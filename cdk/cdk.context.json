@@ -1,0 +1,16 @@
+{
+    "globals": {
+        "appName": "detweb",
+        "region": "af-south-1",
+        "appDescription": "A stack for the detweb image/video annotation app"
+        
+    },
+    "environments": [
+        {
+            "environment": "develop",
+            "branchName": "develop",
+            "s3AllowedOrigins": ["http://localhost:3000"]
+        }
+    ]
+}
+

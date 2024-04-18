@@ -1,0 +1,44 @@
+import { CircularProgress } from '@mui/material';
+import Typography from '@mui/material/Typography';
+import Box from '@mui/material/Box';
+import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
+import Tooltip from 'react-bootstrap/Tooltip';
+import React,{ useContext } from 'react';
+import { ProgressContext } from './ProgressContext';
+
+function CircularProgressWithLabel(props) {    
+    
+  return (
+    <OverlayTrigger
+    placement="bottom"
+    delay={{ show: 250, hide: 400 }}
+    overlay={<Tooltip id="button-tooltip-2">{props.detail}</Tooltip>}
+    ><Box sx={{ position: 'relative', display: 'inline-flex' }}>
+      <CircularProgress variant={props.value? 'determinate' : 'indeterminate'} {...props} />
+      {props.value && <Box
+        sx={{
+          top: 0,
+          left: 0,
+          bottom: 0,
+          right: 0,
+          position: 'absolute',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Typography variant="caption" component="div" color="text.secondary">
+          {`${Math.round(props.value)}%`}
+        </Typography>
+      </Box>}
+    </Box></OverlayTrigger>
+  );
+}
+
+
+export function ProgressIndicators(){
+    const [progress,]=useContext(ProgressContext)
+    if (progress){
+    return <> {Object.keys(progress).map(function (key){return <CircularProgressWithLabel key={key} value={progress[key].value} detail={progress[key].detail} color='inherit' size={50} thickness={8}/>})
+    }</>}
+}

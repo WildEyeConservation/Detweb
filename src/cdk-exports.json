@@ -1,0 +1,23 @@
+{
+  "detweb-cognitostack-develop": {
+    "UserPoolClientId": "3q2egni11dp1a07op5qaemhfi2",
+    "UserPoolId": "eu-west-2_fzLBM9iaI",
+    "IdentityPoolId": "eu-west-2:43b8a8bb-536c-475b-a167-19d05cfa81b7",
+    "Cognitoregion": "eu-west-2"
+  },
+  "detweb-stack-develop": {
+    "awsAppsyncApiEndpoint": "https://mlwskn7hirgbhf6dwsztovsfem.appsync-api.af-south-1.amazonaws.com/graphql",
+    "awsAppsyncApiId": "3bonegk4qjc3zarj2zzvj4wx44",
+    "gpuTaskQueueUrl": "https://sqs.af-south-1.amazonaws.com/275736403632/detweb-stack-develop-gpuQueue70C24BE4-jytegggeJAZn.fifo",
+    "amplifyApiModelSchemaS3Uri": "s3://detweb-stack-develop-detwebapiamplifycodegenasset-1q632gydg6ao/model-schema.graphql",
+    "outputsBucketOut": "detweb-stack-develop-detwebdevelopoutputsbucket14-bpqdzjv0x3eo",
+    "awsAppsyncAdditionalAuthenticationTypes": "API_KEY,AWS_IAM",
+    "imagesBucketRegion": "af-south-1",
+    "cpuTaskQueueUrl": "https://sqs.af-south-1.amazonaws.com/275736403632/detweb-stack-develop-cpuQueue833173B2-jdhtNg8EqptW.fifo",
+    "awsAppsyncRegion": "af-south-1",
+    "awsAppsyncApiKey": "da2-yw7kf7tvrfc7rglgmpzgtaivme",
+    "awsAppsyncAuthenticationType": "AMAZON_COGNITO_USER_POOLS",
+    "ProjectRegion": "af-south-1",
+    "imagesBucketOut": "detweb-stack-develop-detwebdevelopinputsbucket869-180qvdkftky5k"
+  }
+}
