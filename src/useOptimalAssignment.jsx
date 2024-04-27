@@ -69,7 +69,7 @@ useEffect (()=>{
         }).filter(([a,b])=> a && b ) // Drop any entries that correspond dummy point matched to other dummy points.
           .filter(([a,b])=> !(a.objectId && b.objectId)) // No need to confirm a match if it has allready been confirmed
           .map(([entryA,entryB])=>{ //Add proposedIds
-            const id = entryA?.objectId || entryB?.objectId || crypto.randomUUID();
+            const id = entryA?.objectId || entryB?.objectId || entryA.id || entryB.id;
             if (!(entryA?.objectId) && entryA) entryA.proposedObjectId=id
             if (!(entryB?.objectId) && entryB) entryB.proposedObjectId=id
             return [entryA,entryB]
