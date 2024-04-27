@@ -348,7 +348,16 @@ export const useAnnotations=(imageKey,setId) => {
                   newAnnotation.owner=user.id;
                   return createMutation.mutate(newAnnotation)},
           deleteAnnotation: deleteMutation.mutate,
-          updateAnnotation: updateMutation.mutate} 
+          updateAnnotation: (anno=>{
+            if (anno.shadow){
+              anno.id=crypto.randomUUID();
+              anno.owner=user.id;
+              anno.shadow=false
+              return createMutation.mutate(anno)
+            }else{
+              updateMutation.mutate(anno)
+            }
+          })} 
 }
 
 
