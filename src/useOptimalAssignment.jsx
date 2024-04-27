@@ -10,7 +10,7 @@ const [proposedAnnotations,setProposedAnnotations] = useState([[],[]])
 function createNewAnnotation(anno,tf,image){
   let projected = tf([anno.x, anno.y]);
   const obscured = projected.x<0 || projected.y<0 || projected.x>image.width || projected.y>image.height
-  return {categoryId: anno.categoryId, x:Math.round(projected.x),y:Math.round(projected.y),obscured,imageKey:image.key,annotationSetId:anno.annotationSetId}
+  return {shadow:true, categoryId: anno.categoryId, x:Math.round(projected.x),y:Math.round(projected.y),obscured,imageKey:image.key,annotationSetId:anno.annotationSetId}
 }
 
 function dist(a,b){

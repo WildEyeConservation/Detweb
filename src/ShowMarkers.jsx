@@ -1,11 +1,11 @@
-import React,{ useContext,useState } from "react";
+import React,{ useContext,useEffect,useState } from "react";
 import { UserContext } from "./UserContext";
 import { CategoriesContext } from "./Categories";
-import { Marker, Tooltip} from "react-leaflet";
-import { uniqueNamesGenerator, adjectives, names } from 'unique-names-generator';
 import './index.css'
 import { isHotkeyPressed, useHotkeys } from "react-hotkeys-hook"
 import { ImageContext } from "./BaseImage";
+import { Marker,Tooltip } from "react-leaflet";
+import { uniqueNamesGenerator, adjectives, names } from "unique-names-generator";
 import * as L from 'leaflet'
 
 function createIcon(categories,annotation,activeAnnotation) {
@@ -13,12 +13,14 @@ function createIcon(categories,annotation,activeAnnotation) {
     let attributes=''
     const id =annotation.objectId || annotation.proposedObjectId
     const activeId =activeAnnotation?.objectId || activeAnnotation?.proposedObjectId
-    if (id==activeId)
+    if (activeId && id==activeId)
       attributes+=' selected'
     if (annotation.candidate)
       attributes+=' candidate'
     if (annotation.obscured)
       attributes+=' obscured'
+    if (annotation.shadow)
+      attributes+=' shadow'
     let html = `<div class="marker" ${attributes}><div style="background-color: ${color}; border-color: ${annotation.objectId ? '#ffffff' : annotation.proposedObjectId ? '#888888' :'#000000'}">
        <span class="markerLabel">${id ? jdenticon.toSvg( id,24) : ""}</svg></span></div></div>`;
     //let html = `<svg width="80" height="80" data-jdenticon-value="user127"/>`;

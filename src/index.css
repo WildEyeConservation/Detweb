@@ -7,7 +7,6 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
- 
 
 .icon {
   max-width: 70%;
@@ -58,8 +57,13 @@ code {
                 width: 3rem;}
 
 @keyframes spin {
-  0%   {transform: scale(1,1)}
-  100% {transform: scale(-1,1)}
+  from   {transform: scale(1,1)}
+  to {transform: scale(-1,1)}
+}
+
+@keyframes spinSmall {
+  from   {transform: scale(0.7,0.7)}
+  to {transform: scale(-0.7,0.7)}
 }
 
 @keyframes throb {
@@ -72,16 +76,18 @@ code {
   to {opacity: 0.2}
 }
 
-
 .marker[withnote] {animation-name: throb;
            animation-duration: 1s;
            animation-iteration-count: infinite;
-           animation-direction: alternate;}
+           animation-direction: alternate;} 
 
 .marker[obscured] {animation-name: dim;
                    animation-duration: 1s;
                    animation-iteration-count: infinite;
                    animation-direction: alternate;}
+
+                   
+.marker[shadow] {transform: scale(0.7);}
  
 
 .marker[selected]
@@ -90,6 +96,14 @@ code {
            animation-timing-function: ease-in-out;
            animation-iteration-count: infinite;
            animation-direction: alternate;}
+
+ .marker[shadow][selected] {
+          animation-name: spinSmall;
+          animation-duration: 1.5s;
+          animation-timing-function: ease-in-out;
+          animation-iteration-count: infinite;
+          animation-direction: alternate;
+}
 
 .legend {
     line-height: 18px;
