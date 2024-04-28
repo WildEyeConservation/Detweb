@@ -1,11 +1,11 @@
-const fetch = require('node-fetch').default;
-const Request = require('node-fetch').Request;
+const fetch = require("node-fetch").default;
+const Request = require("node-fetch").Request;
 
 const GRAPHQL_ENDPOINT = process.env.API_DETWEB_GRAPHQLAPIENDPOINTOUTPUT;
 const GRAPHQL_API_KEY = process.env.API_DETWEB_GRAPHQLAPIKEYOUTPUT;
 
 const query = /* GraphQL */ `
-mutation CREATE_USER($input: CreateUserInput!) {
+  mutation CREATE_USER($input: CreateUserInput!) {
     createUser(input: $input) {
       id
       name
@@ -13,7 +13,6 @@ mutation CREATE_USER($input: CreateUserInput!) {
     }
   }
 `;
-
 
 /**
  * @type {import('@types/aws-lambda').APIGatewayProxyHandler}
@@ -24,18 +23,18 @@ exports.handler = async (event) => {
     input: {
       id: event.userName,
       name: event.request.userAttributes.name,
-      email: event.request.userAttributes.email, 
-    }
-  }; 
+      email: event.request.userAttributes.email,
+    },
+  };
 
   /** @type {import('node-fetch').RequestInit} */
   const options = {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'x-api-key': GRAPHQL_API_KEY,
-      'Content-Type': 'application/json'
+      "x-api-key": GRAPHQL_API_KEY,
+      "Content-Type": "application/json",
     },
-    body: JSON.stringify({ query, variables })
+    body: JSON.stringify({ query, variables }),
   };
 
   const request = new Request(GRAPHQL_ENDPOINT, options);
@@ -55,14 +54,14 @@ exports.handler = async (event) => {
         {
           status: response.status,
           message: error.message,
-          stack: error.stack
-        }
-      ]
+          stack: error.stack,
+        },
+      ],
     };
   }
 
   return {
     statusCode,
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   };
 };

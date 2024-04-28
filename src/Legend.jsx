@@ -1,7 +1,7 @@
-import { POSITION_CLASSES } from './NavButtons'
-import React, { useState, useEffect, useRef,useContext } from "react";
-import L from 'leaflet'
-import {CategoriesContext} from './Categories';
+import { POSITION_CLASSES } from "./NavButtons";
+import React, { useState, useEffect, useRef, useContext } from "react";
+import L from "leaflet";
+import { CategoriesContext } from "./Categories";
 
 /**
  *
@@ -18,9 +18,10 @@ import {CategoriesContext} from './Categories';
  */
 
 export function Legend({ position }) {
-  const [categories,[,setCurrentCategory]]=useContext(CategoriesContext)
+  const [categories, [, setCurrentCategory]] = useContext(CategoriesContext);
   const divRef = useRef(null);
-  const positionClass = (position && POSITION_CLASSES[position]) || POSITION_CLASSES.bottomright
+  const positionClass =
+    (position && POSITION_CLASSES[position]) || POSITION_CLASSES.bottomright;
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
@@ -30,28 +31,40 @@ export function Legend({ position }) {
   return (
     <div ref={divRef} className={positionClass}>
       <div className="leaflet-control leaflet-bar">
-        <div className='info legend' onMouseEnter={() => setExpanded(true)} onMouseLeave={() => setExpanded(false)}>
+        <div
+          className="info legend"
+          onMouseEnter={() => setExpanded(true)}
+          onMouseLeave={() => setExpanded(false)}
+        >
           <div>
-            {expanded ? categories.map((item, index) => {
-              return (
-                <div
-                  key={index}
-                  onClick={() => setCurrentCategory(item.id)}
-                  style={{ display: 'flex', flexDirection: 'row'}}
-                >
-                  <i style={{ background: item.color }}></i>
-                  <div style={{ display: 'flex', flexDirection: 'row', width: '100%', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>{item.name}</div>
-                    <div>({item.shortcutKey})</div>
-                  </div>
-                </div>
-              )
-            }) : "Legend"}
+            {expanded
+              ? categories.map((item, index) => {
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => setCurrentCategory(item.id)}
+                      style={{ display: "flex", flexDirection: "row" }}
+                    >
+                      <i style={{ background: item.color }}></i>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "row",
+                          width: "100%",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <div>{item.name}</div>
+                        <div>({item.shortcutKey})</div>
+                      </div>
+                    </div>
+                  );
+                })
+              : "Legend"}
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
-
-

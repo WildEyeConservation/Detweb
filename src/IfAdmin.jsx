@@ -9,13 +9,13 @@
  **/
 
 import React from "react";
-const IfAdmin=({session,children})=>{
-  const groups=session.tokens.accessToken.payload["cognito:groups"];
-  if (groups.includes('admin')){
-    return <>{children}</>
-  }else{
+const IfAdmin = ({ session, children }) => {
+  const groups = session.tokens.accessToken.payload["cognito:groups"];
+  if (groups.includes("admin")) {
+    return <>{children}</>;
+  } else {
     return null;
   }
-}
+};
 
 export default IfAdmin;

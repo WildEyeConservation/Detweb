@@ -1,7 +1,6 @@
-import Button from 'react-bootstrap/Button'
-import React, { useEffect, useRef} from "react";
-import L from 'leaflet'
-
+import Button from "react-bootstrap/Button";
+import React, { useEffect, useRef } from "react";
+import L from "leaflet";
 
 /**
  *
@@ -19,15 +18,16 @@ import L from 'leaflet'
  */
 
 export const POSITION_CLASSES = {
-  bottomleft: 'leaflet-bottom leaflet-left',
-  bottomright: 'leaflet-bottom leaflet-right',
-  topleft: 'leaflet-top leaflet-left',
-  topright: 'leaflet-top leaflet-right',
-}
+  bottomleft: "leaflet-bottom leaflet-left",
+  bottomright: "leaflet-bottom leaflet-right",
+  topleft: "leaflet-top leaflet-left",
+  topright: "leaflet-top leaflet-right",
+};
 
-export function NavButtons({position,prevText,nextText,prev,next}){
+export function NavButtons({ position, prevText, nextText, prev, next }) {
   const divRef = useRef(null);
-  const positionClass = (position && POSITION_CLASSES[position]) || POSITION_CLASSES.bottomleft;
+  const positionClass =
+    (position && POSITION_CLASSES[position]) || POSITION_CLASSES.bottomleft;
 
   useEffect(() => {
     L.DomEvent.disableClickPropagation(divRef.current);
@@ -37,12 +37,12 @@ export function NavButtons({position,prevText,nextText,prev,next}){
     <div ref={divRef} className={positionClass}>
       <div className="leaflet-control leaflet-bar">
         <Button onClick={prev} disabled={prev === undefined}>
-          {prevText || '<'}
+          {prevText || "<"}
         </Button>
         <Button onClick={next} disabled={next === undefined}>
-          {nextText || '>'}
+          {nextText || ">"}
         </Button>
       </div>
     </div>
-  )
+  );
 }

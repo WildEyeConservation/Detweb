@@ -1,21 +1,17 @@
-import React from 'react';
-import { Droppable, Draggable } from 'react-beautiful-dnd';
-import Button from 'react-bootstrap/Button';
-import DndTask, { getItemStyle, getListStyle } from './DndTask';
+import React from "react";
+import { Droppable, Draggable } from "react-beautiful-dnd";
+import Button from "react-bootstrap/Button";
+import DndTask, { getItemStyle, getListStyle } from "./DndTask";
 
-/** 
- * This component is a wrapper around DndTask specifically for rendering surveys 
+/**
+ * This component is a wrapper around DndTask specifically for rendering surveys
  */
 
 const SurveyDraggable = (props) => {
-  const { item, index, sets } = props
+  const { item, index, sets } = props;
 
   return (
-    <Draggable
-      key={item.uniqueId}
-      draggableId={item.uniqueId}
-      index={index}
-    >
+    <Draggable key={item.uniqueId} draggableId={item.uniqueId} index={index}>
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
@@ -23,7 +19,7 @@ const SurveyDraggable = (props) => {
           {...provided.dragHandleProps}
           style={getItemStyle(
             snapshot.isDragging,
-            provided.draggableProps.style
+            provided.draggableProps.style,
           )}
         >
           <DndTask
@@ -36,19 +32,35 @@ const SurveyDraggable = (props) => {
       )}
     </Draggable>
   );
-}
+};
 
 const SurveyDnd = (props) => {
-  const { uniqueId, id, name, elements, sets, onDelete } = props
+  const { uniqueId, id, name, elements, sets, onDelete } = props;
 
   return (
     <div>
       {onDelete ? (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-evenly' }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-evenly",
+          }}
+        >
           <h4>{name}</h4>
           <Button onClick={onDelete.bind(this, id)}>Delete</Button>
         </div>
-      ) : (<h4 style={{ display: 'flex', justifyContent: 'center', paddingBottom: 8 }}>{name}</h4>)}
+      ) : (
+        <h4
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            paddingBottom: 8,
+          }}
+        >
+          {name}
+        </h4>
+      )}
       <Droppable key={name} droppableId={uniqueId}>
         {(provided, snapshot) => (
           <div
@@ -62,7 +74,7 @@ const SurveyDnd = (props) => {
                 item={item}
                 name={name}
                 index={index}
-                sets={sets.filter(set => set.stratum === item.id)}
+                sets={sets.filter((set) => set.stratum === item.id)}
               ></SurveyDraggable>
             ))}
             {provided.placeholder}
@@ -71,6 +83,6 @@ const SurveyDnd = (props) => {
       </Droppable>
     </div>
   );
-}
+};
 
 export default SurveyDnd;

@@ -1,4 +1,4 @@
-export const getImageSetsInProject=`query getImageSetsInProject ($name: String!,$nextToken:String){
+export const getImageSetsInProject = `query getImageSetsInProject ($name: String!,$nextToken:String){
     result1:getProject(name: $name) {
       result2:imageSets(nextToken: $nextToken){
         items {
@@ -8,9 +8,9 @@ export const getImageSetsInProject=`query getImageSetsInProject ($name: String!,
       }
     }
   }
-  `
+  `;
 
-  export const getLocationSetsInProject=`query getLocationSetsInProject ($name: String!,$nextToken:String){
+export const getLocationSetsInProject = `query getLocationSetsInProject ($name: String!,$nextToken:String){
     result1:getProject(name: $name) {
       result2:locationSets(nextToken: $nextToken){
         items {
@@ -21,8 +21,8 @@ export const getImageSetsInProject=`query getImageSetsInProject ($name: String!,
       }
     }
   }
-  `
-  export const getAnnotationSetsInProject=`query getAnnotationSetsInProject ($name: String!,$nextToken:String){
+  `;
+export const getAnnotationSetsInProject = `query getAnnotationSetsInProject ($name: String!,$nextToken:String){
     result1:getProject(name: $name) {
       result2:annotationSet(nextToken: $nextToken){
         items {
@@ -33,8 +33,8 @@ export const getImageSetsInProject=`query getImageSetsInProject ($name: String!,
       }
     }
   }
-  `
-  export const getQueuesInProject=`query getQueuesInProject ($name: String!,$nextToken:String){
+  `;
+export const getQueuesInProject = `query getQueuesInProject ($name: String!,$nextToken:String){
     result1:getProject(name: $name) {
       result2:queues(nextToken: $nextToken){
         items {
@@ -45,8 +45,8 @@ export const getImageSetsInProject=`query getImageSetsInProject ($name: String!,
       }
     }
   }
-  `
-  export const getLocationsInSet=`query getLocationsInSet($id: ID!, $nextToken: String) {
+  `;
+export const getLocationsInSet = `query getLocationsInSet($id: ID!, $nextToken: String) {
     result1: getLocationSet(id: $id) {
       result2: locations(nextToken: $nextToken) {
         items {
@@ -66,11 +66,9 @@ export const getImageSetsInProject=`query getImageSetsInProject ($name: String!,
       }
     }
   }
-  `
+  `;
 
-
-
-  export const getImagesInSet=`query getImagesInSet ($name: String!,$nextToken:String){
+export const getImagesInSet = `query getImagesInSet ($name: String!,$nextToken:String){
     result1:getImageSet(name: $name) {
         result2:images(nextToken: $nextToken){
         items {
@@ -85,24 +83,24 @@ export const getImageSetsInProject=`query getImageSetsInProject ($name: String!,
       }
     }
   }
-  `
+  `;
 
-export const testLocations=`query MyQuery($setId: ID!, $nextToken: String) {
+export const testLocations = `query MyQuery($setId: ID!, $nextToken: String) {
   testLocations(setId: $setId, nextToken: $nextToken) {
     items {
       id
     }
   }
 }
-`
-export const latestObservation=`query LatestObservation($owner: String!, $locationId: ID!) {
+`;
+export const latestObservation = `query LatestObservation($owner: String!, $locationId: ID!) {
   observationsByLocationIdAndOwnerAndCreatedAt(locationId: $locationId, ownerCreatedAt: {beginsWith: {owner: $owner}}, sortDirection: DESC, limit: 1) {
     items {
       createdAt
     }
   }
 }
-`
+`;
 
 /* These createXminimal and update X minimal queries were written because in some cases I ran into trouble because eg. the default createAnnotation
 graphQL mutation would also return the annotationSet that the annotation belongs to. This would cause hassles when logged in as a non-admin user 
@@ -147,8 +145,8 @@ export const deleteAnnotationMinimal = /* GraphQL */ `
   mutation DeleteAnnotation(
     $input: DeleteAnnotationInput!
     $condition: ModelAnnotationConditionInput
-    ) {
-      deleteAnnotation(input:$input,condition:$condition) {
+  ) {
+    deleteAnnotation(input: $input, condition: $condition) {
       id
     }
   }
@@ -177,4 +175,3 @@ export const createImageSetMembershipMinimal = /* GraphQL */ `
     }
   }
 `;
-
