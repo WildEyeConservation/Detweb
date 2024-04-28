@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback,useMemo , useEffect} from "react";
 import BaseImage from "./BaseImage";
 import LinkMaps from "./LinkMaps";
 import CreateAnnotationOnClick from "./CreateAnnotationOnClick";
@@ -10,6 +10,8 @@ import { useAnnotations } from "./useGqlCached";
 import { Legend } from "./Legend";
 import { multiply, inv } from "mathjs";
 import useAckOnTimeout from "./useAckOnTimeout";
+import { ShowMarkers } from "./ShowMarkers";
+import Annotations from "./AnnotationsContext";
 
 const transform = (H) => (c1) => {
   c1 = multiply(H, [c1[0], c1[1], 1]).valueOf();
@@ -23,8 +25,7 @@ export function RegisterPair({
   prev,
   homography,
   visible,
-  ack,
-}) {
+  ack}) {
   const [index, setIndex] = useState(-1);
   const [map1, setMap1] = useState(undefined); // Refs to the two leaflet maps. Necessary to keep them synchronized with LinkMaps
   const [map2, setMap2] = useState(undefined);
@@ -158,52 +159,55 @@ export function RegisterPair({
     <>
       {images?.length == 2 &&
         images?.map((image, i) => (
-          <BaseImage
-            visible={visible}
-            setId={selectedSet}
-            fullImage={false}
-            key={image.key + i}
-            boundsxy={[
-              [0, 0],
-              [image.width, image.height],
-            ]}
-            containerwidth="45vw"
-            containerheight="80vh"
-            image={image}
-            x={image.width / 2}
-            y={image.height / 2}
-            width={image.width}
-            height={image.height}
-            next={i == 0 && nextAnnotation}
-            prev={i == 0 && prevAnnotation}
-          >
-            {homography && (
-              <GotoAnnotation
-                image={image}
-                activeAnnotation={activeAnnotation}
-                transform={transforms[1 - i]}
-              />
-            )}
-            {homography && (
-              <OverlapOutline image={image} transform={transforms[1 - i]} />
-            )}
-            <CreateAnnotationOnClick
+          <Annotations key={i} annotationsHook={getAugmentedHook(i)}>
+            {useMemo(() => <BaseImage
+              visible={visible}
+              activeAnnotation={activeAnnotation}
               setId={selectedSet}
-              image={image}
-              annotationsHook={getAugmentedHook(i)}
-              activeAnnotation={matches?.[index]?.[i]}
-            />
-            {homography && (
-              <LinkMaps
-                otherMap={[map2, map1][i]}
-                setMap={[setMap1, setMap2][i]}
-                transform={transforms[i]}
-                blocked={blocked}
-                setBlocked={setBlocked}
+              fullImage={false}
+              key={image.key + i}
+              boundsxy={[
+                [0, 0],
+                [image.width, image.height],
+              ]}
+              containerwidth="45vw"
+              containerheight="80vh"
+              img={image}
+              x={image.width / 2}
+              y={image.height / 2}
+              width={image.width}
+              height={image.height}
+              next={i == 0 && nextAnnotation}
+              prev={i == 0 && prevAnnotation}
+            >
+              {homography && (
+                <GotoAnnotation
+                  image={image}
+                  activeAnnotation={activeAnnotation}
+                  transform={transforms[1 - i]}
+                />
+              )}
+              {homography && (
+                <OverlapOutline image={image} transform={transforms[1 - i]} />
+              )}
+              <CreateAnnotationOnClick
+                setId={selectedSet}
+                image={image}
+                activeAnnotation={matches?.[index]?.[i]}
               />
-            )}
-            {i == 1 && <Legend position="bottomright" />}
-          </BaseImage>
+              <ShowMarkers activeAnnotation={activeAnnotation}/>
+              {homography && (
+                <LinkMaps
+                  otherMap={[map2, map1][i]}
+                  setMap={[setMap1, setMap2][i]}
+                  transform={transforms[i]}
+                  blocked={blocked}
+                  setBlocked={setBlocked}
+                />
+              )}
+              {i == 1 && <Legend position="bottomright" />}
+            </BaseImage>, [visible,selectedSet,image,activeAnnotation,map2,map1])}
+            </Annotations>
         ))}
     </>
   );

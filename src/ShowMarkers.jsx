@@ -11,6 +11,7 @@ import {
   names,
 } from "unique-names-generator";
 import * as L from "leaflet";
+import { AnnotationsContext } from "./AnnotationsContext";
 
 function createIcon(categories, annotation, activeAnnotation) {
   const color =
@@ -43,11 +44,11 @@ function createIcon(categories, annotation, activeAnnotation) {
 }
 
 export function ShowMarkers({
-  annotations,
-  deleteAnnotation,
-  updateAnnotation,
-  activeAnnotation,
+  activeAnnotation
 }) {
+  const { annotations,
+    deleteAnnotation,
+    updateAnnotation }= useContext(AnnotationsContext)
   const [categories] = useContext(CategoriesContext);
   const { latLng2xy, xy2latLng } = useContext(ImageContext);
   const { user, sendToQueue, createQueue, currentProject } =
@@ -153,7 +154,7 @@ export function ShowMarkers({
           update, I am replacing the entire component on every render.
           */
             //key={annotation.y + annotation.id + annotation.categoryId + annotation.x +annotation.selected + annotation.obscured + annotation.objectId + annotation.proposedObjectId}
-            key={annotation.id || annotation.x}
+            key={annotation.id || crypto.randomUUID()}
             eventHandlers={{
               dragend: (e) => {
                 let coords = latLng2xy(e.target.getLatLng());

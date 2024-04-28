@@ -12,18 +12,17 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { S3ImageOverlay } from "./S3ImageOverlay";
 export const ImageContext = createContext({});
 
-const BaseImage = (props) => {
-  const { image, next, prev, children, fullImage } = props;
+const BaseImage = ({width,height,x,y,img,next,prev, children, fullImage,containerheight,containerwidth,visible,id}) => {
   let boundsxy = [
-    [props.x - props.width / 2, props.y - props.height / 2],
-    [props.x + props.width / 2, props.y + props.height / 2],
+    [x - width / 2, y - height / 2],
+    [x + width / 2, y + height / 2],
   ];
   const mouseCoords = useRef({ x: 0, y: 0 });
   const { user } = useContext(UserContext);
 
   const scale = Math.pow(
     2,
-    Math.ceil(Math.log2(Math.max(image.width, image.height))) - 8,
+    Math.ceil(Math.log2(Math.max(img.width, img.height))) - 8,
   );
 
   function xy2latLng(input) {
@@ -45,10 +44,10 @@ const BaseImage = (props) => {
     }
   }
 
-  useHotkeys("RightArrow", next ? next : () => {}, { enabled: props.visible }, [
+  useHotkeys("RightArrow", next ? next : () => {}, { enabled: visible }, [
     next,
   ]);
-  useHotkeys("LeftArrow", prev ? prev : () => {}, { enabled: props.visible }, [
+  useHotkeys("LeftArrow", prev ? prev : () => {}, { enabled: visible }, [
     prev,
   ]);
 
@@ -59,7 +58,7 @@ const BaseImage = (props) => {
   //       if (mouseCoords.current.x || mouseCoords.current.y){
   //         create(mouseCoords.current, cat.id)}
   //       else{
-  //         create({x:props.x,y:props.y}, cat.id)
+  //         create({x:x,y:y}, cat.id)
   //       }
   //     }
   //   }
@@ -68,31 +67,30 @@ const BaseImage = (props) => {
   return (
     <ImageContext.Provider value={{ latLng2xy, xy2latLng }}>
       <MapContainer
-        id={props.id}
+        id={id}
         style={{
-          width: props.containerwidth,
-          height: props.containerheight,
+          width: containerwidth,
+          height: containerheight,
           margin: "auto",
           display: "flex",
           justifyContent: "center",
           borderRadius: 10,
           alignItems: "center",
         }}
-        {...props}
         crs={L.CRS.Simple}
         zoomAnimation={false}
         fadeAnimation={false}
         markerZoomAnimation={false}
         contextmenu={true}
         whenCreated={(map) => {
-          map.custom = image.key;
+          map.custom = img.key;
         }}
         contextmenuItems={[
           {
-            text: `${image.key}`,
+            text: `${img.key}`,
             callback: () => {
               console.log("copying");
-              navigator.clipboard.writeText(image.key);
+              navigator.clipboard.writeText(img.key);
             },
           },
         ]}
@@ -105,21 +103,21 @@ const BaseImage = (props) => {
         keyboardPanDelta={0}
       >
         <LayersControl position="topright">
-          {image && fullImage ? (
+          {img && fullImage ? (
             <LayersControl.BaseLayer
               key={2}
               name="Full resolution JPG"
               checked={true}
             >
               <S3ImageOverlay
-                image={image}
+                image={img}
                 bounds={
-                  image.width &&
-                  image.height &&
-                  xy2latLng([L.point(0, 0), L.point(image.width, image.height)])
+                  img.width &&
+                  img.height &&
+                  xy2latLng([L.point(0, 0), L.point(img.width, img.height)])
                 }
                 noWrap={true}
-                source={image.key}
+                source={img.key}
               />
             </LayersControl.BaseLayer>
           ) : (
@@ -129,18 +127,18 @@ const BaseImage = (props) => {
               checked={true}
             >
               <S3Layer
-                source={image.key}
+                source={img.key}
                 bounds={
-                  image.width &&
-                  image.height &&
-                  xy2latLng([L.point(0, 0), L.point(image.width, image.height)])
+                  img.width &&
+                  img.height &&
+                  xy2latLng([L.point(0, 0), L.point(img.width, img.height)])
                 }
                 noWrap={true}
                 maxNativeZoom={5}
               />
             </LayersControl.BaseLayer>
           )}
-          {user.isAdmin && <AllLocations image={image} />}
+          {user.isAdmin && <AllLocations image={img} />}
         </LayersControl>
         {children}
         {(next || prev) && (

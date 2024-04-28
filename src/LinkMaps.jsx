@@ -14,7 +14,7 @@ export default function LinkMaps({ otherMap, setMap, transform }) {
         if (
           Math.abs(xy_current.x - xy_new.x) +
             Math.abs(xy_current.y - xy_new.y) >
-          10
+          20
         ) {
           console.log(xy_new);
           console.log(xy_current);

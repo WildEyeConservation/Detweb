@@ -133,8 +133,6 @@ export default function useGqlCached(
   //   f()
   // })
 
-  console.log(queryKey);
-
   const query = useQuery({
     queryKey,
     queryFn: async () => {

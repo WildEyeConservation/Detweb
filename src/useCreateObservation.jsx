@@ -27,12 +27,11 @@ export default function useCreateObservation({
 
 export function withCreateObservation(WrappedComponent) {
   let WithCreateObservation = function (props) {
-    const { ack, id, setId, incrementJobs } = props;
+    const { ack, id, setId } = props;
     const newAck = useCreateObservation({
       ack,
       locationId: id,
       annotationSetId: setId,
-      incrementJobs,
     });
     return <WrappedComponent {...props} ack={newAck} />;
   };

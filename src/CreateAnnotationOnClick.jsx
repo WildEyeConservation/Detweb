@@ -3,13 +3,12 @@ import React, { useContext } from "react";
 import { CategoriesContext } from "./Categories";
 import { ShowMarkers } from "./ShowMarkers";
 import { ImageContext } from "./BaseImage";
+import { AnnotationsContext } from "./AnnotationsContext";
 
 export default function CreateAnnotationOnClick({
   image,
   setId,
-  annotationsHook,
   location,
-  activeAnnotation,
 }) {
   const map = useMap();
   const { latLng2xy } = useContext(ImageContext);
@@ -18,7 +17,7 @@ export default function CreateAnnotationOnClick({
     createAnnotation = undefined,
     deleteAnnotation = undefined,
     updateAnnotation = undefined,
-  } = annotationsHook || {};
+  } = useContext(AnnotationsContext)
   const x = useContext(CategoriesContext);
   const [, [currentCategory]] = x;
   useMapEvents(
@@ -42,14 +41,5 @@ export default function CreateAnnotationOnClick({
     },
     [map, image, setId],
   );
-  return (
-    annotations && (
-      <ShowMarkers
-        annotations={annotations}
-        deleteAnnotation={deleteAnnotation}
-        updateAnnotation={updateAnnotation}
-        activeAnnotation={activeAnnotation}
-      />
-    )
-  );
+  return 
 }

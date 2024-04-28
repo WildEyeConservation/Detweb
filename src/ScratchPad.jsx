@@ -1,7 +1,7 @@
 import React, { memo } from "react";
 import { withPreloading2 } from "./withPriorityQueue";
 import { Row } from "react-bootstrap";
-// import { JobsRemaining } from './JobsRemaining';
+import { JobsRemaining } from './JobsRemaining';
 import { TaskSelector } from "./TaskSelector";
 import { LivenessIndicator } from "./LivenessIndicator";
 
@@ -21,7 +21,7 @@ export function ScratchPad() {
     return (
       <Row className="align-items-center h-100">
         <TestImage />
-        {/* <JobsRemaining/> */}
+        <JobsRemaining/>
         <LivenessIndicator />
       </Row>
     );

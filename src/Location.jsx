@@ -13,7 +13,7 @@ export default function Location({
   height,
   id,
   isTest: _isTest,
-  showTestCase,
+  showTestCase=1,
   confidence = 0,
 }) {
   const { xy2latLng } = useContext(ImageContext);
