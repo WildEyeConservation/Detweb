@@ -56,7 +56,6 @@ cdk/containerImages/lightGlueImage/ec2user@ec2-13-245-11-9.af-south-1.compute.am
 cdk/containerImages/lightGlueImage/ec2user@ec2-13-245-11-9.af-south-1.compute.amazonaws.com/localtest.bat
 cdk/README.md
 cdk/schema.json
-cdk/key.json
 src/backup/App.css
 src/backup/App.jsx
 src/backup/index.css
