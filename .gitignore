@@ -54,9 +54,6 @@ cdk2/containerImages/lightGlueImage/.env
 src/legacy/*
 cdk/containerImages/lightGlueImage/ec2user@ec2-13-245-11-9.af-south-1.compute.amazonaws.com/Dockerfile
 cdk/containerImages/lightGlueImage/ec2user@ec2-13-245-11-9.af-south-1.compute.amazonaws.com/localtest.bat
-cdk/createAdminUser.bat
-cdk/expression-attribute-names.json
-cdk/expression-attribute-values.json
 cdk/README.md
 cdk/schema.json
 cdk/key.json
