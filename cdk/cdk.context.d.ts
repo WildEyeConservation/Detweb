@@ -5,6 +5,9 @@ export type CDKContext = {
   environment: envNameContext;
   branchName: branchNameContext;
   s3AllowedOrigins: [string];
+  adminUsername: string;
+  adminEmail: string;
+  adminTempPassword: string;
 };
 
 export type envNameContext = "develop";
