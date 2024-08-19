@@ -18,6 +18,8 @@ import {
   AmplifyGraphqlDefinition,
 } from "@aws-amplify/graphql-api-construct";
 
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+
 export class Cdk2Stack extends cdk.Stack {
   constructor(
     scope: Construct,
@@ -32,6 +34,11 @@ export class Cdk2Stack extends cdk.Stack {
       appName: context.appName,
       env: context.environment,
       //addUserPostConfirmation: addUserFunc,
+    });
+
+    const dynamoTable = new dynamodb.Table(this, "UserTable", {
+      partitionKey: { name: "id", type: dynamodb.AttributeType.STRING },
+      tableName: `User-${context.environment}-NONE`, 
     });
     // Create a Role for the hanlde upload Lambda to use.
     const uploadLambdaRole = new iam.Role(this, "LambdaRole", {
@@ -49,6 +56,16 @@ export class Cdk2Stack extends cdk.Stack {
       "arn:aws:iam::275736403632:role/gpuWorkerRole",
     );
 
+    const adminUsername = this.node.tryGetContext("adminUsername");
+    const adminEmail = this.node.tryGetContext("adminEmail");
+    const adminTempPassword = this.node.tryGetContext("adminTempPassword");
+    const adminName = this.node.tryGetContext("adminName");
+    const dynamoDbRegion = cdk.Stack.of(this).region;
+
+
+    console.log("Admin Username from context:", adminUsername);
+    console.log("Admin Email from context:", adminEmail);
+    console.log("Admin Temp Password from context:", adminTempPassword);
     // // 👇 create VPC in which we'll launch the Cluster
     const vpc = new ec2.Vpc(this, "my-cdk-vpc");
     // Some ECS tasks need to be done on machines with GPUs and some don't require GPUs. Thus we have to separate task queues for ECS
@@ -162,7 +179,6 @@ export class Cdk2Stack extends cdk.Stack {
         },
       },
     });
-
     const postDeployLambda = createPostDeployLambda(this, {
       appName: context.appName,
       env: context.environment,
@@ -170,7 +186,16 @@ export class Cdk2Stack extends cdk.Stack {
       graphqlEndpoint: detwebAPI.graphqlUrl,
       graphqlApiKey: detwebAPI.apiKey || "none",
       cognitoRegion: cognitoAuth.addUserFunc.env.region,
-    });
+      adminName: adminName,
+      adminUsername: adminUsername,
+      adminEmail: adminEmail,
+      adminTempPassword: adminTempPassword,
+      apiId: detwebAPI.apiId,
+      dynamoDbRegion: dynamoDbRegion,
+    },
+    cognitoAuth.userPool.userPoolId,
+    dynamoTable.tableName,
+  );
 
     // Define a Task Definition
     const gpuTaskDefinition = new ecs.Ec2TaskDefinition(
