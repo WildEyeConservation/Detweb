@@ -256,7 +256,7 @@ function Header({ signOut, session, user }: HeaderProps) {
         <Nav className="navbar-right">
           <ProgressIndicators />
           <ProjectSelector />
-          <Nav.Link onClick={signOut}>Log out {user.username}</Nav.Link>
+          <Nav.Link onClick={signOut}>Log out {user.attributes.preferredUsername}</Nav.Link>
         </Nav>
       </Container>
     </Navbar>
