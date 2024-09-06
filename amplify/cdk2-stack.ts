@@ -169,7 +169,6 @@ export const createDetwebResources=function(scope: Construct, backend : Backend<
     );
 
     const postDeployLambda = new NodejsFunction(scope, "postDeployFunc", {
-      functionName: 'postDeployFunc',
       runtime: Runtime.NODEJS_18_X,
       handler: "handler",
       entry: './cdk/lib/lambdas/postDeploy/main.ts',
