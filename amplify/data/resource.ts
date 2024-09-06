@@ -4,7 +4,6 @@ import { addUserToGroup } from '../data/add-user-to-group/resource'
 import { createGroup } from '../data/create-group/resource'
 import { listUsers } from '../data/list-users/resource'
 import { listGroupsForUser } from '../data/list-groups-for-user/resource'
-import { object } from "prop-types";
 
 /*== STEP 1 ===============================================================
 The section below creates a Todo database table with a "content" field. Try
