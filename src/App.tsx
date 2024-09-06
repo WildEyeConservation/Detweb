@@ -3,6 +3,7 @@ export const gqlClient = generateClient();
 export function graphqlOperation(query: string, variables: any) {
   return { query, variables };
 }
+import { fetchUserAttributes } from "@aws-amplify/auth";
 import pLimit from "p-limit";
 export const limitConnections = pLimit(30);
 import { useEffect, useState } from "react";
@@ -95,6 +96,11 @@ function Header({ signOut, session, user }: HeaderProps) {
   const [modalToShow, setModalToShow] = useState<string | null>(null);
   const [dirHandle, setDirHandle] = useState<any | null>(null);
   let location = useLocation();
+  const [userAttributes, setUserAttributes] = useState<any>(null);
+  useEffect(() => {
+    fetchAuthSession().then((sess) => setSession(sess));
+    fetchUserAttributes().then(attributes => setUserAttributes(attributes));
+  }, [user]);
 
   let handleSelect = async function (key: string | null) {
     if (key == "addFiles") {
@@ -256,7 +262,7 @@ function Header({ signOut, session, user }: HeaderProps) {
         <Nav className="navbar-right">
           <ProgressIndicators />
           <ProjectSelector />
-          <Nav.Link onClick={signOut}>Log out {user.attributes.preferredUsername}</Nav.Link>
+          <Nav.Link onClick={signOut}>Log out {userAttributes?.preferred_username}</Nav.Link>
         </Nav>
       </Container>
     </Navbar>

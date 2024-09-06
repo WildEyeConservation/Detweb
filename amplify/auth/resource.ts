@@ -17,7 +17,7 @@ export const auth = defineAuth({
   userAttributes: {
     preferredUsername: {
       mutable: true,
-      required: false
+      required: true
     }
   },
   groups: ["admin", "annotator"],
