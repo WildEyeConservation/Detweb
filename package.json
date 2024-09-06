@@ -27,6 +27,7 @@
     "export-from-json": "^1.7.4",
     "humanize-duration": "^3.32.1",
     "jdenticon": "^3.3.0",
+    "leaflet": "^1.9.4",
     "leaflet-contextmenu": "^1.4.0",
     "leaflet.markercluster": "^1.5.3",
     "luxon": "^3.5.0",
