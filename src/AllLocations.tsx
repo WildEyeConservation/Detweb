@@ -1,0 +1,101 @@
+import { useEffect, useState } from "react";
+import "leaflet-contextmenu/dist/leaflet.contextmenu.css";
+import { getLocationSet, locationsByImageKey } from "./graphql/queries";
+import Location from "./Location";
+import { LayersControl, Pane } from "react-leaflet";
+import { gqlClient, graphqlOperation } from "./App";
+import { GraphQLResult } from "@aws-amplify/api";
+
+interface ImageProps {
+  key: string;
+}
+
+interface LocationType {
+  id: string;
+  setId: string;
+}
+
+interface LocationSetType {
+  name: string;
+  locs: LocationType[];
+}
+
+interface LocationsByImageKeyResponse {
+  locationsByImageKey: {
+    items: LocationType[];
+    nextToken: string | null;
+  };
+}
+
+interface GetLocationSetResponse {
+  getLocationSet: {
+    name: string;
+  };
+}
+
+interface AllLocationsProps {
+  image: ImageProps;
+}
+
+export default function AllLocations({ image }: AllLocationsProps) {
+  const [locationSets, setLocationSets] = useState<Record<string, LocationSetType>>({});
+  useEffect(() => {
+    const go = async () => {
+      let locations: LocationType[] = [];
+      let nextToken: string | null = null;
+      do {
+        const response = (await gqlClient.graphql(
+          graphqlOperation(locationsByImageKey, {
+            imageKey: image.key,
+            nextToken,
+          })
+        )) as GraphQLResult<LocationsByImageKeyResponse>;
+
+        const locs = response?.data?.locationsByImageKey;
+        if (locs) {
+          locations = locations.concat(locs.items);
+          nextToken = locs.nextToken;
+        } else {
+          nextToken = null; 
+        }
+      } while (nextToken);
+      const _locationSets: Record<string, LocationSetType> = {};
+      for (const loc of locations) {
+        if (_locationSets[loc.setId]) {
+          _locationSets[loc.setId].locs.push(loc);
+        } else {
+          const setResponse = (await gqlClient.graphql(
+            graphqlOperation(getLocationSet, { id: loc.setId })
+          )) as GraphQLResult<GetLocationSetResponse>;
+
+          const setName = setResponse?.data?.getLocationSet?.name;
+          if (setName) {
+            _locationSets[loc.setId] = { name: setName, locs: [loc] };
+          }
+        }
+      }
+      setLocationSets(_locationSets);
+    };
+    go();
+  }, []);
+
+  return (
+    <>
+      {Object.keys(locationSets).map((key) => (
+        <LayersControl.Overlay
+          name={locationSets[key].name}
+          key={key}
+          checked={false}
+        >
+          <Pane name="shadowPane">
+            {/* By default this layer goes to the overlayPane. We want to lift it slightly to the shadowPane so that it renders over the current
+            location (which has showTestCase==false) */}
+            {locationSets[key].locs.map((loc) => (
+              <Location x={0} y={0} width={0} height={0} isTest={null} key={loc.id} showTestCase={true} {...loc} />
+            ))}
+          </Pane>
+        </LayersControl.Overlay>
+      ))}
+    </>
+  );
+}
