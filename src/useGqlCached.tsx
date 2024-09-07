@@ -19,7 +19,10 @@ import {
 } from "./gqlQueries";
 import { SQSClient, CreateQueueCommand } from "@aws-sdk/client-sqs";
 import { makeSafeQueueName, gqlSend, gqlGetMany } from "./utils";
-import {GQL_Client} from "./App";
+import { GQL_Client } from "./App";
+import type { UserProjectMembershipType, CategoryType, AnnotationType, LocationType, AnnotationSetType, LocationSetType }
+  from "./schemaTypes";
+
 
 /* This utility function is from https://stackoverflow.com/questions/1584370/how-to-merge-two-arrays-in-javascript-and-de-duplicate-items
 It is used to merge two arrays of objects, and removing duplicates, for some definition of duplicate. a and b are the 
@@ -53,64 +56,9 @@ interface UseGqlCachedConfig<T> {
   onUpdate: (subConfig: any) => Promise<any>;
 };
 
-
-interface Category extends Identifiable {
-  name: string;
-  color: string;
-  projectId: string;
-  shortcutKey: string;
-};
-
-export interface Annotation {
-  owner?: string;
-  id: string;
-  x: number;
-  y: number;
-  categoryId: string;
-  objectId?: string;
-  obscured: boolean;
-  imageKey: string;
-  annotationSetId: string;
-  proposedObjectId?: string;
-  shadow?: boolean;
-  selected?: boolean;
-  candidate?: boolean;
-  note?: string;
-  linked?: boolean;
-  label?: string;
-  createdAt?: string;
-  user?: { name: string };
-};
-
-interface Location {
-  id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  imageLocationsId: string;
-};
-
-interface AnnotationSet extends Identifiable {
-  name: string;
-  projectName: string;
-};
-
-interface LocationSet extends Identifiable {
-  name: string;
-  projectName: string;
-};
-
-
-interface UserProjectMembership extends Identifiable {
-  userId: string;
-  projectId: string;
-  queueUrl?: string;
-};
-
 interface AnnotationsResponse {
   annotationsByImageKey: {
-    items: Annotation[];
+    items: AnnotationType[];
     nextToken: string | null;
   };
 };
@@ -120,22 +68,11 @@ interface NamedIdentifiable extends Identifiable {
   name: string;
 }
 
-const merge =<T extends Identifiable > (a: T[], b: T[], predicate = (a: T, b: T) => (a as any).id === (b as any).id) => {
-  const c = [...a]; // copy to avoid side effects
-  // add all items from B to copy C if they're not already present
-  b.forEach((bItem) =>
-    c.some((cItem) => predicate(bItem, cItem)) ? null : c.push(bItem),
-  );
-  return c;
-};
-
-
-
 const subscriptions: Record<string, SubscriptionEntry> = {};
 const mergeById = (a: any, b: any) => a.id === b.id;
 const mergeByUrl = (a: any, b: any) => a.url === b.url;
 
-export default function useGqlCached<T extends Identifiable>(
+export default function useGqlCached<T>(
   config: UseGqlCachedConfig<T>,
   mergingPredicate: (a: T, b: T) => boolean = mergeById
 ) {
@@ -157,8 +94,7 @@ export default function useGqlCached<T extends Identifiable>(
             next: ({ data }: any) => {
               const newItem = Object.values(data)[0] as T;
               console.log(`onCreate callback (${JSON.stringify(queryKey)}`);
-              queryClient.setQueryData(queryKey, (old: T[]) =>
-                merge([newItem], old, mergingPredicate),
+              queryClient.setQueryData(queryKey, (old: T[]) => [...old, newItem],
               );
             },
             error: (error: any) => console.warn(error),
@@ -168,7 +104,7 @@ export default function useGqlCached<T extends Identifiable>(
               const updatedItem = Object.values(data)[0] as T;
               console.log(`onUpdate callback (${JSON.stringify(queryKey)}`);
               queryClient.setQueryData(queryKey, (old: T[]) =>
-                merge([updatedItem], old),
+                old.map((item) => mergingPredicate(item, updatedItem) ? { ...item, ...updatedItem } : item),
               );
             },
             error: (error: any) => console.warn(error),
@@ -178,7 +114,7 @@ export default function useGqlCached<T extends Identifiable>(
               const deletedItem = Object.values(data)[0] as T;
               console.log(`onDelete callback (${JSON.stringify(queryKey)}`);
               queryClient.setQueryData(queryKey, (items: T[]) =>
-                items.filter((item) => item.id !== deletedItem.id),
+                items.filter((item) => !mergingPredicate(item,deletedItem)),
               );
             },
             error: (error: any) => console.warn(error),
@@ -279,22 +215,19 @@ export default function useGqlCached<T extends Identifiable>(
       // (so they don't overwrite our optimistic update)
       await queryClient.cancelQueries({ queryKey });
       // Snapshot the previous value
-      const oldCategories = queryClient.getQueryData(queryKey);
+      const oldItems = queryClient.getQueryData(queryKey);
       // Optimistically update to the new value
-      if (oldCategories) {
-        queryClient.setQueryData(queryKey, (old: T[]) =>
-          old.filter((item) => item.id !== deletedItem.id)
-        );
-      }
+      queryClient.setQueryData(queryKey, (old: T[]) =>
+        old.filter((item) => !mergingPredicate(item,deletedItem)));
       // Return a context object with the snapshotted value
-      return { oldCategories };
+      return { oldItems };
     },
     // If the mutation fails,
     // use the context returned from onMutate to rollback
     onError: (err, newItem, context) => {
       console.error("Error saving record:", err, newItem);
-      if (context?.oldCategories) {
-        queryClient.setQueryData(queryKey, context.oldCategories);
+      if (context?.oldItems) {
+        queryClient.setQueryData(queryKey, context.oldItems as T[]);
       }
     },
     onSuccess: () => {
@@ -321,9 +254,7 @@ export default function useGqlCached<T extends Identifiable>(
       // if (oldCategories) {
 
       queryClient.setQueryData(queryKey, (old:T[]) =>
-        old.map((item) =>
-          item.id === (editedItem as any).id ? { ...item, ...editedItem } : item,
-        ),
+          old.map((item) => mergingPredicate(item,editedItem) ? { ...item, ...editedItem } : item),
       );
       // }
       // Return a context object with the snapshotted value
@@ -350,8 +281,8 @@ export const useImages = () => {
         await gqlSend(mutations.createImage, { input }),
       updateItem: async (input) =>
         await gqlSend(mutations.updateImage, { input }),
-      deleteItem: async ({ id }) =>
-        await gqlSend(mutations.deleteImage, { input: { id } }),
+      deleteItem: async (input) =>
+        await gqlSend(mutations.deleteImage, { input }),
       onCreate: (subConfig) =>
         gqlSend(subs.onCreateImage, {}).then((x: any) => x.subscribe(subConfig)),
       onDelete: (subConfig) =>
@@ -413,7 +344,7 @@ export const useUsers = () => {
 export const useCategory = (currentProject: any) => {
   const [currentCategory, setCurrentCategory] = useState<string>("");
   const { query, createMutation, deleteMutation, updateMutation } =
-    useGqlCached<Category>({
+    useGqlCached<CategoryType>({
       queryKey: ["categories", currentProject],
       listItem: async () => await GQL_Client.models.Category.list({filter: {projectId: {eq: currentProject}}}),
       createItem: async (input) => 
@@ -473,11 +404,11 @@ const listAnnotations = `query MyQuery($imageKey: String!, $setId: ID!, $nextTok
 }`;
 export const useAnnotations = (imageKey: string, setId: string) => {
   const { user } = useContext(UserContext) ?? {};
-  const { query, createMutation, deleteMutation, updateMutation } = useGqlCached<Annotation>({
+  const { query, createMutation, deleteMutation, updateMutation } = useGqlCached<AnnotationType>({
     queryKey: ["annotations", `${imageKey}-${setId}`],
     listItem: async () => {
       let nextToken: string | null = null;
-      let allItems: Annotation[] = [];
+      let allItems: AnnotationType[] = [];
       while (nextToken !== null) {
         const response = await gqlSend(listAnnotations, { nextToken, setId, imageKey }) as { data: AnnotationsResponse };
         const la: AnnotationsResponse['annotationsByImageKey'] = response.data.annotationsByImageKey;
@@ -486,9 +417,9 @@ export const useAnnotations = (imageKey: string, setId: string) => {
       }
       return { data: { listAnnotations: { items: allItems } } };
     },
-    createItem: async (input: Annotation) =>
+    createItem: async (input: AnnotationType) =>
       await gqlSend(createAnnotationMinimal, { input }),
-    updateItem: async (input: Annotation) =>
+    updateItem: async (input: AnnotationType) =>
       await gqlSend(updateAnnotationMinimal, { input }),
     deleteItem: async ({ id }: { id: string }) =>
       await gqlSend(deleteAnnotationMinimal, { input: { id } }),
@@ -516,18 +447,16 @@ export const useAnnotations = (imageKey: string, setId: string) => {
   });
   return {
     annotations: query.data,
-    createAnnotation: (newAnnotation: Annotation) => {
-      newAnnotation.id = crypto.randomUUID();
+    createAnnotation: (annotation: AnnotationType) => {
+      const newAnnotation = {...annotation, id: crypto.randomUUID()};
       if (user) newAnnotation.owner = user.id;
       return createMutation.mutate(newAnnotation);
     },
     deleteAnnotation: deleteMutation.mutate,
-    updateAnnotation: (anno: Annotation & { shadow?: boolean }) => {
+    updateAnnotation: (anno: AnnotationType & { shadow?: boolean }) => {
       if (anno.shadow) {
-        anno.id = crypto.randomUUID();
-        if (user) anno.owner = user.id;
-        anno.shadow = false;
-        return createMutation.mutate(anno);
+        const newAnnotation: AnnotationType = {...anno, id: crypto.randomUUID()};
+        return createMutation.mutate(newAnnotation);
       } else {
         updateMutation.mutate(anno);
       }
@@ -618,22 +547,20 @@ export const useQueues = (project: string) => {
 };
 
 /*      createItem: async ({ id }) =>
-        await GQL_Client.models.AnnotationSet.create({id, projectId: project}),*/
+        await GQL_Client.models.AnnotationSetType.create({id, projectId: project}),*/
 
 export const useAnnotationSets = (project: string) => {
   const { query, createMutation, deleteMutation, updateMutation } =
-    useGqlCached<AnnotationSet>({
+    useGqlCached<AnnotationSetType>({
       queryKey: ["annotationSets", project],
       listItem: async () =>
         await GQL_Client.models.AnnotationSet.list({filter: {name: {eq: project}}}),
         createItem: async ({ name, id }) =>
           await GQL_Client.models.AnnotationSet.create({id, name, projectId: project}),
-      updateItem: async ({ name, id, projectName }) =>
-        await gqlSend(mutations.updateAnnotationSet, {
-          input: { id, name, projectName },
-        }),
-      deleteItem: async ({ id }) =>
-        await gqlSend(mutations.deleteAnnotationSet, { input: { id } }),
+      updateItem: async (input) =>
+        await gqlSend(mutations.updateAnnotationSet, { input }),
+      deleteItem: async (input) =>
+        await gqlSend(mutations.deleteAnnotationSet, { input }),
       onCreate: (subconfig) =>
         gqlSend(subs.onCreateAnnotationSet, {
           filter: { projectName: { eq: project } },
@@ -649,9 +576,9 @@ export const useAnnotationSets = (project: string) => {
     });
   return {
     annotationSets: query.data,
-    createAnnotationSet: (name: string) => {
+    createAnnotationSet: (set: AnnotationSetType) => {
       const id = crypto.randomUUID();
-      createMutation.mutate({ name, id, projectName: project });
+      createMutation.mutate({...set, id});
       return id;
     },
     deleteAnnotationSet: deleteMutation.mutate,
@@ -661,17 +588,17 @@ export const useAnnotationSets = (project: string) => {
 
 export const useLocationSets = (projectName: string) => {
   const { query, createMutation, deleteMutation, updateMutation } =
-    useGqlCached<LocationSet>({
+    useGqlCached<LocationSetType>({
       queryKey: ["locationSets", projectName],
       listItem: async () =>
         await gqlSend(queries.locationSetsByProjectName, { projectName }),
-      createItem: async ({ id, name }) =>
+      createItem: async (input: LocationSetType) =>
         await gqlSend(mutations.createLocationSet, {
-          input: { name, id, projectName },
+          input,
         }),
-      updateItem: async ({ id, name, projectName }) =>
+      updateItem: async (input) =>
         await gqlSend(mutations.updateLocationSet, {
-          input: { name, id, projectName },
+          input,
         }),
       deleteItem: async ({ id }) =>
         await gqlSend(mutations.deleteLocationSet, { input: { id } }),
@@ -690,9 +617,9 @@ export const useLocationSets = (projectName: string) => {
     });
   return {
     locationSets: query.data,
-    createLocationSet: (newLocationSet: {id: string; name: string}) => {
+    createLocationSet: (input: LocationSetType) => {
       const id = crypto.randomUUID();
-      createMutation.mutate({...newLocationSet, id, projectName,});
+      createMutation.mutate({...input, id});
       return id;
     },
     deleteLocationSet: deleteMutation.mutate,
@@ -718,7 +645,7 @@ const createSub = `subscription onCreateLocation {
 
 export const useLocations = (setId: string) => {
   const { query, createMutation, deleteMutation, updateMutation } =
-    useGqlCached<Location>({
+    useGqlCached<LocationType>({
       queryKey: ["locations", `${setId}`],
       listItem: async () => gqlGetMany(getLocationsInSet, { id: setId }),
       createItem: async (input) =>
@@ -741,8 +668,8 @@ export const useLocations = (setId: string) => {
     });
   return {
     locations: query.data,
-    createLocation: (newLocation: Location) => {
-      newLocation.id = crypto.randomUUID();
+    createLocation: (location: LocationType) => {
+      const newLocation = {...location, id: crypto.randomUUID()};
       return createMutation.mutate(newLocation);
     },
     deleteLocation: deleteMutation.mutate,
@@ -790,7 +717,7 @@ export const useProjects = () => {
 
 export const useProjectMemberships = () => {
   const { query, createMutation, deleteMutation, updateMutation } =
-    useGqlCached<UserProjectMembership>({
+    useGqlCached<UserProjectMembershipType>({
       queryKey: ["UserProjectMemberships"],
       listItem: async () =>
         await GQL_Client.models.UserProjectMembership.list({}),
@@ -815,8 +742,8 @@ export const useProjectMemberships = () => {
     });
   return {
     projectMemberships: query.data,
-    createProjectMembership: (newUserProjectMembership: UserProjectMembership) => {
-      newUserProjectMembership.id = crypto.randomUUID();
+    createProjectMembership: (userProjectMembership: UserProjectMembershipType) => {
+      const newUserProjectMembership: UserProjectMembershipType = {...userProjectMembership, id: crypto.randomUUID()};
       GQL_Client.mutations.addUserToGroup({
         userId: newUserProjectMembership.userId,
         groupName: newUserProjectMembership.projectId,
@@ -824,7 +751,7 @@ export const useProjectMemberships = () => {
       createMutation.mutate(newUserProjectMembership);
       return newUserProjectMembership.id;
     },
-    deleteProjectMembership: (pm: UserProjectMembership) => {
+    deleteProjectMembership: (pm: UserProjectMembershipType) => {
       GQL_Client.mutations.removeUserFromGroup({
         userId: pm.userId,
         groupName: pm.projectId,
