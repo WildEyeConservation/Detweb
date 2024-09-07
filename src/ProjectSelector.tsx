@@ -5,20 +5,20 @@ import { UserContext, UserContextType } from "./UserContext";
 import { GQL_Client } from "./App";
 
 function ProjectSelector() {
-  const { user, setCurrentProject, projects, currentProject } = useContext(UserContext) as UserContextType;
-  const { createProject } = useProjects();
+  const { user, setCurrentProject, memberships, currentProject } = useContext(UserContext) as UserContextType;
+  const { projects, createProject } = useProjects();
   const { createProjectMembership } = useProjectMemberships();
 
   useEffect(() => {
-    if (projects?.length === 0) {
+    if (memberships?.length === 0) {
       alert(
         "You have not been added to any projects yet. You won't be able to participate until an admin adds you to one of their projects and assigns you to a work queue.",
       );
     }
-    if (projects?.length === 1) {
-      setCurrentProject(projects[0]);
+    if (memberships?.length === 1) {
+      setCurrentProject(memberships[0].projectId);
     }
-  }, [user, projects, setCurrentProject]);
+  }, [user, memberships, setCurrentProject]);
 
   const onNewProject = async () => {
     const name = prompt("Please enter Project name", "");
@@ -34,7 +34,7 @@ function ProjectSelector() {
         userId: user!.id,
         groupName: project.id+'-admin',
       });
-      return name;
+      return project.id;
     }
   };
 
@@ -52,12 +52,12 @@ function ProjectSelector() {
                 setCurrentProject(e.target.value);
               }
             }}
-            value={currentProject || ""}
+            value={currentProject}
           >
             {!currentProject && <option>Select a Project to work on:</option>}
             {projects?.map((project) => (
-              <option value={project} key={project}>
-                {project}
+              <option value={project.id} key={project.id}>
+                {projects.find(p => p.id === project.id)?.name}
               </option>
             ))}
             {<option value="new">Create a new Project</option>}
