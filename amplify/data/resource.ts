@@ -47,7 +47,8 @@ const schema = a.schema({
     observations: a.hasMany('Observation', 'projectId'),
     members: a.hasMany('UserProjectMembership', 'projectId'),
     queues: a.hasMany('Queue', 'projectId'),
-  }).authorization(allow=>[allow.authenticated()]),
+  }).authorization(allow => [allow.groupDefinedIn('projectId').to(['read']),
+                   allow.group('orgadmin').to(['create','update','delete'])]),
   Category: a.model({
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
