@@ -43,5 +43,5 @@ backend.addOutput({custom:createDetwebResources(customStack,backend)})
 //   }
 // );
 
-//backend.data.resources.tables['User'].grantFullAccess(addUser)
+//backend.data.resources.tables['User'].grantFullAccess(handleNewUser)
 

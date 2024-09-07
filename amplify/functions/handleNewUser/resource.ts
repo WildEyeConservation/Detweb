@@ -1,7 +1,7 @@
 import { defineFunction } from '@aws-amplify/backend';
 
-export const addUser = defineFunction({
-    name: 'addUser',
+export const handleNewUser = defineFunction({
+    name: 'handleNewUser',
     environment:{
         GROUP: 'annotator'
     }

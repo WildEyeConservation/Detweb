@@ -5,7 +5,7 @@ import {
   AdminAddUserToGroupCommand,
   ListUsersCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
-import {env} from '$amplify/env/addUser'
+import {env} from '$amplify/env/handleNewUser'
 
 const addToGroup = async (event: PostConfirmationConfirmSignUpTriggerEvent) => {
   const cognitoIdentityServiceProvider = new CognitoIdentityProviderClient({});

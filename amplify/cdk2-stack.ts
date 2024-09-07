@@ -173,7 +173,7 @@ export const createDetwebResources=function(scope: Construct, backend : Backend<
       handler: "handler",
       entry: './cdk/lib/lambdas/postDeploy/main.ts',
       environment: {
-        //LAMBDANAME: backend.addUser.resources.lambda.functionArn,
+        //LAMBDANAME: backend.handleNewUser.resources.lambda.functionArn,
         API_DETWEB_GRAPHQLAPIENDPOINTOUTPUT: gqlAPI.graphqlUrl,
         API_DETWEB_GRAPHQLAPIKEYOUTPUT: gqlAPI.apiKey || "none",
         USER_POOL_ID: auth.resources.userPool.userPoolId,
