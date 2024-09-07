@@ -23,9 +23,7 @@ export const auth = defineAuth({
   groups: ["sysadmin", "orgadmin"],
   triggers:{postConfirmation: addUser},
   access:(allow)=>[
-    allow.resource(addUser).to(["addUserToGroup"]),
-    allow.resource(addUser).to(["listUsers"]),
-    allow.resource(addUserToGroup).to(["addUserToGroup"]),
+    allow.resource(addUser).to(["addUserToGroup","listUsers"]),
     allow.resource(createGroup).to(["createGroup"]),
     allow.resource(listUsers).to(["listUsers"]),
     allow.resource(listGroupsForUser).to(["listGroupsForUser"]),

@@ -194,7 +194,7 @@ const schema = a.schema({
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
     queueUrl: a.string(),
-  }).authorization(allow => [allow.groupDefinedIn('projectId'),allow.group('admin')])
+  }).authorization(allow => [allow.groupDefinedIn('projectId'),allow.group('orgadmin')])
   .secondaryIndexes((index)=>[index('projectId').queryField('userProjectMembershipsByProjectId'),
     index('userId').queryField('userProjectMembershipsByUserId'),
     index('queueUrl').queryField('userProjectMembershipsByQueueUrl')
@@ -209,29 +209,29 @@ const schema = a.schema({
   addUserToGroup: a.mutation().arguments({
     userId:a.string().required(), 
     groupName:a.string().required()
-  }).authorization(allow=>[allow.group('admin')])
+  }).authorization(allow=>[allow.group('orgadmin')])
   .handler(a.handler.function(addUserToGroup))
   .returns(a.json()),
   removeUserFromGroup: a.mutation().arguments({
     userId:a.string().required(), 
     groupName:a.string().required()
-  }).authorization(allow=>[allow.group('admin')])
+  }).authorization(allow=>[allow.group('orgadmin')])
   .handler(a.handler.function(addUserToGroup))
   .returns(a.json()),
   createGroup: a.mutation().arguments({
     groupName: a.string().required()
-  }).authorization(allow=>[allow.group('admin')])
+  }).authorization(allow=>[allow.group('orgadmin')])
   .handler(a.handler.function(createGroup))
   .returns(a.json()),
   listUsers: a.query().arguments({
     nextToken: a.string()
-  }).authorization(allow=>[allow.group('admin')])
+  }).authorization(allow=>[allow.group('orgadmin')])
   .handler(a.handler.function(listUsers))
   .returns(a.customType({Users: a.ref('UserType').array(), NextToken: a.string()})),
   listGroupsForUser: a.query().arguments({
     userId: a.string().required(),
     nextToken: a.string()
-  }).authorization(allow=>[allow.group('admin')])
+  }).authorization(allow=>[allow.group('orgadmin')])
   .handler(a.handler.function(listGroupsForUser))
   .returns(a.json()),
 }).authorization(allow=>[allow.resource(handleUpload)])
