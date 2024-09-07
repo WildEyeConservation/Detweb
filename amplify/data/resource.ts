@@ -193,6 +193,7 @@ const schema = a.schema({
     userId: a.string().required(),
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
+    isAdmin: a.boolean(),
     queueUrl: a.string(),
   }).authorization(allow => [allow.groupDefinedIn('projectId'),allow.group('orgadmin')])
   .secondaryIndexes((index)=>[index('projectId').queryField('userProjectMembershipsByProjectId'),

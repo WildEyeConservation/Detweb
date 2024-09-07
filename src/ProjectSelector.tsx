@@ -27,9 +27,9 @@ function ProjectSelector() {
         name,
       });
       createProjectMembership({
-        projectId: project.id, userId: user!.id
+        projectId: project.id!, userId: user!.id, isAdmin: true
       });
-      setCurrentProject(project);
+      setCurrentProject(project.id);
       await GQL_Client.mutations.addUserToGroup({
         userId: user!.id,
         groupName: project.id+'-admin',
