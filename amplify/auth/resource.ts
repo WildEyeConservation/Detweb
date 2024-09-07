@@ -1,6 +1,6 @@
 import { defineAuth } from '@aws-amplify/backend';
 import { addUser } from '../functions/addUser/resource';
-import { addUserToGroup } from "../data/add-user-to-group/resource"
+import { addUserToGroup } from "../functions/add-user-to-group/resource"
 import { createGroup } from "../data/create-group/resource"
 import { listUsers } from "../data/list-users/resource"
 import { listGroupsForUser } from "../data/list-groups-for-user/resource"
@@ -20,10 +20,11 @@ export const auth = defineAuth({
       required: true
     }
   },
-  groups: ["admin", "annotator"],
+  groups: ["sysadmin", "orgadmin"],
   triggers:{postConfirmation: addUser},
   access:(allow)=>[
     allow.resource(addUser).to(["addUserToGroup"]),
+    allow.resource(addUser).to(["listUsers"]),
     allow.resource(addUserToGroup).to(["addUserToGroup"]),
     allow.resource(createGroup).to(["createGroup"]),
     allow.resource(listUsers).to(["listUsers"]),

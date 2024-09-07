@@ -2,16 +2,16 @@ import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { createDetwebResources } from "./cdk2-stack";
-import { addUser } from "./functions/addUser/resource";
-import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import { addUserToGroup } from "./functions/add-user-to-group/resource";
+// import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 
-import * as opensearch from "aws-cdk-lib/aws-opensearchservice";
-import {  Stack } from "aws-cdk-lib";
+// import * as opensearch from "aws-cdk-lib/aws-opensearchservice";
+// import {  Stack } from "aws-cdk-lib";
 
 const backend=defineBackend({
   auth,
   data,
-  addUser
+  addUserToGroup
 });
 
 

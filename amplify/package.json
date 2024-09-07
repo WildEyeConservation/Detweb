@@ -1,3 +1,6 @@
 {
-  "type": "module"
+  "name": "amplify-functions",
+  "version": "1.0.0",
+  "description": "Amplify functions",
+  "private": true
 }

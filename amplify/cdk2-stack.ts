@@ -29,7 +29,7 @@ export type AddEnvironmentFactory = {
 export const createDetwebResources=function(scope: Construct, backend : Backend<{
   auth: ConstructFactory<BackendAuth>;
   data: ConstructFactory<AmplifyGraphqlApi>;
-  addUser: ConstructFactory<ResourceProvider<FunctionResources> & ResourceAccessAcceptorFactory & AddEnvironmentFactory>;
+  addUserToGroup: ConstructFactory<ResourceProvider<FunctionResources> & ResourceAccessAcceptorFactory & AddEnvironmentFactory>;
 }>) {
   const authenticatedRole = backend.auth.resources.authenticatedUserIamRole
   const gqlAPI = backend.data
@@ -189,7 +189,7 @@ export const createDetwebResources=function(scope: Construct, backend : Backend<
     postDeployLambda.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["lambda:UpdateFunctionConfiguration"],
-        resources: [backend.addUser.resources.lambda.functionArn],
+        resources: [backend.addUserToGroup.resources.lambda.functionArn],
       })
     );    
   

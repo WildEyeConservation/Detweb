@@ -1,6 +1,6 @@
 import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
 import { handleUpload } from '../functions/handleUpload/resource'
-import { addUserToGroup } from '../data/add-user-to-group/resource'
+import { addUserToGroup } from '../functions/add-user-to-group/resource'
 import { createGroup } from '../data/create-group/resource'
 import { listUsers } from '../data/list-users/resource'
 import { listGroupsForUser } from '../data/list-groups-for-user/resource'
@@ -47,7 +47,7 @@ const schema = a.schema({
     observations: a.hasMany('Observation', 'projectId'),
     members: a.hasMany('UserProjectMembership', 'projectId'),
     queues: a.hasMany('Queue', 'projectId'),
-  }).authorization(allow => [allow.groupDefinedIn('name'),allow.group('admin')]),
+  }).authorization(allow=>[allow.authenticated()]),
   Category: a.model({
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
