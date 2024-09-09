@@ -15,13 +15,12 @@ export function LocationSetDropdown({
   hasCreateOption = false,
 }: LocationSetDropdownProps) {
   const { currentProject } = useContext(UserContext)!;
-  const { locationSets, createLocationSet } = useLocationSets(currentProject || "");
+  const { locationSets, createLocationSet } = useLocationSets(currentProject!.id);
 
   const onNewLocationSet = async () => {
     const name = prompt("Please enter new LocationSet name", "");
     if (name) {
-      const newLocationSet: { id: string; name: string } = { id: crypto.randomUUID(), name };
-      await createLocationSet(newLocationSet);
+      const newLocationSet = await createLocationSet({name, projectId: currentProject!.id});
       setLocationSet(newLocationSet.id);
     }
   };

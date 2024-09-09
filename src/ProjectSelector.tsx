@@ -1,13 +1,14 @@
 import { useContext, useEffect } from "react";
 import Form from "react-bootstrap/Form";
-import { useProjects, useProjectMemberships } from "./useGqlCached";
+import { useProjects } from "./useGqlCached";
 import { UserContext, UserContextType } from "./UserContext";
-import { GQL_Client } from "./App";
-
+import { GQL_Client  } from "./App";
+import { useOptimisticUpdates } from "./useOptimisticUpdates";
 function ProjectSelector() {
-  const { user, setCurrentProject, memberships, currentProject } = useContext(UserContext) as UserContextType;
+  const { user, setCurrentProject, currentProject } = useContext(UserContext) as UserContextType;
   const { projects, createProject } = useProjects();
-  const { createProjectMembership } = useProjectMemberships();
+  //const { createProjectMembership } = useProjectMemberships();
+  const { data: { data: memberships }, create: createProjectMembership} = useOptimisticUpdates("UserProjectMembership");
 
   useEffect(() => {
     if (memberships?.length === 0) {
@@ -18,7 +19,7 @@ function ProjectSelector() {
     if (memberships?.length === 1) {
       setCurrentProject(memberships[0].projectId);
     }
-  }, [user, memberships, setCurrentProject]);
+  }, [memberships?.length]);
 
   const onNewProject = async () => {
     const name = prompt("Please enter Project name", "");
@@ -52,7 +53,7 @@ function ProjectSelector() {
                 setCurrentProject(e.target.value);
               }
             }}
-            value={currentProject}
+            value={currentProject?.id}
           >
             {!currentProject && <option>Select a Project to work on:</option>}
             {projects?.map((project) => (

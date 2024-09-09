@@ -12,35 +12,18 @@ import {
 import * as L from "leaflet";
 import { AnnotationsContext } from "./AnnotationsContext";
 import * as jdenticon from "jdenticon";
-import { Category } from "./Categories"; // Ensure this import is correct
 import { useMap } from "react-leaflet";
 import { useCategory } from "./useGqlCached";
-
-
-interface Annotation {
-  id?: string;
-  objectId?: string | null;
-  proposedObjectId?: string;
-  candidate?: boolean;
-  obscured?: boolean;
-  shadow?: boolean;
-  owner?: string;
-  createdAt?: string;
-  categoryId?: string;
-  y: number;
-  x: number;
-  message?: string;
-}
-
+import type { AnnotationType, CategoryType, ExtendedAnnotationType } from "./schemaTypes";
 interface ShowMarkersProps {
-  activeAnnotation?: Annotation;
-  annotations: Annotation[] | undefined;
+  activeAnnotation?: AnnotationType;
+  annotations: AnnotationType[] | undefined;
 }
 
 function createIcon(
-  categories: Category[],
-  annotation: Annotation,
-  activeAnnotation?: Annotation
+  categories: CategoryType[],
+  annotation: ExtendedAnnotationType,
+  activeAnnotation?: ExtendedAnnotationType
 ) {
   const color =
     categories?.find((category) => category.id === annotation.categoryId)
@@ -104,7 +87,7 @@ export function ShowMarkers({ activeAnnotation }: ShowMarkersProps) {
       const items = getContextMenuItems(
         annotation,
         user,
-        categories ?? [],
+        categories as CategoryType[],
         deleteAnnotation,
         updateAnnotation
       );
@@ -175,11 +158,11 @@ export function ShowMarkers({ activeAnnotation }: ShowMarkersProps) {
   }
 
   function getContextMenuItems(
-    det: Annotation,
+    det: AnnotationType,
     user: any,
-    categories: Category[],
-    deleteAnnotation: (annotation: Annotation) => void,
-    updateAnnotation: (annotation: Annotation) => void
+    categories: CategoryType[],
+    deleteAnnotation: (annotation: AnnotationType) => void,
+    updateAnnotation: (annotation: AnnotationType) => void
   ) {
     let contextmenuItems = [];
     contextmenuItems.push({
@@ -235,8 +218,7 @@ export function ShowMarkers({ activeAnnotation }: ShowMarkersProps) {
               MessageRetentionPeriod: "1209600", // This value is in seconds. 1209600 corresponds to 14 days and is the maximum AWS supports
             },
           });
-          det.message = msg ?? undefined;
-          sendToQueue({ QueueUrl: url, MessageBody: JSON.stringify(det) });
+          sendToQueue({ QueueUrl: url, MessageBody: JSON.stringify({...det, message: msg}) });
           console.log(msg);
         },
       };
@@ -245,14 +227,14 @@ export function ShowMarkers({ activeAnnotation }: ShowMarkersProps) {
     return contextmenuItems;
   }
 
-  const getType = (annotation: Annotation) =>
-    (categories?.find((category) => category.id === annotation.categoryId) as Category | undefined)
+  const getType = (annotation: ExtendedAnnotationType) =>
+    (categories?.find((category) => category.id === annotation.categoryId) as CategoryType | undefined)
       ?.name ?? "Unknown";
 
   if (enabled)
     return (
       <>
-        {annotations?.map((annotation: Annotation) => {
+        {annotations?.map((annotation: ExtendedAnnotationType) => {
           const position = xy2latLng
             ? (() => {
                 const latLng = xy2latLng([annotation.x, annotation.y]);

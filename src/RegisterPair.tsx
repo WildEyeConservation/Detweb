@@ -12,21 +12,14 @@ import { multiply, inv, Matrix } from "mathjs";
 import useAckOnTimeout from "./useAckOnTimeout";
 import { ShowMarkers } from "./ShowMarkers";
 import Annotations from "./AnnotationsContext";
-import { Annotation } from './useGqlCached';
 import { Map } from 'leaflet';
-
-type Image = {
-  key: string;
-  width: number;
-  height: number;
-};
-
+import type { ImageMetaType, AnnotationType, ExtendedAnnotationType } from "./schemaTypes";
 
 type RegisterPairProps = {
-  images: Image[];
+  images: [ImageMetaType, ImageMetaType];
   selectedSet: string;
   next: () => void;
-  prev: () => void;
+  prev: () => void; 
   homography?: Matrix;
   visible: boolean;
   ack: () => void;
@@ -54,14 +47,14 @@ export function RegisterPair({
     useAnnotations(images?.[1]?.key, selectedSet) || { annotations: [], createAnnotation: () => {}, deleteAnnotation: () => {}, updateAnnotation: () => {} },
   ].map((hook)=>({...hook,annotations:hook.annotations || []}));
   const [matchStatus, setMatchStatus] = useState<Record<string, number>>({});
-  const setMatch = (anno1: Annotation, anno2: Annotation, val: number) => {
+  const setMatch = (anno1: Partial<ExtendedAnnotationType>, anno2: Partial<ExtendedAnnotationType>, val: number) => {
     setMatchStatus((m) => {
       const mNew = { ...m };
       mNew[anno1.id + anno2.id] = val;
       return mNew;
     });
   };
-  const rejectMatch = ([anno1, anno2]: [Annotation, Annotation]) => {
+  const rejectMatch = ([anno1, anno2]: [ExtendedAnnotationType, ExtendedAnnotationType]) => {
     setMatch(anno1, anno2, -1);
   };
   // const acceptMatch = ([anno1, anno2]: [Annotation, Annotation]) => {
@@ -71,7 +64,7 @@ export function RegisterPair({
     ? [transform(homography), transform(inv(homography))]
     : null;
   const getMatchStatus = useCallback(
-    ([anno1, anno2]: [Annotation, Annotation]): number => {
+    ([anno1, anno2]: [AnnotationType, AnnotationType]): number => {
       return matchStatus[anno1.id + anno2.id];
     },
     [matchStatus],
@@ -91,7 +84,7 @@ export function RegisterPair({
     if (index < matches.length - 1) {
       setIndex((i) => i + 1);
     } else {
-      getAugmentedHook(0).annotations?.map((anno: Annotation) =>
+      getAugmentedHook(0).annotations?.map((anno: AnnotationType) =>
         confirmAnnotation(anno, getAugmentedHook(0)),
       );
       getAugmentedHook(1).annotations?.map((anno: Annotation) =>
@@ -107,7 +100,7 @@ export function RegisterPair({
   //   nextAnnotation();
   // }, [matches, index]);
 
-  function confirmAnnotation(anno: Annotation, hook: any) {
+  function confirmAnnotation(anno: AnnotationType, hook: any) {
     if (!anno.objectId && anno.proposedObjectId) {
       anno.objectId = anno.proposedObjectId;
     }

@@ -5,21 +5,10 @@ import Location from "./Location";
 import { LayersControl, Pane } from "react-leaflet";
 import { gqlClient, graphqlOperation } from "./App";
 import { GraphQLResult } from "@aws-amplify/api";
-
+import type { LocationType, LocationSetType } from "./schemaTypes";
 interface ImageProps {
   key: string;
 }
-
-interface LocationType {
-  id: string;
-  setId: string;
-}
-
-interface LocationSetType {
-  name: string;
-  locs: LocationType[];
-}
-
 interface LocationsByImageKeyResponse {
   locationsByImageKey: {
     items: LocationType[];
@@ -91,7 +80,7 @@ export default function AllLocations({ image }: AllLocationsProps) {
             {/* By default this layer goes to the overlayPane. We want to lift it slightly to the shadowPane so that it renders over the current
             location (which has showTestCase==false) */}
             {locationSets[key].locs.map((loc) => (
-              <Location x={0} y={0} width={0} height={0} isTest={null} key={loc.id} showTestCase={true} {...loc} />
+              <Location x={0} y={0} width={0} height={0} key={loc.id} showTestCase={true} {...loc} />
             ))}
           </Pane>
         </LayersControl.Overlay>

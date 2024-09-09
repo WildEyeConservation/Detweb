@@ -1,38 +1,15 @@
 import { useMap } from "react-leaflet";
-import { useContext, useState, useEffect } from "react";
+import { useContext,  useEffect } from "react";
 import "leaflet-contextmenu/dist/leaflet.contextmenu.css";
-import { gqlClient, graphqlOperation } from "./App";
-import { updateLocation } from "./graphql/mutations";
-import { UserContext } from "./UserContext";
 import { ImageContext } from "./BaseImage";
 import L from "leaflet";
 import "leaflet-contextmenu";
+import { LocationType } from "./schemaTypes";
 
-interface LocationProps {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  id: string;
-  isTest: number | null;
-  showTestCase?: boolean;
-  confidence?: number;
-}
-
-export default function Location({
-  x,
-  y,
-  width,
-  height,
-  id,
-  isTest: _isTest,
-  showTestCase = true,
-  confidence = 0,
-}: LocationProps) {
+export default function Location({x,y,width,height,confidence}: LocationType) {
   const { xy2latLng } = useContext(ImageContext)!;
-  const [isTest, setTest] = useState<number | null>(_isTest);
-  const { user } = useContext(UserContext)!;
-  const [key, setKey] = useState<string>(crypto.randomUUID());
+  width ||= 100
+  height ||= 100
 
   const boundsxy: [number, number][] = [
     [x - width / 2, y - height / 2],
@@ -48,29 +25,30 @@ export default function Location({
     },
   ];
 
-  if (user?.isAdmin) {
-    contextMenuItems.push({
-      text: isTest
-        ? "Stop using this location as a test location"
-        : "Use this location as a test location",
-      callback: changeTest,
-    });
-  }
+  // if (user?.isAdmin) {
+  //   contextMenuItems.push({
+  //     text: isTest
+  //       ? "Stop using this location as a test location"
+  //       : "Use this location as a test location",
+  //     callback: changeTest,
+  //   });
+  // }
 
-  function changeTest() {
-    setKey(crypto.randomUUID());
-    setTest(isTest ? null : Math.floor(Date.now() / 1000));
-    gqlClient.graphql(
-      graphqlOperation(updateLocation, {
-        input: { id, isTest: isTest ? null : Math.floor(Date.now() / 1000) },
-      })
-    );
-  }
+  // function changeTest() {
+  //   setKey(crypto.randomUUID());
+  //   setTest(isTest ? null : Math.floor(Date.now() / 1000));
+  //   gqlClient.graphql(
+  //     graphqlOperation(updateLocation, {
+  //       input: { id, isTest: isTest ? null : Math.floor(Date.now() / 1000) },
+  //     })
+  //   );
+  // }
 
   useEffect(() => {
     const latLngBounds = xy2latLng(boundsxy) as unknown as L.LatLngBoundsLiteral;
     const rectangle = L.rectangle(latLngBounds, {
-      color: showTestCase && isTest ? "red" : "blue",
+      // color: showTestCase && isTest ? "red" : "blue",
+      color: "blue",
       fill: false,
     }).addTo(map);
 
@@ -83,7 +61,7 @@ export default function Location({
     return () => {
       map.removeLayer(rectangle);
     };
-  }, [map, key, boundsxy, contextMenuItems]);
+  }, [map, boundsxy, contextMenuItems]);
 
   return null;
 }

@@ -1,32 +1,21 @@
 import { useContext, useEffect } from "react";
 import { useMap } from "react-leaflet";
 import { ImageContext } from "./BaseImage";
-
-interface Annotation {
-  x: number;
-  y: number;
-  imageKey?: string; 
-  selected?: boolean;
-}
-
-interface Image {
-  key: string;
-}
+import { ExtendedAnnotationType, ImageMetaType } from "./schemaTypes";
 
 interface GotoAnnotationProps {
-  activeAnnotation: Annotation | null;
-  image: Image | null;
+  activeAnnotation?: ExtendedAnnotationType;
+  imageMeta: ImageMetaType;
   transform: (coords: [number, number]) => [number, number];
 }
 
-export function GotoAnnotation({ activeAnnotation, image, transform }: GotoAnnotationProps) {
+export function GotoAnnotation({ activeAnnotation, imageMeta, transform }: GotoAnnotationProps) {
   const map = useMap();
   const { xy2latLng } = useContext(ImageContext)!;
-
   useEffect(() => {
     if (activeAnnotation) {
-      //activeAnnotation.selected = true;
-      if (image?.key == activeAnnotation?.imageKey) {
+      activeAnnotation.selected = true;
+      if (imageMeta.id == activeAnnotation.metaId) {
         const latLng = xy2latLng([activeAnnotation.x, activeAnnotation.y]) as L.LatLng; 
         map.setView(latLng, 6, {
           animate: false,
@@ -40,7 +29,7 @@ export function GotoAnnotation({ activeAnnotation, image, transform }: GotoAnnot
         activeAnnotation.selected = false;
       };
     }
-  }, [activeAnnotation, transform, map, image]);
+  }, [activeAnnotation, transform, map, imageMeta]);
 
   return null;
 }

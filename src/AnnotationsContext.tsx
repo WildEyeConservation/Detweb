@@ -1,9 +1,9 @@
-import React, { ReactNode, createContext } from 'react';
-import { type Annotation } from './useGqlCached';
+import React, { ReactNode, createContext } from 'react';;
+import {type AnnotationType} from './schemaTypes'
 
 
 export interface AnnotationsContextType {
-  annotations: Annotation[] | undefined;
+  annotations: AnnotationType[] | undefined;
   updateAnnotation?: (annotation: any) => void;
   createAnnotation?: (annotation: any) => void;
   deleteAnnotation?: (annotation: any) => void;

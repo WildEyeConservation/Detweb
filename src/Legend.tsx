@@ -18,14 +18,6 @@ import { UserContext } from "./UserContext";
  * of the category is supplied as a parameter to the function call. Typically used to select the clicked category.
  */
 
-
-interface Category {
-  id: string;
-  name: string;
-  color: string;
-  shortcutKey: string;
-}
-
 interface LegendProps {
   position: keyof typeof POSITION_CLASSES;
 }
@@ -55,14 +47,14 @@ export function Legend({ position }: LegendProps) {
         >
           <div>
             {expanded
-              ? categories?.map((item: Category, index: number) => {
+              ? categories?.map((item, index) => {
                   return (
                     <div
                       key={index}
-                      onClick={() => setCurrentCategory(item.id)}
+                      onClick={() => setCurrentCategory(item)}
                       style={{ display: "flex", flexDirection: "row" }}
                     >
-                      <i style={{ background: item.color }}></i>
+                      <i style={{ background: item.color || "#000" }}></i>
                       <div
                         style={{
                           display: "flex",

@@ -1,23 +1,20 @@
 import React, { useContext, useState } from "react";
 import { Stack, Modal, Form, Button } from "react-bootstrap";
-import { UserContext } from "./UserContext";
+//import { UserContext } from "./UserContext";
 import { ImageSetDropdown } from "./ImageSetDropDown";
-import { imageSetMembershipsByImageSetName } from "./graphql/queries";
-import backend from "../amplify_outputs.json";
+//import { imageSetMembershipsByImageSetName } from "./graphql/queries";
+//import backend from "../amplify_outputs.json";
+import { ImageSetMembershipType } from "./schemaTypes";
 
 interface RetileProps{
   show: boolean;
   handleClose: ()=> void;
 }
 
-interface ImageSetMembership {
-  imageKey: string;
-}
-
 interface GraphQLResponse {
   data: {
     imageSetMembershipsByImageSetName: {
-      items: ImageSetMembership[];
+      items: ImageSetMembershipType[];
       nextToken: string | null;
     };
   };
@@ -25,45 +22,45 @@ interface GraphQLResponse {
 
 const Retile: React.FC<RetileProps> = ({ show, handleClose }) =>{
   const [selectedSets, setImageSets] = useState<string[] | undefined>(undefined);
-  const { invoke, gqlSend } = useContext(UserContext)!;
+  //const { invoke, gqlSend } = useContext(UserContext)!;
 
   async function handleSubmit() {
-    if(!selectedSets) return;
-    handleClose();
-    let allItems: ImageSetMembership[] = [];
+    // if(!selectedSets) return;
+    // handleClose();
+    // let allItems: ImageSetMembershipType[] = [];
 
-    for (const imageSet of selectedSets) {
-      let nextToken: string | null = null;
-      do {
-        const response = await gqlSend(imageSetMembershipsByImageSetName, {
-          imageSetName: imageSet,
-          nextToken,
-        }) as GraphQLResponse;
-        const { items, nextToken: newNextToken } = response.data.imageSetMembershipsByImageSetName;
-        allItems = allItems.concat(items);
-        nextToken = newNextToken;
-      } while (nextToken);
+    // for (const imageSet of selectedSets) {
+    //   let nextToken: string | null = null;
+    //   do {
+    //     const response = await gqlSend(imageSetMembershipsByImageSetName, {
+    //       imageSetName: imageSet,
+    //       nextToken,
+    //     }) as GraphQLResponse;
+    //     const { items, nextToken: newNextToken } = response.data.imageSetMembershipsByImageSetName;
+    //     allItems = allItems.concat(items);
+    //     nextToken = newNextToken;
+    //   } while (nextToken);
+    // }
+
+    // allItems.map((imageSetMembership) => {
+    //   const params = {
+    //     FunctionName:
+    //       "arn:aws:lambda:af-south-1:275736403632:function:detweb-stack-test-tileImage42302E57-exz2oBIP9AFq",
+    //     Payload: JSON.stringify({
+    //       Records: [
+    //         {
+    //           s3: {
+    //             bucket: { name: backend.custom.inputsBucket },
+    //             object: { key: "public/images/" + imageSetMembership.imageMeta.original.key },
+    //           },
+    //           eventName: "ObjectCreated",
+    //         },
+    //       ],
+    //     }),
+    //   };
+    //   invoke(params);
+    // });
     }
-
-    allItems.map(({ imageKey }) => {
-      const params = {
-        FunctionName:
-          "arn:aws:lambda:af-south-1:275736403632:function:detweb-stack-test-tileImage42302E57-exz2oBIP9AFq",
-        Payload: JSON.stringify({
-          Records: [
-            {
-              s3: {
-                bucket: { name: backend.custom.inputsBucket },
-                object: { key: "public/images/" + imageKey },
-              },
-              eventName: "ObjectCreated",
-            },
-          ],
-        }),
-      };
-      invoke(params);
-    });
-  }
 
   return (
     <Modal show={show} onHide={handleClose}>

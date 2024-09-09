@@ -17,6 +17,9 @@ import { limitConnections } from "./App.tsx";
 import { gqlSend, gqlGetMany } from "./utils";
 import { fetchAuthSession } from "aws-amplify/auth";
 import outputs from "../amplify_outputs.json";
+import type { UserProjectMembershipType, ProjectType } from "./schemaTypes";
+import { useOptimisticUpdates } from "./useOptimisticUpdates";
+
 
 
 interface UserProps {
@@ -30,11 +33,8 @@ interface UserType {
   isAdmin?: boolean;
 }
 
-interface ProjectMembership {
-  userId: string;
-  projectId: string;
-  queueUrl?: string;
-}
+// Define ProjectMembership to be the same as the ProjectMembership type in Schema
+
 
 export interface UserContextType {
   user: UserType | undefined;
@@ -46,7 +46,7 @@ export interface UserContextType {
   refreshVisibility: (config: any) => Promise<any>;
   createQueue: (config: any) => Promise<any>;
   getQueueAttributes: (config: any) => Promise<any>;
-  setCurrentProject: Dispatch<SetStateAction<string | undefined>>;
+  setCurrentProject: (projectId: string) => void;
   getQueueUrl: (config: any) => Promise<any>;
   deleteFromQueue: (config: any) => Promise<any>;
   jobsCompleted: number;
@@ -57,9 +57,10 @@ export interface UserContextType {
   lambdaClient: LambdaClient | undefined;
   region: string;
   credentials: any;
-  projects: string[] | undefined;
-  currentProject?: string | undefined;
+  projects: ProjectType[] | undefined;
+  currentProject: ProjectType | undefined;
   currentQueue: string | undefined;
+  currentPM: UserProjectMembershipType | undefined;
 }
 
 
@@ -71,14 +72,12 @@ export default function User({ loggedInUser, children }: UserProps) {
   const { projectMemberships } = useProjectMemberships();
   //const [user, setUser] = useState<UserType | undefined>(undefined);
   const [credentials, setCredentials] = useState<any>(undefined);
-  const [projects, setProjects] = useState<{id: string, name: string}[]>([]);
-  const [currentPM, setCurrentPM] = useState<ProjectMembership | undefined>(undefined);
+  const [currentPM, setCurrentPM] = useState<UserProjectMembershipType | undefined>(undefined);
   const [sqsClient, setSqsClient] = useState<SQSClient | undefined>(undefined);
   const [s3Client, setS3Client] = useState<S3Client | undefined>(undefined);
   const [lambdaClient, setLambdaClient] = useState<LambdaClient | undefined>(undefined);
-  const [currentProject, setCurrentProject] = useState<{id: string, name: string} | undefined>(undefined);
-
   const region = outputs.auth.aws_region;
+  const { data: { data: projects }} = useOptimisticUpdates("Project");
   
   // useEffect(()=>{
   //   const setup = async()=>{
@@ -161,29 +160,15 @@ export default function User({ loggedInUser, children }: UserProps) {
     return sqsSend(new GetQueueAttributesCommand(config));
   }
 
-  useEffect(() => {
-    if (loggedInUser) {
-      const projects = (projectMemberships as ProjectMembership[])
-        ?.filter((pm) => pm.userId == loggedInUser.username)
-        ?.map((pm) => pm.projectId);
-      setProjects(projects);
-    }
-  }, [projectMemberships, loggedInUser]);
+  const setCurrentProject = (projectId: string) => {
+    setCurrentPM(projectMemberships?.find((pm: UserProjectMembershipType) => pm.userId == loggedInUser.username && pm.projectId == projectId));
+  };
 
-  useEffect(() => {
-    if (loggedInUser) {
-      setCurrentPM(
-        projectMemberships?.find(
-          (pm: ProjectMembership) => pm.userId == loggedInUser.username && pm.projectId == currentProject,
-        ),
-      );
-    }
-  }, [projectMemberships, loggedInUser]);
 
   return (
     <UserContext.Provider
       value={{
-        user: {id: loggedInUser.username, currentProjectId: currentProject||""},
+        user: {id: loggedInUser.username, currentProjectId: currentPM?.projectId||""},
         backend: outputs,
         gqlSend,
         gqlGetMany,
@@ -203,9 +188,10 @@ export default function User({ loggedInUser, children }: UserProps) {
         lambdaClient,
         region,
         credentials,
-        projects,
-        currentProject,
-        currentQueue: currentPM?.queueUrl,
+        projects,//tEMPORARY HACK
+        currentProject: projects?.find((p: ProjectType) => p.id == currentPM?.projectId),
+        currentPM,
+        currentQueue: currentPM?.queueUrl || "",
       }}
     >
       {loggedInUser && credentials && children}

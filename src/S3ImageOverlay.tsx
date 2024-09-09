@@ -4,16 +4,12 @@ import { UserContext } from "./UserContext";
 import backend from "../amplify_outputs.json";
 
 interface S3ImageOverlayProps extends ImageOverlayProps {
-  image: { key: string };
   bounds: [[number, number], [number, number]];
   source: string;
 }
-export function S3ImageOverlay({ image, bounds, source, ...props }: S3ImageOverlayProps) {
+export function S3ImageOverlay({ bounds, source }: S3ImageOverlayProps) {
   const [url, setUrl] = useState<string | undefined>(undefined);
   const { getObject } = useContext(UserContext)!;
-  console.log(image);
-  console.log(image.key);
-  console.log(source);
 
   useEffect(() => {
     getObject({
@@ -38,7 +34,5 @@ export function S3ImageOverlay({ image, bounds, source, ...props }: S3ImageOverl
       .then((url) => setUrl(url));
   }, [source, getObject]);
 
-  const { url: _url, ...restProps } = props;
-
-  return url ? <ImageOverlay bounds={bounds} url={url} {...restProps} /> : null;
+  return url ? <ImageOverlay bounds={bounds} url={url} /> : null;
 }

@@ -1,19 +1,11 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from "react";
+import type {CategoryType} from './schemaTypes'
 import { useCategory } from "./useGqlCached";
 import { UserContext } from "./UserContext";
 
-//export const CategoriesContext = createContext([]);
-
-
-export interface Category {
-  id: string;
-  name: string;
-  color: string;
-}
-
-
+//export const CategoriesContext = createContext([]
 interface CategoriesContextType {
-  categories: Category[] | undefined;
+  categories: CategoryType[] | undefined;
   currentCategoryState: [string | boolean, React.Dispatch<React.SetStateAction<string | boolean>>];
 }
 export const CategoriesContext = createContext<CategoriesContextType | undefined>(undefined);

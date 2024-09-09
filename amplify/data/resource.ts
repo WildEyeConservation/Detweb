@@ -30,7 +30,6 @@ const schema = a.schema({
   //     users: [UserProjectMembership] @hasMany (indexName:"byProject",fields:["name"])
   // }
   UserType: a.customType({
-    id:a.string().required(),
     name:a.string().required(),
     isAdmin:a.boolean()}),
   Project: a.model({
@@ -48,7 +47,7 @@ const schema = a.schema({
     members: a.hasMany('UserProjectMembership', 'projectId'),
     queues: a.hasMany('Queue', 'projectId'),
   }).authorization(allow => [allow.groupDefinedIn('projectId').to(['read']),
-                   allow.group('orgadmin').to(['create','update','delete'])]),
+                   allow.group('orgadmin').to(['create','update','delete','read'])]),
   Category: a.model({
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
@@ -56,9 +55,9 @@ const schema = a.schema({
     color: a.string(),
     shortcutKey: a.string(),
     annotations: a.hasMany('Annotation','categoryId'),
-    objects: a.hasMany('Object','categoryId')
+    objects: a.hasMany('Object', 'categoryId')
   }).authorization(allow => [allow.groupDefinedIn('projectId')])
-  .secondaryIndexes((index)=>[index('projectId').queryField('categoriesByProjectId')]),
+    .secondaryIndexes((index)=>[index('projectId').queryField('categoriesByProjectId')]),
   ImageMeta: a.model({
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
@@ -72,12 +71,15 @@ const schema = a.schema({
     roll: a.float(),
     yaw: a.float(),
     pitch: a.float(),
-    timestamp: a.datetime(),
+    timestamp: a.timestamp(),
     exifData: a.string(),
     cameraSerial: a.string(),
     images: a.hasMany('Image', 'metaId'),
     locations: a.hasMany('Location', 'metaId'),
-    annotations: a.hasMany('Annotation','metaId')
+    annotations: a.hasMany('Annotation', 'metaId'),
+    // There may be many images for each meta, but each image has only one meta, also one of the images is the original
+    originalId: a.id(),
+    original: a.belongsTo('Image','originalId'),
     //   collections: [ImageSet] @manyToMany(relationName: "ImageSetMembership")
     //   leftNeighbours: [ImageNeighbour] @hasMany(indexName:"bySecondNeighbour",fields:["key"]) 
     //   rightNeighbours: [ImageNeighbour] @hasMany(indexName:"byFirstNeighbour",fields:["key"]) 
@@ -86,12 +88,14 @@ const schema = a.schema({
   Image: a.model({
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
-    derivedFrom: a.id(),
     path: a.string().required(),
     metaId: a.id(),
+    key: a.string().required(),
     meta: a.belongsTo('ImageMeta', 'metaId'),
     type: a.string().required(),
-    sets: a.hasMany('ImageSetMembership', 'imageId')
+    sets: a.hasMany('ImageSetMembership', 'imageId'),
+    // Add this line to define the reverse relationship
+    originalMeta: a.hasOne('ImageMeta', 'originalId'),
   }).authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('metaId').queryField('imagesByMetaId')]),
   AnnotationSet: a.model({
@@ -111,9 +115,10 @@ const schema = a.schema({
     categoryId: a.id().required(),
     category: a.belongsTo('Category', 'categoryId'),
     metaId: a.id().required(),
-    image : a.belongsTo('ImageMeta','metaId'),
+    imageMeta : a.belongsTo('ImageMeta','metaId'),
     x: a.integer().required(),
     y: a.integer().required(),
+    obscured: a.boolean(),
     objectId: a.id(),
     object: a.belongsTo('Object', 'objectId')
   }).authorization(allow => [allow.groupDefinedIn('projectId'), allow.owner()])
@@ -165,6 +170,7 @@ const schema = a.schema({
 
   LocationSet: a.model({
     projectId: a.id().required(),
+    name: a.string().required(),
     project: a.belongsTo('Project', 'projectId'),
     locations: a.hasMany('Location', 'setId'),
     memberships: a.hasMany('LocationSetMembership', 'locationSetId')
@@ -205,7 +211,7 @@ const schema = a.schema({
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
     name: a.string().required(),
-    url: a.string().required(),
+    url: a.url().required(),
   }).authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('projectId').queryField('queuesByProjectId')]),
   addUserToGroup: a.mutation().arguments({

@@ -169,7 +169,8 @@ export default function useGqlCached<T>(
   });
   
   const createMutation = useMutation({
-    mutationFn: async (newItem: T) =>{const result = await createItem(newItem)
+    mutationFn: async (newItem: T) => {
+      const result = await createItem(newItem)
       if (result.errors) {
         throw new Error(result.errors[0].message)
       }
@@ -342,7 +343,7 @@ export const useUsers = () => {
 }
 
 export const useCategory = (currentProject: any) => {
-  const [currentCategory, setCurrentCategory] = useState<string>("");
+  const [currentCategory, setCurrentCategory] = useState<CategoryType|null>(null);
   const { query, createMutation, deleteMutation, updateMutation } =
     useGqlCached<CategoryType>({
       queryKey: ["categories", currentProject],
@@ -371,7 +372,7 @@ export const useCategory = (currentProject: any) => {
   }, [query.data, currentCategory]);
   
   return {
-    categories: currentProject ? query.data : [],
+    categories: (currentProject ? query.data : [] ) as CategoryType[],
     createCategory: (newCategory: any) => {
       newCategory.id = crypto.randomUUID();
       newCategory.projectId = currentProject;
@@ -447,7 +448,7 @@ export const useAnnotations = (imageKey: string, setId: string) => {
   });
   return {
     annotations: query.data,
-    createAnnotation: (annotation: AnnotationType) => {
+    createAnnotation: (annotation: Partial<AnnotationType>) => {
       const newAnnotation = {...annotation, id: crypto.randomUUID()};
       if (user) newAnnotation.owner = user.id;
       return createMutation.mutate(newAnnotation);
@@ -549,36 +550,36 @@ export const useQueues = (project: string) => {
 /*      createItem: async ({ id }) =>
         await GQL_Client.models.AnnotationSetType.create({id, projectId: project}),*/
 
-export const useAnnotationSets = (project: string) => {
+export const useAnnotationSets = ({ projectId }: { projectId: string }) => {
   const { query, createMutation, deleteMutation, updateMutation } =
     useGqlCached<AnnotationSetType>({
-      queryKey: ["annotationSets", project],
+      queryKey: ["annotationSets", projectId],
       listItem: async () =>
-        await GQL_Client.models.AnnotationSet.list({filter: {name: {eq: project}}}),
-        createItem: async ({ name, id }) =>
-          await GQL_Client.models.AnnotationSet.create({id, name, projectId: project}),
+        await GQL_Client.models.AnnotationSet.list({filter: {name: {eq: projectId}}}),
+      createItem: async ({ name, id }) =>
+        await GQL_Client.models.AnnotationSet.create({id, name, projectId: projectId}),
       updateItem: async (input) =>
         await gqlSend(mutations.updateAnnotationSet, { input }),
       deleteItem: async (input) =>
         await gqlSend(mutations.deleteAnnotationSet, { input }),
       onCreate: (subconfig) =>
         gqlSend(subs.onCreateAnnotationSet, {
-          filter: { projectName: { eq: project } },
+          filter: { projectName: { eq: projectId } },
         }).then((x: any) => x.subscribe(subconfig)),
       onDelete: (subconfig) =>
         gqlSend(subs.onDeleteAnnotationSet, {
-          filter: { projectName: { eq: project } },
+          filter: { projectName: { eq: projectId } },
         }).then((x: any) => x.subscribe(subconfig)),
       onUpdate: (subconfig) =>
         gqlSend(subs.onUpdateAnnotationSet, {
-          filter: { projectName: { eq: project } },
+          filter: { projectName: { eq: projectId } },
         }).then((x: any) => x.subscribe(subconfig)),
     });
   return {
     annotationSets: query.data,
-    createAnnotationSet: (set: AnnotationSetType) => {
+    createAnnotationSet: (set: Partial<AnnotationSetType>) => {
       const id = crypto.randomUUID();
-      createMutation.mutate({...set, id});
+      createMutation.mutate({ ...set, id });
       return id;
     },
     deleteAnnotationSet: deleteMutation.mutate,
@@ -586,38 +587,31 @@ export const useAnnotationSets = (project: string) => {
   };
 };
 
-export const useLocationSets = (projectName: string) => {
+export const useLocationSets = (projectId: string) => {
   const { query, createMutation, deleteMutation, updateMutation } =
-    useGqlCached<LocationSetType>({
-      queryKey: ["locationSets", projectName],
+    useGqlCached<typeof GQL_Client.models.LocationSet>({
+      queryKey: ["locationSets", projectId],
       listItem: async () =>
-        await gqlSend(queries.locationSetsByProjectName, { projectName }),
-      createItem: async (input: LocationSetType) =>
-        await gqlSend(mutations.createLocationSet, {
-          input,
-        }),
-      updateItem: async (input) =>
-        await gqlSend(mutations.updateLocationSet, {
-          input,
-        }),
-      deleteItem: async ({ id }) =>
-        await gqlSend(mutations.deleteLocationSet, { input: { id } }),
+        await GQL_Client.models.LocationSet.list({filter: {projectId: {eq: projectId}}}),
+      createItem: GQL_Client.models.LocationSet.create,
+      updateItem: GQL_Client.models.LocationSet.update,
+      deleteItem: GQL_Client.models.LocationSet.delete,
       onCreate: (subconfig) =>
         gqlSend(subs.onCreateLocationSet, {
-          filter: { projectName: { eq: projectName } },
+          filter: { projectName: { eq: projectId } },
         }).then((x: any) => x.subscribe(subconfig)),
       onDelete: (subconfig) =>
         gqlSend(subs.onDeleteLocationSet, {
-          filter: { projectName: { eq: projectName } },
+          filter: { projectName: { eq: projectId } },
         }).then((x: any) => x.subscribe(subconfig)),
       onUpdate: (subconfig) =>
         gqlSend(subs.onUpdateLocationSet, {
-          filter: { projectName: { eq: projectName } },
+          filter: { projectName: { eq: projectId } },
         }).then((x: any) => x.subscribe(subconfig)),
     });
   return {
     locationSets: query.data,
-    createLocationSet: (input: LocationSetType) => {
+    createLocationSet: (input : Parameters<typeof createMutation.mutate>[0]) => {
       const id = crypto.randomUUID();
       createMutation.mutate({...input, id});
       return id;

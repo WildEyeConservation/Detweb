@@ -1,32 +1,18 @@
 import { useContext, useState } from "react";
 import MyTable from "./Table";
-// import { onCreateCategory, onUpdateCategory, onDeleteCategory } from './graphql/subscriptions'
-// import { listCategories } from './graphql/queries';
 import Button from "react-bootstrap/Button";
 import Modal from "react-bootstrap/Modal";
 import Form from "react-bootstrap/Form";
 import Container from "react-bootstrap/Container";
-//import { useCategory } from "./useGqlCached";
 import { UserContext } from "./UserContext";
-// import { generateClient } from 'aws-amplify/data';
-// import { type Schema } from '../amplify/data/resource'
 import { useCategory } from "./useGqlCached";
+import { type CategoryType } from "./schemaTypes";
 
-//const client = generateClient<Schema>();
-
-interface Category {
-  id?: string;
-  name: string;
-  color: string;
-  shortcutKey: string;
-  createdAt?: string;
-  projectId: string;
-}
 
 /* Here I am rewriting the existing defineCategories page using TanStack as a risk reduction exercise before 
 trying to port other parts of the application to this approach*/
 
-const initialCategoryState: Category = {
+const initialCategoryState: Partial<CategoryType> = {
   name: "Object",
   projectId: "",
   color: "#563d7c",
@@ -36,9 +22,9 @@ const initialCategoryState: Category = {
 export default function DefineCategories() {
   const { currentProject } = useContext(UserContext) ?? {};
   const [showModal, setShowModal] = useState(false);
-  const [category, setCategory] = useState<Category>({
+  const [category, setCategory] = useState<Partial<CategoryType>>({
     ...initialCategoryState,
-    projectId: currentProject || "",
+    projectId: currentProject?.id,
   });
 
   const setName = (newname: string) => {
@@ -63,20 +49,20 @@ export default function DefineCategories() {
   const handleSubmit = () => {
     setShowModal(false);
     if (typeof category.id === 'string') {
-      updateCategory(category as Category & { id: string });
+      updateCategory(category as CategoryType & { id: string });
     } else {
       createCategory({ ...category, id: undefined });
     }
   };
 
-  const editCategory = (category: Category) => {
+  const editCategory = (category: CategoryType) => {
     setCategory(category);
     setShowModal(true);
   };
 
   const tableData = categories
-    ?.sort((a: Category, b: Category) => (a.createdAt ?? "") > (b.createdAt ?? "") ? 1 : -1)
-    ?.map((item: Category) => {
+    ?.sort((a: CategoryType, b: CategoryType) => (a.createdAt ?? "") > (b.createdAt ?? "") ? 1 : -1)
+    ?.map((item: CategoryType) => {
       const { id, name, color, shortcutKey } = item;
       return {
         id,
@@ -89,7 +75,7 @@ export default function DefineCategories() {
             type="color"
             id="exampleColorInput"
             size="lg"
-            value={color}
+            value={color!}
             title="Category color"
           />,
           <>
@@ -106,7 +92,7 @@ export default function DefineCategories() {
               onClick={() => {
                 if (typeof item.id === 'string') {
                   console.log("Deleting category with ID:", item.id);
-                  deleteCategory(item as Category & { id: string });
+                  deleteCategory(item as CategoryType & { id: string });
                 }
               }}
             >
@@ -137,7 +123,7 @@ export default function DefineCategories() {
               <Form.Label>Shortcut key</Form.Label>
               <Form.Control
                 type="text"
-                value={category.shortcutKey}
+                value={category.shortcutKey ?? ""}
                 onChange={(x) => setShortcutKey(x.target.value)}
               />
             </Form.Group>
@@ -147,7 +133,7 @@ export default function DefineCategories() {
                 type="color"
                 id="exampleColorInput"
                 size="sm"
-                value={category.color}
+                value={category.color ?? "#563d7c"}
                 title="Category color"
                 onChange={(event) => {
                   setColor(event.currentTarget.value);
@@ -181,7 +167,7 @@ export default function DefineCategories() {
       <Button
         variant="primary"
         onClick={() => {
-          setCategory({ ...initialCategoryState, projectId: currentProject || "" });
+          setCategory({ ...initialCategoryState, projectId: currentProject?.id});
           setShowModal(true);
         }}
       >

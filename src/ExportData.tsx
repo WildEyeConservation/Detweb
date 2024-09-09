@@ -1,36 +1,7 @@
-import React, { useContext, useState } from "react";
+import React, { useState } from "react";
 import { Stack, Modal, Form, Button } from "react-bootstrap";
 import { AnnotationSetDropdown } from "./AnnotationSetDropDown";
-import { UserContext } from "./UserContext";
-import exportFromJSON from "export-from-json";
-
-
-interface Image {
-  key: string;
-  latitude: number;
-  longitude: number;
-  timestamp: number;
-}
-
-interface Category {
-  name: string;
-}
-
-interface Annotation {
-  x: number;
-  y: number;
-  obscured: boolean;
-  image: Image;
-  category: Category;
-  owner: string;
-}
-
-interface AnnotationsResponse {
-  annotationsByAnnotationSetId: {
-    items: Annotation[];
-    nextToken: string | null;
-  };
-}
+//import { UserContext } from "./UserContext";
 
 interface ExportDataProps {
   show: boolean;
@@ -39,9 +10,9 @@ interface ExportDataProps {
 
 export const ExportData: React.FC<ExportDataProps> = ({ show, handleClose }) => {
   const [annotationSet, setAnnotationSet] = useState<string | undefined>(undefined);
-  const { gqlSend } = useContext(UserContext)!;
+  //const { gqlSend } = useContext(UserContext)!;
 
-  const annotationsByAnnotationSetId = `
+  /*const annotationsByAnnotationSetId = `
   query AnnotationsByAnnotationSetId(
     $annotationSetId: ID!
     $sortDirection: ModelSortDirection
@@ -74,44 +45,47 @@ export const ExportData: React.FC<ExportDataProps> = ({ show, handleClose }) => 
       nextToken
     }
   }
-`;
+`;*/
 
   async function handleSubmit() {
-    console.log("wtf");
-    handleClose();
-    const fileName = "DetWebExport";
-    const exportType = exportFromJSON.types.csv;
-    let nextToken: string | undefined = undefined;
-    let items: Annotation[] = [];
-    let allItems: Annotation[] = [];
-    do {
-      const result = await gqlSend(annotationsByAnnotationSetId, {
-        annotationSetId: annotationSet,
-        nextToken,
-      });
-      const data = result as unknown as AnnotationsResponse;
-      const { items: fetchedItems, nextToken: fetchedNextToken } = data.annotationsByAnnotationSetId;
-      items = fetchedItems;
-      nextToken = fetchedNextToken ?? undefined;
-      allItems = allItems.concat(items);
-    } while (nextToken);
-    exportFromJSON({
-      data: allItems.map((xx) => {
-        return {
-          category: xx.category.name,
-          image: xx.image.key,
-          timestamp: xx.image.timestamp,
-          latitude: xx.image.latitude,
-          longitude: xx.image.longitude,
-          obscured: xx.obscured,
-          objectId: xx.owner,
-          x: xx.x,
-          y: xx.y,
-        };
-      }),
-      fileName,
-      exportType,
-    });
+    // console.log("wtf");
+    // handleClose();
+    // const fileName = "DetWebExport";
+    // const exportType = exportFromJSON.types.csv;
+    // let nextToken: string | undefined = undefined;
+    // let items: AnnotationType[] = [];
+    // let allItems: AnnotationType[] = [];
+    // do {
+    //   const result = await gqlSend(annotationsByAnnotationSetId, {
+    //     annotationSetId: annotationSet,
+    //     nextToken,
+    //   });
+    //   const data = result as unknown as AnnotationsResponse;
+    //   const { items: fetchedItems, nextToken: fetchedNextToken } = data.annotationsByAnnotationSetId;
+    //   items = fetchedItems;
+    //   nextToken = fetchedNextToken ?? undefined;
+    //   allItems = allItems.concat(items);
+    // } while (nextToken);
+
+    // exportFromJSON({
+    //   data: allItems.map((xx: AnnotationType) => {
+    //     const imageMeta: ImageMetaType = xx.imageMeta;
+    //     const timestamp = imageMeta.timestamp;
+    //     return {
+    //       category: xx.category.name,
+    //       image: xx.image.key,
+    //       timestamp: xx.image.timestamp,
+    //       latitude: xx.image.latitude,
+    //       longitude: xx.image.longitude,
+    //       obscured: xx.obscured,
+    //       objectId: xx.owner,
+    //       x: xx.x,
+    //       y: xx.y,
+    //     };
+    //   }),
+    //   fileName,
+    //   exportType,
+    // });
   }
 
   return (

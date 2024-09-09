@@ -1,40 +1,21 @@
 import { useMapEvents } from "react-leaflet";
 import { useContext } from "react";
 import { ImageContext } from "./BaseImage";
-import { AnnotationsContext } from "./AnnotationsContext";
-import {Annotation} from "./useGqlCached"
-import { UseMutateFunction } from "@tanstack/react-query";
 import { UserContext } from "./UserContext";
-import { useCategory } from "./useGqlCached";
+import { useAnnotations, useCategory } from "./useGqlCached";
+import type { LocationType, AnnotationSetType, ImageMetaType } from "./schemaTypes";
 
-interface Location {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+export interface CreateAnnotationOnClickProps {
+  location?: LocationType;
+  imageMeta: ImageMetaType;
+  annotationsHook: ReturnType<typeof useAnnotations>;
+  annotationSet: AnnotationSetType;
+  source: string;
 }
 
-interface CreateAnnotationOnClickProps {
-  setId: string;
-  image: any;
-  location: Location;
-  annotationsHook?: {
-    annotations: Annotation[] | undefined;
-    createAnnotation: (newAnnotation: Annotation) => void;
-    deleteAnnotation: UseMutateFunction<any, any, any, any>;
-    updateAnnotation: (anno: Annotation & { id: string }) => void;
-  };
-}
-
-export default function CreateAnnotationOnClick({
-  setId,
-  image,
-  location,
-}: CreateAnnotationOnClickProps) {
+export default function CreateAnnotationOnClick(props: CreateAnnotationOnClickProps) {
+  const {annotationSet,location,annotationsHook: {createAnnotation},source, imageMeta} = props;
   const { latLng2xy } = useContext(ImageContext)!;
-
-  const context = useContext(AnnotationsContext);
-  const createAnnotation = context?.createAnnotation;
   const {currentProject} = useContext(UserContext)!;
   const {currentCategory} = useCategory(currentProject)
 
@@ -44,16 +25,20 @@ export default function CreateAnnotationOnClick({
       const xy = Array.isArray(xyResult) ? xyResult[0] : xyResult;
 
       if (
-        !location ||
-        (Math.abs(xy.x - location.x) < location.width / 2 &&
-          Math.abs(xy.y - location.y) < location.height / 2)
-      ) {
+        !(location?.width && location?.height ) ||
+        (Math.abs(xy.x - location.x) < location.width! / 2 &&
+          Math.abs(xy.y - location.y) < location.height! / 2)
+      ) {currentCategory && source && currentProject &&
         createAnnotation?.({
-          imageKey: image.key,
-          annotationSetId: setId,
+          metaId: imageMeta.id,
+          setId: annotationSet.id!,
+          projectId: currentProject.id,
           x: Math.round(xy.x),
           y: Math.round(xy.y),
-          categoryId: currentCategory,
+          categoryId: currentCategory.id,
+          source: source,
+          obscured: false,
+          objectId: null,
         });
       }
     },

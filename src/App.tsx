@@ -9,14 +9,11 @@ export const limitConnections = pLimit(30);
 import { useEffect, useState } from "react";
 import "./App.css";
 import "leaflet/dist/leaflet.css";
-
+import QuickTest from "./QuickTest.tsx";
 import Navbar from "react-bootstrap/Navbar";
 import Container from "react-bootstrap/Container";
 import Nav from "react-bootstrap/Nav";
 import NavDropdown from "react-bootstrap/NavDropdown";
-// import Verification from "./Verification";
-// import HerdDetection from "./HerdDetection";
-//import Import from "./Import";
 import DefineCategories from "./DefineCategories.js";
 import FilesUploadComponent from "./FilesUploadComponent.jsx";
 import {
@@ -26,7 +23,6 @@ import {
   NavLink,
   useLocation,
 } from "react-router-dom";
-// import PrivateRoute from './PrivateRoute';
 import { configure } from "react-hotkeys";
 import ScratchPad from "./ScratchPad.jsx";
 import DefineTransect from "./DefineTransect.jsx";
@@ -35,43 +31,25 @@ import "@aws-amplify/ui-react/styles.css";
 import CreateTask from "./CreateTask.jsx";
 import LaunchTask from "./LaunchTask.jsx";
 import UserManagement from "./UserManagement.jsx";
-//import UserStats from "./UserStats.jsx";
 import User from "./UserContext.js";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import "bootswatch/dist/slate/bootstrap.min.css";
 import IfAdmin from "./IfAdmin.jsx";
 import ProjectSelector from "./ProjectSelector.jsx";
 import ProcessImages from "./ProcessImages.jsx";
 import AddGpsData from "./AddGpsData.jsx";
-//import Registration from './Registration.jsx';
 import { ProgressIndicators } from "./ProgressIndicators.jsx";
 import Progress from "./ProgressContext.jsx";
 import DeleteImageSet from "./DeleteImageSet.jsx";
-//import Rescan from './Rescan.jsx'
-import { Amplify } from "aws-amplify";
 import { fetchAuthSession } from "aws-amplify/auth";
-//import { MessageHandler } from './SqsMessageHandler.jsx';
 import Review from "./Review2.jsx";
 import { BrowserView, MobileView } from "react-device-detect";
 import ExportData from "./ExportData.jsx";
-//import Retile from "./Retile.jsx";
-import LaunchRegistration from "./LaunchRegistration.jsx";
-import outputs from "../amplify_outputs.json";
 import type { Schema } from '../amplify/data/resource'; // Path to your backend resource definition
 
 
-Amplify.configure(outputs);
 export const GQL_Client = generateClient<Schema>({authMode: 'userPool'});
 configure({ ignoreRepeatedEventsWhenKeyHeldDown: false });
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: Infinity,
-    },
-  },
-});
 /**
  *
  * The root component for the ESS frontend map. Renders the Navbar and the router that selects which of the other pages
@@ -98,7 +76,7 @@ function Header({ signOut, session, user }: HeaderProps) {
   let location = useLocation();
   const [userAttributes, setUserAttributes] = useState<any>(null);
   useEffect(() => {
-    fetchAuthSession().then((sess) => setSession(sess));
+    //fetchAuthSession().then((sess) => setSession(sess));
     fetchUserAttributes().then(attributes => setUserAttributes(attributes));
   }, [user]);
 
@@ -285,9 +263,6 @@ function App({ signOut = () => {}, user }: AppProps) {
     e.returnValue = "";
   };
   useEffect(() => {
-    queryClient.invalidateQueries();
-  }, [user]);
-  useEffect(() => {
     fetchAuthSession().then((sess) => setSession(sess));
   }, [user]);
   let Test = ScratchPad();
@@ -295,14 +270,12 @@ function App({ signOut = () => {}, user }: AppProps) {
     session && (
       <>
         <BrowserView>
-          <QueryClientProvider client={queryClient}>
             <User loggedInUser={user}>
                 <Progress>
                   <div
                     className="App d-flex flex-column"
                     style={{ height: "100vh", overflow: "scroll" }}
                   >
-                    <ReactQueryDevtools />
                     <Router>
                       <Header signOut={signOut} session={session} user={user} />
                       <Container
@@ -323,7 +296,7 @@ function App({ signOut = () => {}, user }: AppProps) {
                           <Route path="/annotate" element={<Test />} />
                           {/* <Route exact path="/registration" element={<Registration/>}/>  */}
                           <Route path="/review" element={<Review />} />
-                          <Route path="" element={<Test />} />
+                          <Route path="/quickTest" element={<QuickTest />} />
                           {/* <Route
                             path="/userStats"
                             element={<UserStats />}
@@ -360,7 +333,6 @@ function App({ signOut = () => {}, user }: AppProps) {
                   </div>
                 </Progress>
             </User>
-          </QueryClientProvider>
         </BrowserView>
         <MobileView>
           <p>

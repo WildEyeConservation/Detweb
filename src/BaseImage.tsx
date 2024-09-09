@@ -1,37 +1,30 @@
 // @flow
-import React, { useRef, useContext, memo, createContext, ReactNode } from "react";
-import { MapContainer, LayersControl, useMapEvents } from "react-leaflet";
+import React, {memo, createContext, ReactNode, useState, useEffect } from "react";
+import { MapContainer, LayersControl} from "react-leaflet";
 import { NavButtons } from "./NavButtons";
 import * as L from "leaflet";
 import "leaflet-contextmenu";
 import "leaflet-contextmenu/dist/leaflet.contextmenu.css";
-import { UserContext } from "./UserContext";
 import { S3Layer } from "./S3Layer";
-//import AllLocations from "./AllLocations";
 import { useHotkeys } from "react-hotkeys-hook";
 import { S3ImageOverlay } from "./S3ImageOverlay";
 import { S3 } from 'aws-sdk';
+import { ImageMetaType, LocationType, AnnotationSetType } from './schemaTypes';
+import { ImageType } from "./schemaTypes";
+
+const DEFAULT_WIDTH = 100;
+const DEFAULT_HEIGHT = 100;
 
 export interface BaseImageProps {
-  width: number;
-  height: number;
-  x: number;
-  y: number;
-  img: {
-    key: string;
-    width: number;
-    height: number;
-  };
+  imageMeta: ImageMetaType;
+  location?: LocationType;
   next?: () => void;
   prev?: () => void;
   children: ReactNode;
-  fullImage?: boolean;
-  containerheight: string;
-  containerwidth: string;
+  containerheight?: number;
+  containerwidth?: number;
   visible: boolean;
-  setId: string | undefined;
-  boundsxy: [[number, number], [number, number]];
-  center_xy?: [number, number];
+  annotationSet: AnnotationSetType;
 }
 
 interface ImageContextType {
@@ -39,9 +32,7 @@ interface ImageContextType {
   xy2latLng: (input: L.Point | [number, number] | Array<L.Point | [number, number]>) => L.LatLng | L.LatLng[];
 }
 
-
 export const ImageContext = createContext<ImageContextType | undefined>(undefined);
-
 const s3 = new S3();
 
 const getObject = async ({ Bucket, Key }: { Bucket: string; Key: string }) => {
@@ -50,15 +41,17 @@ const getObject = async ({ Bucket, Key }: { Bucket: string; Key: string }) => {
   return data.Body;
 };
 
-
-const BaseImage: React.FC<BaseImageProps> = ({img,next,prev, children, fullImage,containerheight,containerwidth,visible, boundsxy,}) => {
-  const mouseCoords = useRef({ x: 0, y: 0 });
-  const { user } = useContext(UserContext)!;
-
+const BaseImage: React.FC<BaseImageProps> = (props) => {
+  const [images, setImages] = useState<ImageType[]>([]);
+  const { imageMeta, next, prev, visible, containerheight, containerwidth, children, location } = props;
   const scale = Math.pow(
     2,
-    Math.ceil(Math.log2(Math.max(img.width, img.height))) - 8,
+    Math.ceil(Math.log2(Math.max(imageMeta.width, imageMeta.height))) - 8,
   );
+
+  useEffect(() => {
+    imageMeta.images().then(response => setImages(response.data))
+  }, [imageMeta.images]);
 
   function xy2latLng(input: L.Point | [number, number] | Array<L.Point | [number, number]>): L.LatLng | L.LatLng[] {
     if (Array.isArray(input)) {
@@ -106,58 +99,48 @@ const BaseImage: React.FC<BaseImageProps> = ({img,next,prev, children, fullImage
   //     }
   //   }
   // });
-
-  useMapEvents({'mousemove': (e: L.LeafletMouseEvent) => {
-    mouseCoords.current = { x: e.latlng.lng, y: e.latlng.lat };
-  }});
-
+  const fullImageTypes = ['Complete JPG', 'Complete TIFF', 'Complete PNG'];
+  const imageBounds = (xy2latLng([L.point(0, 0), L.point(imageMeta.width, imageMeta.height)]) as L.LatLng[]).map((latLng: L.LatLng) => [latLng.lat, latLng.lng]) as [[number, number], [number, number]]
+  //If a location is provided, use the location bounds, otherwise use the image bounds
+  const viewBounds = location ?
+    L.latLngBounds(xy2latLng([[location.x, location.y], [location.x + (location.width ?? DEFAULT_WIDTH), location.y + (location.height ?? DEFAULT_HEIGHT)]]) as [L.LatLng, L.LatLng]) : imageBounds;
   return (
     <ImageContext.Provider value={{ latLng2xy, xy2latLng }}>
       <MapContainer
         // id={id}
         style={{
-          width: containerwidth,
-          height: containerheight,
+          width: String(containerwidth) || "100%",
+          height: String(containerheight) || "100%",
           margin: "auto",
           display: "flex",
           justifyContent: "center",
           borderRadius: 10,
           alignItems: "center",
         }}
-        bounds={L.latLngBounds(xy2latLng(boundsxy) as [L.LatLng, L.LatLng])}
+        bounds={viewBounds}
         zoomSnap={1}
         zoomDelta={1}
         keyboardPanDelta={0}
       >
         <LayersControl position="topright">
-          {img && fullImage ? (
+          {images.map(image => 
             <LayersControl.BaseLayer
-              key={2}
-              name="Full resolution JPG"
-              checked={true}
+            key={image.id}
+            name={image.type}
             >
+              {fullImageTypes.includes(image.type) ? 
               <S3ImageOverlay
-                image={img}
-                bounds={(xy2latLng([L.point(0, 0), L.point(img.width, img.height)]) as L.LatLng[]).map((latLng: L.LatLng) => [latLng.lat, latLng.lng]) as [[number, number], [number, number]]}
-                source={img.key} 
-                url={""} 
-              />
-            </LayersControl.BaseLayer>
-          ) : (
-            <LayersControl.BaseLayer
-              key={1}
-              name="Slippy Maps Layer"
-              checked={true}
-            >
+              bounds={imageBounds}
+              source={image.key} 
+              url={""} />:
               <S3Layer
-                source={img.key}
-                bounds={L.latLngBounds(xy2latLng([L.point(0, 0), L.point(img.width, img.height)]) as [L.LatLng, L.LatLng])}
-                maxNativeZoom={5}
-                getObject={getObject}
-              />
+              source={image.key}
+              bounds={imageBounds}
+              maxNativeZoom={5}
+              getObject={getObject}
+              />}
             </LayersControl.BaseLayer>
           )}
-          {/* {user?.isAdmin && <AllLocations image={img} />} */}
         </LayersControl>
         {children}
         {(next || prev) && (

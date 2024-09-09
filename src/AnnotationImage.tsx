@@ -10,20 +10,13 @@ import { useAnnotations } from './useGqlCached';
 // import { useMapEvents } from 'react-leaflet';
 import Annotations from './AnnotationsContext';
 import { ShowMarkers } from './ShowMarkers';
-
+import { ImageMetaType, LocationType, AnnotationSetType } from './schemaTypes';
 
 const Image = memo(withAckOnTimeout(withCreateObservation(BaseImage)));
 
 interface AnnotationImageProps {
-  width: number;
-  height: number;
-  x: number;
-  y: number;
-  image: {
-    key: string;
-    width?: number;
-    height?: number;
-  };
+  imageMeta: ImageMetaType;
+  location?: LocationType;
   next: () => void;
   prev: () => void;
   fullImage: boolean;
@@ -32,10 +25,8 @@ interface AnnotationImageProps {
   visible: boolean;
   id: string;
   ack: () => void,
-  setId: string;
+  annotationSet: AnnotationSetType;
   isTest?: boolean;
-  locationId: string;
-  annotationSetId: string;
 }
 
 // interface PushToSecondaryProps {
@@ -60,32 +51,32 @@ interface AnnotationImageProps {
 
 //   return null;
 // });
-export default function AnnotationImage(props: AnnotationImageProps) {
-  const { width, height, x, y, image, next, prev, fullImage, containerheight = 800, containerwidth = 1024, visible, id, ack, setId, isTest, locationId, annotationSetId  } = props;
-  const annotationsHook = useAnnotations(image.key, setId);
-
-  const img = {
-    key: image.key,
-    width: image.width ?? 0, 
-    height: image.height ?? 0 
-  };
-
+export default function AnnotationImage({ imageMeta, location, next, prev, fullImage, containerheight, containerwidth, visible, id, ack, annotationSet}: AnnotationImageProps) {
+  const annotationsHook = useAnnotations(imageMeta.id, annotationSet.id);
   return (
     <Annotations annotationsHook={annotationsHook}>
-      {image?.width && useMemo(() =>
-        <Image containerwidth={String(containerwidth)} containerheight={String(containerheight)} width={width} height={height} x={x} y={y} visible={visible} id={id} img={img}
-          prev={prev} next={next} fullImage={fullImage} ack={ack || (() => {})} setId={setId} locationId={locationId} annotationSetId={annotationSetId} boundsxy={[[x, y], [x + width, y + height]]}>
-          <Location {...{ x, y, width, height, isTest: isTest ? 1 : 0, id }} />
+      {useMemo(() =>
+        <Image
+          containerwidth={containerwidth}
+          containerheight={containerheight}
+          location={location}
+          imageMeta={imageMeta}
+          visible={visible}
+          id={id} 
+          prev={prev}
+          next={next}
+          ack={ack}
+          annotationSet={annotationSet}>
+          {location && <Location {...location}/>}
           {typeof ack === 'function' && (
             <>
-              <CreateAnnotationOnClick {...{ setId, image, x, y, width, height, annotationsHook, location: { x, y, width, height} }}
-              />
+              <CreateAnnotationOnClick {...{imageMeta, annotationsHook, location, annotationSet, source: 'manual'}}/>
               <ShowMarkers annotations={annotationsHook.annotations}/>
               {/* <PushToSecondary {...props} /> */}
             </>
           )}
           <Legend position="bottomright" />
-        </Image>, [width,height,x,y,image,next,prev, fullImage,containerheight,containerwidth,visible,id,ack,setId,locationId,annotationSetId])}
+        </Image>, [location,imageMeta,next,prev, fullImage,containerheight,containerwidth,visible,id,ack,annotationSet])}
     </Annotations>
   );
 }
