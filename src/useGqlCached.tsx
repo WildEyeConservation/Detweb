@@ -19,7 +19,7 @@ import {
 } from "./gqlQueries";
 import { SQSClient, CreateQueueCommand } from "@aws-sdk/client-sqs";
 import { makeSafeQueueName, gqlSend, gqlGetMany } from "./utils";
-import { GQL_Client } from "./App";
+import { client as GQL_Client } from "./useOptimisticUpdates";
 import type { UserProjectMembershipType, CategoryType, AnnotationType, LocationType, AnnotationSetType, LocationSetType }
   from "./schemaTypes";
 
@@ -80,58 +80,58 @@ export default function useGqlCached<T>(
   const stringKey = JSON.stringify(queryKey);
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const entry = subscriptions?.[stringKey];
-    if (entry?.listeners) {
-      entry.listeners += 1;
-      console.log(`Adding subscriber for ${stringKey}`);
-    } else {
-      console.log(`creating 3 subscriptions for ${stringKey}`);
-      subscriptions[stringKey] = {
-        listeners: 1,
-        subs: [
-          onCreate({
-            next: ({ data }: any) => {
-              const newItem = Object.values(data)[0] as T;
-              console.log(`onCreate callback (${JSON.stringify(queryKey)}`);
-              queryClient.setQueryData(queryKey, (old: T[]) => [...old, newItem],
-              );
-            },
-            error: (error: any) => console.warn(error),
-          }),
-          onUpdate({
-            next: ({ data }: any) => {
-              const updatedItem = Object.values(data)[0] as T;
-              console.log(`onUpdate callback (${JSON.stringify(queryKey)}`);
-              queryClient.setQueryData(queryKey, (old: T[]) =>
-                old.map((item) => mergingPredicate(item, updatedItem) ? { ...item, ...updatedItem } : item),
-              );
-            },
-            error: (error: any) => console.warn(error),
-          }),
-          onDelete({
-            next: ({ data }: any) => {
-              const deletedItem = Object.values(data)[0] as T;
-              console.log(`onDelete callback (${JSON.stringify(queryKey)}`);
-              queryClient.setQueryData(queryKey, (items: T[]) =>
-                items.filter((item) => !mergingPredicate(item,deletedItem)),
-              );
-            },
-            error: (error: any) => console.warn(error),
-          }),
-        ],
-      };
-    }
-    return () => {
-      const entry = subscriptions[stringKey];
-      entry.listeners -= 1;
-      console.log(`unsubscribing from ${stringKey}`);
-      if (entry.listeners === 0) {
-        console.log(`canceling 3 subscriptions for ${stringKey}`);
-        entry.subs.map((sub) => sub.then((x) => x.unsubscribe()));
-      }
-    };
-  }, [stringKey]);
+  // useEffect(() => {
+  //   const entry = subscriptions?.[stringKey];
+  //   if (entry?.listeners) {
+  //     entry.listeners += 1;
+  //     console.log(`Adding subscriber for ${stringKey}`);
+  //   } else {
+  //     console.log(`creating 3 subscriptions for ${stringKey}`);
+  //     subscriptions[stringKey] = {
+  //       listeners: 1,
+  //       subs: [
+  //         onCreate({
+  //           next: ({ data }: any) => {
+  //             const newItem = Object.values(data)[0] as T;
+  //             console.log(`onCreate callback (${JSON.stringify(queryKey)}`);
+  //             queryClient.setQueryData(queryKey, (old: T[]) => [...old, newItem],
+  //             );
+  //           },
+  //           error: (error: any) => console.warn(error),
+  //         }),
+  //         onUpdate({
+  //           next: ({ data }: any) => {
+  //             const updatedItem = Object.values(data)[0] as T;
+  //             console.log(`onUpdate callback (${JSON.stringify(queryKey)}`);
+  //             queryClient.setQueryData(queryKey, (old: T[]) =>
+  //               old.map((item) => mergingPredicate(item, updatedItem) ? { ...item, ...updatedItem } : item),
+  //             );
+  //           },
+  //           error: (error: any) => console.warn(error),
+  //         }),
+  //         onDelete({
+  //           next: ({ data }: any) => {
+  //             const deletedItem = Object.values(data)[0] as T;
+  //             console.log(`onDelete callback (${JSON.stringify(queryKey)}`);
+  //             queryClient.setQueryData(queryKey, (items: T[]) =>
+  //               items.filter((item) => !mergingPredicate(item,deletedItem)),
+  //             );
+  //           },
+  //           error: (error: any) => console.warn(error),
+  //         }),
+  //       ],
+  //     };
+  //   }
+  //   return () => {
+  //     const entry = subscriptions[stringKey];
+  //     entry.listeners -= 1;
+  //     console.log(`unsubscribing from ${stringKey}`);
+  //     if (entry.listeners === 0) {
+  //       console.log(`canceling 3 subscriptions for ${stringKey}`);
+  //       entry.subs.map((sub) => sub.then((x) => x.unsubscribe()));
+  //     }
+  //   };
+  // }, [stringKey]);
 
   /* This effect is purely used for debugging and should be deactivated when not required. 
   It checks (on every render cycle) that the server and client's versions of the data are in sync.

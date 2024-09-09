@@ -1,9 +1,8 @@
 import { useContext, useEffect } from "react";
 import Form from "react-bootstrap/Form";
-import { useProjects } from "./useGqlCached";
 import { UserContext, UserContextType } from "./UserContext";
-import { GQL_Client  } from "./App";
-import { useOptimisticUpdates } from "./useOptimisticUpdates";
+import { client as GQL_Client } from "./useOptimisticUpdates";
+import { useOptimisticUpdates,useProjects } from "./useOptimisticUpdates";
 function ProjectSelector() {
   const { user, setCurrentProject, currentProject } = useContext(UserContext) as UserContextType;
   const { projects, createProject } = useProjects();

@@ -31,27 +31,33 @@ delete({
 }); // This will delete the todo item with id '2' and update the data immediately, while the actual API call is made in the background.
 
 */
+import { Amplify } from 'aws-amplify'
+import outputs from '../amplify_outputs.json'
+Amplify.configure(outputs)
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import {GQL_Client as client} from "./App";
-type ModelType = keyof typeof client.models;
+import { generateClient } from "aws-amplify/api";
+import { Schema } from '../amplify/data/resource'; // Path to your backend resource definition
 
+export const client = generateClient<Schema>({ authMode: 'userPool' });
+
+type ModelType = keyof typeof client.models;
+type listType = () => ReturnType<typeof client.models.Category.list>;
 
 export function useOptimisticUpdates<T extends ModelType>(
   modelName: T,
-//  listFilter? : Parameters<typeof client.models[T]['list']>[0],
-//  subscriptionFilter?: Parameters<typeof client.models[T]['onCreate']>[0]
+  listFunction: () => ReturnType<client.models[modelName]['list']> = client.models[modelName].list,
+  subscriptionFilter: Parameters<typeof client.models[modelName]['onCreate']>[0] = undefined
 ) {
-  
   const queryClient = useQueryClient();
   const model = client.models[modelName];
-  const queryKey = [modelName];
+  const queryKey = [modelName, subscriptionFilter];
 
   // Query to fetch data
   const { data, ...queryResult } = useQuery({
     queryKey,
     queryFn: async () => {
-      const result = await model.list();
+      const result = await listFunction();
       return result.data;
     },
   });
@@ -59,10 +65,10 @@ export function useOptimisticUpdates<T extends ModelType>(
   // Create a separate subscription filter
   //const subscriptionFilter = filterExpression ? { filter: filterExpression.filter } : undefined;
 
-  // Subscription effect
+  //Subscription effect
   useEffect(() => {
     // Subscribe to creation of Todo
-    const createSub = model.onCreate().subscribe({
+    const createSub = model.onCreate(subscriptionFilter).subscribe({
       next: (data) => {
         console.log(data)
         queryClient.setQueryData(queryKey, (old: any[] = []) => {
@@ -78,7 +84,7 @@ export function useOptimisticUpdates<T extends ModelType>(
     });
 
     // Subscribe to update of Todo
-    const updateSub = model.onUpdate().subscribe({
+    const updateSub = model.onUpdate(subscriptionFilter).subscribe({
       next: (data) => {
         console.log(data)
         queryClient.setQueryData(queryKey, (old: any[] = []) => {
@@ -89,7 +95,7 @@ export function useOptimisticUpdates<T extends ModelType>(
     });
 
     // Subscribe to deletion of Todo
-    const deleteSub = model.onDelete().subscribe({
+    const deleteSub = model.onDelete(subscriptionFilter).subscribe({
       next: (data) => {
         console.log(data)
         queryClient.setQueryData(queryKey, (old: any[] = []) => {  
@@ -166,3 +172,25 @@ export function useOptimisticUpdates<T extends ModelType>(
     delete: deleteMutation.mutate,
   };
 }
+
+export const useProjects = () => useOptimisticUpdates("Project");
+  
+export const useProjectMemberships = () => {
+  const { data, create, update, delete: remove } = useOptimisticUpdates("UserProjectMembership");
+  return {
+    projectMemberships: data,
+    createProjectMembership: create,
+    updateProjectMembership: update,
+    deleteProjectMembership: remove,
+  };
+};
+
+export const useCategories = () => {
+  const { data, create, update, delete: remove } = useOptimisticUpdates("Category");
+  return {
+    categories: data,
+    createCategory: create,
+    updateCategory: update,
+    deleteCategory: remove,
+  };
+};

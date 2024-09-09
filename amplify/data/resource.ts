@@ -46,8 +46,10 @@ const schema = a.schema({
     observations: a.hasMany('Observation', 'projectId'),
     members: a.hasMany('UserProjectMembership', 'projectId'),
     queues: a.hasMany('Queue', 'projectId'),
-  }).authorization(allow => [allow.groupDefinedIn('projectId').to(['read']),
-                   allow.group('orgadmin').to(['create','update','delete','read'])]),
+  }).authorization(allow => [allow.authenticated()]),
+    // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
+    // allow.group('orgadmin').to(['create', 'update', 'delete', 'read']),
+    // allow.custom()]),
   Category: a.model({
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
@@ -56,7 +58,8 @@ const schema = a.schema({
     shortcutKey: a.string(),
     annotations: a.hasMany('Annotation','categoryId'),
     objects: a.hasMany('Object', 'categoryId')
-  }).authorization(allow => [allow.groupDefinedIn('projectId')])
+  }).authorization(allow => [allow.authenticated()])
+    // .authorization(allow => [allow.groupDefinedIn('projectId')])
     .secondaryIndexes((index)=>[index('projectId').queryField('categoriesByProjectId')]),
   ImageMeta: a.model({
     projectId: a.id().required(),
@@ -84,7 +87,8 @@ const schema = a.schema({
     //   leftNeighbours: [ImageNeighbour] @hasMany(indexName:"bySecondNeighbour",fields:["key"]) 
     //   rightNeighbours: [ImageNeighbour] @hasMany(indexName:"byFirstNeighbour",fields:["key"]) 
 
-  }).authorization(allow => [allow.groupDefinedIn('projectId')]),
+  }).authorization(allow => [allow.authenticated()]),
+    // .authorization(allow => [allow.groupDefinedIn('projectId')]),
   Image: a.model({
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
@@ -96,7 +100,8 @@ const schema = a.schema({
     sets: a.hasMany('ImageSetMembership', 'imageId'),
     // Add this line to define the reverse relationship
     originalMeta: a.hasOne('ImageMeta', 'originalId'),
-  }).authorization(allow => [allow.groupDefinedIn('projectId')])
+    // .authorization(allow => [allow.groupDefinedIn('projectId')])
+  }).authorization(allow => [allow.authenticated()])
   .secondaryIndexes((index)=>[index('metaId').queryField('imagesByMetaId')]),
   AnnotationSet: a.model({
     projectId: a.id().required(),
@@ -104,7 +109,8 @@ const schema = a.schema({
     name: a.string().required(),
     annotations: a.hasMany('Annotation', 'setId'),
     observations: a.hasMany('Observation', 'annotationSetId')
-  }).authorization(allow => [allow.groupDefinedIn('projectId')])
+  }).authorization(allow => [allow.authenticated()])
+    // .authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('projectId').queryField('annotationSetsByProjectId')]),
   Annotation: a.model({
     projectId: a.id().required(),
@@ -121,7 +127,8 @@ const schema = a.schema({
     obscured: a.boolean(),
     objectId: a.id(),
     object: a.belongsTo('Object', 'objectId')
-  }).authorization(allow => [allow.groupDefinedIn('projectId'), allow.owner()])
+  }).authorization(allow => [allow.authenticated()])
+    // .authorization(allow => [allow.groupDefinedIn('projectId'), allow.owner()])
   .secondaryIndexes((index)=>[
     index('setId').queryField('annotationsByAnnotationSetId'),
     index('metaId').queryField('annotationsByMetaId'),
@@ -135,7 +142,8 @@ const schema = a.schema({
     annotations: a.hasMany('Annotation', 'objectId'),
     categoryId: a.id().required(),
     category: a.belongsTo('Category', 'categoryId')
-  }).authorization(allow => [allow.groupDefinedIn('projectId')])
+  }).authorization(allow => [allow.authenticated()])
+    // .authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('categoryId').queryField('objectsByCategoryId')]),
   Location: a.model({
     projectId: a.id().required(),
@@ -152,7 +160,8 @@ const schema = a.schema({
     confidence: a.float(),
     observations: a.hasMany('Observation','locationId'),
     sets: a.hasMany('LocationSetMembership', 'locationId')
-  }).authorization(allow => [allow.groupDefinedIn('projectId')])
+  }).authorization(allow => [allow.authenticated()])
+    // .authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('metaId').queryField('locationsByImageKey'), 
     index('setId').queryField('locationsBySetId')
   ]),
@@ -163,7 +172,8 @@ const schema = a.schema({
     location: a.belongsTo('Location', 'locationId'),
     annotationSetId: a.id().required(),
     annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId')
-  }).authorization(allow => [allow.groupDefinedIn('projectId'), allow.owner()])
+  }).authorization(allow => [allow.authenticated()])
+    // .authorization(allow => [allow.groupDefinedIn('projectId'), allow.owner()])
   .secondaryIndexes((index)=>[index('locationId').queryField('observationsByLocationId'), 
     index('annotationSetId').queryField('observationsByAnnotationSetId')
   ]),
@@ -174,14 +184,15 @@ const schema = a.schema({
     project: a.belongsTo('Project', 'projectId'),
     locations: a.hasMany('Location', 'setId'),
     memberships: a.hasMany('LocationSetMembership', 'locationSetId')
-  }).authorization(allow => [allow.groupDefinedIn('projectId')])
+  }).authorization(allow => [allow.authenticated()])
+    // .authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('projectId').queryField('locationSetsByProjectId')]),
   LocationSetMembership: a.model({
     locationId: a.id().required(),
     locationSetId: a.id().required(),
     location: a.belongsTo('Location', 'locationId'),
     locationSet: a.belongsTo('LocationSet', 'locationSetId')
-  }).authorization(allow=>[allow.authenticated()]),
+  }).authorization(allow => [allow.authenticated()]),
   ImageSetMembership: a.model({
     imageId: a.id().required(),
     imageSetId: a.id().required(),
@@ -194,7 +205,8 @@ const schema = a.schema({
     project: a.belongsTo('Project', 'projectId'),
     name: a.string().required(),
     images: a.hasMany('ImageSetMembership', 'imageSetId')
-  }).authorization(allow => [allow.groupDefinedIn('projectId')])
+  }).authorization(allow => [allow.authenticated()])
+    //.authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('projectId').queryField('imageSetsByProjectId')]),
   UserProjectMembership: a.model({
     userId: a.string().required(),
@@ -202,7 +214,8 @@ const schema = a.schema({
     project: a.belongsTo('Project', 'projectId'),
     isAdmin: a.boolean(),
     queueUrl: a.string(),
-  }).authorization(allow => [allow.groupDefinedIn('projectId'),allow.group('orgadmin')])
+  }).authorization(allow => [allow.authenticated()])
+    //.authorization(allow => [allow.groupDefinedIn('projectId'), allow.group('orgadmin')])
   .secondaryIndexes((index)=>[index('projectId').queryField('userProjectMembershipsByProjectId'),
     index('userId').queryField('userProjectMembershipsByUserId'),
     index('queueUrl').queryField('userProjectMembershipsByQueueUrl')
@@ -212,7 +225,8 @@ const schema = a.schema({
     project: a.belongsTo('Project', 'projectId'),
     name: a.string().required(),
     url: a.url().required(),
-  }).authorization(allow => [allow.groupDefinedIn('projectId')])
+  }).authorization(allow => [allow.authenticated()])
+    //.authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('projectId').queryField('queuesByProjectId')]),
   addUserToGroup: a.mutation().arguments({
     userId:a.string().required(), 
@@ -242,7 +256,7 @@ const schema = a.schema({
   }).authorization(allow=>[allow.group('orgadmin')])
   .handler(a.handler.function(listGroupsForUser))
   .returns(a.json()),
-}).authorization(allow=>[allow.resource(handleUpload)])
+}).authorization(allow => [allow.resource(handleUpload)])
 
 export type Schema = ClientSchema<typeof schema>;
 

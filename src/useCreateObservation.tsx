@@ -1,6 +1,6 @@
 import React, { useCallback, useContext } from "react";
 import { UserContext } from "./UserContext";
-import { GQL_Client } from "./App";
+import { client as GQL_Client } from "./useOptimisticUpdates";
 import { UseAckOnTimeoutProps } from "./useAckOnTimeout"; 
 import { BaseImageProps } from "./BaseImage";
 import { LocationType, AnnotationSetType } from "./schemaTypes";

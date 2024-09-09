@@ -44,10 +44,6 @@ import { fetchAuthSession } from "aws-amplify/auth";
 import Review from "./Review2.jsx";
 import { BrowserView, MobileView } from "react-device-detect";
 import ExportData from "./ExportData.jsx";
-import type { Schema } from '../amplify/data/resource'; // Path to your backend resource definition
-
-
-export const GQL_Client = generateClient<Schema>({authMode: 'userPool'});
 configure({ ignoreRepeatedEventsWhenKeyHeldDown: false });
 
 /**

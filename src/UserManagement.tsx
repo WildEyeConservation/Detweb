@@ -9,7 +9,7 @@ import { useUsers, useProjectMemberships, Identifiable } from "./useGqlCached";
 import { UserContext } from "./UserContext";
 import { useContext } from "react";
 import { QueueDropdown } from "./QueueDropDown";
-import { GQL_Client } from "./App";
+import { client as GQL_Client } from "./useOptimisticUpdates";
 
 
 interface User extends Identifiable {
