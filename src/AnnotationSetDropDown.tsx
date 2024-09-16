@@ -1,6 +1,6 @@
 import { Form } from "react-bootstrap";
 import { useContext, ChangeEvent  } from "react";
-import { ProjectContext } from "./Context";
+import { ProjectContext, ManagementContext } from "./Context";
 
 interface AnnotationSetDropdownProps{
   setAnnotationSet: (arg0:string) => void;
@@ -14,7 +14,8 @@ export function AnnotationSetDropdown({
   canCreate = true,
 }: AnnotationSetDropdownProps) {
   // Look into this, UserContext is not passing through items within it
-  const { project, annotationSetsHook: {data: annotationSets, create: createAnnotationSet } } = useContext(ProjectContext)!;
+  const { project } = useContext(ProjectContext)!;
+  const { annotationSetsHook: {data: annotationSets, create: createAnnotationSet } } = useContext(ManagementContext)!;
   const onNewAnnotationSet = async () => {
     const name = prompt("Please enter new AnnotationSet name", "");
     if (name) {

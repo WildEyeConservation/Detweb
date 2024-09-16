@@ -1,6 +1,6 @@
 import { Form } from "react-bootstrap";
 import React, { useContext } from "react";
-import { ProjectContext } from "./Context";
+import { ProjectContext, ManagementContext } from "./Context";
 interface LocationSetDropdownProps {
   selectedSet: string | null;
   setLocationSet: (id: string | undefined) => void;
@@ -12,7 +12,8 @@ export function LocationSetDropdown({
   setLocationSet ,
   hasCreateOption = false,
 }: LocationSetDropdownProps) {
-  const {project,locationSetsHook:{data:locationSets,create:createLocationSet}} = useContext(ProjectContext)!;
+  const { project } = useContext(ProjectContext)!;
+  const { locationSetsHook:{data:locationSets,create:createLocationSet}} = useContext(ManagementContext)!;
   
   const onNewLocationSet = async () => {
     const name = prompt("Please enter new LocationSet name", "");

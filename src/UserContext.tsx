@@ -19,7 +19,7 @@ import {
   useOptimisticImageSet,
   useOptimisticLocationSet,
   useOptimisticAnnotationSet,
-  useOptimisticQueue
+  useQueues
 } from "./useOptimisticUpdates.tsx";
 
 
@@ -33,18 +33,6 @@ export function Project({ children }: { children: React.ReactNode }) {
   const categoriesHook = useOptimisticCategory(
     async () => client.models.Category.list({ filter: { projectId: { eq: currentProject?.id } } }),
     { filter: { projectId: { eq: currentProject?.id } } })
-  const imageSetsHook = useOptimisticImageSet(
-    async () => client.models.ImageSet.list({ filter: { projectId: { eq: currentProject?.id } } }),
-    { filter: { projectId: { eq: currentProject?.id } } })
-  const locationSetsHook = useOptimisticLocationSet(
-    async () => client.models.LocationSet.list({ filter: { projectId: { eq: currentProject?.id } } }),
-    { filter: { projectId: { eq: currentProject?.id } } })
-  const annotationSetsHook = useOptimisticAnnotationSet(
-    async () => client.models.AnnotationSet.list({ filter: { projectId: { eq: currentProject?.id } } }),
-    { filter: { projectId: { eq: currentProject?.id } } })
-  const queuesHook = useOptimisticQueue(
-    async () => client.models.Queue.list({ filter: { projectId: { eq: currentProject?.id } } }),
-    { filter: { projectId: { eq: currentProject?.id } } })
 
   useEffect(() => {
     if (currentPM) {
@@ -57,11 +45,7 @@ export function Project({ children }: { children: React.ReactNode }) {
     currentProject && 
     <ProjectContext.Provider value={{
         project: currentProject,
-        categoriesHook,
-        imageSetsHook,
-        locationSetsHook,
-        annotationSetsHook,
-        queuesHook
+        categoriesHook
     }}>
       {currentProject && children}
     </ProjectContext.Provider>
@@ -170,11 +154,29 @@ export function Management({ children }: { children: React.ReactNode }) {
   //const {items: projectMemberships} = useObserveQuery('UserProjectMembership',{ filter: { projectId: { eq: project.id } } });
   const projectMembershipHook = useOptimisticMembership(
     async () => client.models.UserProjectMembership.list({ filter: { projectId: { eq: project.id } } }),
+    { filter: { projectId: { eq: project.id } } })  
+  const imageSetsHook = useOptimisticImageSet(
+    async () => client.models.ImageSet.list({ filter: { projectId: { eq: project.id } } }),
     { filter: { projectId: { eq: project.id } } })
+  const locationSetsHook = useOptimisticLocationSet(
+    async () => client.models.LocationSet.list({ filter: { projectId: { eq: project.id } } }),
+    { filter: { projectId: { eq: project.id } } })
+  const annotationSetsHook = useOptimisticAnnotationSet(
+    async () => client.models.AnnotationSet.list({ filter: { projectId: { eq: project.id } } }),
+    { filter: { projectId: { eq: project.id } } })
+  const queuesHook = useQueues(
+    async () => client.models.Queue.list({ filter: { projectId: { eq: project.id } } }),
+    { filter: { projectId: { eq: project.id } } })
+  
   return ( 
     <ManagementContext.Provider value={{
-        allUsers,
-        projectMembershipHook
+      allUsers,
+      projectMembershipHook,
+      imageSetsHook,
+      locationSetsHook,
+      annotationSetsHook,
+      queuesHook
+
     }} >
       {allUsers && projectMembershipHook && children}
     </ManagementContext.Provider>)

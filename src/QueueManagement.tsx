@@ -1,16 +1,15 @@
 import { useContext, useEffect, useState } from 'react';
 import { Button, Row, Tooltip, OverlayTrigger, Col } from 'react-bootstrap';
-import { UserContext,ProjectContext, ManagementContext, GlobalContext } from './Context';
+import { UserContext, ManagementContext } from './Context';
 import MyTable from './Table';
 import { PurgeQueueCommand, GetQueueAttributesCommand } from '@aws-sdk/client-sqs'
-import { useQueues } from './apiInterface'
 import { type GetQueueAttributesCommandInput } from '@aws-sdk/client-sqs'
 import { Schema } from '../amplify/data/resource'
 
 
 export default function QueueManagement() {
   const { sqsClient } = useContext(UserContext)!;
-  const { queuesHook: { data: queues, create: createQueue, delete : deleteQueue } } = useContext(ProjectContext)!;
+  const { queuesHook: { data: queues, create: createQueue, delete : deleteQueue } } = useContext(ManagementContext)!;
   const { projectMembershipHook: { data: projectMemberships, update: updateProjectMembership } } = useContext(ManagementContext)!;
   const [messageCounts, setMessageCounts] = useState<{ [key: string]: number }>({});
   
@@ -36,8 +35,10 @@ export default function QueueManagement() {
   useEffect(() => {
     const updateMessageCounts = async () => {
       const newCounts:{[key: string]: number} = {};
-      for (const queue of queues || []) {
-        newCounts[queue.url] = await getMessageCount(queue.url);
+      for (const queue of queues) {
+        if (queue.url.length > 0) {
+          newCounts[queue.url] = await getMessageCount(queue.url);
+        }
       }
       setMessageCounts(newCounts);
     };
@@ -53,7 +54,7 @@ export default function QueueManagement() {
       // 1. Deleting the queue from SQS
       // 2. Updating any users who were subscribed to this queue
       // 3. Removing the queue from the local state
-      await deleteQueue(queue);
+      deleteQueue(queue);
     } catch (error) {
       console.error('Error deleting queue:', error);
     }

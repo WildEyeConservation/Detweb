@@ -32,10 +32,13 @@ delete({
 
 */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect} from 'react';
+import { useEffect, useContext} from 'react';
 import type { Schema } from "../amplify/data/resource";
 import { V6Client } from '@aws-amplify/api-graphql'
 import { client } from './main';
+import { CreateQueueCommand, DeleteQueueCommand } from '@aws-sdk/client-sqs';
+import { makeSafeQueueName } from './utils';
+import { GlobalContext, UserContext, ProjectContext } from './Context';
 
 type ClientType = V6Client<Schema>;
 type ModelType = keyof ClientType['models'];
@@ -806,7 +809,7 @@ export function useOptimisticAnnotationSet(
 }
 
 type Queue = Schema['Queue']['type'];
-export function useOptimisticQueue(
+function useOptimisticQueue(
   listFunction: () => Promise<{ data: Queue[] }> = () => client['models']['Queue'].list(), 
   subscriptionFilter?: Parameters<ClientType['models']['Queue']['onCreate']>[0]){
   const queryClient = useQueryClient();
@@ -926,11 +929,42 @@ export function useOptimisticQueue(
   item.id ||= crypto.randomUUID(); // If the item does not have an id, we generate a random UUID for it.
   createMutation.mutate(item);
   return item.id;
-  },
+    },
   update: updateMutation.mutate,
   delete: deleteMutation.mutate,
   };
 }
+
+export const useQueues = (projectId: string) => {
+  const { client } = useContext(GlobalContext)!;
+  const { sqsClient } = useContext(UserContext)!;
+  const { project }   = useContext(ProjectContext)!;
+  const originalHook = useOptimisticQueue(() => client.models.Queue.list({filter: {projectId: {eq: project.id}}}), 
+    { filter: { projectId: { eq: project.id } } });
+  const create = (name: string) => {
+    const safeName = makeSafeQueueName(name);
+    const id = originalHook.create({ name: safeName, projectId: project.id, url: "" });
+    sqsClient.send(new CreateQueueCommand({
+      QueueName: safeName,
+      Attributes: {
+        MessageRetentionPeriod: '1209600', //This value is in seconds. 1209600 corresponds to 14 days and is the maximum AWS supports      //FifoQueue: "false",
+      },
+    })
+    ).then(({ QueueUrl: url }) => {
+      originalHook.update({ id, url });
+      return id;
+    })
+  }
+  const remove = ({ id }: { id: string }) => {
+    const url = originalHook.data.find((x) => x.id == id)?.url;
+    if (url) {
+      sqsClient.send(new DeleteQueueCommand({ QueueUrl: url })); 
+      originalHook.delete({ id });
+    }
+  }
+  return { ...originalHook, create, delete:remove };
+}
+
 // // The byProject versions of the useOptimisticUpdates hook work on all classes except project itself
 // type ModelTypeByProject = Exclude<keyof typeof client.models, 'Project'>;
 

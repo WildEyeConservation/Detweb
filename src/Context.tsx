@@ -47,17 +47,16 @@ export interface UserContextType {
 export interface ManagementContextType {
     allUsers: Schema['UserType']['type'][],
     projectMembershipHook: CRUDhook<Schema['UserProjectMembership']['type']>,
+    annotationSetsHook: CRUDhook<Schema['AnnotationSet']['type']>;
+    imageSetsHook: CRUDhook<Schema['ImageSet']['type']>;
+    locationSetsHook: CRUDhook<Schema['LocationSet']['type']>; 
+    queuesHook: CRUDhook<Schema['Queue']['type']>; 
 } 
     
 export interface ProjectContextType {
     project: Schema['Project']['type'];
-    annotationSetsHook: CRUDhook<Schema['AnnotationSet']['type']>;
-    imageSetsHook: CRUDhook<Schema['ImageSet']['type']>;
-    locationSetsHook: CRUDhook<Schema['LocationSet']['type']>; 
     categoriesHook: CRUDhook<Schema['Category']['type']>; 
-    queuesHook: CRUDhook<Schema['Queue']['type']>; 
 }
-
     
 export const GlobalContext = createContext<GlobalContextType | null>(null);
 export const UserContext = createContext<UserContextType | null>(null);

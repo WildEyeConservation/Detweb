@@ -1,16 +1,14 @@
 import { Form } from "react-bootstrap";
 import { useContext } from "react";
-import { ProjectContext } from "./Context";
+import { ManagementContext } from "./Context";
 import React from "react";
-import { useQueues } from "./apiInterface";
 interface QueueDropdownProps {
   setQueue: (url: string) => void;
   currentQueue: string | null;
 }
 
 export function QueueDropdown({ setQueue, currentQueue }: QueueDropdownProps) {
-  const {project} = useContext(ProjectContext)!;
-  const { data: queues, create: createQueue } = useQueues(project.id);
+  const { queuesHook: { data: queues, create: createQueue } } = useContext(ManagementContext)!;
   console.log(`queue: ${JSON.stringify(queues)}`)
   
 
