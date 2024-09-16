@@ -1,7 +1,7 @@
 import { useLeafletContext } from "@react-leaflet/core";
 import L from "leaflet";
 import { useContext, useEffect } from "react";
-import { UserContext } from "./UserContext";
+import { UserContext } from "./Context";
 import backend from "../amplify_outputs.json";
 /* This is a custom Leaflet layer that uses a slippy map stored on S3 storage, accessed via the aws-sdk/aws-s3
 library. Because the URLs that we use to access files stored there need to be individually signed, we cannot 

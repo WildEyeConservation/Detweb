@@ -5,8 +5,7 @@ import BaseImage from "./BaseImage";
 import CreateAnnotationOnClick from "./CreateAnnotationOnClick";
 import { AnnotationSetDropdown } from "./AnnotationSetDropDown";
 import { Stack } from "react-bootstrap";
-import { useAnnotations } from "./useGqlCached";
-import { UserContext } from "./UserContext";
+import { UserContext } from "./Context";
 // import CreateBatchRectangle from './createBatchRectangle';
 
 /**

@@ -2,7 +2,6 @@ import computeMunkres from "munkres-js";
 import { useState, useEffect } from "react";
 import { square, sqrt } from "mathjs";
 import { AnnotationsContextType } from "./AnnotationsContext";
-import { Annotation } from "./useGqlCached";
 
 interface TransformFunction {
   (coordinates: [number, number]): [number, number];

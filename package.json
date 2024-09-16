@@ -14,7 +14,9 @@
     "@aws-amplify/auth": "^6.3.16",
     "@aws-amplify/ui-react": "^6.1.13",
     "@aws-sdk/client-cognito-identity-provider": "^3.635.0",
+    "@aws-sdk/client-dynamodb": "^3.648.0",
     "@aws-sdk/client-sqs": "^3.635.0",
+    "@aws-sdk/util-dynamodb": "^3.648.0",
     "@emotion/styled": "^11.13.0",
     "@fortawesome/fontawesome-free": "^6.6.0",
     "@mui/material": "^5.16.7",
@@ -24,6 +26,7 @@
     "aws-amplify": "^6.4.0",
     "aws-sdk": "^2.1687.0",
     "bootswatch": "^5.3.3",
+    "exifreader": "^4.23.5",
     "export-from-json": "^1.7.4",
     "humanize-duration": "^3.32.1",
     "jdenticon": "^3.3.0",
@@ -47,6 +50,7 @@
     "react-leaflet": "^4.2.1",
     "react-router-dom": "^6.26.1",
     "react-select": "^5.8.0",
+    "sharp": "^0.33.5",
     "unique-names-generator": "^4.7.1"
   },
   "devDependencies": {

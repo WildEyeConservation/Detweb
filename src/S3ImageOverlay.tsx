@@ -1,6 +1,6 @@
 import { ImageOverlay, ImageOverlayProps } from "react-leaflet";
 import { useState, useContext, useEffect } from "react";
-import { UserContext } from "./UserContext";
+import { UserContext } from "./Context";
 import backend from "../amplify_outputs.json";
 
 interface S3ImageOverlayProps extends ImageOverlayProps {

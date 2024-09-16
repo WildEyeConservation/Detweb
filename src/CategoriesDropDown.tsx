@@ -1,7 +1,6 @@
 import { Form } from "react-bootstrap";
 import { useContext } from "react";
-import { UserContext } from "./UserContext";
-import { useCategory } from "./useGqlCached";
+import { ProjectContext } from "./Context";
 import Select, { MultiValue, SingleValue, OptionsOrGroups } from "react-select";
 
 interface CategoryOption {
@@ -14,8 +13,7 @@ interface CategoriesDropdownProps {
 }
 
 export function CategoriesDropdown({ setSelectedCategories }: CategoriesDropdownProps) {
-  const { currentProject } = useContext(UserContext)!;
-  const { categories } = useCategory(currentProject);
+  const {categoriesHook:{data:categories}} = useContext(ProjectContext)!;
 
   const options: OptionsOrGroups<CategoryOption, any> = categories?.map((x) => {
     return { label: x.name, value: x.id };

@@ -1,25 +1,19 @@
-## AWS Amplify React+Vite Starter Template
+Things to watch out for
 
-This repository provides a starter template for creating applications using React+Vite and AWS Amplify, emphasizing easy setup for authentication, API, and database capabilities.
+Not all AWS regions support all services, or support all services fully. Usually you only discover this once you have invested significant time into developing some new feature that requires X. eg. 
+- af-south-1 does not support amplify (I assume this just means amplify hosting, because the backend is built on cdk, which is built on cloudformation both of which obviously work just fine and the frontend is built on your machine and can be hosted anywhere).
+- af-south-1 does not support aurora serverless (or more precisley they just don;t have any serverless engines available for aurora-mysql)
+- af south has g4dn instances in 2 of the three AZs. If you don't hack your way around this, then the deployment fails, because CDK tries to place g4dn where they are not available.
 
-## Overview
+Changing regions triggers the following bug:
+https://github.com/aws/aws-cdk/issues/26446
+Workaround is to clear docker cache.
 
-This template equips you with a foundational React application integrated with AWS Amplify, streamlined for scalability and performance. It is ideal for developers looking to jumpstart their project with pre-configured AWS services like Cognito, AppSync, and DynamoDB.
+sometimes npx ampx would fail to use local sso credentials, hidden in the error message was something about a socket timeout. This ultimately led me to 
+https://stackoverflow.com/questions/76179568/socket-connection-timout-error-in-node-js and an upgrade to 20.17.0 did indeed solve the problem.
 
-## Features
+Docker credential store is unable to deal with the long strings that ECR uses for auth.
+This can be solved by opening ~\.docker\config.json and deleting the line 
+"credsStore": "desktop",
+This one tends to recur. I suspect that docket desktop restores that file to previous status.
 
-- **Authentication**: Setup with Amazon Cognito for secure user authentication.
-- **API**: Ready-to-use GraphQL endpoint with AWS AppSync.
-- **Database**: Real-time database powered by Amazon DynamoDB.
-
-## Deploying to AWS
-
-For detailed instructions on deploying your application, refer to the [deployment section](https://docs.amplify.aws/react/start/quickstart/#deploy-a-fullstack-app-to-aws) of our documentation.
-
-## Security
-
-See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
-
-## License
-
-This library is licensed under the MIT-0 License. See the LICENSE file.

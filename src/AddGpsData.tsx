@@ -2,7 +2,7 @@ import { useContext, useState } from "react";
 import Modal from "react-bootstrap/Modal";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
-import { UserContext } from "./UserContext";
+import { UserContext } from "./Context";
 import { createImageSetMembershipMinimal } from "./gqlQueries";
 import Papa from "papaparse";
 import { createImageSet, updateImage } from "./graphql/mutations";

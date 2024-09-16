@@ -1,184 +1,182 @@
-import { useEffect, useState, useRef, useContext } from "react";
+import { useEffect, useState, useRef, useContext, useCallback } from "react";
+import Spinner from "react-bootstrap/Spinner"; // Add this import
 // import moment from 'moment'
 // import {MD5,enc} from 'crypto-js'
 import Modal from "react-bootstrap/Modal";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
-import { addLocal } from "./Files";
-import { UserContext } from "./UserContext";
-import { createImageSet } from "./graphql/mutations";
 import { useUpdateProgress } from "./useUpdateProgress";
 import { list, uploadData } from "aws-amplify/storage";
-import { limitConnections } from "./App";
+import { ProjectContext, UserContext, GlobalContext } from "./Context.tsx";
+import pLimit from 'p-limit'
 
+
+/* I don't understand why I need to tell Typescript that webkitdirectory is one of the fields of the input element.
+  Without this, Typescript complains that webkitdirectory is not a valid attribute for an input element.
+  Some discussion at https://stackoverflow.com/questions/71444475/webkitdirectory-in-typescript-and-react 
+  This can probably solved in a better way. I am moving on for now. JJN
+*/
+declare module 'react' {
+  interface InputHTMLAttributes<T> extends HTMLAttributes<T> {
+    webkitdirectory?: string;
+  }
+}
 
 interface FilesUploadComponentProps {
   show: boolean;
   handleClose: () => void;
-  dirHandle: FileSystemDirectoryHandle | null;
 }
 
-interface FileEntry {
-  entry: any;
-  name: string;
-  path?: string;
-  getFile: () => Promise<File>;
-}
-
-async function recurseFolder(dirHandle: FileSystemDirectoryHandle, path: string): Promise<FileEntry[]> {
-  let files: FileEntry[] = [];
-  
-  for await (const entry of (dirHandle as any).values()) {
-    const name = entry.name;
-    if (entry.kind === "directory") {
-      files = files.concat(await recurseFolder(entry as FileSystemDirectoryHandle, path + "/" + name));
-    } else if (entry.kind === "file") {
-      const upper = name.toUpperCase();
-      if (upper.endsWith(".JPG") || upper.endsWith(".JPEG")) {
-        const fileEntry: FileEntry = {
-          name: name,
-          path: path,
-          getFile: () => (entry as FileSystemFileHandle).getFile(),
-          entry: undefined
-        };
-        addLocal(fileEntry);
-        files.push(fileEntry);
-      }
-    }
-  }
-
-  return files;
-}
-
-
-
-export default function FilesUploadComponent({ show, handleClose, dirHandle }: FilesUploadComponentProps) {
+export default function FilesUploadComponent({ show, handleClose }: FilesUploadComponentProps) {
+  const limitConnections = pLimit(1);
   const [upload, setUpload] = useState(true);
   const [name, setName] = useState("");
+  const {client} = useContext(GlobalContext)!;
+  const { project } = useContext(ProjectContext)!;
   const [integrityCheck, setIntegrityCheck] = useState(true);
-  const [recurseResult, setRecurseResult] = useState<Promise<FileEntry[]> | undefined>(undefined);
+  const [scannedFiles, setScannedFiles] = useState<File[]>([]);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [filteredImageFiles, setFilteredImageFiles] = useState<File[]>([]);
   const submitButtonRef = useRef<HTMLButtonElement | null>(null);
   const userContext = useContext(UserContext);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [totalImageSize, setTotalImageSize] = useState(0);
+  const [filteredImageSize, setFilteredImageSize] = useState(0);
   if (!userContext) {
     return null;
   }
-  const { currentProject, gqlSend } = userContext;
-  const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
-    taskId: `Upload files`,
-    determinateTaskName: "Uploading files",
-    indeterminateTaskName: "Preparing files", 
-    stepName: "files",
-  });
 
   useEffect(() => {
-    if (show) {
-      submitButtonRef.current?.focus();
+    if (show && fileInputRef.current) {
+      setIsScanning(true);
+      fileInputRef.current.click();
     }
   }, [show]);
 
-  async function upload2S3storage(entry: FileEntry) {
-    console.log("uploading" + entry.path + "/" + entry.name);
-    const key = "images/" + entry.path + "/" + entry.name;
-    await uploadData({ key, data: await entry.getFile() }).result;
-    setStepsCompleted((fc: number) => fc + 1);
-    return entry;
-  }
-
-  // async function calcMD5(data){
-  //   if (integrityCheck){
-  //     return new Promise((resolve,reject)=>{
-  //     var reader = new FileReader();
-  //     reader.addEventListener('load',function () {
-  //       var hash = MD5(enc.Latin1.parse(this.result));
-  //       resolve({...data,hash:hash.toString(enc.Hex)})})
-  //       reader.readAsBinaryString(data.file);
-  //     })}
-  //     else{
-  //       return {...data,hash:undefined}
-  //     }
-  // }
-
-  // function exifDateTimeToUnix(tags) {
-  //   /*Exif DateTime strings are a little ugly. They seem to use the non standard datetime format "yyyy:MM:dd HH:mm:ssZZ", which is not great to start with
-  //   but the time zone informtion [ZZ] is not always present, which sucks.*/
-  //   var dateString=tags['DateTimeOriginal'].description
-  //   if (dateString.length<20){
-  //     dateString+=tags['OffsetTimeOriginal'].description
-  //   }
-  //   var dt=DateTime.fromFormat(dateString, "yyyy:MM:dd HH:mm:ssZZ")
-  //   if (!dt.isValid){
-  //     dt=DateTime.fromFormat(dateString, "yyyy:MM:dd HH:mm:ss")
-  //   }
-  //   return dt.toSeconds();
-  // }
-
-  /* I used to extract the exif metadata on the client side and then update the database from here. This functionality is now a part of the handleS3upload lambda, 
-so it has been commented here. The reason why I have not removed it is that I will need a client side version if we are to support a fully or partially 
-offline mode */
-  // async function getExifmeta(data){
-  //     const file=await data.entry.getFile()
-  //     const tags = await ExifReader.load(file)
-  //     /* I am saving all of the exifdata to make it easier to answer questions about eg. lens used/ISO/shutterTime/aperture distributions later on. However, some
-  //     EXIF fields are absolutely huge and make writing to my database impossibly slow. I explicitly drop those here*/
-  //     delete tags['Thumbnail']
-  //     delete tags['Images']
-  //     delete tags['MakerNote']
-  //     return ({...data,
-  //               file,
-  //               key:data.entry.path+'/'+data.entry.name,
-  //               width:tags['Image Width'].value,
-  //               height:tags['Image Height'].value,
-  //               timestamp:exifDateTimeToUnix(tags),
-  //               cameraSerial:tags['Internal Serial Number']?.value,
-  //               exifData:JSON.stringify(tags)})
-  // }
-  // async function updateDB(data,imageSetId){
-  //   const {data:{createImage:{key:imageKey}}}=await gqlClient.graphql({query: createImage,variables:{input:{hash:data.hash,key:data.key,timestamp:data.timestamp,exifData:data.exifData,height:data.height,width:data.width}}});
-  //   await gqlClient.graphql({query: createImageSetMembership,variables:{input:{imageKey,imageSetId}}})
-  //   console.log(data)
-  //   return data
-  // }
+  useEffect(() => {
+    setFilteredImageSize(0)
+    setFilteredImageFiles([])
+  }, [name]);
 
   useEffect(() => {
-    if (dirHandle) {
-      setName(dirHandle.name);
-      setRecurseResult(recurseFolder(dirHandle, dirHandle.name));
+    setImageFiles(scannedFiles.filter(file => file.type.startsWith('image/')));
+  }, [scannedFiles]);
+
+  useEffect(() => {
+    setTotalImageSize(imageFiles.reduce((acc, file) => acc + file.size, 0));
+  }, [imageFiles]);
+
+  useEffect(() => {
+    setFilteredImageSize(filteredImageFiles.reduce((acc, file) => acc + file.size, 0));
+  }, [filteredImageFiles]);
+
+  useEffect(() => {
+    async function getExistingFiles() {
+      const {items} = await list({
+        path: `images/${name}`,
+      });
+      console.log(items);
+      const existingFiles = items.reduce<Set<string>>((set, x) => {
+        set.add(x.path.substring("images/".length));
+        return set;
+      }, new Set());
+      setFilteredImageFiles(imageFiles.filter(file => !existingFiles.has(file.webkitRelativePath)));
     }
-  }, [dirHandle]);
+    if (imageFiles.length > 0) {
+      getExistingFiles();
+    }
+  }, [imageFiles]);
+
+  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files) {
+      setScannedFiles(Array.from(files));
+      setName(files[0].webkitRelativePath.split('/')[0]);
+    }
+    setIsScanning(false);
+  };
+
+  const formatFileSize = useCallback((bytes: number): string => {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let size = bytes;
+    let unitIndex = 0;
+
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex++;
+    }
+
+    return `${size.toFixed(2)} ${units[unitIndex]}`;
+  }, []);
+  
+  const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
+    taskId: `Upload files ${name}`,
+    determinateTaskName: `Uploading files for imageSet ${name}`,
+    indeterminateTaskName: `Preparing files for imageSet ${name}`, 
+    stepFormatter: formatFileSize
+  });
 
   const handleSubmit = async () => {
+    // Close the modal first, so the user doesn't experience the UI as unresponsive
     handleClose();
-    const files = await recurseResult;
-    if (!files) return;
+    /* We wait for scanning of the submitted folder to be completed before proceeding, otherwise there is a risk that 
+    we start processing on a recurseResult that is incomplete*/
 
-    const { items } = await list({
-      prefix: "images/" + dirHandle?.name + "/",
-      options: { listAll: true },
-    });
-
-    const existingFiles = items.reduce<Set<string>>((set, x) => {
-      set.add(x.key.substring("images/".length));
-      return set;
-    }, new Set());
-
-    const filesToUpload = files.filter(
-      (file) => !existingFiles.has(file.entry.path + "/" + file.entry.name)
-    );
-
-    setTotalSteps(filesToUpload.length);
+    setTotalSteps(filteredImageSize);
     setStepsCompleted(0);
 
-    const promises = filesToUpload.map(({ entry }) =>
-      limitConnections(() => upload2S3storage(entry))
+    const promises = filteredImageFiles.map(
+      (file) => limitConnections(async () => {
+        let lastTransferred = 0;
+        const task = uploadData({
+          path: "images/" + file.webkitRelativePath,
+          data: file,
+          options: {
+            contentType: file.type,
+            onProgress: ({ transferredBytes }) => {
+              {
+                const additionalTransferred = transferredBytes - lastTransferred;
+                setStepsCompleted(fc => fc + additionalTransferred);  
+              }
+              lastTransferred = transferredBytes;
+            }
+          }
+        })
+        await task.result;
+      })
     );
 
     Promise.all(promises).then(() =>
-      gqlSend(createImageSet, { input: { name, projectName: currentProject } })
+      client.models.ImageSet.create({ name, projectId: project.id })
     );
   };
 
+  // This just ensures that the modal closes if the user closes the filepicker without making a selection
+  useEffect(() => {
+    const fileInput = fileInputRef.current;
+    if (fileInput) {
+      const handleCancel = () => {
+        handleClose();
+      };
+      fileInput.addEventListener('cancel', handleCancel);
+      return () => {
+        fileInput.removeEventListener('cancel', handleCancel);
+      };
+    }
+  }, [handleClose]);
+
   return (
     <Modal show={show} onHide={handleClose}>
+      <input type="file"
+        id="filepicker"
+        name="fileList"
+        multiple
+        webkitdirectory=""
+        ref={fileInputRef}
+        style={{ display: 'none' }}
+        onChange={handleFileInputChange}
+      />
       <Modal.Header closeButton>
         <Modal.Title>Add files</Modal.Title>
       </Modal.Header>
@@ -215,6 +213,22 @@ offline mode */
               />
             </Form.Group>
           </Form.Group>
+          {isScanning ? (
+            <div className="text-center mt-3">
+              <Spinner animation="border" role="status" />
+              <p className="mt-2">Please be patient while files are scanned.</p>
+            </div>
+          ) : (
+            <div className="text-center mt-3">
+              <p>
+                Total files: {scannedFiles.length}<br />
+                Image files: {imageFiles.length}<br />
+                Image files size: {formatFileSize(totalImageSize)}<br/>
+                Image files not allready uploaded: {filteredImageFiles.length}<br />
+                Image files size not allready uploaded: {formatFileSize(filteredImageSize)}
+              </p>
+            </div>
+          )}
         </Form>
       </Modal.Body>
       <Modal.Footer>

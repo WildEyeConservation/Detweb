@@ -5,7 +5,6 @@ import Col from "react-bootstrap/Col";
 import Button from "react-bootstrap/Button";
 import BaseImage from "./BaseImage";
 import { UserContext } from "./UserContext";
-import { useAnnotations } from "./useGqlCached";
 import { ShowMarkers } from "./ShowMarkers";
 
 const Image = BaseImage;

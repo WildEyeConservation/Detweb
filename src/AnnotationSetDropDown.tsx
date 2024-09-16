@@ -1,8 +1,7 @@
 import { Form } from "react-bootstrap";
 import { useContext, ChangeEvent  } from "react";
-import { UserContext } from "./UserContext";
-import { useAnnotationSets } from "./useGqlCached";
-import { AnnotationSetType } from "./schemaTypes";
+import { ProjectContext } from "./Context";
+
 interface AnnotationSetDropdownProps{
   setAnnotationSet: (arg0:string) => void;
   selectedSet: string | undefined;
@@ -15,14 +14,11 @@ export function AnnotationSetDropdown({
   canCreate = true,
 }: AnnotationSetDropdownProps) {
   // Look into this, UserContext is not passing through items within it
-  const { currentProject } = useContext(UserContext)!;
-  const { annotationSets, createAnnotationSet } = useAnnotationSets({projectId: currentProject!.id})
+  const { project, annotationSetsHook: {data: annotationSets, create: createAnnotationSet } } = useContext(ProjectContext)!;
   const onNewAnnotationSet = async () => {
     const name = prompt("Please enter new AnnotationSet name", "");
     if (name) {
-      //const {data:{createAnnotationSet:{id}}}=await createAnnotationSet(name)
-      const id = createAnnotationSet({ name, projectId: currentProject!.id } as Partial<AnnotationSetType>);
-      setAnnotationSet(id);
+      setAnnotationSet(createAnnotationSet({ name, projectId: project.id }))
     }
   };
 
@@ -35,7 +31,11 @@ export function AnnotationSetDropdown({
   };
 
   return (
-    <Form.Select value={selectedSet || "none"} onChange={onSelect}>
+    <Form.Select 
+      value={selectedSet || "none"} 
+      onChange={onSelect}
+      aria-label="Select annotation set"
+    >
       {!selectedSet && <option value="none">Select an annotation set</option>}
       {annotationSets?.map((q) => (
         <option key={q.id} value={q.id}>

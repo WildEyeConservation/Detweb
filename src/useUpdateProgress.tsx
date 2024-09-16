@@ -1,12 +1,13 @@
 import React, { useContext, useState, useEffect, Dispatch, SetStateAction } from "react";
 import { DateTime } from "luxon";
 import humanizeDuration from "humanize-duration";
+import { GlobalContext } from "./Context";
 
 interface UseUpdateProgressParams {
   taskId: string;
   indeterminateTaskName: string;
   determinateTaskName: string;
-  stepName: string;
+  stepFormatter: (steps: number) => string;
 }
 
 interface Progress {
@@ -28,18 +29,13 @@ export function useUpdateProgress({
   taskId,
   indeterminateTaskName,
   determinateTaskName,
-  stepName,
+  stepFormatter,
 }: UseUpdateProgressParams): [
   Dispatch<SetStateAction<number>>,
   Dispatch<SetStateAction<number>>
 ] {
   // Use context with type checking
-  const context = useContext(ProgressContext);
-  if (!context) {
-    throw new Error("useUpdateProgress must be used within a ProgressProvider");
-  }
-
-  const [, setProgress] = context;
+  const { setProgress } = useContext(GlobalContext)!;
   const [stepsCompleted, setStepsCompleted] = useState(0);
   const [totalSteps, setTotalSteps] = useState(0);
   const [startTime, setStartTime] = useState<number | null>(null);
@@ -55,7 +51,7 @@ export function useUpdateProgress({
   // This effect handles that update
   useEffect(() => {
     if (totalSteps || stepsCompleted) {
-      setProgress((progress: Progress) => {
+      setProgress((progress) => {
         const newProgress = { ...progress };
         // React only does shallow comparisons. Therefore we need to treat the dict as immutable.
         // Make a copy so that react can pick up the change
@@ -69,7 +65,7 @@ export function useUpdateProgress({
               <p>
                 {determinateTaskName}
                 <br />
-                {`Done with ${stepsCompleted}/${totalSteps} ${stepName}`}
+                {`Done with ${stepFormatter(stepsCompleted)}/${stepFormatter(totalSteps)}`}
                 <br />
                 {`Elapsed time: ${humanizeDuration(millis, {
                   units: ["d", "h", "m", "s"],
@@ -83,6 +79,8 @@ export function useUpdateProgress({
                   largest: 1,
                 })}`}
                 <br />
+                {`Average rate ${stepFormatter(stepsCompleted/millis*1000)}/s`}
+                <br />
               </p>
             ),
           };
@@ -92,7 +90,7 @@ export function useUpdateProgress({
               <p>
                 {indeterminateTaskName}
                 <br />
-                {`Loaded ${stepsCompleted} ${stepName} so far`}
+                {`Loaded ${stepFormatter(stepsCompleted)} so far`}
               </p>
             ),
           };
@@ -111,7 +109,7 @@ export function useUpdateProgress({
         return newProgress;
       });
     }
-  }, [stepsCompleted, totalSteps, setProgress, taskId, determinateTaskName, indeterminateTaskName, stepName, startTime]);
+  }, [stepsCompleted, totalSteps, setProgress, taskId, determinateTaskName, indeterminateTaskName, stepFormatter, startTime]);
 
   return [setStepsCompleted, setTotalSteps];
 }

@@ -7,144 +7,157 @@ import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 
 import * as opensearch from "aws-cdk-lib/aws-opensearchservice";
 import { Stack } from "aws-cdk-lib";
-  
-import { storage } from "./storage/resource";
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { outputBucket, inputBucket } from "./storage/resource";
 import * as iam from "aws-cdk-lib/aws-iam";
+import { handleS3Upload } from "./storage/handleS3Upload/resource";
 
 const backend=defineBackend({
   auth,
   data,
   addUserToGroup,
-  storage
+  outputBucket,
+  inputBucket,
+  handleS3Upload
 });
 
-const table=backend.data.resources.cfnResources.amplifyDynamoDbTables['Annotation']
+const lambdaFunction = backend.handleS3Upload.resources.lambda as lambda.Function;
+const layerVersion = new lambda.LayerVersion(Stack.of(lambdaFunction), 'sharpLayer', {
+  code: lambda.Code.fromAsset('./amplify/layers/sharp-layer'),
+  description: "Sharp layer for image processing",
+  compatibleArchitectures: [lambda.Architecture.X86_64, lambda.Architecture.ARM_64],
+  layerVersionName: "sharpLayer",
+})
+lambdaFunction.addLayers(layerVersion);
 
-table.pointInTimeRecoveryEnabled = true;
-table.streamSpecification = {
-  streamViewType: dynamodb.StreamViewType.NEW_IMAGE,
-};
+const customStack = backend.createStack('DetwebCustom')
+const custom=createDetwebResources(customStack, backend)
+backend.addOutput({ custom })
+
+//const table=backend.data.resources.cfnResources.amplifyDynamoDbTables['Annotation']
+//backend.handleS3Upload.resources.cfnResources.cfnFunction.layers?.push(custom.sharpLayerVersionArn)
+
+// table.pointInTimeRecoveryEnabled = true;
+// table.streamSpecification = {
+//   streamViewType: dynamodb.StreamViewType.NEW_IMAGE,
+// };
 
 
 // Get the DynamoDB table ARN
-const tableArn = backend.data.resources.tables["Annotation"].tableArn;
-
-const customStack=backend.createStack('DetwebCustom')
-
-backend.addOutput({custom:createDetwebResources(customStack,backend)})
+// const tableArn = backend.data.resources.tables["Annotation"].tableArn;
 
 
-// Get the data stack
-const dataStack = Stack.of(backend.data);
-// Create the OpenSearch domain
-const openSearchDomain = new opensearch.Domain(
-  dataStack,
-  "OpenSearchDomain",
-  {
-    version: opensearch.EngineVersion.OPENSEARCH_2_11,
-    nodeToNodeEncryption: true,
-    encryptionAtRest: {
-      enabled: true,
-    },
-  }
-);
+
+// // Get the data stack
+// const dataStack = Stack.of(backend.data);
+// // Create the OpenSearch domain
+// const openSearchDomain = new opensearch.Domain(
+//   dataStack,
+//   "OpenSearchDomain",
+//   {
+//     version: opensearch.EngineVersion.OPENSEARCH_2_11,
+//     nodeToNodeEncryption: true,
+//     encryptionAtRest: {
+//       enabled: true,
+//     },
+//   }
+// );
 
 //backend.data.resources.tables['User'].grantFullAccess(handleNewUser)
 
 
 // Get the S3Bucket ARN
-const s3BucketArn = backend.storage.resources.bucket.bucketArn;
-// Get the S3Bucket Name
-const s3BucketName = backend.storage.resources.bucket.bucketName;
+// const s3BucketArn = backend.storageOS.resources.bucket.bucketArn;
+// // Get the S3Bucket Name
+// const s3BucketName = backend.storageOS.resources.bucket.bucketName;
 
 
-//Get the region
-const region = dataStack.region;
+// //Get the region
+// const region = dataStack.region;
 
 
-// Create an IAM role for OpenSearch integration
-const openSearchIntegrationPipelineRole = new iam.Role(
-  dataStack,
-  "OpenSearchIntegrationPipelineRole",
-  {
-    assumedBy: new iam.ServicePrincipal("osis-pipelines.amazonaws.com"),
-    inlinePolicies: {
-      openSearchPipelinePolicy: new iam.PolicyDocument({
-        statements: [
-          new iam.PolicyStatement({
-            actions: ["es:DescribeDomain"],
-            resources: [
-              openSearchDomain.domainArn,
-              openSearchDomain.domainArn + "/*",
-            ],
-            effect: iam.Effect.ALLOW,
-          }),
-          new iam.PolicyStatement({
-            actions: ["es:ESHttp*"],
-            resources: [
-              openSearchDomain.domainArn,
-              openSearchDomain.domainArn + "/*",
-            ],
-            effect: iam.Effect.ALLOW,
-          }),
-          new iam.PolicyStatement({
-            effect: iam.Effect.ALLOW,
-            actions: [
-              "s3:GetObject",
-              "s3:AbortMultipartUpload",
-              "s3:PutObject",
-              "s3:PutObjectAcl",
-            ],
-            resources: [s3BucketArn, s3BucketArn + "/*"],
-          }),
-          new iam.PolicyStatement({
-            effect: iam.Effect.ALLOW,
-            actions: [
-              "dynamodb:DescribeTable",
-              "dynamodb:DescribeContinuousBackups",
-              "dynamodb:ExportTableToPointInTime",
-              "dynamodb:DescribeExport",
-              "dynamodb:DescribeStream",
-              "dynamodb:GetRecords",
-              "dynamodb:GetShardIterator",
-            ],
-            resources: [tableArn, tableArn + "/*"],
-          }),
-        ],
-      }),
-    },
-    managedPolicies: [
-      iam.ManagedPolicy.fromAwsManagedPolicyName(
-        "AmazonOpenSearchIngestionFullAccess"
-      ),
-    ],
-  }
-);
+// // Create an IAM role for OpenSearch integration
+// const openSearchIntegrationPipelineRole = new iam.Role(
+//   dataStack,
+//   "OpenSearchIntegrationPipelineRole",
+//   {
+//     assumedBy: new iam.ServicePrincipal("osis-pipelines.amazonaws.com"),
+//     inlinePolicies: {
+//       openSearchPipelinePolicy: new iam.PolicyDocument({
+//         statements: [
+//           new iam.PolicyStatement({
+//             actions: ["es:DescribeDomain"],
+//             resources: [
+//               openSearchDomain.domainArn,
+//               openSearchDomain.domainArn + "/*",
+//             ],
+//             effect: iam.Effect.ALLOW,
+//           }),
+//           new iam.PolicyStatement({
+//             actions: ["es:ESHttp*"],
+//             resources: [
+//               openSearchDomain.domainArn,
+//               openSearchDomain.domainArn + "/*",
+//             ],
+//             effect: iam.Effect.ALLOW,
+//           }),
+//           new iam.PolicyStatement({
+//             effect: iam.Effect.ALLOW,
+//             actions: [
+//               "s3:GetObject",
+//               "s3:AbortMultipartUpload",
+//               "s3:PutObject",
+//               "s3:PutObjectAcl",
+//             ],
+//             resources: [s3BucketArn, s3BucketArn + "/*"],
+//           }),
+//           new iam.PolicyStatement({
+//             effect: iam.Effect.ALLOW,
+//             actions: [
+//               "dynamodb:DescribeTable",
+//               "dynamodb:DescribeContinuousBackups",
+//               "dynamodb:ExportTableToPointInTime",
+//               "dynamodb:DescribeExport",
+//               "dynamodb:DescribeStream",
+//               "dynamodb:GetRecords",
+//               "dynamodb:GetShardIterator",
+//             ],
+//             resources: [tableArn, tableArn + "/*"],
+//           }),
+//         ],
+//       }),
+//     },
+//     managedPolicies: [
+//       iam.ManagedPolicy.fromAwsManagedPolicyName(
+//         "AmazonOpenSearchIngestionFullAccess"
+//       ),
+//     ],
+//   }
+// );
 
 
 
 
 // Define OpenSearch index mappings
-const indexName = "Annotations";
+// const indexName = "Annotations";
 
 
-const indexMapping = {
-  settings: {
-    number_of_shards: 1,
-    number_of_replicas: 0,
-  },
-  mappings: {
-    properties: {
-      id: {
-        type: "keyword",
-      },
-      done: {
-        type: "boolean",
-      },
-      content: {
-        type: "text",
-      },
-    },
-  },
-};
-
+// const indexMapping = {
+//   settings: {
+//     number_of_shards: 1,
+//     number_of_replicas: 0,
+//   },
+//   mappings: {
+//     properties: {
+//       id: {
+//         type: "keyword",
+//       },
+//       done: {
+//         type: "boolean",
+//       },
+//       content: {
+//         type: "text",
+//       },
+//     },
+//   },
+// };

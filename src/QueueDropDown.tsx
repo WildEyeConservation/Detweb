@@ -1,26 +1,25 @@
 import { Form } from "react-bootstrap";
 import { useContext } from "react";
-import { UserContext } from "./UserContext";
-import { useQueues } from "./useGqlCached";
+import { ProjectContext } from "./Context";
 import React from "react";
-
+import { useQueues } from "./apiInterface";
 interface QueueDropdownProps {
   setQueue: (url: string) => void;
   currentQueue: string | null;
 }
 
 export function QueueDropdown({ setQueue, currentQueue }: QueueDropdownProps) {
-  const { currentProject } = useContext(UserContext)!;
-  const { queues, createQueue } = useQueues(currentProject || "");
-
-  console.log(`Queues: ${queues}`);
+  const {project} = useContext(ProjectContext)!;
+  const { data: queues, create: createQueue } = useQueues(project.id);
+  console.log(`queue: ${JSON.stringify(queues)}`)
+  
 
   const onNewQueue = async () => {
     const name = prompt("Please enter new queue name", "") || "";
     if (name) {
-      const url = await createQueue(name);
-      if (url) {
-        setQueue(url);
+      const queue = await createQueue(name);
+      if (queue) {
+        setQueue(queue.url);
       }
     }
   };

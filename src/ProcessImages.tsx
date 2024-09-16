@@ -2,7 +2,7 @@ import { useContext, useState } from "react";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import Modal from "react-bootstrap/Modal";
-import { UserContext } from "./UserContext";
+import { UserContext } from "./Context";
 import { getImagesInSet } from "./gqlQueries";
 import { useUpdateProgress } from "./useUpdateProgress";
 import { ImageSetDropdown } from "./ImageSetDropDown";

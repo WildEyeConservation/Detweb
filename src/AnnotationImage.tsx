@@ -5,7 +5,6 @@ import { Legend } from './Legend';
 import Location from './Location';
 import { withCreateObservation } from './useCreateObservation';
 import CreateAnnotationOnClick from './CreateAnnotationOnClick';
-import { useAnnotations } from './useGqlCached';
 // import { UserContext } from './UserContext';
 // import { useMapEvents } from 'react-leaflet';
 import Annotations from './AnnotationsContext';
@@ -70,7 +69,7 @@ export default function AnnotationImage({ imageMeta, location, next, prev, fullI
           {location && <Location {...location}/>}
           {typeof ack === 'function' && (
             <>
-              <CreateAnnotationOnClick {...{imageMeta, annotationsHook, location, annotationSet, source: 'manual'}}/>
+              <CreateAnnotationOnClick {...{image: imageMeta, annotationsHook, location, annotationSet, source: 'manual'}}/>
               <ShowMarkers annotations={annotationsHook.annotations}/>
               {/* <PushToSecondary {...props} /> */}
             </>

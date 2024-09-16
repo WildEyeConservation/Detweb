@@ -1,23 +1,23 @@
 import { useMapEvents } from "react-leaflet";
 import { useContext } from "react";
 import { ImageContext } from "./BaseImage";
-import { UserContext } from "./UserContext";
-import { useAnnotations, useCategory } from "./useGqlCached";
-import type { LocationType, AnnotationSetType, ImageMetaType } from "./schemaTypes";
+import { UserContext, ProjectContext } from "./Context";
+import type { LocationType, AnnotationSetType, ImageType } from "./schemaTypes";
 
 export interface CreateAnnotationOnClickProps {
   location?: LocationType;
-  imageMeta: ImageMetaType;
+  image: ImageType;
   annotationsHook: ReturnType<typeof useAnnotations>;
   annotationSet: AnnotationSetType;
   source: string;
 }
 
 export default function CreateAnnotationOnClick(props: CreateAnnotationOnClickProps) {
-  const {annotationSet,location,annotationsHook: {createAnnotation},source, imageMeta} = props;
+  const {annotationSet,location,annotationsHook: {createAnnotation},source, image} = props;
   const { latLng2xy } = useContext(ImageContext)!;
-  const {currentProject} = useContext(UserContext)!;
-  const {currentCategory} = useCategory(currentProject)
+  const {project} = useContext(ProjectContext)!;
+  
+  const {currentCategory} = useCategoryByProject(currentProject)
 
   useMapEvents({
     click: (e: { latlng: any; }) => {
@@ -30,7 +30,7 @@ export default function CreateAnnotationOnClick(props: CreateAnnotationOnClickPr
           Math.abs(xy.y - location.y) < location.height! / 2)
       ) {currentCategory && source && currentProject &&
         createAnnotation?.({
-          metaId: imageMeta.id,
+          metaId: image.id,
           setId: annotationSet.id!,
           projectId: currentProject.id,
           x: Math.round(xy.x),

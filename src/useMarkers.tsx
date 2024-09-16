@@ -5,9 +5,7 @@ import "leaflet/dist/leaflet.css";
 import "leaflet-contextmenu/dist/leaflet.contextmenu.css";
 import { Marker, Popup } from "react-leaflet";
 import { UserContext } from "./UserContext";
-import { useAnnotations } from "./useGqlCached";
 import { ImageContext } from "./BaseImage";
-import { Annotation,useCategory } from "./useGqlCached";
 
 function createIcon(categories: any[], annotation: Annotation) {
   const color =
@@ -86,7 +84,7 @@ export function useMarkers(imageId: string, setId: string) {
   const { user, currentProject } = useContext(UserContext)!;
   const [markers, setMarkers] = useState<JSX.Element[]>([]);
   const { latLng2xy } = useContext(ImageContext)!;
-  const {categories} = useCategory(currentProject);
+  const {categories} = useCategoryByProject(currentProject);
 
   useEffect(() => {
     if (!annotations) return;

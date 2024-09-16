@@ -6,7 +6,6 @@ import { UserContext } from "./UserContext";
 import { useContext, useEffect, useState } from "react";
 import { annotationsByAnnotationSetId } from "./graphql/queries";
 import humanizeDuration from "humanize-duration";
-import { gqlClient, graphqlOperation } from "./App";
 import { GraphQLResult } from "@aws-amplify/api";
 
 interface UserStatsType {

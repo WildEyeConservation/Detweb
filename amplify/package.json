@@ -2,5 +2,12 @@
   "name": "amplify-functions",
   "version": "1.0.0",
   "description": "Amplify functions",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "mysql2": "^3.11.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4"
+  }
 }

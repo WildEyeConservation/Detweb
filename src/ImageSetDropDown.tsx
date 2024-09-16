@@ -19,8 +19,7 @@
 
 import { Form } from "react-bootstrap";
 import { useContext } from "react";
-import { UserContext } from "./UserContext";
-import { useImageSets } from "./useGqlCached";
+import { ProjectContext } from "./Context";
 import Select, { MultiValue, Options  } from "react-select";
 
 interface OptionType {
@@ -34,8 +33,7 @@ interface ImageSetDropdownProps {
 }
 
 export function ImageSetDropdown({ selectedSets, setImageSets }: ImageSetDropdownProps) {
-  const { currentProject } = useContext(UserContext)!;
-  const { imageSets } = useImageSets(currentProject);
+  const {imageSetsHook:{data:imageSets}} = useContext(ProjectContext)!;
   const options: Options<OptionType> | undefined = imageSets
     ?.map((x) => ({
       label: x.name,

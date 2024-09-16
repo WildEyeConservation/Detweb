@@ -1,23 +1,13 @@
-import React, { useContext, useState } from "react";
+import React, { useState } from "react";
 import { Stack, Modal, Form, Button } from "react-bootstrap";
 //import { UserContext } from "./UserContext";
 import { ImageSetDropdown } from "./ImageSetDropDown";
 //import { imageSetMembershipsByImageSetName } from "./graphql/queries";
 //import backend from "../amplify_outputs.json";
-import { ImageSetMembershipType } from "./schemaTypes";
 
 interface RetileProps{
   show: boolean;
   handleClose: ()=> void;
-}
-
-interface GraphQLResponse {
-  data: {
-    imageSetMembershipsByImageSetName: {
-      items: ImageSetMembershipType[];
-      nextToken: string | null;
-    };
-  };
 }
 
 const Retile: React.FC<RetileProps> = ({ show, handleClose }) =>{

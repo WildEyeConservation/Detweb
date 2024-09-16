@@ -1,19 +1,17 @@
-import { generateClient } from "aws-amplify/api";
-export const gqlClient = generateClient();
 export function graphqlOperation(query: string, variables: any) {
   return { query, variables };
 }
 import { fetchUserAttributes } from "@aws-amplify/auth";
 import pLimit from "p-limit";
 export const limitConnections = pLimit(30);
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import "./App.css";
 import "leaflet/dist/leaflet.css";
-import QuickTest from "./QuickTest.tsx";
 import Navbar from "react-bootstrap/Navbar";
 import Container from "react-bootstrap/Container";
 import Nav from "react-bootstrap/Nav";
 import NavDropdown from "react-bootstrap/NavDropdown";
+import ProjectManagement from "./ProjectManagement.tsx";  
 import DefineCategories from "./DefineCategories.js";
 import FilesUploadComponent from "./FilesUploadComponent.jsx";
 import {
@@ -30,20 +28,20 @@ import { withAuthenticator } from "@aws-amplify/ui-react";
 import "@aws-amplify/ui-react/styles.css";
 import CreateTask from "./CreateTask.jsx";
 import LaunchTask from "./LaunchTask.jsx";
-import UserManagement from "./UserManagement.jsx";
-import User from "./UserContext.js";
+import { User, Project } from "./UserContext.js";
 import "bootswatch/dist/slate/bootstrap.min.css";
-import IfAdmin from "./IfAdmin.jsx";
+import IfProjectAdmin from "./IfProjectAdmin.jsx";
 import ProjectSelector from "./ProjectSelector.jsx";
 import ProcessImages from "./ProcessImages.jsx";
 import AddGpsData from "./AddGpsData.jsx";
 import { ProgressIndicators } from "./ProgressIndicators.jsx";
-import Progress from "./ProgressContext.jsx";
 import DeleteImageSet from "./DeleteImageSet.jsx";
 import { fetchAuthSession } from "aws-amplify/auth";
 import Review from "./Review2.jsx";
 import { BrowserView, MobileView } from "react-device-detect";
 import ExportData from "./ExportData.jsx";
+import { GlobalContext } from "./Context";
+
 configure({ ignoreRepeatedEventsWhenKeyHeldDown: false });
 
 /**
@@ -65,58 +63,21 @@ interface AppProps {
   user?: any;
 }
 
+
 function Header({ signOut, session, user }: HeaderProps) {
   //const { currentProject } = useContext(UserContext) ?? {};
-  const [modalToShow, setModalToShow] = useState<string | null>(null);
-  const [dirHandle, setDirHandle] = useState<any | null>(null);
-  let location = useLocation();
+  const { showModal } = useContext(GlobalContext)!
+ let location = useLocation();
   const [userAttributes, setUserAttributes] = useState<any>(null);
   useEffect(() => {
     //fetchAuthSession().then((sess) => setSession(sess));
     fetchUserAttributes().then(attributes => setUserAttributes(attributes));
   }, [user]);
 
-  let handleSelect = async function (key: string | null) {
-    if (key == "addFiles") {
-      setDirHandle(await (window as any).showDirectoryPicker());
-    }
-    setModalToShow(key);
-  };
 
   return (
     <Navbar bg="primary" variant="dark">
       <Container fluid>
-        <CreateTask
-          show={modalToShow == "createTask"}
-          handleClose={() => setModalToShow(null)}
-        />
-        <LaunchTask
-          show={modalToShow == "launchTask"}
-          handleClose={() => setModalToShow(null)}
-        />
-        {/* <Rescan show={modalToShow=="rescan"} handleClose={()=>setModalToShow(null)}/> */}
-        <ProcessImages
-          show={modalToShow == "processImages"}
-          handleClose={() => setModalToShow(null)}
-        />
-        <AddGpsData
-          show={modalToShow == "addGps"}
-          handleClose={() => setModalToShow(null)}
-        />
-        <DeleteImageSet
-          show={modalToShow == "deleteImageSet"}
-          handleClose={() => setModalToShow(null)}
-        />
-        <FilesUploadComponent
-          show={modalToShow == "addFiles"}
-          dirHandle={dirHandle}
-          handleClose={() => setModalToShow(null)}
-        />
-        <ExportData
-          show={modalToShow == "exportData"}
-          //dirHandle={dirHandle}
-          handleClose={() => setModalToShow(null)}
-        />
         {/* <LaunchRegistration
           show={modalToShow == "launchRegistration"}
           handleClose={() => setModalToShow(null)}
@@ -131,7 +92,7 @@ function Header({ signOut, session, user }: HeaderProps) {
         {/* <Messages/> */}
         <Navbar.Toggle aria-controls="basic-navbar-nav" />
         <Navbar.Collapse id="basic-navbar-nav">
-          <Nav fill activeKey={location.pathname} onSelect={handleSelect}>
+          <Nav fill activeKey={location.pathname}>
             <Nav.Link
               as={NavLink}
               eventKey="/annotate"
@@ -140,30 +101,30 @@ function Header({ signOut, session, user }: HeaderProps) {
             >
               Annotate
             </Nav.Link>
-            <IfAdmin session={session}>
+            <IfProjectAdmin>
               <NavDropdown title="Actions" id="collapsible-nav-dropdown">
-                <NavDropdown.Item as={NavLink} eventKey="addFiles" to="/addFiles">
+                <NavDropdown.Item onClick={()=>showModal("addFiles")}>
                   Add Files
                 </NavDropdown.Item>
-                <NavDropdown.Item as={NavLink} eventKey="addGps" to="/addGps">
+                <NavDropdown.Item  onClick={()=>showModal("addGps")}>
                   Add GPS data{" "}
                 </NavDropdown.Item>
-                <NavDropdown.Item as={NavLink} eventKey="processImages" to="/processImages">
+                <NavDropdown.Item  onClick={()=>showModal("processImages")}>
                   Process Imagery
                 </NavDropdown.Item>
-                <NavDropdown.Item as={NavLink} eventKey="createTask" to="/createTask">
+                <NavDropdown.Item onClick={()=>showModal("createTask")}>
                   Create annotation task
                 </NavDropdown.Item>
-                <NavDropdown.Item as={NavLink} eventKey="launchTask" to="/launchTask">
+                <NavDropdown.Item onClick={()=>showModal("launchTask")}>
                   Launch annotation task
                 </NavDropdown.Item>
-                <NavDropdown.Item as={NavLink} eventKey="launchRegistration" to="/launchRegistration">
+                <NavDropdown.Item onClick={()=>showModal("launchTask")}>
                   Launch registration task
                 </NavDropdown.Item>
-                <NavDropdown.Item as={NavLink} eventKey="exportData" to="/exportData">
+                <NavDropdown.Item onClick={()=>showModal("exportData")}>
                   Export Data
                 </NavDropdown.Item>
-                <NavDropdown.Item as={NavLink} eventKey="retile" to="/retile">
+                <NavDropdown.Item onClick={()=>showModal("retileImages")}>
                   Retile images
                 </NavDropdown.Item>
 
@@ -213,16 +174,16 @@ function Header({ signOut, session, user }: HeaderProps) {
       </CheckPermission> */}
               <Nav.Link
                 as={NavLink}
-                eventKey="/userManagement"
-                to="/userManagement"
+                eventKey="/projectManagement"
+                to="/projectManagement"
               >
-                User Management
+                Project Management
               </Nav.Link>
               {/* <Nav.Link as={NavLink} eventKey='/registration' to="/registration">Registration</Nav.Link> */}
               <Nav.Link as={NavLink} eventKey="/userStats" to="/userStats">
                 User Stats
               </Nav.Link>
-            </IfAdmin>
+            </IfProjectAdmin>
             {(session?.tokens?.accessToken?.payload?.["cognito:groups"]?.includes("admin")) && (
               <Nav.Link as={NavLink} eventKey="/review" to="/review">
                 Review
@@ -245,6 +206,14 @@ function Header({ signOut, session, user }: HeaderProps) {
 
 function App({ signOut = () => {}, user }: AppProps) {
   const [session, setSession] = useState<any>();
+  const {modalToShow, showModal} = useContext(GlobalContext)!
+  // let handleSelect = async function (key: string | null) {
+  //   if (key == "addFiles") {
+  //     setDirHandle(await (window as any).showDirectoryPicker());
+  //   }
+  //   setModalToShow(key);
+  // };
+  
   useEffect(() => {
     window.addEventListener("beforeunload", alertUser);
     return () => {
@@ -266,68 +235,83 @@ function App({ signOut = () => {}, user }: AppProps) {
     session && (
       <>
         <BrowserView>
-            <User loggedInUser={user}>
-                <Progress>
+            <User user={user}>
                   <div
                     className="App d-flex flex-column"
                     style={{ height: "100vh", overflow: "scroll" }}
                   >
                     <Router>
-                      <Header signOut={signOut} session={session} user={user} />
-                      <Container
-                        fluid
-                        className="d-flex justify-content-center h-100"
-                      >
-                        {/* <DebugDetails/> */}
-                        <Routes>
-                          {/* <Route exact path="register" element={<Register/>}/>
-            <Route path="image/:im_id" render={({match}) => (<BaseImage im_id={match.params.im_id} height="100%"/>)}/>
-            <Route path="location/:loc_id" render={({match}) => (<BaseImage loc_id={match.params.loc_id} height="100%"/>)}/>
-            <Route path="detection/:det_id" render={({match}) => (<BaseImage det_id={match.params.det_id} height="100%"/>)}/>
-            <Route path="cluster/:cluster_id" render={({match}) => (<BaseImage cluster_id={match.params.cluster_id} height="100%"/>)}/> */}
-                          <Route
-                            path="/DefineTransect"
-                            element={<DefineTransect />}
-                          />
-                          <Route path="/annotate" element={<Test />} />
-                          {/* <Route exact path="/registration" element={<Registration/>}/>  */}
-                          <Route path="/review" element={<Review />} />
-                          <Route path="/quickTest" element={<QuickTest />} />
-                          {/* <Route
-                            path="/userStats"
-                            element={<UserStats />}
-                          /> */}
-                          {/* <Route exact path='/results' element={<Results/>}/>  */}
-                          {/* <Route exact path="dashboard" element={<Dashboard/>}/>
-            <Route exact path="registration" element={<Registration/>}/>
-            <Route exact path="import" element={<FilesUploadComponent/>}/>
-            <Route exact path="process" element={<Process/>}/>
-            <Route exact path="launch" element={<LaunchTask/>}/>
-            <Route exact path="defineTransect" element={<DefineTransect/>}/>
-            <Route exact path="defineSurvey" element={<DefineSurvey/>}/>
-            <Route exact path="results" element={<Results/>}/> */}
-                          {session &&
-                            session.tokens.accessToken.payload &&
-                            session.tokens.accessToken.payload["cognito:groups"] &&
-                            session.tokens.accessToken.payload["cognito:groups"].includes("admin")
-                            ? [
-                                <Route
-                                  key="1"
-                                  path="defineCategories"
-                                  element={<DefineCategories />}
-                                />,
-                                <Route
-                                  key="2"
-                                  path="userManagement"
-                                  element={<UserManagement />}
-                                />,
-                              ]
-                            : ""}
-                        </Routes>
-                      </Container>
+                  <Header signOut={signOut} session={session} user={user}/>
+                  <Project>
+                        <Container
+                          fluid
+                          className="d-flex justify-content-center h-100"
+                    >
+                              <CreateTask
+          show={modalToShow == "createTask"}
+          handleClose={() => showModal(null)}
+        />
+        <LaunchTask
+          show={modalToShow == "launchTask"}
+          handleClose={() => showModal(null)}
+        />
+        {/* <Rescan show={modalToShow=="rescan"} handleClose={()=>setModalToShow(null)}/> */}
+        <ProcessImages
+          show={modalToShow == "processImages"}
+          handleClose={() => showModal(null)}
+        />
+        <AddGpsData
+          show={modalToShow == "addGps"}
+          handleClose={() => showModal(null)}
+        />
+        <DeleteImageSet
+          show={modalToShow == "deleteImageSet"}
+          handleClose={() => showModal(null)}
+        />
+        <FilesUploadComponent
+          show={modalToShow == "addFiles"}
+          handleClose={() => showModal(null)}
+        />
+        <ExportData
+          show={modalToShow == "exportData"}
+          //dirHandle={dirHandle}
+          handleClose={() => showModal(null)}
+        />
+
+                          {/* <DebugDetails/> */}
+                          <Routes>
+                            {/* <Route exact path="register" element={<Register/>}/>
+              <Route path="image/:im_id" render={({match}) => (<BaseImage im_id={match.params.im_id} height="100%"/>)}/>
+              <Route path="location/:loc_id" render={({match}) => (<BaseImage loc_id={match.params.loc_id} height="100%"/>)}/>
+              <Route path="detection/:det_id" render={({match}) => (<BaseImage det_id={match.params.det_id} height="100%"/>)}/>
+              <Route path="cluster/:cluster_id" render={({match}) => (<BaseImage cluster_id={match.params.cluster_id} height="100%"/>)}/> */}
+                            <Route
+                              path="/DefineTransect"
+                              element={<DefineTransect />}
+                        />
+                            <Route
+                              path="/"
+                              element={null}
+                            />
+
+                            <Route path="/annotate" element={<Test />} />
+                            {/* <Route exact path="/registration" element={<Registration/>}/>  */}
+                            <Route path="/review" element={<Review />} />
+                            <Route
+                              key="1"
+                              path="/defineCategories"
+                              element={<DefineCategories />}
+                            />,
+                            <Route
+                              key="2"
+                              path="/projectManagement"
+                              element={<ProjectManagement />}
+                            />,
+                          </Routes>
+                    </Container>
+                    </Project>
                     </Router>
                   </div>
-                </Progress>
             </User>
         </BrowserView>
         <MobileView>

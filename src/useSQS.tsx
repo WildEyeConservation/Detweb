@@ -1,5 +1,5 @@
 import { useEffect, useState, useContext, useCallback } from "react";
-import { UserContext } from "./UserContext";
+import { UserContext } from "./Context";
 
 interface SQSMessage {
   message_id: string;

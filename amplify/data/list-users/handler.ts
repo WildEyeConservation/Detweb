@@ -13,11 +13,14 @@ export const handler: Handler = async (event) => {
     PaginationToken: event.arguments.nextToken || undefined,
   })
   const response = await client.send(command)
+  console.log(JSON.stringify(response))
   const userData=response.Users?.map((user) => ({
     id: user.Username,
-    name: user.Attributes?.find((attr) => attr.Name === "email")?.Value,
+    name: user.Attributes?.find((attr) => attr.Name === "preferred_username")?.Value,
+    email: user.Attributes?.find((attr) => attr.Name === "email")?.Value,
     isAdmin: user.Attributes?.find((attr) => attr.Name === "custom:isAdmin")?.Value === "true",
   }))
+  console.log(JSON.stringify(userData))
   return {
     Users: userData as any,
     NextToken: response.PaginationToken || null, // Include NextToken in the response

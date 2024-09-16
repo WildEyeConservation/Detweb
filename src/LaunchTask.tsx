@@ -1,6 +1,6 @@
 import { useContext, useState } from "react";
 import { Stack, Modal, Form, Button } from "react-bootstrap";
-import { UserContext } from "./UserContext";
+import { UserContext } from "./Context";
 import { getLocationsInSet } from "./gqlQueries";
 import { QueueDropdown } from "./QueueDropDown";
 import { useUpdateProgress } from "./useUpdateProgress";

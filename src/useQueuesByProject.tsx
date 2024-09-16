@@ -1,7 +1,6 @@
 import { useState, useEffect, useContext } from "react";
 import { getQueuesInProject } from "./gqlQueries";
 import { UserContext } from "./UserContext";
-import { gqlClient, graphqlOperation } from "./App";
 import { createQueue } from "./graphql/mutations";
 
 interface Queue {

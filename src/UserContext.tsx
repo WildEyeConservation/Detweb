@@ -1,87 +1,116 @@
-import { createContext, useState, useEffect, ReactNode, Dispatch, SetStateAction } from "react";
-// export const UserContext = createContext([]);
-import { useProjectMemberships, useUsers } from "./useGqlCached.tsx";
+import {useState, useEffect, useCallback, useContext } from "react";
+import { useObserveQuery } from './useObserveQuery.tsx'
 import {
-  CreateQueueCommand,
-  GetQueueAttributesCommand,
-  GetQueueUrlCommand,
-  ReceiveMessageCommand,
-  SendMessageCommand,
-  DeleteMessageCommand,
   SQSClient,
-  ChangeMessageVisibilityCommand,
 } from "@aws-sdk/client-sqs";
-import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import { limitConnections } from "./App.tsx";
-import { gqlSend, gqlGetMany } from "./utils";
-import { fetchAuthSession } from "aws-amplify/auth";
+import { LambdaClient} from "@aws-sdk/client-lambda";
+import { S3Client } from "@aws-sdk/client-s3";
+import { AuthUser, fetchAuthSession } from "aws-amplify/auth";
+import { Schema } from '../amplify/data/resource'; // Path to your backend resource definition
+import {useUsers} from './apiInterface.tsx'
+import {
+  GlobalContext, ProjectContext, UserContext, ManagementContext
+} from "./Context.tsx";
+import { generateClient } from "aws-amplify/api";
 import outputs from "../amplify_outputs.json";
-import type { UserProjectMembershipType, ProjectType } from "./schemaTypes";
-import { useOptimisticUpdates } from "./useOptimisticUpdates";
+import {
+  useOptimisticMembership,
+  useOptimisticCategory,
+  useOptimisticImageSet,
+  useOptimisticLocationSet,
+  useOptimisticAnnotationSet,
+  useOptimisticQueue
+} from "./useOptimisticUpdates.tsx";
 
 
 
-interface UserProps {
-  loggedInUser: { username: string };
-  children: ReactNode;
+
+export function Project({ children }: { children: React.ReactNode }) {
+  const { client } = useContext(GlobalContext)!;
+  const [currentProject, setCurrentProject] = useState<Schema['Project']['type'] | undefined>(undefined)
+  const { currentPM } = useContext(UserContext)!
+  
+  const categoriesHook = useOptimisticCategory(
+    async () => client.models.Category.list({ filter: { projectId: { eq: currentProject?.id } } }),
+    { filter: { projectId: { eq: currentProject?.id } } })
+  const imageSetsHook = useOptimisticImageSet(
+    async () => client.models.ImageSet.list({ filter: { projectId: { eq: currentProject?.id } } }),
+    { filter: { projectId: { eq: currentProject?.id } } })
+  const locationSetsHook = useOptimisticLocationSet(
+    async () => client.models.LocationSet.list({ filter: { projectId: { eq: currentProject?.id } } }),
+    { filter: { projectId: { eq: currentProject?.id } } })
+  const annotationSetsHook = useOptimisticAnnotationSet(
+    async () => client.models.AnnotationSet.list({ filter: { projectId: { eq: currentProject?.id } } }),
+    { filter: { projectId: { eq: currentProject?.id } } })
+  const queuesHook = useOptimisticQueue(
+    async () => client.models.Queue.list({ filter: { projectId: { eq: currentProject?.id } } }),
+    { filter: { projectId: { eq: currentProject?.id } } })
+
+  useEffect(() => {
+    if (currentPM) {
+      client.models.Project.get({ id: currentPM.projectId }).then(p => setCurrentProject(p.data || undefined));
+    } else {
+      setCurrentProject(undefined);
+    }
+  },[currentPM])
+  return (
+    currentProject && 
+    <ProjectContext.Provider value={{
+        project: currentProject,
+        categoriesHook,
+        imageSetsHook,
+        locationSetsHook,
+        annotationSetsHook,
+        queuesHook
+    }}>
+      {currentProject && children}
+    </ProjectContext.Provider>
+  )
 }
 
-interface UserType {
-  id: string;
-  currentProjectId: string;
-  isAdmin?: boolean;
-}
 
-// Define ProjectMembership to be the same as the ProjectMembership type in Schema
-
-
-export interface UserContextType {
-  user: UserType | undefined;
-  backend: any;
-  gqlSend: typeof gqlSend;
-  gqlGetMany: typeof gqlGetMany;
-  sendToQueue: (config: any) => Promise<any>;
-  getFromQueue: (config: any) => Promise<any>;
-  refreshVisibility: (config: any) => Promise<any>;
-  createQueue: (config: any) => Promise<any>;
-  getQueueAttributes: (config: any) => Promise<any>;
-  setCurrentProject: (projectId: string) => void;
-  getQueueUrl: (config: any) => Promise<any>;
-  deleteFromQueue: (config: any) => Promise<any>;
-  jobsCompleted: number;
-  setJobsCompleted: React.Dispatch<React.SetStateAction<number>>;
-  getObject: (config: any) => Promise<any>;
-  invoke: (config: any) => Promise<any>;
-  s3Client: S3Client | undefined;
-  lambdaClient: LambdaClient | undefined;
-  region: string;
-  credentials: any;
-  projects: ProjectType[] | undefined;
-  currentProject: ProjectType | undefined;
-  currentQueue: string | undefined;
-  currentPM: UserProjectMembershipType | undefined;
-}
-
-
-export const UserContext = createContext<UserContextType | undefined>(undefined);
-
-export default function User({ loggedInUser, children }: UserProps) {
-  const {users } = useUsers();
-  const [jobsCompleted, setJobsCompleted] = useState(0);
-  const { projectMemberships } = useProjectMemberships();
-  //const [user, setUser] = useState<UserType | undefined>(undefined);
-  const [credentials, setCredentials] = useState<any>(undefined);
-  const [currentPM, setCurrentPM] = useState<UserProjectMembershipType | undefined>(undefined);
+export function User({ user, children }: { user: AuthUser, children: React.ReactNode }) {
+  const [jobsCompleted, setJobsCompleted] = useState<number>(0);
+  const { client,region } = useContext(GlobalContext)!;
+  const [currentPM, setCurrentPM] = useState<Schema['UserProjectMembership']['type'] | undefined>(undefined);
+  const [currentProject,setCurrentProject] = useState<Schema['Project']['type'] | undefined>(undefined) 
   const [sqsClient, setSqsClient] = useState<SQSClient | undefined>(undefined);
   const [s3Client, setS3Client] = useState<S3Client | undefined>(undefined);
   const [lambdaClient, setLambdaClient] = useState<LambdaClient | undefined>(undefined);
-  const region = outputs.auth.aws_region;
-  const { data: { data: projects }} = useOptimisticUpdates("Project");
-  
-  // useEffect(()=>{
-  //   const setup = async()=>{
-  //     credentials = Auth.essentialCredentials(await Auth.currentCredentials())
+  //const { items: myMemberships } = useObserveQuery('UserProjectMembership', { filter: { userId: { eq: user!.username } } });
+  // const { data: myMemberships } = useOptimisticUpdates(
+  //   'UserProjectMembership',
+  //   async () => client.models.UserProjectMembership.list({ filter: { userId: { eq: user!.username } } }),
+  //   { filter: { userId: { eq: user!.username } } })
+  const myMembershipHook = useOptimisticMembership(
+    async () => client.models.UserProjectMembership.list({ filter: { userId: { eq: user!.username } } }),
+    { filter: { userId: { eq: user!.username } } })
+  const { data: myMemberships } = myMembershipHook;
+
+  // useEffect(() => {
+  //   const sub = client.models.UserProjectMembership.observeQuery({ filter: { userId: { eq: user!.username } } }).subscribe({
+  //     next: async ({ items }) => {
+  //       setMyMemberships(items);
+  //     },
+  //   });
+  //   return () => sub.unsubscribe();
+  // }, [user.username]);
+
+  const switchProject = useCallback((projectId: String) => {
+    const pm = myMemberships?.find((pm) => pm.projectId == projectId);
+    if (pm) {
+      setCurrentPM(pm);
+    }
+    else {
+      console.error('User tried to switch to a project they are not a member of')
+    }
+  }, [myMemberships, user.username])
+  //const [credentials, setCredentials] = useState<any>(undefined);
+  // useEffect(() => {
+  //   const { region } = useContext(GlobalContext)!; 
+  //   const setup = async () => {
+      
+  //     const credentials = Auth.essentialCredentials(await Auth.currentCredentials())
   //     setCredentials(credentials);
   //     setLambdaClient(new LambdaClient({ region, credentials }));
   //     setS3Client(new S3Client({ region, credentials }));
@@ -89,112 +118,85 @@ export default function User({ loggedInUser, children }: UserProps) {
   //     setSqsClient(new SQSClient({region, credentials}))
   //   }
   //   setup()
-  // },[loggedInUser])
+  // },[user])
+
+  useEffect(() => {
+    if (currentPM) {
+      client.models.Project.get({ id: currentPM.projectId }).then(p => setCurrentProject(p.data || undefined));
+    } else {
+      setCurrentProject(undefined);
+    }
+    currentProject;
+  },[currentPM])
 
   useEffect(() => {
     async function refreshCredentials() {
-      const { credentials } = await fetchAuthSession();
-      setCredentials(credentials);
+    const { credentials } = await fetchAuthSession();
+      //setCredentials(credentials);
       setSqsClient(new SQSClient({ region, credentials }));
       setLambdaClient(new LambdaClient({ region, credentials }));
       setS3Client(new S3Client({ region, credentials }));
     }
     refreshCredentials();
-    //const user = users?.find((user_: any) => user_.id == loggedInUser.username) as UserType | undefined;
-    // if (user) {
-    //   setUser({
-    //     ...user,
-    //     currentProjectId: user.currentProjectId || "",
-    //   });
-    // 
-    //}
     const timer = setInterval(refreshCredentials, 30 * 60 * 1000); // Refresh credentials every 30 minutes
     return () => clearInterval(timer);
-  }, [loggedInUser, users]);
-
-  async function sqsSend(command: any) {
-    return limitConnections(() => sqsClient!.send(command));
-  }
-
-  async function lambdaSend(command: any) {
-    return limitConnections(() => lambdaClient!.send(command));
-  }
-
-  async function invoke(config: any) {
-    return lambdaSend(new InvokeCommand(config));
-  }
-
-  async function s3Send(command: any) {
-    return limitConnections(() => s3Client!.send(command));
-  }
-
-  async function getObject(config: any) {
-    return s3Send(new GetObjectCommand(config));
-  }
-
-  async function sendToQueue(config: any) {
-    return sqsSend(new SendMessageCommand(config));
-  }
-
-  async function getFromQueue(config: any) {
-    return sqsSend(new ReceiveMessageCommand(config));
-  }
-
-  async function refreshVisibility(config: any) {
-    return sqsSend(new ChangeMessageVisibilityCommand(config));
-  }
-
-  async function getQueueUrl(config: any) {
-    return sqsSend(new GetQueueUrlCommand(config));
-  }
-
-  async function deleteFromQueue(config: any) {
-    return sqsSend(new DeleteMessageCommand(config));
-  }
-
-  async function createQueue(config: any) {
-    return sqsSend(new CreateQueueCommand(config));
-  }
-
-  async function getQueueAttributes(config: any) {
-    return sqsSend(new GetQueueAttributesCommand(config));
-  }
-
-  const setCurrentProject = (projectId: string) => {
-    setCurrentPM(projectMemberships?.find((pm: UserProjectMembershipType) => pm.userId == loggedInUser.username && pm.projectId == projectId));
-  };
-
+  }, [user]);
 
   return (
+    sqsClient && s3Client && lambdaClient && 
     <UserContext.Provider
       value={{
-        user: {id: loggedInUser.username, currentProjectId: currentPM?.projectId||""},
-        backend: outputs,
-        gqlSend,
-        gqlGetMany,
-        sendToQueue,
-        getFromQueue,
-        refreshVisibility,
-        createQueue,
-        getQueueAttributes,
-        setCurrentProject,
-        getQueueUrl,
-        deleteFromQueue,
+        user,
+        sqsClient,
         jobsCompleted,
         setJobsCompleted,
-        getObject,
-        invoke,
         s3Client,
         lambdaClient,
-        region,
-        credentials,
-        projects,//tEMPORARY HACK
-        currentProject: projects?.find((p: ProjectType) => p.id == currentPM?.projectId),
+        myMembershipHook,
         currentPM,
-        currentQueue: currentPM?.queueUrl || "",
+        switchProject
       }}
-    >
-      {loggedInUser && credentials && children}
+      >
+            {children}
     </UserContext.Provider>
+  );
+}
+
+
+export function Management({ children }: { children: React.ReactNode }) {
+  const { client } = useContext(GlobalContext)!;
+  const {project} = useContext(ProjectContext)!;
+  const { users: allUsers } = useUsers();
+  //const {items: projectMemberships} = useObserveQuery('UserProjectMembership',{ filter: { projectId: { eq: project.id } } });
+  const projectMembershipHook = useOptimisticMembership(
+    async () => client.models.UserProjectMembership.list({ filter: { projectId: { eq: project.id } } }),
+    { filter: { projectId: { eq: project.id } } })
+  return ( 
+    <ManagementContext.Provider value={{
+        allUsers,
+        projectMembershipHook
+    }} >
+      {allUsers && projectMembershipHook && children}
+    </ManagementContext.Provider>)
+
+}
+
+export function Global({ children }: { children: React.ReactNode }) {
+  const [modalToShow, showModal] = useState<string | null>(null)
+  const [progress, setProgress] = useState<ProgressContextType>({})
+  
+
+  return (
+    <GlobalContext.Provider value={{
+      backend: outputs,
+      region: outputs.auth.aws_region,
+      client: generateClient<Schema>({authMode:"userPool"}),
+      showModal,
+      progress,
+      setProgress,
+      modalToShow
+    }}>
+      {children}
+    </GlobalContext.Provider>
   );
 }

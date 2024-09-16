@@ -4,264 +4,143 @@ import { addUserToGroup } from '../functions/add-user-to-group/resource'
 import { createGroup } from '../data/create-group/resource'
 import { listUsers } from '../data/list-users/resource'
 import { listGroupsForUser } from '../data/list-groups-for-user/resource'
+import { schema as generatedSqlSchema } from '../sqldata/schema.sql';
 
-/*== STEP 1 ===============================================================
-The section below creates a Todo database table with a "content" field. Try
-adding a new "isDone" field as a boolean. The authorization rule below
-specifies that any user authenticated via an API key can "create", "read",
-"update", and "delete" any "Todo" records.
-=========================================================================*/
-const schema = a.schema({
-  // type Project
-  // @auth(
-  // rules: [
-  //     {allow: public, provider: iam},
-  //     { allow: private, operations: [read] }, #Signed in users can list projects 
-  //     { allow: groups, groups: ["admin"] } #Only admins can create a Project
-  // ])
-  // @model
-  // {
-  //     name: String! @primaryKey
-  //     categories: [Category] @hasMany(indexName:"byProject", fields:["name"])
-  //     annotationSet: [AnnotationSet] @hasMany(indexName:"byProject", fields:["name"])
-  //     locationSets: [LocationSet] @hasMany(indexName:"byProject", fields:["name"])
-  //     imageSets: [ImageSet] @hasMany(indexName:"byProject", fields:["name"])
-  //     queues: [Queue] @hasMany (indexName:"byProject", fields:["name"])
-  //     users: [UserProjectMembership] @hasMany (indexName:"byProject",fields:["name"])
-  // }
-  UserType: a.customType({
-    name:a.string().required(),
-    isAdmin:a.boolean()}),
-  Project: a.model({
-    name: a.string().required(),
-    categories: a.hasMany('Category', 'projectId'),
-    images: a.hasMany('Image', 'projectId'),
-    imageMetas: a.hasMany('ImageMeta', 'projectId'),
-    annotations: a.hasMany('Annotation', 'projectId'),
-    objects: a.hasMany('Object', 'projectId'),
-    imageSets: a.hasMany('ImageSet', 'projectId'),
-    annotationSets: a.hasMany('AnnotationSet', 'projectId'),
-    locations: a.hasMany('Location', 'projectId'),
-    locationSets: a.hasMany('LocationSet', 'projectId'),
-    observations: a.hasMany('Observation', 'projectId'),
-    members: a.hasMany('UserProjectMembership', 'projectId'),
-    queues: a.hasMany('Queue', 'projectId'),
-  }).authorization(allow => [allow.authenticated()]),
-    // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
-    // allow.group('orgadmin').to(['create', 'update', 'delete', 'read']),
-    // allow.custom()]),
-  Category: a.model({
-    projectId: a.id().required(),
-    project: a.belongsTo('Project', 'projectId'),
-    name: a.string().required(),
-    color: a.string(),
-    shortcutKey: a.string(),
-    annotations: a.hasMany('Annotation','categoryId'),
-    objects: a.hasMany('Object', 'categoryId')
-  }).authorization(allow => [allow.authenticated()])
-    // .authorization(allow => [allow.groupDefinedIn('projectId')])
-    .secondaryIndexes((index)=>[index('projectId').queryField('categoriesByProjectId')]),
-  ImageMeta: a.model({
-    projectId: a.id().required(),
-    project: a.belongsTo('Project', 'projectId'),
-    latitude: a.float(),
-    longitude: a.float(),
-    altitude_wgs84: a.float(),
-    altitude_agl: a.float(),
-    altitude_egm96: a.float(),
-    width: a.integer().required(),
-    height: a.integer().required(),
-    roll: a.float(),
-    yaw: a.float(),
-    pitch: a.float(),
-    timestamp: a.timestamp(),
-    exifData: a.string(),
-    cameraSerial: a.string(),
-    images: a.hasMany('Image', 'metaId'),
-    locations: a.hasMany('Location', 'metaId'),
-    annotations: a.hasMany('Annotation', 'metaId'),
-    // There may be many images for each meta, but each image has only one meta, also one of the images is the original
-    originalId: a.id(),
-    original: a.belongsTo('Image','originalId'),
-    //   collections: [ImageSet] @manyToMany(relationName: "ImageSetMembership")
-    //   leftNeighbours: [ImageNeighbour] @hasMany(indexName:"bySecondNeighbour",fields:["key"]) 
-    //   rightNeighbours: [ImageNeighbour] @hasMany(indexName:"byFirstNeighbour",fields:["key"]) 
-
-  }).authorization(allow => [allow.authenticated()]),
-    // .authorization(allow => [allow.groupDefinedIn('projectId')]),
-  Image: a.model({
-    projectId: a.id().required(),
-    project: a.belongsTo('Project', 'projectId'),
-    path: a.string().required(),
-    metaId: a.id(),
-    key: a.string().required(),
-    meta: a.belongsTo('ImageMeta', 'metaId'),
-    type: a.string().required(),
-    sets: a.hasMany('ImageSetMembership', 'imageId'),
-    // Add this line to define the reverse relationship
-    originalMeta: a.hasOne('ImageMeta', 'originalId'),
-    // .authorization(allow => [allow.groupDefinedIn('projectId')])
-  }).authorization(allow => [allow.authenticated()])
-  .secondaryIndexes((index)=>[index('metaId').queryField('imagesByMetaId')]),
-  AnnotationSet: a.model({
-    projectId: a.id().required(),
-    project: a.belongsTo('Project', 'projectId'),
-    name: a.string().required(),
-    annotations: a.hasMany('Annotation', 'setId'),
-    observations: a.hasMany('Observation', 'annotationSetId')
-  }).authorization(allow => [allow.authenticated()])
-    // .authorization(allow => [allow.groupDefinedIn('projectId')])
-  .secondaryIndexes((index)=>[index('projectId').queryField('annotationSetsByProjectId')]),
-  Annotation: a.model({
-    projectId: a.id().required(),
-    project: a.belongsTo('Project', 'projectId'),
-    setId: a.id().required(),
-    set: a.belongsTo('AnnotationSet', 'setId'),
-    source: a.string().required(),
-    categoryId: a.id().required(),
-    category: a.belongsTo('Category', 'categoryId'),
-    metaId: a.id().required(),
-    imageMeta : a.belongsTo('ImageMeta','metaId'),
-    x: a.integer().required(),
-    y: a.integer().required(),
-    obscured: a.boolean(),
-    objectId: a.id(),
-    object: a.belongsTo('Object', 'objectId')
-  }).authorization(allow => [allow.authenticated()])
-    // .authorization(allow => [allow.groupDefinedIn('projectId'), allow.owner()])
-  .secondaryIndexes((index)=>[
-    index('setId').queryField('annotationsByAnnotationSetId'),
-    index('metaId').queryField('annotationsByMetaId'),
-    index('objectId').queryField('annotationsByObjectId'),
-    index('categoryId').queryField('annotationsByCategoryId')
+const sqlSchema = generatedSqlSchema.authorization(allow => allow.authenticated())
+  .setRelationships((models) => [
+    models.Project.relationships({
+      categories: a.hasMany("Category", "projectId"),
+      imageSets: a.hasMany("ImageSet", "projectId"),
+      imageFiles: a.hasMany("ImageFile", "projectId"),
+      locations: a.hasMany("Location", "projectId"),
+      locationSets: a.hasMany("LocationSet", "projectId"),
+      annotations: a.hasMany("Annotation", "projectId"),
+      annotationSets: a.hasMany("AnnotationSet", "projectId"),
+      observations: a.hasMany("Observation", "projectId"),
+      members: a.hasMany("UserProjectMembership", "projectId"),
+      queues: a.hasMany("Queue", "projectId"),
+      images: a.hasMany("Image", "projectId"),
+      objects: a.hasMany("Object", "projectId"),
+    }),
+    models.Category.relationships({
+      project: a.belongsTo("Project", "projectId"),
+      annotations: a.hasMany("Annotation", "categoryId"),
+      objects: a.hasMany("Object", "categoryId")
+    }),
+    models.ImageSet.relationships({
+      project: a.belongsTo("Project", "projectId"),
+      images: a.hasMany("ImageSetMembership", "imageSetId"),
+    }),
+    models.Image.relationships({
+      project: a.belongsTo("Project", "projectId"),
+      imageFiles: a.hasMany("ImageFile", "imageId"),
+      locations: a.hasMany("Location", "imageId"),
+      annotations: a.hasMany("Annotation", "imageId"),
+      sets: a.hasMany("ImageSetMembership", "imageId"),
+    }),
+    models.ImageFile.relationships({
+      project: a.belongsTo("Project", "projectId"),
+      image: a.belongsTo("Image", "imageId"),
+    }),
+    models.AnnotationSet.relationships({
+      project: a.belongsTo("Project", "projectId"),
+      annotations: a.hasMany("Annotation", "setId"),
+      observations: a.hasMany("Observation", "annotationSetId"),
+    }),
+    models.Annotation.relationships({
+      project: a.belongsTo("Project", "projectId"),
+      category: a.belongsTo("Category", "categoryId"),
+      image: a.belongsTo("Image", "imageId"),
+      object: a.belongsTo("Object", "objectId"),
+      set: a.belongsTo("AnnotationSet", "setId"),
+    }),
+    models.Object.relationships({
+      project: a.belongsTo("Project", "projectId"),
+      annotations: a.hasMany("Annotation", "objectId"),
+      category: a.belongsTo("Category", "categoryId"),
+    }),
+    models.Location.relationships({
+      project: a.belongsTo("Project", "projectId"),
+      image: a.belongsTo("Image", "imageId"),
+      set: a.belongsTo("LocationSet", "setId"),
+      observations: a.hasMany("Observation", "locationId"),
+    }),
+    models.Observation.relationships({
+      project: a.belongsTo("Project", "projectId"),
+      location: a.belongsTo("Location", "locationId"),
+      annotationSet: a.belongsTo("AnnotationSet", "annotationSetId"),
+    }),
+    models.LocationSet.relationships({
+      project: a.belongsTo("Project", "projectId"),
+      locations: a.hasMany("Location", "setId"),
+    }),
+    models.UserProjectMembership.relationships({
+      project: a.belongsTo("Project", "projectId"),
+    }),
+    models.Queue.relationships({
+      project: a.belongsTo("Project", "projectId"),
+    }),
+    models.ImageSetMembership.relationships({
+      image: a.belongsTo("Image", "imageId"),
+      imageSet: a.belongsTo("ImageSet", "imageSetId"),
+    })
   ])
-  ,
-  Object: a.model({
-    projectId: a.id().required(),
-    project: a.belongsTo('Project', 'projectId'),
-    annotations: a.hasMany('Annotation', 'objectId'),
-    categoryId: a.id().required(),
-    category: a.belongsTo('Category', 'categoryId')
-  }).authorization(allow => [allow.authenticated()])
-    // .authorization(allow => [allow.groupDefinedIn('projectId')])
-  .secondaryIndexes((index)=>[index('categoryId').queryField('objectsByCategoryId')]),
-  Location: a.model({
-    projectId: a.id().required(),
-    project: a.belongsTo('Project', 'projectId'),
-    metaId: a.id(),
-    meta: a.belongsTo('ImageMeta', 'metaId'),
-    setId: a.id().required(),
-    set: a.belongsTo('LocationSet', 'setId'),
-    height: a.integer(),
-    width: a.integer(),
-    x: a.integer().required(),
-    y: a.integer().required(),
-    source: a.string().required(),
-    confidence: a.float(),
-    observations: a.hasMany('Observation','locationId'),
-    sets: a.hasMany('LocationSetMembership', 'locationId')
-  }).authorization(allow => [allow.authenticated()])
-    // .authorization(allow => [allow.groupDefinedIn('projectId')])
-  .secondaryIndexes((index)=>[index('metaId').queryField('locationsByImageKey'), 
-    index('setId').queryField('locationsBySetId')
-  ]),
-  Observation: a.model({
-    projectId: a.id().required(),
-    project: a.belongsTo('Project', 'projectId'),
-    locationId: a.id().required(),
-    location: a.belongsTo('Location', 'locationId'),
-    annotationSetId: a.id().required(),
-    annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId')
-  }).authorization(allow => [allow.authenticated()])
-    // .authorization(allow => [allow.groupDefinedIn('projectId'), allow.owner()])
-  .secondaryIndexes((index)=>[index('locationId').queryField('observationsByLocationId'), 
-    index('annotationSetId').queryField('observationsByAnnotationSetId')
-  ]),
+  .addToSchema({
+    numberOfImagesInSet: a.query()
+      .arguments({
+        imageSetId: a.string().required()
+      })
+      .returns(a.ref('countType').array())
+      .handler(a.handler.inlineSql(
+        `SELECT
+            COUNT(*) AS count
+            FROM ImageSetMembership
+            WHERE imageSetId = :imageSetId;`
+      )),
+    countType: a.customType({count: a.integer()})
+  })
 
-  LocationSet: a.model({
-    projectId: a.id().required(),
+const schema = a.schema({
+  UserType: a.customType({
     name: a.string().required(),
-    project: a.belongsTo('Project', 'projectId'),
-    locations: a.hasMany('Location', 'setId'),
-    memberships: a.hasMany('LocationSetMembership', 'locationSetId')
-  }).authorization(allow => [allow.authenticated()])
-    // .authorization(allow => [allow.groupDefinedIn('projectId')])
-  .secondaryIndexes((index)=>[index('projectId').queryField('locationSetsByProjectId')]),
-  LocationSetMembership: a.model({
-    locationId: a.id().required(),
-    locationSetId: a.id().required(),
-    location: a.belongsTo('Location', 'locationId'),
-    locationSet: a.belongsTo('LocationSet', 'locationSetId')
-  }).authorization(allow => [allow.authenticated()]),
-  ImageSetMembership: a.model({
-    imageId: a.id().required(),
-    imageSetId: a.id().required(),
-    image: a.belongsTo('Image', 'imageId'),
-    imageSet: a.belongsTo('ImageSet', 'imageSetId'),
-  }).authorization(allow=>[allow.authenticated()])
-  .secondaryIndexes((index)=>[index('imageSetId').queryField('imageSetMemberShipsByImageSetName')]),
-  ImageSet: a.model({
-    projectId: a.id().required(),
-    project: a.belongsTo('Project', 'projectId'),
-    name: a.string().required(),
-    images: a.hasMany('ImageSetMembership', 'imageSetId')
-  }).authorization(allow => [allow.authenticated()])
-    //.authorization(allow => [allow.groupDefinedIn('projectId')])
-  .secondaryIndexes((index)=>[index('projectId').queryField('imageSetsByProjectId')]),
-  UserProjectMembership: a.model({
-    userId: a.string().required(),
-    projectId: a.id().required(),
-    project: a.belongsTo('Project', 'projectId'),
-    isAdmin: a.boolean(),
-    queueUrl: a.string(),
-  }).authorization(allow => [allow.authenticated()])
-    //.authorization(allow => [allow.groupDefinedIn('projectId'), allow.group('orgadmin')])
-  .secondaryIndexes((index)=>[index('projectId').queryField('userProjectMembershipsByProjectId'),
-    index('userId').queryField('userProjectMembershipsByUserId'),
-    index('queueUrl').queryField('userProjectMembershipsByQueueUrl')
-  ]),
-  Queue: a.model({
-    projectId: a.id().required(),
-    project: a.belongsTo('Project', 'projectId'),
-    name: a.string().required(),
-    url: a.url().required(),
-  }).authorization(allow => [allow.authenticated()])
-    //.authorization(allow => [allow.groupDefinedIn('projectId')])
-  .secondaryIndexes((index)=>[index('projectId').queryField('queuesByProjectId')]),
+    id : a.string().required(),
+    isAdmin:a.integer()}),
   addUserToGroup: a.mutation().arguments({
-    userId:a.string().required(), 
-    groupName:a.string().required()
-  }).authorization(allow=>[allow.group('orgadmin')])
+      userId:a.string().required(), 
+      groupName:a.string().required()
+  }).authorization(allow => [allow.authenticated()])
   .handler(a.handler.function(addUserToGroup))
   .returns(a.json()),
   removeUserFromGroup: a.mutation().arguments({
     userId:a.string().required(), 
     groupName:a.string().required()
-  }).authorization(allow=>[allow.group('orgadmin')])
+  }).authorization(allow => [allow.authenticated()])
   .handler(a.handler.function(addUserToGroup))
   .returns(a.json()),
   createGroup: a.mutation().arguments({
     groupName: a.string().required()
-  }).authorization(allow=>[allow.group('orgadmin')])
+  }).authorization(allow => [allow.authenticated()])
   .handler(a.handler.function(createGroup))
   .returns(a.json()),
   listUsers: a.query().arguments({
     nextToken: a.string()
-  }).authorization(allow=>[allow.group('orgadmin')])
+  }).authorization(allow => [allow.authenticated()])
   .handler(a.handler.function(listUsers))
   .returns(a.customType({Users: a.ref('UserType').array(), NextToken: a.string()})),
   listGroupsForUser: a.query().arguments({
     userId: a.string().required(),
     nextToken: a.string()
-  }).authorization(allow=>[allow.group('orgadmin')])
+  }).authorization(allow => [allow.authenticated()])
   .handler(a.handler.function(listGroupsForUser))
   .returns(a.json()),
-}).authorization(allow => [allow.resource(handleUpload)])
+}).authorization(allow => [allow.resource(handleUpload), allow.authenticated()])
 
-export type Schema = ClientSchema<typeof schema>;
+const combinedSchema = a.combine([sqlSchema,schema]);
+
+export type Schema = ClientSchema<typeof combinedSchema>;
 
 export const data = defineData({
-  schema,
+  schema: combinedSchema,
   authorizationModes: {
     defaultAuthorizationMode: "apiKey",
     // API Key is used for a.allow.public() rules
@@ -271,31 +150,3 @@ export const data = defineData({
   },
 });
 
-/*== STEP 2 ===============================================================
-Go to your frontend source code. From your client-side code, generate a
-Data client to make CRUDL requests to your table. (THIS SNIPPET WILL ONLY
-WORK IN THE FRONTEND CODE FILE.)
-
-Using JavaScript or Next.js React Server Components, Middleware, Server 
-Actions or Pages Router? Review how to generate Data clients for those use
-cases: https://docs.amplify.aws/gen2/build-a-backend/data/connect-to-API/
-=========================================================================*/
-
-/*
-"use client"
-import { generateClient } from "aws-amplify/data";
-import type { Schema } from "@/amplify/data/resource";
-
-const client = generateClient<Schema>() // use this Data client for CRUDL requests
-*/
-
-/*== STEP 3 ===============================================================
-Fetch records from the database and use them in your frontend component.
-(THIS SNIPPET WILL ONLY WORK IN THE FRONTEND CODE FILE.)
-=========================================================================*/
-
-/* For example, in a React component, you can use this snippet in your
-  function's RETURN statement */
-// const { data: todos } = await client.models.Todo.list()
-
-// return <ul>{todos.map(todo => <li key={todo.id}>{todo.content}</li>)}</ul>

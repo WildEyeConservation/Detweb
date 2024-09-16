@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 
 interface TableObject {
   tableData: { id: any; rowData: React.ReactNode[] }[];
-  tableHeadings: { content: string; style: CSSProperties | undefined }[];
+  tableHeadings: { content: string; style?: CSSProperties}[];
 }
 
 export default function MyTable(input:TableObject) {

@@ -1,71 +1,68 @@
-import { useContext, useEffect } from "react";
+import { useContext, useEffect,useState } from "react";
 import Form from "react-bootstrap/Form";
-import { UserContext, UserContextType } from "./UserContext";
-import { client as GQL_Client } from "./useOptimisticUpdates";
-import { useOptimisticUpdates,useProjects } from "./useOptimisticUpdates";
+import { GlobalContext,UserContext } from "./Context";
+import { Schema } from "../amplify/data/resource";
+
 function ProjectSelector() {
-  const { user, setCurrentProject, currentProject } = useContext(UserContext) as UserContextType;
-  const { projects, createProject } = useProjects();
-  //const { createProjectMembership } = useProjectMemberships();
-  const { data: { data: memberships }, create: createProjectMembership} = useOptimisticUpdates("UserProjectMembership");
-
+  const { client } = useContext(GlobalContext)!;
+  const { myMembershipHook, currentPM, switchProject, user } = useContext(UserContext)!;
+  const { data: myMemberships, create: createProjectMembership} = myMembershipHook;
+  const createProject = client.models.Project.create
+  const [projects, setProjects] = useState<Schema['Project']['type'][]>([])
+  
   useEffect(() => {
-    if (memberships?.length === 0) {
-      alert(
-        "You have not been added to any projects yet. You won't be able to participate until an admin adds you to one of their projects and assigns you to a work queue.",
-      );
-    }
-    if (memberships?.length === 1) {
-      setCurrentProject(memberships[0].projectId);
-    }
-  }, [memberships?.length]);
-
+    console.log("myMemberships", myMemberships)
+    Promise.all(myMemberships?.map(async (membership) => (await client.models.Project.get({ id: membership.projectId })).data))
+      .then((projects) => {
+        setProjects(projects.filter(project => project !== null));
+      });
+  }, [myMemberships.length])
+  
   const onNewProject = async () => {
     const name = prompt("Please enter Project name", "");
     if (name) {
-      const project = await createProject({
+      const {data:project} = await createProject({
         name,
       });
-      createProjectMembership({
-        projectId: project.id!, userId: user!.id, isAdmin: true
-      });
-      setCurrentProject(project.id);
-      await GQL_Client.mutations.addUserToGroup({
-        userId: user!.id,
-        groupName: project.id+'-admin',
-      });
-      return project.id;
+      if (project) {
+        await createProjectMembership({
+          projectId: project.id!, userId: user.username, isAdmin: 1
+        });
+        return project.id
+      }
     }
   };
 
-  return (
-    <>
-      {(
-        <Form>
-          <Form.Select
-            onChange={(e) => {
-              if (e.target.value === "new") {
-                onNewProject().then((value) => {
-                  if (value) setCurrentProject(value);
-                });
-              } else {
-                setCurrentProject(e.target.value);
-              }
-            }}
-            value={currentProject?.id}
-          >
-            {!currentProject && <option>Select a Project to work on:</option>}
-            {projects?.map((project) => (
-              <option value={project.id} key={project.id}>
-                {projects.find(p => p.id === project.id)?.name}
-              </option>
-            ))}
-            {<option value="new">Create a new Project</option>}
-          </Form.Select>
-        </Form>
-      )}
-    </>
-  );
-}
+    return (
+      <>
+        {(
+          <Form>
+            <Form.Select
+              onChange={(e) => {
+                if (e.target.value === "new") {
+                  onNewProject().then((value) => {
+                    if (value) {
+                      switchProject(value);
+                    }
+                  });
+                } else {
+                  switchProject(e.target.value)
+                }
+              }}
+              value={currentPM?.projectId}
+            >
+              {!currentPM && <option>Select a Project to work on:</option>}
+              {projects?.map((project) => (
+                <option value={project.id} key={project.id}>
+                  {project.name}
+                </option>
+              ))}
+              {<option value="new">Create a new Project</option>}
+            </Form.Select>
+          </Form>
+        )}
+      </>
+    );
+  }
 
 export default ProjectSelector;

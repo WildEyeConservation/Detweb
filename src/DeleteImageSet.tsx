@@ -2,8 +2,7 @@ import { useContext, useState } from "react";
 import { Stack, Modal, Form, Button } from "react-bootstrap";
 import { useUpdateProgress } from "./useUpdateProgress";
 import { ImageSetDropdown } from "./ImageSetDropDown";
-import { UserContext } from "./UserContext";
-import { gqlClient } from "./App";
+import { UserContext } from "./Context";
 import { graphqlOperation } from "./App";
 import { GraphQLResult } from "aws-amplify/api";
 

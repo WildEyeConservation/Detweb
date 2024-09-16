@@ -11,6 +11,10 @@ import * as ecs from "aws-cdk-lib/aws-ecs";
 import * as lambdaEventSources from "aws-cdk-lib/aws-lambda-event-sources";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
+import * as rds from 'aws-cdk-lib/aws-rds';
+import { Duration } from 'aws-cdk-lib';
+import { CfnOutput } from 'aws-cdk-lib';
+
 
 import { Construct } from "constructs";
 // import { createUserPool } from "./cognito/auth";
@@ -71,25 +75,65 @@ export const createDetwebResources=function(scope: Construct, backend : Backend<
       assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
     });
 
-    const gpuWorkerRole = iam.Role.fromRoleArn(
-      scope,
-      "gpuRole",
-      "arn:aws:iam::275736403632:role/gpuWorkerRole",
-    );
+    // const gpuWorkerRole = iam.Role.fromRoleArn(
+    //   scope,
+    //   "gpuRole",
+    //   "arn:aws:iam::275736403632:role/gpuWorkerRole",
+    // );
 
      const adminEmail = "noone@nowhere.com";
      const adminTempPassword = "adminTempPassword$%3445";
      const adminName = "Admin";
 
 
-    const vpc = new ec2.Vpc(scope, "my-cdk-vpc");
+  const vpc = new ec2.Vpc(scope, "my-cdk-vpc");
+  const sg = new ec2.SecurityGroup(scope, "instanceSg", { vpc });
+  // Create a new VPC for the Aurora cluster
+
+  // Create the Aurora MySQL Serverless v2 cluster
+// Create the serverless cluster, provide all values needed to customise the database.
+const cluster = new rds.DatabaseCluster(scope, 'AuroraClusterV2', {
+  engine: rds.DatabaseClusterEngine.auroraMysql({ version: rds.AuroraMysqlEngineVersion.VER_3_07_1 }),
+  credentials: { username: 'clusteradmin' },
+  clusterIdentifier: 'db-endpoint-test',
+  writer: rds.ClusterInstance.serverlessV2('writer'),
+  serverlessV2MinCapacity: 2,
+  serverlessV2MaxCapacity: 10,
+  vpc,
+  defaultDatabaseName: 'demos',
+  enableDataApi: true,  // has to be set to true to enable Data API as not enable by default
+});
+
+  // Allow inbound traffic on port 3306 from your local IP address
+  sg.addIngressRule(
+    ec2.Peer.ipv4('105.214.21.216/32'), // Replace with your actual IP
+    ec2.Port.tcp(3306),
+    'Allow MySQL access from local machine'
+  );
+
+  // Create outputs for the database information
+  new CfnOutput(scope, 'AuroraClusterEndpoint', {
+    value: cluster.clusterEndpoint.socketAddress,
+    description: 'Aurora Cluster Endpoint',
+  });
+
+  new CfnOutput(scope, 'AuroraClusterReadEndpoint', {
+    value: cluster.clusterReadEndpoint.socketAddress,
+    description: 'Aurora Cluster Read Endpoint',
+  });
+
+  new CfnOutput(scope, 'AuroraClusterSecretArn', {
+    value: cluster.secret?.secretArn || 'Secret not available',
+    description: 'Aurora Cluster Secret ARN',
+  });
+
     // Some ECS tasks need to be done on machines with GPUs and some don't require GPUs. Thus we have to separate task queues for ECS
     const gpuQueue = new sqs.Queue(scope, "gpuQueue", { fifo: true });
     const cpuQueue = new sqs.Queue(scope, "cpuQueue", { fifo: true });
 
-    const sg = new ec2.SecurityGroup(scope, "instanceSg", { vpc });
     sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22));
-
+    sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(3306));
+    sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443));
     // Create ECS Clusters
     const gpuCluster = new ecs.Cluster(scope, "GpuCluster", { vpc });
     const cpuCluster = new ecs.Cluster(scope, "CpuCluster", { vpc });
@@ -393,6 +437,7 @@ export const createDetwebResources=function(scope: Construct, backend : Backend<
     const sqsCreateQueueStatement = new iam.PolicyStatement({
       actions: [
         "sqs:CreateQueue",
+        "sqs:PurgeQueue",
         "sqs:SendMessage",
         "sqs:DeleteQueue",
         "sqs:GetQueueAttributes",
@@ -437,7 +482,11 @@ export const createDetwebResources=function(scope: Construct, backend : Backend<
     return {gpuTaskQueueUrl : gpuQueue.queueUrl,
     cpuTaskQueueUrl : cpuQueue.queueUrl,
     inputsBucket : inputsBucket.bucketName,
-    outputBucket : outputsBucket.bucketName,
+      outputBucket: outputsBucket.bucketName,
+      auroraClusterEndpoint: cluster.clusterEndpoint.socketAddress,
+      auroraClusterReadEndpoint: cluster.clusterReadEndpoint.socketAddress,
+      sharpLayerVersionArn: sharpLayer.layerVersionArn,
+      auroraClusterSecretArn: cluster.secret?.secretArn || 'Secret not available',  
   };
 
 

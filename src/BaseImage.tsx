@@ -1,5 +1,5 @@
 // @flow
-import React, {memo, createContext, ReactNode, useState, useEffect } from "react";
+import React, {memo, createContext, ReactNode, useState, useEffect, useContext } from "react";
 import { MapContainer, LayersControl} from "react-leaflet";
 import { NavButtons } from "./NavButtons";
 import * as L from "leaflet";
@@ -9,14 +9,14 @@ import { S3Layer } from "./S3Layer";
 import { useHotkeys } from "react-hotkeys-hook";
 import { S3ImageOverlay } from "./S3ImageOverlay";
 import { S3 } from 'aws-sdk';
-import { ImageMetaType, LocationType, AnnotationSetType } from './schemaTypes';
-import { ImageType } from "./schemaTypes";
+import { ImageType, ImageFileType, LocationType, AnnotationSetType } from './schemaTypes';
+import { GlobalContext } from "./Context";
 
 const DEFAULT_WIDTH = 100;
 const DEFAULT_HEIGHT = 100;
 
 export interface BaseImageProps {
-  imageMeta: ImageMetaType;
+  image: ImageType;
   location?: LocationType;
   next?: () => void;
   prev?: () => void;
@@ -42,16 +42,17 @@ const getObject = async ({ Bucket, Key }: { Bucket: string; Key: string }) => {
 };
 
 const BaseImage: React.FC<BaseImageProps> = (props) => {
-  const [images, setImages] = useState<ImageType[]>([]);
-  const { imageMeta, next, prev, visible, containerheight, containerwidth, children, location } = props;
+  const { client } = useContext(GlobalContext)!;
+  const [imageFiles, setImageFiles] = useState<ImageFileType[]>([]);
+  const { image, next, prev, visible, containerheight, containerwidth, children, location } = props;
   const scale = Math.pow(
     2,
-    Math.ceil(Math.log2(Math.max(imageMeta.width, imageMeta.height))) - 8,
+    Math.ceil(Math.log2(Math.max(image.width, image.height))) - 8,
   );
 
   useEffect(() => {
-    imageMeta.images().then(response => setImages(response.data))
-  }, [imageMeta.images]);
+    client.models.ImageFile.list({filter: {imageId: {eq: image.id}}}).then(response => setImageFiles(response.data))
+  }, [image]);
 
   function xy2latLng(input: L.Point | [number, number] | Array<L.Point | [number, number]>): L.LatLng | L.LatLng[] {
     if (Array.isArray(input)) {
@@ -100,7 +101,7 @@ const BaseImage: React.FC<BaseImageProps> = (props) => {
   //   }
   // });
   const fullImageTypes = ['Complete JPG', 'Complete TIFF', 'Complete PNG'];
-  const imageBounds = (xy2latLng([L.point(0, 0), L.point(imageMeta.width, imageMeta.height)]) as L.LatLng[]).map((latLng: L.LatLng) => [latLng.lat, latLng.lng]) as [[number, number], [number, number]]
+  const imageBounds = (xy2latLng([L.point(0, 0), L.point(image.width, image.height)]) as L.LatLng[]).map((latLng: L.LatLng) => [latLng.lat, latLng.lng]) as [[number, number], [number, number]]
   //If a location is provided, use the location bounds, otherwise use the image bounds
   const viewBounds = location ?
     L.latLngBounds(xy2latLng([[location.x, location.y], [location.x + (location.width ?? DEFAULT_WIDTH), location.y + (location.height ?? DEFAULT_HEIGHT)]]) as [L.LatLng, L.LatLng]) : imageBounds;
@@ -123,7 +124,7 @@ const BaseImage: React.FC<BaseImageProps> = (props) => {
         keyboardPanDelta={0}
       >
         <LayersControl position="topright">
-          {images.map(image => 
+          {imageFiles.map(image => 
             <LayersControl.BaseLayer
             key={image.id}
             name={image.type}
@@ -131,10 +132,10 @@ const BaseImage: React.FC<BaseImageProps> = (props) => {
               {fullImageTypes.includes(image.type) ? 
               <S3ImageOverlay
               bounds={imageBounds}
-              source={image.key} 
+              source={image.s3key} 
               url={""} />:
               <S3Layer
-              source={image.key}
+              source={image.s3key}
               bounds={imageBounds}
               maxNativeZoom={5}
               getObject={getObject}

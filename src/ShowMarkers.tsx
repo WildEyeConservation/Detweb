@@ -1,5 +1,5 @@
 import { useContext, useState, useEffect } from "react";
-import { UserContext } from "./UserContext";
+import { UserContext } from "./Context";
 import "./index.css";
 import { isHotkeyPressed, useHotkeys } from "react-hotkeys-hook";
 import { ImageContext } from "./BaseImage";
@@ -13,7 +13,6 @@ import * as L from "leaflet";
 import { AnnotationsContext } from "./AnnotationsContext";
 import * as jdenticon from "jdenticon";
 import { useMap } from "react-leaflet";
-import { useCategory } from "./useGqlCached";
 import type { AnnotationType, CategoryType, ExtendedAnnotationType } from "./schemaTypes";
 interface ShowMarkersProps {
   activeAnnotation?: AnnotationType;
@@ -64,7 +63,7 @@ export function ShowMarkers({ activeAnnotation }: ShowMarkersProps) {
   const { latLng2xy, xy2latLng } = useContext(ImageContext) ?? {};
   const { user, sendToQueue, createQueue, currentProject } =
     useContext(UserContext)!;
-  const {categories} = useCategory(currentProject)
+  const {categories} = useCategoryByProject(currentProject)
   const [enabled, setEnabled] = useState(true);
 
   useHotkeys(

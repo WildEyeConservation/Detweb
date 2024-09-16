@@ -6,7 +6,6 @@ import OverlapOutline from "./OverlapOutline";
 import { useHotkeys } from "react-hotkeys-hook";
 import { GotoAnnotation } from "./GotoAnnotation";
 import { useOptimalAssignment } from "./useOptimalAssignment";
-import { useAnnotations } from "./useGqlCached";
 import { Legend } from "./Legend";
 import { multiply, inv, Matrix } from "mathjs";
 import useAckOnTimeout from "./useAckOnTimeout";

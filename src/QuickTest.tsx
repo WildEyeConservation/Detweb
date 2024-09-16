@@ -1,11 +1,6 @@
-/* Generate a minimal UI to test the useOptimisticUpdates hook */
-import { Amplify } from 'aws-amplify'
-import outputs from '../amplify_outputs.json'
-Amplify.configure(outputs)
-
-import { useState } from 'react';
-import { useOptimisticUpdates,client } from "./useOptimisticUpdates";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { useState, useContext } from 'react';
+import { useOptimisticUpdates } from "./useOptimisticUpdates";
+import { GlobalContext,ProjectContext } from "./Context";
 
 
 export default function QuickTest() {
@@ -18,16 +13,18 @@ export default function QuickTest() {
 }
 
 function CategoryList() {
+    const { client } = useContext(GlobalContext)!;
+     = useContext(ProjectContext)!;
     const { data, create, update, delete: remove } =
         useOptimisticUpdates("Category",
-            () => client.models.Category.categoriesByProjectId({ projectId: "01c449c5-66f1-4658-82be-a0f938f129d5" }),
-            { filter: { projectId: { eq: "01c449c5-66f1-4658-82be-a0f938f129d5" } } });
+            () => client.models.Category.CategoriesByProject({ projectId: project.id }),
+            { filter: { projectId: { eq:  project.id } } });
 
     const [newCategoryName, setNewCategoryName] = useState("");
 
     const handleCreate = () => {
         if (newCategoryName) {
-            create({ name: newCategoryName, projectId: "01c449c5-66f1-4658-82be-a0f938f129d5"});
+            create({ name: newCategoryName, projectId: project.id});
             setNewCategoryName("");
         }
     };
@@ -41,8 +38,8 @@ function CategoryList() {
                 placeholder="New Category name"
             />
             <button onClick={handleCreate}>Create Category</button>
-            {data?.data ? (
-                data.data.map((p: {id: string, name: string}) => (
+            {data  ? (
+                data.map((p: {id: string, name: string}) => (
                     <div key={p.name}>
                         {p.name}
                         <button onClick={() => update({id: p.id, name: p.name + " (updated)"})}>

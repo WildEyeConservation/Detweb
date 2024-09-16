@@ -13,7 +13,7 @@ import {
   LayerGroup,
   useMap,
 } from "react-leaflet";
-import { UserContext } from "./UserContext";
+import { UserContext } from "./Context";
 import { getImageSetsInProject, createImageSetMembershipMinimal } from "./gqlQueries";
 import { createImageSet } from "./graphql/mutations";
 import "./DefineTransect.css";

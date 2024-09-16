@@ -1,0 +1,16 @@
+{
+    "compilerOptions": {
+        "target": "es6",
+        "module": "commonjs",
+        "inlineSourceMap": true,
+        "outDir": "C:\\dev2\\repos\\SurveyScope\\amplify\\storage\\handleS3Upload",
+        "rootDir": ".",
+        "sourceRoot": "C:/dev2/repos/SurveyScope/amplify/storage/handleS3Upload",
+        "typeRoots": [
+            "node_modules/@types"
+        ],
+        "types": [
+            "node"
+        ]
+    }
+}
