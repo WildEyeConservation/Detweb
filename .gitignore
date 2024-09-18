@@ -8,6 +8,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+!amplify/layers/sharp-ph200-arm64/node_modules
 dist
 dist-ssr
 *.local

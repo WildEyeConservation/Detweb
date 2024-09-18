@@ -8,6 +8,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { outputBucket, inputBucket } from "./storage/resource";
 import { handleS3Upload } from "./storage/handleS3Upload/resource";
 import * as sts from '@aws-sdk/client-sts';
+import { processImages } from "./functions/processImages/resource";
 
 const backend=defineBackend({
   auth,
@@ -15,8 +16,11 @@ const backend=defineBackend({
   addUserToGroup,
   outputBucket,
   inputBucket,
-  handleS3Upload
+  handleS3Upload,
+  processImages
 });
+
+backend.processImages.addEnvironment('API_KEY', backend.data.apiKey!)
 
 async function getUser() {
   const stsClient = new sts.STSClient({ region: 'eu-west-1' });

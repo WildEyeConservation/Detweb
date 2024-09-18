@@ -5,6 +5,7 @@ import { createGroup } from '../data/create-group/resource'
 import { listUsers } from '../data/list-users/resource'
 import { listGroupsForUser } from '../data/list-groups-for-user/resource'
 import { schema as generatedSqlSchema } from '../sqldata/schema.sql';
+import { processImages } from '../functions/processImages/resource';
 
 const sqlSchema = generatedSqlSchema.authorization(allow => allow.authenticated())
   .setRelationships((models) => [
@@ -146,7 +147,10 @@ const schema = a.schema({
     })
     .returns(a.ref('Message'))
     .handler(a.handler.custom({ entry: './publish.js' }))
-    .authorization(allow => [allow.authenticated(),allow.publicApiKey()]),
+    .authorization(allow => [
+      allow.authenticated(),
+      allow.publicApiKey(),
+      allow.custom()]),
   // Subscribe to incoming messages
   receive: a.subscription()
     // subscribes to the 'publish' mutation
@@ -155,13 +159,15 @@ const schema = a.schema({
     .handler(a.handler.custom({entry: './receive.js'})) 
     // authorization rules as to who can subscribe to the data
     .authorization(allow => [allow.authenticated()]),
-  // processImages: a
-  //   .mutation()
-  //   .arguments({
-  //     s3keys: a.string().array().required(),
-  //     model: a.string().required(),
-  //     threshold: a.float(),
-  //   }),
+  processImages: a
+    .mutation()
+    .arguments({
+      s3keys: a.string().array().required(),
+      model: a.string().required(),
+      threshold: a.float(),
+    }).handler(a.handler.function(processImages)).returns(a.string())
+  .authorization(allow => [allow.authenticated()])
+  
   // registerImages: a
   //   .mutation()
   //   .arguments({
@@ -176,7 +182,8 @@ const schema = a.schema({
   //     type: a.string().required(),
   //     level: a.float(),
   //   })
-}).authorization(allow => [allow.resource(handleUpload), allow.authenticated()])
+}).authorization(allow => [
+  allow.resource(processImages)])
 const combinedSchema = a.combine([sqlSchema,schema]);
 export type Schema = ClientSchema<typeof combinedSchema>;
 export const data = defineData({
