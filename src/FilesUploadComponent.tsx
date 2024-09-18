@@ -9,6 +9,10 @@ import { useUpdateProgress } from "./useUpdateProgress";
 import { list, uploadData } from "aws-amplify/storage";
 import { ProjectContext, UserContext, GlobalContext } from "./Context.tsx";
 import pLimit from 'p-limit'
+import ExifReader from 'exifreader'
+import { ManagementContext } from "./Context.tsx";
+import { DateTime } from 'luxon'
+
 
 
 /* I don't understand why I need to tell Typescript that webkitdirectory is one of the fields of the input element.
@@ -28,7 +32,7 @@ interface FilesUploadComponentProps {
 }
 
 export default function FilesUploadComponent({ show, handleClose }: FilesUploadComponentProps) {
-  const limitConnections = pLimit(1);
+  const limitConnections = pLimit(4);
   const [upload, setUpload] = useState(true);
   const [name, setName] = useState("");
   const {client} = useContext(GlobalContext)!;
@@ -43,6 +47,9 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
   const [isScanning, setIsScanning] = useState(false);
   const [totalImageSize, setTotalImageSize] = useState(0);
   const [filteredImageSize, setFilteredImageSize] = useState(0);
+  const manContext = useContext(ManagementContext)!;
+  const {imageSetsHook:{data:imageSets,create:createImageSet} } = manContext!;
+
   if (!userContext) {
     return null;
   }
@@ -109,6 +116,29 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
 
     return `${size.toFixed(2)} ${units[unitIndex]}`;
   }, []);
+
+  async function getExifmeta(file:File){
+      const tags = await ExifReader.load(file)
+      /* I am saving all of the exifdata to make it easier to answer questions about eg. lens used/ISO/shutterTime/aperture distributions later on. However, some
+      EXIF fields are absolutely huge and make writing to my database impossibly slow. I explicitly drop those here*/
+      delete tags['Thumbnail']
+      delete tags['Images']
+      delete tags['MakerNote']
+      for (const tag of Object.keys(tags)) {
+        if (tags[tag]?.description?.length > 100) {
+          console.log(`Tag ${tag} has a description longer than 100 characters. Dropping it.`)
+          console.log(tags[tag].description)
+          delete tags[tag];
+        }
+      }
+      return ({ key:file.webkitRelativePath,
+                width:tags['Image Width']?.value,
+                height:tags['Image Height']?.value,
+                timestamp: DateTime.fromFormat(tags.DateTimeOriginal?.value as string, 'yyyy:MM:dd HH:mm:ss').toISO(),
+                cameraSerial:tags['Internal Serial Number']?.value,
+        exifData: JSON.stringify({ ...tags, 'ImageHeight':undefined, 'ImageWidth':undefined})
+      })
+  }
   
   const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
     taskId: `Upload files ${name}`,
@@ -124,12 +154,13 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
     we start processing on a recurseResult that is incomplete*/
 
     setTotalSteps(filteredImageSize);
-    setStepsCompleted(0);
 
+    setStepsCompleted(0);
+    const imageSetId = imageSets.find(x => x.name === name)?.id || createImageSet({name, projectId:project.id});
     const promises = filteredImageFiles.map(
       (file) => limitConnections(async () => {
         let lastTransferred = 0;
-        const task = uploadData({
+        const tasks = [uploadData({
           path: "images/" + file.webkitRelativePath,
           data: file,
           options: {
@@ -142,13 +173,34 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
               lastTransferred = transferredBytes;
             }
           }
+        }), getExifmeta(file)] as const
+        const results = await Promise.all(tasks)
+        const exifmeta=results[1]
+        // Get the exif metadata from the second task
+        client.models.Image.create({
+          projectId: project.id,
+          width: exifmeta.width || 0,
+          height: exifmeta.height || 0,
+          timestamp: exifmeta.timestamp,
+          cameraSerial: exifmeta.cameraSerial,
+          exifData: exifmeta.exifData,
+        }).then(({ data: image }) => {
+          if (!image) {
+            throw new Error("Image not created");
+          }
+          client.models.ImageSetMembership.create({
+            imageId: image.id,
+            imageSetId: imageSetId
+          });
+          client.models.ImageFile.create({
+            projectId: project.id,
+            imageId: image.id,
+            s3key: file.webkitRelativePath,
+            path: file.webkitRelativePath,
+            type: file.type
+          })
         })
-        await task.result;
       })
-    );
-
-    Promise.all(promises).then(() =>
-      client.models.ImageSet.create({ name, projectId: project.id })
     );
   };
 
@@ -182,36 +234,44 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
       </Modal.Header>
       <Modal.Body>
         <Form>
-          <Form.Group>
-            <Form.Check // prettier-ignore
-              type="switch"
-              id="custom-switch"
-              label="Upload files to S3"
-              checked={upload}
-              onChange={(x) => {
-                setUpload(x.target.checked);
-              }}
-            />
-          </Form.Group>
-          <Form.Group>
-            <Form.Check // prettier-ignore
-              type="switch"
-              id="custom-switch"
-              label="Do integrity check"
-              checked={integrityCheck}
-              onChange={(x) => {
-                setIntegrityCheck(x.target.checked);
-              }}
-            />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <Form.Group>
+                <Form.Check
+                  type="switch"
+                  id="custom-switch"
+                  label="Upload files to S3"
+                  checked={upload}
+                  onChange={(x) => {
+                    setUpload(x.target.checked);
+                  }}
+                />
+              </Form.Group>
+              <Form.Group>
+                <Form.Check
+                  type="switch"
+                  id="custom-switch"
+                  label="Do integrity check"
+                  checked={integrityCheck}
+                  onChange={(x) => {
+                    setIntegrityCheck(x.target.checked);
+                  }}
+                />
+              </Form.Group>
+            </div>
             <Form.Group>
-              <Form.Label>Imageset Name</Form.Label>
-              <Form.Control
-                type="string"
-                value={name}
-                onChange={(x) => setName(x.target.value)}
-                disabled
-              />
+              <Button variant="primary" onClick={() => fileInputRef.current?.click()}>
+                Change source folder
+              </Button>
             </Form.Group>
+          </div>
+          <Form.Group>
+            <Form.Label>Imageset Name</Form.Label>
+            <Form.Control
+              type="string"
+              value={name}
+              onChange={(x) => setName(x.target.value)}
+            />
           </Form.Group>
           {isScanning ? (
             <div className="text-center mt-3">

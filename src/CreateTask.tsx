@@ -2,18 +2,21 @@ import { useContext, useState } from "react";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import Modal from "react-bootstrap/Modal";
-import { UserContext } from "./Context";
-import { createLocation, createLocationSet } from "./graphql/mutations";
-import { getImagesInSet } from "./gqlQueries";
+import { UserContext, GlobalContext, ManagementContext, ProjectContext } from "./Context";
 import { useUpdateProgress } from "./useUpdateProgress";
 import { ImageSetDropdown } from "./ImageSetDropDown";
+import { subset } from "mathjs";
 
 interface CreateTaskProps {
   show: boolean;
   handleClose: () => void;
+  selectedImageSets: string[];
+  setSelectedImageSets: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
-function CreateTask({ show, handleClose }: CreateTaskProps) {
+function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets }: CreateTaskProps) {
+  const { client } = useContext(GlobalContext)!;
+  const { project } = useContext(ProjectContext)!;
   const [sidelap, setSidelap] = useState<number>(-1000);
   const [overlap, setOverlap] = useState<number>(-1000);
   const [width, setWidth] = useState<number>(1024);
@@ -21,25 +24,22 @@ function CreateTask({ show, handleClose }: CreateTaskProps) {
   const [height, setHeight] = useState<number>(1024);
   const [modelGuided, setModelGuided] = useState(false);
   const userContext = useContext(UserContext);
+  const { locationSetsHook: { create: createLocationSet } } = useContext(ManagementContext)!;
   if (!userContext) {
     return null;
   }
-  const { currentProject, gqlSend } = userContext;
-  const [selectedSets, selectSets] = useState<string[]>([]);
   const [setImagesCompleted, setTotalImages] = useUpdateProgress({
     taskId: `Create task (model guided)`,
     indeterminateTaskName: `Loading images`,
     determinateTaskName: "Processing images",
-    stepName: "images",
+    stepFormatter: (x:number) => `${x} images`
   });
   const [setLocationsCompleted, setTotalLocations] = useUpdateProgress({
     taskId: `Create task`,
     indeterminateTaskName: `Loading locations`,
     determinateTaskName: "Processing locations",
-    stepName: "locations",
+    stepFormatter: (x:number) => `${x} locations`
   });
-
-  const { gqlGetMany, backend, sendToQueue } = userContext;
 
   async function handleSubmit() {
     // const client=new SNSClient({
@@ -53,30 +53,19 @@ function CreateTask({ show, handleClose }: CreateTaskProps) {
     //const images=await gqlClient.graphql({query: listImages,variables:{filter:{projectImageName:{eq:currentProject}}}})
     setTotalImages(0);
     let images: any[] = [];
-    for (const selectedSet of selectedSets) {
-      images = images.concat(
-        await gqlGetMany(
-          getImagesInSet,
-          { name: selectedSet },
-          setImagesCompleted,
-        ),
-      );
-    }
+
+    const allImages = await selectedImageSets.reduce(async (acc, selectedSet) => {
+      const images = (await client.models.ImageSet.get(
+        { id: selectedSet },
+        { selectionSet: ["images.image.timestamp", "images.image.id"] }
+      )).data?.images || [];
+      return [...await acc, ...images];
+    }, Promise.resolve([] as { image: { id: string; timestamp: string | null } }[]));
     setImagesCompleted(0);
-    interface CreateLocationSetResponse {
-      data: {
-        createLocationSet: {
-          id: string;
-        };
-      };
-    }
-    const response = await gqlSend(createLocationSet, {
-      input: { name, projectName: currentProject },
-    }) as CreateLocationSetResponse;
-    const locationSetId = response.data.createLocationSet.id;
-    if (modelGuided) {
-      setTotalImages(images.length);
-      for (const { image } of images) {
+    const locationSetId = createLocationSet({ name, projectId: project.id })
+  if (modelGuided) {
+      setTotalImages(allImages.length);
+      for (const { image } of allImages) {
         sendToQueue({
           QueueUrl: backend.custom.cpuTaskQueueUrl,
           MessageGroupId: crypto.randomUUID(),
@@ -149,9 +138,9 @@ function CreateTask({ show, handleClose }: CreateTaskProps) {
           </Form.Group>
           <Form.Label>Image Sets to process</Form.Label>
           <ImageSetDropdown
-            setImageSets={selectSets}
-            selectedSets={selectedSets}
-          />
+                            selectedSets={selectedImageSets}
+                            setImageSets={setSelectedImageSets}
+                        />
           {/* <Form.Label>Image Set to process</Form.Label>
       <Form.Select onChange={(e)=>{selectSet(e.target.value)}} value={selectedSet}>  
       {!selectedSet && <option value="none">Select an image set to apply the processing to:</option>}

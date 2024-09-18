@@ -3,14 +3,11 @@ import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { createDetwebResources } from "./cdk2-stack";
 import { addUserToGroup } from "./functions/add-user-to-group/resource";
-import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
-
-import * as opensearch from "aws-cdk-lib/aws-opensearchservice";
 import { Stack } from "aws-cdk-lib";
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { outputBucket, inputBucket } from "./storage/resource";
-import * as iam from "aws-cdk-lib/aws-iam";
 import { handleS3Upload } from "./storage/handleS3Upload/resource";
+import * as sts from '@aws-sdk/client-sts';
 
 const backend=defineBackend({
   auth,
@@ -21,18 +18,27 @@ const backend=defineBackend({
   handleS3Upload
 });
 
-const lambdaFunction = backend.handleS3Upload.resources.lambda as lambda.Function;
-const layerVersion = new lambda.LayerVersion(Stack.of(lambdaFunction), 'sharpLayer', {
-  code: lambda.Code.fromAsset('./amplify/layers/sharp-layer'),
-  description: "Sharp layer for image processing",
-  compatibleArchitectures: [lambda.Architecture.X86_64, lambda.Architecture.ARM_64],
-  layerVersionName: "sharpLayer",
-})
-lambdaFunction.addLayers(layerVersion);
+async function getUser() {
+  const stsClient = new sts.STSClient({ region: 'eu-west-1' });
+  const command = new sts.GetCallerIdentityCommand({});
+  return await stsClient.send(command);
+}
 
-const customStack = backend.createStack('DetwebCustom')
-const custom=createDetwebResources(customStack, backend)
-backend.addOutput({ custom })
+getUser().then((user) => {
+  console.log(user.Arn)
+  const lambdaFunction = backend.handleS3Upload.resources.lambda as lambda.Function;
+  const layerVersion = new lambda.LayerVersion(Stack.of(lambdaFunction), 'sharpLayer', {
+    code: lambda.Code.fromAsset('./amplify/layers/sharp-ph200-x64'),
+    description: "Sharp layer for image processing (ph200-x86_64)",
+    compatibleArchitectures: [lambda.Architecture.X86_64],
+  })
+
+  lambdaFunction.addLayers(layerVersion);
+
+  const customStack = backend.createStack('DetwebCustom')
+  const custom = createDetwebResources(customStack, backend, user.Arn!)
+  backend.addOutput({ custom })
+})
 
 //const table=backend.data.resources.cfnResources.amplifyDynamoDbTables['Annotation']
 //backend.handleS3Upload.resources.cfnResources.cfnFunction.layers?.push(custom.sharpLayerVersionArn)

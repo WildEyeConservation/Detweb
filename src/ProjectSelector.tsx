@@ -3,10 +3,14 @@ import Form from "react-bootstrap/Form";
 import { GlobalContext,UserContext } from "./Context";
 import { Schema } from "../amplify/data/resource";
 
-function ProjectSelector() {
+interface ProjectSelectorProps {
+  currentPM: Schema['UserProjectMembership']['type'] | undefined,
+  setCurrentPM: React.Dispatch<React.SetStateAction<Schema['UserProjectMembership']['type'] | undefined>>
+}
+
+function ProjectSelector({ currentPM, setCurrentPM }: ProjectSelectorProps) {
   const { client } = useContext(GlobalContext)!;
-  const { myMembershipHook, currentPM, switchProject, user } = useContext(UserContext)!;
-  const { data: myMemberships, create: createProjectMembership} = myMembershipHook;
+  const { myMembershipHook:{ data: myMemberships, create: createProjectMembership}, user } = useContext(UserContext)!;
   const createProject = client.models.Project.create
   const [projects, setProjects] = useState<Schema['Project']['type'][]>([])
   
@@ -42,11 +46,11 @@ function ProjectSelector() {
                 if (e.target.value === "new") {
                   onNewProject().then((value) => {
                     if (value) {
-                      switchProject(value);
+                      setCurrentPM(myMemberships.find(membership => membership.projectId === value));
                     }
                   });
                 } else {
-                  switchProject(e.target.value)
+                  setCurrentPM(myMemberships.find(membership => membership.projectId === e.target.value))
                 }
               }}
               value={currentPM?.projectId}

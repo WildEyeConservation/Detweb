@@ -1,18 +1,54 @@
 import  fs  from 'node:fs/promises'
 import  path  from 'node:path'
-import ExifReader from 'exifreader'
-import { DateTime } from 'luxon'
+//import ExifReader from 'exifreader'
+//import { DateTime } from 'luxon'
 import pLimit from 'p-limit'
 import { S3Client, GetObjectCommand, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
-import { marshall } from '@aws-sdk/util-dynamodb'
+//import { marshall } from '@aws-sdk/util-dynamodb'
 const s3 = new S3Client();
 import { STSClient, AssumeRoleCommand } from '@aws-sdk/client-sts';
 //import {doAppsyncQueryWithPagination, doAppsyncQuery} from './appsync.js'
-import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
-//import sharp from 'sharp';
-const dynamoDb = new DynamoDBClient();
+//import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
+import sharp from 'sharp';
 
-const TABLE_NAME = process.env.IMAGETABLE;
+//const dynamoDb = new DynamoDBClient();
+//import { Amplify } from "aws-amplify";
+//import { generateClient } from "aws-amplify/data";
+import { env } from "$amplify/env/handleS3Upload";
+//import { createImage } from "./graphql/mutations";
+
+// Amplify.configure(
+//   {
+//     API: {
+//       GraphQL: {
+//         endpoint: env.AMPLIFY_DATA_GRAPHQL_ENDPOINT,
+//         region: env.AWS_REGION,
+//         defaultAuthMode: "iam",
+//       },
+//     },
+//   },
+//   {
+//     Auth: {
+//       credentialsProvider: {
+//         getCredentialsAndIdentityId: async () => ({
+//           credentials: {
+//             accessKeyId: env.AWS_ACCESS_KEY_ID,
+//             secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+//             sessionToken: env.AWS_SESSION_TOKEN,
+//           },
+//         }),
+//         clearCredentialsAndIdentityId: () => {
+//           /* noop */
+//         },
+//       },
+//     },
+//   }
+// );
+
+// const client = generateClient({
+//   authMode: "iam",
+// });
+
 async function uploadDir(localDir, s3Prefix) {
   const files = await fs.readdir(localDir);
 
@@ -28,7 +64,7 @@ async function uploadDir(localDir, s3Prefix) {
       if (stats.isFile()) {
         return s3.send(
           new PutObjectCommand({
-            Bucket: process.env.OUTPUTBUCKET,
+            Bucket: env.OUTPUTS_BUCKET_NAME,
             Key: s3Path,
             Body: await fs.readFile(localPath),
           }),
@@ -146,41 +182,42 @@ export async function handler(event) {
       const buffer = Buffer.concat(chunks);
       const localTmpPath = "/tmp/tiles";
       // Read the exif data from the image stored in buffer.
-      const tags = ExifReader.load(buffer);
-      //Drop all tags with a length longer than 100 characters
-      let tagsDD = {}
-      for (const tag of Object.keys(tags)) {
-        if (tags[tag]?.description?.length > 100) {
-          console.log(`Tag ${tag} has a description longer than 100 characters. Dropping it.`)
-          console.log(tags[tag].description)
-          delete tags[tag];
-        }
-      }
-      delete tags.MakerNote
-      Object.keys(tags).forEach(key => { tagsDD[key] = tags[key]?.description })
-      tagsDD['key'] = Key.substring('public/images/'.length)
-      /*tags.DateTimeOriginal.value[0]
-      '2023:11:14 09:52:39'*/
-      tagsDD['timestamp'] = DateTime.fromFormat(tags.DateTimeOriginal.value[0], 'yyyy:MM:dd HH:mm:ss').toUnixInteger()
-      // tagsDD['height'] = tags.ImageHeight.value
-      // tagsDD['width'] = tags.ImageWidth.value
-      tagsDD['createdAt'] = DateTime.now().toISO()
-      tagsDD['updatedAt'] = DateTime.now().toISO()
-      tagsDD['__typename'] = 'Image'
-      // delete tagsDD['ImageHeight']
-      // delete tagsDD['ImageWidth']
+      // const tags = ExifReader.load(buffer);
+      // //Drop all tags with a length longer than 100 characters
+      // // let tagsDD = {}
+      // for (const tag of Object.keys(tags)) {
+      //   if (tags[tag]?.description?.length > 100) {
+      //     console.log(`Tag ${tag} has a description longer than 100 characters. Dropping it.`)
+      //     console.log(tags[tag].description)
+      //     delete tags[tag];
+      //   }
+      // }
+      // delete tags.MakerNote
+      // Object.keys(tags).forEach(key => { tagsDD[key] = tags[key]?.description })
+      // client.graphql({querycreateImage,)
+      // // tagsDD['key'] = Key.substring('public/images/'.length)
+      // // /*tags.DateTimeOriginal.value[0]
+      // // '2023:11:14 09:52:39'*/
+      // // tagsDD['timestamp'] = DateTime.fromFormat(tags.DateTimeOriginal.value[0], 'yyyy:MM:dd HH:mm:ss').toUnixInteger()
+      // // // tagsDD['height'] = tags.ImageHeight.value
+      // // // tagsDD['width'] = tags.ImageWidth.value
+      // // tagsDD['createdAt'] = DateTime.now().toISO()
+      // // tagsDD['updatedAt'] = DateTime.now().toISO()
+      // // tagsDD['__typename'] = 'Image'
+      // // delete tagsDD['ImageHeight']
+      // // delete tagsDD['ImageWidth']
 
-      const config={
-        TableName: TABLE_NAME,
-        Item: marshall(tagsDD, { removeUndefinedValues: true , convertEmptyValues: false}),
-      }
       // const config={
       //   TableName: TABLE_NAME,
-      //   Item: { key: { 'S': 'testItem' }},
+      //   Item: marshall(tagsDD, { removeUndefinedValues: true , convertEmptyValues: false}),
       // }
-      const putItemCommand = new PutItemCommand(config);
-      const result=await dynamoDb.send(putItemCommand);
-      console.log(result)
+      // // const config={
+      // //   TableName: TABLE_NAME,
+      // //   Item: { key: { 'S': 'testItem' }},
+      // // }
+      // const putItemCommand = new PutItemCommand(config);
+      // const result=await dynamoDb.send(putItemCommand);
+      // console.log(result)
 
       // const input={
       //   key,

@@ -41,137 +41,137 @@ import { makeSafeQueueName } from './utils';
 import { GlobalContext, UserContext, ProjectContext } from './Context';
 
 type ClientType = V6Client<Schema>;
-type ModelType = keyof ClientType['models'];
+// type ModelType = keyof ClientType['models'];
 
-export function useOptimisticUpdates<T extends ModelType>(modelName: T,
-                                                          listFunction: () => Promise<{data : Schema[T]['type'][]}> = () => client['models'][modelName].list(), 
-                                                          subscriptionFilter?: Parameters<ClientType['models'][T]['onCreate']>[0]
-) {
-  const queryClient = useQueryClient();
-  const model = client.models[modelName];
-  const queryKey = [modelName, subscriptionFilter];
+// export function useOptimisticUpdates<T extends ModelType>(modelName: T,
+//                                                           listFunction: () => Promise<{data : Schema[T]['type'][]}> = () => client['models'][modelName].list(), 
+//                                                           subscriptionFilter?: Parameters<ClientType['models'][T]['onCreate']>[0]
+// ) {
+//   const queryClient = useQueryClient();
+//   const model = client.models[modelName];
+//   const queryKey = [modelName, subscriptionFilter];
 
-  // Query to fetch data
-  const { data, ...queryResult } = useQuery({
-    queryKey,
-    queryFn: async () => {
-      const result = await listFunction();
-      return result.data;
-    },
-  });
+//   // Query to fetch data
+//   const { data, ...queryResult } = useQuery({
+//     queryKey,
+//     queryFn: async () => {
+//       const result = await listFunction();
+//       return result.data;
+//     },
+//   });
 
-  // Create a separate subscription filter
-  //const subscriptionFilter = filterExpression ? { filter: filterExpression.filter } : undefined;
+//   // Create a separate subscription filter
+//   //const subscriptionFilter = filterExpression ? { filter: filterExpression.filter } : undefined;
 
-  //Subscription effect
-  useEffect(() => {
-    console.log('effect ran')
-    // Subscribe to creation of Todo
-    const createSub = model.onCreate(subscriptionFilter).subscribe({
-      next: (data) => {
-        console.log(data)
-        // queryClient.setQueryData(queryKey, (old: Schema[T]['type'][] = []) => [
-        //   ...old.filter((item) => item.id !== data.id),
-        //   data as Schema[T]['type']
-        // ]);
-      },
-      error: (error) => console.warn(error),
-    });
+//   //Subscription effect
+//   useEffect(() => {
+//     console.log('effect ran')
+//     // Subscribe to creation of Todo
+//     const createSub = model.onCreate(subscriptionFilter).subscribe({
+//       next: (data) => {
+//         console.log(data)
+//         // queryClient.setQueryData(queryKey, (old: Schema[T]['type'][] = []) => [
+//         //   ...old.filter((item) => item.id !== data.id),
+//         //   data as Schema[T]['type']
+//         // ]);
+//       },
+//       error: (error) => console.warn(error),
+//     });
 
-    // Subscribe to update of Todo
-    const updateSub = model.onUpdate(subscriptionFilter).subscribe({
-      next: (data) => {
-        console.log(data)
-        // queryClient.setQueryData<BasicType[]>(queryKey, (old:{id:string}[]) => {
-        //   return old.map(item => item.id === data.id ? data : item)
-        // })
-      },
-      error: (error) => console.warn(error),
-    });
+//     // Subscribe to update of Todo
+//     const updateSub = model.onUpdate(subscriptionFilter).subscribe({
+//       next: (data) => {
+//         console.log(data)
+//         // queryClient.setQueryData<BasicType[]>(queryKey, (old:{id:string}[]) => {
+//         //   return old.map(item => item.id === data.id ? data : item)
+//         // })
+//       },
+//       error: (error) => console.warn(error),
+//     });
 
-    // Subscribe to deletion of Todo
-    const deleteSub = model.onDelete(subscriptionFilter).subscribe({
-      next: (data) => {
-        console.log(data)
-        // queryClient.setQueryData(queryKey, (old: {id:string}[]) => {  
-        //   return old.filter(item => item.id !== data.id)
-        // })
-      },
-      error: (error) => console.warn(error),
-    });
-    return () => {
-      createSub.unsubscribe();
-      updateSub.unsubscribe();
-      deleteSub.unsubscribe();
-    };
-  }, [modelName, queryClient, subscriptionFilter]);
+//     // Subscribe to deletion of Todo
+//     const deleteSub = model.onDelete(subscriptionFilter).subscribe({
+//       next: (data) => {
+//         console.log(data)
+//         // queryClient.setQueryData(queryKey, (old: {id:string}[]) => {  
+//         //   return old.filter(item => item.id !== data.id)
+//         // })
+//       },
+//       error: (error) => console.warn(error),
+//     });
+//     return () => {console.log('unsubscribing')
+//       createSub.unsubscribe();
+//       updateSub.unsubscribe();
+//       deleteSub.unsubscribe();
+//     };
+//   }, [modelName, queryClient, subscriptionFilter]);
 
-  // Create mutation
-  const createMutation = useMutation({
-    mutationFn: model.create,
-    onMutate: async (newItem) => {
-      newItem.id ||= crypto.randomUUID(); // If the item does not have an id, we generate a random UUID for it.
-      // Normally we wouldn't need to do this as the server will generate an id for us. But our onCreate subscription will inform us of all newly created items (including
-      // ones created by ourselves). We then need to add them to the cache. But if the newly created item was created by us, it would allready have been added to the cache
-      // by the optimistic update. Avoiding duplicates is trivial if ids are generated client-side, but basically impossible if they are generated on the server.
-      await queryClient.cancelQueries({ queryKey});
-      const previousItems = queryClient.getQueryData([modelName]);
-      queryClient.setQueryData(queryKey, (old: any[] = []) => [...old, newItem]);
-      return { previousItems };
-    },
-    onError: (err, newItem, context) => {
-      console.error(err, newItem, context)
-      queryClient.setQueryData(queryKey, context?.previousItems);
-    }
-  });
+//   // Create mutation
+//   const createMutation = useMutation({
+//     mutationFn: model.create,
+//     onMutate: async (newItem) => {
+//       newItem.id ||= crypto.randomUUID(); // If the item does not have an id, we generate a random UUID for it.
+//       // Normally we wouldn't need to do this as the server will generate an id for us. But our onCreate subscription will inform us of all newly created items (including
+//       // ones created by ourselves). We then need to add them to the cache. But if the newly created item was created by us, it would allready have been added to the cache
+//       // by the optimistic update. Avoiding duplicates is trivial if ids are generated client-side, but basically impossible if they are generated on the server.
+//       await queryClient.cancelQueries({ queryKey});
+//       const previousItems = queryClient.getQueryData([modelName]);
+//       queryClient.setQueryData(queryKey, (old: any[] = []) => [...old, newItem]);
+//       return { previousItems };
+//     },
+//     onError: (err, newItem, context) => {
+//       console.error(err, newItem, context)
+//       queryClient.setQueryData(queryKey, context?.previousItems);
+//     }
+//   });
 
-  // Update mutation
-  const updateMutation = useMutation({
-    mutationFn: model.update,
-    onMutate: async (updatedItem) => {
-      updatedItem.id ||= crypto.randomUUID(); // If the item does not have an id, we generate a random UUID for it.
-      await queryClient.cancelQueries({ queryKey});
-      const previousItems = queryClient.getQueryData([modelName]);
-      queryClient.setQueryData(queryKey, (old: any[] = []) =>
-        old.map((item) => (item.id === updatedItem.id ? {...item, ...updatedItem} : item))
-      );
-      return { previousItems };
-    },
-    onError: (err, updatedItem, context) => {
-      console.error(err, updatedItem, context)
-      queryClient.setQueryData(queryKey, context?.previousItems);
-    }
-  });
+//   // Update mutation
+//   const updateMutation = useMutation({
+//     mutationFn: model.update,
+//     onMutate: async (updatedItem) => {
+//       updatedItem.id ||= crypto.randomUUID(); // If the item does not have an id, we generate a random UUID for it.
+//       await queryClient.cancelQueries({ queryKey});
+//       const previousItems = queryClient.getQueryData([modelName]);
+//       queryClient.setQueryData(queryKey, (old: any[] = []) =>
+//         old.map((item) => (item.id === updatedItem.id ? {...item, ...updatedItem} : item))
+//       );
+//       return { previousItems };
+//     },
+//     onError: (err, updatedItem, context) => {
+//       console.error(err, updatedItem, context)
+//       queryClient.setQueryData(queryKey, context?.previousItems);
+//     }
+//   });
 
-  // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: model.delete,
-    onMutate: async (deletedItem) => {
-      await queryClient.cancelQueries({ queryKey});
-      const previousItems = queryClient.getQueryData(queryKey);
-      queryClient.setQueryData(queryKey, (old: any[] = []) =>
-        old.filter((item) => item.id !== deletedItem.id)
-      );
-      return { previousItems };
-    },
-    onError: (err, deletedItem, context) => {
-      console.error(err, deletedItem, context)
-      queryClient.setQueryData(queryKey, context?.previousItems);
-    }
-  });
+//   // Delete mutation
+//   const deleteMutation = useMutation({
+//     mutationFn: model.delete,
+//     onMutate: async (deletedItem) => {
+//       await queryClient.cancelQueries({ queryKey});
+//       const previousItems = queryClient.getQueryData(queryKey);
+//       queryClient.setQueryData(queryKey, (old: any[] = []) =>
+//         old.filter((item) => item.id !== deletedItem.id)
+//       );
+//       return { previousItems };
+//     },
+//     onError: (err, deletedItem, context) => {
+//       console.error(err, deletedItem, context)
+//       queryClient.setQueryData(queryKey, context?.previousItems);
+//     }
+//   });
 
-  return {
-    data: data || [],
-    meta : queryResult,
-    create: (item: Parameters<typeof createMutation.mutate>[0]) => {
-      item.id ||= crypto.randomUUID(); // If the item does not have an id, we generate a random UUID for it.
-      createMutation.mutate(item);
-      return item.id;
-    },
-    update: updateMutation.mutate,
-    delete: deleteMutation.mutate,
-  };
-}
+//   return {
+//     data: data || [],
+//     meta : queryResult,
+//     create: (item: Parameters<typeof createMutation.mutate>[0]) => {
+//       item.id ||= crypto.randomUUID(); // If the item does not have an id, we generate a random UUID for it.
+//       createMutation.mutate(item);
+//       return item.id;
+//     },
+//     update: updateMutation.mutate,
+//     delete: deleteMutation.mutate,
+//   };
+// }
 
 type ProjectMembership = Schema['UserProjectMembership']['type'];
 
@@ -197,8 +197,7 @@ export function useOptimisticMembership(
 
   //Subscription effect
   useEffect(() => {
-    console.log('creating subscriptions')
-    // Subscribe to creation of Todo
+    console.log(`creating subscriptions ${queryClient} ${JSON.stringify(subscriptionFilter)}`)
     const createSub = model.onCreate(subscriptionFilter).subscribe({
       next: (data) => {
         console.log(data)
@@ -229,7 +228,7 @@ export function useOptimisticMembership(
       },
       error: (error) => console.warn(error),
     });
-    return () => {
+    return () => {console.log('unsubscribing')
       createSub.unsubscribe();
       updateSub.unsubscribe();
       deleteSub.unsubscribe();
@@ -321,7 +320,7 @@ export function useOptimisticCategory(
 
   //Subscription effect
   useEffect(() => {
-    console.log('creating subscriptions')
+    console.log(`creating subscriptions ${queryClient} ${JSON.stringify(subscriptionFilter)}`)
     // Subscribe to creation of Todo
     const createSub = model.onCreate(subscriptionFilter).subscribe({
       next: (data) => {
@@ -353,7 +352,7 @@ export function useOptimisticCategory(
       },
       error: (error) => console.warn(error),
     });
-    return () => {
+    return () => {console.log('unsubscribing')
       createSub.unsubscribe();
       updateSub.unsubscribe();
       deleteSub.unsubscribe();
@@ -448,7 +447,7 @@ export function useOptimisticLocationSet(
 
   //Subscription effect
   useEffect(() => {
-    console.log('creating subscriptions')
+    console.log(`creating subscriptions ${queryClient} ${JSON.stringify(subscriptionFilter)}`)
     // Subscribe to creation of Todo
     const createSub = model.onCreate(subscriptionFilter).subscribe({
       next: (data) => {
@@ -480,7 +479,7 @@ export function useOptimisticLocationSet(
       },
       error: (error) => console.warn(error),
     });
-    return () => {
+    return () => {console.log('unsubscribing')
       createSub.unsubscribe();
       updateSub.unsubscribe();
       deleteSub.unsubscribe();
@@ -576,7 +575,7 @@ export function useOptimisticImageSet(
 
   //Subscription effect
   useEffect(() => {
-    console.log('creating subscriptions')
+    console.log(`creating subscriptions ${queryClient} ${JSON.stringify(subscriptionFilter)}`)
     // Subscribe to creation of Todo
     const createSub = model.onCreate(subscriptionFilter).subscribe({
       next: (data) => {
@@ -608,7 +607,7 @@ export function useOptimisticImageSet(
       },
       error: (error) => console.warn(error),
     });
-    return () => {
+    return () => {console.log('unsubscribing')
       createSub.unsubscribe();
       updateSub.unsubscribe();
       deleteSub.unsubscribe();
@@ -703,7 +702,7 @@ export function useOptimisticAnnotationSet(
 
   //Subscription effect
   useEffect(() => {
-    console.log('creating subscriptions')
+    console.log(`creating subscriptions ${queryClient} ${JSON.stringify(subscriptionFilter)}`)
     // Subscribe to creation of Todo
     const createSub = model.onCreate(subscriptionFilter).subscribe({
       next: (data) => {
@@ -735,7 +734,7 @@ export function useOptimisticAnnotationSet(
       },
       error: (error) => console.warn(error),
     });
-    return () => {
+    return () => {console.log('unsubscribing')
       createSub.unsubscribe();
       updateSub.unsubscribe();
       deleteSub.unsubscribe();
@@ -830,7 +829,7 @@ function useOptimisticQueue(
 
   //Subscription effect
   useEffect(() => {
-    console.log('creating subscriptions')
+    console.log(`creating subscriptions ${queryClient} ${JSON.stringify(subscriptionFilter)}`)
     // Subscribe to creation of Todo
     const createSub = model.onCreate(subscriptionFilter).subscribe({
       next: (data) => {
@@ -862,7 +861,7 @@ function useOptimisticQueue(
       },
       error: (error) => console.warn(error),
     });
-    return () => {
+    return () => {console.log('unsubscribing')
       createSub.unsubscribe();
       updateSub.unsubscribe();
       deleteSub.unsubscribe();
@@ -935,7 +934,7 @@ function useOptimisticQueue(
   };
 }
 
-export const useQueues = (projectId: string) => {
+export const useQueues = () => {
   const { client } = useContext(GlobalContext)!;
   const { sqsClient } = useContext(UserContext)!;
   const { project }   = useContext(ProjectContext)!;

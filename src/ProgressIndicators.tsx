@@ -4,10 +4,10 @@ import Box from "@mui/material/Box";
 import OverlayTrigger from "react-bootstrap/OverlayTrigger";
 import Tooltip from "react-bootstrap/Tooltip";
 import { useContext } from "react";
-import { GlobalContext } from "./Context";
+import { ProgressContext } from "./Context";
 
 interface CircularProgressWithLabelProps extends CircularProgressProps {
-  value: number;
+  value?: number;
   detail: JSX.Element;
 }
 
@@ -51,7 +51,8 @@ function CircularProgressWithLabel(props: CircularProgressWithLabelProps) {
 }
 
 export function ProgressIndicators() {
-  const {progress} = useContext(GlobalContext)!;
+  const { progress } = useContext(ProgressContext)!;
+  if (!progress) return null;
     return (
       <>
         {Object.keys(progress).map((key) => (

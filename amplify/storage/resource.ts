@@ -4,7 +4,7 @@ import { handleS3Upload } from "./handleS3Upload/resource"
 export const outputBucket = defineStorage({
   name: "outputs",
   access: allow => ({
-    'public/*': [
+    'slippymaps/*': [
       allow.resource(handleS3Upload).to(['write','list','get'])
     ]
   })
@@ -23,7 +23,7 @@ export const inputBucket = defineStorage({
   name: "inputs",
   isDefault: true,
   access: allow => ({
-    'public/images/*': [
+    'images/*': [
       allow.resource(handleS3Upload).to(['get'])
     ]
   }),

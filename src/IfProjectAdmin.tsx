@@ -8,17 +8,18 @@
  *
  **/
 
-import React, { ReactNode, useContext } from "react";
-import { UserContext, UserContextType } from "./Context";
+import React, { ReactNode } from "react";
+import { Schema } from "../amplify/data/resource";
+
 
 
 
 interface IfAdminProps {
+  currentPM?: Schema['UserProjectMembership']['type'];
   children: ReactNode;
 }
 
-const IfProjectAdmin: React.FC<IfAdminProps> = ({ children }) => {
-  const { currentPM } = useContext(UserContext) as UserContextType;
+const IfProjectAdmin: React.FC<IfAdminProps> = ({ currentPM, children }) => {
   if (
     currentPM?.isAdmin
   ) {

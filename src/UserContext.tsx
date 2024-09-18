@@ -1,5 +1,4 @@
-import {useState, useEffect, useCallback, useContext } from "react";
-import { useObserveQuery } from './useObserveQuery.tsx'
+import {useState, useEffect, useContext} from "react";
 import {
   SQSClient,
 } from "@aws-sdk/client-sqs";
@@ -9,7 +8,7 @@ import { AuthUser, fetchAuthSession } from "aws-amplify/auth";
 import { Schema } from '../amplify/data/resource'; // Path to your backend resource definition
 import {useUsers} from './apiInterface.tsx'
 import {
-  GlobalContext, ProjectContext, UserContext, ManagementContext
+  GlobalContext, ProjectContext, UserContext, ManagementContext, ProgressContext, ProgressType
 } from "./Context.tsx";
 import { generateClient } from "aws-amplify/api";
 import outputs from "../amplify_outputs.json";
@@ -25,22 +24,23 @@ import {
 
 
 
-export function Project({ children }: { children: React.ReactNode }) {
+export function Project({ children, currentPM }: { children: React.ReactNode, currentPM: Schema['UserProjectMembership']['type']   }) {
   const { client } = useContext(GlobalContext)!;
   const [currentProject, setCurrentProject] = useState<Schema['Project']['type'] | undefined>(undefined)
-  const { currentPM } = useContext(UserContext)!
   
   const categoriesHook = useOptimisticCategory(
-    async () => client.models.Category.list({ filter: { projectId: { eq: currentProject?.id } } }),
+    async () => client.models.Category.list({ filter: { projectId: { eq: currentPM?.projectId } } }),
     { filter: { projectId: { eq: currentProject?.id } } })
 
   useEffect(() => {
     if (currentPM) {
-      client.models.Project.get({ id: currentPM.projectId }).then(p => setCurrentProject(p.data || undefined));
+      client.models.Project.get({ id: currentPM.projectId }).then(p =>
+        setCurrentProject(p['data']!));
     } else {
       setCurrentProject(undefined);
     }
-  },[currentPM])
+  }, [currentPM])
+  
   return (
     currentProject && 
     <ProjectContext.Provider value={{
@@ -56,8 +56,6 @@ export function Project({ children }: { children: React.ReactNode }) {
 export function User({ user, children }: { user: AuthUser, children: React.ReactNode }) {
   const [jobsCompleted, setJobsCompleted] = useState<number>(0);
   const { client,region } = useContext(GlobalContext)!;
-  const [currentPM, setCurrentPM] = useState<Schema['UserProjectMembership']['type'] | undefined>(undefined);
-  const [currentProject,setCurrentProject] = useState<Schema['Project']['type'] | undefined>(undefined) 
   const [sqsClient, setSqsClient] = useState<SQSClient | undefined>(undefined);
   const [s3Client, setS3Client] = useState<S3Client | undefined>(undefined);
   const [lambdaClient, setLambdaClient] = useState<LambdaClient | undefined>(undefined);
@@ -69,7 +67,6 @@ export function User({ user, children }: { user: AuthUser, children: React.React
   const myMembershipHook = useOptimisticMembership(
     async () => client.models.UserProjectMembership.list({ filter: { userId: { eq: user!.username } } }),
     { filter: { userId: { eq: user!.username } } })
-  const { data: myMemberships } = myMembershipHook;
 
   // useEffect(() => {
   //   const sub = client.models.UserProjectMembership.observeQuery({ filter: { userId: { eq: user!.username } } }).subscribe({
@@ -79,16 +76,6 @@ export function User({ user, children }: { user: AuthUser, children: React.React
   //   });
   //   return () => sub.unsubscribe();
   // }, [user.username]);
-
-  const switchProject = useCallback((projectId: String) => {
-    const pm = myMemberships?.find((pm) => pm.projectId == projectId);
-    if (pm) {
-      setCurrentPM(pm);
-    }
-    else {
-      console.error('User tried to switch to a project they are not a member of')
-    }
-  }, [myMemberships, user.username])
   //const [credentials, setCredentials] = useState<any>(undefined);
   // useEffect(() => {
   //   const { region } = useContext(GlobalContext)!; 
@@ -103,15 +90,6 @@ export function User({ user, children }: { user: AuthUser, children: React.React
   //   }
   //   setup()
   // },[user])
-
-  useEffect(() => {
-    if (currentPM) {
-      client.models.Project.get({ id: currentPM.projectId }).then(p => setCurrentProject(p.data || undefined));
-    } else {
-      setCurrentProject(undefined);
-    }
-    currentProject;
-  },[currentPM])
 
   useEffect(() => {
     async function refreshCredentials() {
@@ -137,8 +115,6 @@ export function User({ user, children }: { user: AuthUser, children: React.React
         s3Client,
         lambdaClient,
         myMembershipHook,
-        currentPM,
-        switchProject
       }}
       >
             {children}
@@ -164,9 +140,7 @@ export function Management({ children }: { children: React.ReactNode }) {
   const annotationSetsHook = useOptimisticAnnotationSet(
     async () => client.models.AnnotationSet.list({ filter: { projectId: { eq: project.id } } }),
     { filter: { projectId: { eq: project.id } } })
-  const queuesHook = useQueues(
-    async () => client.models.Queue.list({ filter: { projectId: { eq: project.id } } }),
-    { filter: { projectId: { eq: project.id } } })
+  const queuesHook = useQueues()
   
   return ( 
     <ManagementContext.Provider value={{
@@ -176,16 +150,14 @@ export function Management({ children }: { children: React.ReactNode }) {
       locationSetsHook,
       annotationSetsHook,
       queuesHook
-
     }} >
-      {allUsers && projectMembershipHook && children}
+      {allUsers && projectMembershipHook && imageSetsHook && locationSetsHook && annotationSetsHook && queuesHook && children}
     </ManagementContext.Provider>)
 
 }
 
 export function Global({ children }: { children: React.ReactNode }) {
   const [modalToShow, showModal] = useState<string | null>(null)
-  const [progress, setProgress] = useState<ProgressContextType>({})
   
 
   return (
@@ -194,11 +166,21 @@ export function Global({ children }: { children: React.ReactNode }) {
       region: outputs.auth.aws_region,
       client: generateClient<Schema>({authMode:"userPool"}),
       showModal,
-      progress,
-      setProgress,
       modalToShow
     }}>
       {children}
     </GlobalContext.Provider>
+  );
+}
+
+export function Progress({ children }: { children: React.ReactNode }) {
+  const [progress, setProgress] = useState<ProgressType>({})
+  return (
+    <ProgressContext.Provider value={{
+      progress,
+      setProgress,
+    }}>
+      {children}
+    </ProgressContext.Provider>
   );
 }

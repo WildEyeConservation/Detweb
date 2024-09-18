@@ -1,7 +1,7 @@
-import React, { useContext, useState, useEffect, Dispatch, SetStateAction } from "react";
+import { useContext, useState, useEffect, Dispatch, SetStateAction } from "react";
 import { DateTime } from "luxon";
 import humanizeDuration from "humanize-duration";
-import { GlobalContext } from "./Context";
+import { ProgressContext } from "./Context";
 
 interface UseUpdateProgressParams {
   taskId: string;
@@ -9,21 +9,6 @@ interface UseUpdateProgressParams {
   determinateTaskName: string;
   stepFormatter: (steps: number) => string;
 }
-
-interface Progress {
-  [key: string]: {
-    value?: number;
-    detail: JSX.Element;
-  };
-}
-
-// Define the ProgressContext type
-type ProgressContextType = [
-  Progress,
-  Dispatch<SetStateAction<Progress>>
-];
-
-export const ProgressContext = React.createContext<ProgressContextType>([{}, () => {}]);
 
 export function useUpdateProgress({
   taskId,
@@ -35,11 +20,10 @@ export function useUpdateProgress({
   Dispatch<SetStateAction<number>>
 ] {
   // Use context with type checking
-  const { setProgress } = useContext(GlobalContext)!;
+  const { setProgress } = useContext(ProgressContext)!;
   const [stepsCompleted, setStepsCompleted] = useState(0);
   const [totalSteps, setTotalSteps] = useState(0);
   const [startTime, setStartTime] = useState<number | null>(null);
-
   // Whenever the user adjusts totalSteps to a nonzero number, that means we are about to embark on a task with determinate progress.
   // We need to capture a timestamp when this process starts to enable calculation of ETA etc.
   useEffect(() => {
@@ -50,6 +34,8 @@ export function useUpdateProgress({
   // Whenever the user adjusts stepsCompleted or totalSteps, we may need to adjust the output that goes to ProgressContext.
   // This effect handles that update
   useEffect(() => {
+    console.log("totalSteps", totalSteps);
+    console.log("stepsCompleted", stepsCompleted);
     if (totalSteps || stepsCompleted) {
       setProgress((progress) => {
         const newProgress = { ...progress };
@@ -109,7 +95,7 @@ export function useUpdateProgress({
         return newProgress;
       });
     }
-  }, [stepsCompleted, totalSteps, setProgress, taskId, determinateTaskName, indeterminateTaskName, stepFormatter, startTime]);
+  }, [stepsCompleted, totalSteps, setProgress, taskId, determinateTaskName, indeterminateTaskName, startTime]);
 
   return [setStepsCompleted, setTotalSteps];
 }

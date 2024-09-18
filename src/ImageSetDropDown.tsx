@@ -37,12 +37,13 @@ export function ImageSetDropdown({ selectedSets, setImageSets }: ImageSetDropdow
   const options: Options<OptionType> | undefined = imageSets
     ?.map((x) => ({
       label: x.name,
-      value: x.name,
+      value: x.id,
     }))
     .sort((a, b) => (a.label > b.label ? 1 : -1));
+  const selectedOptions=options?.filter(o=>selectedSets?.includes(o.value))
 
   function handleChange(selectedOptions: MultiValue<OptionType>) {
-    setImageSets(selectedOptions.map((option) => option.label));
+    setImageSets(selectedOptions.map(o => o.value));
   }
   
 
@@ -52,7 +53,7 @@ export function ImageSetDropdown({ selectedSets, setImageSets }: ImageSetDropdow
   return (
     <Form.Group>
       <Select
-        value={selectedSets?.map((set) => ({ label: set, value: set }))}
+        value={selectedOptions}
         onChange={handleChange}
         isMulti
         name="Image sets"
