@@ -11,6 +11,7 @@ import SpatiotemporalSubset from "./SpatioTemporalSubset";
 import SubsampleModal from "./Subsample";
 import AddGpsData from "./AddGpsData";
 import CreateTask from "./CreateTask";
+import ProcessImages from './ProcessImages.tsx';
 
 export default function ImageSetManagement() {
   const { client, modalToShow, showModal } = useContext(GlobalContext)!
@@ -107,6 +108,13 @@ export default function ImageSetManagement() {
         selectedImageSets={selectedSets}
         setSelectedImageSets={setSelectedSets}
       />
+      <ProcessImages
+        show={modalToShow == "processImages"}
+        handleClose={() => showModal(null)}
+        selectedImageSets={selectedSets}
+        setSelectedImageSets={setSelectedSets}
+      />
+
       <Row className="justify-content-center mt-3">
       <div>
         <h2>Image Sets Management</h2>

@@ -1,0 +1,76 @@
+{
+    "typeName": "Mutation",
+    "fieldName": "processImages",
+    "arguments": {
+        "s3key": "images/Add2024Sample/DSC00001.jpg",
+        "model": "heatmap",
+        "threshold": null
+    },
+    "identity": {
+        "claims": {
+            "origin_jti": "849a8880-d99e-455f-9ef5-4975f0046411",
+            "sub": "12256474-6051-70ba-3cca-8ecb8dc2f08f",
+            "event_id": "1bdb471e-add0-4871-bc28-1df4837f1ac7",
+            "token_use": "access",
+            "scope": "aws.cognito.signin.user.admin",
+            "auth_time": 1726724639,
+            "iss": "https://cognito-idp.eu-west-1.amazonaws.com/eu-west-1_JcpS4t4Lg",
+            "exp": 1726728239,
+            "iat": 1726724639,
+            "client_id": "91074g7fr5maqhuhbtnrlnmgs",
+            "jti": "a8af97ec-5d2f-49f1-8262-6e90d5a7788e",
+            "username": "12256474-6051-70ba-3cca-8ecb8dc2f08f"
+        },
+        "defaultAuthStrategy": "DENY",
+        "groups": null,
+        "issuer": "https://cognito-idp.eu-west-1.amazonaws.com/eu-west-1_JcpS4t4Lg",
+        "sourceIp": [
+            "105.214.21.216"
+        ],
+        "sub": "12256474-6051-70ba-3cca-8ecb8dc2f08f",
+        "username": "12256474-6051-70ba-3cca-8ecb8dc2f08f"
+    },
+    "source": null,
+    "request": {
+        "headers": {
+            "x-forwarded-for": "105.214.21.216, 18.68.28.7",
+            "sec-ch-ua-mobile": "?0",
+            "cloudfront-viewer-country": "ZA",
+            "cloudfront-is-tablet-viewer": "false",
+            "x-amzn-requestid": "9c495c06-3819-4696-be68-32155c7906be",
+            "via": "2.0 7fe0e96d7fd4c51e102046d03edfa81a.cloudfront.net (CloudFront)",
+            "cloudfront-forwarded-proto": "https",
+            "origin": "http://localhost:5173",
+            "content-length": "226",
+            "x-forwarded-proto": "https",
+            "accept-language": "en-GB,en;q=0.9,en-US;q=0.8",
+            "host": "futn7hzcqjeynlhhszz6ys7zri.appsync-api.eu-west-1.amazonaws.com",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0",
+            "cloudfront-is-mobile-viewer": "false",
+            "accept": "*/*",
+            "priority": "u=1, i",
+            "cloudfront-viewer-asn": "16637",
+            "cloudfront-is-smarttv-viewer": "false",
+            "x-amzn-appsync-is-vpce-request": "false",
+            "accept-encoding": "gzip, deflate, br, zstd",
+            "referer": "http://localhost:5173/",
+            "x-amzn-remote-ip": "105.214.21.216",
+            "content-type": "application/json; charset=UTF-8",
+            "sec-fetch-mode": "cors",
+            "x-amzn-trace-id": "Root=1-66ebc765-54bd9759360a4564418247ed",
+            "x-amz-cf-id": "Ox7SOaKU7pqZpHToqJANFq_lkbll6ejKstIK5rQOGcVkaNz_9YL0wA==",
+            "authorization": "eyJraWQiOiI2NjBDNU5pMDRnY251bk9pZktWMEVIaHNWZWQwUlg2XC9oa0NlWmhcL3RKVzQ9IiwiYWxnIjoiUlMyNTYifQ.eyJzdWIiOiIxMjI1NjQ3NC02MDUxLTcwYmEtM2NjYS04ZWNiOGRjMmYwOGYiLCJpc3MiOiJodHRwczpcL1wvY29nbml0by1pZHAuZXUtd2VzdC0xLmFtYXpvbmF3cy5jb21cL2V1LXdlc3QtMV9KY3BTNHQ0TGciLCJjbGllbnRfaWQiOiI5MTA3NGc3ZnI1bWFxaHVoYnRucmxubWdzIiwib3JpZ2luX2p0aSI6Ijg0OWE4ODgwLWQ5OWUtNDU1Zi05ZWY1LTQ5NzVmMDA0NjQxMSIsImV2ZW50X2lkIjoiMWJkYjQ3MWUtYWRkMC00ODcxLWJjMjgtMWRmNDgzN2YxYWM3IiwidG9rZW5fdXNlIjoiYWNjZXNzIiwic2NvcGUiOiJhd3MuY29nbml0by5zaWduaW4udXNlci5hZG1pbiIsImF1dGhfdGltZSI6MTcyNjcyNDYzOSwiZXhwIjoxNzI2NzI4MjM5LCJpYXQiOjE3MjY3MjQ2MzksImp0aSI6ImE4YWY5N2VjLTVkMmYtNDlmMS04MjYyLTZlOTBkNWE3Nzg4ZSIsInVzZXJuYW1lIjoiMTIyNTY0NzQtNjA1MS03MGJhLTNjY2EtOGVjYjhkYzJmMDhmIn0.dzfy1mzTQyZ3icEyzgL2BJWh6Ricsk9c6NsrtQyX6RSPeEcbQeBjXmJLGLMq5zAm3uYr8tgos_2edR9v8YoAFgiUzceVk7HZSpaKhVXeClDmphqsLdzjEHaJv2phRj4NT1DHh6zPwj8NqYI1fI0Tpp0AuQcdxOfg0ABAQoUCT_ZRUor2FtTRTUpFsGyVHDakAHKCVHO683MTaMI5R0QCrdzhftJb9NQBxGBnKVDOrG7edYTjYfm91THTF29HG9K8RI0-RRdJjk_sLFKXqt66FaiABVlG5_ZDnTW0qYTazDZdqBEQcBrBXFQDeTSx64D1_7Z8SrTJdLUKu0IlINMB9Q",
+            "sec-fetch-dest": "empty",
+            "x-amz-user-agent": "aws-amplify/6.5.3 api/1 framework/1",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "cloudfront-is-desktop-viewer": "true",
+            "sec-fetch-site": "cross-site",
+            "sec-ch-ua": "\"Chromium\";v=\"128\", \"Not;A=Brand\";v=\"24\", \"Microsoft Edge\";v=\"128\"",
+            "x-forwarded-port": "443"
+        },
+        "domainName": null
+    },
+    "prev": {
+        "result": {}
+    }
+}

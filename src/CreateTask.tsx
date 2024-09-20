@@ -41,6 +41,8 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
     stepFormatter: (x:number) => `${x} locations`
   });
 
+  const [threshold, setThreshold] = useState(5); // New state variable for threshold
+
   async function handleSubmit() {
     // const client=new SNSClient({
     //   region: awsExports.aws_project_region,
@@ -147,19 +149,28 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
       {imageSets?.map( q => <option key={q.name} value={q.name}>{q.name}</option>)} 
       </Form.Select>   */}
           {modelGuided ? (
+            <>
             <Form.Group>
               <Form.Label>Threshold</Form.Label>
-              <Form.Group>
-                <Form.Label>Threshold</Form.Label>
-                <Form.Range />
+              <Form.Range 
+                min={1}
+                max={10}
+                step={1}
+                value={threshold}
+                onChange={(e) => setThreshold(parseFloat(e.target.value))}
+              />
+              <Form.Text>
+                Threshold value: {(1 - Math.pow(10, -threshold)).toFixed(8)}
+              </Form.Text>
               </Form.Group>
-
-              {/* <Form.Label>Model</Form.Label>
-      <Form.Select aria-label="Select AI model to use to guide annotation">
-      <option>Select AI model to use to guide annotation</option>
-      <option value="1">Elephant detection (nadir)</option>
-      </Form.Select> */}
-            </Form.Group>
+              <Form.Group>
+              <Form.Label>Model</Form.Label>
+              <Form.Select aria-label="Select AI model to use to guide annotation">
+                <option>Select AI model to use to guide annotation</option>
+                <option value="1">Elephant detection (nadir)</option>
+              </Form.Select>
+              </Form.Group>
+              </>
           ) : (
             <>
               <Form.Group>

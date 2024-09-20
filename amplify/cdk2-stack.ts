@@ -112,9 +112,6 @@ const cluster = new rds.DatabaseCluster(scope, 'AuroraClusterV2', {
   //   description: 'Aurora Cluster Secret ARN',
   // });
 
-    // Some ECS tasks need to be done on machines with GPUs and some don't require GPUs. Thus we have to separate task queues for ECS
-    const gpuQueue = new sqs.Queue(scope, "gpuQueue", { fifo: true });
-    const cpuQueue = new sqs.Queue(scope, "cpuQueue", { fifo: true });
 
     sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22));
     sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(3306));
@@ -174,6 +171,7 @@ const cluster = new rds.DatabaseCluster(scope, 'AuroraClusterV2', {
     lightGlueAutoProcessor.queue.grantConsumeMessages(ecsTaskRole);
     lightGlueAutoProcessor.queue.grantSendMessages(authenticatedRole);
   
+  
   ;
   //const devRole = iam.Role.fromRoleArn(scope, "DevRole", devUserArn);
 
@@ -230,21 +228,19 @@ const cluster = new rds.DatabaseCluster(scope, 'AuroraClusterV2', {
     authenticatedRole.addToPrincipalPolicy(
       lambdaInvoke,
     );
-    return {gpuTaskQueueUrl : gpuQueue.queueUrl,
-    cpuTaskQueueUrl : cpuQueue.queueUrl,
+  const processor = new EC2QueueProcessor(scope, 'MyProcessor', {
+    vpc: vpc, // Your VPC
+    instanceType: ec2.InstanceType.of(ec2.InstanceClass.G4DN, ec2.InstanceSize.XLARGE), // Or any instance type you prefer
+    amiId: 'ami-01692ebb92628b00c', // Your AMI ID
+    keyName: 'detwebTest', // Optional: Your EC2 key pair name
+  });
+
+  
+  return {
+    processTaskQueueUrl: processor.queue.queueUrl,
     auroraClusterEndpoint: cluster.clusterEndpoint.socketAddress,
     auroraClusterReadEndpoint: cluster.clusterReadEndpoint.socketAddress,
     auroraClusterSecretArn: cluster.secret?.secretArn || 'Secret not available',  
   };
 
-  const processor = new EC2QueueProcessor(scope, 'MyProcessor', {
-    vpc: vpc, // Your VPC
-    instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO), // Or any instance type you prefer
-    amiId: 'ami-xxxxxxxxxxxxxxxxx', // Your AMI ID
-    keyName: 'your-key-pair-name', // Optional: Your EC2 key pair name
-  });
-
-  // You can now access the queue and ASG if needed
-  const queueUrl = processor.queue.queueUrl;
-  const asgArn = processor.autoScalingGroup.autoScalingGroupArn;
-  }
+}

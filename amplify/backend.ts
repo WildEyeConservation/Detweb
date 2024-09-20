@@ -9,6 +9,8 @@ import { outputBucket, inputBucket } from "./storage/resource";
 import { handleS3Upload } from "./storage/handleS3Upload/resource";
 import * as sts from '@aws-sdk/client-sts';
 import { processImages } from "./functions/processImages/resource";
+import { postDeploy } from "./functions/postDeploy/resource";
+import * as iam from "aws-cdk-lib/aws-iam"
 
 const backend=defineBackend({
   auth,
@@ -17,10 +19,13 @@ const backend=defineBackend({
   outputBucket,
   inputBucket,
   handleS3Upload,
-  processImages
+  processImages,
+  postDeploy
 });
 
-backend.processImages.addEnvironment('API_KEY', backend.data.apiKey!)
+// backend.postDeploy.addEnvironment('LAMBDA_NAME', backend.processImages.resources.lambda.functionArn)
+// backend.postDeploy.addEnvironment('API_KEY', backend.data.apiKey!)
+// backend.postDeploy.addEnvironment('AMPLIFY_DATA_GRAPHQL_ENDPOINT', backend.data.graphqlUrl!)
 
 async function getUser() {
   const stsClient = new sts.STSClient({ region: 'eu-west-1' });
@@ -41,7 +46,14 @@ getUser().then((user) => {
 
   const customStack = backend.createStack('DetwebCustom')
   const custom = createDetwebResources(customStack, backend, user.Arn!)
-  backend.addOutput({ custom })
+  backend.processImages.addEnvironment('PROCESS_QUEUE_URL', custom.processTaskQueueUrl)
+  const statement = new iam.PolicyStatement({
+    sid: "AllowPublishToDigest",
+    actions: ["sqs:SendMessage"],
+    resources: ["*"],
+  })
+    backend.processImages.resources.lambda.addToRolePolicy(statement)
+    backend.addOutput({ custom })
 })
 
 //const table=backend.data.resources.cfnResources.amplifyDynamoDbTables['Annotation']

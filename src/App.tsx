@@ -122,9 +122,9 @@ function App({ signOut = () => {}, user }: AppProps) {
             </Nav.Link>
             <IfProjectAdmin currentPM={currentPM}>
               <NavDropdown title="Actions" id="collapsible-nav-dropdown">
-                <NavDropdown.Item  onClick={()=>showModal("processImages")}>
+                {/* <NavDropdown.Item  onClick={()=>showModal("processImages")}>
                   Process Imagery
-                </NavDropdown.Item>
+                </NavDropdown.Item> */}
                 {/* <NavDropdown.Item onClick={()=>showModal("createTask")}>
                   Create annotation task
                 </NavDropdown.Item> */}

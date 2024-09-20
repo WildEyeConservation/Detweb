@@ -6,7 +6,6 @@ import DefineCategories from './DefineCategories.tsx';
 import { GlobalContext } from './Context.tsx';
 import { Management } from './UserContext.tsx';
 import LaunchTask from './LaunchTask.tsx';
-import ProcessImages from './ProcessImages.tsx';
 import DeleteImageSet from './DeleteImageSet.tsx';
 import FilesUploadComponent from './FilesUploadComponent.tsx';
 import ExportData from './ExportData.tsx';
@@ -22,16 +21,12 @@ const ProjectManagement = () => {
         <ImageSetManagement />
         <DefineCategories />
         <QueueManagement />
-          <UserManagement />
+        <UserManagement />
         <LaunchTask
           show={modalToShow == "launchTask"}
           handleClose={() => showModal(null)}
         />
         {/* <Rescan show={modalToShow=="rescan"} handleClose={()=>setModalToShow(null)}/> */}
-        <ProcessImages
-          show={modalToShow == "processImages"}
-          handleClose={() => showModal(null)}
-        />
         <DeleteImageSet
           show={modalToShow == "deleteImageSet"}
           handleClose={() => showModal(null)}

@@ -1,5 +1,4 @@
 import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
-import { handleUpload } from '../functions/handleUpload/resource'
 import { addUserToGroup } from '../functions/add-user-to-group/resource'
 import { createGroup } from '../data/create-group/resource'
 import { listUsers } from '../data/list-users/resource'
@@ -159,10 +158,8 @@ const schema = a.schema({
     .handler(a.handler.custom({entry: './receive.js'})) 
     // authorization rules as to who can subscribe to the data
     .authorization(allow => [allow.authenticated()]),
-  processImages: a
-    .mutation()
-    .arguments({
-      s3keys: a.string().array().required(),
+  processImages: a.mutation().arguments({
+      s3key: a.string().required(),
       model: a.string().required(),
       threshold: a.float(),
     }).handler(a.handler.function(processImages)).returns(a.string())
