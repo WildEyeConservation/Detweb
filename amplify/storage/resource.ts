@@ -6,10 +6,12 @@ export const outputBucket = defineStorage({
   name: "outputs",
   access: allow => ({
     'slippymaps/*': [
-      allow.resource(handleS3Upload).to(['write','list','get'])
+      allow.resource(handleS3Upload).to(['write', 'list', 'get']),
+      allow.authenticated.to(['read'])
     ],
     'heatmaps/*': [
-      allow.resource(processImages).to(['write','list','delete'])
+      allow.resource(processImages).to(['write', 'list', 'delete']),
+      allow.authenticated.to(['read'])
     ]
   })
 })
@@ -29,7 +31,8 @@ export const inputBucket = defineStorage({
   access: allow => ({
     'images/*': [
       allow.resource(handleS3Upload).to(['get']),
-      allow.resource(processImages).to(['read'])
+      allow.resource(processImages).to(['read']),
+      allow.authenticated.to(['read','write'])
     ]
   }),
   triggers: {

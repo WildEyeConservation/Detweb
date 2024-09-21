@@ -56,13 +56,13 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
     setTotalImages(0);
     let images: any[] = [];
 
-    const allImages = await selectedImageSets.reduce(async (acc, selectedSet) => {
+    const allImages = selectedImageSets.reduce(async (acc, selectedSet) => {
       const images = (await client.models.ImageSet.get(
         { id: selectedSet },
         { selectionSet: ["images.image.timestamp", "images.image.id"] }
       )).data?.images || [];
       return [...await acc, ...images];
-    }, Promise.resolve([] as { image: { id: string; timestamp: string | null } }[]));
+    }, Promise.resolve([] as { image: { id: string; timestamp: string | null; }; }[]));
     setImagesCompleted(0);
     const locationSetId = createLocationSet({ name, projectId: project.id })
   if (modelGuided) {

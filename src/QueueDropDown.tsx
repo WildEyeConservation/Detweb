@@ -15,9 +15,9 @@ export function QueueDropdown({ setQueue, currentQueue }: QueueDropdownProps) {
   const onNewQueue = async () => {
     const name = prompt("Please enter new queue name", "") || "";
     if (name) {
-      const queue = await createQueue(name);
-      if (queue) {
-        setQueue(queue.url);
+      const id = await createQueue(name);
+      if (id) {
+        setQueue(id);
       }
     }
   };
@@ -34,7 +34,7 @@ export function QueueDropdown({ setQueue, currentQueue }: QueueDropdownProps) {
     <Form.Select value={currentQueue || "none"} onChange={onSelect}>
       {currentQueue ? null : <option value="none">Select a queue</option>}
       {queues?.map((q) => (
-        <option key={q.url} value={q.url}>
+        <option key={q.id} value={q.id}>
           {q.name}
         </option>
       ))}

@@ -18,13 +18,13 @@ export default function ImageSetManagement() {
   const { imageSetsHook: { data: imageSets, delete: deleteImageSet } } = useContext(ManagementContext)!;
   const [selectedSets, setSelectedSets] = useState<string[]>([]);
   const [counts, setCounts] = useState<{ [key: string]: number }>({}); 
-  useEffect(() => {
-    const fetchCounts = async () => {
-      setCounts(Object.fromEntries(await Promise.all(imageSets?.map(async (imageSet) => 
-        [imageSet.id, ((await client.queries.numberOfImagesInSet({ imageSetId: imageSet.id })).data?.[0]?.count || 0)]))));
-    };
-    fetchCounts();
-  }, [imageSets]);
+  // useEffect(() => {
+  //   const fetchCounts = async () => {
+  //     setCounts(Object.fromEntries(await Promise.all(imageSets?.map(async (imageSet) => 
+  //       [imageSet.id, ((await client.queries.numberOfImagesInSet({ imageSetId: imageSet.id })).data?.[0]?.count || 0)]))));
+  //   };
+  //   fetchCounts();
+  // }, [imageSets]);
 
   const tableData = imageSets?.sort((a,b)=> a.name.localeCompare(b.name)).map((imageSet) => {
     const { id, name } = imageSet;
