@@ -13,7 +13,8 @@ specifies that any user authenticated via an API key can "create", "read",
 =========================================================================*/
 const schema = a.schema({
   UserType: a.customType({
-    name:a.string().required(),
+    name: a.string().required(),
+    id : a.id().required(),
     isAdmin:a.boolean()}),
   Project: a.model({
     name: a.string().required(),
@@ -79,7 +80,6 @@ const schema = a.schema({
     key: a.string().required(),
     image: a.belongsTo('Image', 'imageId'),
     type: a.string().required(),
-    sets: a.hasMany('ImageSetMembership', 'imageId'),
     // Add this line to define the reverse relationship
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
   }).authorization(allow => [allow.authenticated()])
@@ -130,7 +130,7 @@ const schema = a.schema({
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
     imageId: a.id(),
-    meta: a.belongsTo('ImageMeta', 'imageId'),
+    image: a.belongsTo('Image', 'imageId'),
     setId: a.id().required(),
     set: a.belongsTo('LocationSet', 'setId'),
     height: a.integer(),
@@ -259,21 +259,30 @@ const schema = a.schema({
     // subscribes to the 'publish' mutation
     .for(a.ref('publish')) 
     // subscription handler to set custom filters
-    .handler(a.handler.custom({entry: './receive.js'})) 
+    .handler(a.handler.custom({
+      entry: './receive.js'
+    })) 
     // authorization rules as to who can subscribe to the data
     .authorization(allow => [allow.authenticated()]),
   processImages: a.mutation().arguments({
       s3key: a.string().required(),
       model: a.string().required(),
       threshold: a.float(),
-  }).handler(a.handler.function(processImages)).returns(a.string()),
+  }).handler(a.handler.function(processImages)).returns(a.string())
+  .authorization(allow => [allow.authenticated()]),
+  CountType: a.customType({
+    count: a.integer().required(),
+  }),
   getImageCounts: a.query()
     .arguments({
       imageSetId: a.string().required()
     })
     .returns(a.integer())
     .authorization(allow => [allow.authenticated()])
-    .handler(a.handler.custom({entry: './getImageCounts.js'})),
+    .handler(a.handler.custom({
+      entry: './getImageCounts.js',
+      dataSource: a.ref('ImageSetMembership'),
+    })),
   //.authorization(allow => [allow.authenticated()])
   
   // registerImages: a

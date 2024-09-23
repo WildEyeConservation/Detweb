@@ -23,6 +23,8 @@ const backend=defineBackend({
   postDeploy
 });
 
+backend.data.apiKey
+
 // backend.postDeploy.addEnvironment('LAMBDA_NAME', backend.processImages.resources.lambda.functionArn)
 // backend.postDeploy.addEnvironment('API_KEY', backend.data.apiKey!)
 // backend.postDeploy.addEnvironment('AMPLIFY_DATA_GRAPHQL_ENDPOINT', backend.data.graphqlUrl!)
@@ -45,7 +47,7 @@ getUser().then((user) => {
   lambdaFunction.addLayers(layerVersion);
 
   const customStack = backend.createStack('DetwebCustom')
-  const custom = createDetwebResources(customStack, backend, user.Arn!)
+  const custom = createDetwebResources(customStack, backend)
   backend.processImages.addEnvironment('PROCESS_QUEUE_URL', custom.processTaskQueueUrl)
   const statement = new iam.PolicyStatement({
     sid: "AllowPublishToDigest",

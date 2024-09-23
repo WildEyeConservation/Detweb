@@ -134,7 +134,7 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
       return ({ key:file.webkitRelativePath,
                 width:tags['Image Width']?.value,
                 height:tags['Image Height']?.value,
-                timestamp: DateTime.fromFormat(tags.DateTimeOriginal?.value as string, 'yyyy:MM:dd HH:mm:ss').toISO(),
+                timestamp: DateTime.fromFormat(tags.DateTimeOriginal?.description as string, 'yyyy:MM:dd HH:mm:ss').toSeconds(),
                 cameraSerial:tags['Internal Serial Number']?.value,
         exifData: JSON.stringify({ ...tags, 'ImageHeight':undefined, 'ImageWidth':undefined})
       })
@@ -157,10 +157,10 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
 
     setStepsCompleted(0);
     const imageSetId = imageSets.find(x => x.name === name)?.id || createImageSet({name, projectId:project.id});
-    const promises = filteredImageFiles.map(
+    filteredImageFiles.map(
       (file) => limitConnections(async () => {
         let lastTransferred = 0;
-        const tasks = [uploadData({
+        const tasks = [upload ? uploadData({
           path: "images/" + file.webkitRelativePath,
           data: file,
           options: {
@@ -173,7 +173,7 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
               lastTransferred = transferredBytes;
             }
           }
-        }), getExifmeta(file)] as const
+        }) : Promise.resolve(), getExifmeta(file)] as const
         const results = await Promise.all(tasks)
         const exifmeta=results[1]
         // Get the exif metadata from the second task
@@ -181,7 +181,7 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
           projectId: project.id,
           width: exifmeta.width || 0,
           height: exifmeta.height || 0,
-          timestamp: exifmeta.timestamp,
+          timestamp: exifmeta.timestamp!,
           cameraSerial: exifmeta.cameraSerial,
           exifData: exifmeta.exifData,
         }).then(({ data: image }) => {
@@ -195,7 +195,7 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
           client.models.ImageFile.create({
             projectId: project.id,
             imageId: image.id,
-            s3key: file.webkitRelativePath,
+            key: file.webkitRelativePath,
             path: file.webkitRelativePath,
             type: file.type
           })

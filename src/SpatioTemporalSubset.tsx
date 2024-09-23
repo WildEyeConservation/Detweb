@@ -19,6 +19,8 @@ import 'leaflet-draw/dist/leaflet.draw.css';
 import { DateTime } from 'luxon';
 import * as turf from '@turf/turf';
 import L from 'leaflet';
+import { getUrl } from 'aws-amplify/storage';
+import Spinner from 'react-bootstrap/Spinner';
 
 interface CreateSubsetModalProps {
     show: boolean;
@@ -70,21 +72,46 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
     const featureGroupRef = useRef<L.FeatureGroup>(null);
     const [subsets, setSubsets] = useState<Subset[]>([]);
     const [currentPolygon, setCurrentPolygon] = useState<L.LatLngExpression[] | null>(null);
+    const [imageFilenames, setImageFilenames] = useState<string[]>([]);
+    const [imageURL, setImageURL] = useState<string|undefined>(undefined);
+    const [loading, setLoading] = useState(true);
+
+    const fetchFilenames = async (imageId: string) => {
+        const { data: images } = await client.models.ImageFile.imagesByimageId({imageId})
+        setImageFilenames(images.map(image => image.key));
+        const path=images.find(image=>image.type=='image/jpeg')?.path
+        if (path) {
+            const { url } = await getUrl({ path: 'slippymaps/Add2024Sample/DSC00008.jpg/0/0/0.png', options: { bucket: 'outputs' } })
+            setImageURL(url.toString())
+        }
+    };
 
     useEffect(() => {
         const fetchImagesData = async () => {
-            if (selectedImageSets.length === 0) return;
+            if (selectedImageSets.length === 0) {
+                setLoading(false);
+                return;
+            }
 
             const fetchedImageSets = await Promise.all(selectedImageSets.map(async (selectedSetId) => {
-                const result = await client.models.ImageSet.get(
-                    { id: selectedSetId },
-                    { selectionSet: ["id", "name", "images.image.id", "images.image.timestamp", "images.image.latitude", "images.image.longitude"] }
+                let prevNextToken: string | null | undefined = undefined;
+                let allImages: any[] = [];
+                do {
+                    const { data: images, nextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
+                        imageSetId: selectedImageSets[0],
+                        selectionSet: ['image.timestamp', 'image.id','image.latitude','image.longitude'],
+                        nextToken: prevNextToken
+                    })
+                  prevNextToken = nextToken
+                  allImages = allImages.concat(images)
+                } while (prevNextToken)            
+                const {data:imageSet} = await client.models.ImageSet.get({ id: selectedSetId },
+                    { selectionSet: ["id", "name"] }
                 );
-                const imageSet = result.data!;
                 return {
                     id: imageSet.id,
                     name: imageSet.name,
-                    images: imageSet.images.map(({ image }) => ({
+                    images: allImages.map(({ image }) => ({
                         id: image.id,
                         timestamp: image.timestamp || "",
                         latitude: image.latitude || 0,
@@ -92,10 +119,10 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
                     }))
                 };
             }));
-
             setImageSetsData(fetchedImageSets);
+            setLoading(false);
         };
-
+        setLoading(true);
         fetchImagesData();
     }, [selectedImageSets, client.models.ImageSet]);
 
@@ -201,7 +228,26 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
                 <Modal.Title>Define spatiotemporal subsets</Modal.Title>
             </Modal.Header>
             <Modal.Body>
-                <div style={{ height: '500px', width: '100%' }}>
+                <div style={{ height: '500px', width: '100%', position: 'relative' }}>
+                    {loading && (
+                        <div style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                            zIndex: 1000
+                        }}>
+                            <Spinner animation="border" role="status">
+                                <span className="sr-only">Loading...</span>
+                            </Spinner>
+                            <span style={{ marginLeft: '10px' }}>Please be patient while geodata is loaded</span>
+                        </div>
+                    )}
                     <MapContainer
                         style={{ height: '100%', width: '100%' }}
                         center={[0, 0]}
@@ -268,10 +314,16 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
                                                 opacity={1}
                                                 fillOpacity={0.8}
                                             >
-                                                <Popup>
+                                                <Popup
+                                                    eventHandlers={{
+                                                        add: () => fetchFilenames(image.id),
+                                                    }}
+                                                >
                                                     ImageSet: {imageSet.name}<br />
                                                     ID: {image.id}<br />
-                                                    Timestamp: {DateTime.fromISO(image.timestamp).toFormat("yyyy-MM-dd HH:mm:ss")}
+                                                    Timestamp: {DateTime.fromSeconds(image.timestamp).toFormat("yyyy-MM-dd HH:mm:ss")}<br />
+                                                    Associated Filenames: {imageFilenames.length > 0 ? imageFilenames.join('\n').replace(/\n/g, '<br />') : 'Loading...'}
+                                                    {imageURL && <img src={imageURL} alt={image.id} style={{ width: '256px', height: 'auto', objectFit: 'none', objectPosition: '0 0', width: '149px', height: '99px' }} />}
                                                 </Popup>
                                             </CircleMarker>
                                         ))}

@@ -55,16 +55,19 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
     //const images=await gqlClient.graphql({query: listImages,variables:{filter:{projectImageName:{eq:currentProject}}}})
     setTotalImages(0);
     let images: any[] = [];
-
-    const allImages = selectedImageSets.reduce(async (acc, selectedSet) => {
-      const images = (await client.models.ImageSet.get(
-        { id: selectedSet },
-        { selectionSet: ["images.image.timestamp", "images.image.id"] }
-      )).data?.images || [];
-      return [...await acc, ...images];
-    }, Promise.resolve([] as { image: { id: string; timestamp: string | null; }; }[]));
-    setImagesCompleted(0);
-    const locationSetId = createLocationSet({ name, projectId: project.id })
+    let prevNextToken: string | null | undefined = undefined;
+    let allImages = [];
+    do {
+      const { data: images, nextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
+        imageSetId: selectedImageSets[0],
+        selectionSet: ['image.timestamp', 'image.id'],
+        nextToken: prevNextToken
+      })
+      prevNextToken = nextToken
+      allImages = allImages.concat(images)
+    } while (prevNextToken)
+  setImagesCompleted(0);
+  const locationSetId = createLocationSet({ name, projectId: project.id })
   if (modelGuided) {
       setTotalImages(allImages.length);
       for (const { image } of allImages) {

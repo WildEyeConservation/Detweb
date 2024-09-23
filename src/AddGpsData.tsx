@@ -7,7 +7,8 @@ import { useUpdateProgress } from "./useUpdateProgress";
 import { ImageSetDropdown } from "./ImageSetDropDown";
 import PropTypes from "prop-types";
 import { GlobalContext } from "./Context";
-import {DateTime} from 'luxon'
+import { DateTime } from 'luxon'
+import pLimit from 'p-limit'
 
 
 interface AddGpsDataProps {
@@ -19,6 +20,7 @@ interface AddGpsDataProps {
 
 
 function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets }: AddGpsDataProps) {
+  const plimit = pLimit(10);
   const {client} = useContext(GlobalContext)!;
   const [file, setFile] = useState<File | undefined>();
   const [csvData, setCsvData] = useState<any>(undefined);
@@ -94,20 +96,20 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
   async function handleSubmit() {
     handleClose();
     if (!selectedImageSets) return;
-    const allImages = await selectedImageSets.reduce(async (acc, selectedSet) => {
-      const images = (await client.models.ImageSet.get(
-        { id: selectedSet },
-        { selectionSet: ["images.image.timestamp", "images.image.id"] }
-      )).data?.images || [];
-      return [...await acc, ...images];
-    }, Promise.resolve([] as { image: { id: string; timestamp: string | null } }[]));
+    // const allImages = await selectedImageSets.reduce(async (acc, selectedSet) => {
+    let prevNextToken: string | null | undefined = undefined;
+    let allImages = [];
+    do {
+      const { data: images, nextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({ imageSetId: selectedImageSets[0], selectionSet: ['image.timestamp', 'image.id'], nextToken: prevNextToken })
+      prevNextToken = nextToken
+      allImages = allImages.concat(images)
+    } while (prevNextToken)
     setTotalSteps(allImages.length);
     let count=0
-    await Promise.all(allImages.map(async ({ image }) => {
-      const timestamp=DateTime.fromISO(image.timestamp!).toUnixInteger()
+    await Promise.all(allImages.map(async ({ image:{timestamp,id} }) => {
       if (timestamp > csvData.data[0].timestamp && timestamp < csvData.data[csvData.data.length - 1].timestamp)  {
         const gpsData = interpolateGpsData(csvData.data, timestamp);
-        client.models.Image.update({ id: image.id, latitude: gpsData.lat, longitude: gpsData.lon, altitude_agl: gpsData.alt });
+        plimit(() => client.models.Image.update({ id, latitude: gpsData.lat, longitude: gpsData.lon, altitude_agl: gpsData.alt }));
       } else {
         count++;
       }

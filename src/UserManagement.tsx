@@ -63,7 +63,7 @@ export default function UserManagement() {
 
   const tableData = allUsers?.map((user) => {
     const { id, name } = user;
-    const belongsToCurrentProject = projectMemberships?.find(
+    const belongsToCurrentProject =  projectMemberships?.find(
       (pm) => pm.userId == user.id && pm.projectId == project.id,
     );
     return {

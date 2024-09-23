@@ -68,11 +68,11 @@ export class EC2QueueProcessor extends Construct {
       vpc: props.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       instanceType: props.instanceType,
-      machineImage: ec2.MachineImage.genericLinux({ 'eu-west-1': props.amiId }),
+      machineImage: ec2.MachineImage.genericLinux({ 'af-south-1': props.amiId }),
       minCapacity: 0,
       maxCapacity: 1,
       desiredCapacity: 0,
-      cooldown: cdk.Duration.seconds(1), // Set cooldown to minimum allowed value
+      //cooldown: cdk.Duration.seconds(1), // Set cooldown to minimum allowed value
       securityGroup,
       role,
       keyName: props.keyName,

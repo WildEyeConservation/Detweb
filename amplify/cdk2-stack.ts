@@ -23,8 +23,7 @@ export const createDetwebResources=function(scope: Construct, backend : Backend<
   auth: ConstructFactory<BackendAuth>;
   data: ConstructFactory<AmplifyGraphqlApi>;
   addUserToGroup: ConstructFactory<ResourceProvider<FunctionResources> & ResourceAccessAcceptorFactory & AddEnvironmentFactory>;
-}>,
-devUserArn: string) {
+}>) {
   const authenticatedRole = backend.auth.resources.authenticatedUserIamRole
   
   // // Give our function permission to add an item to a group
@@ -82,19 +81,19 @@ devUserArn: string) {
   const sg = new ec2.SecurityGroup(scope, "instanceSg", { vpc });
   // Create a new VPC for the Aurora cluster
 
-  // Create the Aurora MySQL Serverless v2 cluster
-// Create the serverless cluster, provide all values needed to customise the database.
-const cluster = new rds.DatabaseCluster(scope, 'AuroraClusterV2', {
-  engine: rds.DatabaseClusterEngine.auroraMysql({ version: rds.AuroraMysqlEngineVersion.VER_3_07_1 }),
-  credentials: { username: 'clusteradmin' },
-  clusterIdentifier: 'db-endpoint-test',
-  writer: rds.ClusterInstance.serverlessV2('writer'),
-  serverlessV2MinCapacity: 2,
-  serverlessV2MaxCapacity: 10,
-  vpc,
-  defaultDatabaseName: 'demos',
-  enableDataApi: true,  // has to be set to true to enable Data API as not enable by default
-});
+//   // Create the Aurora MySQL Serverless v2 cluster
+// // Create the serverless cluster, provide all values needed to customise the database.
+// const cluster = new rds.DatabaseCluster(scope, 'AuroraClusterV2', {
+//   engine: rds.DatabaseClusterEngine.auroraMysql({ version: rds.AuroraMysqlEngineVersion.VER_3_07_1 }),
+//   credentials: { username: 'clusteradmin' },
+//   clusterIdentifier: 'db-endpoint-test',
+//   writer: rds.ClusterInstance.serverlessV2('writer'),
+//   serverlessV2MinCapacity: 2,
+//   serverlessV2MaxCapacity: 10,
+//   vpc,
+//   defaultDatabaseName: 'demos',
+//   enableDataApi: true,  // has to be set to true to enable Data API as not enable by default
+// });
 
   // // Create outputs for the database information
   // new CfnOutput(scope, 'AuroraClusterEndpoint', {
@@ -231,16 +230,16 @@ const cluster = new rds.DatabaseCluster(scope, 'AuroraClusterV2', {
   const processor = new EC2QueueProcessor(scope, 'MyProcessor', {
     vpc: vpc, // Your VPC
     instanceType: ec2.InstanceType.of(ec2.InstanceClass.G4DN, ec2.InstanceSize.XLARGE), // Or any instance type you prefer
-    amiId: 'ami-01692ebb92628b00c', // Your AMI ID
-    keyName: 'detwebTest', // Optional: Your EC2 key pair name
+    amiId: 'ami-0779b180a7f490247', // Your AMI ID
+    keyName: 'cvat_africa', // Optional: Your EC2 key pair name
   });
 
   
   return {
     processTaskQueueUrl: processor.queue.queueUrl,
-    auroraClusterEndpoint: cluster.clusterEndpoint.socketAddress,
-    auroraClusterReadEndpoint: cluster.clusterReadEndpoint.socketAddress,
-    auroraClusterSecretArn: cluster.secret?.secretArn || 'Secret not available',  
+    //auroraClusterEndpoint: cluster.clusterEndpoint.socketAddress,
+    //auroraClusterReadEndpoint: cluster.clusterReadEndpoint.socketAddress,
+    //auroraClusterSecretArn: cluster.secret?.secretArn || 'Secret not available',  
   };
 
 }
