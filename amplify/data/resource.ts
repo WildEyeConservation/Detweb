@@ -64,8 +64,9 @@ const schema = a.schema({
     files: a.hasMany('ImageFile', 'imageId'),
     locations: a.hasMany('Location', 'imageId'),
     annotations: a.hasMany('Annotation', 'imageId'),
-    memberships: a.hasMany('ImageSetMembership', 'imageId')
-
+    memberships: a.hasMany('ImageSetMembership', 'imageId'),
+    leftNeighbours: a.hasMany('ImageNeighbour', 'image1Id'),
+    rightNeighbours: a.hasMany('ImageNeighbour', 'image2Id'),
     // sets: [ImageSet] @manyToMany(relationName: "ImageSetMembership")
     //   leftNeighbours: [ImageNeighbour] @hasMany(indexName:"bySecondNeighbour",fields:["key"]) 
     //   rightNeighbours: [ImageNeighbour] @hasMany(indexName:"byFirstNeighbour",fields:["key"]) 
@@ -108,7 +109,8 @@ const schema = a.schema({
     obscured: a.boolean(),
     objectId: a.id(),
     object: a.belongsTo('Object', 'objectId')
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.owner()])
+    
     // .authorization(allow => [allow.groupDefinedIn('projectId'), allow.owner()])
   .secondaryIndexes((index)=>[
     index('setId').queryField('annotationsByAnnotationSetId'),
@@ -153,8 +155,7 @@ const schema = a.schema({
     location: a.belongsTo('Location', 'locationId'),
     annotationSetId: a.id().required(),
     annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId')
-  }).authorization(allow => [allow.authenticated()])
-    // .authorization(allow => [allow.groupDefinedIn('projectId'), allow.owner()])
+  }).authorization(allow => [allow.authenticated(), allow.owner()])
   .secondaryIndexes((index)=>[index('locationId').queryField('observationsByLocationId'), 
     index('annotationSetId').queryField('observationsByAnnotationSetId')
   ]),
@@ -194,18 +195,46 @@ const schema = a.schema({
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
     isAdmin: a.boolean(),
-    queueUrl: a.string(),
+    queueId: a.id(),
+    queue: a.belongsTo('Queue', 'queueId')
   }).authorization(allow => [allow.authenticated()])
     //.authorization(allow => [allow.groupDefinedIn('projectId'), allow.group('orgadmin')])
   .secondaryIndexes((index)=>[index('projectId').queryField('userProjectMembershipsByProjectId'),
     index('userId').queryField('userProjectMembershipsByUserId'),
-    index('queueUrl').queryField('userProjectMembershipsByQueueUrl')
+    index('queueId').queryField('userProjectMembershipsByQueueId')
+  ]),
+//   type ImageNeighbour 
+//   @model
+//   @auth(
+//   rules: [
+//     {allow: public, provider: iam},
+//     {allow: private, provider: iam},
+//     { allow: groups, groups: ["admin"] }  
+//   ])
+// {
+//  image1key: String! @index(name:"byFirstNeighbour")
+//  image1: Image @belongsTo (fields: ["image1key"])
+//  image2key: String! @index(name:"bySecondNeighbour")
+//  image2: Image @belongsTo (fields: ["image2key"])
+//  homography: [Float] 
+  // }
+  ImageNeighbour: a.model({
+    image1Id: a.id().required(),
+    image1: a.belongsTo('Image', 'image1Id'),
+    image2Id: a.id().required(),
+    image2: a.belongsTo('Image', 'image2Id'),
+    homography: a.float().array()
+  }).authorization(allow => [allow.authenticated()])
+  .identifier(['image1Id', 'image2Id'])
+  .secondaryIndexes((index)=>[index('image1Id').queryField('imageNeighboursByImage1key'),
+    index('image2Id').queryField('imageNeighboursByImage2key')
   ]),
   Queue: a.model({
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
     name: a.string().required(),
-    url: a.url().required(),
+    users: a.hasMany('UserProjectMembership', 'queueId'),
+    url: a.url(),
   }).authorization(allow => [allow.authenticated()])
     //.authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('projectId').queryField('queuesByProjectId')]),

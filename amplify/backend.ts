@@ -1,16 +1,19 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
-import { createDetwebResources } from "./cdk2-stack";
 import { addUserToGroup } from "./functions/add-user-to-group/resource";
 import { Stack } from "aws-cdk-lib";
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { outputBucket, inputBucket } from "./storage/resource";
 import { handleS3Upload } from "./storage/handleS3Upload/resource";
-import * as sts from '@aws-sdk/client-sts';
+//import * as sts from '@aws-sdk/client-sts';
+import * as ecs from "aws-cdk-lib/aws-ecs";
+import { AutoProcessor } from "./autoProcessor";
+import { EC2QueueProcessor } from './ec2QueueProcessor';
 import { processImages } from "./functions/processImages/resource";
 import { postDeploy } from "./functions/postDeploy/resource";
 import * as iam from "aws-cdk-lib/aws-iam"
+import * as ec2 from "aws-cdk-lib/aws-ec2";
 
 const backend=defineBackend({
   auth,
@@ -23,165 +26,148 @@ const backend=defineBackend({
   postDeploy
 });
 
-backend.data.apiKey
 
-// backend.postDeploy.addEnvironment('LAMBDA_NAME', backend.processImages.resources.lambda.functionArn)
-// backend.postDeploy.addEnvironment('API_KEY', backend.data.apiKey!)
-// backend.postDeploy.addEnvironment('AMPLIFY_DATA_GRAPHQL_ENDPOINT', backend.data.graphqlUrl!)
+const authenticatedRole = backend.auth.resources.authenticatedUserIamRole;
 
-async function getUser() {
-  const stsClient = new sts.STSClient({ region: 'eu-west-1' });
-  const command = new sts.GetCallerIdentityCommand({});
-  return await stsClient.send(command);
-}
+const sqsCreateQueueStatement = new iam.PolicyStatement({
+  actions: [
+    "sqs:CreateQueue",
+    "sqs:PurgeQueue",
+    "sqs:SendMessage",
+    "sqs:DeleteQueue",
+    "sqs:GetQueueAttributes",
+    "sqs:GetQueueUrl",
+  ],
+  resources: ["*"],
+});
+const sqsConsumeQueueStatement = new iam.PolicyStatement({
+  actions: [
+    "sqs:ReceiveMessage",
+    "sqs:DeleteMessage",
+    "sqs:GetQueueAttributes",
+    "sqs:GetQueueUrl",
+    "sqs:ChangeMessageVisibility",
+  ],
+  resources: ["*"],
+});
+const cognitoAdmin = new iam.PolicyStatement({
+  actions: [
+    "cognito-idp:AdminRemoveUserFromGroup",
+    "cognito-idp:AdminAddUserToGroup",
+  ],
+  resources: ["*"],
+});
+const lambdaInvoke = new iam.PolicyStatement({
+  actions: ["lambda:InvokeFunction"],
+  resources: ["*"],
+});
 
-getUser().then((user) => {
-  console.log(user.Arn)
-  const lambdaFunction = backend.handleS3Upload.resources.lambda as lambda.Function;
-  const layerVersion = new lambda.LayerVersion(Stack.of(lambdaFunction), 'sharpLayer', {
-    code: lambda.Code.fromAsset('./amplify/layers/sharp-ph200-x64'),
-    description: "Sharp layer for image processing (ph200-x86_64)",
-    compatibleArchitectures: [lambda.Architecture.X86_64],
-  })
+authenticatedRole.addToPrincipalPolicy(
+  sqsCreateQueueStatement,
+);
+authenticatedRole.addToPrincipalPolicy(
+  sqsConsumeQueueStatement,
+);
+authenticatedRole.addToPrincipalPolicy(
+  cognitoAdmin,
+);
+authenticatedRole.addToPrincipalPolicy(
+  lambdaInvoke,
+);
 
-  lambdaFunction.addLayers(layerVersion);
-
-  const customStack = backend.createStack('DetwebCustom')
-  const custom = createDetwebResources(customStack, backend)
-  backend.processImages.addEnvironment('PROCESS_QUEUE_URL', custom.processTaskQueueUrl)
-  const statement = new iam.PolicyStatement({
-    sid: "AllowPublishToDigest",
-    actions: ["sqs:SendMessage"],
-    resources: ["*"],
-  })
-    backend.processImages.resources.lambda.addToRolePolicy(statement)
-    backend.addOutput({ custom })
+const lambdaFunction = backend.handleS3Upload.resources.lambda as lambda.Function;
+const layerVersion = new lambda.LayerVersion(Stack.of(lambdaFunction), 'sharpLayer', {
+  code: lambda.Code.fromAsset('./amplify/layers/sharp-ph200-x64'),
+  description: "Sharp layer for image processing (ph200-x86_64)",
+  compatibleArchitectures: [lambda.Architecture.X86_64],
 })
+lambdaFunction.addLayers(layerVersion);
 
-//const table=backend.data.resources.cfnResources.amplifyDynamoDbTables['Annotation']
-//backend.handleS3Upload.resources.cfnResources.cfnFunction.layers?.push(custom.sharpLayerVersionArn)
+const customStack = backend.createStack('DetwebCustom')
+const ecsStack = backend.createStack('DetwebECS')
+//const custom = createDetwebResources(customStack, backend)
+const ecsTaskRole = new iam.Role(ecsStack, "EcsTaskRole", {
+  assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+});
 
-// table.pointInTimeRecoveryEnabled = true;
-// table.streamSpecification = {
-//   streamViewType: dynamodb.StreamViewType.NEW_IMAGE,
-// };
+const vpc = new ec2.Vpc(customStack, "my-cdk-vpc");
+const ecsvpc = new ec2.Vpc(ecsStack, "my-cdk-vpc");
+ecsTaskRole.addManagedPolicy(
+  iam.ManagedPolicy.fromAwsManagedPolicyName("AWSAppSyncInvokeFullAccess"),
+);
+const pointFinderAutoProcessor = new AutoProcessor(ecsStack, "CpuAutoProcessor",
+  {
+    vpc: ecsvpc,
+    instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.SMALL),
+    ecsImage: ecs.ContainerImage.fromAsset("containerImages/pointFinderImage"),
+    ecsTaskRole,
+    environment: {
+      API_ENDPOINT: backend.data.graphqlUrl,
+      API_KEY: backend.data.apiKey || ""
+    },
+    machineImage: ecs.EcsOptimizedImage.amazonLinux2()
+  })
+ecsTaskRole.addToPrincipalPolicy(
+  new iam.PolicyStatement({
+    actions: ["s3:ListBucket", "s3:GetObject", "s3:PutObject"],
+    resources: ["arn:aws:s3:::*"],
+  })
+);
 
+pointFinderAutoProcessor.asg.role.addManagedPolicy(
+  iam.ManagedPolicy.fromAwsManagedPolicyName("AWSAppSyncInvokeFullAccess"),
+);
 
-// Get the DynamoDB table ARN
-// const tableArn = backend.data.resources.tables["Annotation"].tableArn;
+const lightGlueAutoProcessor = new AutoProcessor(ecsStack, "GpuAutoProcessor",
+  {
+    vpc,
+    instanceType: ec2.InstanceType.of(ec2.InstanceClass.G4DN, ec2.InstanceSize.XLARGE),
+    ecsImage: ecs.ContainerImage.fromAsset("containerImages/lightGlueImage"),
+    ecsTaskRole,
+    memoryLimitMiB: 1024 * 12,
+    gpuCount: 1,
+    environment: {
+      API_ENDPOINT: backend.data.graphqlUrl,
+      API_KEY: backend.data.apiKey || ""
+    },
+    machineImage: ecs.EcsOptimizedImage.amazonLinux2(ecs.AmiHardwareType.GPU)
+  })
 
+lightGlueAutoProcessor.asg.role.addManagedPolicy(
+  iam.ManagedPolicy.fromAwsManagedPolicyName("AWSAppSyncInvokeFullAccess"),
+);
 
+;
+//const devRole = iam.Role.fromRoleArn(scope, "DevRole", devUserArn);
 
-// // Get the data stack
-// const dataStack = Stack.of(backend.data);
-// // Create the OpenSearch domain
-// const openSearchDomain = new opensearch.Domain(
-//   dataStack,
-//   "OpenSearchDomain",
-//   {
-//     version: opensearch.EngineVersion.OPENSEARCH_2_11,
-//     nodeToNodeEncryption: true,
-//     encryptionAtRest: {
-//       enabled: true,
-//     },
-//   }
-// );
+// Grant the devuser permission to assume the Subsample Lambda role
+// devRole.attachInlinePolicy(new iam.Policy(scope, 'AssumeRolePolicy', {
+//   statements: [new iam.PolicyStatement({
+//     actions: ['sts:AssumeRole'],
+//     resources: [subsampleLambdaRole.roleArn],
+//   })],
+// }));
 
-//backend.data.resources.tables['User'].grantFullAccess(handleNewUser)
+const processor = new EC2QueueProcessor(customStack, 'MyProcessor', {
+vpc: vpc, // Your VPC
+instanceType: ec2.InstanceType.of(ec2.InstanceClass.G4DN, ec2.InstanceSize.XLARGE), // Or any instance type you prefer
+amiId: 'ami-0779b180a7f490247', // Your AMI ID
+keyName: 'cvat_africa', // Optional: Your EC2 key pair name
+});
 
+backend.processImages.addEnvironment('PROCESS_QUEUE_URL', processor.queue.queueUrl)
 
-// Get the S3Bucket ARN
-// const s3BucketArn = backend.storageOS.resources.bucket.bucketArn;
-// // Get the S3Bucket Name
-// const s3BucketName = backend.storageOS.resources.bucket.bucketName;
+const statement = new iam.PolicyStatement({
+  sid: "AllowPublishToDigest",
+  actions: ["sqs:SendMessage"],
+  resources: ["*"],
+})
+backend.processImages.resources.lambda.addToRolePolicy(statement)
+backend.addOutput({
+  custom: {
+    processTaskQueueUrl: processor.queue.queueUrl,
+    pointFinderTaskQueueUrl: pointFinderAutoProcessor.queue.queueUrl
+  }
+}
+)
 
-
-// //Get the region
-// const region = dataStack.region;
-
-
-// // Create an IAM role for OpenSearch integration
-// const openSearchIntegrationPipelineRole = new iam.Role(
-//   dataStack,
-//   "OpenSearchIntegrationPipelineRole",
-//   {
-//     assumedBy: new iam.ServicePrincipal("osis-pipelines.amazonaws.com"),
-//     inlinePolicies: {
-//       openSearchPipelinePolicy: new iam.PolicyDocument({
-//         statements: [
-//           new iam.PolicyStatement({
-//             actions: ["es:DescribeDomain"],
-//             resources: [
-//               openSearchDomain.domainArn,
-//               openSearchDomain.domainArn + "/*",
-//             ],
-//             effect: iam.Effect.ALLOW,
-//           }),
-//           new iam.PolicyStatement({
-//             actions: ["es:ESHttp*"],
-//             resources: [
-//               openSearchDomain.domainArn,
-//               openSearchDomain.domainArn + "/*",
-//             ],
-//             effect: iam.Effect.ALLOW,
-//           }),
-//           new iam.PolicyStatement({
-//             effect: iam.Effect.ALLOW,
-//             actions: [
-//               "s3:GetObject",
-//               "s3:AbortMultipartUpload",
-//               "s3:PutObject",
-//               "s3:PutObjectAcl",
-//             ],
-//             resources: [s3BucketArn, s3BucketArn + "/*"],
-//           }),
-//           new iam.PolicyStatement({
-//             effect: iam.Effect.ALLOW,
-//             actions: [
-//               "dynamodb:DescribeTable",
-//               "dynamodb:DescribeContinuousBackups",
-//               "dynamodb:ExportTableToPointInTime",
-//               "dynamodb:DescribeExport",
-//               "dynamodb:DescribeStream",
-//               "dynamodb:GetRecords",
-//               "dynamodb:GetShardIterator",
-//             ],
-//             resources: [tableArn, tableArn + "/*"],
-//           }),
-//         ],
-//       }),
-//     },
-//     managedPolicies: [
-//       iam.ManagedPolicy.fromAwsManagedPolicyName(
-//         "AmazonOpenSearchIngestionFullAccess"
-//       ),
-//     ],
-//   }
-// );
-
-
-
-
-// Define OpenSearch index mappings
-// const indexName = "Annotations";
-
-
-// const indexMapping = {
-//   settings: {
-//     number_of_shards: 1,
-//     number_of_replicas: 0,
-//   },
-//   mappings: {
-//     properties: {
-//       id: {
-//         type: "keyword",
-//       },
-//       done: {
-//         type: "boolean",
-//       },
-//       content: {
-//         type: "text",
-//       },
-//     },
-//   },
-// };

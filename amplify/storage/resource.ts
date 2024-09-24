@@ -4,6 +4,7 @@ import { processImages } from "../functions/processImages/resource"
 
 export const outputBucket = defineStorage({
   name: "outputs",
+  isDefault: true,
   access: allow => ({
     'slippymaps/*': [
       allow.resource(handleS3Upload).to(['write', 'list', 'get']),
@@ -27,7 +28,6 @@ export const outputBucket = defineStorage({
 
 export const inputBucket = defineStorage({
   name: "inputs",
-  isDefault: true,
   access: allow => ({
     'images/*': [
       allow.resource(handleS3Upload).to(['get']),

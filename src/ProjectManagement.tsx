@@ -9,6 +9,7 @@ import LaunchTask from './LaunchTask.tsx';
 import DeleteImageSet from './DeleteImageSet.tsx';
 import FilesUploadComponent from './FilesUploadComponent.tsx';
 import ExportData from './ExportData.tsx';
+import TaskManagement from './TaskManagement.tsx';
 
 
 
@@ -21,11 +22,8 @@ const ProjectManagement = () => {
         <ImageSetManagement />
         <DefineCategories />
         <QueueManagement />
+        <TaskManagement />
         <UserManagement />
-        <LaunchTask
-          show={modalToShow == "launchTask"}
-          handleClose={() => showModal(null)}
-        />
         {/* <Rescan show={modalToShow=="rescan"} handleClose={()=>setModalToShow(null)}/> */}
         <DeleteImageSet
           show={modalToShow == "deleteImageSet"}

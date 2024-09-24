@@ -1,5 +1,5 @@
 import React, { useCallback, useContext } from "react";
-import { UserContext } from "./Context";
+import { UserContext, ProjectContext, GlobalContext } from "./Context";
 import { UseAckOnTimeoutProps } from "./useAckOnTimeout"; 
 import { BaseImageProps } from "./BaseImage";
 import { LocationType, AnnotationSetType } from "./schemaTypes";
@@ -15,23 +15,27 @@ interface UseCreateObservationProps {
   annotationSet: AnnotationSetType;
 }
 
-export default function useCreateObservation({
-  ack = () => {},
-  location,
-  annotationSet,
-}: UseCreateObservationProps) {
-  const { user, setJobsCompleted, currentProject } = useContext(UserContext)!;
+export default function useCreateObservation(location: UseCreateObservationProps) {
+  const {
+    ack = () => { },
+    annotationSetId,
+    id
+  } = location;
+  const { setJobsCompleted } = useContext(UserContext)!;
+  const { project } = useContext(ProjectContext)!;
+  const { client } = useContext(GlobalContext)!;
 
   const newAck = useCallback(() => {
-    if (!user || !location || !annotationSet || !currentProject) return;
-    GQL_Client.models.Observation.create({
-      annotationSetId: annotationSet.id,
-      locationId: location.id,
-      projectId: currentProject.id,
-    });
+    if (location && annotationSetId && project) {
+      client.models.Observation.create({
+        annotationSetId: annotationSetId,
+        locationId: id,
+        projectId: project.id,
+      });
+    }
     ack();
     setJobsCompleted?.((x: number) => x + 1);
-  }, [ack, setJobsCompleted, annotationSet.id, location?.id, currentProject?.id]);
+  }, [location, project]);
 
   return newAck;
 }
@@ -47,13 +51,9 @@ export function withCreateObservation<T extends CombinedProps>(
   WrappedComponent: React.ComponentType<T>
 ) {
   const WithCreateObservation: React.FC<T> = (props) => {
-    const { ack, location, annotationSet} = props;
-    const newAck = useCreateObservation({
-      ack,
-      location,
-      annotationSet,
-    });
-    return <WrappedComponent {...props} ack={newAck} />;
+    const {location} = props;
+    const newAck = useCreateObservation(location);
+    return <WrappedComponent {...props} location={{ ...location, ack: newAck }} />;
   };
   return WithCreateObservation;
 }

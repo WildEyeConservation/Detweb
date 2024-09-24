@@ -10,8 +10,11 @@ import CreateAnnotationOnClick from './CreateAnnotationOnClick';
 import Annotations from './AnnotationsContext';
 import { ShowMarkers } from './ShowMarkers';
 import { ImageMetaType, LocationType, AnnotationSetType } from './schemaTypes';
+import { ProjectContext } from './Context'
+import { useContext } from 'react';
 
-const Image = memo(withAckOnTimeout(withCreateObservation(BaseImage)));
+const Image = memo(withCreateObservation(withAckOnTimeout(BaseImage)));
+//const Image = memo(BaseImage);
 
 interface AnnotationImageProps {
   imageMeta: ImageMetaType;
@@ -50,32 +53,29 @@ interface AnnotationImageProps {
 
 //   return null;
 // });
-export default function AnnotationImage({ imageMeta, location, next, prev, fullImage, containerheight, containerwidth, visible, id, ack, annotationSet}: AnnotationImageProps) {
-  const annotationsHook = useAnnotations(imageMeta.id, annotationSet.id);
+export default function AnnotationImage(props) {
+  const { location, next, prev, fullImage, containerheight = 800, containerwidth = 1024, visible, id, ack, setId, isTest, annotationSetId } =props
+  const {annotationsHook} = useContext(ProjectContext)!;
+  //const annotationsHook = useAnnotations(imageMeta.id, annotationSet.id);
   return (
     <Annotations annotationsHook={annotationsHook}>
       {useMemo(() =>
         <Image
           containerwidth={containerwidth}
           containerheight={containerheight}
-          location={location}
-          imageMeta={imageMeta}
           visible={visible}
+          location={location}
           id={id} 
           prev={prev}
           next={next}
           ack={ack}
-          annotationSet={annotationSet}>
-          {location && <Location {...location}/>}
-          {typeof ack === 'function' && (
-            <>
-              <CreateAnnotationOnClick {...{image: imageMeta, annotationsHook, location, annotationSet, source: 'manual'}}/>
-              <ShowMarkers annotations={annotationsHook.annotations}/>
-              {/* <PushToSecondary {...props} /> */}
-            </>
-          )}
-          <Legend position="bottomright" />
-        </Image>, [location,imageMeta,next,prev, fullImage,containerheight,containerwidth,visible,id,ack,annotationSet])}
+          annotationSet={annotationSetId}>
+          {location && <Location {...location}/>} 
+          <CreateAnnotationOnClick {...{annotationsHook, location, annotationSet: annotationSetId, source: 'manual'}}/>
+          <ShowMarkers imageId={location.image.id} annotationSetId={location.annotationSetId}/>
+          {/* <PushToSecondary {...props} /> */}
+          <Legend position="bottomright" /> 
+        </Image>, [location,next,prev, fullImage,containerheight,containerwidth,visible,id,ack,annotationSetId])}
     </Annotations>
   );
 }

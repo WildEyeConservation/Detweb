@@ -51,82 +51,67 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
     setHeatmapStepsCompleted(0);
     setTotalHeatmapSteps(0);
     
-    const allImages = await selectedImageSets.reduce(async (acc, selectedSet) => {
-      const images = (await client.models.ImageSet.get(
-        { id: selectedSet },
-        { selectionSet: ["images.image.timestamp", "images.image.id"] }
-      )).data?.images || [];
-      return [...await acc, ...images];
-    }, Promise.resolve([] as { image: { id: string; timestamp: string | null } }[]));
 
-      switch (selectedProcess) {
-        case "Run heatmap generation": {
-          //const setId = crypto.randomUUID();
-          setTotalHeatmapSteps(allImages.length);
-          setHeatmapStepsCompleted(0);
-          allImages.map(async ({ image }) => {
-            const { data: imageFiles } = await client.models.ImageFile.list({ filter: { imageId: { eq: image.id } } })
-            const path = imageFiles.find((imageFile) => imageFile.type == 'image/jpeg')?.path
-              if (path) {
-                client.mutations.processImages({
+    switch (selectedProcess) {
+      case "Run heatmap generation": {
+        const allImages = await Promise.all(selectedImageSets.map(async (selectedSet) => 
+          (await client.models.ImageSetMembership.imageSetMembershipsByImageSetId(
+            {imageSetId: selectedSet })).data.map(im => im.imageId)
+        )).then(arrays => arrays.flat());    
+        //const setId = crypto.randomUUID();
+        setTotalHeatmapSteps(allImages.length);
+        setHeatmapStepsCompleted(0);
+        allImages.map(async (id) => {
+          const {data :imageFiles} = await client.models.ImageFile.imagesByimageId({imageId: id})
+          const path = imageFiles.find((imageFile) => imageFile.type == 'image/jpeg')?.path
+            if (path) {
+              client.mutations.processImages({
                 s3key: path!,
                 model: "heatmap",
               })
             }
             setHeatmapStepsCompleted((s) => s + 1);
-          })
-        }
-        // case "Compute image registrations": {
-        //   setRegistrationTotalSteps(images.length - 1);
-        //   setRegistrationStepsCompleted(0);
-        //   for (let i = 0; i < images.length - 1; i++) {
-        //     setRegistrationStepsCompleted(i + 1);
-        //     const { image: image1 } = images[i];
-        //     const { image: image2 } = images[i + 1];
-        //     if (image2.timestamp - image1.timestamp < 5) {
-        //       const response = await gqlSend(getPair, {
-        //         image1Key: image1.key,
-        //         image2Key: image2.key,
-        //       }) as { data: { imageNeighboursByImage1key: { items: { homography: string | null, id: string }[] } } };
-
-        //       const {
-        //         data: {
-        //           imageNeighboursByImage1key: { items },
-        //         },
-        //       } = response;
-              
-        //       let id = null;
-        //       if (items.length === 0) {
-        //         // const response = await gqlSend(getPair, {
-        //         //   image1Key: image1.key,
-        //         //   image2Key: image2.key,
-        //         // }) as { data: { imageNeighboursByImage1key: { items: { homography: string | null, id: string }[] } } };
-                
-        //       } else {
-        //         if (items[0].homography) {
-        //           continue;
-        //         }
-        //         id = items[0].id;
-        //       }
-        //       await sendToQueue({
-        //         QueueUrl: backend.custom.gpuTaskQueueUrl,
-        //         MessageGroupId: crypto.randomUUID(),
-        //         MessageDeduplicationId: crypto.randomUUID(),
-        //         MessageBody: JSON.stringify({
-        //           inputBucket: backend.custom.inputsBucket,
-        //           id: id,
-        //           keys: [image1.key, image2.key],
-        //           action: "register",
-        //           region,
-        //           outputBucket: backend.custom.outputBucket,
-        //         }),
-        //       });
-        //     }
-        //   }
-        //   break;
-        // }
+        })
       }
-      handleClose();
+      case "Compute image registrations": {
+        const images = await Promise.all(selectedImageSets.map(async (selectedSet) => 
+          (await client.models.ImageSetMembership.imageSetMembershipsByImageSetId(
+            { imageSetId: selectedSet, selectionSet: ["image.id", "image.timestamp", "image.files.key"] })).data))
+          .then(arrays => arrays.flat())
+          .then(images=>images.map(({image})=>image))
+          .then(images => images.sort((a, b) => a.timestamp - b.timestamp))
+        setRegistrationTotalSteps(images.length - 1);
+        setRegistrationStepsCompleted(0);
+        for (let i = 0; i < images.length - 1; i++) {
+          setRegistrationStepsCompleted(i + 1);
+          const image1 = images[i];
+          const image2 = images[i + 1];
+          if (image2.timestamp - image1.timestamp < 5) {
+            const { data } = await client.models.ImageNeighbour.get({
+              image1Id: image1.id,
+              image2Id: image2.id,
+            });
+            if (!data.homography) {
+              await sendToQueue({
+                QueueUrl: backend.custom.gpuTaskQueueUrl,
+                MessageGroupId: crypto.randomUUID(),
+                MessageDeduplicationId: crypto.randomUUID(),
+                MessageBody: JSON.stringify({
+                  inputBucket: backend.custom.inputsBucket,
+                  id: id,
+                  keys: [image1.key, image2.key],
+                  action: "register",
+                  region,
+                  outputBucket: backend.custom.outputBucket,
+                }),
+              });
+            }
+          }
+        }
+        break;
+      }
+    }
+    handleClose();
   };
     
 

@@ -5,7 +5,8 @@ import Modal from "react-bootstrap/Modal";
 import { UserContext, GlobalContext, ManagementContext, ProjectContext } from "./Context";
 import { useUpdateProgress } from "./useUpdateProgress";
 import { ImageSetDropdown } from "./ImageSetDropDown";
-import { subset } from "mathjs";
+//import { subset } from "mathjs";
+import { SendMessageCommand } from "@aws-sdk/client-sqs";
 
 interface CreateTaskProps {
   show: boolean;
@@ -15,7 +16,8 @@ interface CreateTaskProps {
 }
 
 function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets }: CreateTaskProps) {
-  const { client } = useContext(GlobalContext)!;
+  const { client, backend } = useContext(GlobalContext)!;
+  const { sqsClient } = useContext(UserContext)!;
   const { project } = useContext(ProjectContext)!;
   const [sidelap, setSidelap] = useState<number>(-1000);
   const [overlap, setOverlap] = useState<number>(-1000);
@@ -60,7 +62,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
     do {
       const { data: images, nextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
         imageSetId: selectedImageSets[0],
-        selectionSet: ['image.timestamp', 'image.id'],
+        selectionSet: ['image.timestamp', 'image.id','image.width','image.height'],
         nextToken: prevNextToken
       })
       prevNextToken = nextToken
@@ -70,25 +72,30 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
   const locationSetId = createLocationSet({ name, projectId: project.id })
   if (modelGuided) {
       setTotalImages(allImages.length);
-      for (const { image } of allImages) {
-        sendToQueue({
-          QueueUrl: backend.custom.cpuTaskQueueUrl,
-          MessageGroupId: crypto.randomUUID(),
-          MessageDeduplicationId: crypto.randomUUID(),
+    for (const { image } of allImages) {
+      const { data: imageFiles } = await client.models.ImageFile.imagesByimageId({ imageId: image.id })
+      // FIXME: This is wrong. I am using the key from the jpeg file to deduce what the path to the h5 file is, but 
+      // the right way to do this is to create a separate ImageFile entry as soon as we create the heatmap file.
+      const key = imageFiles.find((x: any) => x.type == 'image/jpeg')?.key.replace('images','heatmaps')
+      sqsClient.send(
+        new SendMessageCommand({
+          QueueUrl: backend.custom.pointFinderTaskQueueUrl,
           MessageBody: JSON.stringify({
-            key: image.key,
+            imageId: image.id,
+            projectId: project.id,
+            key: 'heatmaps/' + key + '.h5',
             width: 1024,
             height: 1024,
-            threshold: 0.99,
-            bucket: backend.custom.outputBucket,
+            threshold: 1 - Math.pow(10, -threshold),
+            bucket: backend.storage.buckets[0].bucket_name,
             setId: locationSetId,
-          }),
-        }).then(() => setImagesCompleted((s: number) => s + 1));
+          })
+        })).then(() => setImagesCompleted((s: number) => s + 1));
       }
     } else {
       const promises = [];
       let totalSteps = 0;
-      for (const { image } of images) {
+      for (const { image } of allImages) {
         const xSteps = Math.ceil((image.width - width) / (width - sidelap));
         const ySteps = Math.ceil((image.height - height) / (height - overlap));
         const xStepSize = (image.width - width) / xSteps;
@@ -103,15 +110,15 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
               yStep * (yStepSize ? yStepSize : 0) + height / 2,
             );
             promises.push(
-              gqlSend(createLocation, {
-                input: {
-                  x,
-                  y,
-                  width,
-                  height,
-                  imageKey: image.key,
-                  setId: locationSetId,
-                },
+              client.models.Location.create({
+                x,
+                y,
+                width,
+                height,
+                imageId: image.id,
+                projectId: project.id,
+                source: 'manual',
+                setId: locationSetId,
               }).then(() => setLocationsCompleted((fc: any) => fc + 1)),
             );
           }
@@ -163,7 +170,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                 onChange={(e) => setThreshold(parseFloat(e.target.value))}
               />
               <Form.Text>
-                Threshold value: {(1 - Math.pow(10, -threshold)).toFixed(8)}
+                  {`Threshold value: ${threshold} -- (${(1 - Math.pow(10, -threshold)).toFixed(8)})`}
               </Form.Text>
               </Form.Group>
               <Form.Group>

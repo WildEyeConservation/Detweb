@@ -15,7 +15,7 @@ export function QueueDropdown({ setQueue, currentQueue }: QueueDropdownProps) {
   const onNewQueue = async () => {
     const name = prompt("Please enter new queue name", "") || "";
     if (name) {
-      const id = await createQueue(name);
+      const id = createQueue(name);
       if (id) {
         setQueue(id);
       }

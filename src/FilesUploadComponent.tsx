@@ -74,6 +74,7 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
     setTotalImageSize(imageFiles.reduce((acc, file) => acc + file.size, 0));
   }, [imageFiles]);
 
+
   useEffect(() => {
     setFilteredImageSize(filteredImageFiles.reduce((acc, file) => acc + file.size, 0));
   }, [filteredImageFiles]);
@@ -150,11 +151,7 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
   const handleSubmit = async () => {
     // Close the modal first, so the user doesn't experience the UI as unresponsive
     handleClose();
-    /* We wait for scanning of the submitted folder to be completed before proceeding, otherwise there is a risk that 
-    we start processing on a recurseResult that is incomplete*/
-
     setTotalSteps(filteredImageSize);
-
     setStepsCompleted(0);
     const imageSetId = imageSets.find(x => x.name === name)?.id || createImageSet({name, projectId:project.id});
     filteredImageFiles.map(
@@ -283,7 +280,7 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
               <p>
                 Total files: {scannedFiles.length}<br />
                 Image files: {imageFiles.length}<br />
-                Image files size: {formatFileSize(totalImageSize)}<br/>
+                Image files size: {formatFileSize(totalImageSize)}<br />
                 Image files not allready uploaded: {filteredImageFiles.length}<br />
                 Image files size not allready uploaded: {formatFileSize(filteredImageSize)}
               </p>

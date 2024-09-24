@@ -1,5 +1,6 @@
 import { useEffect, useState, useContext, useCallback } from "react";
-import { UserContext } from "./Context";
+import { UserContext,ProjectContext } from "./Context";
+import { ReceiveMessageCommand, DeleteMessageCommand } from "@aws-sdk/client-sqs";
 
 interface SQSMessage {
   message_id: string;
@@ -8,42 +9,46 @@ interface SQSMessage {
 }
 
 export default function useSQS() {
-  const {
-    credentials,
-    currentQueue,
-    getFromQueue,
-    deleteFromQueue,
-    refreshVisibility,
-  } = useContext(UserContext)!;
+  const { currentPM } = useContext(ProjectContext)!;
+  const {sqsClient} = useContext(UserContext)!;
   const [buffer, setBuffer] = useState<SQSMessage[]>([]);
+  const [url,setUrl] = useState<string | undefined>(undefined);
   const [retryCount] = useState(0);
   const [index, setIndex] = useState(0);
   const next = useCallback(() => setIndex(index + 1), [index]);
   const prev = useCallback(() => setIndex(index - 1), [index]);
+
   const margin = 3;
   console.log("sqs!!!!");
+
+  useEffect(() => {
+    currentPM.queue().then(
+      ({ data: { url } }) => {
+      setUrl(url);
+    });
+  }, [currentPM]);
 
   function getMessages() {
     console.log(`Buffer Length ${buffer.length}`);
     console.log(`Index ${index}`);
     //Then try to get new Jobs.
-    getFromQueue({
-      AttributeNames: ["SentTimestamp"],
+
+    sqsClient.send(new ReceiveMessageCommand({
+      QueueUrl: url,
       MaxNumberOfMessages: 10,
       MessageAttributeNames: ["All"],
-      QueueUrl: currentQueue,
-      VisibilityTimeout: 60,
-    }).then((messages) => {
+      VisibilityTimeout: 600,
+      })).then((messages) => {
       if ("Messages" in messages) {
         const bodies = messages.Messages.map((entity: { ReceiptHandle: any; Body: string; }) => {
-          const timer = setInterval(() => {
-            refreshVisibility({
-              // ChangeMessageVisibilityRequest
-              QueueUrl: currentQueue, // required
-              ReceiptHandle: entity.ReceiptHandle, // required
-              VisibilityTimeout: 60, // required
-            });
-          }, 30000);
+          // const timer = setInterval(() => {
+          //   refreshVisibility({
+          //     // ChangeMessageVisibilityRequest
+          //     QueueUrl: currentQueue, // required
+          //     ReceiptHandle: entity.ReceiptHandle, // required
+          //     VisibilityTimeout: 60, // required
+          //   });
+          // }, 30000);
           const body = JSON.parse(entity.Body);
           // The messages we recieve typically HAVE ids. These correspond to location ids. But there is no guarantee that we won't receive the same ID twice,
           // the admin may have launched the same task on the same queue twice, or one of our earlier messages may have passed its visibility timeout and
@@ -51,11 +56,11 @@ export default function useSQS() {
           body.message_id = crypto.randomUUID();
           body.ack = async () => {
             try {
-              await deleteFromQueue({
-                QueueUrl: currentQueue,
+              await sqsClient.send(new DeleteMessageCommand({
+                QueueUrl: url,
                 ReceiptHandle: entity.ReceiptHandle,
-              });
-              clearInterval(timer);
+              }));
+              //clearInterval(timer);
               console.log(
                 `Ack Succeeded for location ${body.id} with receipthandle ${entity.ReceiptHandle}`,
               );
@@ -79,10 +84,10 @@ export default function useSQS() {
   useEffect(() => {
     console.log("here we go");
     //If we CAN access SQS and we NEED additional jobs
-    if (credentials && buffer.length - index <= margin && currentQueue) {
+    if (buffer.length - index <= margin && url) {
       getMessages();
     }
-  }, [index, retryCount, credentials, buffer, currentQueue]);
+  }, [index, retryCount, buffer, url ]);
 
   const inject = (message: SQSMessage) => {
     setBuffer((buffer_) => [

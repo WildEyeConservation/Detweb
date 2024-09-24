@@ -81,7 +81,7 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
         setImageFilenames(images.map(image => image.key));
         const path=images.find(image=>image.type=='image/jpeg')?.path
         if (path) {
-            const { url } = await getUrl({ path: 'slippymaps/Add2024Sample/DSC00008.jpg/0/0/0.png', options: { bucket: 'outputs' } })
+            const { url } = await getUrl({ path: 'slippymaps/'+path+'/0/0/0.png', options: { bucket: 'outputs' } })
             setImageURL(url.toString())
         }
     };
@@ -255,51 +255,59 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
                         scrollWheelZoom={true}
                     >
                         <FitBoundsToImages imageSetsData={imageSetsData} />
-                        <TileLayer
-                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                        />
-                        <FeatureGroup ref={featureGroupRef}>
-                            <EditControl
-                                position="topright"
-                                onCreated={handleCreated}
-                                onEdited={handleEdited}
-                                onDeleted={handleDeleted}
-                                draw={{
-                                    polygon: {
-                                        allowIntersection: false,
-                                        drawError: {
-                                            color: '#e1e100',
-                                            message: '<strong>Oh snap!<strong> you can\'t draw that!'
-                                        },
-                                        shapeOptions: {
-                                            color: '#97009c'
-                                        }
-                                    },
-                                    rectangle: false,
-                                    circle: false,
-                                    circlemarker: false,
-                                    marker: false,
-                                    polyline: false,
-                                }}
-                                edit={{
-                                    edit: {
-                                        selectedPathOptions: {
-                                            maintainColor: true,
-                                            opacity: 0.3
-                                        }
-                                    },
-                                    remove: {
-                                        selectedPathOptions: {
-                                            maintainColor: true,
-                                            opacity: 0.3
-                                        }
-                                    },
-                                    featureGroup: featureGroupRef.current,
-                                }}
-                            />
-                        </FeatureGroup>
                         <LayersControl position="topright">
+                            <LayersControl.BaseLayer checked name="OpenStreetMap">
+                                <TileLayer
+                                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                />
+                            </LayersControl.BaseLayer>
+                            <LayersControl.BaseLayer name="Satellite">
+                                <TileLayer
+                                    attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+                                    url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                                />
+                            </LayersControl.BaseLayer>
+                            <FeatureGroup ref={featureGroupRef}>
+                                <EditControl
+                                    position="topright"
+                                    onCreated={handleCreated}
+                                    onEdited={handleEdited}
+                                    onDeleted={handleDeleted}
+                                    draw={{
+                                        polygon: {
+                                            allowIntersection: false,
+                                            drawError: {
+                                                color: '#e1e100',
+                                                message: '<strong>Oh snap!<strong> you can\'t draw that!'
+                                            },
+                                            shapeOptions: {
+                                                color: '#97009c'
+                                            }
+                                        },
+                                        rectangle: false,
+                                        circle: false,
+                                        circlemarker: false,
+                                        marker: false,
+                                        polyline: false,
+                                    }}
+                                    edit={{
+                                        edit: {
+                                            selectedPathOptions: {
+                                                maintainColor: true,
+                                                opacity: 0.3
+                                            }
+                                        },
+                                        remove: {
+                                            selectedPathOptions: {
+                                                maintainColor: true,
+                                                opacity: 0.3
+                                            }
+                                        },
+                                        featureGroup: featureGroupRef.current,
+                                    }}
+                                />
+                            </FeatureGroup>
                             {imageSetsData.map((imageSet, index) => (
                                 <LayersControl.Overlay key={imageSet.id} name={imageSet.name} checked>
                                     <LayerGroup>
@@ -319,12 +327,26 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
                                                         add: () => fetchFilenames(image.id),
                                                     }}
                                                 >
-                                                    ImageSet: {imageSet.name}<br />
-                                                    ID: {image.id}<br />
+                                                        <div style={{ textAlign: 'center' }}>
+                                                        ImageSet: {imageSet.name}<br />
                                                     Timestamp: {DateTime.fromSeconds(image.timestamp).toFormat("yyyy-MM-dd HH:mm:ss")}<br />
+                                                        {imageURL && (
+                                                            <>
+                                                            <img 
+                                                                src={imageURL} 
+                                                                alt={image.id} 
+                                                                style={{ 
+                                                                    width: '149px', 
+                                                                    height: '99px', 
+                                                                    objectFit: 'none', 
+                                                                    objectPosition: '0 0',
+                                                                    display: 'inline-block'
+                                                                }} 
+                                                            /><br /></>
+                                                    )}
                                                     Associated Filenames: {imageFilenames.length > 0 ? imageFilenames.join('\n').replace(/\n/g, '<br />') : 'Loading...'}
-                                                    {imageURL && <img src={imageURL} alt={image.id} style={{ width: '256px', height: 'auto', objectFit: 'none', objectPosition: '0 0', width: '149px', height: '99px' }} />}
-                                                </Popup>
+                                                    </div>
+                                                    </Popup>
                                             </CircleMarker>
                                         ))}
                                     </LayerGroup>

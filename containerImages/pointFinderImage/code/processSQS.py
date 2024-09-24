@@ -43,14 +43,15 @@ class MobileNetNormalProjector(HMVisProjector):
 proj=MobileNetNormalProjector()
 
 createLocation=gql("""
-mutation MyMutation($height: Int , $imageKey: String! , $x: Int! , $y: Int! , $width: Int , $setId: ID!,$confidence:Float ) {
-  createLocation(input: {confidence: $confidence, height: $height, width: $width, x: $x, y: $y, setId: $setId, imageKey: $imageKey}){
+mutation MyMutation($confidence: Float, $height: Int, $imageId: ID!, $projectId: ID="", $setId: ID!, $source: String!, $width: Int, $x: Int!, $y: Int!) {
+  createLocation(input: {confidence: $confidence, height: $height, imageId: $imageId, projectId: $projectId, setId: $setId, source: $source, x: $x, y: $y, width: $width}){
     id
   }
-}""")
+}
+""")
 
-sqs = boto3.client('sqs',os.environ['SQS_REGION'])
-queue_url = os.environ['SQS_QUEUE_URL']
+sqs = boto3.client('sqs',os.environ['REGION'])
+queue_url = os.environ['QUEUE_URL']
 
 # Create graphQL client that we'll use to post results back to the DetwebAPI
 headers = {
@@ -62,7 +63,7 @@ credentials = aws.get_credentials().get_frozen_credentials()
 auth = AWS4Auth(
     credentials.access_key,
     credentials.secret_key,
-    os.environ['SQS_REGION'],
+    os.environ['REGION'],
     'appsync',
     session_token=credentials.token,
 )
@@ -84,16 +85,25 @@ def process(body):
     height=body['height']
     threshold=body['threshold']
     setId=body['setId']
-    s3_client = boto3.client('s3',os.environ['SQS_REGION'])
-    key=body['key'].replace('.JPG','.h5')
+    s3_client = boto3.client('s3',os.environ['REGION'])
+    key=body['key']
     with NamedTemporaryFile(suffix=os.path.splitext(key)[1]) as tmpFile:
-        print('public/heatmaps/'+key)
-        s3_client.download_file(body['bucket'],'public/heatmaps/'+key,tmpFile.name)
+        print(key)
+        s3_client.download_file(body['bucket'],key,tmpFile.name)
         print(tmpFile.name)
         pts=processFile(tmpFile.name,height,width,threshold)
         print(pts)
     for point,val in pts:
-        resp = client.execute(createLocation, variable_values=json.dumps({'height': height , 'imageKey': body['key'], 'x': point[0], 'y':point[1], 'width': width , 'setId': setId,'confidence':val}))
+        resp = client.execute(createLocation, variable_values=json.dumps({
+            'height': height , 
+            'imageId': body['imageId'], 
+            'projectId': body['projectId'],
+            'x': point[0], 
+            'y':point[1], 
+            'width': width,             
+            'setId': setId,
+            'confidence':val,
+            'source': 'heatmap'}))
         print(resp)
     return True
         # location=Location(x=int(pt[0]), y=int(pt[1]), image=image)

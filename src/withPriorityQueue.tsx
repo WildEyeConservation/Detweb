@@ -61,7 +61,7 @@ export function withPreloading2(WrappedComponent: React.ComponentType<any>) {
             >
               {/*  */}
               <WrappedComponent
-                {...entry}
+                location={entry}
                 visible={i === index - subsetStart}
                 next={next}
                 prev={prev}
@@ -94,7 +94,7 @@ export function withPreloading2(WrappedComponent: React.ComponentType<any>) {
                       containerwidth="100%"
                       containerheight="800px"
                     >
-                      <Location {...errorprops} />
+                      {/* <Location {...errorprops} /> */}
                     </BaseImage>
                   )}
                 </Col>

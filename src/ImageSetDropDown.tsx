@@ -42,9 +42,9 @@ export function ImageSetDropdown({ selectedSets, setImageSets }: ImageSetDropdow
     .sort((a, b) => (a.label > b.label ? 1 : -1));
   const selectedOptions=options?.filter(o=>selectedSets?.includes(o.value))
 
-  function handleChange(selectedOptions: MultiValue<OptionType>) {
-    setImageSets(selectedOptions.map(o => o.value));
-  }
+    function handleChange(selectedOptions: MultiValue<OptionType>) {
+      setImageSets(selectedOptions.map(o => o.value));
+    }
   
 
   console.log("imageSets");

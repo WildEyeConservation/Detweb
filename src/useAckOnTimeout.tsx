@@ -66,9 +66,10 @@ export function withAckOnTimeout<T extends CombinedProps>(
   WrappedComponent: React.ComponentType<T>
 ) {
   const WithAckOnTimeout: React.FC<T> = (props) => {
-    const { next, visible, ack = () => {}, ...rest } = props;
+    const { next, visible, location} = props;
+    const {ack = () => {}} = location;
     const newNext = useAckOnTimeout({ next, visible, ack });
-    return <WrappedComponent {...(rest as T)} next={newNext} />;
+    return <WrappedComponent {...props} next={newNext} />;
   };
   return WithAckOnTimeout;
 }

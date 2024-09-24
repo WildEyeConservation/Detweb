@@ -34,6 +34,7 @@ import Review from "./Review2.jsx";
 import { BrowserView, MobileView } from "react-device-detect";
 import { GlobalContext } from "./Context";
 import { Schema } from "../amplify/data/resource";
+import { StorageImage } from '@aws-amplify/ui-react-storage';
 
 configure({ ignoreRepeatedEventsWhenKeyHeldDown: false });
 
@@ -95,7 +96,8 @@ function App({ signOut = () => {}, user }: AppProps) {
                     style={{ height: "100vh", overflow: "scroll" }}
                   >
                     
-                <Navbar bg="primary" variant="dark">
+              <Navbar bg="primary" variant="dark">
+                
       <Container fluid>
         {/* <LaunchRegistration
           show={modalToShow == "launchRegistration"}
@@ -175,7 +177,6 @@ function App({ signOut = () => {}, user }: AppProps) {
                   fluid
                   className="d-flex justify-content-center h-100"
                 >
-
                   {/* <DebugDetails/> */}
                   <Routes>
                     {/* <Route exact path="register" element={<Register/>}/>

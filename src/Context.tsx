@@ -51,10 +51,16 @@ export interface ManagementContextType {
         delete: (arg:{id:string}) => void
     };   
 } 
-    
+
+
+
 export interface ProjectContextType {
+    currentPM: Schema['UserProjectMembership']['type'],
+    annotationsHook: CRUDhook<'Annotation'>,
     project: Schema['Project']['type'];
     categoriesHook: CRUDhook<'Category'>; 
+    currentCategory: Schema['Category']['type'],
+    setCurrentCategory: React.Dispatch<React.SetStateAction<Schema['Category']['type']>>
 }
 
 export interface ProgressContextType {

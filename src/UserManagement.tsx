@@ -73,8 +73,8 @@ export default function UserManagement() {
         belongsToCurrentProject ? (
           <QueueDropdown
             key={id + "2"}
-            setQueue={(q) => updateProjectMembership({ id: belongsToCurrentProject?.id, queueUrl: q })}
-            currentQueue={belongsToCurrentProject?.queueUrl || ""}
+            setQueue={(q) => updateProjectMembership({ id: belongsToCurrentProject?.id, queueId: q })}
+            currentQueue={belongsToCurrentProject?.queueId || ""}
           />
         ) : (
           <p>To select a queue, first add user to this project</p>

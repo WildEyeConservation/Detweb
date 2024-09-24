@@ -13,6 +13,7 @@ import * as L from "leaflet";
 import { AnnotationsContext } from "./AnnotationsContext";
 import * as jdenticon from "jdenticon";
 import { useMap } from "react-leaflet";
+import { ProjectContext } from "./Context";
 import type { AnnotationType, CategoryType, ExtendedAnnotationType } from "./schemaTypes";
 interface ShowMarkersProps {
   activeAnnotation?: AnnotationType;
@@ -53,17 +54,11 @@ function createIcon(
 }
 
 
-export function ShowMarkers({ activeAnnotation }: ShowMarkersProps) {
-  const {
-    annotations,
-    deleteAnnotation,
-    updateAnnotation,
-  } = useContext(AnnotationsContext)!;
-
+export function ShowMarkers({ activeAnnotation,imageId,annotationSetId}) {
+  const { annotationsHook:{data:annotations,delete:deleteAnnotation,update:updateAnnotation}} = useContext(ProjectContext)!;
   const { latLng2xy, xy2latLng } = useContext(ImageContext) ?? {};
-  const { user, sendToQueue, createQueue, currentProject } =
-    useContext(UserContext)!;
-  const {categories} = useCategoryByProject(currentProject)
+  const { user } = useContext(UserContext)!;
+  const {categoriesHook:{data:categories}} = useContext(ProjectContext)!;
   const [enabled, setEnabled] = useState(true);
 
   useHotkeys(
@@ -79,8 +74,9 @@ export function ShowMarkers({ activeAnnotation }: ShowMarkersProps) {
 
   const handleContextMenu = (e: L.LeafletMouseEvent) => {
     e.originalEvent.preventDefault();
+    const xy = latLng2xy(e.latlng);
     const annotation = annotations?.find(
-      (ann) => ann.x === e.latlng.lng && ann.y === e.latlng.lat
+      (ann) => ann.x === xy.x && ann.y === xy.y
     );
     if (annotation && deleteAnnotation && updateAnnotation) {
       const items = getContextMenuItems(
@@ -233,7 +229,9 @@ export function ShowMarkers({ activeAnnotation }: ShowMarkersProps) {
   if (enabled)
     return (
       <>
-        {annotations?.map((annotation: ExtendedAnnotationType) => {
+        {annotations.filter(annotation => annotation.imageId == imageId)
+          .filter(annotation => annotation.setId == annotationSetId)
+          .map((annotation: ExtendedAnnotationType) => {
           const position = xy2latLng
             ? (() => {
                 const latLng = xy2latLng([annotation.x, annotation.y]);

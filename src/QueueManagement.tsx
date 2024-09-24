@@ -14,8 +14,8 @@ export default function QueueManagement() {
   const [messageCounts, setMessageCounts] = useState<{ [key: string]: number }>({});
   
 
-  const getSubscribedUsersCount = (queueUrl:string) => {
-    return projectMemberships!.filter((pm) => pm.queueUrl === queueUrl).length;
+  const getSubscribedUsersCount = (queueId:string) => {
+    return projectMemberships!.filter((pm) => pm.queueId === queueId).length;
   };
 
   async function getMessageCount(queueUrl:string) {
@@ -36,7 +36,7 @@ export default function QueueManagement() {
     const updateMessageCounts = async () => {
       const newCounts:{[key: string]: number} = {};
       for (const queue of queues) {
-        if (queue.url.length > 0) {
+        if (queue.url) {
           newCounts[queue.url] = await getMessageCount(queue.url);
         }
       }
@@ -60,10 +60,10 @@ export default function QueueManagement() {
     }
   };
 
-  const unsubscribeAllUsers = (queueUrl:string) => {
-    console.log('Unsubscribe all users button pressed for queue:', queueUrl);
-    projectMemberships?.filter(pm => pm.queueUrl === queueUrl)?.forEach(
-      pm => updateProjectMembership({ id: pm.id, queueUrl: null }))
+  const unsubscribeAllUsers = (queueId:string) => {
+    console.log('Unsubscribe all users button pressed for queue:', queueId);
+    projectMemberships?.filter(pm => pm.queueId === queueId)?.forEach(
+      pm => updateProjectMembership({ id: pm.id, queueId: null }))
   };
 
   const purgeQueueHandler = (queueUrl:string) => {
@@ -74,8 +74,8 @@ export default function QueueManagement() {
 
   const tableData = queues
     ?.map((queue) => {
-      const subscribedUsersCount = getSubscribedUsersCount(queue.url);
-      const messageCount = messageCounts[queue.url];
+      const subscribedUsersCount = getSubscribedUsersCount(queue.id);
+      const messageCount = queue.url ? messageCounts[queue.url] : 0;
       const isDeleteDisabled = (subscribedUsersCount > 0) || (messageCount > 0);
 
       const deleteTooltip = (
@@ -85,17 +85,17 @@ export default function QueueManagement() {
       );
 
       return {
-        id: queue.url,
+        id: queue.id,
         name: queue.name, // Add this line to include the name for sorting
         rowData: [
           queue.name,
           subscribedUsersCount,
           <span key={`${queue.url}-count`}>{messageCount}</span>,
           <div key={`${queue.url}-actions`}>
-            <Button variant="warning" className="me-2" onClick={() => unsubscribeAllUsers(queue.url)}>
+            <Button variant="warning" className="me-2" onClick={() => unsubscribeAllUsers(queue.id)}>
               Unsubscribe All
             </Button>
-            <Button variant="info" className="me-2" onClick={() => purgeQueueHandler(queue.url)}>
+            <Button variant="info" disabled={!(queue.url)} className="me-2" onClick={() => purgeQueueHandler(queue.url!)}>
               Purge Queue
             </Button>
             <OverlayTrigger

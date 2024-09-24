@@ -24,7 +24,6 @@ export const createDetwebResources=function(scope: Construct, backend : Backend<
   data: ConstructFactory<AmplifyGraphqlApi>;
   addUserToGroup: ConstructFactory<ResourceProvider<FunctionResources> & ResourceAccessAcceptorFactory & AddEnvironmentFactory>;
 }>) {
-  const authenticatedRole = backend.auth.resources.authenticatedUserIamRole
   
   // // Give our function permission to add an item to a group
   // addUserFunc.addToRolePolicy(
@@ -43,34 +42,11 @@ export const createDetwebResources=function(scope: Construct, backend : Backend<
   // });
 
 
-  backend.auth.resources.userPool.grant(
-    authenticatedRole,
-    "cognito-idp:AdminAddUserToGroup",
-  );
-  backend.auth.resources.userPool.grant(
-    authenticatedRole,
-    "cognito-idp:AdminRemoveUserFromGroup",
-  );
-
-    // Create a Role for the hanlde upload Lambda to use.
-    const uploadLambdaRole = new iam.Role(scope, "LambdaRole", {
-      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
-    });
-  
-    const subsampleLambdaRole = new iam.Role(scope, "SubsampleLambdaRole", {
-      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
-    });
 
     // Create a Task Role
     const ecsTaskRole = new iam.Role(scope, "EcsTaskRole", {
       assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
     });
-
-    const gpuWorkerRole = iam.Role.fromRoleArn(
-      scope,
-      "gpuRole",
-      "arn:aws:iam::275736403632:role/gpuWorkerRole",
-    );
 
     //  const adminEmail = "noone@nowhere.com";
     //  const adminTempPassword = "adminTempPassword$%3445";
@@ -78,43 +54,10 @@ export const createDetwebResources=function(scope: Construct, backend : Backend<
 
 
   const vpc = new ec2.Vpc(scope, "my-cdk-vpc");
-  const sg = new ec2.SecurityGroup(scope, "instanceSg", { vpc });
-  // Create a new VPC for the Aurora cluster
-
-//   // Create the Aurora MySQL Serverless v2 cluster
-// // Create the serverless cluster, provide all values needed to customise the database.
-// const cluster = new rds.DatabaseCluster(scope, 'AuroraClusterV2', {
-//   engine: rds.DatabaseClusterEngine.auroraMysql({ version: rds.AuroraMysqlEngineVersion.VER_3_07_1 }),
-//   credentials: { username: 'clusteradmin' },
-//   clusterIdentifier: 'db-endpoint-test',
-//   writer: rds.ClusterInstance.serverlessV2('writer'),
-//   serverlessV2MinCapacity: 2,
-//   serverlessV2MaxCapacity: 10,
-//   vpc,
-//   defaultDatabaseName: 'demos',
-//   enableDataApi: true,  // has to be set to true to enable Data API as not enable by default
-// });
-
-  // // Create outputs for the database information
-  // new CfnOutput(scope, 'AuroraClusterEndpoint', {
-  //   value: cluster.clusterEndpoint.socketAddress,
-  //   description: 'Aurora Cluster Endpoint',
-  // });
-
-  // new CfnOutput(scope, 'AuroraClusterReadEndpoint', {
-  //   value: cluster.clusterReadEndpoint.socketAddress,
-  //   description: 'Aurora Cluster Read Endpoint',
-  // });
-
-  // new CfnOutput(scope, 'AuroraClusterSecretArn', {
-  //   value: cluster.secret?.secretArn || 'Secret not available',
-  //   description: 'Aurora Cluster Secret ARN',
-  // });
-
-
-    sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22));
-    sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(3306));
-    sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443));
+  // const sg = new ec2.SecurityGroup(scope, "instanceSg", { vpc });
+  //   sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22));
+  //   sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(3306));
+  //   sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443));
 
     ecsTaskRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName("AWSAppSyncInvokeFullAccess"),
@@ -127,8 +70,8 @@ export const createDetwebResources=function(scope: Construct, backend : Backend<
         ecsImage: ecs.ContainerImage.fromAsset("containerImages/pointFinderImage"),
         ecsTaskRole,
         environment: {
-          //API_ENDPOINT: backend.data.resources.cfnResources.cfnGraphqlApi.attrGraphQlUrl,
-          //API_KEY: backend.data.apiKey || ""
+          API_ENDPOINT: backend.data.graphqlUrl,
+          API_KEY: backend.data.apiKey || ""
         },
         machineImage: ecs.EcsOptimizedImage.amazonLinux2()
       })
@@ -150,8 +93,8 @@ export const createDetwebResources=function(scope: Construct, backend : Backend<
         memoryLimitMiB: 1024 * 12,
         gpuCount: 1,
         environment: {
-          //API_ENDPOINT: backend.data.graphqlUrl,
-          //API_KEY: backend.data.apiKey || ""
+          API_ENDPOINT: backend.data.graphqlUrl,
+          API_KEY: backend.data.apiKey || ""
         },
         machineImage: ecs.EcsOptimizedImage.amazonLinux2(ecs.AmiHardwareType.GPU)
       })
@@ -163,13 +106,6 @@ export const createDetwebResources=function(scope: Construct, backend : Backend<
     lightGlueAutoProcessor.asg.role.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName("AWSAppSyncInvokeFullAccess"),
     );
-
-
-    pointFinderAutoProcessor.queue.grantConsumeMessages(ecsTaskRole);
-    pointFinderAutoProcessor.queue.grantSendMessages(authenticatedRole);
-    lightGlueAutoProcessor.queue.grantConsumeMessages(ecsTaskRole);
-    lightGlueAutoProcessor.queue.grantSendMessages(authenticatedRole);
-  
   
   ;
   //const devRole = iam.Role.fromRoleArn(scope, "DevRole", devUserArn);
@@ -182,51 +118,6 @@ export const createDetwebResources=function(scope: Construct, backend : Backend<
   //   })],
   // }));
   
-    const sqsCreateQueueStatement = new iam.PolicyStatement({
-      actions: [
-        "sqs:CreateQueue",
-        "sqs:PurgeQueue",
-        "sqs:SendMessage",
-        "sqs:DeleteQueue",
-        "sqs:GetQueueAttributes",
-        "sqs:GetQueueUrl",
-      ],
-      resources: ["*"],
-    });
-    const sqsConsumeQueueStatement = new iam.PolicyStatement({
-      actions: [
-        "sqs:ReceiveMessage",
-        "sqs:DeleteMessage",
-        "sqs:GetQueueAttributes",
-        "sqs:GetQueueUrl",
-        "sqs:ChangeMessageVisibility",
-      ],
-      resources: ["*"],
-    });
-    const cognitoAdmin = new iam.PolicyStatement({
-      actions: [
-        "cognito-idp:AdminRemoveUserFromGroup",
-        "cognito-idp:AdminAddUserToGroup",
-      ],
-      resources: ["*"],
-    });
-    const lambdaInvoke = new iam.PolicyStatement({
-      actions: ["lambda:InvokeFunction"],
-      resources: ["*"],
-    });
-
-    authenticatedRole.addToPrincipalPolicy(
-      sqsCreateQueueStatement,
-    );
-    authenticatedRole.addToPrincipalPolicy(
-      sqsConsumeQueueStatement,
-    );
-    authenticatedRole.addToPrincipalPolicy(
-      cognitoAdmin,
-    );
-    authenticatedRole.addToPrincipalPolicy(
-      lambdaInvoke,
-    );
   const processor = new EC2QueueProcessor(scope, 'MyProcessor', {
     vpc: vpc, // Your VPC
     instanceType: ec2.InstanceType.of(ec2.InstanceClass.G4DN, ec2.InstanceSize.XLARGE), // Or any instance type you prefer
@@ -237,6 +128,7 @@ export const createDetwebResources=function(scope: Construct, backend : Backend<
   
   return {
     processTaskQueueUrl: processor.queue.queueUrl,
+    pointFinderTaskQueueUrl: pointFinderAutoProcessor.queue.queueUrl,
     //auroraClusterEndpoint: cluster.clusterEndpoint.socketAddress,
     //auroraClusterReadEndpoint: cluster.clusterReadEndpoint.socketAddress,
     //auroraClusterSecretArn: cluster.secret?.secretArn || 'Secret not available',  

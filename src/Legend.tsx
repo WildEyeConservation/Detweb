@@ -1,7 +1,8 @@
 import { POSITION_CLASSES } from "./NavButtons";
 import { useState, useEffect, useRef, useContext } from "react";
 import L from "leaflet";
-import { UserContext } from "./Context";
+import { ProjectContext, UserContext } from "./Context";
+
 
 /**
  *
@@ -23,8 +24,7 @@ interface LegendProps {
 
 
 export function Legend({ position }: LegendProps) {
-  const {currentProject} = useContext(UserContext)!;
-  const {categories, setCurrentCategory} = useCategoryByProject(currentProject)
+  const {categoriesHook:{data:categories},currentCategory,setCurrentCategory} = useContext(ProjectContext)!;
   const divRef = useRef<HTMLDivElement | null>(null);
   const positionClass =
     (position && POSITION_CLASSES[position]) || POSITION_CLASSES.bottomright;

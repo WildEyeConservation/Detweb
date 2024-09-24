@@ -40,8 +40,8 @@ updateN=gql("""mutation MyMutation($input: UpdateImageNeighbourInput!) {
 """)
 
 # Create SQS client
-sqs = boto3.client('sqs',os.environ['SQS_REGION'])
-queue_url = os.environ['SQS_QUEUE_URL']
+sqs = boto3.client('sqs',os.environ['REGION'])
+queue_url = os.environ['QUEUE_URL']
 
 # Create graphQL client that we'll use to post results back to the DetwebAPI
 headers = {
@@ -53,7 +53,7 @@ credentials = aws.get_credentials().get_frozen_credentials()
 auth = AWS4Auth(
     credentials.access_key,
     credentials.secret_key,
-    os.environ['API_REGION'],
+    os.environ['REGION'],
     'appsync',
     session_token=credentials.token,
 )

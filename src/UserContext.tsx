@@ -18,6 +18,7 @@ import {
   useOptimisticImageSet,
   useOptimisticLocationSet,
   useOptimisticAnnotationSet,
+  useOptimisticAnnotation,
   useQueues
 } from "./useOptimisticUpdates.tsx";
 
@@ -27,11 +28,14 @@ import {
 export function Project({ children, currentPM }: { children: React.ReactNode, currentPM: Schema['UserProjectMembership']['type']   }) {
   const { client } = useContext(GlobalContext)!;
   const [currentProject, setCurrentProject] = useState<Schema['Project']['type'] | undefined>(undefined)
-  
   const categoriesHook = useOptimisticCategory(
     async () => client.models.Category.list({ filter: { projectId: { eq: currentPM?.projectId } } }),
     { filter: { projectId: { eq: currentProject?.id } } })
-
+  const [currentCategory, setCurrentCategory] = useState<Schema['Category']['type']|undefined>(categoriesHook.data?.[0])
+  
+  const annotationsHook = useOptimisticAnnotation(
+    async () => client.models.Annotation.list({ filter: { projectId: { eq: currentPM?.projectId } } }),
+    { filter: { projectId: { eq: currentProject?.id } } })
   useEffect(() => {
     if (currentPM) {
       client.models.Project.get({ id: currentPM.projectId }).then(p =>
@@ -41,11 +45,22 @@ export function Project({ children, currentPM }: { children: React.ReactNode, cu
     }
   }, [currentPM])
   
+  useEffect(() => {
+    if (!currentCategory) {
+      setCurrentCategory(categoriesHook.data?.[0])
+    }
+  },[categoriesHook.data])
+
+
   return (
     currentProject && 
     <ProjectContext.Provider value={{
         project: currentProject,
-        categoriesHook
+        categoriesHook,
+        annotationsHook,
+        currentPM,
+        currentCategory,
+        setCurrentCategory
     }}>
       {currentProject && children}
     </ProjectContext.Provider>

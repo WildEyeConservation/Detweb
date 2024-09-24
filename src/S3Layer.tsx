@@ -29,7 +29,7 @@ class leafletS3Layer extends L.GridLayer {
 
   createTile(coords: L.Coords, done: (error: Error | undefined, tile: HTMLElement) => void) {
     const tile = document.createElement("img");
-    let key = `public/slippymaps/${this.source}/${coords.z}/${coords.y}/${coords.x}.png`;
+    let key = `slippymaps/${this.source}/${coords.z}/${coords.y}/${coords.x}.png`;
     if (!(key in cachedUrlPromises)) {
       // Get a blob URL
       cachedUrlPromises[key] = this.getObject({
