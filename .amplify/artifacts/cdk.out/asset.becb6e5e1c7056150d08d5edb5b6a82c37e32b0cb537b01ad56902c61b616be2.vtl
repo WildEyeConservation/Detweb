@@ -1,0 +1,30 @@
+## [Start] Field Authorization Steps. **
+#set( $isAuthorized = false )
+#if( $util.authType() == "API Key Authorization" )
+
+#end
+#if( $util.authType() == "IAM Authorization" )
+  #if( $util.authType() == "IAM Authorization" && $util.isNull($ctx.identity.cognitoIdentityPoolId) && $util.isNull($ctx.identity.cognitoIdentityId) )
+    $util.qr($ctx.stash.put("hasAuth", true))
+    #set( $isAuthorized = true )
+  #else
+$util.unauthorized()
+  #end
+#end
+#if( $util.authType() == "User Pool Authorization" )
+  #if( !$isAuthorized )
+    #set( $staticGroupRoles = [{"claim":"cognito:groups","entity":"admin"}] )
+    #foreach( $groupRole in $staticGroupRoles )
+      #set( $groupsInToken = $util.defaultIfNull($ctx.identity.claims.get($groupRole.claim), []) )
+      #if( $groupsInToken.contains($groupRole.entity) )
+        #set( $isAuthorized = true )
+        #break
+      #end
+    #end
+  #end
+#end
+#if( !$isAuthorized )
+$util.unauthorized()
+#end
+$util.toJson({"version":"2018-05-29","payload":{}})
+## [End] Field Authorization Steps. **

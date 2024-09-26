@@ -1,0 +1,3038 @@
+{
+ "Description": "{\"createdOn\":\"Windows\",\"createdBy\":\"AmplifySandbox\",\"createdWith\":\"1.2.0\",\"stackType\":\"custom\",\"metadata\":{}}",
+ "Resources": {
+  "LambdaRole3A44B857": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/LambdaRole/Resource"
+   }
+  },
+  "SubsampleLambdaRoleFB84E8CF": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/SubsampleLambdaRole/Resource"
+   }
+  },
+  "EcsTaskRole8DFA0181": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ecs-tasks.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/AWSAppSyncInvokeFullAccess"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/EcsTaskRole/Resource"
+   }
+  },
+  "EcsTaskRoleDefaultPolicy50882C77": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "sqs:ReceiveMessage",
+        "sqs:ChangeMessageVisibility",
+        "sqs:GetQueueUrl",
+        "sqs:DeleteMessage",
+        "sqs:GetQueueAttributes"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "CpuAutoProcessorProcessingQueue8311B335",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "sqs:ReceiveMessage",
+        "sqs:ChangeMessageVisibility",
+        "sqs:GetQueueUrl",
+        "sqs:DeleteMessage",
+        "sqs:GetQueueAttributes"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "GpuAutoProcessorProcessingQueue37A524D4",
+         "Arn"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "EcsTaskRoleDefaultPolicy50882C77",
+    "Roles": [
+     {
+      "Ref": "EcsTaskRole8DFA0181"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/EcsTaskRole/DefaultPolicy/Resource"
+   }
+  },
+  "mycdkvpc037DA4AF": {
+   "Type": "AWS::EC2::VPC",
+   "Properties": {
+    "CidrBlock": "10.0.0.0/16",
+    "EnableDnsHostnames": true,
+    "EnableDnsSupport": true,
+    "InstanceTenancy": "default",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/Resource"
+   }
+  },
+  "mycdkvpcPublicSubnet1Subnet0CCFA225": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": {
+     "Fn::Select": [
+      0,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
+    "CidrBlock": "10.0.0.0/18",
+    "MapPublicIpOnLaunch": true,
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Public"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Public"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "mycdkvpc037DA4AF"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet1/Subnet"
+   }
+  },
+  "mycdkvpcPublicSubnet1RouteTableC2716F4D": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "mycdkvpc037DA4AF"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet1/RouteTable"
+   }
+  },
+  "mycdkvpcPublicSubnet1RouteTableAssociation2B06D461": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "mycdkvpcPublicSubnet1RouteTableC2716F4D"
+    },
+    "SubnetId": {
+     "Ref": "mycdkvpcPublicSubnet1Subnet0CCFA225"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet1/RouteTableAssociation"
+   }
+  },
+  "mycdkvpcPublicSubnet1DefaultRoute19FD7680": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "GatewayId": {
+     "Ref": "mycdkvpcIGW4220D5A9"
+    },
+    "RouteTableId": {
+     "Ref": "mycdkvpcPublicSubnet1RouteTableC2716F4D"
+    }
+   },
+   "DependsOn": [
+    "mycdkvpcVPCGW2444B783"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet1/DefaultRoute"
+   }
+  },
+  "mycdkvpcPublicSubnet1EIPC0CEF1CB": {
+   "Type": "AWS::EC2::EIP",
+   "Properties": {
+    "Domain": "vpc",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet1"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet1/EIP"
+   }
+  },
+  "mycdkvpcPublicSubnet1NATGateway3DF5C4E4": {
+   "Type": "AWS::EC2::NatGateway",
+   "Properties": {
+    "AllocationId": {
+     "Fn::GetAtt": [
+      "mycdkvpcPublicSubnet1EIPC0CEF1CB",
+      "AllocationId"
+     ]
+    },
+    "SubnetId": {
+     "Ref": "mycdkvpcPublicSubnet1Subnet0CCFA225"
+    },
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet1"
+     }
+    ]
+   },
+   "DependsOn": [
+    "mycdkvpcPublicSubnet1DefaultRoute19FD7680",
+    "mycdkvpcPublicSubnet1RouteTableAssociation2B06D461"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet1/NATGateway"
+   }
+  },
+  "mycdkvpcPublicSubnet2Subnet33F973F6": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": {
+     "Fn::Select": [
+      1,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
+    "CidrBlock": "10.0.64.0/18",
+    "MapPublicIpOnLaunch": true,
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Public"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Public"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "mycdkvpc037DA4AF"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet2/Subnet"
+   }
+  },
+  "mycdkvpcPublicSubnet2RouteTableB1A27A7D": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "mycdkvpc037DA4AF"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet2/RouteTable"
+   }
+  },
+  "mycdkvpcPublicSubnet2RouteTableAssociation3ADB11EB": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "mycdkvpcPublicSubnet2RouteTableB1A27A7D"
+    },
+    "SubnetId": {
+     "Ref": "mycdkvpcPublicSubnet2Subnet33F973F6"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet2/RouteTableAssociation"
+   }
+  },
+  "mycdkvpcPublicSubnet2DefaultRoute32FE0E26": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "GatewayId": {
+     "Ref": "mycdkvpcIGW4220D5A9"
+    },
+    "RouteTableId": {
+     "Ref": "mycdkvpcPublicSubnet2RouteTableB1A27A7D"
+    }
+   },
+   "DependsOn": [
+    "mycdkvpcVPCGW2444B783"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet2/DefaultRoute"
+   }
+  },
+  "mycdkvpcPublicSubnet2EIP2135E277": {
+   "Type": "AWS::EC2::EIP",
+   "Properties": {
+    "Domain": "vpc",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet2"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet2/EIP"
+   }
+  },
+  "mycdkvpcPublicSubnet2NATGatewayE67C5CFB": {
+   "Type": "AWS::EC2::NatGateway",
+   "Properties": {
+    "AllocationId": {
+     "Fn::GetAtt": [
+      "mycdkvpcPublicSubnet2EIP2135E277",
+      "AllocationId"
+     ]
+    },
+    "SubnetId": {
+     "Ref": "mycdkvpcPublicSubnet2Subnet33F973F6"
+    },
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet2"
+     }
+    ]
+   },
+   "DependsOn": [
+    "mycdkvpcPublicSubnet2DefaultRoute32FE0E26",
+    "mycdkvpcPublicSubnet2RouteTableAssociation3ADB11EB"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PublicSubnet2/NATGateway"
+   }
+  },
+  "mycdkvpcPrivateSubnet1Subnet196BF1EF": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": {
+     "Fn::Select": [
+      0,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
+    "CidrBlock": "10.0.128.0/18",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Private"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Private"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PrivateSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "mycdkvpc037DA4AF"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PrivateSubnet1/Subnet"
+   }
+  },
+  "mycdkvpcPrivateSubnet1RouteTableD4BD6179": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PrivateSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "mycdkvpc037DA4AF"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PrivateSubnet1/RouteTable"
+   }
+  },
+  "mycdkvpcPrivateSubnet1RouteTableAssociation7FC64E24": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "mycdkvpcPrivateSubnet1RouteTableD4BD6179"
+    },
+    "SubnetId": {
+     "Ref": "mycdkvpcPrivateSubnet1Subnet196BF1EF"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PrivateSubnet1/RouteTableAssociation"
+   }
+  },
+  "mycdkvpcPrivateSubnet1DefaultRoute35833E43": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "NatGatewayId": {
+     "Ref": "mycdkvpcPublicSubnet1NATGateway3DF5C4E4"
+    },
+    "RouteTableId": {
+     "Ref": "mycdkvpcPrivateSubnet1RouteTableD4BD6179"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PrivateSubnet1/DefaultRoute"
+   }
+  },
+  "mycdkvpcPrivateSubnet2SubnetC5D2ACEF": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": {
+     "Fn::Select": [
+      1,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
+    "CidrBlock": "10.0.192.0/18",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Private"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Private"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PrivateSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "mycdkvpc037DA4AF"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PrivateSubnet2/Subnet"
+   }
+  },
+  "mycdkvpcPrivateSubnet2RouteTableE3606704": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PrivateSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "mycdkvpc037DA4AF"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PrivateSubnet2/RouteTable"
+   }
+  },
+  "mycdkvpcPrivateSubnet2RouteTableAssociation9998E839": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "mycdkvpcPrivateSubnet2RouteTableE3606704"
+    },
+    "SubnetId": {
+     "Ref": "mycdkvpcPrivateSubnet2SubnetC5D2ACEF"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PrivateSubnet2/RouteTableAssociation"
+   }
+  },
+  "mycdkvpcPrivateSubnet2DefaultRouteFF924DDA": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "NatGatewayId": {
+     "Ref": "mycdkvpcPublicSubnet2NATGatewayE67C5CFB"
+    },
+    "RouteTableId": {
+     "Ref": "mycdkvpcPrivateSubnet2RouteTableE3606704"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/PrivateSubnet2/DefaultRoute"
+   }
+  },
+  "mycdkvpcIGW4220D5A9": {
+   "Type": "AWS::EC2::InternetGateway",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/IGW"
+   }
+  },
+  "mycdkvpcVPCGW2444B783": {
+   "Type": "AWS::EC2::VPCGatewayAttachment",
+   "Properties": {
+    "InternetGatewayId": {
+     "Ref": "mycdkvpcIGW4220D5A9"
+    },
+    "VpcId": {
+     "Ref": "mycdkvpc037DA4AF"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/my-cdk-vpc/VPCGW"
+   }
+  },
+  "instanceSg67C4465B": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/instanceSg",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "from 0.0.0.0/0:22",
+      "FromPort": 22,
+      "IpProtocol": "tcp",
+      "ToPort": 22
+     },
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "from 0.0.0.0/0:3306",
+      "FromPort": 3306,
+      "IpProtocol": "tcp",
+      "ToPort": 3306
+     },
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "from 0.0.0.0/0:443",
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "VpcId": {
+     "Ref": "mycdkvpc037DA4AF"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/instanceSg/Resource"
+   }
+  },
+  "CpuAutoProcessorProcessingQueue8311B335": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessingQueue/Resource"
+   }
+  },
+  "CpuAutoProcessorProcessorCluster1AA00A80": {
+   "Type": "AWS::ECS::Cluster",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorCluster/Resource"
+   }
+  },
+  "CpuAutoProcessorProcessorCluster098C6D72": {
+   "Type": "AWS::ECS::ClusterCapacityProviderAssociations",
+   "Properties": {
+    "CapacityProviders": [
+     {
+      "Ref": "CpuAutoProcessorAsgCapacityProviderBBEFEE2A"
+     }
+    ],
+    "Cluster": {
+     "Ref": "CpuAutoProcessorProcessorCluster1AA00A80"
+    },
+    "DefaultCapacityProviderStrategy": []
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorCluster/ProcessorCluster"
+   }
+  },
+  "CpuAutoProcessorinstanceSg93DEC970": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/instanceSg",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "from 0.0.0.0/0:22",
+      "FromPort": 22,
+      "IpProtocol": "tcp",
+      "ToPort": 22
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "VpcId": {
+     "Ref": "mycdkvpc037DA4AF"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/instanceSg/Resource"
+   }
+  },
+  "CpuAutoProcessorProcessorASGInstanceRole36834D64": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ec2.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/AWSAppSyncInvokeFullAccess"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorASG"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorASG/InstanceRole/Resource"
+   }
+  },
+  "CpuAutoProcessorProcessorASGInstanceRoleDefaultPolicyB1011CA1": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "ecs:DeregisterContainerInstance",
+        "ecs:RegisterContainerInstance",
+        "ecs:Submit*"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "CpuAutoProcessorProcessorCluster1AA00A80",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "ecs:Poll",
+        "ecs:StartTelemetrySession"
+       ],
+       "Condition": {
+        "ArnEquals": {
+         "ecs:cluster": {
+          "Fn::GetAtt": [
+           "CpuAutoProcessorProcessorCluster1AA00A80",
+           "Arn"
+          ]
+         }
+        }
+       },
+       "Effect": "Allow",
+       "Resource": "*"
+      },
+      {
+       "Action": [
+        "ecs:DiscoverPollEndpoint",
+        "ecr:GetAuthorizationToken",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "CpuAutoProcessorProcessorASGInstanceRoleDefaultPolicyB1011CA1",
+    "Roles": [
+     {
+      "Ref": "CpuAutoProcessorProcessorASGInstanceRole36834D64"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorASG/InstanceRole/DefaultPolicy/Resource"
+   }
+  },
+  "CpuAutoProcessorProcessorASGInstanceProfileE1B14764": {
+   "Type": "AWS::IAM::InstanceProfile",
+   "Properties": {
+    "Roles": [
+     {
+      "Ref": "CpuAutoProcessorProcessorASGInstanceRole36834D64"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorASG/InstanceProfile"
+   }
+  },
+  "CpuAutoProcessorProcessorASGLaunchConfigA3D14D04": {
+   "Type": "AWS::AutoScaling::LaunchConfiguration",
+   "Properties": {
+    "AssociatePublicIpAddress": true,
+    "IamInstanceProfile": {
+     "Ref": "CpuAutoProcessorProcessorASGInstanceProfileE1B14764"
+    },
+    "ImageId": {
+     "Ref": "SsmParameterValueawsserviceecsoptimizedamiamazonlinux2recommendedimageidC96584B6F00A464EAD1953AFF4B05118Parameter"
+    },
+    "InstanceType": "t3.small",
+    "KeyName": "cvat_africa",
+    "SecurityGroups": [
+     {
+      "Fn::GetAtt": [
+       "CpuAutoProcessorinstanceSg93DEC970",
+       "GroupId"
+      ]
+     }
+    ],
+    "UserData": {
+     "Fn::Base64": {
+      "Fn::Join": [
+       "",
+       [
+        "#!/bin/bash\necho ECS_CLUSTER=",
+        {
+         "Ref": "CpuAutoProcessorProcessorCluster1AA00A80"
+        },
+        " >> /etc/ecs/ecs.config\nsudo iptables --insert FORWARD 1 --in-interface docker+ --destination 169.254.169.254/32 --jump DROP\nsudo service iptables save\necho ECS_AWSVPC_BLOCK_IMDS=true >> /etc/ecs/ecs.config"
+       ]
+      ]
+     }
+    }
+   },
+   "DependsOn": [
+    "CpuAutoProcessorProcessorASGInstanceRoleDefaultPolicyB1011CA1",
+    "CpuAutoProcessorProcessorASGInstanceRole36834D64"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorASG/LaunchConfig"
+   }
+  },
+  "CpuAutoProcessorProcessorASG9EFA3629": {
+   "Type": "AWS::AutoScaling::AutoScalingGroup",
+   "Properties": {
+    "DesiredCapacity": "0",
+    "LaunchConfigurationName": {
+     "Ref": "CpuAutoProcessorProcessorASGLaunchConfigA3D14D04"
+    },
+    "MaxSize": "1",
+    "MinSize": "0",
+    "NewInstancesProtectedFromScaleIn": true,
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "PropagateAtLaunch": true,
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "PropagateAtLaunch": true,
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "PropagateAtLaunch": true,
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorASG"
+     }
+    ],
+    "VPCZoneIdentifier": [
+     {
+      "Ref": "mycdkvpcPublicSubnet1Subnet0CCFA225"
+     },
+     {
+      "Ref": "mycdkvpcPublicSubnet2Subnet33F973F6"
+     }
+    ]
+   },
+   "UpdatePolicy": {
+    "AutoScalingScheduledAction": {
+     "IgnoreUnmodifiedGroupSizeProperties": true
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorASG/ASG"
+   }
+  },
+  "CpuAutoProcessorAsgCapacityProviderBBEFEE2A": {
+   "Type": "AWS::ECS::CapacityProvider",
+   "Properties": {
+    "AutoScalingGroupProvider": {
+     "AutoScalingGroupArn": {
+      "Ref": "CpuAutoProcessorProcessorASG9EFA3629"
+     },
+     "ManagedScaling": {
+      "Status": "ENABLED",
+      "TargetCapacity": 100
+     },
+     "ManagedTerminationProtection": "ENABLED"
+    },
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/AsgCapacityProvider/AsgCapacityProvider"
+   }
+  },
+  "CpuAutoProcessorProcessorTaskDefE31F983A": {
+   "Type": "AWS::ECS::TaskDefinition",
+   "Properties": {
+    "ContainerDefinitions": [
+     {
+      "Cpu": 1024,
+      "Environment": [
+       {
+        "Name": "QUEUE_URL",
+        "Value": {
+         "Ref": "CpuAutoProcessorProcessingQueue8311B335"
+        }
+       },
+       {
+        "Name": "REGION",
+        "Value": {
+         "Ref": "AWS::Region"
+        }
+       }
+      ],
+      "Essential": true,
+      "Image": {
+       "Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/cdk-hnb659fds-container-assets-${AWS::AccountId}-${AWS::Region}:633be0899c0b63dd99d1a60dba77f2563713d2ae36d716283fc0d719e7b78e03"
+      },
+      "LogConfiguration": {
+       "LogDriver": "awslogs",
+       "Options": {
+        "awslogs-group": {
+         "Ref": "CpuAutoProcessorProcessorTaskDefProcessorContainerLogGroupDF1110C0"
+        },
+        "awslogs-stream-prefix": "processor",
+        "awslogs-region": {
+         "Ref": "AWS::Region"
+        }
+       }
+      },
+      "Memory": 1024,
+      "Name": "ProcessorContainer"
+     }
+    ],
+    "ExecutionRoleArn": {
+     "Fn::GetAtt": [
+      "CpuAutoProcessorProcessorTaskDefExecutionRole621C6BAE",
+      "Arn"
+     ]
+    },
+    "Family": "amplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomCpuAutoProcessorProcessorTaskDefDC0B5825",
+    "NetworkMode": "bridge",
+    "RequiresCompatibilities": [
+     "EC2"
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "TaskRoleArn": {
+     "Fn::GetAtt": [
+      "EcsTaskRole8DFA0181",
+      "Arn"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorTaskDef/Resource"
+   }
+  },
+  "CpuAutoProcessorProcessorTaskDefProcessorContainerLogGroupDF1110C0": {
+   "Type": "AWS::Logs::LogGroup",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorTaskDef/ProcessorContainer/LogGroup/Resource"
+   }
+  },
+  "CpuAutoProcessorProcessorTaskDefExecutionRole621C6BAE": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ecs-tasks.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorTaskDef/ExecutionRole/Resource"
+   }
+  },
+  "CpuAutoProcessorProcessorTaskDefExecutionRoleDefaultPolicy269B0646": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":ecr:",
+          {
+           "Ref": "AWS::Region"
+          },
+          ":",
+          {
+           "Ref": "AWS::AccountId"
+          },
+          ":repository/",
+          {
+           "Fn::Sub": "cdk-hnb659fds-container-assets-${AWS::AccountId}-${AWS::Region}"
+          }
+         ]
+        ]
+       }
+      },
+      {
+       "Action": "ecr:GetAuthorizationToken",
+       "Effect": "Allow",
+       "Resource": "*"
+      },
+      {
+       "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "CpuAutoProcessorProcessorTaskDefProcessorContainerLogGroupDF1110C0",
+         "Arn"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "CpuAutoProcessorProcessorTaskDefExecutionRoleDefaultPolicy269B0646",
+    "Roles": [
+     {
+      "Ref": "CpuAutoProcessorProcessorTaskDefExecutionRole621C6BAE"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorTaskDef/ExecutionRole/DefaultPolicy/Resource"
+   }
+  },
+  "CpuAutoProcessorProcessorService4FA8AEE0": {
+   "Type": "AWS::ECS::Service",
+   "Properties": {
+    "CapacityProviderStrategy": [
+     {
+      "CapacityProvider": {
+       "Ref": "CpuAutoProcessorAsgCapacityProviderBBEFEE2A"
+      },
+      "Weight": 1
+     }
+    ],
+    "Cluster": {
+     "Ref": "CpuAutoProcessorProcessorCluster1AA00A80"
+    },
+    "DeploymentConfiguration": {
+     "Alarms": {
+      "AlarmNames": [],
+      "Enable": false,
+      "Rollback": false
+     },
+     "MaximumPercent": 200,
+     "MinimumHealthyPercent": 50
+    },
+    "DesiredCount": 0,
+    "EnableECSManagedTags": false,
+    "SchedulingStrategy": "REPLICA",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "TaskDefinition": {
+     "Ref": "CpuAutoProcessorProcessorTaskDefE31F983A"
+    }
+   },
+   "DependsOn": [
+    "EcsTaskRoleDefaultPolicy50882C77",
+    "EcsTaskRole8DFA0181"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorService/Service"
+   }
+  },
+  "CpuAutoProcessorProcessorServiceTaskCountTarget5ADBCA5D": {
+   "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+   "Properties": {
+    "MaxCapacity": 1,
+    "MinCapacity": 0,
+    "ResourceId": {
+     "Fn::Join": [
+      "",
+      [
+       "service/",
+       {
+        "Ref": "CpuAutoProcessorProcessorCluster1AA00A80"
+       },
+       "/",
+       {
+        "Fn::GetAtt": [
+         "CpuAutoProcessorProcessorService4FA8AEE0",
+         "Name"
+        ]
+       }
+      ]
+     ]
+    },
+    "RoleARN": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":iam::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService"
+      ]
+     ]
+    },
+    "ScalableDimension": "ecs:service:DesiredCount",
+    "ServiceNamespace": "ecs"
+   },
+   "DependsOn": [
+    "EcsTaskRoleDefaultPolicy50882C77",
+    "EcsTaskRole8DFA0181"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorService/TaskCount/Target/Resource"
+   }
+  },
+  "CpuAutoProcessorProcessorServiceTaskCountTargetScaleOnSQSMessagesLowerPolicy73075AF0": {
+   "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+   "Properties": {
+    "PolicyName": "amplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomCpuAutoProcessorProcessorServiceTaskCountTargetScaleOnSQSMessagesLowerPolicy64E932D7",
+    "PolicyType": "StepScaling",
+    "ScalingTargetId": {
+     "Ref": "CpuAutoProcessorProcessorServiceTaskCountTarget5ADBCA5D"
+    },
+    "StepScalingPolicyConfiguration": {
+     "AdjustmentType": "ChangeInCapacity",
+     "MetricAggregationType": "Maximum",
+     "StepAdjustments": [
+      {
+       "MetricIntervalUpperBound": 0,
+       "ScalingAdjustment": -1
+      }
+     ]
+    }
+   },
+   "DependsOn": [
+    "EcsTaskRoleDefaultPolicy50882C77",
+    "EcsTaskRole8DFA0181"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorService/TaskCount/Target/ScaleOnSQSMessages/LowerPolicy/Resource"
+   }
+  },
+  "CpuAutoProcessorProcessorServiceTaskCountTargetScaleOnSQSMessagesLowerAlarm9E3B00DB": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "CpuAutoProcessorProcessorServiceTaskCountTargetScaleOnSQSMessagesLowerPolicy73075AF0"
+     }
+    ],
+    "AlarmDescription": "Lower threshold scaling alarm",
+    "ComparisonOperator": "LessThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "QueueName",
+      "Value": {
+       "Fn::GetAtt": [
+        "CpuAutoProcessorProcessingQueue8311B335",
+        "QueueName"
+       ]
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "ApproximateNumberOfMessagesVisible",
+    "Namespace": "AWS/SQS",
+    "Period": 300,
+    "Statistic": "Maximum",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Threshold": 0
+   },
+   "DependsOn": [
+    "EcsTaskRoleDefaultPolicy50882C77",
+    "EcsTaskRole8DFA0181"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorService/TaskCount/Target/ScaleOnSQSMessages/LowerAlarm/Resource"
+   }
+  },
+  "CpuAutoProcessorProcessorServiceTaskCountTargetScaleOnSQSMessagesUpperPolicy2DA6576E": {
+   "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+   "Properties": {
+    "PolicyName": "amplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomCpuAutoProcessorProcessorServiceTaskCountTargetScaleOnSQSMessagesUpperPolicyC599622A",
+    "PolicyType": "StepScaling",
+    "ScalingTargetId": {
+     "Ref": "CpuAutoProcessorProcessorServiceTaskCountTarget5ADBCA5D"
+    },
+    "StepScalingPolicyConfiguration": {
+     "AdjustmentType": "ChangeInCapacity",
+     "MetricAggregationType": "Maximum",
+     "StepAdjustments": [
+      {
+       "MetricIntervalLowerBound": 0,
+       "ScalingAdjustment": 1
+      }
+     ]
+    }
+   },
+   "DependsOn": [
+    "EcsTaskRoleDefaultPolicy50882C77",
+    "EcsTaskRole8DFA0181"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorService/TaskCount/Target/ScaleOnSQSMessages/UpperPolicy/Resource"
+   }
+  },
+  "CpuAutoProcessorProcessorServiceTaskCountTargetScaleOnSQSMessagesUpperAlarm4AF1472F": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "CpuAutoProcessorProcessorServiceTaskCountTargetScaleOnSQSMessagesUpperPolicy2DA6576E"
+     }
+    ],
+    "AlarmDescription": "Upper threshold scaling alarm",
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "QueueName",
+      "Value": {
+       "Fn::GetAtt": [
+        "CpuAutoProcessorProcessingQueue8311B335",
+        "QueueName"
+       ]
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "ApproximateNumberOfMessagesVisible",
+    "Namespace": "AWS/SQS",
+    "Period": 300,
+    "Statistic": "Maximum",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Threshold": 1
+   },
+   "DependsOn": [
+    "EcsTaskRoleDefaultPolicy50882C77",
+    "EcsTaskRole8DFA0181"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CpuAutoProcessor/ProcessorService/TaskCount/Target/ScaleOnSQSMessages/UpperAlarm/Resource"
+   }
+  },
+  "GpuAutoProcessorProcessingQueue37A524D4": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessingQueue/Resource"
+   }
+  },
+  "GpuAutoProcessorProcessorCluster1D7B490B": {
+   "Type": "AWS::ECS::Cluster",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorCluster/Resource"
+   }
+  },
+  "GpuAutoProcessorProcessorClusterA1C8E699": {
+   "Type": "AWS::ECS::ClusterCapacityProviderAssociations",
+   "Properties": {
+    "CapacityProviders": [
+     {
+      "Ref": "GpuAutoProcessorAsgCapacityProviderB46F90B7"
+     }
+    ],
+    "Cluster": {
+     "Ref": "GpuAutoProcessorProcessorCluster1D7B490B"
+    },
+    "DefaultCapacityProviderStrategy": []
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorCluster/ProcessorCluster"
+   }
+  },
+  "GpuAutoProcessorinstanceSgDB32505E": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/instanceSg",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "from 0.0.0.0/0:22",
+      "FromPort": 22,
+      "IpProtocol": "tcp",
+      "ToPort": 22
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "VpcId": {
+     "Ref": "mycdkvpc037DA4AF"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/instanceSg/Resource"
+   }
+  },
+  "GpuAutoProcessorProcessorASGInstanceRole65A82CAE": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ec2.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/AWSAppSyncInvokeFullAccess"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorASG"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorASG/InstanceRole/Resource"
+   }
+  },
+  "GpuAutoProcessorProcessorASGInstanceRoleDefaultPolicy41265FFB": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "ecs:DeregisterContainerInstance",
+        "ecs:RegisterContainerInstance",
+        "ecs:Submit*"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "GpuAutoProcessorProcessorCluster1D7B490B",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "ecs:Poll",
+        "ecs:StartTelemetrySession"
+       ],
+       "Condition": {
+        "ArnEquals": {
+         "ecs:cluster": {
+          "Fn::GetAtt": [
+           "GpuAutoProcessorProcessorCluster1D7B490B",
+           "Arn"
+          ]
+         }
+        }
+       },
+       "Effect": "Allow",
+       "Resource": "*"
+      },
+      {
+       "Action": [
+        "ecs:DiscoverPollEndpoint",
+        "ecr:GetAuthorizationToken",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "GpuAutoProcessorProcessorASGInstanceRoleDefaultPolicy41265FFB",
+    "Roles": [
+     {
+      "Ref": "GpuAutoProcessorProcessorASGInstanceRole65A82CAE"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorASG/InstanceRole/DefaultPolicy/Resource"
+   }
+  },
+  "GpuAutoProcessorProcessorASGInstanceProfileBD1F1540": {
+   "Type": "AWS::IAM::InstanceProfile",
+   "Properties": {
+    "Roles": [
+     {
+      "Ref": "GpuAutoProcessorProcessorASGInstanceRole65A82CAE"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorASG/InstanceProfile"
+   }
+  },
+  "GpuAutoProcessorProcessorASGLaunchConfig5083714B": {
+   "Type": "AWS::AutoScaling::LaunchConfiguration",
+   "Properties": {
+    "AssociatePublicIpAddress": true,
+    "IamInstanceProfile": {
+     "Ref": "GpuAutoProcessorProcessorASGInstanceProfileBD1F1540"
+    },
+    "ImageId": {
+     "Ref": "SsmParameterValueawsserviceecsoptimizedamiamazonlinux2gpurecommendedimageidC96584B6F00A464EAD1953AFF4B05118Parameter"
+    },
+    "InstanceType": "g4dn.xlarge",
+    "KeyName": "cvat_africa",
+    "SecurityGroups": [
+     {
+      "Fn::GetAtt": [
+       "GpuAutoProcessorinstanceSgDB32505E",
+       "GroupId"
+      ]
+     }
+    ],
+    "UserData": {
+     "Fn::Base64": {
+      "Fn::Join": [
+       "",
+       [
+        "#!/bin/bash\necho ECS_CLUSTER=",
+        {
+         "Ref": "GpuAutoProcessorProcessorCluster1D7B490B"
+        },
+        " >> /etc/ecs/ecs.config\nsudo iptables --insert FORWARD 1 --in-interface docker+ --destination 169.254.169.254/32 --jump DROP\nsudo service iptables save\necho ECS_AWSVPC_BLOCK_IMDS=true >> /etc/ecs/ecs.config"
+       ]
+      ]
+     }
+    }
+   },
+   "DependsOn": [
+    "GpuAutoProcessorProcessorASGInstanceRoleDefaultPolicy41265FFB",
+    "GpuAutoProcessorProcessorASGInstanceRole65A82CAE"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorASG/LaunchConfig"
+   }
+  },
+  "GpuAutoProcessorProcessorASGA0A39719": {
+   "Type": "AWS::AutoScaling::AutoScalingGroup",
+   "Properties": {
+    "DesiredCapacity": "0",
+    "LaunchConfigurationName": {
+     "Ref": "GpuAutoProcessorProcessorASGLaunchConfig5083714B"
+    },
+    "MaxSize": "1",
+    "MinSize": "0",
+    "NewInstancesProtectedFromScaleIn": true,
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "PropagateAtLaunch": true,
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "PropagateAtLaunch": true,
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "PropagateAtLaunch": true,
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorASG"
+     }
+    ],
+    "VPCZoneIdentifier": [
+     {
+      "Ref": "mycdkvpcPublicSubnet1Subnet0CCFA225"
+     },
+     {
+      "Ref": "mycdkvpcPublicSubnet2Subnet33F973F6"
+     }
+    ]
+   },
+   "UpdatePolicy": {
+    "AutoScalingScheduledAction": {
+     "IgnoreUnmodifiedGroupSizeProperties": true
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorASG/ASG"
+   }
+  },
+  "GpuAutoProcessorAsgCapacityProviderB46F90B7": {
+   "Type": "AWS::ECS::CapacityProvider",
+   "Properties": {
+    "AutoScalingGroupProvider": {
+     "AutoScalingGroupArn": {
+      "Ref": "GpuAutoProcessorProcessorASGA0A39719"
+     },
+     "ManagedScaling": {
+      "Status": "ENABLED",
+      "TargetCapacity": 100
+     },
+     "ManagedTerminationProtection": "ENABLED"
+    },
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/AsgCapacityProvider/AsgCapacityProvider"
+   }
+  },
+  "GpuAutoProcessorProcessorTaskDef41CEF932": {
+   "Type": "AWS::ECS::TaskDefinition",
+   "Properties": {
+    "ContainerDefinitions": [
+     {
+      "Cpu": 1024,
+      "Environment": [
+       {
+        "Name": "QUEUE_URL",
+        "Value": {
+         "Ref": "GpuAutoProcessorProcessingQueue37A524D4"
+        }
+       },
+       {
+        "Name": "REGION",
+        "Value": {
+         "Ref": "AWS::Region"
+        }
+       }
+      ],
+      "Essential": true,
+      "Image": {
+       "Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/cdk-hnb659fds-container-assets-${AWS::AccountId}-${AWS::Region}:ace22d86128fb60e22c56baf3ba6fb3e4977e27dcb3e1e93adf16c7a0f3ce783"
+      },
+      "LogConfiguration": {
+       "LogDriver": "awslogs",
+       "Options": {
+        "awslogs-group": {
+         "Ref": "GpuAutoProcessorProcessorTaskDefProcessorContainerLogGroupFE2579A9"
+        },
+        "awslogs-stream-prefix": "processor",
+        "awslogs-region": {
+         "Ref": "AWS::Region"
+        }
+       }
+      },
+      "Memory": 12288,
+      "Name": "ProcessorContainer",
+      "ResourceRequirements": [
+       {
+        "Type": "GPU",
+        "Value": "1"
+       }
+      ]
+     }
+    ],
+    "ExecutionRoleArn": {
+     "Fn::GetAtt": [
+      "GpuAutoProcessorProcessorTaskDefExecutionRole37C4B36E",
+      "Arn"
+     ]
+    },
+    "Family": "amplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomGpuAutoProcessorProcessorTaskDef13ECCA35",
+    "NetworkMode": "bridge",
+    "RequiresCompatibilities": [
+     "EC2"
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "TaskRoleArn": {
+     "Fn::GetAtt": [
+      "EcsTaskRole8DFA0181",
+      "Arn"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorTaskDef/Resource"
+   }
+  },
+  "GpuAutoProcessorProcessorTaskDefProcessorContainerLogGroupFE2579A9": {
+   "Type": "AWS::Logs::LogGroup",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorTaskDef/ProcessorContainer/LogGroup/Resource"
+   }
+  },
+  "GpuAutoProcessorProcessorTaskDefExecutionRole37C4B36E": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ecs-tasks.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorTaskDef/ExecutionRole/Resource"
+   }
+  },
+  "GpuAutoProcessorProcessorTaskDefExecutionRoleDefaultPolicyC0D862C6": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":ecr:",
+          {
+           "Ref": "AWS::Region"
+          },
+          ":",
+          {
+           "Ref": "AWS::AccountId"
+          },
+          ":repository/",
+          {
+           "Fn::Sub": "cdk-hnb659fds-container-assets-${AWS::AccountId}-${AWS::Region}"
+          }
+         ]
+        ]
+       }
+      },
+      {
+       "Action": "ecr:GetAuthorizationToken",
+       "Effect": "Allow",
+       "Resource": "*"
+      },
+      {
+       "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "GpuAutoProcessorProcessorTaskDefProcessorContainerLogGroupFE2579A9",
+         "Arn"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "GpuAutoProcessorProcessorTaskDefExecutionRoleDefaultPolicyC0D862C6",
+    "Roles": [
+     {
+      "Ref": "GpuAutoProcessorProcessorTaskDefExecutionRole37C4B36E"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorTaskDef/ExecutionRole/DefaultPolicy/Resource"
+   }
+  },
+  "GpuAutoProcessorProcessorService6C771925": {
+   "Type": "AWS::ECS::Service",
+   "Properties": {
+    "CapacityProviderStrategy": [
+     {
+      "CapacityProvider": {
+       "Ref": "GpuAutoProcessorAsgCapacityProviderB46F90B7"
+      },
+      "Weight": 1
+     }
+    ],
+    "Cluster": {
+     "Ref": "GpuAutoProcessorProcessorCluster1D7B490B"
+    },
+    "DeploymentConfiguration": {
+     "Alarms": {
+      "AlarmNames": [],
+      "Enable": false,
+      "Rollback": false
+     },
+     "MaximumPercent": 200,
+     "MinimumHealthyPercent": 50
+    },
+    "DesiredCount": 0,
+    "EnableECSManagedTags": false,
+    "SchedulingStrategy": "REPLICA",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "TaskDefinition": {
+     "Ref": "GpuAutoProcessorProcessorTaskDef41CEF932"
+    }
+   },
+   "DependsOn": [
+    "EcsTaskRoleDefaultPolicy50882C77",
+    "EcsTaskRole8DFA0181"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorService/Service"
+   }
+  },
+  "GpuAutoProcessorProcessorServiceTaskCountTarget83F91C8E": {
+   "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+   "Properties": {
+    "MaxCapacity": 1,
+    "MinCapacity": 0,
+    "ResourceId": {
+     "Fn::Join": [
+      "",
+      [
+       "service/",
+       {
+        "Ref": "GpuAutoProcessorProcessorCluster1D7B490B"
+       },
+       "/",
+       {
+        "Fn::GetAtt": [
+         "GpuAutoProcessorProcessorService6C771925",
+         "Name"
+        ]
+       }
+      ]
+     ]
+    },
+    "RoleARN": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":iam::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService"
+      ]
+     ]
+    },
+    "ScalableDimension": "ecs:service:DesiredCount",
+    "ServiceNamespace": "ecs"
+   },
+   "DependsOn": [
+    "EcsTaskRoleDefaultPolicy50882C77",
+    "EcsTaskRole8DFA0181"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorService/TaskCount/Target/Resource"
+   }
+  },
+  "GpuAutoProcessorProcessorServiceTaskCountTargetScaleOnSQSMessagesLowerPolicy20C3768F": {
+   "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+   "Properties": {
+    "PolicyName": "amplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomGpuAutoProcessorProcessorServiceTaskCountTargetScaleOnSQSMessagesLowerPolicy03B02BB2",
+    "PolicyType": "StepScaling",
+    "ScalingTargetId": {
+     "Ref": "GpuAutoProcessorProcessorServiceTaskCountTarget83F91C8E"
+    },
+    "StepScalingPolicyConfiguration": {
+     "AdjustmentType": "ChangeInCapacity",
+     "MetricAggregationType": "Maximum",
+     "StepAdjustments": [
+      {
+       "MetricIntervalUpperBound": 0,
+       "ScalingAdjustment": -1
+      }
+     ]
+    }
+   },
+   "DependsOn": [
+    "EcsTaskRoleDefaultPolicy50882C77",
+    "EcsTaskRole8DFA0181"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorService/TaskCount/Target/ScaleOnSQSMessages/LowerPolicy/Resource"
+   }
+  },
+  "GpuAutoProcessorProcessorServiceTaskCountTargetScaleOnSQSMessagesLowerAlarm18173366": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "GpuAutoProcessorProcessorServiceTaskCountTargetScaleOnSQSMessagesLowerPolicy20C3768F"
+     }
+    ],
+    "AlarmDescription": "Lower threshold scaling alarm",
+    "ComparisonOperator": "LessThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "QueueName",
+      "Value": {
+       "Fn::GetAtt": [
+        "GpuAutoProcessorProcessingQueue37A524D4",
+        "QueueName"
+       ]
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "ApproximateNumberOfMessagesVisible",
+    "Namespace": "AWS/SQS",
+    "Period": 300,
+    "Statistic": "Maximum",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Threshold": 0
+   },
+   "DependsOn": [
+    "EcsTaskRoleDefaultPolicy50882C77",
+    "EcsTaskRole8DFA0181"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorService/TaskCount/Target/ScaleOnSQSMessages/LowerAlarm/Resource"
+   }
+  },
+  "GpuAutoProcessorProcessorServiceTaskCountTargetScaleOnSQSMessagesUpperPolicyA6F5992B": {
+   "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+   "Properties": {
+    "PolicyName": "amplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomGpuAutoProcessorProcessorServiceTaskCountTargetScaleOnSQSMessagesUpperPolicy164BF114",
+    "PolicyType": "StepScaling",
+    "ScalingTargetId": {
+     "Ref": "GpuAutoProcessorProcessorServiceTaskCountTarget83F91C8E"
+    },
+    "StepScalingPolicyConfiguration": {
+     "AdjustmentType": "ChangeInCapacity",
+     "MetricAggregationType": "Maximum",
+     "StepAdjustments": [
+      {
+       "MetricIntervalLowerBound": 0,
+       "ScalingAdjustment": 1
+      }
+     ]
+    }
+   },
+   "DependsOn": [
+    "EcsTaskRoleDefaultPolicy50882C77",
+    "EcsTaskRole8DFA0181"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorService/TaskCount/Target/ScaleOnSQSMessages/UpperPolicy/Resource"
+   }
+  },
+  "GpuAutoProcessorProcessorServiceTaskCountTargetScaleOnSQSMessagesUpperAlarmC67FD4D8": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "GpuAutoProcessorProcessorServiceTaskCountTargetScaleOnSQSMessagesUpperPolicyA6F5992B"
+     }
+    ],
+    "AlarmDescription": "Upper threshold scaling alarm",
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "QueueName",
+      "Value": {
+       "Fn::GetAtt": [
+        "GpuAutoProcessorProcessingQueue37A524D4",
+        "QueueName"
+       ]
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "ApproximateNumberOfMessagesVisible",
+    "Namespace": "AWS/SQS",
+    "Period": 300,
+    "Statistic": "Maximum",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Threshold": 1
+   },
+   "DependsOn": [
+    "EcsTaskRoleDefaultPolicy50882C77",
+    "EcsTaskRole8DFA0181"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/GpuAutoProcessor/ProcessorService/TaskCount/Target/ScaleOnSQSMessages/UpperAlarm/Resource"
+   }
+  },
+  "MyProcessorProcessingQueueAA5A8970": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/MyProcessor/ProcessingQueue/Resource"
+   }
+  },
+  "MyProcessorProcessorInstanceSG0D066F44": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Allow ssh access to ec2 instances",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "allow ssh access from the world",
+      "FromPort": 22,
+      "IpProtocol": "tcp",
+      "ToPort": 22
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "VpcId": {
+     "Ref": "mycdkvpc037DA4AF"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/MyProcessor/ProcessorInstanceSG/Resource"
+   }
+  },
+  "MyProcessorProcessorInstanceRole38C18F1C": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ec2.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/AmazonSQSFullAccess"
+       ]
+      ]
+     },
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/AmazonEC2FullAccess"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/MyProcessor/ProcessorInstanceRole/Resource"
+   }
+  },
+  "MyProcessorProcessorInstanceRoleDefaultPolicy4A2E2712": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:ListBucket"
+       ],
+       "Effect": "Allow",
+       "Resource": "*"
+      },
+      {
+       "Action": [
+        "sqs:ReceiveMessage",
+        "sqs:ChangeMessageVisibility",
+        "sqs:GetQueueUrl",
+        "sqs:DeleteMessage",
+        "sqs:GetQueueAttributes"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "MyProcessorProcessingQueueAA5A8970",
+         "Arn"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "MyProcessorProcessorInstanceRoleDefaultPolicy4A2E2712",
+    "Roles": [
+     {
+      "Ref": "MyProcessorProcessorInstanceRole38C18F1C"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/MyProcessor/ProcessorInstanceRole/DefaultPolicy/Resource"
+   }
+  },
+  "MyProcessorProcessorASGInstanceProfileD0978629": {
+   "Type": "AWS::IAM::InstanceProfile",
+   "Properties": {
+    "Roles": [
+     {
+      "Ref": "MyProcessorProcessorInstanceRole38C18F1C"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/MyProcessor/ProcessorASG/InstanceProfile"
+   }
+  },
+  "MyProcessorProcessorASGLaunchConfigE815D946": {
+   "Type": "AWS::AutoScaling::LaunchConfiguration",
+   "Properties": {
+    "AssociatePublicIpAddress": true,
+    "IamInstanceProfile": {
+     "Ref": "MyProcessorProcessorASGInstanceProfileD0978629"
+    },
+    "ImageId": {
+     "Fn::FindInMap": [
+      "MyProcessorProcessorASGAmiMap5C50F077",
+      {
+       "Ref": "AWS::Region"
+      },
+      "ami"
+     ]
+    },
+    "InstanceType": "g4dn.xlarge",
+    "KeyName": "cvat_africa",
+    "SecurityGroups": [
+     {
+      "Fn::GetAtt": [
+       "MyProcessorProcessorInstanceSG0D066F44",
+       "GroupId"
+      ]
+     }
+    ],
+    "UserData": {
+     "Fn::Base64": {
+      "Fn::Join": [
+       "",
+       [
+        "#!/bin/bash\necho \"export QUEUE_URL=",
+        {
+         "Ref": "MyProcessorProcessingQueueAA5A8970"
+        },
+        "\" >> /etc/environment\necho \"export AWS_DEFAULT_REGION=",
+        {
+         "Ref": "AWS::Region"
+        },
+        "\" >> /etc/environment\ncd /home/ubuntu\nsource /etc/environment\nQUEUE_URL=$QUEUE_URL AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION docker-compose up"
+       ]
+      ]
+     }
+    }
+   },
+   "DependsOn": [
+    "MyProcessorProcessorInstanceRoleDefaultPolicy4A2E2712",
+    "MyProcessorProcessorInstanceRole38C18F1C"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/MyProcessor/ProcessorASG/LaunchConfig"
+   }
+  },
+  "MyProcessorProcessorASG513D4E94": {
+   "Type": "AWS::AutoScaling::AutoScalingGroup",
+   "Properties": {
+    "DesiredCapacity": "0",
+    "LaunchConfigurationName": {
+     "Ref": "MyProcessorProcessorASGLaunchConfigE815D946"
+    },
+    "MaxSize": "1",
+    "MinSize": "0",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "PropagateAtLaunch": true,
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "PropagateAtLaunch": true,
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "PropagateAtLaunch": true,
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/MyProcessor/ProcessorASG"
+     }
+    ],
+    "VPCZoneIdentifier": [
+     {
+      "Ref": "mycdkvpcPublicSubnet1Subnet0CCFA225"
+     },
+     {
+      "Ref": "mycdkvpcPublicSubnet2Subnet33F973F6"
+     }
+    ]
+   },
+   "UpdatePolicy": {
+    "AutoScalingScheduledAction": {
+     "IgnoreUnmodifiedGroupSizeProperties": true
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/MyProcessor/ProcessorASG/ASG"
+   }
+  },
+  "MyProcessorProcessorASGScaleOnSQSMessagesLowerPolicyE1D94330": {
+   "Type": "AWS::AutoScaling::ScalingPolicy",
+   "Properties": {
+    "AdjustmentType": "ExactCapacity",
+    "AutoScalingGroupName": {
+     "Ref": "MyProcessorProcessorASG513D4E94"
+    },
+    "MetricAggregationType": "Maximum",
+    "PolicyType": "StepScaling",
+    "StepAdjustments": [
+     {
+      "MetricIntervalUpperBound": 0,
+      "ScalingAdjustment": 0
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/MyProcessor/ProcessorASG/ScaleOnSQSMessages/LowerPolicy/Resource"
+   }
+  },
+  "MyProcessorProcessorASGScaleOnSQSMessagesLowerAlarm04DF6EB6": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "MyProcessorProcessorASGScaleOnSQSMessagesLowerPolicyE1D94330"
+     }
+    ],
+    "AlarmDescription": "Lower threshold scaling alarm",
+    "ComparisonOperator": "LessThanOrEqualToThreshold",
+    "DatapointsToAlarm": 1,
+    "Dimensions": [
+     {
+      "Name": "QueueName",
+      "Value": {
+       "Fn::GetAtt": [
+        "MyProcessorProcessingQueueAA5A8970",
+        "QueueName"
+       ]
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "ApproximateNumberOfMessagesVisible",
+    "Namespace": "AWS/SQS",
+    "Period": 60,
+    "Statistic": "Maximum",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/MyProcessor/ProcessorASG"
+     }
+    ],
+    "Threshold": 0
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/MyProcessor/ProcessorASG/ScaleOnSQSMessages/LowerAlarm/Resource"
+   }
+  },
+  "MyProcessorProcessorASGScaleOnSQSMessagesUpperPolicyF9DFC2E3": {
+   "Type": "AWS::AutoScaling::ScalingPolicy",
+   "Properties": {
+    "AdjustmentType": "ExactCapacity",
+    "AutoScalingGroupName": {
+     "Ref": "MyProcessorProcessorASG513D4E94"
+    },
+    "MetricAggregationType": "Maximum",
+    "PolicyType": "StepScaling",
+    "StepAdjustments": [
+     {
+      "MetricIntervalLowerBound": 0,
+      "ScalingAdjustment": 1
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/MyProcessor/ProcessorASG/ScaleOnSQSMessages/UpperPolicy/Resource"
+   }
+  },
+  "MyProcessorProcessorASGScaleOnSQSMessagesUpperAlarm1AE8D010": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmActions": [
+     {
+      "Ref": "MyProcessorProcessorASGScaleOnSQSMessagesUpperPolicyF9DFC2E3"
+     }
+    ],
+    "AlarmDescription": "Upper threshold scaling alarm",
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "DatapointsToAlarm": 1,
+    "Dimensions": [
+     {
+      "Name": "QueueName",
+      "Value": {
+       "Fn::GetAtt": [
+        "MyProcessorProcessingQueueAA5A8970",
+        "QueueName"
+       ]
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "ApproximateNumberOfMessagesVisible",
+    "Namespace": "AWS/SQS",
+    "Period": 60,
+    "Statistic": "Maximum",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     },
+     {
+      "Key": "Name",
+      "Value": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/MyProcessor/ProcessorASG"
+     }
+    ],
+    "Threshold": 1
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/MyProcessor/ProcessorASG/ScaleOnSQSMessages/UpperAlarm/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/51Ty27jMAz8lr0r2jZAP8DrBkWAbuHGRa8FQzMOG1lyJSpBYPjfF7LdvHrbk4ZDUiKH1FzfPzzou19wCDOsdjPDa929UBCqSgHcKTiEj46h0d3KGVL5xg5n4QzjMZlntLRBwCIV3m3YUK8I57p7bzE534tcFXFtGMu4tiSJO6OVi0JvsB5fGPkzl4XgkEHY2VNwAotlkY4XkCcQOsBRFZ73IHS+eGmFvKVTwFjJZGUigNuGrKiSMHqW45N3sR1quCR6Fb6C7l4jxeHhAaT+gu5yE4OQT/RPmEMLyHIsvNtzRf6ik6CyUN/6h9RbboHzNwi7R9qw5W8RbhlnBdiSv+AWOC/J7xlHUSdYIpgkarogd9FKryCKCwiGba27LIorR+MkxjNEi9vc2Q3X0Z8G8SO0FGonYlqLCybD77yrkCSj/4AQSIJ+dLgjv2ygTkMnST69otYFFuePfyCQMq4Ount2F+VNuFfQtoZxKPCqqXPTvp5275r5v8rRuFgdQHCru8yAbwZVEuh7taLgokdSQyelQM22Hn4MeGhoWpS/0LYTf0pIS+BsNUyxV9ZVpD/D7/38Tt+nv/oZmGc+WuGG9Go8/wHc0hfSyAMAAA=="
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/DetwebCustom/CDKMetadata/Default"
+   },
+   "Condition": "CDKMetadataAvailable"
+  }
+ },
+ "Parameters": {
+  "SsmParameterValueawsserviceecsoptimizedamiamazonlinux2recommendedimageidC96584B6F00A464EAD1953AFF4B05118Parameter": {
+   "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+   "Default": "/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id"
+  },
+  "SsmParameterValueawsserviceecsoptimizedamiamazonlinux2gpurecommendedimageidC96584B6F00A464EAD1953AFF4B05118Parameter": {
+   "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+   "Default": "/aws/service/ecs/optimized-ami/amazon-linux-2/gpu/recommended/image_id"
+  }
+ },
+ "Mappings": {
+  "MyProcessorProcessorASGAmiMap5C50F077": {
+   "af-south-1": {
+    "ami": "ami-0779b180a7f490247"
+   }
+  }
+ },
+ "Conditions": {
+  "CDKMetadataAvailable": {
+   "Fn::Or": [
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "af-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-3"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-south-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-3"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-4"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ca-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ca-west-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "cn-north-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "cn-northwest-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-central-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-north-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-south-2"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-3"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "il-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "me-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "me-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "sa-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-east-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-west-1"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Equals": [
+      {
+       "Ref": "AWS::Region"
+      },
+      "us-west-2"
+     ]
+    }
+   ]
+  }
+ },
+ "Outputs": {
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomCpuAutoProcessorProcessingQueueDC294984Arn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "CpuAutoProcessorProcessingQueue8311B335",
+     "Arn"
+    ]
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomGpuAutoProcessorProcessingQueue7446302CArn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "GpuAutoProcessorProcessingQueue37A524D4",
+     "Arn"
+    ]
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomMyProcessorProcessingQueue89EE0123Ref": {
+   "Value": {
+    "Ref": "MyProcessorProcessingQueueAA5A8970"
+   }
+  }
+ }
+}

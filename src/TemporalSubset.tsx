@@ -81,6 +81,8 @@ const TemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClose, s
     const [timeRanges, setTimeRanges] = useState<[number, number][]>([[0, 24]]);
     const [filteredImages, setFilteredImages] = useState<ImageData[]>([]);
     const [isMultipleRange, setIsMultipleRange] = useState(false);
+    const [showNameEditPrompt, setShowNameEditPrompt] = useState(false);
+    const [editedSubsets, setEditedSubsets] = useState<Subset[]>([]);
 
     const fetchFilenames = async (imageId: string) => {
         const { data: images } = await client.models.ImageFile.imagesByimageId({imageId})
@@ -168,6 +170,31 @@ const TemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClose, s
             })
         );
         setFilteredImages(filteredImages);
+
+        // Automatically create subsets based on the time ranges
+        const newSubsets = timeRanges.map((range, index) => {
+            const subsetImages = filteredImages.filter(image => {
+                let imageTime;
+                if (typeof image.timestamp === 'string') {
+                    imageTime = DateTime.fromFormat(image.timestamp, "yyyy-MM-dd HH:mm:ss").toMillis();
+                } else if (typeof image.timestamp === 'number') {
+                    imageTime = DateTime.fromMillis(image.timestamp * 1000).toMillis(); // Assuming the number is in seconds
+                } else {
+                    console.error("Invalid timestamp format:", image.timestamp);
+                    return false;
+                }
+                return imageTime >= range[0] && imageTime <= range[1];
+            });
+
+            return {
+                id: Date.now().toString() + index, // Generate a unique ID
+                name: `Subset ${index + 1}`,
+                polygon: [], // No polygon needed
+                imageIds: subsetImages.map(image => image.id),
+            };
+        });
+
+        setSubsets(newSubsets);
     }, [imageSetsData, timeRanges]);
 
     const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
@@ -252,12 +279,26 @@ const TemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClose, s
     };
 
     const handleCreateSubsets = () => {
-        subsets.forEach(subset => {
+        setEditedSubsets(subsets);
+        setShowNameEditPrompt(true);
+    };
+
+    const handleNameEditChange = (index: number, newName: string) => {
+        const updatedSubsets = [...editedSubsets];
+        updatedSubsets[index].name = newName;
+        setEditedSubsets(updatedSubsets);
+    };
+
+    const handleConfirmSubsets = () => {
+        editedSubsets.forEach(subset => {
             createNewImageSet(subset.name, subset.imageIds);
         });
         // Clear subsets after creation
         setSubsets([]);
-        // You might want to show a success message or close the modal here
+        setShowNameEditPrompt(false);
+        // Reset time ranges to the initial one
+        setTimeRanges([sliderRange]);
+        setIsMultipleRange(false);
     };
 
     const handleKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -325,16 +366,7 @@ const TemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClose, s
                                 onEdited={handleEdited}
                                 onDeleted={handleDeleted}
                                 draw={{
-                                    polygon: {
-                                        allowIntersection: false,
-                                        drawError: {
-                                            color: '#e1e100',
-                                            message: '<strong>Oh snap!<strong> you can\'t draw that!'
-                                        },
-                                        shapeOptions: {
-                                            color: '#97009c'
-                                        }
-                                    },
+                                    polygon: false, // Disable polygon drawing
                                     rectangle: false,
                                     circle: false,
                                     circlemarker: false,
@@ -477,6 +509,32 @@ const TemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClose, s
                     </Button>
                     <Button variant="primary" onClick={handleNameSubmit}>
                         Create Subset
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+            <Modal show={showNameEditPrompt} onHide={() => setShowNameEditPrompt(false)}>
+                <Modal.Header closeButton>
+                    <Modal.Title>Edit Subset Names</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    {editedSubsets.map((subset, index) => (
+                        <Form.Group key={subset.id}>
+                            <Form.Label>Subset {index + 1} Name</Form.Label>
+                            <Form.Control
+                                type="text"
+                                value={subset.name}
+                                onChange={(e) => handleNameEditChange(index, e.target.value)}
+                                placeholder="Enter a name for this subset"
+                            />
+                        </Form.Group>
+                    ))}
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={() => setShowNameEditPrompt(false)}>
+                        Cancel
+                    </Button>
+                    <Button variant="primary" onClick={handleConfirmSubsets}>
+                        Confirm Subsets
                     </Button>
                 </Modal.Footer>
             </Modal>

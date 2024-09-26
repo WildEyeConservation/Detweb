@@ -1,0 +1,1557 @@
+{
+ "Resources": {
+  "QuerygetObservationpreAuth0FunctionQuerygetObservationpreAuth0FunctionAppSyncFunctionDEE9A8BF": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "QuerygetObservationpreAuth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/d9accdc3fd88c22d0abb2c6938cf294a73543ac27c5ea0cfb319b68e935913de.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/QuerygetObservationpreAuth0Function/QuerygetObservationpreAuth0Function.AppSyncFunction"
+   }
+  },
+  "QuerygetObservationauth0FunctionQuerygetObservationauth0FunctionAppSyncFunctionF6C89B9A": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "QuerygetObservationauth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/71260ff2012ac9cb8675989b937dcd9a007044a5fe280733091c5bac21658894.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/QuerygetObservationauth0Function/QuerygetObservationauth0Function.AppSyncFunction"
+   }
+  },
+  "QuerygetObservationpostAuth0FunctionQuerygetObservationpostAuth0FunctionAppSyncFunctionDED13FE5": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "QuerygetObservationpostAuth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/c1721bcd774e27c514d3454b5be4f9bdd094c0161b57ddf053d618e3b0086a77.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/QuerygetObservationpostAuth0Function/QuerygetObservationpostAuth0Function.AppSyncFunction"
+   }
+  },
+  "QueryGetObservationDataResolverFnQueryGetObservationDataResolverFnAppSyncFunction94BDB52A": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackResource4DBF9A2DOutputsamplif139D67D8"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "QueryGetObservationDataResolverFn",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/59a5d0912ad479f2bab015e7f692eeef648425c657e6fa4c09a6717d0c242133.vtl"
+    },
+    "ResponseMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/8339055957a796205a02508009fd9920f4928caa26c8b5c5969a3a05174f1ba8.vtl"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/QueryGetObservationDataResolverFn/QueryGetObservationDataResolverFn.AppSyncFunction"
+   }
+  },
+  "GetobservationResolver": {
+   "Type": "AWS::AppSync::Resolver",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "FieldName": "getObservation",
+    "Kind": "PIPELINE",
+    "PipelineConfig": {
+     "Functions": [
+      {
+       "Fn::GetAtt": [
+        "QuerygetObservationpreAuth0FunctionQuerygetObservationpreAuth0FunctionAppSyncFunctionDEE9A8BF",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "QuerygetObservationauth0FunctionQuerygetObservationauth0FunctionAppSyncFunctionF6C89B9A",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "QuerygetObservationpostAuth0FunctionQuerygetObservationpostAuth0FunctionAppSyncFunctionDED13FE5",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "QueryGetObservationDataResolverFnQueryGetObservationDataResolverFnAppSyncFunction94BDB52A",
+        "FunctionId"
+       ]
+      }
+     ]
+    },
+    "RequestMappingTemplate": {
+     "Fn::Join": [
+      "",
+      [
+       "$util.qr($ctx.stash.put(\"typeName\", \"Query\"))\n$util.qr($ctx.stash.put(\"fieldName\", \"getObservation\"))\n$util.qr($ctx.stash.put(\"conditions\", []))\n$util.qr($ctx.stash.put(\"metadata\", {}))\n$util.qr($ctx.stash.metadata.put(\"dataSourceType\", \"AWS_LAMBDA\"))\n$util.qr($ctx.stash.metadata.put(\"apiId\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"connectionAttributes\", {}))\n$util.qr($ctx.stash.put(\"lambdaFunctionArn\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackResource4DBF9A2DOutputsamplifE470703F"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"authRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthauthenticatedUserRole2DDBF981Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"unauthRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthunauthenticatedUserRoleDBF4EAC9Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"identityPoolId\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthIdentityPool45320473Ref"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"adminRoles\", []))\n$util.toJson({})"
+      ]
+     ]
+    },
+    "ResponseMappingTemplate": "$util.toJson($ctx.prev.result)",
+    "TypeName": "Query"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/queryGetObservationResolver"
+   }
+  },
+  "QuerylistObservationspreAuth0FunctionQuerylistObservationspreAuth0FunctionAppSyncFunction19109CCA": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "QuerylistObservationspreAuth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/7f4d0a778bbbd9e1d18ce117db5a59923e17c4ddba7b48c3b27ca9a2125354f5.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/QuerylistObservationspreAuth0Function/QuerylistObservationspreAuth0Function.AppSyncFunction"
+   }
+  },
+  "QuerylistObservationsauth0FunctionQuerylistObservationsauth0FunctionAppSyncFunction7634F6D4": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "QuerylistObservationsauth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/71260ff2012ac9cb8675989b937dcd9a007044a5fe280733091c5bac21658894.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/QuerylistObservationsauth0Function/QuerylistObservationsauth0Function.AppSyncFunction"
+   }
+  },
+  "QuerylistObservationspostAuth0FunctionQuerylistObservationspostAuth0FunctionAppSyncFunction344DE791": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "QuerylistObservationspostAuth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/c1721bcd774e27c514d3454b5be4f9bdd094c0161b57ddf053d618e3b0086a77.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/QuerylistObservationspostAuth0Function/QuerylistObservationspostAuth0Function.AppSyncFunction"
+   }
+  },
+  "QueryListObservationsDataResolverFnQueryListObservationsDataResolverFnAppSyncFunction18545E3B": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackResource4DBF9A2DOutputsamplif139D67D8"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "QueryListObservationsDataResolverFn",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/19f0d44aef9b21afaec79cd570e1a9dfc10d5b7aebec5826d9af4863fee9a254.vtl"
+    },
+    "ResponseMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/cc01911d0269d4080ea57505dc445dfc315ef7ad85d3d9d4ea1357858bff451d.vtl"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/QueryListObservationsDataResolverFn/QueryListObservationsDataResolverFn.AppSyncFunction"
+   }
+  },
+  "ListobservationResolver": {
+   "Type": "AWS::AppSync::Resolver",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "FieldName": "listObservations",
+    "Kind": "PIPELINE",
+    "PipelineConfig": {
+     "Functions": [
+      {
+       "Fn::GetAtt": [
+        "QuerylistObservationspreAuth0FunctionQuerylistObservationspreAuth0FunctionAppSyncFunction19109CCA",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "QuerylistObservationsauth0FunctionQuerylistObservationsauth0FunctionAppSyncFunction7634F6D4",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "QuerylistObservationspostAuth0FunctionQuerylistObservationspostAuth0FunctionAppSyncFunction344DE791",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "QueryListObservationsDataResolverFnQueryListObservationsDataResolverFnAppSyncFunction18545E3B",
+        "FunctionId"
+       ]
+      }
+     ]
+    },
+    "RequestMappingTemplate": {
+     "Fn::Join": [
+      "",
+      [
+       "$util.qr($ctx.stash.put(\"typeName\", \"Query\"))\n$util.qr($ctx.stash.put(\"fieldName\", \"listObservations\"))\n$util.qr($ctx.stash.put(\"conditions\", []))\n$util.qr($ctx.stash.put(\"metadata\", {}))\n$util.qr($ctx.stash.metadata.put(\"dataSourceType\", \"AWS_LAMBDA\"))\n$util.qr($ctx.stash.metadata.put(\"apiId\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"connectionAttributes\", {}))\n$util.qr($ctx.stash.put(\"lambdaFunctionArn\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackResource4DBF9A2DOutputsamplifE470703F"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"authRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthauthenticatedUserRole2DDBF981Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"unauthRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthunauthenticatedUserRoleDBF4EAC9Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"identityPoolId\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthIdentityPool45320473Ref"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"adminRoles\", []))\n$util.toJson({})"
+      ]
+     ]
+    },
+    "ResponseMappingTemplate": "$util.toJson($ctx.prev.result)",
+    "TypeName": "Query"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/queryListObservationsResolver"
+   }
+  },
+  "MutationcreateObservationinit0FunctionMutationcreateObservationinit0FunctionAppSyncFunction4CC7AC5E": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "MutationcreateObservationinit0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/87ef44ec2f60e34cc89b57a4d6bef7f0cb767a91ff19821e38e30ae346d5f26f.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/MutationcreateObservationinit0Function/MutationcreateObservationinit0Function.AppSyncFunction"
+   }
+  },
+  "MutationcreateObservationpreAuth0FunctionMutationcreateObservationpreAuth0FunctionAppSyncFunction231DBAB7": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "MutationcreateObservationpreAuth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/d9accdc3fd88c22d0abb2c6938cf294a73543ac27c5ea0cfb319b68e935913de.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/MutationcreateObservationpreAuth0Function/MutationcreateObservationpreAuth0Function.AppSyncFunction"
+   }
+  },
+  "MutationcreateObservationauth0FunctionMutationcreateObservationauth0FunctionAppSyncFunctionB3064188": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "MutationcreateObservationauth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/be2f2c1e7d2d520504b7d2c215fcbd67eede1476d8190f0808363e739fbed33b.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/MutationcreateObservationauth0Function/MutationcreateObservationauth0Function.AppSyncFunction"
+   }
+  },
+  "MutationcreateObservationpostAuth0FunctionMutationcreateObservationpostAuth0FunctionAppSyncFunction111C64C4": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "MutationcreateObservationpostAuth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/c1721bcd774e27c514d3454b5be4f9bdd094c0161b57ddf053d618e3b0086a77.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/MutationcreateObservationpostAuth0Function/MutationcreateObservationpostAuth0Function.AppSyncFunction"
+   }
+  },
+  "MutationCreateObservationDataResolverFnMutationCreateObservationDataResolverFnAppSyncFunction9B05F4FA": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackResource4DBF9A2DOutputsamplif139D67D8"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "MutationCreateObservationDataResolverFn",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/ebc53b36107787bad6cc093128b0064fb558cea442d3839686356ee8954ed521.vtl"
+    },
+    "ResponseMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/f4a52b72209a9dfa197b5e7367a5c378c5bb86de6e29ddd9e48b49a3fe54b249.vtl"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/MutationCreateObservationDataResolverFn/MutationCreateObservationDataResolverFn.AppSyncFunction"
+   }
+  },
+  "CreateobservationResolver": {
+   "Type": "AWS::AppSync::Resolver",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "FieldName": "createObservation",
+    "Kind": "PIPELINE",
+    "PipelineConfig": {
+     "Functions": [
+      {
+       "Fn::GetAtt": [
+        "MutationcreateObservationinit0FunctionMutationcreateObservationinit0FunctionAppSyncFunction4CC7AC5E",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "MutationcreateObservationpreAuth0FunctionMutationcreateObservationpreAuth0FunctionAppSyncFunction231DBAB7",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "MutationcreateObservationauth0FunctionMutationcreateObservationauth0FunctionAppSyncFunctionB3064188",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "MutationcreateObservationpostAuth0FunctionMutationcreateObservationpostAuth0FunctionAppSyncFunction111C64C4",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "MutationCreateObservationDataResolverFnMutationCreateObservationDataResolverFnAppSyncFunction9B05F4FA",
+        "FunctionId"
+       ]
+      }
+     ]
+    },
+    "RequestMappingTemplate": {
+     "Fn::Join": [
+      "",
+      [
+       "$util.qr($ctx.stash.put(\"typeName\", \"Mutation\"))\n$util.qr($ctx.stash.put(\"fieldName\", \"createObservation\"))\n$util.qr($ctx.stash.put(\"conditions\", []))\n$util.qr($ctx.stash.put(\"metadata\", {}))\n$util.qr($ctx.stash.metadata.put(\"dataSourceType\", \"AWS_LAMBDA\"))\n$util.qr($ctx.stash.metadata.put(\"apiId\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"connectionAttributes\", {}))\n$util.qr($ctx.stash.put(\"lambdaFunctionArn\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackResource4DBF9A2DOutputsamplifE470703F"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"authRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthauthenticatedUserRole2DDBF981Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"unauthRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthunauthenticatedUserRoleDBF4EAC9Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"identityPoolId\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthIdentityPool45320473Ref"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"adminRoles\", []))\n$util.toJson({})"
+      ]
+     ]
+    },
+    "ResponseMappingTemplate": "$util.toJson($ctx.prev.result)",
+    "TypeName": "Mutation"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/mutationCreateObservationResolver"
+   }
+  },
+  "MutationupdateObservationinit0FunctionMutationupdateObservationinit0FunctionAppSyncFunction463E30B8": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "MutationupdateObservationinit0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/69012da9b7b085486ee5cab0cdc6841382cdb3d605c26bed1cc10125538d5d1f.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/MutationupdateObservationinit0Function/MutationupdateObservationinit0Function.AppSyncFunction"
+   }
+  },
+  "MutationupdateObservationpreAuth0FunctionMutationupdateObservationpreAuth0FunctionAppSyncFunction93890195": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "MutationupdateObservationpreAuth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/d9accdc3fd88c22d0abb2c6938cf294a73543ac27c5ea0cfb319b68e935913de.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/MutationupdateObservationpreAuth0Function/MutationupdateObservationpreAuth0Function.AppSyncFunction"
+   }
+  },
+  "MutationupdateObservationauth0FunctionMutationupdateObservationauth0FunctionAppSyncFunctionD970BA00": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackResource4DBF9A2DOutputsamplif139D67D8"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "MutationupdateObservationauth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/0ed561ac564f8bdc8668d674666a9218a1ef1aa06c13d5ca49e32015f3f3f017.vtl"
+    },
+    "ResponseMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/0b53875dc6c4075ba6b99018ba4c7060d743c9565c4c8cb9c1740cd7fd894667.vtl"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/MutationupdateObservationauth0Function/MutationupdateObservationauth0Function.AppSyncFunction"
+   }
+  },
+  "MutationupdateObservationpostAuth0FunctionMutationupdateObservationpostAuth0FunctionAppSyncFunction7F1BE6EB": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "MutationupdateObservationpostAuth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/c1721bcd774e27c514d3454b5be4f9bdd094c0161b57ddf053d618e3b0086a77.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/MutationupdateObservationpostAuth0Function/MutationupdateObservationpostAuth0Function.AppSyncFunction"
+   }
+  },
+  "MutationUpdateObservationDataResolverFnMutationUpdateObservationDataResolverFnAppSyncFunction2BC22731": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackResource4DBF9A2DOutputsamplif139D67D8"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "MutationUpdateObservationDataResolverFn",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/b205b13109cda3b45c102caf09037d5516127e97f6664074eb79b50a9d8cfad9.vtl"
+    },
+    "ResponseMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/f4a52b72209a9dfa197b5e7367a5c378c5bb86de6e29ddd9e48b49a3fe54b249.vtl"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/MutationUpdateObservationDataResolverFn/MutationUpdateObservationDataResolverFn.AppSyncFunction"
+   }
+  },
+  "UpdateobservationResolver": {
+   "Type": "AWS::AppSync::Resolver",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "FieldName": "updateObservation",
+    "Kind": "PIPELINE",
+    "PipelineConfig": {
+     "Functions": [
+      {
+       "Fn::GetAtt": [
+        "MutationupdateObservationinit0FunctionMutationupdateObservationinit0FunctionAppSyncFunction463E30B8",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "MutationupdateObservationpreAuth0FunctionMutationupdateObservationpreAuth0FunctionAppSyncFunction93890195",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "MutationupdateObservationauth0FunctionMutationupdateObservationauth0FunctionAppSyncFunctionD970BA00",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "MutationupdateObservationpostAuth0FunctionMutationupdateObservationpostAuth0FunctionAppSyncFunction7F1BE6EB",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "MutationUpdateObservationDataResolverFnMutationUpdateObservationDataResolverFnAppSyncFunction2BC22731",
+        "FunctionId"
+       ]
+      }
+     ]
+    },
+    "RequestMappingTemplate": {
+     "Fn::Join": [
+      "",
+      [
+       "$util.qr($ctx.stash.put(\"typeName\", \"Mutation\"))\n$util.qr($ctx.stash.put(\"fieldName\", \"updateObservation\"))\n$util.qr($ctx.stash.put(\"conditions\", []))\n$util.qr($ctx.stash.put(\"metadata\", {}))\n$util.qr($ctx.stash.metadata.put(\"dataSourceType\", \"AWS_LAMBDA\"))\n$util.qr($ctx.stash.metadata.put(\"apiId\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"connectionAttributes\", {}))\n$util.qr($ctx.stash.put(\"lambdaFunctionArn\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackResource4DBF9A2DOutputsamplifE470703F"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"authRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthauthenticatedUserRole2DDBF981Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"unauthRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthunauthenticatedUserRoleDBF4EAC9Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"identityPoolId\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthIdentityPool45320473Ref"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"adminRoles\", []))\n$util.toJson({})"
+      ]
+     ]
+    },
+    "ResponseMappingTemplate": "$util.toJson($ctx.prev.result)",
+    "TypeName": "Mutation"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/mutationUpdateObservationResolver"
+   }
+  },
+  "MutationdeleteObservationpreAuth0FunctionMutationdeleteObservationpreAuth0FunctionAppSyncFunctionECD9F38A": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "MutationdeleteObservationpreAuth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/d9accdc3fd88c22d0abb2c6938cf294a73543ac27c5ea0cfb319b68e935913de.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/MutationdeleteObservationpreAuth0Function/MutationdeleteObservationpreAuth0Function.AppSyncFunction"
+   }
+  },
+  "MutationdeleteObservationauth0FunctionMutationdeleteObservationauth0FunctionAppSyncFunction171A7C58": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackResource4DBF9A2DOutputsamplif139D67D8"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "MutationdeleteObservationauth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/0ed561ac564f8bdc8668d674666a9218a1ef1aa06c13d5ca49e32015f3f3f017.vtl"
+    },
+    "ResponseMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/6b8a13a9e695249429c96931f1f63a09b88e93eedcfe1ca947e962e409da682c.vtl"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/MutationdeleteObservationauth0Function/MutationdeleteObservationauth0Function.AppSyncFunction"
+   }
+  },
+  "MutationdeleteObservationpostAuth0FunctionMutationdeleteObservationpostAuth0FunctionAppSyncFunctionC4C1B519": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "MutationdeleteObservationpostAuth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/c1721bcd774e27c514d3454b5be4f9bdd094c0161b57ddf053d618e3b0086a77.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/MutationdeleteObservationpostAuth0Function/MutationdeleteObservationpostAuth0Function.AppSyncFunction"
+   }
+  },
+  "MutationDeleteObservationDataResolverFnMutationDeleteObservationDataResolverFnAppSyncFunctionD96E15C1": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackResource4DBF9A2DOutputsamplif139D67D8"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "MutationDeleteObservationDataResolverFn",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/520b86d3c97b4253b08988e14d80392e588207cba15413a3c5cccb4a7eb2941b.vtl"
+    },
+    "ResponseMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/f4a52b72209a9dfa197b5e7367a5c378c5bb86de6e29ddd9e48b49a3fe54b249.vtl"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/MutationDeleteObservationDataResolverFn/MutationDeleteObservationDataResolverFn.AppSyncFunction"
+   }
+  },
+  "DeleteobservationResolver": {
+   "Type": "AWS::AppSync::Resolver",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "FieldName": "deleteObservation",
+    "Kind": "PIPELINE",
+    "PipelineConfig": {
+     "Functions": [
+      {
+       "Fn::GetAtt": [
+        "MutationdeleteObservationpreAuth0FunctionMutationdeleteObservationpreAuth0FunctionAppSyncFunctionECD9F38A",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "MutationdeleteObservationauth0FunctionMutationdeleteObservationauth0FunctionAppSyncFunction171A7C58",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "MutationdeleteObservationpostAuth0FunctionMutationdeleteObservationpostAuth0FunctionAppSyncFunctionC4C1B519",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "MutationDeleteObservationDataResolverFnMutationDeleteObservationDataResolverFnAppSyncFunctionD96E15C1",
+        "FunctionId"
+       ]
+      }
+     ]
+    },
+    "RequestMappingTemplate": {
+     "Fn::Join": [
+      "",
+      [
+       "$util.qr($ctx.stash.put(\"typeName\", \"Mutation\"))\n$util.qr($ctx.stash.put(\"fieldName\", \"deleteObservation\"))\n$util.qr($ctx.stash.put(\"conditions\", []))\n$util.qr($ctx.stash.put(\"metadata\", {}))\n$util.qr($ctx.stash.metadata.put(\"dataSourceType\", \"AWS_LAMBDA\"))\n$util.qr($ctx.stash.metadata.put(\"apiId\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"connectionAttributes\", {}))\n$util.qr($ctx.stash.put(\"lambdaFunctionArn\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackResource4DBF9A2DOutputsamplifE470703F"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"authRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthauthenticatedUserRole2DDBF981Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"unauthRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthunauthenticatedUserRoleDBF4EAC9Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"identityPoolId\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthIdentityPool45320473Ref"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"adminRoles\", []))\n$util.toJson({})"
+      ]
+     ]
+    },
+    "ResponseMappingTemplate": "$util.toJson($ctx.prev.result)",
+    "TypeName": "Mutation"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/mutationDeleteObservationResolver"
+   }
+  },
+  "SubscriptiononCreateObservationauth0FunctionSubscriptiononCreateObservationauth0FunctionAppSyncFunctionC0655907": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "SubscriptiononCreateObservationauth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/4493fc8da0226e9f3b6aba936ad54f6e072d73d4621c264869f3f73d907414e5.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/SubscriptiononCreateObservationauth0Function/SubscriptiononCreateObservationauth0Function.AppSyncFunction"
+   }
+  },
+  "SubscriptiononCreateObservationpostAuth0FunctionSubscriptiononCreateObservationpostAuth0FunctionAppSyncFunction1FBC4F8B": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "SubscriptiononCreateObservationpostAuth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/c1721bcd774e27c514d3454b5be4f9bdd094c0161b57ddf053d618e3b0086a77.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/SubscriptiononCreateObservationpostAuth0Function/SubscriptiononCreateObservationpostAuth0Function.AppSyncFunction"
+   }
+  },
+  "SubscriptionOnCreateObservationDataResolverFnSubscriptionOnCreateObservationDataResolverFnAppSyncFunction8C11DD57": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "SubscriptionOnCreateObservationDataResolverFn",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/fe3c43ada4b9d681a5e2312663ef7a73386424d73b73e51f8e2e9d4b50f7c502.vtl"
+    },
+    "ResponseMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/e0cff47fb007f0bbf2a4e43ca256d6aa7ec109821769fd79fa7c5e83f0e7f9fc.vtl"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/SubscriptionOnCreateObservationDataResolverFn/SubscriptionOnCreateObservationDataResolverFn.AppSyncFunction"
+   }
+  },
+  "SubscriptiononCreateObservationResolver": {
+   "Type": "AWS::AppSync::Resolver",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "FieldName": "onCreateObservation",
+    "Kind": "PIPELINE",
+    "PipelineConfig": {
+     "Functions": [
+      {
+       "Fn::GetAtt": [
+        "SubscriptiononCreateObservationauth0FunctionSubscriptiononCreateObservationauth0FunctionAppSyncFunctionC0655907",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "SubscriptiononCreateObservationpostAuth0FunctionSubscriptiononCreateObservationpostAuth0FunctionAppSyncFunction1FBC4F8B",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "SubscriptionOnCreateObservationDataResolverFnSubscriptionOnCreateObservationDataResolverFnAppSyncFunction8C11DD57",
+        "FunctionId"
+       ]
+      }
+     ]
+    },
+    "RequestMappingTemplate": {
+     "Fn::Join": [
+      "",
+      [
+       "$util.qr($ctx.stash.put(\"typeName\", \"Subscription\"))\n$util.qr($ctx.stash.put(\"fieldName\", \"onCreateObservation\"))\n$util.qr($ctx.stash.put(\"conditions\", []))\n$util.qr($ctx.stash.put(\"metadata\", {}))\n$util.qr($ctx.stash.metadata.put(\"dataSourceType\", \"NONE\"))\n$util.qr($ctx.stash.metadata.put(\"apiId\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"connectionAttributes\", {}))\n\n$util.qr($ctx.stash.put(\"authRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthauthenticatedUserRole2DDBF981Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"unauthRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthunauthenticatedUserRoleDBF4EAC9Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"identityPoolId\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthIdentityPool45320473Ref"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"adminRoles\", []))\n$util.toJson({})"
+      ]
+     ]
+    },
+    "ResponseMappingTemplate": "$util.toJson($ctx.prev.result)",
+    "TypeName": "Subscription"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/subscriptionOnCreateObservationResolver"
+   }
+  },
+  "SubscriptiononUpdateObservationauth0FunctionSubscriptiononUpdateObservationauth0FunctionAppSyncFunctionEBAA0AA2": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "SubscriptiononUpdateObservationauth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/4493fc8da0226e9f3b6aba936ad54f6e072d73d4621c264869f3f73d907414e5.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/SubscriptiononUpdateObservationauth0Function/SubscriptiononUpdateObservationauth0Function.AppSyncFunction"
+   }
+  },
+  "SubscriptiononUpdateObservationpostAuth0FunctionSubscriptiononUpdateObservationpostAuth0FunctionAppSyncFunction477E74CE": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "SubscriptiononUpdateObservationpostAuth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/c1721bcd774e27c514d3454b5be4f9bdd094c0161b57ddf053d618e3b0086a77.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/SubscriptiononUpdateObservationpostAuth0Function/SubscriptiononUpdateObservationpostAuth0Function.AppSyncFunction"
+   }
+  },
+  "SubscriptionOnUpdateObservationDataResolverFnSubscriptionOnUpdateObservationDataResolverFnAppSyncFunction69B64905": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "SubscriptionOnUpdateObservationDataResolverFn",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/fe3c43ada4b9d681a5e2312663ef7a73386424d73b73e51f8e2e9d4b50f7c502.vtl"
+    },
+    "ResponseMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/e0cff47fb007f0bbf2a4e43ca256d6aa7ec109821769fd79fa7c5e83f0e7f9fc.vtl"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/SubscriptionOnUpdateObservationDataResolverFn/SubscriptionOnUpdateObservationDataResolverFn.AppSyncFunction"
+   }
+  },
+  "SubscriptiononUpdateObservationResolver": {
+   "Type": "AWS::AppSync::Resolver",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "FieldName": "onUpdateObservation",
+    "Kind": "PIPELINE",
+    "PipelineConfig": {
+     "Functions": [
+      {
+       "Fn::GetAtt": [
+        "SubscriptiononUpdateObservationauth0FunctionSubscriptiononUpdateObservationauth0FunctionAppSyncFunctionEBAA0AA2",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "SubscriptiononUpdateObservationpostAuth0FunctionSubscriptiononUpdateObservationpostAuth0FunctionAppSyncFunction477E74CE",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "SubscriptionOnUpdateObservationDataResolverFnSubscriptionOnUpdateObservationDataResolverFnAppSyncFunction69B64905",
+        "FunctionId"
+       ]
+      }
+     ]
+    },
+    "RequestMappingTemplate": {
+     "Fn::Join": [
+      "",
+      [
+       "$util.qr($ctx.stash.put(\"typeName\", \"Subscription\"))\n$util.qr($ctx.stash.put(\"fieldName\", \"onUpdateObservation\"))\n$util.qr($ctx.stash.put(\"conditions\", []))\n$util.qr($ctx.stash.put(\"metadata\", {}))\n$util.qr($ctx.stash.metadata.put(\"dataSourceType\", \"NONE\"))\n$util.qr($ctx.stash.metadata.put(\"apiId\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"connectionAttributes\", {}))\n\n$util.qr($ctx.stash.put(\"authRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthauthenticatedUserRole2DDBF981Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"unauthRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthunauthenticatedUserRoleDBF4EAC9Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"identityPoolId\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthIdentityPool45320473Ref"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"adminRoles\", []))\n$util.toJson({})"
+      ]
+     ]
+    },
+    "ResponseMappingTemplate": "$util.toJson($ctx.prev.result)",
+    "TypeName": "Subscription"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/subscriptionOnUpdateObservationResolver"
+   }
+  },
+  "SubscriptiononDeleteObservationauth0FunctionSubscriptiononDeleteObservationauth0FunctionAppSyncFunctionF2A05074": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "SubscriptiononDeleteObservationauth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/4493fc8da0226e9f3b6aba936ad54f6e072d73d4621c264869f3f73d907414e5.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/SubscriptiononDeleteObservationauth0Function/SubscriptiononDeleteObservationauth0Function.AppSyncFunction"
+   }
+  },
+  "SubscriptiononDeleteObservationpostAuth0FunctionSubscriptiononDeleteObservationpostAuth0FunctionAppSyncFunction9C020CE7": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "SubscriptiononDeleteObservationpostAuth0Function",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/c1721bcd774e27c514d3454b5be4f9bdd094c0161b57ddf053d618e3b0086a77.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/SubscriptiononDeleteObservationpostAuth0Function/SubscriptiononDeleteObservationpostAuth0Function.AppSyncFunction"
+   }
+  },
+  "SubscriptionOnDeleteObservationDataResolverFnSubscriptionOnDeleteObservationDataResolverFnAppSyncFunctionA50D97C7": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "SubscriptionOnDeleteObservationDataResolverFn",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/fe3c43ada4b9d681a5e2312663ef7a73386424d73b73e51f8e2e9d4b50f7c502.vtl"
+    },
+    "ResponseMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/e0cff47fb007f0bbf2a4e43ca256d6aa7ec109821769fd79fa7c5e83f0e7f9fc.vtl"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/SubscriptionOnDeleteObservationDataResolverFn/SubscriptionOnDeleteObservationDataResolverFn.AppSyncFunction"
+   }
+  },
+  "SubscriptiononDeleteObservationResolver": {
+   "Type": "AWS::AppSync::Resolver",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "FieldName": "onDeleteObservation",
+    "Kind": "PIPELINE",
+    "PipelineConfig": {
+     "Functions": [
+      {
+       "Fn::GetAtt": [
+        "SubscriptiononDeleteObservationauth0FunctionSubscriptiononDeleteObservationauth0FunctionAppSyncFunctionF2A05074",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "SubscriptiononDeleteObservationpostAuth0FunctionSubscriptiononDeleteObservationpostAuth0FunctionAppSyncFunction9C020CE7",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "SubscriptionOnDeleteObservationDataResolverFnSubscriptionOnDeleteObservationDataResolverFnAppSyncFunctionA50D97C7",
+        "FunctionId"
+       ]
+      }
+     ]
+    },
+    "RequestMappingTemplate": {
+     "Fn::Join": [
+      "",
+      [
+       "$util.qr($ctx.stash.put(\"typeName\", \"Subscription\"))\n$util.qr($ctx.stash.put(\"fieldName\", \"onDeleteObservation\"))\n$util.qr($ctx.stash.put(\"conditions\", []))\n$util.qr($ctx.stash.put(\"metadata\", {}))\n$util.qr($ctx.stash.metadata.put(\"dataSourceType\", \"NONE\"))\n$util.qr($ctx.stash.metadata.put(\"apiId\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"connectionAttributes\", {}))\n\n$util.qr($ctx.stash.put(\"authRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthauthenticatedUserRole2DDBF981Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"unauthRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthunauthenticatedUserRoleDBF4EAC9Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"identityPoolId\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthIdentityPool45320473Ref"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"adminRoles\", []))\n$util.toJson({})"
+      ]
+     ]
+    },
+    "ResponseMappingTemplate": "$util.toJson($ctx.prev.result)",
+    "TypeName": "Subscription"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/subscriptionOnDeleteObservationResolver"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/zWOzQqDMBCEn6X3uPUHH6AGeuxBH0DSZJWo3Ug2UYr47iUtPX0zDDNMCUVdQ35RO2fazNlin3A8kAOaLig9C7Vzf3DVK2YMDLcEwRU0Uc8YGsUo1LrymzQccqB7JB2sI+losGP0KhkhB2qR3bKhP0/x3eiCGi2N/yh6jUlLR8amzinIGYSJr1uZQ5E+Tmxt5iMF+0Jof/wAupmD6sAAAAA="
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/observation/CDKMetadata/Default"
+   },
+   "Condition": "CDKMetadataAvailable"
+  }
+ },
+ "Conditions": {
+  "CDKMetadataAvailable": {
+   "Fn::Or": [
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "af-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-3"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-south-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-3"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-4"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ca-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ca-west-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "cn-north-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "cn-northwest-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-central-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-north-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-south-2"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-3"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "il-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "me-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "me-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "sa-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-east-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-west-1"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Equals": [
+      {
+       "Ref": "AWS::Region"
+      },
+      "us-west-2"
+     ]
+    }
+   ]
+  }
+ },
+ "Parameters": {
+  "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId": {
+   "Type": "String"
+  },
+  "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName": {
+   "Type": "String"
+  },
+  "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackResource4DBF9A2DOutputsamplif139D67D8": {
+   "Type": "String"
+  },
+  "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackSQLApiStacka80850e3b503cddb393aID3XcVikNjXl6D9DfR9OxCHwNestedStackResource4DBF9A2DOutputsamplifE470703F": {
+   "Type": "String"
+  },
+  "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthauthenticatedUserRole2DDBF981Ref": {
+   "Type": "String"
+  },
+  "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthunauthenticatedUserRoleDBF4EAC9Ref": {
+   "Type": "String"
+  },
+  "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthIdentityPool45320473Ref": {
+   "Type": "String"
+  }
+ }
+}

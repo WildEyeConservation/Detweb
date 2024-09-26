@@ -1,0 +1,30 @@
+## [Start] Authorization rules. **
+#if( $util.authType() == "IAM Authorization" && $util.isNull($ctx.identity.cognitoIdentityPoolId) && $util.isNull($ctx.identity.cognitoIdentityId) )
+  $util.qr($ctx.stash.put("hasAuth", true))
+  $util.toJson({"version":"2018-05-29","payload":{}})
+#else
+  $util.qr($ctx.stash.put("hasAuth", true))
+  #set( $authRules = [] )
+  #if( $ctx.stash.adminRoles && $ctx.stash.adminRoles.size() > 0 )
+    $util.qr($authRules.add({
+  "provider": "iam",
+  "type": "admin",
+  "strict": false,
+  "roles": $ctx.stash.adminRoles
+}))
+  #end
+  $util.qr($authRules.add({
+  "type": "private",
+  "provider": "userPools",
+  "allowedFields":   ["id", "projectId", "setId", "source", "categoryId", "imageId", "x", "y", "obscured", "objectId", "createdAt", "updatedAt", "project", "category", "image", "object", "set"]
+}))
+  #set( $authResult = $util.authRules.mutationAuth($authRules, "delete", $ctx.args.input, $ctx.result) )
+  #if( !$authResult || ($authResult && !$authResult.authorized) )
+    $util.unauthorized()
+  #end
+  #if( $authResult && !$util.isNullOrEmpty($authResult.authorizedInput) )
+    #set( $ctx.args.input = $authResult.authorizedInput )
+  #end
+  $util.toJson({"version":"2018-05-29","payload":{}})
+#end
+## [End] Authorization rules. **

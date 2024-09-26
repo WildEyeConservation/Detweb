@@ -1,0 +1,83 @@
+## [Start] Authorization Steps. **
+$util.qr($ctx.stash.put("hasAuth", true))
+#set( $isAuthorized = false )
+#if( $util.authType() == "API Key Authorization" )
+
+#end
+#if( $util.authType() == "IAM Authorization" )
+  #if( $util.authType() == "IAM Authorization" && $util.isNull($ctx.identity.cognitoIdentityPoolId) && $util.isNull($ctx.identity.cognitoIdentityId) )
+    $util.qr($ctx.stash.put("hasAuth", true))
+    #set( $isAuthorized = true )
+  #else
+    #if( !$isAuthorized )
+      #if( $ctx.identity.userArn == $ctx.stash.unauthRole )
+        #set( $isAuthorized = true )
+      #end
+    #end
+  #end
+#end
+#if( $util.authType() == "User Pool Authorization" )
+  #set( $isAuthorized = true )
+  #if( !$isAuthorized )
+    #set( $staticGroupRoles = [{"claim":"cognito:groups","entity":"superAdmin"}] )
+    #foreach( $groupRole in $staticGroupRoles )
+      #set( $groupsInToken = $util.defaultIfNull($ctx.identity.claims.get($groupRole.claim), []) )
+      #if( $groupsInToken.contains($groupRole.entity) )
+        #set( $isAuthorized = true )
+        #break
+      #end
+    #end
+  #end
+  #set( $hasValidOwnerArgument = false )
+  #set( $authRuntimeFilter = [] )
+  #set( $authOwnerRuntimeFilter = [] )
+  #set( $authGroupRuntimeFilter = [] )
+  #set( $groupClaim0 = $util.defaultIfNull($ctx.identity.claims.get("cognito:groups"), []) )
+  #if( $util.isString($groupClaim0) )
+    #if( $util.isList($util.parseJson($groupClaim0)) )
+      #set( $groupClaim0 = $util.parseJson($groupClaim0) )
+    #else
+      #set( $groupClaim0 = [$groupClaim0] )
+    #end
+  #end
+  #if( !$util.isNullOrEmpty($groupClaim0) )
+    $util.qr($authGroupRuntimeFilter.add({ "readGroup": { "in": $groupClaim0 } }))
+  #end
+  #set( $groupClaim1 = $util.defaultIfNull($ctx.identity.claims.get("cognito:groups"), []) )
+  #if( $util.isString($groupClaim1) )
+    #if( $util.isList($util.parseJson($groupClaim1)) )
+      #set( $groupClaim1 = $util.parseJson($groupClaim1) )
+    #else
+      #set( $groupClaim1 = [$groupClaim1] )
+    #end
+  #end
+  #if( !$util.isNullOrEmpty($groupClaim1) )
+    $util.qr($authGroupRuntimeFilter.add({ "writeGroup": { "in": $groupClaim1 } }))
+  #end
+  ## Apply dynamic roles auth if not previously authorized by static groups and owner argument **
+  #if( $authOwnerRuntimeFilter.size() > 0 )
+    $util.qr($authRuntimeFilter.addAll($authOwnerRuntimeFilter))
+  #end
+  #if( $authGroupRuntimeFilter.size() > 0 )
+    $util.qr($authRuntimeFilter.addAll($authGroupRuntimeFilter))
+  #end
+  #set( $filterArgsSize = 0 )
+  #if( !$util.isNullOrEmpty($ctx.args.filter) )
+    #set( $filterArgsSize = $ctx.args.filter.size() )
+  #end
+  #set( $isOwnerAuthAuthorizedAndNoOtherFilters = $hasValidOwnerArgument && $authRuntimeFilter.size() == 1 && $filterArgsSize == 0 )
+  #set( $isOwnerOrDynamicAuthAuthorizedWithFilters = (!$isAuthorized || $hasValidOwnerArgument) && $authRuntimeFilter.size() > 0 )
+  #if( !$isOwnerAuthAuthorizedAndNoOtherFilters && $isOwnerOrDynamicAuthAuthorizedWithFilters )
+    #if( $util.isNullOrEmpty($ctx.args.filter) )
+      #set( $ctx.args.filter = { "or": $authRuntimeFilter } )
+    #else
+      #set( $ctx.args.filter = { "and": [ { "or": $authRuntimeFilter }, $ctx.args.filter ]} )
+    #end
+    #set( $isAuthorized = true )
+  #end
+#end
+#if( !$isAuthorized )
+$util.unauthorized()
+#end
+$util.toJson({"version":"2018-05-29","payload":{}})
+## [End] Authorization Steps. **

@@ -1,0 +1,5 @@
+kornia
+opencv-python-headless
+boto3
+gql[all]
+requests_aws4auth

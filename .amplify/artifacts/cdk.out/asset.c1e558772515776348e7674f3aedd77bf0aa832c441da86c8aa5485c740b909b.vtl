@@ -1,0 +1,20 @@
+## [Start] Get existing record. **
+#set( $lambdaInput = {} )
+#set( $lambdaInput.args = {} )
+#set( $lambdaInput.table = "UserProjectMembership" )
+#set( $lambdaInput.operation = "GET" )
+#set( $lambdaInput.operationName = "GET_EXISTING_RECORD" )
+#set( $lambdaInput.args.metadata = {} )
+#set( $lambdaInput.args.metadata.keys = [] )
+#set( $lambdaInput.args.metadata.nonScalarFields = [] )
+#set( $lambdaInput.args.metadata.arrayFields = [] )
+#set( $lambdaInput.args.metadata.fieldMap = {} )
+$util.qr($lambdaInput.args.metadata.fieldMap.putAll($util.defaultIfNull($context.stash.fieldMap, {})))
+$util.qr($lambdaInput.args.metadata.keys.addAll($util.defaultIfNull($ctx.stash.keys, [])))
+#set( $lambdaInput.args.input = $util.map.copyAndRetainAllKeys($context.arguments.input, $ctx.stash.keys) )
+{
+  "version": "2018-05-29",
+  "operation": "Invoke",
+  "payload":   $util.toJson($lambdaInput)
+}
+## [End] Get existing record. **

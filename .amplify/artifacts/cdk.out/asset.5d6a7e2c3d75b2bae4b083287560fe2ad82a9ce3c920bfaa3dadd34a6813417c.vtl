@@ -1,0 +1,16 @@
+## [Start] Invoke RDS Lambda data source. **
+#set( $lambdaInput = {} )
+#set( $lambdaInput.parameters = {} )
+#set( $lambdaInput.statement = "SELECT
+            COUNT(*) AS count
+            FROM imagesetmembership
+            WHERE imagesetid = :imagesetid;" )
+#set( $lambdaInput.operation = "RAW_SQL" )
+#set( $lambdaInput.operationName = "numberOfImagesInSet" )
+#set( $lambdaInput.parameters = $util.defaultIfNull($context.arguments, {}) )
+{
+  "version": "2018-05-29",
+  "operation": "Invoke",
+  "payload":   $util.toJson($lambdaInput)
+}
+## [End] Invoke RDS Lambda data source. **

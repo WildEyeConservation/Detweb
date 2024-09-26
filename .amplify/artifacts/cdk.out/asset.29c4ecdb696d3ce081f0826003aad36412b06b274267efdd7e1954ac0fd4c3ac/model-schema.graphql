@@ -1,0 +1,187 @@
+type annotation @model(timestamps: null) @auth(rules: [{allow: private}]) {
+  id: String! @primaryKey
+  projectid: String!
+  setid: String!
+  source: String!
+  categoryid: String!
+  imageid: String!
+  x: Int!
+  y: Int!
+  obscured: Boolean
+  objectid: String
+  createdat: AWSDateTime
+  updatedat: AWSDateTime
+}
+
+type annotationset @model(timestamps: null) @auth(rules: [{allow: private}]) {
+  id: String! @primaryKey
+  projectid: String!
+  name: String!
+  createdat: AWSDateTime
+  updatedat: AWSDateTime
+}
+
+type category @model(timestamps: null) @auth(rules: [{allow: private}]) {
+  id: String! @primaryKey
+  projectid: String!
+  name: String!
+  color: String
+  shortcutkey: String
+  createdat: AWSDateTime
+  updatedat: AWSDateTime
+}
+
+type image @model(timestamps: null) @auth(rules: [{allow: private}]) {
+  id: String! @primaryKey
+  projectid: String!
+  latitude: Float
+  longitude: Float
+  altitude_wgs84: Float
+  altitude_agl: Float
+  altitude_egm96: Float
+  width: Int!
+  height: Int!
+  roll: Float
+  yaw: Float
+  pitch: Float
+  timestamp: AWSDateTime
+  exifdata: String
+  cameraserial: String
+  createdat: AWSDateTime
+  updatedat: AWSDateTime
+  sets: [imagesetmembership] @hasMany(references: ["imageid"])
+}
+
+type imagefile @model(timestamps: null) @auth(rules: [{allow: private}]) {
+  id: String! @primaryKey
+  projectid: String!
+  path: String!
+  imageid: String
+  s3key: String!
+  type: String!
+  createdat: AWSDateTime
+  updatedat: AWSDateTime
+}
+
+type imageset @model(timestamps: null) @auth(rules: [{allow: private}]) {
+  id: String! @primaryKey
+  projectid: String!
+  name: String!
+  createdat: AWSDateTime
+  updatedat: AWSDateTime
+  images: [imagesetmembership] @hasMany(references: ["imagesetid"])
+}
+
+type imagesetmembership @model(timestamps: null) @auth(rules: [{allow: private}]) {
+  id: String! @primaryKey
+  imageid: String!
+  imagesetid: String!
+  createdat: AWSDateTime
+  updatedat: AWSDateTime
+  image: image @belongsTo(references: ["imageid"])
+  imageSet: imageset @belongsTo(references: ["imagesetid"])
+}
+
+type location @model(timestamps: null) @auth(rules: [{allow: private}]) {
+  id: String! @primaryKey
+  projectid: String!
+  imageid: String
+  setid: String!
+  height: Int
+  width: Int
+  x: Int!
+  y: Int!
+  source: String!
+  confidence: Float
+  createdat: AWSDateTime
+  updatedat: AWSDateTime
+}
+
+type locationset @model(timestamps: null) @auth(rules: [{allow: private}]) {
+  id: String! @primaryKey
+  projectid: String!
+  name: String!
+  createdat: AWSDateTime
+  updatedat: AWSDateTime
+}
+
+type object @model(timestamps: null) @auth(rules: [{allow: private}]) {
+  id: String! @primaryKey
+  projectid: String!
+  categoryid: String!
+  createdat: AWSDateTime
+  updatedat: AWSDateTime
+}
+
+type observation @model(timestamps: null) @auth(rules: [{allow: private}]) {
+  id: String! @primaryKey
+  projectid: String!
+  locationid: String!
+  annotationsetid: String!
+  createdat: AWSDateTime
+  updatedat: AWSDateTime
+}
+
+type project @model(timestamps: null) @auth(rules: [{allow: private}]) {
+  id: String! @primaryKey
+  name: String!
+  createdat: AWSDateTime
+  updatedat: AWSDateTime
+}
+
+type queue @model(timestamps: null) @auth(rules: [{allow: private}]) {
+  id: String! @primaryKey
+  projectid: String!
+  name: String!
+  url: String!
+  createdat: AWSDateTime
+  updatedat: AWSDateTime
+}
+
+type userprojectmembership @model(timestamps: null) @auth(rules: [{allow: private}]) {
+  id: String! @primaryKey
+  userid: String!
+  projectid: String!
+  isadmin: Boolean
+  queueurl: String
+  createdat: AWSDateTime
+  updatedat: AWSDateTime
+}
+
+type countType @aws_cognito_user_pools {
+  count: Int
+}
+
+type UserType @aws_cognito_user_pools {
+  name: String!
+  id: String!
+  isAdmin: Int
+}
+
+type Message @aws_cognito_user_pools @aws_api_key @aws_lambda {
+  content: String!
+  channelName: String!
+}
+
+type ListUsersReturnType @aws_cognito_user_pools {
+  Users: [UserType]
+  NextToken: String
+}
+
+type Mutation {
+  addUserToGroup(userId: String!, groupName: String!): AWSJSON @function(name: "FnAddUserToGroup") @auth(rules: [{allow: private}])
+  removeUserFromGroup(userId: String!, groupName: String!): AWSJSON @function(name: "FnRemoveUserFromGroup") @auth(rules: [{allow: private}])
+  createGroup(groupName: String!): AWSJSON @function(name: "FnCreateGroup") @auth(rules: [{allow: private}])
+  publish(channelName: String!, content: String!): Message @aws_cognito_user_pools @aws_api_key @aws_lambda
+  processImages(s3keys: [String]!, model: String!, threshold: Float): String @function(name: "FnProcessImages") @auth(rules: [{allow: private}])
+}
+
+type Query {
+  numberOfImagesInSet(imageSetId: String!): [countType] @sql(statement: "SELECT\n            COUNT(*) AS count\n            FROM imagesetmembership\n            WHERE imagesetid = :imagesetid;") @auth(rules: [{allow: private}])
+  listUsers(nextToken: String): ListUsersReturnType @function(name: "FnListUsers") @auth(rules: [{allow: private}])
+  listGroupsForUser(userId: String!, nextToken: String): AWSJSON @function(name: "FnListGroupsForUser") @auth(rules: [{allow: private}])
+}
+
+type Subscription {
+  receive: Message @aws_subscribe(mutations: ["publish"]) @aws_cognito_user_pools
+}

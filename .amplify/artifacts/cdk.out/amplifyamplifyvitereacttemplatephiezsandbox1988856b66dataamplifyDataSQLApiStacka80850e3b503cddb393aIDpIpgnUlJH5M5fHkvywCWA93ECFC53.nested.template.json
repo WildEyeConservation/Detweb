@@ -1,0 +1,1397 @@
+{
+ "Resources": {
+  "SQLLayerVersionCustomResourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA88456BEE": {
+   "Type": "Custom::SQLLayerVersionCustomResource",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "AWS679f53fac002430cb0da5b7982bd22872D164C4C",
+      "Arn"
+     ]
+    },
+    "Create": {
+     "Fn::Join": [
+      "",
+      [
+       "{\"service\":\"S3\",\"action\":\"getObject\",\"region\":\"us-east-1\",\"parameters\":{\"Bucket\":\"amplify-rds-layer-resources\",\"Key\":\"sql-layer-versions/",
+       {
+        "Ref": "AWS::Region"
+       },
+       "\"},\"physicalResourceId\":{\"id\":\"SQLLayerVersionCustomResourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA\"}}"
+      ]
+     ]
+    },
+    "Update": {
+     "Fn::Join": [
+      "",
+      [
+       "{\"service\":\"S3\",\"action\":\"getObject\",\"region\":\"us-east-1\",\"parameters\":{\"Bucket\":\"amplify-rds-layer-resources\",\"Key\":\"sql-layer-versions/",
+       {
+        "Ref": "AWS::Region"
+       },
+       "\"},\"physicalResourceId\":{\"id\":\"SQLLayerVersionCustomResourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA\"}}"
+      ]
+     ]
+    },
+    "InstallLatestAwsSdk": false
+   },
+   "DependsOn": [
+    "SQLLayerVersionCustomResourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWACustomResourcePolicyD14F5F9B"
+   ],
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLLayerVersionCustomResourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/Resource/Default"
+   }
+  },
+  "SQLLayerVersionCustomResourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWACustomResourcePolicyD14F5F9B": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:GetObject",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:aws:s3:::amplify-rds-layer-resources/sql-layer-versions/",
+          {
+           "Ref": "AWS::Region"
+          }
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "SQLLayerVersionCustomResourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWACustomResourcePolicyD14F5F9B",
+    "Roles": [
+     {
+      "Ref": "AWS679f53fac002430cb0da5b7982bd2287ServiceRoleC1EA0FF2"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLLayerVersionCustomResourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/CustomResourcePolicy/Resource"
+   }
+  },
+  "AWS679f53fac002430cb0da5b7982bd2287ServiceRoleC1EA0FF2": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "amplifyData"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/AWS679f53fac002430cb0da5b7982bd2287/ServiceRole/Resource"
+   }
+  },
+  "AWS679f53fac002430cb0da5b7982bd22872D164C4C": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "97f30e67419a1676a2215492723e5add1aa491caf0cbe2dd878fc4fab0468cd4.zip"
+    },
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "AWS679f53fac002430cb0da5b7982bd2287ServiceRoleC1EA0FF2",
+      "Arn"
+     ]
+    },
+    "Runtime": {
+     "Fn::FindInMap": [
+      "LatestNodeRuntimeMap",
+      {
+       "Ref": "AWS::Region"
+      },
+      "value"
+     ]
+    },
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "amplifyData"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Timeout": 120
+   },
+   "DependsOn": [
+    "AWS679f53fac002430cb0da5b7982bd2287ServiceRoleC1EA0FF2"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/AWS679f53fac002430cb0da5b7982bd2287/Resource",
+    "aws:asset:path": "asset.97f30e67419a1676a2215492723e5add1aa491caf0cbe2dd878fc4fab0468cd4",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "SQLLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAA8CDDDBB": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "RoleName": {
+     "Fn::Join": [
+      "",
+      [
+       "SQLLambdaRolea80850ead4f5f-",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+       },
+       "-NONE"
+      ]
+     ]
+    },
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "amplifyData"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/Resource"
+   }
+  },
+  "SQLLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWADefaultPolicy118BB2D4": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "ec2:CreateNetworkInterface",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DeleteNetworkInterface"
+       ],
+       "Effect": "Allow",
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "SQLLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWADefaultPolicy118BB2D4",
+    "Roles": [
+     {
+      "Ref": "SQLLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAA8CDDDBB"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/DefaultPolicy/Resource"
+   }
+  },
+  "SQLLambdaRolePolicya80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAB7856FE8": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": "arn:aws:logs:*:*:*"
+      },
+      {
+       "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        "arn:aws:ssm:*:*:parameter/amplify/amplifyvitereacttemplate/phiez-sandbox-1988856b66/SQL_CONNECTION_STRING",
+        "arn:aws:ssm:*:*:parameter/amplify/shared/amplify-vite-react-template/SQL_CONNECTION_STRING"
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": {
+     "Fn::Join": [
+      "",
+      [
+       "SQLLambdaRolea80850ead4f5f-",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+       },
+       "-NONEPolicy"
+      ]
+     ]
+    },
+    "Roles": [
+     {
+      "Ref": "SQLLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAA8CDDDBB"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLLambdaRolePolicya80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/Resource"
+   }
+  },
+  "SQLVpcEndpointa80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAssm": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": false,
+    "SecurityGroupIds": [
+     "sg-0383349e70c9893ce",
+     "sg-0f595be854aba2172"
+    ],
+    "ServiceName": {
+     "Fn::Join": [
+      "",
+      [
+       "com.amazonaws.",
+       {
+        "Ref": "AWS::Region"
+       },
+       ".ssm"
+      ]
+     ]
+    },
+    "SubnetIds": [
+     "subnet-025938c6df28c5044",
+     "subnet-028ac957343eda1be"
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": "vpc-06eb15fcdb8d99c13"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLVpcEndpointa80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAssm"
+   }
+  },
+  "SQLVpcEndpointa80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAssmmessages": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": false,
+    "SecurityGroupIds": [
+     "sg-0383349e70c9893ce",
+     "sg-0f595be854aba2172"
+    ],
+    "ServiceName": {
+     "Fn::Join": [
+      "",
+      [
+       "com.amazonaws.",
+       {
+        "Ref": "AWS::Region"
+       },
+       ".ssmmessages"
+      ]
+     ]
+    },
+    "SubnetIds": [
+     "subnet-025938c6df28c5044",
+     "subnet-028ac957343eda1be"
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": "vpc-06eb15fcdb8d99c13"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLVpcEndpointa80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAssmmessages"
+   }
+  },
+  "SQLVpcEndpointa80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAec2": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": false,
+    "SecurityGroupIds": [
+     "sg-0383349e70c9893ce",
+     "sg-0f595be854aba2172"
+    ],
+    "ServiceName": {
+     "Fn::Join": [
+      "",
+      [
+       "com.amazonaws.",
+       {
+        "Ref": "AWS::Region"
+       },
+       ".ec2"
+      ]
+     ]
+    },
+    "SubnetIds": [
+     "subnet-025938c6df28c5044",
+     "subnet-028ac957343eda1be"
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": "vpc-06eb15fcdb8d99c13"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLVpcEndpointa80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAec2"
+   }
+  },
+  "SQLVpcEndpointa80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAec2messages": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": false,
+    "SecurityGroupIds": [
+     "sg-0383349e70c9893ce",
+     "sg-0f595be854aba2172"
+    ],
+    "ServiceName": {
+     "Fn::Join": [
+      "",
+      [
+       "com.amazonaws.",
+       {
+        "Ref": "AWS::Region"
+       },
+       ".ec2messages"
+      ]
+     ]
+    },
+    "SubnetIds": [
+     "subnet-025938c6df28c5044",
+     "subnet-028ac957343eda1be"
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": "vpc-06eb15fcdb8d99c13"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLVpcEndpointa80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAec2messages"
+   }
+  },
+  "SQLVpcEndpointa80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAkms": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": false,
+    "SecurityGroupIds": [
+     "sg-0383349e70c9893ce",
+     "sg-0f595be854aba2172"
+    ],
+    "ServiceName": {
+     "Fn::Join": [
+      "",
+      [
+       "com.amazonaws.",
+       {
+        "Ref": "AWS::Region"
+       },
+       ".kms"
+      ]
+     ]
+    },
+    "SubnetIds": [
+     "subnet-025938c6df28c5044",
+     "subnet-028ac957343eda1be"
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": "vpc-06eb15fcdb8d99c13"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLVpcEndpointa80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAkms"
+   }
+  },
+  "SQLFunctiona80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA5F5C728B": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "d576c14cccdf1ea2157133d0ad6ad2f1f1643ad9d952e4af1e4b42b72ac39a91.zip"
+    },
+    "Description": "Amplify-managed SQL function",
+    "Environment": {
+     "Variables": {
+      "engine": "mysql",
+      "CREDENTIAL_STORAGE_METHOD": "SSM",
+      "connectionString": "[\"/amplify/amplifyvitereacttemplate/phiez-sandbox-1988856b66/SQL_CONNECTION_STRING\",\"/amplify/shared/amplify-vite-react-template/SQL_CONNECTION_STRING\"]",
+      "SSM_ENDPOINT": {
+       "Fn::Select": [
+        0,
+        {
+         "Fn::GetAtt": [
+          "SQLVpcEndpointa80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAssm",
+          "DnsEntries"
+         ]
+        }
+       ]
+      }
+     }
+    },
+    "Handler": "handler.run",
+    "Layers": [
+     {
+      "Fn::GetAtt": [
+       "SQLLayerVersionCustomResourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA88456BEE",
+       "Body"
+      ]
+     }
+    ],
+    "Role": {
+     "Fn::GetAtt": [
+      "SQLLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAA8CDDDBB",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "amplifyData"
+     },
+     {
+      "Key": "amplify:function-type",
+      "Value": "sql-data-source"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Timeout": 30,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      "sg-0383349e70c9893ce",
+      "sg-0f595be854aba2172"
+     ],
+     "SubnetIds": [
+      "subnet-025938c6df28c5044",
+      "subnet-028ac957343eda1be"
+     ]
+    }
+   },
+   "DependsOn": [
+    "SQLLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWADefaultPolicy118BB2D4",
+    "SQLLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAA8CDDDBB"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLFunctiona80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/Resource"
+   }
+  },
+  "SQLPatchingLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAFCBCB663": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "RoleName": {
+     "Fn::Join": [
+      "",
+      [
+       "SQLPatchingLambdaRol80eb75-",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+       },
+       "-NONE"
+      ]
+     ]
+    },
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "amplifyData"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLPatchingLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/Resource"
+   }
+  },
+  "SQLPatchingLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWADefaultPolicy1194C158": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "ec2:CreateNetworkInterface",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DeleteNetworkInterface"
+       ],
+       "Effect": "Allow",
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "SQLPatchingLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWADefaultPolicy1194C158",
+    "Roles": [
+     {
+      "Ref": "SQLPatchingLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAFCBCB663"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLPatchingLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/DefaultPolicy/Resource"
+   }
+  },
+  "SQLPatchingLambdaRolePolicya80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA01E5B6CD": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": "arn:aws:logs:*:*:*"
+      },
+      {
+       "Action": "lambda:UpdateFunctionConfiguration",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "SQLFunctiona80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA5F5C728B",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "lambda:GetLayerVersion",
+        "lambda:GetLayerVersionPolicy"
+       ],
+       "Effect": "Allow",
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": {
+     "Fn::Join": [
+      "",
+      [
+       "SQLPatchingLambdaRol80eb75-",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+       },
+       "-NONEPolicy"
+      ]
+     ]
+    },
+    "Roles": [
+     {
+      "Ref": "SQLPatchingLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAFCBCB663"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLPatchingLambdaRolePolicya80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/Resource"
+   }
+  },
+  "SQLLambdaLayerPatchingFunctiona80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAB7D1EF29": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "028ded67098f3b2f9020e8e5a03907b2fce19bbdbe7bf689a4a58de694e88799.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "LAMBDA_FUNCTION_ARN": {
+       "Fn::GetAtt": [
+        "SQLFunctiona80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA5F5C728B",
+        "Arn"
+       ]
+      }
+     }
+    },
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "SQLPatchingLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAFCBCB663",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "amplifyData"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Timeout": 360
+   },
+   "DependsOn": [
+    "SQLPatchingLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWADefaultPolicy1194C158",
+    "SQLPatchingLambdaRolea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAFCBCB663"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLLambdaLayerPatchingFunctiona80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/Resource"
+   }
+  },
+  "SQLLambdaLayerPatchingFunctiona80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAAllowInvokeamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWASQLLambdaLayerPatchingTopica80850e08D13304": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "SQLLambdaLayerPatchingFunctiona80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAB7D1EF29",
+      "Arn"
+     ]
+    },
+    "Principal": "sns.amazonaws.com",
+    "SourceArn": {
+     "Fn::GetAtt": [
+      "SQLLambdaLayerPatchingTopicARNResolvera80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA51994099",
+      "Body"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLLambdaLayerPatchingFunctiona80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/AllowInvoke:amplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWASQLLambdaLayerPatchingTopica80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA8DB664D9"
+   }
+  },
+  "SQLLambdaLayerPatchingFunctiona80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWASQLLambdaLayerPatchingTopica80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA40B85C5A": {
+   "Type": "AWS::SNS::Subscription",
+   "Properties": {
+    "Endpoint": {
+     "Fn::GetAtt": [
+      "SQLLambdaLayerPatchingFunctiona80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAB7D1EF29",
+      "Arn"
+     ]
+    },
+    "FilterPolicy": {
+     "Region": [
+      {
+       "Ref": "AWS::Region"
+      }
+     ]
+    },
+    "Protocol": "lambda",
+    "Region": {
+     "Fn::Select": [
+      3,
+      {
+       "Fn::Split": [
+        ":",
+        {
+         "Fn::GetAtt": [
+          "SQLLambdaLayerPatchingTopicARNResolvera80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA51994099",
+          "Body"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    "TopicArn": {
+     "Fn::GetAtt": [
+      "SQLLambdaLayerPatchingTopicARNResolvera80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA51994099",
+      "Body"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLLambdaLayerPatchingFunctiona80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLLambdaLayerPatchingTopica80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/Resource"
+   }
+  },
+  "SQLLambdaLayerPatchingTopicARNResolvera80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA51994099": {
+   "Type": "Custom::SQLSNSTopicARNCustomResource",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "AWS679f53fac002430cb0da5b7982bd22872D164C4C",
+      "Arn"
+     ]
+    },
+    "Create": {
+     "Fn::Join": [
+      "",
+      [
+       "{\"service\":\"S3\",\"action\":\"getObject\",\"region\":\"us-east-1\",\"parameters\":{\"Bucket\":\"amplify-rds-layer-resources\",\"Key\":\"sql-sns-topic-versions/",
+       {
+        "Ref": "AWS::Region"
+       },
+       "\"},\"physicalResourceId\":{\"id\":\"SQLLambdaLayerPatchingTopicARNResolvera80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA\"}}"
+      ]
+     ]
+    },
+    "Update": {
+     "Fn::Join": [
+      "",
+      [
+       "{\"service\":\"S3\",\"action\":\"getObject\",\"region\":\"us-east-1\",\"parameters\":{\"Bucket\":\"amplify-rds-layer-resources\",\"Key\":\"sql-sns-topic-versions/",
+       {
+        "Ref": "AWS::Region"
+       },
+       "\"},\"physicalResourceId\":{\"id\":\"SQLLambdaLayerPatchingTopicARNResolvera80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA\"}}"
+      ]
+     ]
+    },
+    "InstallLatestAwsSdk": false
+   },
+   "DependsOn": [
+    "SQLLambdaLayerPatchingTopicARNResolvera80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWACustomResourcePolicy1240D668"
+   ],
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLLambdaLayerPatchingTopicARNResolvera80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/Resource/Default"
+   }
+  },
+  "SQLLambdaLayerPatchingTopicARNResolvera80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWACustomResourcePolicy1240D668": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:GetObject",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:aws:s3:::amplify-rds-layer-resources/sql-sns-topic-versions/",
+          {
+           "Ref": "AWS::Region"
+          }
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "SQLLambdaLayerPatchingTopicARNResolvera80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWACustomResourcePolicy1240D668",
+    "Roles": [
+     {
+      "Ref": "AWS679f53fac002430cb0da5b7982bd2287ServiceRoleC1EA0FF2"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLLambdaLayerPatchingTopicARNResolvera80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/CustomResourcePolicy/Resource"
+   }
+  },
+  "SQLLambdaDataSourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAServiceRole228264CD": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "appsync.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "amplifyData"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLLambdaDataSourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/ServiceRole/Resource"
+   }
+  },
+  "SQLLambdaDataSourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAServiceRoleDefaultPolicy944204C3": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "lambda:InvokeFunction",
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "SQLFunctiona80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA5F5C728B",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "SQLFunctiona80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA5F5C728B",
+             "Arn"
+            ]
+           },
+           ":*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "SQLLambdaDataSourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAServiceRoleDefaultPolicy944204C3",
+    "Roles": [
+     {
+      "Ref": "SQLLambdaDataSourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAServiceRole228264CD"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLLambdaDataSourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "SQLLambdaDataSourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA": {
+   "Type": "AWS::AppSync::DataSource",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "LambdaConfig": {
+     "LambdaFunctionArn": {
+      "Fn::GetAtt": [
+       "SQLFunctiona80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA5F5C728B",
+       "Arn"
+      ]
+     }
+    },
+    "Name": "SQLLambdaDataSourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA",
+    "ServiceRoleArn": {
+     "Fn::GetAtt": [
+      "SQLLambdaDataSourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAServiceRole228264CD",
+      "Arn"
+     ]
+    },
+    "Type": "AWS_LAMBDA"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/SQLLambdaDataSourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/11Ry07DQAz8Fu5b04f6Ae1CT4CiBHGt3I0TuU28q3hDVUX5d7QplMJpHpblGXkJi/Ua5g941pkrT7OGDzC8kUYqi4juZFyv0bf7jtT3nSOFzVnt5OXflsGz7ocG20OJMBQsdUPRy64XF9mLuRFbyT3PqGtZlb2MhrGFIfMNu8s0urLcN5RkwtHoao+qFBU2CYyuYNu7E8UtKhlyS7CVfGT2WcrgWaJRURiK/qCu4/Bz9Y9+94FdWh8NhqAXcTC8TEWeMGJxrWcr+VXjaP61T/nu+CuGwFKbmzeFLSLWybWVWC8lx6m1+JLgqI+fyzks0heOyjzreoncEuRX/AKyXySmogEAAA=="
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/SQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA/CDKMetadata/Default"
+   },
+   "Condition": "CDKMetadataAvailable"
+  }
+ },
+ "Mappings": {
+  "LatestNodeRuntimeMap": {
+   "af-south-1": {
+    "value": "nodejs20.x"
+   },
+   "ap-east-1": {
+    "value": "nodejs20.x"
+   },
+   "ap-northeast-1": {
+    "value": "nodejs20.x"
+   },
+   "ap-northeast-2": {
+    "value": "nodejs20.x"
+   },
+   "ap-northeast-3": {
+    "value": "nodejs20.x"
+   },
+   "ap-south-1": {
+    "value": "nodejs20.x"
+   },
+   "ap-south-2": {
+    "value": "nodejs20.x"
+   },
+   "ap-southeast-1": {
+    "value": "nodejs20.x"
+   },
+   "ap-southeast-2": {
+    "value": "nodejs20.x"
+   },
+   "ap-southeast-3": {
+    "value": "nodejs20.x"
+   },
+   "ap-southeast-4": {
+    "value": "nodejs20.x"
+   },
+   "ap-southeast-5": {
+    "value": "nodejs20.x"
+   },
+   "ap-southeast-7": {
+    "value": "nodejs20.x"
+   },
+   "ca-central-1": {
+    "value": "nodejs20.x"
+   },
+   "ca-west-1": {
+    "value": "nodejs20.x"
+   },
+   "cn-north-1": {
+    "value": "nodejs18.x"
+   },
+   "cn-northwest-1": {
+    "value": "nodejs18.x"
+   },
+   "eu-central-1": {
+    "value": "nodejs20.x"
+   },
+   "eu-central-2": {
+    "value": "nodejs20.x"
+   },
+   "eu-isoe-west-1": {
+    "value": "nodejs18.x"
+   },
+   "eu-north-1": {
+    "value": "nodejs20.x"
+   },
+   "eu-south-1": {
+    "value": "nodejs20.x"
+   },
+   "eu-south-2": {
+    "value": "nodejs20.x"
+   },
+   "eu-west-1": {
+    "value": "nodejs20.x"
+   },
+   "eu-west-2": {
+    "value": "nodejs20.x"
+   },
+   "eu-west-3": {
+    "value": "nodejs20.x"
+   },
+   "il-central-1": {
+    "value": "nodejs20.x"
+   },
+   "me-central-1": {
+    "value": "nodejs20.x"
+   },
+   "me-south-1": {
+    "value": "nodejs20.x"
+   },
+   "mx-central-1": {
+    "value": "nodejs20.x"
+   },
+   "sa-east-1": {
+    "value": "nodejs20.x"
+   },
+   "us-east-1": {
+    "value": "nodejs20.x"
+   },
+   "us-east-2": {
+    "value": "nodejs20.x"
+   },
+   "us-gov-east-1": {
+    "value": "nodejs18.x"
+   },
+   "us-gov-west-1": {
+    "value": "nodejs18.x"
+   },
+   "us-iso-east-1": {
+    "value": "nodejs18.x"
+   },
+   "us-iso-west-1": {
+    "value": "nodejs18.x"
+   },
+   "us-isob-east-1": {
+    "value": "nodejs18.x"
+   },
+   "us-west-1": {
+    "value": "nodejs20.x"
+   },
+   "us-west-2": {
+    "value": "nodejs20.x"
+   }
+  }
+ },
+ "Conditions": {
+  "CDKMetadataAvailable": {
+   "Fn::Or": [
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "af-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-3"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-south-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-3"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-4"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ca-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ca-west-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "cn-north-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "cn-northwest-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-central-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-north-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-south-2"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-3"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "il-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "me-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "me-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "sa-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-east-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-west-1"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Equals": [
+      {
+       "Ref": "AWS::Region"
+      },
+      "us-west-2"
+     ]
+    }
+   ]
+  }
+ },
+ "Parameters": {
+  "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId": {
+   "Type": "String"
+  }
+ },
+ "Outputs": {
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWASQLLambdaDataSourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA4FD67844Name": {
+   "Value": {
+    "Fn::GetAtt": [
+     "SQLLambdaDataSourcea80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA",
+     "Name"
+    ]
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataSQLApiStacka80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWASQLFunctiona80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWAF96D2249Arn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "SQLFunctiona80850e3b503cddb393aIDpIpgnUlJH5M5fHkvywCWA5F5C728B",
+     "Arn"
+    ]
+   }
+  }
+ }
+}

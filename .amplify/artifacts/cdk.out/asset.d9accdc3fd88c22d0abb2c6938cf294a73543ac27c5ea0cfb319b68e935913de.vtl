@@ -1,0 +1,6 @@
+## [Start] Set the primary key information in metadata. **
+#set( $keys = [] )
+$util.qr($keys.add("id"))
+$util.qr($ctx.stash.put("keys", $keys))
+## [End] Set the primary key information in metadata. **
+{}

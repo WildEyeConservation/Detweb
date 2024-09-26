@@ -1,0 +1,56 @@
+## [Start] Authorization Steps. **
+$util.qr($ctx.stash.put("hasAuth", true))
+#if( $ctx.error )
+  $util.error($ctx.error.message, $ctx.error.type)
+#end
+#set( $inputFields = $util.parseJson($util.toJson($ctx.args.input.keySet())) )
+#set( $isAuthorized = false )
+#set( $allowedFields = [] )
+#set( $nullAllowedFields = [] )
+#set( $deniedFields = {} )
+#if( $util.authType() == "API Key Authorization" )
+  #set( $isAuthorized = true )
+#end
+#if( $util.authType() == "IAM Authorization" )
+  #if( $util.authType() == "IAM Authorization" && $util.isNull($ctx.identity.cognitoIdentityPoolId) && $util.isNull($ctx.identity.cognitoIdentityId) )
+    $util.qr($ctx.stash.put("hasAuth", true))
+    #set( $isAuthorized = true )
+  #else
+$util.unauthorized()
+  #end
+#end
+#if( $util.authType() == "User Pool Authorization" )
+  #if( !$isAuthorized )
+    #set( $staticGroupRoles = [{"claim":"cognito:groups","entity":"admin","allowedFields":["id","name","projectName","project","annotations","observations","projectAnnotationSetName"],"nullAllowedFields":["id","name","projectName","project","annotations","observations"],"isAuthorizedOnAllFields":true}] )
+    #foreach( $groupRole in $staticGroupRoles )
+      #set( $groupsInToken = $util.defaultIfNull($ctx.identity.claims.get($groupRole.claim), []) )
+      #if( $groupsInToken.contains($groupRole.entity) )
+        #if( $groupRole.isAuthorizedOnAllFields )
+          #set( $isAuthorized = true )
+          #break
+        #else
+          $util.qr($allowedFields.addAll($groupRole.allowedFields))
+          $util.qr($nullAllowedFields.addAll($groupRole.nullAllowedFields))
+        #end
+      #end
+    #end
+  #end
+#end
+#if( !$isAuthorized && $allowedFields.isEmpty() && $nullAllowedFields.isEmpty() )
+$util.unauthorized()
+#end
+#if( !$isAuthorized )
+  #foreach( $entry in $util.map.copyAndRetainAllKeys($ctx.args.input, $inputFields).entrySet() )
+    #if( $util.isNull($entry.value) && !$nullAllowedFields.contains($entry.key) )
+      $util.qr($deniedFields.put($entry.key, ""))
+    #end
+  #end
+  #foreach( $deniedField in $util.list.copyAndRemoveAll($inputFields, $allowedFields) )
+    $util.qr($deniedFields.put($deniedField, ""))
+  #end
+#end
+#if( $deniedFields.keySet().size() > 0 )
+  $util.error("Unauthorized on ${deniedFields.keySet()}", "Unauthorized")
+#end
+$util.toJson({})
+## [End] Authorization Steps. **
