@@ -8,7 +8,6 @@ import "leaflet-contextmenu/dist/leaflet.contextmenu.css";
 import { S3Layer } from "./S3Layer";
 import { useHotkeys } from "react-hotkeys-hook";
 import { S3ImageOverlay } from "./S3ImageOverlay";
-import { S3 } from 'aws-sdk';
 import { ImageType, ImageFileType, LocationType, AnnotationSetType } from './schemaTypes';
 import { GlobalContext } from "./Context";
 import { StorageLayer } from "./StorageLayer";
@@ -34,13 +33,6 @@ interface ImageContextType {
 }
 
 export const ImageContext = createContext<ImageContextType | undefined>(undefined);
-const s3 = new S3();
-
-const getObject = async ({ Bucket, Key }: { Bucket: string; Key: string }) => {
-  const params = { Bucket, Key };
-  const data = await s3.getObject(params).promise();
-  return data.Body;
-};
 
 const BaseImage: React.FC<BaseImageProps> = (props) => {
   const { client } = useContext(GlobalContext)!;

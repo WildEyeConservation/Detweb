@@ -20,21 +20,16 @@ import torch
 import kornia as K
 import kornia.feature as KF
 import cv2
+import time
 
 
 torch.set_default_device('cuda')
 matcher = KF.LoFTR(pretrained="outdoor")
-createN=gql("""
-mutation MyMutation ($input: CreateImageNeighbourInput!){
-  createImageNeighbour(input: $input) {
-    id
-  }
-}
-""")
-
-updateN=gql("""mutation MyMutation($input: UpdateImageNeighbourInput!) {
-  updateImageNeighbour(input: $input){
-    id
+updateN=gql("""
+mutation MyMutation($homography: [Float], $image1Id: ID!, $image2Id: ID!) {
+  updateImageNeighbour(input: {homography: $homography, image1Id: $image1Id, image2Id: $image2Id}) {
+    image1Id
+    image2Id
   }
 }
 """)
@@ -64,11 +59,11 @@ client = Client(transport=transport,
                 fetch_schema_from_transport=False)
 
 def process(body):
-    s3_client = boto3.client('s3',body['region'])
+    s3_client = boto3.client('s3',os.environ['REGION'])
     keys=body['keys']
     with NamedTemporaryFile(suffix=os.path.splitext(keys[0])[1]) as tmpFile1,NamedTemporaryFile(suffix=os.path.splitext(keys[1])[1]) as tmpFile2:
-        s3_client.download_file(body['inputBucket'],'public/images/'+keys[0],tmpFile1.name)
-        s3_client.download_file(body['inputBucket'],'public/images/'+keys[1],tmpFile2.name)
+        s3_client.download_file(os.environ['BUCKET'],'images/'+keys[0],tmpFile1.name)
+        s3_client.download_file(os.environ['BUCKET'],'images/'+keys[1],tmpFile2.name)
         img1=read_image(tmpFile1.name,mode=ImageReadMode.GRAY).to('cuda',dtype=torch.float32)/255
         img2=read_image(tmpFile2.name,mode=ImageReadMode.GRAY).to('cuda',dtype=torch.float32)/255
     img1 = K.geometry.resize(img1, 528, antialias=True).unsqueeze(0)
@@ -86,8 +81,8 @@ def process(body):
     M, mask = cv2.findHomography(mkpts0[inliers.squeeze(),:], mkpts1[inliers.squeeze(),:], cv2.USAC_MAGSAC,30.0)
     print(sum(mask))
     if sum(mask)>10:
-        params = {'id':body['id'], 'homography': M.reshape(-1).tolist()}
-        resp = client.execute(updateN, variable_values=json.dumps({'input': params}))
+        params = {'image1Id':body['image1Id'], 'image2Id':body['image2Id'], 'homography': M.reshape(-1).tolist()}
+        resp = client.execute(updateN, variable_values=params)
         print(resp)
     return True
 
@@ -111,7 +106,7 @@ while True:
             #print(message['Body'])
             body=json.loads(message['Body'])
             if process(body):
-                print(f'Task {body["id"]} completed. Removing from queue')
+                print(f'Task {message["Body"]} completed. Removing from queue')
                 # Delete received message from queue
                 sqs.delete_message(
                     QueueUrl=queue_url,
@@ -120,7 +115,8 @@ while True:
                 print(f'Task {message["Body"]} could not be completed. If no dead letter queue is set up this may lead to infinite loop.')
 
     except KeyError:
-        print('Queue empty. Task exiting...')
+        print('Queue empty.')
+        time.sleep(60)
         #break
 
 

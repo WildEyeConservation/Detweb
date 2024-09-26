@@ -3,11 +3,10 @@ import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import Modal from "react-bootstrap/Modal";
 import { UserContext } from "./Context";
-import { getImagesInSet } from "./gqlQueries";
 import { useUpdateProgress } from "./useUpdateProgress";
 import { ImageSetDropdown } from "./ImageSetDropDown";
 import { GlobalContext } from "./Context";
-
+import { SendMessageCommand } from "@aws-sdk/client-sqs";
 
 // const createPair = `mutation MyMutation($image1Key: String!, $image2Key: String!) {
 //   createImageNeighbour(input: {image1key: $image1Key, image2key: $image2Key}) {
@@ -23,8 +22,10 @@ interface ProcessImagesProps {
 }
 
 export default function ProcessImages({ show, handleClose, selectedImageSets, setSelectedImageSets }: ProcessImagesProps) {
-  const { client } = useContext(GlobalContext)!
+  const { client, backend } = useContext(GlobalContext)!
   const [selectedProcess, selectProcess] = useState<string | undefined>(undefined);
+  const { sqsClient } = useContext(UserContext)!;
+
 
   const processingOptions = [
     "Run heatmap generation",
@@ -46,12 +47,11 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
   });
 
   async function handleSubmit() {
+    handleClose();
     setRegistrationStepsCompleted(0);
     setRegistrationTotalSteps(0);
     setHeatmapStepsCompleted(0);
     setTotalHeatmapSteps(0);
-    
-
     switch (selectedProcess) {
       case "Run heatmap generation": {
         const allImages = await Promise.all(selectedImageSets.map(async (selectedSet) => 
@@ -76,7 +76,7 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
       case "Compute image registrations": {
         const images = await Promise.all(selectedImageSets.map(async (selectedSet) => 
           (await client.models.ImageSetMembership.imageSetMembershipsByImageSetId(
-            { imageSetId: selectedSet, selectionSet: ["image.id", "image.timestamp", "image.files.key"] })).data))
+            { imageSetId: selectedSet, selectionSet: ["image.id", "image.timestamp", "image.files.key", "image.files.type"] })).data))
           .then(arrays => arrays.flat())
           .then(images=>images.map(({image})=>image))
           .then(images => images.sort((a, b) => a.timestamp - b.timestamp))
@@ -87,31 +87,38 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
           const image1 = images[i];
           const image2 = images[i + 1];
           if (image2.timestamp - image1.timestamp < 5) {
-            const { data } = await client.models.ImageNeighbour.get({
+            const { data } = await client.models.ImageNeighbour.create({
               image1Id: image1.id,
               image2Id: image2.id,
             });
-            if (!data.homography) {
-              await sendToQueue({
-                QueueUrl: backend.custom.gpuTaskQueueUrl,
-                MessageGroupId: crypto.randomUUID(),
-                MessageDeduplicationId: crypto.randomUUID(),
+            //If the create failed, it is typically because the record allready exists. Let us check if it allready has an associated homography before we launch a task to compute it
+            if (!data) {
+              const { data } = await client.models.ImageNeighbour.get({
+                image1Id: image1.id,
+                image2Id: image2.id,
+              });
+              if (data.homography) {
+                continue
+              }
+            }
+            const file1 = image1.files.find((f) => f.type == 'image/jpeg').key
+            const file2 = image2.files.find((f) => f.type == 'image/jpeg').key
+            await sqsClient.send(
+              new SendMessageCommand({
+                QueueUrl: backend.custom.lightglueTaskQueueUrl,
                 MessageBody: JSON.stringify({
                   inputBucket: backend.custom.inputsBucket,
-                  id: id,
-                  keys: [image1.key, image2.key],
-                  action: "register",
-                  region,
-                  outputBucket: backend.custom.outputBucket,
-                }),
-              });
+                  image1Id: image1.id,
+                  image2Id: image2.id,
+                  keys: [file1, file2],
+                  action: "register"
+                })
+              }))
             }
-          }
         }
-        break;
       }
+      break;
     }
-    handleClose();
   };
     
 

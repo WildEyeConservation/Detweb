@@ -32,7 +32,7 @@ interface FilesUploadComponentProps {
 }
 
 export default function FilesUploadComponent({ show, handleClose }: FilesUploadComponentProps) {
-  const limitConnections = pLimit(4);
+  const limitConnections = pLimit(3);
   const [upload, setUpload] = useState(true);
   const [name, setName] = useState("");
   const {client} = useContext(GlobalContext)!;
@@ -83,6 +83,7 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
     async function getExistingFiles() {
       const {items} = await list({
         path: `images/${name}`,
+        options:{bucket:'inputs'}
       });
       console.log(items);
       const existingFiles = items.reduce<Set<string>>((set, x) => {
@@ -137,7 +138,7 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
                 height:tags['Image Height']?.value,
                 timestamp: DateTime.fromFormat(tags.DateTimeOriginal?.description as string, 'yyyy:MM:dd HH:mm:ss').toSeconds(),
                 cameraSerial:tags['Internal Serial Number']?.value,
-        exifData: JSON.stringify({ ...tags, 'ImageHeight':undefined, 'ImageWidth':undefined})
+                //exifData: JSON.stringify({ ...tags, 'ImageHeight':undefined, 'ImageWidth':undefined})
       })
   }
   
@@ -161,6 +162,7 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
           path: "images/" + file.webkitRelativePath,
           data: file,
           options: {
+            bucket:'inputs',
             contentType: file.type,
             onProgress: ({ transferredBytes }) => {
               {
@@ -170,8 +172,8 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
               lastTransferred = transferredBytes;
             }
           }
-        }) : Promise.resolve(), getExifmeta(file)] as const
-        const results = await Promise.all(tasks)
+        }) : Promise.resolve(), getExifmeta(file).then(exifmeta => { if (!upload) { setStepsCompleted(fc => fc + file.size) } return exifmeta})] as const
+        const results=await Promise.all(tasks)
         const exifmeta=results[1]
         // Get the exif metadata from the second task
         client.models.Image.create({
@@ -180,7 +182,7 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
           height: exifmeta.height || 0,
           timestamp: exifmeta.timestamp!,
           cameraSerial: exifmeta.cameraSerial,
-          exifData: exifmeta.exifData,
+          //exifData: exifmeta.exifData,
         }).then(({ data: image }) => {
           if (!image) {
             throw new Error("Image not created");

@@ -4,6 +4,7 @@ import { createGroup } from '../data/create-group/resource'
 import { listUsers } from '../data/list-users/resource'
 import { listGroupsForUser } from '../data/list-groups-for-user/resource'
 import {processImages} from '../functions/processImages/resource'
+import { getAnnotationCounts } from '../functions/getAnnotationCounts/resource'
 
 /*== STEP 1 ===============================================================
 The section below creates a Todo database table with a "content" field. Try
@@ -312,6 +313,13 @@ const schema = a.schema({
       entry: './getImageCounts.js',
       dataSource: a.ref('ImageSetMembership'),
     })),
+  getAnnotationCounts: a.query()
+    .arguments({
+      annotationSetId: a.string().required()
+    })
+    .returns(a.json())
+    .authorization(allow => [allow.authenticated()])
+    .handler(a.handler.function(getAnnotationCounts)),
   //.authorization(allow => [allow.authenticated()])
   
   // registerImages: a
@@ -328,7 +336,7 @@ const schema = a.schema({
   //     type: a.string().required(),
   //     level: a.float(),
   //   })
-}).authorization(allow => [
+}).authorization(allow => [allow.resource(getAnnotationCounts),
   allow.resource(processImages)])
 export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({

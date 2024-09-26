@@ -5,7 +5,6 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
-    "exclude": ["amplify/**/*", ".amplify/**/*"],
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -23,5 +22,5 @@
   },
   "exclude": ["amplify/**/*", ".amplify/**/*"],
   "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "references": [{ "path": "./tsconfig.node.json" }],
 }

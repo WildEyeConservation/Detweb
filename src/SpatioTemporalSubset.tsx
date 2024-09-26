@@ -2,7 +2,7 @@ import React, { useContext, useEffect, useState, useRef } from 'react';
 import Modal from 'react-bootstrap/Modal';
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
-import { GlobalContext } from './Context';
+import { ProjectContext, GlobalContext } from './Context';
 import {
     MapContainer,
     TileLayer,
@@ -45,7 +45,6 @@ interface Subset {
     id: string;
     name: string;
     polygon: L.LatLngExpression[];
-    imageIds: string[];
 }
 
 const FitBoundsToImages: React.FC<{ imageSetsData: ImageSetData[] }> = ({ imageSetsData }) => {
@@ -65,8 +64,8 @@ const FitBoundsToImages: React.FC<{ imageSetsData: ImageSetData[] }> = ({ imageS
 
 const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClose, selectedImageSets }) => {
     const { client } = useContext(GlobalContext)!;
+    const {project} = useContext(ProjectContext)!;
     const [imageSetsData, setImageSetsData] = useState<ImageSetData[]>([]);
-    const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
     const [showNamePrompt, setShowNamePrompt] = useState(false);
     const [newSubsetName, setNewSubsetName] = useState('');
     const featureGroupRef = useRef<L.FeatureGroup>(null);
@@ -98,7 +97,7 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
                 let allImages: any[] = [];
                 do {
                     const { data: images, nextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
-                        imageSetId: selectedImageSets[0],
+                        imageSetId: selectedSetId,
                         selectionSet: ['image.timestamp', 'image.id','image.latitude','image.longitude'],
                         nextToken: prevNextToken
                     })
@@ -130,20 +129,9 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
 
     const handleCreated = (e: any) => {
         const { layer } = e;
-        const drawnPolygon = layer.toGeoJSON();
+        const drawnPolygon = layer.getLatLngs()[0];
         
-        const selectedIds: string[] = [];
-        imageSetsData.forEach(imageSet => {
-            imageSet.images.forEach(image => {
-                const point = turf.point([image.longitude ?? 0, image.latitude ?? 0]);
-                if (turf.booleanPointInPolygon(point, drawnPolygon)) {
-                    selectedIds.push(image.id);
-                }
-            });
-        });
-        
-        setSelectedImageIds(selectedIds);
-        setCurrentPolygon(layer.getLatLngs()[0]);
+        setCurrentPolygon(drawnPolygon);
         setShowNamePrompt(true);
 
         // Remove the drawn layer
@@ -180,15 +168,13 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
     const handleNameSubmit = () => {
         if (newSubsetName && currentPolygon) {
             const newSubset: Subset = {
-                id: Date.now().toString(), // Generate a unique ID
+                id: Date.now().toString(),
                 name: newSubsetName,
                 polygon: currentPolygon,
-                imageIds: selectedImageIds,
             };
             setSubsets([...subsets, newSubset]);
             setNewSubsetName('');
             setShowNamePrompt(false);
-            setSelectedImageIds([]);
             setCurrentPolygon(null);
 
             // Add the new subset polygon to the FeatureGroup
@@ -201,19 +187,58 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
         }
     };
 
-    const createNewImageSet = (name: string, imageIds: string[]) => {
+    const createNewImageSet = async (name: string, imageIds: string[]) => {
         // This function will be implemented to create a new ImageSet
         console.log(`Creating new ImageSet "${name}" with ${imageIds.length} images`);
         // Implement the actual creation logic here
+        const subsetId = crypto.randomUUID()
+        await Promise.all(imageIds.map(imageId => 
+            client.models.ImageSetMembership.create({
+                imageSetId: subsetId,
+                imageId: imageId,
+            })
+        ));
+        await client.models.ImageSet.create({
+            id: subsetId,
+            name: name,
+            projectId: project.id 
+        })
+        console.log(`Created new ImageSet "${name}" with ${imageIds.length} images`);
     };
 
     const handleCreateSubsets = () => {
         subsets.forEach(subset => {
-            createNewImageSet(subset.name, subset.imageIds);
+            const selectedIds: string[] = [];
+            let polygonCoords = subset.polygon.map(latlng => 
+                Array.isArray(latlng) ? [latlng[1], latlng[0]] : [latlng.lng, latlng.lat]
+            );
+
+            // Ensure the polygon is closed by adding the first point at the end if necessary
+            if (JSON.stringify(polygonCoords[0]) !== JSON.stringify(polygonCoords[polygonCoords.length - 1])) {
+                polygonCoords.push(polygonCoords[0]);
+            }
+
+            try {
+                const turfPolygon = turf.polygon([polygonCoords]);
+
+                imageSetsData.forEach(imageSet => {
+                    imageSet.images.forEach(image => {
+                        if (image.latitude != null && image.longitude != null) {
+                            const point = turf.point([image.longitude, image.latitude]);
+                            if (turf.booleanPointInPolygon(point, turfPolygon)) {
+                                selectedIds.push(image.id);
+                            }
+                        }
+                    });
+                });
+                console.log(`Subset "${subset.name}" contains ${selectedIds.length} images`);
+                createNewImageSet(subset.name, selectedIds);
+            } catch (error) {
+                console.error(`Error processing subset "${subset.name}":`, error);
+            }
         });
-        // Clear subsets after creation
         setSubsets([]);
-        // You might want to show a success message or close the modal here
+        handleClose();
     };
 
     const handleKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -316,7 +341,7 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
                                                 key={image.id}
                                                 center={[image.latitude, image.longitude]}
                                                 radius={3}
-                                                pathOptions={{ fillColor: selectedImageIds.includes(image.id) ? '#000000' : colors[index % colors.length] }}
+                                                pathOptions={{ fillColor: colors[index % colors.length] }}
                                                 color="#000"
                                                 weight={1}
                                                 opacity={1}
@@ -369,7 +394,6 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
                         </div>
                     ))}
                 </div>
-                <p>Selected images: {selectedImageIds.length}</p>
                 <p>Defined subsets: {subsets.length}</p>
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px' }}>
                     <Button 

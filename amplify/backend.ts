@@ -12,6 +12,7 @@ import { AutoProcessor } from "./autoProcessor";
 import { EC2QueueProcessor } from './ec2QueueProcessor';
 import { processImages } from "./functions/processImages/resource";
 import { postDeploy } from "./functions/postDeploy/resource";
+import { getAnnotationCounts } from "./functions/getAnnotationCounts/resource";
 import * as iam from "aws-cdk-lib/aws-iam"
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 
@@ -23,11 +24,23 @@ const backend=defineBackend({
   inputBucket,
   handleS3Upload,
   processImages,
-  postDeploy
+  postDeploy,
+  getAnnotationCounts
 });
 
 
 const authenticatedRole = backend.auth.resources.authenticatedUserIamRole;
+const dynamoDbPolicy = new iam.PolicyStatement({
+  actions: [
+    "dynamodb:Query",
+  ],
+  resources: ["*"],
+});
+
+backend.getAnnotationCounts.resources.lambda.addToRolePolicy(dynamoDbPolicy);
+
+//backend.data.resources.tables['Annotation'].grantReadData(backend.getAnnotationCounts.resources.lambda)
+//backend.getAnnotationCounts.addEnvironment('ANNOTATION_TABLE', backend.data.resources.tables['Annotation'].tableName)
 
 const sqsCreateQueueStatement = new iam.PolicyStatement({
   actions: [
@@ -128,7 +141,8 @@ const lightGlueAutoProcessor = new AutoProcessor(ecsStack, "GpuAutoProcessor",
     gpuCount: 1,
     environment: {
       API_ENDPOINT: backend.data.graphqlUrl,
-      API_KEY: backend.data.apiKey || ""
+      API_KEY: backend.data.apiKey || "",
+      BUCKET: backend.inputBucket.resources.bucket.bucketName
     },
     machineImage: ecs.EcsOptimizedImage.amazonLinux2(ecs.AmiHardwareType.GPU)
   })
@@ -137,7 +151,6 @@ lightGlueAutoProcessor.asg.role.addManagedPolicy(
   iam.ManagedPolicy.fromAwsManagedPolicyName("AWSAppSyncInvokeFullAccess"),
 );
 
-;
 //const devRole = iam.Role.fromRoleArn(scope, "DevRole", devUserArn);
 
 // Grant the devuser permission to assume the Subsample Lambda role
@@ -165,8 +178,10 @@ const statement = new iam.PolicyStatement({
 backend.processImages.resources.lambda.addToRolePolicy(statement)
 backend.addOutput({
   custom: {
+    lightglueTaskQueueUrl: lightGlueAutoProcessor.queue.queueUrl,
     processTaskQueueUrl: processor.queue.queueUrl,
-    pointFinderTaskQueueUrl: pointFinderAutoProcessor.queue.queueUrl
+    pointFinderTaskQueueUrl: pointFinderAutoProcessor.queue.queueUrl,
+    annotationTable: backend.data.resources.tables['Annotation'].tableName
   }
 }
 )

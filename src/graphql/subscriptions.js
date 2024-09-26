@@ -1,6 +1,5 @@
 /* eslint-disable */
 // this is an auto generated file. This will be overwritten
-
 export const onCreateProject = /* GraphQL */ `
   subscription OnCreateProject($filter: ModelSubscriptionProjectFilterInput) {
     onCreateProject(filter: $filter) {
@@ -9,31 +8,7 @@ export const onCreateProject = /* GraphQL */ `
         nextToken
         __typename
       }
-      images {
-        nextToken
-        __typename
-      }
-      imageMetas {
-        nextToken
-        __typename
-      }
-      annotations {
-        nextToken
-        __typename
-      }
-      objects {
-        nextToken
-        __typename
-      }
-      imageSets {
-        nextToken
-        __typename
-      }
-      annotationSets {
-        nextToken
-        __typename
-      }
-      locations {
+      annotationSet {
         nextToken
         __typename
       }
@@ -41,15 +16,18 @@ export const onCreateProject = /* GraphQL */ `
         nextToken
         __typename
       }
-      observations {
+      imageSets {
         nextToken
         __typename
       }
-      members {
+      queues {
         nextToken
         __typename
       }
-      id
+      users {
+        nextToken
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -64,31 +42,7 @@ export const onUpdateProject = /* GraphQL */ `
         nextToken
         __typename
       }
-      images {
-        nextToken
-        __typename
-      }
-      imageMetas {
-        nextToken
-        __typename
-      }
-      annotations {
-        nextToken
-        __typename
-      }
-      objects {
-        nextToken
-        __typename
-      }
-      imageSets {
-        nextToken
-        __typename
-      }
-      annotationSets {
-        nextToken
-        __typename
-      }
-      locations {
+      annotationSet {
         nextToken
         __typename
       }
@@ -96,15 +50,18 @@ export const onUpdateProject = /* GraphQL */ `
         nextToken
         __typename
       }
-      observations {
+      imageSets {
         nextToken
         __typename
       }
-      members {
+      queues {
         nextToken
         __typename
       }
-      id
+      users {
+        nextToken
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -119,31 +76,7 @@ export const onDeleteProject = /* GraphQL */ `
         nextToken
         __typename
       }
-      images {
-        nextToken
-        __typename
-      }
-      imageMetas {
-        nextToken
-        __typename
-      }
-      annotations {
-        nextToken
-        __typename
-      }
-      objects {
-        nextToken
-        __typename
-      }
-      imageSets {
-        nextToken
-        __typename
-      }
-      annotationSets {
-        nextToken
-        __typename
-      }
-      locations {
+      annotationSet {
         nextToken
         __typename
       }
@@ -151,15 +84,273 @@ export const onDeleteProject = /* GraphQL */ `
         nextToken
         __typename
       }
-      observations {
+      imageSets {
         nextToken
         __typename
       }
-      members {
+      queues {
         nextToken
+        __typename
+      }
+      users {
+        nextToken
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onCreateUser = /* GraphQL */ `
+  subscription OnCreateUser($filter: ModelSubscriptionUserFilterInput) {
+    onCreateUser(filter: $filter) {
+      id
+      name
+      email
+      isAdmin
+      projects {
+        nextToken
+        __typename
+      }
+      currentProjectId
+      currentProject {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onUpdateUser = /* GraphQL */ `
+  subscription OnUpdateUser($filter: ModelSubscriptionUserFilterInput) {
+    onUpdateUser(filter: $filter) {
+      id
+      name
+      email
+      isAdmin
+      projects {
+        nextToken
+        __typename
+      }
+      currentProjectId
+      currentProject {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onDeleteUser = /* GraphQL */ `
+  subscription OnDeleteUser($filter: ModelSubscriptionUserFilterInput) {
+    onDeleteUser(filter: $filter) {
+      id
+      name
+      email
+      isAdmin
+      projects {
+        nextToken
+        __typename
+      }
+      currentProjectId
+      currentProject {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onCreateUserProjectMembership = /* GraphQL */ `
+  subscription OnCreateUserProjectMembership(
+    $filter: ModelSubscriptionUserProjectMembershipFilterInput
+  ) {
+    onCreateUserProjectMembership(filter: $filter) {
+      userId
+      user {
+        id
+        name
+        email
+        isAdmin
+        currentProjectId
+        createdAt
+        updatedAt
+        __typename
+      }
+      projectId
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      queueUrl
+      queue {
+        name
+        url
+        projectId
+        createdAt
+        updatedAt
         __typename
       }
       id
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onUpdateUserProjectMembership = /* GraphQL */ `
+  subscription OnUpdateUserProjectMembership(
+    $filter: ModelSubscriptionUserProjectMembershipFilterInput
+  ) {
+    onUpdateUserProjectMembership(filter: $filter) {
+      userId
+      user {
+        id
+        name
+        email
+        isAdmin
+        currentProjectId
+        createdAt
+        updatedAt
+        __typename
+      }
+      projectId
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      queueUrl
+      queue {
+        name
+        url
+        projectId
+        createdAt
+        updatedAt
+        __typename
+      }
+      id
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onDeleteUserProjectMembership = /* GraphQL */ `
+  subscription OnDeleteUserProjectMembership(
+    $filter: ModelSubscriptionUserProjectMembershipFilterInput
+  ) {
+    onDeleteUserProjectMembership(filter: $filter) {
+      userId
+      user {
+        id
+        name
+        email
+        isAdmin
+        currentProjectId
+        createdAt
+        updatedAt
+        __typename
+      }
+      projectId
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      queueUrl
+      queue {
+        name
+        url
+        projectId
+        createdAt
+        updatedAt
+        __typename
+      }
+      id
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onCreateQueue = /* GraphQL */ `
+  subscription OnCreateQueue($filter: ModelSubscriptionQueueFilterInput) {
+    onCreateQueue(filter: $filter) {
+      name
+      url
+      users {
+        nextToken
+        __typename
+      }
+      projectId
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onUpdateQueue = /* GraphQL */ `
+  subscription OnUpdateQueue($filter: ModelSubscriptionQueueFilterInput) {
+    onUpdateQueue(filter: $filter) {
+      name
+      url
+      users {
+        nextToken
+        __typename
+      }
+      projectId
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onDeleteQueue = /* GraphQL */ `
+  subscription OnDeleteQueue($filter: ModelSubscriptionQueueFilterInput) {
+    onDeleteQueue(filter: $filter) {
+      name
+      url
+      users {
+        nextToken
+        __typename
+      }
+      projectId
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -169,14 +360,7 @@ export const onDeleteProject = /* GraphQL */ `
 export const onCreateCategory = /* GraphQL */ `
   subscription OnCreateCategory($filter: ModelSubscriptionCategoryFilterInput) {
     onCreateCategory(filter: $filter) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
+      id
       name
       color
       shortcutKey
@@ -184,7 +368,17 @@ export const onCreateCategory = /* GraphQL */ `
         nextToken
         __typename
       }
-      id
+      objects {
+        nextToken
+        __typename
+      }
+      projectName
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -194,14 +388,7 @@ export const onCreateCategory = /* GraphQL */ `
 export const onUpdateCategory = /* GraphQL */ `
   subscription OnUpdateCategory($filter: ModelSubscriptionCategoryFilterInput) {
     onUpdateCategory(filter: $filter) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
+      id
       name
       color
       shortcutKey
@@ -209,7 +396,17 @@ export const onUpdateCategory = /* GraphQL */ `
         nextToken
         __typename
       }
-      id
+      objects {
+        nextToken
+        __typename
+      }
+      projectName
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -219,14 +416,7 @@ export const onUpdateCategory = /* GraphQL */ `
 export const onDeleteCategory = /* GraphQL */ `
   subscription OnDeleteCategory($filter: ModelSubscriptionCategoryFilterInput) {
     onDeleteCategory(filter: $filter) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
+      id
       name
       color
       shortcutKey
@@ -234,280 +424,17 @@ export const onDeleteCategory = /* GraphQL */ `
         nextToken
         __typename
       }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const onCreateImageMeta = /* GraphQL */ `
-  subscription OnCreateImageMeta(
-    $filter: ModelSubscriptionImageMetaFilterInput
-  ) {
-    onCreateImageMeta(filter: $filter) {
-      projectId
+      objects {
+        nextToken
+        __typename
+      }
+      projectName
       project {
         name
-        id
         createdAt
         updatedAt
         __typename
       }
-      latitude
-      longitude
-      altitude_wgs84
-      altitude_agl
-      altitude_egm96
-      width
-      height
-      roll
-      yaw
-      pitch
-      timestamp
-      exifData
-      cameraSerial
-      images {
-        nextToken
-        __typename
-      }
-      locations {
-        nextToken
-        __typename
-      }
-      annotations {
-        nextToken
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const onUpdateImageMeta = /* GraphQL */ `
-  subscription OnUpdateImageMeta(
-    $filter: ModelSubscriptionImageMetaFilterInput
-  ) {
-    onUpdateImageMeta(filter: $filter) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      latitude
-      longitude
-      altitude_wgs84
-      altitude_agl
-      altitude_egm96
-      width
-      height
-      roll
-      yaw
-      pitch
-      timestamp
-      exifData
-      cameraSerial
-      images {
-        nextToken
-        __typename
-      }
-      locations {
-        nextToken
-        __typename
-      }
-      annotations {
-        nextToken
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const onDeleteImageMeta = /* GraphQL */ `
-  subscription OnDeleteImageMeta(
-    $filter: ModelSubscriptionImageMetaFilterInput
-  ) {
-    onDeleteImageMeta(filter: $filter) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      latitude
-      longitude
-      altitude_wgs84
-      altitude_agl
-      altitude_egm96
-      width
-      height
-      roll
-      yaw
-      pitch
-      timestamp
-      exifData
-      cameraSerial
-      images {
-        nextToken
-        __typename
-      }
-      locations {
-        nextToken
-        __typename
-      }
-      annotations {
-        nextToken
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const onCreateImage = /* GraphQL */ `
-  subscription OnCreateImage($filter: ModelSubscriptionImageFilterInput) {
-    onCreateImage(filter: $filter) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      derivedFrom
-      path
-      metaId
-      meta {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
-        width
-        height
-        roll
-        yaw
-        pitch
-        timestamp
-        exifData
-        cameraSerial
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      type
-      sets {
-        nextToken
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const onUpdateImage = /* GraphQL */ `
-  subscription OnUpdateImage($filter: ModelSubscriptionImageFilterInput) {
-    onUpdateImage(filter: $filter) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      derivedFrom
-      path
-      metaId
-      meta {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
-        width
-        height
-        roll
-        yaw
-        pitch
-        timestamp
-        exifData
-        cameraSerial
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      type
-      sets {
-        nextToken
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const onDeleteImage = /* GraphQL */ `
-  subscription OnDeleteImage($filter: ModelSubscriptionImageFilterInput) {
-    onDeleteImage(filter: $filter) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      derivedFrom
-      path
-      metaId
-      meta {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
-        width
-        height
-        roll
-        yaw
-        pitch
-        timestamp
-        exifData
-        cameraSerial
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      type
-      sets {
-        nextToken
-        __typename
-      }
-      id
       createdAt
       updatedAt
       __typename
@@ -519,10 +446,11 @@ export const onCreateAnnotationSet = /* GraphQL */ `
     $filter: ModelSubscriptionAnnotationSetFilterInput
   ) {
     onCreateAnnotationSet(filter: $filter) {
-      projectId
+      id
+      name
+      projectName
       project {
         name
-        id
         createdAt
         updatedAt
         __typename
@@ -531,7 +459,10 @@ export const onCreateAnnotationSet = /* GraphQL */ `
         nextToken
         __typename
       }
-      id
+      observations {
+        nextToken
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -543,10 +474,11 @@ export const onUpdateAnnotationSet = /* GraphQL */ `
     $filter: ModelSubscriptionAnnotationSetFilterInput
   ) {
     onUpdateAnnotationSet(filter: $filter) {
-      projectId
+      id
+      name
+      projectName
       project {
         name
-        id
         createdAt
         updatedAt
         __typename
@@ -555,7 +487,10 @@ export const onUpdateAnnotationSet = /* GraphQL */ `
         nextToken
         __typename
       }
-      id
+      observations {
+        nextToken
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -567,10 +502,11 @@ export const onDeleteAnnotationSet = /* GraphQL */ `
     $filter: ModelSubscriptionAnnotationSetFilterInput
   ) {
     onDeleteAnnotationSet(filter: $filter) {
-      projectId
+      id
+      name
+      projectName
       project {
         name
-        id
         createdAt
         updatedAt
         __typename
@@ -579,7 +515,10 @@ export const onDeleteAnnotationSet = /* GraphQL */ `
         nextToken
         __typename
       }
-      id
+      observations {
+        nextToken
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -589,72 +528,68 @@ export const onDeleteAnnotationSet = /* GraphQL */ `
 export const onCreateAnnotation = /* GraphQL */ `
   subscription OnCreateAnnotation(
     $filter: ModelSubscriptionAnnotationFilterInput
-    $owner: String
   ) {
-    onCreateAnnotation(filter: $filter, owner: $owner) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      setId
-      set {
-        projectId
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      source
-      categoryId
-      category {
-        projectId
-        name
-        color
-        shortcutKey
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      metaId
+    onCreateAnnotation(filter: $filter) {
+      x
+      y
+      obscured
+      note
+      origin
+      imageKey
       image {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
+        key
+        hash
         width
         height
+        longitude
+        latitude
+        altitude_msl
         roll
         yaw
         pitch
         timestamp
+        altitude_agl
         exifData
         cameraSerial
-        id
         createdAt
         updatedAt
         __typename
       }
-      x
-      y
+      annotationSetId
+      annotationSet {
+        id
+        name
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      categoryId
+      category {
+        id
+        name
+        color
+        shortcutKey
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
       objectId
       object {
-        projectId
+        categoryId
+        latitude
+        longitude
         id
         createdAt
         updatedAt
         __typename
       }
+      owner
       id
       createdAt
       updatedAt
-      owner
+      objectAnnotationsId
       __typename
     }
   }
@@ -662,72 +597,68 @@ export const onCreateAnnotation = /* GraphQL */ `
 export const onUpdateAnnotation = /* GraphQL */ `
   subscription OnUpdateAnnotation(
     $filter: ModelSubscriptionAnnotationFilterInput
-    $owner: String
   ) {
-    onUpdateAnnotation(filter: $filter, owner: $owner) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      setId
-      set {
-        projectId
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      source
-      categoryId
-      category {
-        projectId
-        name
-        color
-        shortcutKey
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      metaId
+    onUpdateAnnotation(filter: $filter) {
+      x
+      y
+      obscured
+      note
+      origin
+      imageKey
       image {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
+        key
+        hash
         width
         height
+        longitude
+        latitude
+        altitude_msl
         roll
         yaw
         pitch
         timestamp
+        altitude_agl
         exifData
         cameraSerial
-        id
         createdAt
         updatedAt
         __typename
       }
-      x
-      y
+      annotationSetId
+      annotationSet {
+        id
+        name
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      categoryId
+      category {
+        id
+        name
+        color
+        shortcutKey
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
       objectId
       object {
-        projectId
+        categoryId
+        latitude
+        longitude
         id
         createdAt
         updatedAt
         __typename
       }
+      owner
       id
       createdAt
       updatedAt
-      owner
+      objectAnnotationsId
       __typename
     }
   }
@@ -735,72 +666,68 @@ export const onUpdateAnnotation = /* GraphQL */ `
 export const onDeleteAnnotation = /* GraphQL */ `
   subscription OnDeleteAnnotation(
     $filter: ModelSubscriptionAnnotationFilterInput
-    $owner: String
   ) {
-    onDeleteAnnotation(filter: $filter, owner: $owner) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      setId
-      set {
-        projectId
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      source
-      categoryId
-      category {
-        projectId
-        name
-        color
-        shortcutKey
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      metaId
+    onDeleteAnnotation(filter: $filter) {
+      x
+      y
+      obscured
+      note
+      origin
+      imageKey
       image {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
+        key
+        hash
         width
         height
+        longitude
+        latitude
+        altitude_msl
         roll
         yaw
         pitch
         timestamp
+        altitude_agl
         exifData
         cameraSerial
-        id
         createdAt
         updatedAt
         __typename
       }
-      x
-      y
+      annotationSetId
+      annotationSet {
+        id
+        name
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      categoryId
+      category {
+        id
+        name
+        color
+        shortcutKey
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
       objectId
       object {
-        projectId
+        categoryId
+        latitude
+        longitude
         id
         createdAt
         updatedAt
         __typename
       }
+      owner
       id
       createdAt
       updatedAt
-      owner
+      objectAnnotationsId
       __typename
     }
   }
@@ -808,14 +735,19 @@ export const onDeleteAnnotation = /* GraphQL */ `
 export const onCreateObject = /* GraphQL */ `
   subscription OnCreateObject($filter: ModelSubscriptionObjectFilterInput) {
     onCreateObject(filter: $filter) {
-      projectId
-      project {
-        name
+      categoryId
+      category {
         id
+        name
+        color
+        shortcutKey
+        projectName
         createdAt
         updatedAt
         __typename
       }
+      latitude
+      longitude
       annotations {
         nextToken
         __typename
@@ -830,14 +762,19 @@ export const onCreateObject = /* GraphQL */ `
 export const onUpdateObject = /* GraphQL */ `
   subscription OnUpdateObject($filter: ModelSubscriptionObjectFilterInput) {
     onUpdateObject(filter: $filter) {
-      projectId
-      project {
-        name
+      categoryId
+      category {
         id
+        name
+        color
+        shortcutKey
+        projectName
         createdAt
         updatedAt
         __typename
       }
+      latitude
+      longitude
       annotations {
         nextToken
         __typename
@@ -852,14 +789,19 @@ export const onUpdateObject = /* GraphQL */ `
 export const onDeleteObject = /* GraphQL */ `
   subscription OnDeleteObject($filter: ModelSubscriptionObjectFilterInput) {
     onDeleteObject(filter: $filter) {
-      projectId
-      project {
-        name
+      categoryId
+      category {
         id
+        name
+        color
+        shortcutKey
+        projectName
         createdAt
         updatedAt
         __typename
       }
+      latitude
+      longitude
       annotations {
         nextToken
         __typename
@@ -871,105 +813,181 @@ export const onDeleteObject = /* GraphQL */ `
     }
   }
 `;
-export const onCreateLocation = /* GraphQL */ `
-  subscription OnCreateLocation($filter: ModelSubscriptionLocationFilterInput) {
-    onCreateLocation(filter: $filter) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
+export const onCreateImage = /* GraphQL */ `
+  subscription OnCreateImage($filter: ModelSubscriptionImageFilterInput) {
+    onCreateImage(filter: $filter) {
+      key
+      hash
+      width
+      height
+      longitude
+      latitude
+      altitude_msl
+      roll
+      yaw
+      pitch
+      timestamp
+      altitude_agl
+      exifData
+      cameraSerial
+      annotations {
+        nextToken
         __typename
       }
-      metaId
-      meta {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
+      locations {
+        nextToken
+        __typename
+      }
+      collections {
+        nextToken
+        __typename
+      }
+      leftNeighbours {
+        nextToken
+        __typename
+      }
+      rightNeighbours {
+        nextToken
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onUpdateImage = /* GraphQL */ `
+  subscription OnUpdateImage($filter: ModelSubscriptionImageFilterInput) {
+    onUpdateImage(filter: $filter) {
+      key
+      hash
+      width
+      height
+      longitude
+      latitude
+      altitude_msl
+      roll
+      yaw
+      pitch
+      timestamp
+      altitude_agl
+      exifData
+      cameraSerial
+      annotations {
+        nextToken
+        __typename
+      }
+      locations {
+        nextToken
+        __typename
+      }
+      collections {
+        nextToken
+        __typename
+      }
+      leftNeighbours {
+        nextToken
+        __typename
+      }
+      rightNeighbours {
+        nextToken
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onDeleteImage = /* GraphQL */ `
+  subscription OnDeleteImage($filter: ModelSubscriptionImageFilterInput) {
+    onDeleteImage(filter: $filter) {
+      key
+      hash
+      width
+      height
+      longitude
+      latitude
+      altitude_msl
+      roll
+      yaw
+      pitch
+      timestamp
+      altitude_agl
+      exifData
+      cameraSerial
+      annotations {
+        nextToken
+        __typename
+      }
+      locations {
+        nextToken
+        __typename
+      }
+      collections {
+        nextToken
+        __typename
+      }
+      leftNeighbours {
+        nextToken
+        __typename
+      }
+      rightNeighbours {
+        nextToken
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onCreateImageNeighbour = /* GraphQL */ `
+  subscription OnCreateImageNeighbour(
+    $filter: ModelSubscriptionImageNeighbourFilterInput
+  ) {
+    onCreateImageNeighbour(filter: $filter) {
+      image1key
+      image1 {
+        key
+        hash
         width
         height
+        longitude
+        latitude
+        altitude_msl
         roll
         yaw
         pitch
         timestamp
+        altitude_agl
         exifData
         cameraSerial
-        id
         createdAt
         updatedAt
         __typename
       }
-      height
-      width
-      x
-      y
-      source
-      confidence
-      observations {
-        nextToken
-        __typename
-      }
-      sets {
-        nextToken
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const onUpdateLocation = /* GraphQL */ `
-  subscription OnUpdateLocation($filter: ModelSubscriptionLocationFilterInput) {
-    onUpdateLocation(filter: $filter) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      metaId
-      meta {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
+      image2key
+      image2 {
+        key
+        hash
         width
         height
+        longitude
+        latitude
+        altitude_msl
         roll
         yaw
         pitch
         timestamp
+        altitude_agl
         exifData
         cameraSerial
-        id
         createdAt
         updatedAt
         __typename
       }
-      height
-      width
-      x
-      y
-      source
-      confidence
-      observations {
-        nextToken
-        __typename
-      }
-      sets {
-        nextToken
-        __typename
-      }
+      homography
       id
       createdAt
       updatedAt
@@ -977,166 +995,171 @@ export const onUpdateLocation = /* GraphQL */ `
     }
   }
 `;
-export const onDeleteLocation = /* GraphQL */ `
-  subscription OnDeleteLocation($filter: ModelSubscriptionLocationFilterInput) {
-    onDeleteLocation(filter: $filter) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      metaId
-      meta {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
+export const onUpdateImageNeighbour = /* GraphQL */ `
+  subscription OnUpdateImageNeighbour(
+    $filter: ModelSubscriptionImageNeighbourFilterInput
+  ) {
+    onUpdateImageNeighbour(filter: $filter) {
+      image1key
+      image1 {
+        key
+        hash
         width
         height
+        longitude
+        latitude
+        altitude_msl
         roll
         yaw
         pitch
         timestamp
+        altitude_agl
         exifData
         cameraSerial
-        id
         createdAt
         updatedAt
         __typename
       }
-      height
-      width
-      x
-      y
-      source
-      confidence
-      observations {
+      image2key
+      image2 {
+        key
+        hash
+        width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
+        createdAt
+        updatedAt
+        __typename
+      }
+      homography
+      id
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onDeleteImageNeighbour = /* GraphQL */ `
+  subscription OnDeleteImageNeighbour(
+    $filter: ModelSubscriptionImageNeighbourFilterInput
+  ) {
+    onDeleteImageNeighbour(filter: $filter) {
+      image1key
+      image1 {
+        key
+        hash
+        width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
+        createdAt
+        updatedAt
+        __typename
+      }
+      image2key
+      image2 {
+        key
+        hash
+        width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
+        createdAt
+        updatedAt
+        __typename
+      }
+      homography
+      id
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onCreateImageSet = /* GraphQL */ `
+  subscription OnCreateImageSet($filter: ModelSubscriptionImageSetFilterInput) {
+    onCreateImageSet(filter: $filter) {
+      name
+      images {
         nextToken
         __typename
       }
-      sets {
+      projectName
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onUpdateImageSet = /* GraphQL */ `
+  subscription OnUpdateImageSet($filter: ModelSubscriptionImageSetFilterInput) {
+    onUpdateImageSet(filter: $filter) {
+      name
+      images {
         nextToken
         __typename
       }
-      id
+      projectName
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
       createdAt
       updatedAt
       __typename
     }
   }
 `;
-export const onCreateObservation = /* GraphQL */ `
-  subscription OnCreateObservation(
-    $filter: ModelSubscriptionObservationFilterInput
-    $owner: String
-  ) {
-    onCreateObservation(filter: $filter, owner: $owner) {
-      projectId
+export const onDeleteImageSet = /* GraphQL */ `
+  subscription OnDeleteImageSet($filter: ModelSubscriptionImageSetFilterInput) {
+    onDeleteImageSet(filter: $filter) {
+      name
+      images {
+        nextToken
+        __typename
+      }
+      projectName
       project {
         name
-        id
         createdAt
         updatedAt
         __typename
       }
-      locationId
-      location {
-        projectId
-        metaId
-        height
-        width
-        x
-        y
-        source
-        confidence
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      id
       createdAt
       updatedAt
-      owner
-      __typename
-    }
-  }
-`;
-export const onUpdateObservation = /* GraphQL */ `
-  subscription OnUpdateObservation(
-    $filter: ModelSubscriptionObservationFilterInput
-    $owner: String
-  ) {
-    onUpdateObservation(filter: $filter, owner: $owner) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      locationId
-      location {
-        projectId
-        metaId
-        height
-        width
-        x
-        y
-        source
-        confidence
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      owner
-      __typename
-    }
-  }
-`;
-export const onDeleteObservation = /* GraphQL */ `
-  subscription OnDeleteObservation(
-    $filter: ModelSubscriptionObservationFilterInput
-    $owner: String
-  ) {
-    onDeleteObservation(filter: $filter, owner: $owner) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      locationId
-      location {
-        projectId
-        metaId
-        height
-        width
-        x
-        y
-        source
-        confidence
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      owner
       __typename
     }
   }
@@ -1146,19 +1169,20 @@ export const onCreateLocationSet = /* GraphQL */ `
     $filter: ModelSubscriptionLocationSetFilterInput
   ) {
     onCreateLocationSet(filter: $filter) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
+      id
+      name
+      readGroup
       locations {
         nextToken
         __typename
       }
-      id
+      projectName
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -1170,19 +1194,20 @@ export const onUpdateLocationSet = /* GraphQL */ `
     $filter: ModelSubscriptionLocationSetFilterInput
   ) {
     onUpdateLocationSet(filter: $filter) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
+      id
+      name
+      readGroup
       locations {
         nextToken
         __typename
       }
-      id
+      projectName
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -1194,125 +1219,282 @@ export const onDeleteLocationSet = /* GraphQL */ `
     $filter: ModelSubscriptionLocationSetFilterInput
   ) {
     onDeleteLocationSet(filter: $filter) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
+      id
+      name
+      readGroup
       locations {
         nextToken
         __typename
       }
-      id
+      projectName
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
       createdAt
       updatedAt
       __typename
     }
   }
 `;
-export const onCreateLocationSetMembership = /* GraphQL */ `
-  subscription OnCreateLocationSetMembership(
-    $filter: ModelSubscriptionLocationSetMembershipFilterInput
-  ) {
-    onCreateLocationSetMembership(filter: $filter) {
-      locationId
-      locationSetId
-      location {
-        projectId
-        metaId
-        height
-        width
-        x
-        y
-        source
-        confidence
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      locationSet {
-        projectId
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
+export const onCreateLocation = /* GraphQL */ `
+  subscription OnCreateLocation($filter: ModelSubscriptionLocationFilterInput) {
+    onCreateLocation(filter: $filter) {
       id
+      setId
+      set {
+        id
+        name
+        readGroup
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      confidence
+      isTest
+      imageKey
+      image {
+        key
+        hash
+        width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
+        createdAt
+        updatedAt
+        __typename
+      }
+      observations {
+        nextToken
+        __typename
+      }
+      x
+      y
+      width
+      height
       createdAt
       updatedAt
       __typename
     }
   }
 `;
-export const onUpdateLocationSetMembership = /* GraphQL */ `
-  subscription OnUpdateLocationSetMembership(
-    $filter: ModelSubscriptionLocationSetMembershipFilterInput
-  ) {
-    onUpdateLocationSetMembership(filter: $filter) {
-      locationId
-      locationSetId
-      location {
-        projectId
-        metaId
-        height
-        width
-        x
-        y
-        source
-        confidence
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      locationSet {
-        projectId
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
+export const onUpdateLocation = /* GraphQL */ `
+  subscription OnUpdateLocation($filter: ModelSubscriptionLocationFilterInput) {
+    onUpdateLocation(filter: $filter) {
       id
+      setId
+      set {
+        id
+        name
+        readGroup
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      confidence
+      isTest
+      imageKey
+      image {
+        key
+        hash
+        width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
+        createdAt
+        updatedAt
+        __typename
+      }
+      observations {
+        nextToken
+        __typename
+      }
+      x
+      y
+      width
+      height
       createdAt
       updatedAt
       __typename
     }
   }
 `;
-export const onDeleteLocationSetMembership = /* GraphQL */ `
-  subscription OnDeleteLocationSetMembership(
-    $filter: ModelSubscriptionLocationSetMembershipFilterInput
-  ) {
-    onDeleteLocationSetMembership(filter: $filter) {
-      locationId
-      locationSetId
-      location {
-        projectId
-        metaId
-        height
+export const onDeleteLocation = /* GraphQL */ `
+  subscription OnDeleteLocation($filter: ModelSubscriptionLocationFilterInput) {
+    onDeleteLocation(filter: $filter) {
+      id
+      setId
+      set {
+        id
+        name
+        readGroup
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      confidence
+      isTest
+      imageKey
+      image {
+        key
+        hash
         width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
+        createdAt
+        updatedAt
+        __typename
+      }
+      observations {
+        nextToken
+        __typename
+      }
+      x
+      y
+      width
+      height
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onCreateObservation = /* GraphQL */ `
+  subscription OnCreateObservation(
+    $filter: ModelSubscriptionObservationFilterInput
+  ) {
+    onCreateObservation(filter: $filter) {
+      locationId
+      location {
+        id
+        setId
+        confidence
+        isTest
+        imageKey
         x
         y
-        source
-        confidence
-        id
+        width
+        height
         createdAt
         updatedAt
         __typename
       }
-      locationSet {
-        projectId
+      annotationSetId
+      annotationSet {
         id
+        name
+        projectName
         createdAt
         updatedAt
         __typename
       }
-      id
+      owner
       createdAt
+      id
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onUpdateObservation = /* GraphQL */ `
+  subscription OnUpdateObservation(
+    $filter: ModelSubscriptionObservationFilterInput
+  ) {
+    onUpdateObservation(filter: $filter) {
+      locationId
+      location {
+        id
+        setId
+        confidence
+        isTest
+        imageKey
+        x
+        y
+        width
+        height
+        createdAt
+        updatedAt
+        __typename
+      }
+      annotationSetId
+      annotationSet {
+        id
+        name
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      owner
+      createdAt
+      id
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const onDeleteObservation = /* GraphQL */ `
+  subscription OnDeleteObservation(
+    $filter: ModelSubscriptionObservationFilterInput
+  ) {
+    onDeleteObservation(filter: $filter) {
+      locationId
+      location {
+        id
+        setId
+        confidence
+        isTest
+        imageKey
+        x
+        y
+        width
+        height
+        createdAt
+        updatedAt
+        __typename
+      }
+      annotationSetId
+      annotationSet {
+        id
+        name
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      owner
+      createdAt
+      id
       updatedAt
       __typename
     }
@@ -1323,28 +1505,35 @@ export const onCreateImageSetMembership = /* GraphQL */ `
     $filter: ModelSubscriptionImageSetMembershipFilterInput
   ) {
     onCreateImageSetMembership(filter: $filter) {
-      imageId
-      imageSetId
+      id
+      imageKey
+      imageSetName
       image {
-        projectId
-        derivedFrom
-        path
-        metaId
-        type
-        id
+        key
+        hash
+        width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
         createdAt
         updatedAt
         __typename
       }
       imageSet {
-        projectId
         name
-        id
+        projectName
         createdAt
         updatedAt
         __typename
       }
-      id
       createdAt
       updatedAt
       __typename
@@ -1356,28 +1545,35 @@ export const onUpdateImageSetMembership = /* GraphQL */ `
     $filter: ModelSubscriptionImageSetMembershipFilterInput
   ) {
     onUpdateImageSetMembership(filter: $filter) {
-      imageId
-      imageSetId
+      id
+      imageKey
+      imageSetName
       image {
-        projectId
-        derivedFrom
-        path
-        metaId
-        type
-        id
+        key
+        hash
+        width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
         createdAt
         updatedAt
         __typename
       }
       imageSet {
-        projectId
         name
-        id
+        projectName
         createdAt
         updatedAt
         __typename
       }
-      id
       createdAt
       updatedAt
       __typename
@@ -1389,163 +1585,35 @@ export const onDeleteImageSetMembership = /* GraphQL */ `
     $filter: ModelSubscriptionImageSetMembershipFilterInput
   ) {
     onDeleteImageSetMembership(filter: $filter) {
-      imageId
-      imageSetId
+      id
+      imageKey
+      imageSetName
       image {
-        projectId
-        derivedFrom
-        path
-        metaId
-        type
-        id
+        key
+        hash
+        width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
         createdAt
         updatedAt
         __typename
       }
       imageSet {
-        projectId
         name
-        id
+        projectName
         createdAt
         updatedAt
         __typename
       }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const onCreateImageSet = /* GraphQL */ `
-  subscription OnCreateImageSet($filter: ModelSubscriptionImageSetFilterInput) {
-    onCreateImageSet(filter: $filter) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      name
-      images {
-        nextToken
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const onUpdateImageSet = /* GraphQL */ `
-  subscription OnUpdateImageSet($filter: ModelSubscriptionImageSetFilterInput) {
-    onUpdateImageSet(filter: $filter) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      name
-      images {
-        nextToken
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const onDeleteImageSet = /* GraphQL */ `
-  subscription OnDeleteImageSet($filter: ModelSubscriptionImageSetFilterInput) {
-    onDeleteImageSet(filter: $filter) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      name
-      images {
-        nextToken
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const onCreateUserProjectMembership = /* GraphQL */ `
-  subscription OnCreateUserProjectMembership(
-    $filter: ModelSubscriptionUserProjectMembershipFilterInput
-  ) {
-    onCreateUserProjectMembership(filter: $filter) {
-      userId
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      queueUrl
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const onUpdateUserProjectMembership = /* GraphQL */ `
-  subscription OnUpdateUserProjectMembership(
-    $filter: ModelSubscriptionUserProjectMembershipFilterInput
-  ) {
-    onUpdateUserProjectMembership(filter: $filter) {
-      userId
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      queueUrl
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const onDeleteUserProjectMembership = /* GraphQL */ `
-  subscription OnDeleteUserProjectMembership(
-    $filter: ModelSubscriptionUserProjectMembershipFilterInput
-  ) {
-    onDeleteUserProjectMembership(filter: $filter) {
-      userId
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      queueUrl
-      id
       createdAt
       updatedAt
       __typename

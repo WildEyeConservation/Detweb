@@ -71,7 +71,7 @@ type ClientType = V6Client<Schema>;
 //       next: (data) => {
 //         console.log(data)
 //         // queryClient.setQueryData(queryKey, (old: Schema[T]['type'][] = []) => [
-//         //   ...old.filter((item) => item.id !== data.id),
+//         //   ...old.filter((item) => item.id !== data.id), data,
 //         //   data as Schema[T]['type']
 //         // ]);
 //       },
@@ -202,7 +202,7 @@ export function useOptimisticMembership(
       next: (data) => {
         console.log(data)
         queryClient.setQueryData<ProjectMembership[]>(queryKey, (old = []) => [
-          ...old.filter((item) => item.id !== data.id)
+          ...old.filter((item) => item.id !== data.id), data
         ]);
       },
       error: (error) => console.warn(error),
@@ -326,7 +326,7 @@ export function useOptimisticCategory(
       next: (data) => {
         console.log(data)
         queryClient.setQueryData<Category[]>(queryKey, (old = []) => [
-          ...old.filter((item) => item.id !== data.id)
+          ...old.filter((item) => item.id !== data.id), data
         ]);
       },
       error: (error) => console.warn(error),
@@ -453,7 +453,7 @@ export function useOptimisticLocationSet(
       next: (data) => {
         console.log(data)
         queryClient.setQueryData<LocationSet[]>(queryKey, (old = []) => [
-          ...old.filter((item) => item.id !== data.id)
+          ...old.filter((item) => item.id !== data.id), data
         ]);
       },
       error: (error) => console.warn(error),
@@ -581,7 +581,7 @@ export function useOptimisticImageSet(
       next: (data) => {
         console.log(data)
         queryClient.setQueryData<ImageSet[]>(queryKey, (old = []) => [
-          ...old.filter((item) => item.id !== data.id)
+          ...old.filter((item) => item.id !== data.id), data
         ]);
       },
       error: (error) => console.warn(error),
@@ -708,7 +708,7 @@ export function useOptimisticAnnotation(
       next: (data) => {
         console.log(data)
         queryClient.setQueryData<Annotation[]>(queryKey, (old = []) => [
-          ...old.filter((item) => item.id !== data.id)
+          ...old.filter((item) => item.id !== data.id), data
         ]);
       },
       error: (error) => console.warn(error),
@@ -835,7 +835,7 @@ export function useOptimisticAnnotationSet(
       next: (data) => {
         console.log(data)
         queryClient.setQueryData<AnnotationSet[]>(queryKey, (old = []) => [
-          ...old.filter((item) => item.id !== data.id)
+          ...old.filter((item) => item.id !== data.id), data
         ]);
       },
       error: (error) => console.warn(error),
@@ -962,7 +962,7 @@ function useOptimisticQueue(
       next: (data) => {
         console.log(data)
         queryClient.setQueryData<Queue[]>(queryKey, (old = []) => [
-          ...old.filter((item) => item.id !== data.id)
+          ...old.filter((item) => item.id !== data.id), data
         ]);
       },
       error: (error) => console.warn(error),

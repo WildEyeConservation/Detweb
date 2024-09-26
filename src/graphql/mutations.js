@@ -1,6 +1,5 @@
 /* eslint-disable */
 // this is an auto generated file. This will be overwritten
-
 export const createProject = /* GraphQL */ `
   mutation CreateProject(
     $input: CreateProjectInput!
@@ -12,31 +11,7 @@ export const createProject = /* GraphQL */ `
         nextToken
         __typename
       }
-      images {
-        nextToken
-        __typename
-      }
-      imageMetas {
-        nextToken
-        __typename
-      }
-      annotations {
-        nextToken
-        __typename
-      }
-      objects {
-        nextToken
-        __typename
-      }
-      imageSets {
-        nextToken
-        __typename
-      }
-      annotationSets {
-        nextToken
-        __typename
-      }
-      locations {
+      annotationSet {
         nextToken
         __typename
       }
@@ -44,15 +19,18 @@ export const createProject = /* GraphQL */ `
         nextToken
         __typename
       }
-      observations {
+      imageSets {
         nextToken
         __typename
       }
-      members {
+      queues {
         nextToken
         __typename
       }
-      id
+      users {
+        nextToken
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -70,31 +48,7 @@ export const updateProject = /* GraphQL */ `
         nextToken
         __typename
       }
-      images {
-        nextToken
-        __typename
-      }
-      imageMetas {
-        nextToken
-        __typename
-      }
-      annotations {
-        nextToken
-        __typename
-      }
-      objects {
-        nextToken
-        __typename
-      }
-      imageSets {
-        nextToken
-        __typename
-      }
-      annotationSets {
-        nextToken
-        __typename
-      }
-      locations {
+      annotationSet {
         nextToken
         __typename
       }
@@ -102,15 +56,18 @@ export const updateProject = /* GraphQL */ `
         nextToken
         __typename
       }
-      observations {
+      imageSets {
         nextToken
         __typename
       }
-      members {
+      queues {
         nextToken
         __typename
       }
-      id
+      users {
+        nextToken
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -128,31 +85,7 @@ export const deleteProject = /* GraphQL */ `
         nextToken
         __typename
       }
-      images {
-        nextToken
-        __typename
-      }
-      imageMetas {
-        nextToken
-        __typename
-      }
-      annotations {
-        nextToken
-        __typename
-      }
-      objects {
-        nextToken
-        __typename
-      }
-      imageSets {
-        nextToken
-        __typename
-      }
-      annotationSets {
-        nextToken
-        __typename
-      }
-      locations {
+      annotationSet {
         nextToken
         __typename
       }
@@ -160,15 +93,294 @@ export const deleteProject = /* GraphQL */ `
         nextToken
         __typename
       }
-      observations {
+      imageSets {
         nextToken
         __typename
       }
-      members {
+      queues {
         nextToken
+        __typename
+      }
+      users {
+        nextToken
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const createUser = /* GraphQL */ `
+  mutation CreateUser(
+    $input: CreateUserInput!
+    $condition: ModelUserConditionInput
+  ) {
+    createUser(input: $input, condition: $condition) {
+      id
+      name
+      email
+      isAdmin
+      projects {
+        nextToken
+        __typename
+      }
+      currentProjectId
+      currentProject {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const updateUser = /* GraphQL */ `
+  mutation UpdateUser(
+    $input: UpdateUserInput!
+    $condition: ModelUserConditionInput
+  ) {
+    updateUser(input: $input, condition: $condition) {
+      id
+      name
+      email
+      isAdmin
+      projects {
+        nextToken
+        __typename
+      }
+      currentProjectId
+      currentProject {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const deleteUser = /* GraphQL */ `
+  mutation DeleteUser(
+    $input: DeleteUserInput!
+    $condition: ModelUserConditionInput
+  ) {
+    deleteUser(input: $input, condition: $condition) {
+      id
+      name
+      email
+      isAdmin
+      projects {
+        nextToken
+        __typename
+      }
+      currentProjectId
+      currentProject {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const createUserProjectMembership = /* GraphQL */ `
+  mutation CreateUserProjectMembership(
+    $input: CreateUserProjectMembershipInput!
+    $condition: ModelUserProjectMembershipConditionInput
+  ) {
+    createUserProjectMembership(input: $input, condition: $condition) {
+      userId
+      user {
+        id
+        name
+        email
+        isAdmin
+        currentProjectId
+        createdAt
+        updatedAt
+        __typename
+      }
+      projectId
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      queueUrl
+      queue {
+        name
+        url
+        projectId
+        createdAt
+        updatedAt
         __typename
       }
       id
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const updateUserProjectMembership = /* GraphQL */ `
+  mutation UpdateUserProjectMembership(
+    $input: UpdateUserProjectMembershipInput!
+    $condition: ModelUserProjectMembershipConditionInput
+  ) {
+    updateUserProjectMembership(input: $input, condition: $condition) {
+      userId
+      user {
+        id
+        name
+        email
+        isAdmin
+        currentProjectId
+        createdAt
+        updatedAt
+        __typename
+      }
+      projectId
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      queueUrl
+      queue {
+        name
+        url
+        projectId
+        createdAt
+        updatedAt
+        __typename
+      }
+      id
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const deleteUserProjectMembership = /* GraphQL */ `
+  mutation DeleteUserProjectMembership(
+    $input: DeleteUserProjectMembershipInput!
+    $condition: ModelUserProjectMembershipConditionInput
+  ) {
+    deleteUserProjectMembership(input: $input, condition: $condition) {
+      userId
+      user {
+        id
+        name
+        email
+        isAdmin
+        currentProjectId
+        createdAt
+        updatedAt
+        __typename
+      }
+      projectId
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      queueUrl
+      queue {
+        name
+        url
+        projectId
+        createdAt
+        updatedAt
+        __typename
+      }
+      id
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const createQueue = /* GraphQL */ `
+  mutation CreateQueue(
+    $input: CreateQueueInput!
+    $condition: ModelQueueConditionInput
+  ) {
+    createQueue(input: $input, condition: $condition) {
+      name
+      url
+      users {
+        nextToken
+        __typename
+      }
+      projectId
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const updateQueue = /* GraphQL */ `
+  mutation UpdateQueue(
+    $input: UpdateQueueInput!
+    $condition: ModelQueueConditionInput
+  ) {
+    updateQueue(input: $input, condition: $condition) {
+      name
+      url
+      users {
+        nextToken
+        __typename
+      }
+      projectId
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const deleteQueue = /* GraphQL */ `
+  mutation DeleteQueue(
+    $input: DeleteQueueInput!
+    $condition: ModelQueueConditionInput
+  ) {
+    deleteQueue(input: $input, condition: $condition) {
+      name
+      url
+      users {
+        nextToken
+        __typename
+      }
+      projectId
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -181,14 +393,7 @@ export const createCategory = /* GraphQL */ `
     $condition: ModelCategoryConditionInput
   ) {
     createCategory(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
+      id
       name
       color
       shortcutKey
@@ -196,7 +401,17 @@ export const createCategory = /* GraphQL */ `
         nextToken
         __typename
       }
-      id
+      objects {
+        nextToken
+        __typename
+      }
+      projectName
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -209,14 +424,7 @@ export const updateCategory = /* GraphQL */ `
     $condition: ModelCategoryConditionInput
   ) {
     updateCategory(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
+      id
       name
       color
       shortcutKey
@@ -224,7 +432,17 @@ export const updateCategory = /* GraphQL */ `
         nextToken
         __typename
       }
-      id
+      objects {
+        nextToken
+        __typename
+      }
+      projectName
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -237,14 +455,7 @@ export const deleteCategory = /* GraphQL */ `
     $condition: ModelCategoryConditionInput
   ) {
     deleteCategory(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
+      id
       name
       color
       shortcutKey
@@ -252,292 +463,17 @@ export const deleteCategory = /* GraphQL */ `
         nextToken
         __typename
       }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const createImageMeta = /* GraphQL */ `
-  mutation CreateImageMeta(
-    $input: CreateImageMetaInput!
-    $condition: ModelImageMetaConditionInput
-  ) {
-    createImageMeta(input: $input, condition: $condition) {
-      projectId
+      objects {
+        nextToken
+        __typename
+      }
+      projectName
       project {
         name
-        id
         createdAt
         updatedAt
         __typename
       }
-      latitude
-      longitude
-      altitude_wgs84
-      altitude_agl
-      altitude_egm96
-      width
-      height
-      roll
-      yaw
-      pitch
-      timestamp
-      exifData
-      cameraSerial
-      images {
-        nextToken
-        __typename
-      }
-      locations {
-        nextToken
-        __typename
-      }
-      annotations {
-        nextToken
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const updateImageMeta = /* GraphQL */ `
-  mutation UpdateImageMeta(
-    $input: UpdateImageMetaInput!
-    $condition: ModelImageMetaConditionInput
-  ) {
-    updateImageMeta(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      latitude
-      longitude
-      altitude_wgs84
-      altitude_agl
-      altitude_egm96
-      width
-      height
-      roll
-      yaw
-      pitch
-      timestamp
-      exifData
-      cameraSerial
-      images {
-        nextToken
-        __typename
-      }
-      locations {
-        nextToken
-        __typename
-      }
-      annotations {
-        nextToken
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const deleteImageMeta = /* GraphQL */ `
-  mutation DeleteImageMeta(
-    $input: DeleteImageMetaInput!
-    $condition: ModelImageMetaConditionInput
-  ) {
-    deleteImageMeta(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      latitude
-      longitude
-      altitude_wgs84
-      altitude_agl
-      altitude_egm96
-      width
-      height
-      roll
-      yaw
-      pitch
-      timestamp
-      exifData
-      cameraSerial
-      images {
-        nextToken
-        __typename
-      }
-      locations {
-        nextToken
-        __typename
-      }
-      annotations {
-        nextToken
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const createImage = /* GraphQL */ `
-  mutation CreateImage(
-    $input: CreateImageInput!
-    $condition: ModelImageConditionInput
-  ) {
-    createImage(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      derivedFrom
-      path
-      metaId
-      meta {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
-        width
-        height
-        roll
-        yaw
-        pitch
-        timestamp
-        exifData
-        cameraSerial
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      type
-      sets {
-        nextToken
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const updateImage = /* GraphQL */ `
-  mutation UpdateImage(
-    $input: UpdateImageInput!
-    $condition: ModelImageConditionInput
-  ) {
-    updateImage(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      derivedFrom
-      path
-      metaId
-      meta {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
-        width
-        height
-        roll
-        yaw
-        pitch
-        timestamp
-        exifData
-        cameraSerial
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      type
-      sets {
-        nextToken
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const deleteImage = /* GraphQL */ `
-  mutation DeleteImage(
-    $input: DeleteImageInput!
-    $condition: ModelImageConditionInput
-  ) {
-    deleteImage(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      derivedFrom
-      path
-      metaId
-      meta {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
-        width
-        height
-        roll
-        yaw
-        pitch
-        timestamp
-        exifData
-        cameraSerial
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      type
-      sets {
-        nextToken
-        __typename
-      }
-      id
       createdAt
       updatedAt
       __typename
@@ -550,10 +486,11 @@ export const createAnnotationSet = /* GraphQL */ `
     $condition: ModelAnnotationSetConditionInput
   ) {
     createAnnotationSet(input: $input, condition: $condition) {
-      projectId
+      id
+      name
+      projectName
       project {
         name
-        id
         createdAt
         updatedAt
         __typename
@@ -562,7 +499,10 @@ export const createAnnotationSet = /* GraphQL */ `
         nextToken
         __typename
       }
-      id
+      observations {
+        nextToken
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -575,10 +515,11 @@ export const updateAnnotationSet = /* GraphQL */ `
     $condition: ModelAnnotationSetConditionInput
   ) {
     updateAnnotationSet(input: $input, condition: $condition) {
-      projectId
+      id
+      name
+      projectName
       project {
         name
-        id
         createdAt
         updatedAt
         __typename
@@ -587,7 +528,10 @@ export const updateAnnotationSet = /* GraphQL */ `
         nextToken
         __typename
       }
-      id
+      observations {
+        nextToken
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -600,10 +544,11 @@ export const deleteAnnotationSet = /* GraphQL */ `
     $condition: ModelAnnotationSetConditionInput
   ) {
     deleteAnnotationSet(input: $input, condition: $condition) {
-      projectId
+      id
+      name
+      projectName
       project {
         name
-        id
         createdAt
         updatedAt
         __typename
@@ -612,7 +557,10 @@ export const deleteAnnotationSet = /* GraphQL */ `
         nextToken
         __typename
       }
-      id
+      observations {
+        nextToken
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -625,69 +573,66 @@ export const createAnnotation = /* GraphQL */ `
     $condition: ModelAnnotationConditionInput
   ) {
     createAnnotation(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      setId
-      set {
-        projectId
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      source
-      categoryId
-      category {
-        projectId
-        name
-        color
-        shortcutKey
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      metaId
+      x
+      y
+      obscured
+      note
+      origin
+      imageKey
       image {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
+        key
+        hash
         width
         height
+        longitude
+        latitude
+        altitude_msl
         roll
         yaw
         pitch
         timestamp
+        altitude_agl
         exifData
         cameraSerial
-        id
         createdAt
         updatedAt
         __typename
       }
-      x
-      y
+      annotationSetId
+      annotationSet {
+        id
+        name
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      categoryId
+      category {
+        id
+        name
+        color
+        shortcutKey
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
       objectId
       object {
-        projectId
+        categoryId
+        latitude
+        longitude
         id
         createdAt
         updatedAt
         __typename
       }
+      owner
       id
       createdAt
       updatedAt
-      owner
+      objectAnnotationsId
       __typename
     }
   }
@@ -698,69 +643,66 @@ export const updateAnnotation = /* GraphQL */ `
     $condition: ModelAnnotationConditionInput
   ) {
     updateAnnotation(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      setId
-      set {
-        projectId
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      source
-      categoryId
-      category {
-        projectId
-        name
-        color
-        shortcutKey
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      metaId
+      x
+      y
+      obscured
+      note
+      origin
+      imageKey
       image {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
+        key
+        hash
         width
         height
+        longitude
+        latitude
+        altitude_msl
         roll
         yaw
         pitch
         timestamp
+        altitude_agl
         exifData
         cameraSerial
-        id
         createdAt
         updatedAt
         __typename
       }
-      x
-      y
+      annotationSetId
+      annotationSet {
+        id
+        name
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      categoryId
+      category {
+        id
+        name
+        color
+        shortcutKey
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
       objectId
       object {
-        projectId
+        categoryId
+        latitude
+        longitude
         id
         createdAt
         updatedAt
         __typename
       }
+      owner
       id
       createdAt
       updatedAt
-      owner
+      objectAnnotationsId
       __typename
     }
   }
@@ -771,69 +713,66 @@ export const deleteAnnotation = /* GraphQL */ `
     $condition: ModelAnnotationConditionInput
   ) {
     deleteAnnotation(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      setId
-      set {
-        projectId
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      source
-      categoryId
-      category {
-        projectId
-        name
-        color
-        shortcutKey
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      metaId
+      x
+      y
+      obscured
+      note
+      origin
+      imageKey
       image {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
+        key
+        hash
         width
         height
+        longitude
+        latitude
+        altitude_msl
         roll
         yaw
         pitch
         timestamp
+        altitude_agl
         exifData
         cameraSerial
-        id
         createdAt
         updatedAt
         __typename
       }
-      x
-      y
+      annotationSetId
+      annotationSet {
+        id
+        name
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      categoryId
+      category {
+        id
+        name
+        color
+        shortcutKey
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
       objectId
       object {
-        projectId
+        categoryId
+        latitude
+        longitude
         id
         createdAt
         updatedAt
         __typename
       }
+      owner
       id
       createdAt
       updatedAt
-      owner
+      objectAnnotationsId
       __typename
     }
   }
@@ -844,14 +783,19 @@ export const createObject = /* GraphQL */ `
     $condition: ModelObjectConditionInput
   ) {
     createObject(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
+      categoryId
+      category {
         id
+        name
+        color
+        shortcutKey
+        projectName
         createdAt
         updatedAt
         __typename
       }
+      latitude
+      longitude
       annotations {
         nextToken
         __typename
@@ -869,14 +813,19 @@ export const updateObject = /* GraphQL */ `
     $condition: ModelObjectConditionInput
   ) {
     updateObject(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
+      categoryId
+      category {
         id
+        name
+        color
+        shortcutKey
+        projectName
         createdAt
         updatedAt
         __typename
       }
+      latitude
+      longitude
       annotations {
         nextToken
         __typename
@@ -894,14 +843,19 @@ export const deleteObject = /* GraphQL */ `
     $condition: ModelObjectConditionInput
   ) {
     deleteObject(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
+      categoryId
+      category {
         id
+        name
+        color
+        shortcutKey
+        projectName
         createdAt
         updatedAt
         __typename
       }
+      latitude
+      longitude
       annotations {
         nextToken
         __typename
@@ -913,461 +867,245 @@ export const deleteObject = /* GraphQL */ `
     }
   }
 `;
-export const createLocation = /* GraphQL */ `
-  mutation CreateLocation(
-    $input: CreateLocationInput!
-    $condition: ModelLocationConditionInput
+export const createImage = /* GraphQL */ `
+  mutation CreateImage(
+    $input: CreateImageInput!
+    $condition: ModelImageConditionInput
   ) {
-    createLocation(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      metaId
-      meta {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
-        width
-        height
-        roll
-        yaw
-        pitch
-        timestamp
-        exifData
-        cameraSerial
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      height
+    createImage(input: $input, condition: $condition) {
+      key
+      hash
       width
-      x
-      y
-      source
-      confidence
-      observations {
-        nextToken
-        __typename
-      }
-      sets {
-        nextToken
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const updateLocation = /* GraphQL */ `
-  mutation UpdateLocation(
-    $input: UpdateLocationInput!
-    $condition: ModelLocationConditionInput
-  ) {
-    updateLocation(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      metaId
-      meta {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
-        width
-        height
-        roll
-        yaw
-        pitch
-        timestamp
-        exifData
-        cameraSerial
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
       height
-      width
-      x
-      y
-      source
-      confidence
-      observations {
+      longitude
+      latitude
+      altitude_msl
+      roll
+      yaw
+      pitch
+      timestamp
+      altitude_agl
+      exifData
+      cameraSerial
+      annotations {
         nextToken
-        __typename
-      }
-      sets {
-        nextToken
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const deleteLocation = /* GraphQL */ `
-  mutation DeleteLocation(
-    $input: DeleteLocationInput!
-    $condition: ModelLocationConditionInput
-  ) {
-    deleteLocation(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      metaId
-      meta {
-        projectId
-        latitude
-        longitude
-        altitude_wgs84
-        altitude_agl
-        altitude_egm96
-        width
-        height
-        roll
-        yaw
-        pitch
-        timestamp
-        exifData
-        cameraSerial
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      height
-      width
-      x
-      y
-      source
-      confidence
-      observations {
-        nextToken
-        __typename
-      }
-      sets {
-        nextToken
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const createObservation = /* GraphQL */ `
-  mutation CreateObservation(
-    $input: CreateObservationInput!
-    $condition: ModelObservationConditionInput
-  ) {
-    createObservation(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      locationId
-      location {
-        projectId
-        metaId
-        height
-        width
-        x
-        y
-        source
-        confidence
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      owner
-      __typename
-    }
-  }
-`;
-export const updateObservation = /* GraphQL */ `
-  mutation UpdateObservation(
-    $input: UpdateObservationInput!
-    $condition: ModelObservationConditionInput
-  ) {
-    updateObservation(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      locationId
-      location {
-        projectId
-        metaId
-        height
-        width
-        x
-        y
-        source
-        confidence
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      owner
-      __typename
-    }
-  }
-`;
-export const deleteObservation = /* GraphQL */ `
-  mutation DeleteObservation(
-    $input: DeleteObservationInput!
-    $condition: ModelObservationConditionInput
-  ) {
-    deleteObservation(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      locationId
-      location {
-        projectId
-        metaId
-        height
-        width
-        x
-        y
-        source
-        confidence
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      owner
-      __typename
-    }
-  }
-`;
-export const createLocationSet = /* GraphQL */ `
-  mutation CreateLocationSet(
-    $input: CreateLocationSetInput!
-    $condition: ModelLocationSetConditionInput
-  ) {
-    createLocationSet(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
         __typename
       }
       locations {
         nextToken
         __typename
       }
-      id
+      collections {
+        nextToken
+        __typename
+      }
+      leftNeighbours {
+        nextToken
+        __typename
+      }
+      rightNeighbours {
+        nextToken
+        __typename
+      }
       createdAt
       updatedAt
       __typename
     }
   }
 `;
-export const updateLocationSet = /* GraphQL */ `
-  mutation UpdateLocationSet(
-    $input: UpdateLocationSetInput!
-    $condition: ModelLocationSetConditionInput
+export const updateImage = /* GraphQL */ `
+  mutation UpdateImage(
+    $input: UpdateImageInput!
+    $condition: ModelImageConditionInput
   ) {
-    updateLocationSet(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
+    updateImage(input: $input, condition: $condition) {
+      key
+      hash
+      width
+      height
+      longitude
+      latitude
+      altitude_msl
+      roll
+      yaw
+      pitch
+      timestamp
+      altitude_agl
+      exifData
+      cameraSerial
+      annotations {
+        nextToken
         __typename
       }
       locations {
         nextToken
         __typename
       }
-      id
+      collections {
+        nextToken
+        __typename
+      }
+      leftNeighbours {
+        nextToken
+        __typename
+      }
+      rightNeighbours {
+        nextToken
+        __typename
+      }
       createdAt
       updatedAt
       __typename
     }
   }
 `;
-export const deleteLocationSet = /* GraphQL */ `
-  mutation DeleteLocationSet(
-    $input: DeleteLocationSetInput!
-    $condition: ModelLocationSetConditionInput
+export const deleteImage = /* GraphQL */ `
+  mutation DeleteImage(
+    $input: DeleteImageInput!
+    $condition: ModelImageConditionInput
   ) {
-    deleteLocationSet(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
+    deleteImage(input: $input, condition: $condition) {
+      key
+      hash
+      width
+      height
+      longitude
+      latitude
+      altitude_msl
+      roll
+      yaw
+      pitch
+      timestamp
+      altitude_agl
+      exifData
+      cameraSerial
+      annotations {
+        nextToken
         __typename
       }
       locations {
         nextToken
         __typename
       }
-      id
+      collections {
+        nextToken
+        __typename
+      }
+      leftNeighbours {
+        nextToken
+        __typename
+      }
+      rightNeighbours {
+        nextToken
+        __typename
+      }
       createdAt
       updatedAt
       __typename
     }
   }
 `;
-export const createLocationSetMembership = /* GraphQL */ `
-  mutation CreateLocationSetMembership(
-    $input: CreateLocationSetMembershipInput!
-    $condition: ModelLocationSetMembershipConditionInput
+export const createImageNeighbour = /* GraphQL */ `
+  mutation CreateImageNeighbour(
+    $input: CreateImageNeighbourInput!
+    $condition: ModelImageNeighbourConditionInput
   ) {
-    createLocationSetMembership(input: $input, condition: $condition) {
-      locationId
-      locationSetId
-      location {
-        projectId
-        metaId
-        height
+    createImageNeighbour(input: $input, condition: $condition) {
+      image1key
+      image1 {
+        key
+        hash
         width
-        x
-        y
-        source
-        confidence
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      locationSet {
-        projectId
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const updateLocationSetMembership = /* GraphQL */ `
-  mutation UpdateLocationSetMembership(
-    $input: UpdateLocationSetMembershipInput!
-    $condition: ModelLocationSetMembershipConditionInput
-  ) {
-    updateLocationSetMembership(input: $input, condition: $condition) {
-      locationId
-      locationSetId
-      location {
-        projectId
-        metaId
         height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
+        createdAt
+        updatedAt
+        __typename
+      }
+      image2key
+      image2 {
+        key
+        hash
         width
-        x
-        y
-        source
-        confidence
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      locationSet {
-        projectId
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const deleteLocationSetMembership = /* GraphQL */ `
-  mutation DeleteLocationSetMembership(
-    $input: DeleteLocationSetMembershipInput!
-    $condition: ModelLocationSetMembershipConditionInput
-  ) {
-    deleteLocationSetMembership(input: $input, condition: $condition) {
-      locationId
-      locationSetId
-      location {
-        projectId
-        metaId
         height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
+        createdAt
+        updatedAt
+        __typename
+      }
+      homography
+      id
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const updateImageNeighbour = /* GraphQL */ `
+  mutation UpdateImageNeighbour(
+    $input: UpdateImageNeighbourInput!
+    $condition: ModelImageNeighbourConditionInput
+  ) {
+    updateImageNeighbour(input: $input, condition: $condition) {
+      image1key
+      image1 {
+        key
+        hash
         width
-        x
-        y
-        source
-        confidence
-        id
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
         createdAt
         updatedAt
         __typename
       }
-      locationSet {
-        projectId
-        id
+      image2key
+      image2 {
+        key
+        hash
+        width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
         createdAt
         updatedAt
         __typename
       }
+      homography
       id
       createdAt
       updatedAt
@@ -1375,101 +1113,53 @@ export const deleteLocationSetMembership = /* GraphQL */ `
     }
   }
 `;
-export const createImageSetMembership = /* GraphQL */ `
-  mutation CreateImageSetMembership(
-    $input: CreateImageSetMembershipInput!
-    $condition: ModelImageSetMembershipConditionInput
+export const deleteImageNeighbour = /* GraphQL */ `
+  mutation DeleteImageNeighbour(
+    $input: DeleteImageNeighbourInput!
+    $condition: ModelImageNeighbourConditionInput
   ) {
-    createImageSetMembership(input: $input, condition: $condition) {
-      imageId
-      imageSetId
-      image {
-        projectId
-        derivedFrom
-        path
-        metaId
-        type
-        id
+    deleteImageNeighbour(input: $input, condition: $condition) {
+      image1key
+      image1 {
+        key
+        hash
+        width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
         createdAt
         updatedAt
         __typename
       }
-      imageSet {
-        projectId
-        name
-        id
+      image2key
+      image2 {
+        key
+        hash
+        width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
         createdAt
         updatedAt
         __typename
       }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const updateImageSetMembership = /* GraphQL */ `
-  mutation UpdateImageSetMembership(
-    $input: UpdateImageSetMembershipInput!
-    $condition: ModelImageSetMembershipConditionInput
-  ) {
-    updateImageSetMembership(input: $input, condition: $condition) {
-      imageId
-      imageSetId
-      image {
-        projectId
-        derivedFrom
-        path
-        metaId
-        type
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      imageSet {
-        projectId
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const deleteImageSetMembership = /* GraphQL */ `
-  mutation DeleteImageSetMembership(
-    $input: DeleteImageSetMembershipInput!
-    $condition: ModelImageSetMembershipConditionInput
-  ) {
-    deleteImageSetMembership(input: $input, condition: $condition) {
-      imageId
-      imageSetId
-      image {
-        projectId
-        derivedFrom
-        path
-        metaId
-        type
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
-      imageSet {
-        projectId
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
+      homography
       id
       createdAt
       updatedAt
@@ -1483,20 +1173,18 @@ export const createImageSet = /* GraphQL */ `
     $condition: ModelImageSetConditionInput
   ) {
     createImageSet(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
       name
       images {
         nextToken
         __typename
       }
-      id
+      projectName
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -1509,20 +1197,18 @@ export const updateImageSet = /* GraphQL */ `
     $condition: ModelImageSetConditionInput
   ) {
     updateImageSet(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
       name
       images {
         nextToken
         __typename
       }
-      id
+      projectName
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
       createdAt
       updatedAt
       __typename
@@ -1535,107 +1221,495 @@ export const deleteImageSet = /* GraphQL */ `
     $condition: ModelImageSetConditionInput
   ) {
     deleteImageSet(input: $input, condition: $condition) {
-      projectId
-      project {
-        name
-        id
-        createdAt
-        updatedAt
-        __typename
-      }
       name
       images {
         nextToken
         __typename
       }
-      id
-      createdAt
-      updatedAt
-      __typename
-    }
-  }
-`;
-export const createUserProjectMembership = /* GraphQL */ `
-  mutation CreateUserProjectMembership(
-    $input: CreateUserProjectMembershipInput!
-    $condition: ModelUserProjectMembershipConditionInput
-  ) {
-    createUserProjectMembership(input: $input, condition: $condition) {
-      userId
-      projectId
+      projectName
       project {
         name
-        id
         createdAt
         updatedAt
         __typename
       }
-      queueUrl
-      id
       createdAt
       updatedAt
       __typename
     }
   }
 `;
-export const updateUserProjectMembership = /* GraphQL */ `
-  mutation UpdateUserProjectMembership(
-    $input: UpdateUserProjectMembershipInput!
-    $condition: ModelUserProjectMembershipConditionInput
+export const createLocationSet = /* GraphQL */ `
+  mutation CreateLocationSet(
+    $input: CreateLocationSetInput!
+    $condition: ModelLocationSetConditionInput
   ) {
-    updateUserProjectMembership(input: $input, condition: $condition) {
-      userId
-      projectId
+    createLocationSet(input: $input, condition: $condition) {
+      id
+      name
+      readGroup
+      locations {
+        nextToken
+        __typename
+      }
+      projectName
       project {
         name
-        id
         createdAt
         updatedAt
         __typename
       }
-      queueUrl
-      id
       createdAt
       updatedAt
       __typename
     }
   }
 `;
-export const deleteUserProjectMembership = /* GraphQL */ `
-  mutation DeleteUserProjectMembership(
-    $input: DeleteUserProjectMembershipInput!
-    $condition: ModelUserProjectMembershipConditionInput
+export const updateLocationSet = /* GraphQL */ `
+  mutation UpdateLocationSet(
+    $input: UpdateLocationSetInput!
+    $condition: ModelLocationSetConditionInput
   ) {
-    deleteUserProjectMembership(input: $input, condition: $condition) {
-      userId
-      projectId
+    updateLocationSet(input: $input, condition: $condition) {
+      id
+      name
+      readGroup
+      locations {
+        nextToken
+        __typename
+      }
+      projectName
       project {
         name
-        id
         createdAt
         updatedAt
         __typename
       }
-      queueUrl
-      id
       createdAt
       updatedAt
       __typename
     }
   }
 `;
-export const addUserToGroup = /* GraphQL */ `
-  mutation AddUserToGroup($userId: String!, $groupName: String!) {
-    addUserToGroup(userId: $userId, groupName: $groupName)
+export const deleteLocationSet = /* GraphQL */ `
+  mutation DeleteLocationSet(
+    $input: DeleteLocationSetInput!
+    $condition: ModelLocationSetConditionInput
+  ) {
+    deleteLocationSet(input: $input, condition: $condition) {
+      id
+      name
+      readGroup
+      locations {
+        nextToken
+        __typename
+      }
+      projectName
+      project {
+        name
+        createdAt
+        updatedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
   }
 `;
-export const removeUserFromGroup = /* GraphQL */ `
-  mutation RemoveUserFromGroup($userId: String!, $groupName: String!) {
-    removeUserFromGroup(userId: $userId, groupName: $groupName)
+export const createLocation = /* GraphQL */ `
+  mutation CreateLocation(
+    $input: CreateLocationInput!
+    $condition: ModelLocationConditionInput
+  ) {
+    createLocation(input: $input, condition: $condition) {
+      id
+      setId
+      set {
+        id
+        name
+        readGroup
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      confidence
+      isTest
+      imageKey
+      image {
+        key
+        hash
+        width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
+        createdAt
+        updatedAt
+        __typename
+      }
+      observations {
+        nextToken
+        __typename
+      }
+      x
+      y
+      width
+      height
+      createdAt
+      updatedAt
+      __typename
+    }
   }
 `;
-export const createGroup = /* GraphQL */ `
-  mutation CreateGroup($groupName: String!) {
-    createGroup(groupName: $groupName)
+export const updateLocation = /* GraphQL */ `
+  mutation UpdateLocation(
+    $input: UpdateLocationInput!
+    $condition: ModelLocationConditionInput
+  ) {
+    updateLocation(input: $input, condition: $condition) {
+      id
+      setId
+      set {
+        id
+        name
+        readGroup
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      confidence
+      isTest
+      imageKey
+      image {
+        key
+        hash
+        width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
+        createdAt
+        updatedAt
+        __typename
+      }
+      observations {
+        nextToken
+        __typename
+      }
+      x
+      y
+      width
+      height
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const deleteLocation = /* GraphQL */ `
+  mutation DeleteLocation(
+    $input: DeleteLocationInput!
+    $condition: ModelLocationConditionInput
+  ) {
+    deleteLocation(input: $input, condition: $condition) {
+      id
+      setId
+      set {
+        id
+        name
+        readGroup
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      confidence
+      isTest
+      imageKey
+      image {
+        key
+        hash
+        width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
+        createdAt
+        updatedAt
+        __typename
+      }
+      observations {
+        nextToken
+        __typename
+      }
+      x
+      y
+      width
+      height
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const createObservation = /* GraphQL */ `
+  mutation CreateObservation(
+    $input: CreateObservationInput!
+    $condition: ModelObservationConditionInput
+  ) {
+    createObservation(input: $input, condition: $condition) {
+      locationId
+      location {
+        id
+        setId
+        confidence
+        isTest
+        imageKey
+        x
+        y
+        width
+        height
+        createdAt
+        updatedAt
+        __typename
+      }
+      annotationSetId
+      annotationSet {
+        id
+        name
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      owner
+      createdAt
+      id
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const updateObservation = /* GraphQL */ `
+  mutation UpdateObservation(
+    $input: UpdateObservationInput!
+    $condition: ModelObservationConditionInput
+  ) {
+    updateObservation(input: $input, condition: $condition) {
+      locationId
+      location {
+        id
+        setId
+        confidence
+        isTest
+        imageKey
+        x
+        y
+        width
+        height
+        createdAt
+        updatedAt
+        __typename
+      }
+      annotationSetId
+      annotationSet {
+        id
+        name
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      owner
+      createdAt
+      id
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const deleteObservation = /* GraphQL */ `
+  mutation DeleteObservation(
+    $input: DeleteObservationInput!
+    $condition: ModelObservationConditionInput
+  ) {
+    deleteObservation(input: $input, condition: $condition) {
+      locationId
+      location {
+        id
+        setId
+        confidence
+        isTest
+        imageKey
+        x
+        y
+        width
+        height
+        createdAt
+        updatedAt
+        __typename
+      }
+      annotationSetId
+      annotationSet {
+        id
+        name
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      owner
+      createdAt
+      id
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const createImageSetMembership = /* GraphQL */ `
+  mutation CreateImageSetMembership(
+    $input: CreateImageSetMembershipInput!
+    $condition: ModelImageSetMembershipConditionInput
+  ) {
+    createImageSetMembership(input: $input, condition: $condition) {
+      id
+      imageKey
+      imageSetName
+      image {
+        key
+        hash
+        width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
+        createdAt
+        updatedAt
+        __typename
+      }
+      imageSet {
+        name
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const updateImageSetMembership = /* GraphQL */ `
+  mutation UpdateImageSetMembership(
+    $input: UpdateImageSetMembershipInput!
+    $condition: ModelImageSetMembershipConditionInput
+  ) {
+    updateImageSetMembership(input: $input, condition: $condition) {
+      id
+      imageKey
+      imageSetName
+      image {
+        key
+        hash
+        width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
+        createdAt
+        updatedAt
+        __typename
+      }
+      imageSet {
+        name
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
+  }
+`;
+export const deleteImageSetMembership = /* GraphQL */ `
+  mutation DeleteImageSetMembership(
+    $input: DeleteImageSetMembershipInput!
+    $condition: ModelImageSetMembershipConditionInput
+  ) {
+    deleteImageSetMembership(input: $input, condition: $condition) {
+      id
+      imageKey
+      imageSetName
+      image {
+        key
+        hash
+        width
+        height
+        longitude
+        latitude
+        altitude_msl
+        roll
+        yaw
+        pitch
+        timestamp
+        altitude_agl
+        exifData
+        cameraSerial
+        createdAt
+        updatedAt
+        __typename
+      }
+      imageSet {
+        name
+        projectName
+        createdAt
+        updatedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      __typename
+    }
   }
 `;
