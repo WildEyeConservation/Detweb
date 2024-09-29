@@ -5,13 +5,11 @@ import ImageSetManagement from './ImageSetManagement.tsx';
 import DefineCategories from './DefineCategories.tsx';
 import { GlobalContext } from './Context.tsx';
 import { Management } from './UserContext.tsx';
-import LaunchTask from './LaunchTask.tsx';
 import DeleteImageSet from './DeleteImageSet.tsx';
 import FilesUploadComponent from './FilesUploadComponent.tsx';
 import ExportData from './ExportData.tsx';
 import TaskManagement from './TaskManagement.tsx';
-
-
+import AnnotationSetManagement from './AnnotationSetManagement.tsx';
 
 const ProjectManagement = () => {
 
@@ -23,6 +21,7 @@ const ProjectManagement = () => {
         <DefineCategories />
         <QueueManagement />
         <TaskManagement />
+        <AnnotationSetManagement />
         <UserManagement />
         {/* <Rescan show={modalToShow=="rescan"} handleClose={()=>setModalToShow(null)}/> */}
         <DeleteImageSet

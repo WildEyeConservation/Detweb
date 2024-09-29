@@ -75,7 +75,7 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
         sqsClient.send(
           new SendMessageCommand({
             QueueUrl: queueUrl!,
-            MessageBody: JSON.stringify(location)
+            MessageBody: JSON.stringify({ location })
           })).then(() => setStepsCompleted((s: number) => s + 1))  
       );
     }

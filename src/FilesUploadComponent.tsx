@@ -32,7 +32,7 @@ interface FilesUploadComponentProps {
 }
 
 export default function FilesUploadComponent({ show, handleClose }: FilesUploadComponentProps) {
-  const limitConnections = pLimit(3);
+  const limitConnections = pLimit(6);
   const [upload, setUpload] = useState(true);
   const [name, setName] = useState("");
   const {client} = useContext(GlobalContext)!;
@@ -81,9 +81,10 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
 
   useEffect(() => {
     async function getExistingFiles() {
+      
       const {items} = await list({
         path: `images/${name}`,
-        options:{bucket:'inputs'}
+        options:{bucket:'inputs',listAll:true}
       });
       console.log(items);
       const existingFiles = items.reduce<Set<string>>((set, x) => {
@@ -170,11 +171,14 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
                 setStepsCompleted(fc => fc + additionalTransferred);  
               }
               lastTransferred = transferredBytes;
+            },
+            onError: (error) => {
+              console.error(error);
             }
           }
-        }) : Promise.resolve(), getExifmeta(file).then(exifmeta => { if (!upload) { setStepsCompleted(fc => fc + file.size) } return exifmeta})] as const
+        }).result : Promise.resolve(), getExifmeta(file).then(exifmeta => { if (!upload) { setStepsCompleted(fc => fc + file.size) } return exifmeta})] as const
         const results=await Promise.all(tasks)
-        const exifmeta=results[1]
+        const exifmeta = results[1]
         // Get the exif metadata from the second task
         client.models.Image.create({
           projectId: project.id,

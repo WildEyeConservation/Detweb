@@ -34,6 +34,7 @@ import Review from "./Review2.jsx";
 import { BrowserView, MobileView } from "react-device-detect";
 import { GlobalContext } from "./Context";
 import { Schema } from "../amplify/data/resource";
+import Test from "./Test";
 import { StorageImage } from '@aws-amplify/ui-react-storage';
 
 configure({ ignoreRepeatedEventsWhenKeyHeldDown: false });
@@ -85,7 +86,7 @@ function App({ signOut = () => {}, user }: AppProps) {
   useEffect(() => {
     fetchAuthSession().then((sess) => setSession(sess));
   }, [user]);
-  let Test = ScratchPad();
+  let Annotate = ScratchPad();
   return (
     session && (
       <>
@@ -93,10 +94,10 @@ function App({ signOut = () => {}, user }: AppProps) {
             <User user={user}>
                   <div
                     className="App d-flex flex-column"
-                    style={{ height: "100vh", overflow: "scroll" }}
+                    style={{ height: "100vh", overflow: "hidden" }} // Changed overflow to hidden
                   >
                     
-              <Navbar bg="primary" variant="dark">
+              <Navbar bg="primary" variant="dark" fixed="top">
                 
       <Container fluid>
         {/* <LaunchRegistration
@@ -176,6 +177,7 @@ function App({ signOut = () => {}, user }: AppProps) {
                 <Container
                   fluid
                   className="d-flex justify-content-center h-100"
+                  style={{ marginTop: "56px", overflowY: "auto" }} // Added marginTop and overflowY
                 >
                   {/* <DebugDetails/> */}
                   <Routes>
@@ -189,7 +191,8 @@ function App({ signOut = () => {}, user }: AppProps) {
                       element={null}
                     />
 
-                    <Route path="/annotate" element={<Test />} />
+                    <Route path="/annotate" element={<Annotate />} />
+                    <Route path="/test" element={<Test />} />
                     {/* <Route exact path="/registration" element={<Registration/>}/>  */}
                     <Route path="/review" element={<Review />} />
                     <Route

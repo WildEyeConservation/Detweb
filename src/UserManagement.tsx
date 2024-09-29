@@ -67,7 +67,7 @@ export default function UserManagement() {
       (pm) => pm.userId == user.id && pm.projectId == project.id,
     );
     return {
-      id:name,
+      id,
       rowData: [
         name          ,
         belongsToCurrentProject ? (

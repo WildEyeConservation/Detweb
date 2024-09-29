@@ -25,7 +25,7 @@ const CreateSubsetModal: React.FC<CreateSubsetModalProps> = ({ show, handleClose
           <Button variant="primary" className="mb-2 w-75" onClick={() => showModal('SpatiotemporalSubset')}>
             Spatial subset
           </Button>
-          <Button variant="primary" disabled className="mb-2 w-75" onClick={() => showModal('SpatiotemporalSubset')}>
+          <Button variant="primary"  className="mb-2 w-75" onClick={() => showModal('TemporalSubset')}>
             Temporal subset
           </Button>
           <Button variant="primary" className="mb-2 w-75" onClick={() => showModal('Subsample')}>

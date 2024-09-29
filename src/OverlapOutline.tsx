@@ -35,7 +35,7 @@ export default function OverlapOutline({ transform, image }: OverlapOutlineProps
 
     return (
       <Polygon
-        pathOptions={{ color: "purple" }}
+        pathOptions={{ color: "purple", fillOpacity: 0.1 }}
         positions={xy2latLng(polygon.map(transform)) as L.LatLng[]}
       />
     );

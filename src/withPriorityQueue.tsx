@@ -4,7 +4,6 @@ import useSQS from "./useSQS";
 //import { useTesting } from "./useTesting";
 import { Modal, Row, Col, Button } from "react-bootstrap";
 import BaseImage from "./BaseImage";
-import Location from "./Location";
 
 interface WithPreloadingProps {
   historyN?: number;
@@ -39,11 +38,12 @@ export function withPreloading2(WrappedComponent: React.ComponentType<any>) {
     // });
     const { buffer, index, next, prev, inject } = useSQS();
     const [errorprops, setErrorprops] = useState<any>(false);
+    console.log('preloading render runs')
     //useTesting(inject, setErrorprops);
     //useSQS(3)
     const subsetStart = Math.max(index - historyN, 0); // Keep at the least the last historyN entries in memory
     const subset = buffer.slice(subsetStart, index + preloadN);
-
+    console.log(`subset ${subset.length}`)
     // buffer.forEach((msg,i)=>{console.log(`Buffer [${i}].id=${msg.id}`)})
     if (subset?.length) {
       return (
@@ -61,11 +61,11 @@ export function withPreloading2(WrappedComponent: React.ComponentType<any>) {
             >
               {/*  */}
               <WrappedComponent
-                location={entry}
-                visible={i === index - subsetStart}
-                next={next}
-                prev={prev}
                 {...rest}
+                {...entry}
+                visible={i === index - subsetStart}
+                next={i < subset.length - 1 ? next : undefined}
+                prev={i > 0 ? prev : undefined} 
               />
               <div></div>
             </div>

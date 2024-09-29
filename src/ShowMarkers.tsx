@@ -10,14 +10,14 @@ import {
   names,
 } from "unique-names-generator";
 import * as L from "leaflet";
-import { AnnotationsContext } from "./AnnotationsContext";
 import * as jdenticon from "jdenticon";
 import { useMap } from "react-leaflet";
 import { ProjectContext } from "./Context";
 import type { AnnotationType, CategoryType, ExtendedAnnotationType } from "./schemaTypes";
+import type { AnnotationsHook } from "./Context";
 interface ShowMarkersProps {
   activeAnnotation?: AnnotationType;
-  annotations: AnnotationType[] | undefined;
+  annotationsHook: AnnotationsHook;
 }
 
 function createIcon(
@@ -53,9 +53,16 @@ function createIcon(
   });
 }
 
+/* ShowMarkers uses a annotationHook that is passed as a parameter to display the annotations on the map and to allow for editing/deleting of annotations.
+It is important that this hook is passed as a parameter and not obtained directly from context as that gives us the ability to add ephemeral properties
+to certain annotations that affect their appearance, eg whether a particular annotation is currently selected, whether it is a candidate for matching etc.
 
-export function ShowMarkers({ activeAnnotation,imageId,annotationSetId}) {
-  const { annotationsHook:{data:annotations,delete:deleteAnnotation,update:updateAnnotation}} = useContext(ProjectContext)!;
+This is used extensively in RegisterPair.tsx to the extent of injecting phantom or "shadow" annotations in places where the algorithm believes annotations should be.
+Whether annotations are editable or read-only is controlled by the presence or absence of the update and delete functions in the annotationsHook.
+*/
+
+export function ShowMarkers({ activeAnnotation, annotationsHook }:ShowMarkersProps) {
+  const {data: annotations, delete: deleteAnnotation,update: updateAnnotation}= annotationsHook;
   const { latLng2xy, xy2latLng } = useContext(ImageContext) ?? {};
   const { user } = useContext(UserContext)!;
   const {categoriesHook:{data:categories}} = useContext(ProjectContext)!;
@@ -229,9 +236,7 @@ export function ShowMarkers({ activeAnnotation,imageId,annotationSetId}) {
   if (enabled)
     return (
       <>
-        {annotations.filter(annotation => annotation.imageId == imageId)
-          .filter(annotation => annotation.setId == annotationSetId)
-          .map((annotation: ExtendedAnnotationType) => {
+        {annotations.map((annotation: ExtendedAnnotationType) => {
           const position = xy2latLng
             ? (() => {
                 const latLng = xy2latLng([annotation.x, annotation.y]);

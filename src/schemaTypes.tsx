@@ -12,6 +12,7 @@ export type ObservationType = Schema["Observation"]["type"];
 export type LocationSetType = Schema["LocationSet"]["type"];
 export type ImageSetMembershipType = Schema["ImageSetMembership"]["type"];
 export type ImageSetType = Schema["ImageSet"]["type"];
+export type ImageNeighbourType = Schema["ImageNeighbour"]["type"];
 export type UserProjectMembershipType = Schema["UserProjectMembership"]["type"];
 export type QueueType = Schema["Queue"]["type"];
 

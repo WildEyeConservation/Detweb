@@ -7,6 +7,7 @@ import { useUpdateProgress } from "./useUpdateProgress";
 import { ImageSetDropdown } from "./ImageSetDropDown";
 //import { subset } from "mathjs";
 import { SendMessageCommand } from "@aws-sdk/client-sqs";
+import { fetchAllPaginatedResults } from "./utils";
 
 interface CreateTaskProps {
   show: boolean;
@@ -56,18 +57,13 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
     handleClose();
     //const images=await gqlClient.graphql({query: listImages,variables:{filter:{projectImageName:{eq:currentProject}}}})
     setTotalImages(0);
-    let images: any[] = [];
-    let prevNextToken: string | null | undefined = undefined;
-    let allImages = [];
-    do {
-      const { data: images, nextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
-        imageSetId: selectedImageSets[0],
-        selectionSet: ['image.timestamp', 'image.id','image.width','image.height'],
-        nextToken: prevNextToken
-      })
-      prevNextToken = nextToken
-      allImages = allImages.concat(images)
-    } while (prevNextToken)
+    const allImages = await fetchAllPaginatedResults(
+      client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
+      { 
+        imageSetId: selectedImageSets[0], 
+        selectionSet: ['image.timestamp', 'image.id','image.width','image.height'] 
+      }
+    );
   setImagesCompleted(0);
   const locationSetId = createLocationSet({ name, projectId: project.id })
   if (modelGuided) {

@@ -32,7 +32,7 @@ delete({
 
 */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useContext} from 'react';
+import { useEffect, useContext, useMemo} from 'react';
 import type { Schema } from "../amplify/data/resource";
 import { V6Client } from '@aws-amplify/api-graphql'
 import { client } from './main';
@@ -233,7 +233,7 @@ export function useOptimisticMembership(
       updateSub.unsubscribe();
       deleteSub.unsubscribe();
     };
-  }, [queryClient, subscriptionFilter]);
+  }, [subscriptionFilter]);
 
 // Create mutation
   const createMutation = useMutation({
@@ -1064,9 +1064,12 @@ function useOptimisticQueue(
 export const useQueues = () => {
   const { client } = useContext(GlobalContext)!;
   const { sqsClient } = useContext(UserContext)!;
-  const { project }   = useContext(ProjectContext)!;
-  const originalHook = useOptimisticQueue(() => client.models.Queue.list({filter: {projectId: {eq: project.id}}}), 
-    { filter: { projectId: { eq: project.id } } });
+  const { project } = useContext(ProjectContext)!;
+  const subscriptionFilter = useMemo(() => ({
+    filter: { projectId: { eq: project.id } }
+  }), [project.id]);
+  const originalHook = useOptimisticQueue(() => client.models.Queue.list(subscriptionFilter), 
+    subscriptionFilter);
   const create = (name: string) => {
     const safeName = makeSafeQueueName(name);
     const id = originalHook.create({ name: safeName, projectId: project.id});

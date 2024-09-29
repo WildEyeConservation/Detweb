@@ -1,174 +1,88 @@
 import React, { useContext, useState } from "react";
 import { Stack, Modal, Form, Button } from "react-bootstrap";
-import { UserContext } from "./UserContext";
+import { UserContext, GlobalContext,ManagementContext } from "./Context";
 import { QueueDropdown } from "./QueueDropDown";
-import { useUpdateProgress } from "./useUpdateProgress";
-import { AnnotationSetDropdown } from "./AnnotationSetDropDown";
-import {
-  getImage,
-  imageNeighboursByImage1key,
-  imageNeighboursByImage2key,
-} from "./graphql/queries";
+import { AnnotationSetDropdown } from "./AnnotationSetDropdownMulti";
+import { fetchAllPaginatedResults } from "./utils";
+import { ImageNeighbourType } from "./schemaTypes";
+import { SendMessageCommand } from "@aws-sdk/client-sqs";
 
 interface LaunchRegistrationProps {
   show: boolean;
   handleClose: () => void;
+  selectedSets: string[];
+  setSelectedSets: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
-
-interface NeighbourData {
-  id: string;
-  image1key: string;
-  image2key: string;
-  homography: number[] | null;
-}
-
-const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({ show, handleClose }) => {
+const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({ show, handleClose, selectedSets, setSelectedSets }) => {
   const [url, setUrl] = useState<string | null>(null);
-  const [annotationSet, setAnnotationSet] = useState<string | undefined>(undefined);
-  const { sendToQueue, gqlSend } = useContext(UserContext)!;
-  const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
-    taskId: `Launch registration task`,
-    indeterminateTaskName: `Finding images with annotations`,
-    determinateTaskName: "Enqueueing pairs",
-    stepName: "locations",
-  });
-  const pairsSubmitted = new Set<string>();
-
-  const array2Matrix = (hc: number[] | null): number[][] | null => {
-    if (hc) {
-      const matrix = [];
-      while (hc.length) matrix.push(hc.splice(0, 3));
-      return matrix;
-    } else {
-      return null;
-    }
-  };
-
-  const handlePair = async (neighbours: NeighbourData[]) => {
-    for (const pair of neighbours) {
-      if (!pairsSubmitted.has(pair.id)) {
-        pairsSubmitted.add(pair.id);
-        const homography = array2Matrix(pair.homography);
-        // if (homography){
-        //   const anno1=annos[pair.image1key]
-        //   const anno2=annos[pair.image2key]
-        //   console.log(anno1)
-        // }
-        if (homography) {
-          await sendToQueue({
-            QueueUrl: url,
-            MessageGroupId: crypto.randomUUID(),
-            MessageDeduplicationId: crypto.randomUUID(),
-            MessageBody: JSON.stringify({
-              key: pair.image1key + pair.image2key,
-              selectedSet: annotationSet,
-              images: await Promise.all(
-                [pair.image1key, pair.image2key].map(
-                  async (key) =>
-                    await gqlSend(getImage, { key }).then(
-                      (response) => (response as { data: { getImage: any } }).data.getImage,
-                    ),
-                ),
-              ),
-              homography: homography,
-            }),
-          });
-        }
-      }
-    }
-  };
-
-  const handleSetAnnotationSet = (id: string) => setAnnotationSet(id);
-
+  const { client }=useContext(GlobalContext)!;
+  const { sqsClient } = useContext(UserContext)!;
+  const {queuesHook : { data : queues}} = useContext(ManagementContext)!;
+  // const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
+  //   taskId: `Launch registration task`,
+  //   indeterminateTaskName: `Finding images with annotations`,
+  //   determinateTaskName: "Enqueueing pairs",
+  //   stepName: "locations",
+  // });
+  
   async function handleSubmit() {
-    handleClose();
-    const query = `query MyQuery($nextToken: String, $annotationSetId: ID!) {
-      annotationsByAnnotationSetId(annotationSetId: $annotationSetId, nextToken: $nextToken) {
-        items {
-          obscured
-          image {
-            timestamp
-            key
+    /* What we want to do is get a list of images that have annotations in them in the designated 
+    annotationSets and then get all the imageneighbours entries for each image. we deduplicate this list 
+    and push the imageNeighbourIds into the queue sorted by the timestamp of the first image in the pair.
+    Pushing to the queue in sorted order is not strictly required, but it makes the registration process 
+    a little easier if pairs are processed in order.*/
+    for (const annotationSetId of selectedSets) {
+      const annotations: { image: { id: string; timestamp: number } }[] =
+        await fetchAllPaginatedResults(
+          client.models.Annotation.annotationsByAnnotationSetId,
+          {
+            setId: annotationSetId,
+            selectionSet: ['image.id', 'image.timestamp']
+          })
+      
+      type Prettify<T> = {
+        [K in keyof T]: T[K];
+      } & {};
+
+      type functionType = Prettify<typeof client.models.Annotation.annotationsByAnnotationSetId>
+
+      const images: Record<number, string> = {}
+      annotations.forEach(({ image }) => {
+        images[image.timestamp] = image.id
+      })
+
+      const neighboursAllreadyAdded = new Set<string>()
+      
+      //Sort images by timestamp
+      const sortedTimestamps = Object.keys(images).sort();
+      const neighbours: ImageNeighbourType[] = []
+      for (const timestamp of sortedTimestamps) {
+        const neighbours1 = await client.models.ImageNeighbour.imageNeighboursByImage1key({ image1Id: images[timestamp] })
+        neighbours1.data.forEach(neighbour => {
+          if (!neighboursAllreadyAdded.has(neighbour.image1Id)) {
+            neighboursAllreadyAdded.add(neighbour.image1Id)
+            neighbours.push(neighbour)
           }
-        }
-        nextToken
+        })
+        const neighbours2 = await client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: images[timestamp] })
+        neighbours2.data.forEach(neighbour => {
+          if (!neighboursAllreadyAdded.has(neighbour.image2Id)) {
+            neighboursAllreadyAdded.add(neighbour.image2Id)
+            neighbours.push(neighbour)
+          }
+        })
       }
-    }`;
-
-    interface AnnotationsResponse {
-      data: {
-        annotationsByAnnotationSetId: {
-          items: {
-            obscured: boolean;
-            image: {
-              timestamp: string;
-              key: string;
-            };
-          }[];
-          nextToken: string | null;
-        };
-      };
+      neighbours.forEach(neighbour =>
+        sqsClient.send(
+          new SendMessageCommand({
+            QueueUrl: queues.find(queue => queue.id == url)?.url,
+            MessageBody: JSON.stringify({ selectedSet: annotationSetId, images:[neighbour.image1Id,neighbour.image2Id]})
+          })
+        )
+      )
     }
-
-    let nextToken: string | null = null;
-    const images: Record<string, string> = {};
-    do {
-      const response = await gqlSend(query, { nextToken, annotationSetId: annotationSet }) as AnnotationsResponse;
-      const { items: annotations, nextToken: newNextToken } = response.data.annotationsByAnnotationSetId;
-      nextToken = newNextToken;
-      setStepsCompleted((i: any) => i + annotations.length);
-      for (const { obscured, image: { key, timestamp } } of annotations) {
-        if (!obscured) {
-          images[timestamp] = key;
-        }
-      }
-    } while (nextToken);
-    setStepsCompleted(0);
-    setTotalSteps(Object.keys(images).length);
-
-    const sortedTimestamps = Object.keys(images).sort();
-    //const annos = {};
-    // for (const timestamp of sortedTimestamps){
-    //   nextToken=null
-    //   do{
-    //     const data=await gqlSend(annotationsByImageKey,{imageKey:images[timestamp],nextToken})
-    //     annos[images[timestamp]]=data.data.annotationsByImageKey.items
-    //   }while (nextToken)
-    //   setStepsCompleted(i=>i+1)
-    // }
-    setTotalSteps(Object.keys(images).length);
-    setStepsCompleted(0);
-    for (const timestamp of sortedTimestamps) {
-      const {
-        data: {
-          imageNeighboursByImage2key: { items: neighbours1 },
-        },
-      } = await gqlSend(imageNeighboursByImage2key, {
-        image2key: images[timestamp],
-      }) as { data: { imageNeighboursByImage2key: { items: NeighbourData[] } } };
-      await handlePair(neighbours1);
-      const {
-        data: {
-          imageNeighboursByImage1key: { items: neighbours2 },
-        },
-      } = await gqlSend(imageNeighboursByImage1key, {
-        image1key: images[timestamp],
-      }) as { data: { imageNeighboursByImage1key: { items: NeighbourData[] } } };
-      await handlePair(neighbours2);
-      setStepsCompleted((x: number) => x + 1);
-    }
-
-    // const tempBuffer= await Promise.all(Object.keys(pairs)?.map(
-    //   async id=>{
-    //     const pair=pairs[id];
-    //     const homography=array2Matrix(pair.homography)
-    //     return {key        : pair.image1key+pair.image2key,
-    //             images     : await Promise.all([pair.image1key,pair.image2key].map(async key=>await gqlSend(getImage,{key}).then(({data:{getImage:image}})=>image))),
-    //             transforms : [transform(homography),transform(inv(homography))]
-    //             }}))
-    //   tempBuffer.sort((a,b)=>a.key>b.key ? 1 : -1)
-    // setBuffer(tempBuffer)
+    handleClose()
   }
 
   return (
@@ -182,10 +96,15 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({ show, handleClo
             <Form.Group>
               <Form.Label>Annotation Set</Form.Label>
               <AnnotationSetDropdown
+                            selectedSets={selectedSets}
+                            setSelectedSets={setSelectedSets}
+                            canCreate={false}
+              />
+              {/* <AnnotationSetDropdown
                 setAnnotationSet={handleSetAnnotationSet}
                 selectedSet={annotationSet}
                 canCreate={false}
-              />
+              /> */}
             </Form.Group>
             <Form.Group>
               <Form.Label>Target Queue</Form.Label>
@@ -198,7 +117,7 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({ show, handleClo
         <Button
           variant="primary"
           onClick={handleSubmit}
-          disabled={!annotationSet || !url}
+          disabled={!(selectedSets.length && url)}
         >
           Submit
         </Button>

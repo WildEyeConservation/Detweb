@@ -8,6 +8,7 @@ import Form from "react-bootstrap/Form";
 import { ManagementContext } from "./Context";
 import CreateSubsetModal from "./CreateSubset";
 import SpatiotemporalSubset from "./SpatioTemporalSubset";
+import TemporalSubset from "./TemporalSubset";
 import SubsampleModal from "./Subsample";
 import AddGpsData from "./AddGpsData";
 import CreateTask from "./CreateTask";
@@ -90,6 +91,10 @@ export default function ImageSetManagement() {
         selectedImageSets={selectedSets} />
       <SpatiotemporalSubset
         show={modalToShow == "SpatiotemporalSubset"}
+        handleClose={() => showModal(null)}
+        selectedImageSets={selectedSets} />
+      <TemporalSubset
+        show={modalToShow == "TemporalSubset"}
         handleClose={() => showModal(null)}
         selectedImageSets={selectedSets} />
       <SubsampleModal

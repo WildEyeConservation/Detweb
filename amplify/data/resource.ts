@@ -111,11 +111,9 @@ const schema = a.schema({
     objectId: a.id(),
     object: a.belongsTo('Object', 'objectId')
   }).authorization(allow => [allow.authenticated(), allow.owner()])
-    
-    // .authorization(allow => [allow.groupDefinedIn('projectId'), allow.owner()])
   .secondaryIndexes((index)=>[
     index('setId').queryField('annotationsByAnnotationSetId'),
-    index('imageId').queryField('annotationsByimageId'),
+    index('imageId').sortKeys(['setId']).queryField('annotationsByImageIdAndSetId'),
     index('objectId').queryField('annotationsByObjectId'),
     index('categoryId').queryField('annotationsByCategoryId')
   ])

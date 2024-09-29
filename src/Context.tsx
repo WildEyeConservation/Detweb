@@ -13,12 +13,13 @@ export interface ProgressType {
 
 type ClientType = V6Client<Schema>;
 type ModelType = keyof ClientType['models'];
-type CRUDhook<T extends ModelType> = {
+export type CRUDhook<T extends ModelType> = {
     data: Schema[T]['type'][];
     create: (arg: Parameters<ClientType['models'][T]['create']>[0]) => string; 
     update: (arg: Parameters<ClientType['models'][T]['update']>[0]) => void;
     delete: (arg: Parameters<ClientType['models'][T]['delete']>[0]) => void;
 }
+export type AnnotationsHook = CRUDhook<'Annotation'>;
 
 interface GlobalContextType {
     client: V6Client<Schema>,

@@ -7,7 +7,8 @@ import { useUpdateProgress } from "./useUpdateProgress";
 import { ImageSetDropdown } from "./ImageSetDropDown";
 import { GlobalContext } from "./Context";
 import { SendMessageCommand } from "@aws-sdk/client-sqs";
-
+import { fetchAllPaginatedResults } from "./utils";
+import pLimit from 'p-limit'
 // const createPair = `mutation MyMutation($image1Key: String!, $image2Key: String!) {
 //   createImageNeighbour(input: {image1key: $image1Key, image2key: $image2Key}) {
 //     id
@@ -22,6 +23,7 @@ interface ProcessImagesProps {
 }
 
 export default function ProcessImages({ show, handleClose, selectedImageSets, setSelectedImageSets }: ProcessImagesProps) {
+  const limitConnections = pLimit(6);
   const { client, backend } = useContext(GlobalContext)!
   const [selectedProcess, selectProcess] = useState<string | undefined>(undefined);
   const { sqsClient } = useContext(UserContext)!;
@@ -55,31 +57,48 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
     switch (selectedProcess) {
       case "Run heatmap generation": {
         const allImages = await Promise.all(selectedImageSets.map(async (selectedSet) => 
-          (await client.models.ImageSetMembership.imageSetMembershipsByImageSetId(
-            {imageSetId: selectedSet })).data.map(im => im.imageId)
-        )).then(arrays => arrays.flat());    
+          (await fetchAllPaginatedResults(
+            client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
+            {imageSetId: selectedSet, selectionSet: ["imageId"]}
+          ))
+        )).then(arrays =>
+          arrays.flatMap(im => im.map(i => i.imageId)));
+        // const allImages = await fetchAllPaginatedResults(
+        //   client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
+        //   {imageSetId: selectedImageSets[0], selectionSet: ["imageId"]}
+        // )
+        // const allImages = await Promise.all(selectedImageSets.map(async (selectedSet) => 
+        //   (await client.models.ImageSetMembership.imageSetMembershipsByImageSetId(
+        //     {imageSetId: selectedSet })).data.map(im => im.imageId)
+        // )).then(arrays => arrays.flat());    
         //const setId = crypto.randomUUID();
         setTotalHeatmapSteps(allImages.length);
         setHeatmapStepsCompleted(0);
         allImages.map(async (id) => {
-          const {data :imageFiles} = await client.models.ImageFile.imagesByimageId({imageId: id})
+          const {data :imageFiles} = await limitConnections(() => client.models.ImageFile.imagesByimageId({imageId: id}))
           const path = imageFiles.find((imageFile) => imageFile.type == 'image/jpeg')?.path
             if (path) {
               client.mutations.processImages({
                 s3key: path!,
                 model: "heatmap",
               })
+            } else {
+              console.log(`No image file found for image ${id}. Skipping`)
             }
             setHeatmapStepsCompleted((s) => s + 1);
         })
       }
       case "Compute image registrations": {
         const images = await Promise.all(selectedImageSets.map(async (selectedSet) => 
-          (await client.models.ImageSetMembership.imageSetMembershipsByImageSetId(
-            { imageSetId: selectedSet, selectionSet: ["image.id", "image.timestamp", "image.files.key", "image.files.type"] })).data))
-          .then(arrays => arrays.flat())
-          .then(images=>images.map(({image})=>image))
-          .then(images => images.sort((a, b) => a.timestamp - b.timestamp))
+          (await fetchAllPaginatedResults(
+            client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
+            {imageSetId: selectedSet, selectionSet: ["image.id", "image.timestamp", "image.files.key", "image.files.type"]}
+          ))
+        )).then(arrays =>
+          arrays.flat().map(
+            ({ image }) => image))
+          .then(images =>
+            images.sort((a, b) => a.timestamp - b.timestamp))
         setRegistrationTotalSteps(images.length - 1);
         setRegistrationStepsCompleted(0);
         for (let i = 0; i < images.length - 1; i++) {

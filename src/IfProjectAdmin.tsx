@@ -11,9 +11,6 @@
 import React, { ReactNode } from "react";
 import { Schema } from "../amplify/data/resource";
 
-
-
-
 interface IfAdminProps {
   currentPM?: Schema['UserProjectMembership']['type'];
   children: ReactNode;

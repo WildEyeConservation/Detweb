@@ -13,3 +13,38 @@ export function makeSafeQueueName(input: string): string {
   }
   return sanitized;
 }
+
+type PaginatedQueryResult<T> = {
+  data: T[];
+  nextToken?: string | null;
+};
+
+type QueryFunction<T, P> = (
+  params: P & { nextToken?: string | null }
+) => Promise<PaginatedQueryResult<T>>;
+
+type SelectionSet<T> = (keyof T)[] | string[];
+
+export async function fetchAllPaginatedResults<
+  T,
+  P extends { selectionSet?: SelectionSet<T> },
+  R = P['selectionSet'] extends SelectionSet<T> ? Pick<T, P['selectionSet'][number]> : T
+>(
+  queryFn: QueryFunction<R, P>,
+  params: P
+): Promise<R[]> {
+  let allResults: R[] = [];
+  let nextToken: string | null | undefined = undefined;
+
+  do {
+    const result = await queryFn({ ...params, nextToken });
+    allResults = allResults.concat(result.data);
+    nextToken = result.nextToken;
+  } while (nextToken);
+
+  return allResults;
+}
+
+// ReturnTypeOfFirstElementWithX is inferred as number
+
+

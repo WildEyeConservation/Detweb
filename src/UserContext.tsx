@@ -1,4 +1,4 @@
-import {useState, useEffect, useContext} from "react";
+import {useState, useEffect, useContext,useMemo} from "react";
 import {
   SQSClient,
 } from "@aws-sdk/client-sqs";
@@ -18,7 +18,6 @@ import {
   useOptimisticImageSet,
   useOptimisticLocationSet,
   useOptimisticAnnotationSet,
-  useOptimisticAnnotation,
   useQueues
 } from "./useOptimisticUpdates.tsx";
 
@@ -27,16 +26,16 @@ import {
 
 export function Project({ children, currentPM }: { children: React.ReactNode, currentPM: Schema['UserProjectMembership']['type']   }) {
   const { client } = useContext(GlobalContext)!;
+  const {myMembershipHook} = useContext(UserContext)!;
+  const subscriptionFilter = useMemo(() => ({
+    filter: { projectId: { eq: currentPM?.projectId } }
+  }), [currentPM?.projectId]);
   const [currentProject, setCurrentProject] = useState<Schema['Project']['type'] | undefined>(undefined)
   const categoriesHook = useOptimisticCategory(
     async () => client.models.Category.list({ filter: { projectId: { eq: currentPM?.projectId } } }),
-    { filter: { projectId: { eq: currentProject?.id } } })
+    subscriptionFilter)
   const [currentCategory, setCurrentCategory] = useState<Schema['Category']['type']|undefined>(categoriesHook.data?.[0])
-  
-  const annotationsHook = useOptimisticAnnotation(
-    async () => client.models.Annotation.list({ filter: { projectId: { eq: currentPM?.projectId } } }),
-    { filter: { projectId: { eq: currentProject?.id } } })
-  useEffect(() => {
+    useEffect(() => {
     if (currentPM) {
       client.models.Project.get({ id: currentPM.projectId }).then(p =>
         setCurrentProject(p['data']!));
@@ -49,7 +48,9 @@ export function Project({ children, currentPM }: { children: React.ReactNode, cu
     if (!currentCategory) {
       setCurrentCategory(categoriesHook.data?.[0])
     }
-  },[categoriesHook.data])
+  }, [categoriesHook.data])
+  
+  
 
 
   return (
@@ -57,8 +58,7 @@ export function Project({ children, currentPM }: { children: React.ReactNode, cu
     <ProjectContext.Provider value={{
         project: currentProject,
         categoriesHook,
-        annotationsHook,
-        currentPM,
+        currentPM : myMembershipHook.data.find(m=>m.projectId==currentProject.id),
         currentCategory,
         setCurrentCategory
     }}>
@@ -79,9 +79,13 @@ export function User({ user, children }: { user: AuthUser, children: React.React
   //   'UserProjectMembership',
   //   async () => client.models.UserProjectMembership.list({ filter: { userId: { eq: user!.username } } }),
   //   { filter: { userId: { eq: user!.username } } })
+  const subscriptionFilter = useMemo(() => ({
+    filter: { userId: { eq: user.username } }
+  }), [user.username]);
+
   const myMembershipHook = useOptimisticMembership(
     async () => client.models.UserProjectMembership.list({ filter: { userId: { eq: user!.username } } }),
-    { filter: { userId: { eq: user!.username } } })
+    subscriptionFilter)
 
   // useEffect(() => {
   //   const sub = client.models.UserProjectMembership.observeQuery({ filter: { userId: { eq: user!.username } } }).subscribe({
@@ -142,19 +146,22 @@ export function Management({ children }: { children: React.ReactNode }) {
   const { client } = useContext(GlobalContext)!;
   const {project} = useContext(ProjectContext)!;
   const { users: allUsers } = useUsers();
+  const subscriptionFilter = useMemo(() => ({
+    filter: { projectId: { eq: project.id } }
+  }), [project.id]);
   //const {items: projectMemberships} = useObserveQuery('UserProjectMembership',{ filter: { projectId: { eq: project.id } } });
   const projectMembershipHook = useOptimisticMembership(
-    async () => client.models.UserProjectMembership.list({ filter: { projectId: { eq: project.id } } }),
-    { filter: { projectId: { eq: project.id } } })  
+    async () => client.models.UserProjectMembership.list(subscriptionFilter),
+    subscriptionFilter)  
   const imageSetsHook = useOptimisticImageSet(
-    async () => client.models.ImageSet.list({ filter: { projectId: { eq: project.id } } }),
-    { filter: { projectId: { eq: project.id } } })
+    async () => client.models.ImageSet.list(subscriptionFilter),
+    subscriptionFilter)
   const locationSetsHook = useOptimisticLocationSet(
-    async () => client.models.LocationSet.list({ filter: { projectId: { eq: project.id } } }),
-    { filter: { projectId: { eq: project.id } } })
+    async () => client.models.LocationSet.list(subscriptionFilter),
+    subscriptionFilter)
   const annotationSetsHook = useOptimisticAnnotationSet(
-    async () => client.models.AnnotationSet.list({ filter: { projectId: { eq: project.id } } }),
-    { filter: { projectId: { eq: project.id } } })
+    async () => client.models.AnnotationSet.list(subscriptionFilter),
+    subscriptionFilter)
   const queuesHook = useQueues()
   
   return ( 

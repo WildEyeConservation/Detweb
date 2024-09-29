@@ -1,4 +1,3 @@
-import { memo } from "react";
 import { withPreloading2 } from "./withPriorityQueue";
 import { Row } from "react-bootstrap";
 import { JobsRemaining } from './JobsRemaining';
@@ -15,7 +14,7 @@ export function ScratchPad() {
   //let DetWebImage=withEditableDetections(withMetaData(withCreateDetections(withUpdateDetections(withAckLocation(BaseImage)))))
   // let DetWebArray=withTestFailureHandler(withReload(withWorkSource(withPreloading2(DetWebImage),client)))
   //let DetWebArray=withTestFailureHandler(withReload(withSimpleWorkSource(withPreloading2(DetWebImage),client)))
-  let TestImage = memo(withPreloading2(TaskSelector), () => true);
+  let TestImage = withPreloading2(TaskSelector);
   // let TestImage=withPreloading2(DebugComponent)
   let scratch = function () {
     return (

@@ -1,19 +1,14 @@
 // @flow
-import React, {memo, createContext, ReactNode, useState, useEffect, useContext } from "react";
+import React, {createContext, ReactNode, useState, useEffect, useContext } from "react";
 import { MapContainer, LayersControl} from "react-leaflet";
 import { NavButtons } from "./NavButtons";
 import * as L from "leaflet";
 import "leaflet-contextmenu";
 import "leaflet-contextmenu/dist/leaflet.contextmenu.css";
-import { S3Layer } from "./S3Layer";
 import { useHotkeys } from "react-hotkeys-hook";
-import { S3ImageOverlay } from "./S3ImageOverlay";
 import { ImageType, ImageFileType, LocationType, AnnotationSetType } from './schemaTypes';
 import { GlobalContext } from "./Context";
 import { StorageLayer } from "./StorageLayer";
-
-const DEFAULT_WIDTH = 100;
-const DEFAULT_HEIGHT = 100;
 
 export interface BaseImageProps {
   image: ImageType;
@@ -98,7 +93,7 @@ const BaseImage: React.FC<BaseImageProps> = (props) => {
   const fullImageTypes = ['Complete JPG', 'Complete TIFF', 'Complete PNG'];
   //If a location is provided, use the location bounds, otherwise use the image bounds
   const imageBounds=xy2latLng([[0, 0], [image.width, image.height]])
-  const viewBounds = location ?
+  const viewBounds = location.x ?
     xy2latLng([[location.x-location.width/2, location.y-location.height/2], [location.x + location.width/2, location.y + location.height/2]]) :
     imageBounds;
   if (imageFiles.length === 0) return null;
@@ -159,4 +154,4 @@ const BaseImage: React.FC<BaseImageProps> = (props) => {
   );
 };
 
-export default memo(BaseImage);
+export default BaseImage;

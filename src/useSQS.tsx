@@ -15,17 +15,19 @@ export default function useSQS() {
   const [url,setUrl] = useState<string | undefined>(undefined);
   const [retryCount] = useState(0);
   const [index, setIndex] = useState(0);
-  const next = useCallback(() => setIndex(index + 1), [index]);
-  const prev = useCallback(() => setIndex(index - 1), [index]);
+  const next = useCallback(() => setIndex(index=>index + 1), []);
+  const prev = useCallback(() => setIndex(index=>index - 1), []);
 
   const margin = 3;
   console.log("sqs!!!!");
 
   useEffect(() => {
-    currentPM.queue().then(
-      ({ data: { url } }) => {
-      setUrl(url);
-    });
+    if (currentPM.queueId) {
+      currentPM.queue().then(
+        ({ data: { url } }) => {
+          setUrl(url);
+        });
+    }
   }, [currentPM]);
 
   function getMessages() {
@@ -50,10 +52,10 @@ export default function useSQS() {
           //   });
           // }, 30000);
           const body = JSON.parse(entity.Body);
+          body.message_id = crypto.randomUUID();
           // The messages we recieve typically HAVE ids. These correspond to location ids. But there is no guarantee that we won't receive the same ID twice,
           // the admin may have launched the same task on the same queue twice, or one of our earlier messages may have passed its visibility timeout and
           // been refetched. So we have to assign our own id upon receipt to guarantee uniqueness.
-          body.message_id = crypto.randomUUID();
           body.ack = async () => {
             try {
               await sqsClient.send(new DeleteMessageCommand({
@@ -62,7 +64,7 @@ export default function useSQS() {
               }));
               //clearInterval(timer);
               console.log(
-                `Ack Succeeded for location ${body.id} with receipthandle ${entity.ReceiptHandle}`,
+                `Ack Succeeded for location ${body.message_id} with receipthandle ${entity.ReceiptHandle}`,
               );
             } catch {
               console.log(
@@ -99,8 +101,8 @@ export default function useSQS() {
   return {
     buffer,
     index,
-    next: buffer.length > index + 1 ? next : undefined,
-    prev: index ? prev : undefined,
+    next,
+    prev,
     inject,
   };
 }
