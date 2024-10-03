@@ -117,6 +117,10 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
                 const { data: imageSet } = await client.models.ImageSet.get({ id: selectedSetId },
                     { selectionSet: ["id", "name"] }
                 );
+                if (!imageSet) {
+                    console.error(`ImageSet with id ${selectedSetId} not found`);
+                    return null;
+                }
                 return {
                     id: imageSet.id,
                     name: imageSet.name,
@@ -128,10 +132,11 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
                     }))
                 };
             }));
-            setImageSetsData(fetchedImageSets);
+            const validImageSets = fetchedImageSets.filter(imageSet => imageSet !== null);
+            setImageSetsData(validImageSets);
 
             // Calculate the min and max time from the fetched images
-            const allTimestamps = fetchedImageSets.flatMap(imageSet =>
+            const allTimestamps = validImageSets.flatMap(imageSet =>
                 imageSet.images.map(image => {
                     if (typeof image.timestamp === 'string') {
                         return DateTime.fromFormat(image.timestamp, "yyyy-MM-dd HH:mm:ss").toMillis();
@@ -151,9 +156,11 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
 
             setLoading(false);
         };
-        setLoading(true);
-        fetchImagesData();
-    }, [selectedImageSets, client.models.ImageSet]);
+        if (show) {
+            setLoading(true);
+            fetchImagesData();
+        }
+    }, [selectedImageSets, client.models.ImageSet, show]);
 
     useEffect(() => {
         const filteredImages = imageSetsData.flatMap(imageSet =>

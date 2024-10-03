@@ -6,6 +6,7 @@ import Button from "react-bootstrap/Button";
 import BaseImage from "./BaseImage";
 import { UserContext } from "./UserContext";
 import { ShowMarkers } from "./ShowMarkers";
+import { publishError } from './ErrorHandler';
 
 const Image = BaseImage;
 
@@ -45,15 +46,17 @@ export function MessageHandler() {
           console.log(
             `trying to get the SQS queue URL for ${user.id}_${currentProject}`,
           );
-          await getQueueUrl({ QueueName: `${user.id}_${currentProject}` }).then(
-            ({ QueueUrl }) => {
-              setQueueUrl(QueueUrl);
-              console.log("URL set!");
-            },
-          );
+          const result = await getQueueUrl({ QueueName: `${user.id}_${currentProject}` });
+          if (result.QueueUrl) {
+            setQueueUrl(result.QueueUrl);
+            console.log("URL set!");
+          } else {
+            throw new Error("QueueUrl not found in the response");
+          }
         } catch (err) {
-          console.log(`Failed to get URL. Will retry in 30s`);
-          const timer = setTimeout(triggerRetry, 30000); //If the relevant msg queue we check back every 30s
+          console.error(`Failed to get URL: ${err.message}`);
+          publishError(`Error getting SQS queue URL: ${err.message}`);
+          const timer = setTimeout(triggerRetry, 30000);
           return () => {
             console.log(
               "User or project has changed. Clearing URL and stopping scheduled retries",
@@ -65,7 +68,7 @@ export function MessageHandler() {
       };
       tryGetUrl();
     }
-  }, [currentProject, user, retry]);
+  }, [currentProject, user, retry, getQueueUrl]);
 
   useEffect(() => {
     if (queueUrl && !message) {

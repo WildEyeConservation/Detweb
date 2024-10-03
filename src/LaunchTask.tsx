@@ -8,6 +8,8 @@ import { LocationSetDropdown } from "./LocationSetDropDown";
 import { GlobalContext, ManagementContext, UserContext, ProjectContext } from "./Context";
 import { SendMessageCommand } from "@aws-sdk/client-sqs";
 import { aws_elasticloadbalancingv2_targets } from "aws-cdk-lib";
+import { publishError } from './ErrorHandler';
+import { retryOperation } from './utils/retryOperation';
 
 interface LaunchTaskProps {
   show: boolean;
@@ -27,7 +29,7 @@ interface ObservationsResponse {
 function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: LaunchTaskProps) {
   const { client } = useContext(GlobalContext)!;
   const { sqsClient } = useContext(UserContext)!;
-  const {queuesHook: {data:queues}} = useContext(ManagementContext)!;
+  const { queuesHook: { data: queues } } = useContext(ManagementContext)!;
   const [queueId, setQueueId] = useState<string | null>(null);
   const [url2, setUrl2] = useState<string | null>(null);
   const [annotationSet, setAnnotationSet] = useState<string | undefined>(undefined);
@@ -45,43 +47,117 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
     stepFormatter: (count)=>`${count} locations`,
   });
 
+
   async function handleSubmit() {
-    handleClose();
-    let promises = []
-    const allLocations = await Promise.all(selectedTasks.map(async (task) => {
-      let prevNextToken: String | undefined = undefined;
-      let allData = [];
-      do {
-        const {data,nextToken} = (await client.models.Location.locationsBySetId({ setId: task, nextToken: prevNextToken,selectionSet: ['id','x','y','width','height','confidence','image.id','image.width','image.height'] }))
-        prevNextToken = nextToken;
-        allData = allData.concat(data);
-      } while (prevNextToken)
-      return allData;
-    })).then(arrays => arrays.flat());
-    setStepsCompleted(0);
-    setTotalSteps(allLocations.length);
-    let queueUrl = queues?.find(q => q.id == queueId)?.url;
-    
-    for (const location of allLocations) {
-      if (filterObserved) {
-        const { data } = await client.models.Observation.observationsByLocationId({ locationId: location.id });
-        if (data.length > 0) {
-          setStepsCompleted((fc: any) => fc + 1);
-          continue;
-        }
+    try {
+      handleClose();
+      let promises = []
+      const allLocations = await Promise.all(selectedTasks.map(async (task) => {
+        let prevNextToken: String | undefined = undefined;
+        let allData = [];
+        do {
+          const result = await retryOperation(
+            () => client.models.Location.locationsBySetId({ 
+              setId: task, 
+              nextToken: prevNextToken,
+              selectionSet: ['id','x','y','width','height','confidence','image.id','image.width','image.height'] 
+            }),
+            { retryableErrors: ['Network error', 'Connection timeout'] }
+          );
+          const { data, nextToken } = result;
+          prevNextToken = nextToken;
+          allData = allData.concat(data);
+        } while (prevNextToken)
+        return allData;
+      })).then(arrays => arrays.flat());
+      
+      setStepsCompleted(0);
+      setTotalSteps(allLocations.length);
+      let queueUrl = queues?.find(q => q.id == queueId)?.url;
+      
+      if (!queueUrl) {
+        throw new Error("Queue URL not found");
       }
-      location.annotationSetId = annotationSet;
-      promises.push(
-        sqsClient.send(
-          new SendMessageCommand({
-            QueueUrl: queueUrl!,
-            MessageBody: JSON.stringify(location)
-          })).then(() => setStepsCompleted((s: number) => s + 1))  
-      );
+
+      for (let i = 0; i < allLocations.length; i++) {
+        const location = allLocations[i];
+        if (filterObserved) {
+          const { data } = await retryOperation(
+            () => client.models.Observation.observationsByLocationId({ locationId: location.id }),
+            { retryableErrors: ['Network error', 'Connection timeout'] }
+          );
+          if (data.length > 0) {
+            setStepsCompleted((fc: any) => fc + 1);
+            continue;
+          }
+        }
+        location.annotationSetId = annotationSet;
+        await retryOperation(
+          () => sqsClient.send(
+            new SendMessageCommand({
+              QueueUrl: queueUrl,
+              MessageBody: JSON.stringify(location)
+            })
+          ),
+          { retryableErrors: ['Network error', 'Connection timeout'] }
+        );
+        setStepsCompleted((s: number) => s + 1);
+
+        // Publish progress update
+        await client.graphql({
+          query: `mutation Publish($channelName: String!, $content: String!) {
+            publish(channelName: $channelName, content: $content) {
+              channelName
+              content
+            }
+          }`,
+          variables: {
+            channelName: 'taskProgress/launchTask',
+            content: JSON.stringify({
+              type: 'progress',
+              total: allLocations.length,
+              completed: i + 1,
+              taskName: 'Launch Task'
+            })
+          }
+        });
+      }
+
+      // Publish completion message
+      await client.graphql({
+        query: `mutation Publish($channelName: String!, $content: String!) {
+          publish(channelName: $channelName, content: $content) {
+            channelName
+            content
+          }
+        }`,
+        variables: {
+          channelName: 'taskProgress/launchTask',
+          content: JSON.stringify({
+            type: 'completion',
+            taskName: 'Launch Task'
+          })
+        }
+      });
+
+    } catch (error) {
+      console.error('Error in LaunchTask handleSubmit:', error);
+      const errorDetails = {
+        error: error instanceof Error ? error.stack : String(error),
+        selectedTasks,
+        queueId,
+        annotationSet,
+        filterObserved
+      };
+      if (error instanceof Error) {
+        publishError('taskProgress/launchTask', `Error launching task: ${error.message}`, errorDetails);
+      } else {
+        publishError('taskProgress/launchTask', `Error launching task: ${String(error)}`, errorDetails);
+      }
     }
-    await Promise.all(promises);
   }
 
+ 
   return (
     <Modal show={show} onHide={handleClose}>
       <Modal.Header closeButton>
@@ -157,5 +233,6 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
     </Modal>
   );
 }
+
 
 export default LaunchTask;

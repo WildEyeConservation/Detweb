@@ -106,16 +106,20 @@ const TemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClose, s
                 let allImages: any[] = [];
                 do {
                     const { data: images, nextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
-                        imageSetId: selectedImageSets[0],
-                        selectionSet: ['image.timestamp', 'image.id','image.latitude','image.longitude'],
+                        imageSetId: selectedSetId,
+                        selectionSet: ['image.timestamp', 'image.id', 'image.latitude', 'image.longitude'],
                         nextToken: prevNextToken
-                    })
-                  prevNextToken = nextToken
-                  allImages = allImages.concat(images)
-                } while (prevNextToken)            
-                const {data:imageSet} = await client.models.ImageSet.get({ id: selectedSetId },
+                    });
+                    prevNextToken = nextToken;
+                    allImages = allImages.concat(images);
+                } while (prevNextToken);
+                const { data: imageSet } = await client.models.ImageSet.get({ id: selectedSetId },
                     { selectionSet: ["id", "name"] }
                 );
+                if (!imageSet) {
+                    console.error(`ImageSet with id ${selectedSetId} not found`);
+                    return null;
+                }
                 return {
                     id: imageSet.id,
                     name: imageSet.name,
@@ -127,10 +131,11 @@ const TemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClose, s
                     }))
                 };
             }));
-            setImageSetsData(fetchedImageSets);
+            const validImageSets = fetchedImageSets.filter(imageSet => imageSet !== null);
+            setImageSetsData(validImageSets);
 
             // Calculate the min and max time from the fetched images
-            const allTimestamps = fetchedImageSets.flatMap(imageSet => 
+            const allTimestamps = validImageSets.flatMap(imageSet =>
                 imageSet.images.map(image => {
                     if (typeof image.timestamp === 'string') {
                         return DateTime.fromFormat(image.timestamp, "yyyy-MM-dd HH:mm:ss").toMillis();
@@ -150,9 +155,11 @@ const TemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClose, s
 
             setLoading(false);
         };
-        setLoading(true);
-        fetchImagesData();
-    }, [selectedImageSets, client.models.ImageSet]);
+        if (show) {
+            setLoading(true);
+            fetchImagesData();
+        }
+    }, [selectedImageSets, client.models.ImageSet, show]);
 
     useEffect(() => {
         const filteredImages = imageSetsData.flatMap(imageSet => 

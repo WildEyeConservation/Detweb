@@ -99,7 +99,7 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "0f5b22196bbe6593af1b640ca6798ce9c126d59220531c1f98858695a7d8d0e9.zip"
+     "S3Key": "8c61d4e327f0286d672f0ca48528f26907f3ba23c1e67449bc3f1a43115d0e72.zip"
     },
     "Environment": {
      "Variables": {
@@ -138,7 +138,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/handleNewUser-lambda/Resource",
-    "aws:asset:path": "asset.0f5b22196bbe6593af1b640ca6798ce9c126d59220531c1f98858695a7d8d0e9",
+    "aws:asset:path": "asset.8c61d4e327f0286d672f0ca48528f26907f3ba23c1e67449bc3f1a43115d0e72",
     "aws:asset:is-bundled": true,
     "aws:asset:property": "Code"
    }
@@ -241,7 +241,7 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "1ecc822abecee5fbe9d378e546f9fe5f6661406e751f3ade5a3fa2c33608b3b0.zip"
+     "S3Key": "d4377494404a8042ad72457c1127fe8af19805436cacf8b307fc5c6f296f92ec.zip"
     },
     "Environment": {
      "Variables": {
@@ -279,7 +279,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/create-group-lambda/Resource",
-    "aws:asset:path": "asset.1ecc822abecee5fbe9d378e546f9fe5f6661406e751f3ade5a3fa2c33608b3b0",
+    "aws:asset:path": "asset.d4377494404a8042ad72457c1127fe8af19805436cacf8b307fc5c6f296f92ec",
     "aws:asset:is-bundled": true,
     "aws:asset:property": "Code"
    }
@@ -382,7 +382,7 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "1b84a940f03796d6dc48b15d4a71760a41cce62b3d637e4968ec074149486bbf.zip"
+     "S3Key": "748283a5c21c9f3095f4fd088f657674c516a998d1b7fa4fe9e9e7f629470117.zip"
     },
     "Environment": {
      "Variables": {
@@ -420,7 +420,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/list-users-lambda/Resource",
-    "aws:asset:path": "asset.1b84a940f03796d6dc48b15d4a71760a41cce62b3d637e4968ec074149486bbf",
+    "aws:asset:path": "asset.748283a5c21c9f3095f4fd088f657674c516a998d1b7fa4fe9e9e7f629470117",
     "aws:asset:is-bundled": true,
     "aws:asset:property": "Code"
    }
@@ -523,7 +523,7 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "bd9c387b92f274bc6eff2b3905bebb796f7f7e6aa9b687a7101d96879f17ff82.zip"
+     "S3Key": "e4fa3a8a9fcb3df08a5569ad5b41a0df8e3990ad884de5048f135ccd8198c13b.zip"
     },
     "Environment": {
      "Variables": {
@@ -561,7 +561,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/list-groups-for-user-lambda/Resource",
-    "aws:asset:path": "asset.bd9c387b92f274bc6eff2b3905bebb796f7f7e6aa9b687a7101d96879f17ff82",
+    "aws:asset:path": "asset.e4fa3a8a9fcb3df08a5569ad5b41a0df8e3990ad884de5048f135ccd8198c13b",
     "aws:asset:is-bundled": true,
     "aws:asset:property": "Code"
    }
@@ -664,7 +664,7 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "565674dccc7641ce0e551fea8d438d64abb222bf4eec566d6a08051fd9bff89a.zip"
+     "S3Key": "bb2c48a11d9d04ad47a41a63c35c2c4d2602dd5f3f5ea8faa857d79f7daba081.zip"
     },
     "Environment": {
      "Variables": {
@@ -702,7 +702,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/remove-user-from-group-lambda/Resource",
-    "aws:asset:path": "asset.565674dccc7641ce0e551fea8d438d64abb222bf4eec566d6a08051fd9bff89a",
+    "aws:asset:path": "asset.bb2c48a11d9d04ad47a41a63c35c2c4d2602dd5f3f5ea8faa857d79f7daba081",
     "aws:asset:is-bundled": true,
     "aws:asset:property": "Code"
    }
@@ -805,7 +805,7 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "5fee06abdb499a5a3f24fc8c807138acc138a90cee3e862ad76757676ad85a7b.zip"
+     "S3Key": "0ce557a50f0f1453715b4164f15033d0860a66761695b27deca0fb0500aadc3f.zip"
     },
     "Environment": {
      "Variables": {
@@ -843,7 +843,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/add-user-to-group-lambda/Resource",
-    "aws:asset:path": "asset.5fee06abdb499a5a3f24fc8c807138acc138a90cee3e862ad76757676ad85a7b",
+    "aws:asset:path": "asset.0ce557a50f0f1453715b4164f15033d0860a66761695b27deca0fb0500aadc3f",
     "aws:asset:is-bundled": true,
     "aws:asset:property": "Code"
    }
@@ -1034,7 +1034,7 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "1f84f135b5f17123244596d1d0d5d8e7d84d89c29e101b6234cbf15939fd2902.zip"
+     "S3Key": "9af20e1b9b948768b34cbc1f8e72f474250289962b94ab95edecfa2f2c25b82a.zip"
     },
     "Environment": {
      "Variables": {
@@ -1079,7 +1079,154 @@
    ],
    "Metadata": {
     "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/processImages-lambda/Resource",
-    "aws:asset:path": "asset.1f84f135b5f17123244596d1d0d5d8e7d84d89c29e101b6234cbf15939fd2902",
+    "aws:asset:path": "asset.9af20e1b9b948768b34cbc1f8e72f474250289962b94ab95edecfa2f2c25b82a",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "getAnnotationCountslambdaServiceRole05EFB1D8": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "getAnnotationCounts"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/getAnnotationCounts-lambda/ServiceRole/Resource"
+   }
+  },
+  "getAnnotationCountslambdaServiceRoleDefaultPolicy96ABE29C": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "dynamodb:Query",
+       "Effect": "Allow",
+       "Resource": "*"
+      },
+      {
+       "Action": "ssm:GetParameters",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":ssm:",
+          {
+           "Ref": "AWS::Region"
+          },
+          ":",
+          {
+           "Ref": "AWS::AccountId"
+          },
+          ":parameter/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_DATA_GRAPHQL_ENDPOINT"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "getAnnotationCountslambdaServiceRoleDefaultPolicy96ABE29C",
+    "Roles": [
+     {
+      "Ref": "getAnnotationCountslambdaServiceRole05EFB1D8"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/getAnnotationCounts-lambda/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "getAnnotationCountslambdaBA60C100": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "e89a57b89670e94ebfcd18dd641eeec2712e4be8b126684a0774fa00ddca233d.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "AMPLIFY_SSM_ENV_CONFIG": "{\"/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_DATA_GRAPHQL_ENDPOINT\":{\"name\":\"AMPLIFY_DATA_GRAPHQL_ENDPOINT\"}}",
+      "AMPLIFY_DATA_GRAPHQL_ENDPOINT": "<value will be resolved during runtime>"
+     }
+    },
+    "Handler": "index.handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "getAnnotationCountslambdaServiceRole05EFB1D8",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "getAnnotationCounts"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Timeout": 3
+   },
+   "DependsOn": [
+    "getAnnotationCountslambdaServiceRoleDefaultPolicy96ABE29C",
+    "getAnnotationCountslambdaServiceRole05EFB1D8"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/getAnnotationCounts-lambda/Resource",
+    "aws:asset:path": "asset.e89a57b89670e94ebfcd18dd641eeec2712e4be8b126684a0774fa00ddca233d",
     "aws:asset:is-bundled": true,
     "aws:asset:property": "Code"
    }
@@ -1204,7 +1351,7 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "eb4038d2559593807193ca532acbd4f92965366e3a24d75ea7effa6f591122b6.zip"
+     "S3Key": "be49752092264937f371e1e8bae1299e2deb8119250d3bc195ed9ceb9ffb7f06.zip"
     },
     "Environment": {
      "Variables": {
@@ -1248,7 +1395,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/handleS3Upload-lambda/Resource",
-    "aws:asset:path": "asset.eb4038d2559593807193ca532acbd4f92965366e3a24d75ea7effa6f591122b6",
+    "aws:asset:path": "asset.be49752092264937f371e1e8bae1299e2deb8119250d3bc195ed9ceb9ffb7f06",
     "aws:asset:is-bundled": true,
     "aws:asset:property": "Code"
    }
@@ -1722,6 +1869,11 @@
     "Ref": "processImageslambda24101414"
    }
   },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functiongetAnnotationCountslambdaE3EF64CDRef": {
+   "Value": {
+    "Ref": "getAnnotationCountslambdaBA60C100"
+   }
+  },
   "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionhandleS3UploadlambdaC0C3C80ARef": {
    "Value": {
     "Ref": "handleS3Uploadlambda141D7B32"
@@ -1770,6 +1922,19 @@
      "listgroupsforuserlambda6A943911",
      "Arn"
     ]
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functiongetAnnotationCountslambdaE3EF64CDArn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "getAnnotationCountslambdaBA60C100",
+     "Arn"
+    ]
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functiongetAnnotationCountslambdaServiceRole61E7E3EERef": {
+   "Value": {
+    "Ref": "getAnnotationCountslambdaServiceRole05EFB1D8"
    }
   },
   "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionprocessImageslambdaServiceRole79B1BA1CRef": {

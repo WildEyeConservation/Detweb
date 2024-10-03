@@ -22,10 +22,20 @@ export default function useSQS() {
   console.log("sqs!!!!");
 
   useEffect(() => {
-    currentPM.queue().then(
-      ({ data: { url } }) => {
-      setUrl(url);
-    });
+    const fetchQueueUrl = async () => {
+      try {
+        const result = await currentPM.queue();
+        if (result && result.data && result.data.url) {
+          setUrl(result.data.url);
+        } else {
+          console.error("Invalid response from currentPM.queue");
+        }
+      } catch (error) {
+        console.error("Error fetching queue URL:", error);
+      }
+    };
+
+    fetchQueueUrl();
   }, [currentPM]);
 
   function getMessages() {

@@ -7,7 +7,8 @@ import { useUpdateProgress } from "./useUpdateProgress";
 import { ImageSetDropdown } from "./ImageSetDropDown";
 //import { subset } from "mathjs";
 import { SendMessageCommand } from "@aws-sdk/client-sqs";
-
+import { publishError } from './ErrorHandler';
+import { retryOperation } from './utils/retryOperation';
 interface CreateTaskProps {
   show: boolean;
   handleClose: () => void;
@@ -47,24 +48,41 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
   const prevWidth = useRef(width);
   const prevHeight = useRef(height);
 
+  const [consistentImageSizes, setConsistentImageSizes] = useState<boolean>(true);
+
   useEffect(() => {
-    async function fetchImageDimensions() {
-      const { data: images } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
-        imageSetId: selectedImageSets[0],
-        selectionSet: ['image.width', 'image.height'],
-        limit: 1
-      });
-      if (images.length > 0) {
-        const dimensions = { width: images[0].image.width, height: images[0].image.height };
-        setImageDimensions(dimensions);
-        setWidth(dimensions.width);
-        setHeight(dimensions.height);
+    async function checkImageDimensions() {
+      if (show && selectedImageSets.length > 0) {
+        let allImages = [];
+        let prevNextToken: string | null | undefined = undefined;
+
+        do {
+          const { data: images, nextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
+            imageSetId: selectedImageSets[0],
+            selectionSet: ['image.width', 'image.height'],
+            nextToken: prevNextToken
+          });
+          prevNextToken = nextToken;
+          allImages = allImages.concat(images);
+        } while (prevNextToken);
+
+        if (allImages.length > 0) {
+          const firstImageDimensions = { width: allImages[0].image.width, height: allImages[0].image.height };
+          setImageDimensions(firstImageDimensions);
+          setWidth(firstImageDimensions.width);
+          setHeight(firstImageDimensions.height);
+
+          const areConsistent = allImages.every(img => 
+            img.image.width === firstImageDimensions.width && img.image.height === firstImageDimensions.height
+          );
+
+          setConsistentImageSizes(areConsistent);
+        }
       }
     }
-    if (selectedImageSets.length > 0) {
-      fetchImageDimensions();
-    }
-  }, [selectedImageSets, client.models.ImageSetMembership]);
+
+    checkImageDimensions();
+  }, [selectedImageSets, client.models.ImageSetMembership, show]);
 
   const updateDimensions = useCallback(() => {
     if (imageDimensions && (prevHorizontalTiles.current !== horizontalTiles || prevVerticalTiles.current !== verticalTiles)) {
@@ -120,15 +138,19 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
     try {
       handleClose();
       setTotalImages(0);
-      let images: any[] = [];
-      let prevNextToken: string | null | undefined = undefined;
       let allImages = [];
+      let prevNextToken: string | null | undefined = undefined;
+
       do {
-        const { data: images, nextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
-          imageSetId: selectedImageSets[0],
-          selectionSet: ['image.timestamp', 'image.id','image.width','image.height'],
-          nextToken: prevNextToken
-        });
+        const result = await retryOperation(
+          () => client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
+            imageSetId: selectedImageSets[0],
+            selectionSet: ['image.timestamp', 'image.id','image.width','image.height'],
+            nextToken: prevNextToken
+          }),
+          { retryableErrors: ['Network error', 'Connection timeout'] }
+        );
+        const { data: images, nextToken } = result;
         prevNextToken = nextToken;
         allImages = allImages.concat(images);
       } while (prevNextToken);
@@ -138,23 +160,61 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
 
       if (modelGuided) {
         setTotalImages(allImages.length);
-        for (const { image } of allImages) {
-          const { data: imageFiles } = await client.models.ImageFile.imagesByimageId({ imageId: image.id })
-          const key = imageFiles.find((x: any) => x.type == 'image/jpeg')?.key.replace('images','heatmaps')
-          sqsClient.send(
-            new SendMessageCommand({
-              QueueUrl: backend.custom.pointFinderTaskQueueUrl,
-              MessageBody: JSON.stringify({
-                imageId: image.id,
-                projectId: project.id,
-                key: 'heatmaps/' + key + '.h5',
-                width: 1024,
-                height: 1024,
-                threshold: 1 - Math.pow(10, -threshold),
-                bucket: backend.storage.buckets[0].bucket_name,
-                setId: locationSetId,
-              })
-            })).then(() => setImagesCompleted((s: number) => s + 1));
+        for (let i = 0; i < allImages.length; i++) {
+          try {
+            const { image } = allImages[i];
+            const { data: imageFiles } = await retryOperation(
+              () => client.models.ImageFile.imagesByimageId({ imageId: image.id }),
+              { retryableErrors: ['Network error', 'Connection timeout'] }
+            );
+            const key = imageFiles.find((x: any) => x.type == 'image/jpeg')?.key.replace('images','heatmaps');
+            await retryOperation(
+              () => sqsClient.send(
+                new SendMessageCommand({
+                  QueueUrl: backend.custom.pointFinderTaskQueueUrl,
+                  MessageBody: JSON.stringify({
+                    imageId: image.id,
+                    projectId: project.id,
+                    key: 'heatmaps/' + key + '.h5',
+                    width: 1024,
+                    height: 1024,
+                    threshold: 1 - Math.pow(10, -threshold),
+                    bucket: backend.storage.buckets[0].bucket_name,
+                    setId: locationSetId,
+                  })
+                })
+              ),
+              { retryableErrors: ['Network error', 'Connection timeout'] }
+            );
+            setImagesCompleted((s: number) => s + 1);
+            
+            // Publish progress update
+            await client.graphql({
+              query: `mutation Publish($channelName: String!, $content: String!) {
+                publish(channelName: $channelName, content: $content) {
+                  channelName
+                  content
+                }
+              }`,
+              variables: {
+                channelName: 'taskProgress/createTask',
+                content: JSON.stringify({
+                  type: 'progress',
+                  total: allImages.length,
+                  completed: i + 1,
+                  taskName: 'Create Task (Model Guided)'
+                })
+              }
+            });
+          } catch (error) {
+            const errorDetails = {
+              error: error instanceof Error ? error.stack : String(error),
+              selectedImageSets,
+              modelGuided,
+              threshold
+            };
+            await publishError('taskProgress/createTask', `Error in handleSubmit: ${error instanceof Error ? error.message : String(error)}`, errorDetails);
+          }
         }
       } else {
         const promises = [];
@@ -193,9 +253,35 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
         setTotalLocations(totalSteps);
         await Promise.all(promises);
       }
+
+      // Publish completion message
+      await client.graphql({
+        query: `mutation Publish($channelName: String!, $content: String!) {
+          publish(channelName: $channelName, content: $content) {
+            channelName
+            content
+          }
+        }`,
+        variables: {
+          channelName: 'taskProgress/createTask',
+          content: JSON.stringify({
+            type: 'completion',
+            taskName: 'Create Task'
+          })
+        }
+      });
+
     } catch (error) {
-      console.error('Error in handleSubmit:', error);
-      publishError(`Error creating task: ${error.message}`);
+      const errorDetails = {
+        error: error instanceof Error ? error.stack : String(error),
+        selectedImageSets,
+        modelGuided,
+        threshold
+      };
+      await publishError('taskProgress/createTask', {
+        message: `Error in handleSubmit: ${error instanceof Error ? error.message : String(error)}`,
+        details: errorDetails
+      });
     }
   }
 
@@ -254,6 +340,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                   type="number"
                   value={width}
                   onChange={(x) => setWidth(Number(x.target.value))}
+                  disabled={consistentImageSizes}
                 />
               </Form.Group>
               <Form.Group>
@@ -262,6 +349,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                   type="number"
                   value={height}
                   onChange={(x) => setHeight(Number(x.target.value))}
+                  disabled={consistentImageSizes}
                 />
               </Form.Group>
               <Form.Group>
@@ -270,6 +358,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                   type="number"
                   value={horizontalTiles}
                   onChange={(x) => setHorizontalTiles(Number(x.target.value))}
+                  disabled={consistentImageSizes}
                 />
               </Form.Group>
               <Form.Group>
@@ -278,8 +367,14 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                   type="number"
                   value={verticalTiles}
                   onChange={(x) => setVerticalTiles(Number(x.target.value))}
+                  disabled={consistentImageSizes}
                 />
               </Form.Group>
+              {consistentImageSizes && (
+                <Form.Text className="text-muted">
+                  Tiling is disabled because all images in the set have consistent dimensions.
+                </Form.Text>
+              )}
               <Form.Group>
                 <Form.Label>Minimum overlap (%)</Form.Label>
                 <Form.Control
@@ -355,5 +450,6 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
     </Modal>
   );
 }
+
 
 export default CreateTask;

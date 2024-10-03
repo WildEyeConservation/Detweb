@@ -1620,3 +1620,12 @@ export const onDeleteImageSetMembership = /* GraphQL */ `
     }
   }
 `;
+export const receive = /* GraphQL */ `
+  subscription Receive {
+    receive {
+      channelName
+      content
+      __typename
+    }
+  }
+`;

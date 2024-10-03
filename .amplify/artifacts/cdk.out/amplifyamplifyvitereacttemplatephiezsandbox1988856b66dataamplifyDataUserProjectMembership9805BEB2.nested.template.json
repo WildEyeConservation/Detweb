@@ -389,7 +389,7 @@
       "attributeType": "S"
      },
      {
-      "attributeName": "queueUrl",
+      "attributeName": "queueId",
       "attributeType": "S"
      }
     ],
@@ -457,10 +457,10 @@
       }
      },
      {
-      "indexName": "userProjectMembershipsByQueueUrl",
+      "indexName": "userProjectMembershipsByQueueId",
       "keySchema": [
        {
-        "attributeName": "queueUrl",
+        "attributeName": "queueId",
         "keyType": "HASH"
        }
       ],
@@ -489,6 +489,34 @@
       "keySchema": [
        {
         "attributeName": "projectId",
+        "keyType": "HASH"
+       }
+      ],
+      "projection": {
+       "projectionType": "ALL"
+      },
+      "provisionedThroughput": {
+       "Fn::If": [
+        "ShouldUsePayPerRequestBilling",
+        {
+         "Ref": "AWS::NoValue"
+        },
+        {
+         "ReadCapacityUnits": {
+          "Ref": "DynamoDBModelTableReadIOPS"
+         },
+         "WriteCapacityUnits": {
+          "Ref": "DynamoDBModelTableWriteIOPS"
+         }
+        }
+       ]
+      }
+     },
+     {
+      "indexName": "gsi-Queue.users",
+      "keySchema": [
+       {
+        "attributeName": "queueId",
         "keyType": "HASH"
        }
       ],
@@ -1139,7 +1167,7 @@
     "FunctionVersion": "2018-05-29",
     "Name": "MutationCreateUserProjectMembershipDataResolverFn",
     "RequestMappingTemplateS3Location": {
-     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/33b2dd5d2ad841e087547bc7aec7b3a3465f7cc96fb0f2c626bb664b48434a18.vtl"
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/f42b0e0d0675e11123841bfa159d35d00d0138703de84dbf351a70a6059a1baa.vtl"
     },
     "ResponseMappingTemplateS3Location": {
      "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/f4a52b72209a9dfa197b5e7367a5c378c5bb86de6e29ddd9e48b49a3fe54b249.vtl"
@@ -2345,7 +2373,7 @@
     "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/UserProjectMembership/queryUserProjectMembershipsByProjectIdResolver"
    }
   },
-  "QueryuserProjectMembershipsByQueueUrlauth0FunctionQueryuserProjectMembershipsByQueueUrlauth0FunctionAppSyncFunction5E6D8F4E": {
+  "QueryuserProjectMembershipsByQueueIdauth0FunctionQueryuserProjectMembershipsByQueueIdauth0FunctionAppSyncFunction4FA06439": {
    "Type": "AWS::AppSync::FunctionConfiguration",
    "Properties": {
     "ApiId": {
@@ -2355,17 +2383,17 @@
      "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
     },
     "FunctionVersion": "2018-05-29",
-    "Name": "QueryuserProjectMembershipsByQueueUrlauth0Function",
+    "Name": "QueryuserProjectMembershipsByQueueIdauth0Function",
     "RequestMappingTemplateS3Location": {
      "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/6677b1986afebbf1f4026c57099890e32ab4e450e422c5e3c930b085a73b6b60.vtl"
     },
     "ResponseMappingTemplate": "$util.toJson({})"
    },
    "Metadata": {
-    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/UserProjectMembership/QueryuserProjectMembershipsByQueueUrlauth0Function/QueryuserProjectMembershipsByQueueUrlauth0Function.AppSyncFunction"
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/UserProjectMembership/QueryuserProjectMembershipsByQueueIdauth0Function/QueryuserProjectMembershipsByQueueIdauth0Function.AppSyncFunction"
    }
   },
-  "QueryuserProjectMembershipsByQueueUrlpostAuth0FunctionQueryuserProjectMembershipsByQueueUrlpostAuth0FunctionAppSyncFunction1503442A": {
+  "QueryuserProjectMembershipsByQueueIdpostAuth0FunctionQueryuserProjectMembershipsByQueueIdpostAuth0FunctionAppSyncFunction99A865E8": {
    "Type": "AWS::AppSync::FunctionConfiguration",
    "Properties": {
     "ApiId": {
@@ -2375,17 +2403,17 @@
      "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
     },
     "FunctionVersion": "2018-05-29",
-    "Name": "QueryuserProjectMembershipsByQueueUrlpostAuth0Function",
+    "Name": "QueryuserProjectMembershipsByQueueIdpostAuth0Function",
     "RequestMappingTemplateS3Location": {
      "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/c1721bcd774e27c514d3454b5be4f9bdd094c0161b57ddf053d618e3b0086a77.vtl"
     },
     "ResponseMappingTemplate": "$util.toJson({})"
    },
    "Metadata": {
-    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/UserProjectMembership/QueryuserProjectMembershipsByQueueUrlpostAuth0Function/QueryuserProjectMembershipsByQueueUrlpostAuth0Function.AppSyncFunction"
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/UserProjectMembership/QueryuserProjectMembershipsByQueueIdpostAuth0Function/QueryuserProjectMembershipsByQueueIdpostAuth0Function.AppSyncFunction"
    }
   },
-  "QueryUserProjectMembershipsByQueueUrlDataResolverFnQueryUserProjectMembershipsByQueueUrlDataResolverFnAppSyncFunction5EE1A4C8": {
+  "QueryUserProjectMembershipsByQueueIdDataResolverFnQueryUserProjectMembershipsByQueueIdDataResolverFnAppSyncFunction9A6A2EF3": {
    "Type": "AWS::AppSync::FunctionConfiguration",
    "Properties": {
     "ApiId": {
@@ -2398,9 +2426,9 @@
      ]
     },
     "FunctionVersion": "2018-05-29",
-    "Name": "QueryUserProjectMembershipsByQueueUrlDataResolverFn",
+    "Name": "QueryUserProjectMembershipsByQueueIdDataResolverFn",
     "RequestMappingTemplateS3Location": {
-     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/23855b985a27ad4b92a6ca8784b60124281f4eed5fc777114a80f1028d65f321.vtl"
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/acf79a87a0f36c11101b44441a59771e42acada4cf07e2baa4774356e1e41b61.vtl"
     },
     "ResponseMappingTemplateS3Location": {
      "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/098c998f215c333f57348ca8912f66057ae6b574fe34013033dc54362ee2372c.vtl"
@@ -2410,34 +2438,34 @@
     "UserProjectMembershipDataSource"
    ],
    "Metadata": {
-    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/UserProjectMembership/QueryUserProjectMembershipsByQueueUrlDataResolverFn/QueryUserProjectMembershipsByQueueUrlDataResolverFn.AppSyncFunction"
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/UserProjectMembership/QueryUserProjectMembershipsByQueueIdDataResolverFn/QueryUserProjectMembershipsByQueueIdDataResolverFn.AppSyncFunction"
    }
   },
-  "QueryuserProjectMembershipsByQueueUrlResolver": {
+  "QueryuserProjectMembershipsByQueueIdResolver": {
    "Type": "AWS::AppSync::Resolver",
    "Properties": {
     "ApiId": {
      "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
     },
-    "FieldName": "userProjectMembershipsByQueueUrl",
+    "FieldName": "userProjectMembershipsByQueueId",
     "Kind": "PIPELINE",
     "PipelineConfig": {
      "Functions": [
       {
        "Fn::GetAtt": [
-        "QueryuserProjectMembershipsByQueueUrlauth0FunctionQueryuserProjectMembershipsByQueueUrlauth0FunctionAppSyncFunction5E6D8F4E",
+        "QueryuserProjectMembershipsByQueueIdauth0FunctionQueryuserProjectMembershipsByQueueIdauth0FunctionAppSyncFunction4FA06439",
         "FunctionId"
        ]
       },
       {
        "Fn::GetAtt": [
-        "QueryuserProjectMembershipsByQueueUrlpostAuth0FunctionQueryuserProjectMembershipsByQueueUrlpostAuth0FunctionAppSyncFunction1503442A",
+        "QueryuserProjectMembershipsByQueueIdpostAuth0FunctionQueryuserProjectMembershipsByQueueIdpostAuth0FunctionAppSyncFunction99A865E8",
         "FunctionId"
        ]
       },
       {
        "Fn::GetAtt": [
-        "QueryUserProjectMembershipsByQueueUrlDataResolverFnQueryUserProjectMembershipsByQueueUrlDataResolverFnAppSyncFunction5EE1A4C8",
+        "QueryUserProjectMembershipsByQueueIdDataResolverFnQueryUserProjectMembershipsByQueueIdDataResolverFnAppSyncFunction9A6A2EF3",
         "FunctionId"
        ]
       }
@@ -2447,7 +2475,7 @@
      "Fn::Join": [
       "",
       [
-       "$util.qr($ctx.stash.put(\"typeName\", \"Query\"))\n$util.qr($ctx.stash.put(\"fieldName\", \"userProjectMembershipsByQueueUrl\"))\n$util.qr($ctx.stash.put(\"conditions\", []))\n$util.qr($ctx.stash.put(\"metadata\", {}))\n$util.qr($ctx.stash.metadata.put(\"dataSourceType\", \"AMAZON_DYNAMODB\"))\n$util.qr($ctx.stash.metadata.put(\"apiId\", \"",
+       "$util.qr($ctx.stash.put(\"typeName\", \"Query\"))\n$util.qr($ctx.stash.put(\"fieldName\", \"userProjectMembershipsByQueueId\"))\n$util.qr($ctx.stash.put(\"conditions\", []))\n$util.qr($ctx.stash.put(\"metadata\", {}))\n$util.qr($ctx.stash.metadata.put(\"dataSourceType\", \"AMAZON_DYNAMODB\"))\n$util.qr($ctx.stash.metadata.put(\"apiId\", \"",
        {
         "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
        },
@@ -2506,7 +2534,7 @@
     "TypeName": "Query"
    },
    "Metadata": {
-    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/UserProjectMembership/queryUserProjectMembershipsByQueueUrlResolver"
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/UserProjectMembership/queryUserProjectMembershipsByQueueIdResolver"
    }
   },
   "CDKMetadata": {

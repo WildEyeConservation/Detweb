@@ -27,7 +27,8 @@ interface Subset {
     filePaths: string[];
 }
 
-const ITEMS_PER_PAGE = 10;
+const INITIAL_ITEMS_PER_PAGE = 10;
+const LOAD_MORE_ITEMS = 20;
 
 const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClose, selectedImageSets }) => {
     const { client } = useContext(GlobalContext)!;
@@ -40,8 +41,9 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
     const [subsets, setSubsets] = useState<Subset[]>([]);
     const [loading, setLoading] = useState(false);
     const [selectedFile, setSelectedFile] = useState<FileNode | null>(null); // State for selected file
-    const [pagination, setPagination] = useState<{ [key: string]: number }>({});
     const [nextTokens, setNextTokens] = useState<{ [key: string]: string | null }>({});
+    const [loadingAllItems, setLoadingAllItems] = useState<{ [key: string]: boolean }>({});
+    const [loadingImageSetName, setLoadingImageSetName] = useState<string | null>(null);
 
     useEffect(() => {
         if (show && selectedImageSets.length > 0) {
@@ -50,27 +52,23 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
                 const allFileNodes: { [key: string]: FileNode[] } = {};
                 const newNextTokens: { [key: string]: string | null } = {};
                 for (const imageSetId of selectedImageSets) {
-                    let allFiles: any[] = [];
-                    let nextToken: string | null = null;
-                    do {
-                        const { data: imageSetMemberships, nextToken: newNextToken }: { data: any[], nextToken?: string | null } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
-                            imageSetId,
-                            selectionSet: ['image.id', 'image.files.id', 'image.files.path'],
-                            nextToken,
-                            limit: ITEMS_PER_PAGE,
-                        });
-                        allFiles = allFiles.concat(imageSetMemberships);
-                        nextToken = newNextToken;
-                    } while (nextToken);
+                    const { data: imageSetMemberships, nextToken }: { data: any[], nextToken?: string | null } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
+                        imageSetId,
+                        selectionSet: ['image.id', 'image.files.id', 'image.files.path'],
+                        limit: INITIAL_ITEMS_PER_PAGE,
+                    });
 
-                    const fileNodes = allFiles.flatMap((membership: any) =>
-                        membership.image.files.map((file: any) => ({
-                            id: file.id,
-                            name: file.path.split('/').pop(),
-                            path: file.path,
-                            type: 'file',
-                        }))
-                    );
+                    const fileNodes = imageSetMemberships.flatMap((membership: any) => {
+                        if (membership.image && membership.image.files) {
+                            return membership.image.files.map((file: any) => ({
+                                id: file.id,
+                                name: file.path.split('/').pop(),
+                                path: file.path,
+                                type: 'file',
+                            }));
+                        }
+                        return [];
+                    });
                     allFileNodes[imageSetId] = fileNodes;
                     newNextTokens[imageSetId] = nextToken;
                 }
@@ -88,26 +86,32 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
                     expanded: false
                 })));
                 setNextTokens(newNextTokens);
-                setPagination(selectedImageSets.reduce((acc, id) => ({ ...acc, [id]: ITEMS_PER_PAGE }), {}));
                 setLoading(false);
             };
             fetchInitialStructure();
         }
     }, [show, selectedImageSets, client.models.ImageSetMembership, imageSets]);
 
-    const handleNodeSelect = (node: FileNode, isChecked: boolean) => {
+    const handleNodeSelect = async (node: FileNode, isChecked: boolean) => {
         if (node.type === 'file') {
             setSelectedFilePaths(prev => isChecked ? [...prev, node.path] : prev.filter(path => path !== node.path));
             setSelectedFile(node); // Set the selected file
-        } else if (node.type === 'directory' && node.children) {
-            const allFilePaths = node.children.flatMap(child => child.type === 'file' ? [child.path] : []);
-            setSelectedFilePaths(prev => {
-                if (isChecked) {
-                    return [...new Set([...prev, ...allFilePaths])];
-                } else {
-                    return prev.filter(path => !allFilePaths.includes(path));
-                }
-            });
+        } else if (node.type === 'directory') {
+            if (isChecked && nextTokens[node.id]) {
+                // Load all remaining items
+                const allFileNodes = await loadAllItems(node.id, node.name);
+                const allFilePaths = allFileNodes.map(file => file.path);
+                setSelectedFilePaths(prev => [...new Set([...prev, ...allFilePaths])]);
+            } else {
+                const allFilePaths = node.children?.flatMap(child => child.type === 'file' ? [child.path] : []) || [];
+                setSelectedFilePaths(prev => {
+                    if (isChecked) {
+                        return [...new Set([...prev, ...allFilePaths])];
+                    } else {
+                        return prev.filter(path => !allFilePaths.includes(path));
+                    }
+                });
+            }
         }
     };
 
@@ -124,17 +128,14 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
     };
 
     const loadMoreItems = async (imageSetId: string) => {
-        const currentPage = pagination[imageSetId] || ITEMS_PER_PAGE;
         const nextToken = nextTokens[imageSetId];
-
-        console.log(`Loading more items for imageSetId: ${imageSetId}, currentPage: ${currentPage}, nextToken: ${nextToken}`);
 
         if (nextToken) {
             const { data: imageSetMemberships, nextToken: newNextToken }: { data: any[], nextToken?: string | null } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
                 imageSetId,
                 selectionSet: ['image.id', 'image.files.id', 'image.files.path'],
                 nextToken,
-                limit: ITEMS_PER_PAGE,
+                limit: LOAD_MORE_ITEMS,
             });
 
             const newFileNodes = imageSetMemberships.flatMap((membership: any) =>
@@ -161,11 +162,6 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
                 [imageSetId]: newNextToken
             }));
         }
-
-        setPagination(prev => ({
-            ...prev,
-            [imageSetId]: currentPage + ITEMS_PER_PAGE
-        }));
     };
 
     const handleNameSubmit = () => {
@@ -210,12 +206,57 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
         setSubsets([]);
     };
 
+    const loadAllItems = async (imageSetId: string, imageSetName: string) => {
+        setLoadingAllItems(prev => ({ ...prev, [imageSetId]: true }));
+        setLoadingImageSetName(imageSetName);
+        let allFileNodes: FileNode[] = [];
+        let nextToken = nextTokens[imageSetId];
+
+        while (nextToken) {
+            const { data: imageSetMemberships, nextToken: newNextToken }: { data: any[], nextToken?: string | null } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
+                imageSetId,
+                selectionSet: ['image.id', 'image.files.id', 'image.files.path'],
+                nextToken,
+                limit: LOAD_MORE_ITEMS,
+            });
+
+            const newFileNodes = imageSetMemberships.flatMap((membership: any) =>
+                membership.image.files.map((file: any) => ({
+                    id: file.id,
+                    name: file.path.split('/').pop(),
+                    path: file.path,
+                    type: 'file',
+                }))
+            );
+
+            allFileNodes = [...allFileNodes, ...newFileNodes];
+            nextToken = newNextToken;
+        }
+
+        setFileStructure(prev => prev.map(rootNode => {
+            if (rootNode.id === imageSetId) {
+                return {
+                    ...rootNode,
+                    children: [...(rootNode.children || []), ...allFileNodes]
+                };
+            }
+            return rootNode;
+        }));
+
+        setNextTokens(prev => ({
+            ...prev,
+            [imageSetId]: null
+        }));
+
+        setLoadingAllItems(prev => ({ ...prev, [imageSetId]: false }));
+        setLoadingImageSetName(null);
+        return allFileNodes;
+    };
+
     const renderTreeNodes = (nodes: FileNode[]) => {
         return nodes.map(node => {
-            const currentPagination = pagination[node.id] || ITEMS_PER_PAGE;
-            const hasMoreItems = node.children && node.children.length > currentPagination;
-
-            console.log(`Rendering node: ${node.id}, hasMoreItems: ${hasMoreItems}, currentPagination: ${currentPagination}`);
+            const hasMoreItems = !!nextTokens[node.id];
+            const isLoading = loadingAllItems[node.id];
 
             return (
                 <div key={node.id} style={{ marginLeft: node.type === 'directory' ? '20px' : '40px' }}>
@@ -248,13 +289,13 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
                     </div>
                     {node.children && node.expanded && (
                         <div style={{ marginLeft: '20px' }}>
-                            {renderTreeNodes(node.children.slice(0, currentPagination))}
-                            {hasMoreItems && (
+                            {renderTreeNodes(node.children)}
+                            {hasMoreItems && !isLoading && (
                                 <div>
                                     <button onClick={() => loadMoreItems(node.id)}>Load more</button>
-                                    {/* {console.log(`Node ID: ${node.id}, Children Length: ${node.children.length}, Pagination: ${currentPagination}`)} */}
                                 </div>
                             )}
+                            {isLoading && <div>Loading all items...</div>}
                         </div>
                     )}
                 </div>
@@ -286,6 +327,27 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
                                 <span className="sr-only">Loading...</span>
                             </Spinner>
                             <span style={{ marginLeft: '10px' }}>Please be patient while file structure is loaded</span>
+                        </div>
+                    )}
+                    {loadingImageSetName && (
+                        <div style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                            zIndex: 1000
+                        }}>
+                            <Spinner animation="border" role="status">
+                                <span className="sr-only">Loading...</span>
+                            </Spinner>
+                            <span style={{ marginTop: '10px' }}>Loading all items for {loadingImageSetName}</span>
+                            <span>This may take a while for large image sets</span>
                         </div>
                     )}
                     <div style={{ maxHeight: '400px', overflowY: 'auto' }}>

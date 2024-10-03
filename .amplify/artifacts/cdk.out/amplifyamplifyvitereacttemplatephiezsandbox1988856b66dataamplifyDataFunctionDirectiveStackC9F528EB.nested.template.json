@@ -1394,6 +1394,192 @@
     "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/FunctionDirectiveStack/queryListGroupsForUserResolver"
    }
   },
+  "FnGetAnnotationCountsLambdaDataSourceServiceRole3D4485F8": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "appsync.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "amplifyData"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/FunctionDirectiveStack/FnGetAnnotationCountsLambdaDataSource/ServiceRole/Resource"
+   }
+  },
+  "FnGetAnnotationCountsLambdaDataSourceServiceRoleDefaultPolicy3C537C4E": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "lambda:InvokeFunction",
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66functionNestedStackfunctionNestedStackResourceA3061A0FOutputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66functiongetAnnotationCountslambdaE3EF64CDArn"
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66functionNestedStackfunctionNestedStackResourceA3061A0FOutputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66functiongetAnnotationCountslambdaE3EF64CDArn"
+           },
+           ":*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "FnGetAnnotationCountsLambdaDataSourceServiceRoleDefaultPolicy3C537C4E",
+    "Roles": [
+     {
+      "Ref": "FnGetAnnotationCountsLambdaDataSourceServiceRole3D4485F8"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/FunctionDirectiveStack/FnGetAnnotationCountsLambdaDataSource/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "FnGetAnnotationCountsLambdaDataSource": {
+   "Type": "AWS::AppSync::DataSource",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "LambdaConfig": {
+     "LambdaFunctionArn": {
+      "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66functionNestedStackfunctionNestedStackResourceA3061A0FOutputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66functiongetAnnotationCountslambdaE3EF64CDArn"
+     }
+    },
+    "Name": "FnGetAnnotationCountsLambdaDataSource",
+    "ServiceRoleArn": {
+     "Fn::GetAtt": [
+      "FnGetAnnotationCountsLambdaDataSourceServiceRole3D4485F8",
+      "Arn"
+     ]
+    },
+    "Type": "AWS_LAMBDA"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/FunctionDirectiveStack/FnGetAnnotationCountsLambdaDataSource/Resource"
+   }
+  },
+  "InvokeFnGetAnnotationCountsLambdaDataSourceInvokeFnGetAnnotationCountsLambdaDataSourceAppSyncFunctionC048233B": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Fn::GetAtt": [
+      "FnGetAnnotationCountsLambdaDataSource",
+      "Name"
+     ]
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "InvokeFnGetAnnotationCountsLambdaDataSource",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/d61be6bf1e85cc880e3aed67a9f0b821d1270ec6f5482abeba62e393fcde5c59.vtl"
+    },
+    "ResponseMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/43c39d3f3064d951a274ad91ec62cc12e1c8dab308d0dfa845e4de9f0a874e57.vtl"
+    }
+   },
+   "DependsOn": [
+    "FnGetAnnotationCountsLambdaDataSource"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/FunctionDirectiveStack/InvokeFnGetAnnotationCountsLambdaDataSource/InvokeFnGetAnnotationCountsLambdaDataSource.AppSyncFunction"
+   }
+  },
+  "QuerygetAnnotationCountsResolver": {
+   "Type": "AWS::AppSync::Resolver",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "FieldName": "getAnnotationCounts",
+    "Kind": "PIPELINE",
+    "PipelineConfig": {
+     "Functions": [
+      {
+       "Fn::GetAtt": [
+        "QueryGetAnnotationCountsAuthFNQueryGetAnnotationCountsAuthFNAppSyncFunctionBFEB955B",
+        "FunctionId"
+       ]
+      },
+      {
+       "Fn::GetAtt": [
+        "InvokeFnGetAnnotationCountsLambdaDataSourceInvokeFnGetAnnotationCountsLambdaDataSourceAppSyncFunctionC048233B",
+        "FunctionId"
+       ]
+      }
+     ]
+    },
+    "RequestMappingTemplate": {
+     "Fn::Join": [
+      "",
+      [
+       "## [Start] Stash resolver specific context.. **\n$util.qr($ctx.stash.put(\"typeName\", \"Query\"))\n$util.qr($ctx.stash.put(\"fieldName\", \"getAnnotationCounts\"))\n$util.qr($ctx.stash.put(\"authRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthauthenticatedUserRole2DDBF981Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"unauthRole\", \"arn:aws:sts::",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":assumed-role/",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthunauthenticatedUserRoleDBF4EAC9Ref"
+       },
+       "/CognitoIdentityCredentials\"))\n$util.qr($ctx.stash.put(\"identityPoolId\", \"",
+       {
+        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66authNestedStackauthNestedStackResourceB73B2429Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66authamplifyAuthIdentityPool45320473Ref"
+       },
+       "\"))\n$util.qr($ctx.stash.put(\"adminRoles\", []))\n{}\n## [End] Stash resolver specific context.. **"
+      ]
+     ]
+    },
+    "ResponseMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/387d5992f5fc03d05de27289457dcc374a84c42a889acb504aff1031047dde00.vtl"
+    },
+    "TypeName": "Query"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/FunctionDirectiveStack/queryGetAnnotationCountsResolver"
+   }
+  },
   "MutationAddUserToGroupAuthFNMutationAddUserToGroupAuthFNAppSyncFunction4FB21BAE": {
    "Type": "AWS::AppSync::FunctionConfiguration",
    "Properties": {
@@ -1514,6 +1700,26 @@
     "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/FunctionDirectiveStack/QueryListGroupsForUserAuthFN/QueryListGroupsForUserAuthFN.AppSyncFunction"
    }
   },
+  "QueryGetAnnotationCountsAuthFNQueryGetAnnotationCountsAuthFNAppSyncFunctionBFEB955B": {
+   "Type": "AWS::AppSync::FunctionConfiguration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
+    },
+    "DataSourceName": {
+     "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
+    },
+    "FunctionVersion": "2018-05-29",
+    "Name": "QueryGetAnnotationCountsAuthFN",
+    "RequestMappingTemplateS3Location": {
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/3d72cc99f51abdee9e8ef0ac8f5f84a36b933ea339e0dabbc93ff98009dbf274.vtl"
+    },
+    "ResponseMappingTemplate": "$util.toJson({})"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/FunctionDirectiveStack/QueryGetAnnotationCountsAuthFN/QueryGetAnnotationCountsAuthFN.AppSyncFunction"
+   }
+  },
   "CDKMetadata": {
    "Type": "AWS::CDK::Metadata",
    "Properties": {
@@ -1551,6 +1757,9 @@
    "Type": "String"
   },
   "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66functionNestedStackfunctionNestedStackResourceA3061A0FOutputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66functionlistgroupsforuserlambdaB3A9AC47Arn": {
+   "Type": "String"
+  },
+  "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66functionNestedStackfunctionNestedStackResourceA3061A0FOutputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66functiongetAnnotationCountslambdaE3EF64CDArn": {
    "Type": "String"
   },
   "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName": {

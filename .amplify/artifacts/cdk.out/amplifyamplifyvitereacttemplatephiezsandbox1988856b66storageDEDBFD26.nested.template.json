@@ -1399,14 +1399,14 @@
   }
  },
  "Outputs": {
-  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66storageoutputsBucketE047D631Ref": {
-   "Value": {
-    "Ref": "outputsBucket30EB72C2"
-   }
-  },
   "amplifyamplifyvitereacttemplatephiezsandbox1988856b66storageinputsBucketF67DEBA4Ref": {
    "Value": {
     "Ref": "inputsBucketBC59C88F"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66storageoutputsBucketE047D631Ref": {
+   "Value": {
+    "Ref": "outputsBucket30EB72C2"
    }
   }
  }

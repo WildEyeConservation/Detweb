@@ -225,48 +225,6 @@
     "PolicyDocument": {
      "Statement": [
       {
-       "Action": "cognito-idp:AdminAddUserToGroup",
-       "Effect": "Allow",
-       "Resource": {
-        "Fn::GetAtt": [
-         "amplifyAuthUserPool4BA7F805",
-         "Arn"
-        ]
-       }
-      },
-      {
-       "Action": "cognito-idp:AdminRemoveUserFromGroup",
-       "Effect": "Allow",
-       "Resource": {
-        "Fn::GetAtt": [
-         "amplifyAuthUserPool4BA7F805",
-         "Arn"
-        ]
-       }
-      },
-      {
-       "Action": [
-        "sqs:SendMessage",
-        "sqs:GetQueueAttributes",
-        "sqs:GetQueueUrl"
-       ],
-       "Effect": "Allow",
-       "Resource": {
-        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomNestedStackDetwebCustomNestedStackResourceB98792C6Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomCpuAutoProcessorProcessingQueueDC294984Arn"
-       }
-      },
-      {
-       "Action": [
-        "sqs:SendMessage",
-        "sqs:GetQueueAttributes",
-        "sqs:GetQueueUrl"
-       ],
-       "Effect": "Allow",
-       "Resource": {
-        "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomNestedStackDetwebCustomNestedStackResourceB98792C6Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomGpuAutoProcessorProcessingQueue7446302CArn"
-       }
-      },
-      {
        "Action": [
         "sqs:CreateQueue",
         "sqs:PurgeQueue",
@@ -1013,12 +971,6 @@
  },
  "Parameters": {
   "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66functionNestedStackfunctionNestedStackResourceA3061A0FOutputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66functionhandleNewUserlambda3AE36DADArn": {
-   "Type": "String"
-  },
-  "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomNestedStackDetwebCustomNestedStackResourceB98792C6Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomCpuAutoProcessorProcessingQueueDC294984Arn": {
-   "Type": "String"
-  },
-  "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomNestedStackDetwebCustomNestedStackResourceB98792C6Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomGpuAutoProcessorProcessingQueue7446302CArn": {
    "Type": "String"
   },
   "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66functionNestedStackfunctionNestedStackResourceA3061A0FOutputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66functionhandleNewUserlambdaServiceRole75855C89Ref": {
