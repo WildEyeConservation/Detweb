@@ -1,0 +1,25 @@
+type Project @model @auth(rules: [{allow: private}])
+{
+  name: String! @primaryKey
+  activeUsers: [User] @hasMany(references: ["currentProjectId"])
+  users: [UserProjectMembership] @hasMany(references: ["projectId"])
+}
+
+type User @model @auth(rules: [{allow: private}])
+{
+  name: String! @primaryKey
+  isAdmin: Boolean
+  email: String
+  projects: [UserProjectMembership] @hasMany(references: ["userId"])
+  currentProjectId: String
+  currentProject: Project @belongsTo(references: ["currentProjectId"])
+}
+
+type UserProjectMembership @model @auth(rules: [{allow: private}])
+{
+  userId: String!
+  user: User @belongsTo(references: ["userId"])
+  projectId: String!
+  project: Project @belongsTo(references: ["projectId"])
+  queueUrl: String
+}

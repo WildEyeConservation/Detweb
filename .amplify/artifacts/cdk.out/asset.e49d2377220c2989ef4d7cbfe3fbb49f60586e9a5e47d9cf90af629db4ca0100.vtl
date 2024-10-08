@@ -1,0 +1,20 @@
+## [Start] Invoke RDS Lambda data source. **
+#set( $lambdaInput = {} )
+#set( $lambdaInput.table = "ImageSet" )
+#set( $lambdaInput.args = $context.arguments )
+#set( $lambdaInput.operation = "DELETE" )
+#set( $lambdaInput.operationName = "deleteImageSet" )
+#set( $lambdaInput.args.metadata = {} )
+#set( $lambdaInput.args.metadata.keys = [] )
+#set( $lambdaInput.args.metadata.nonScalarFields = ["project", "images"] )
+#set( $lambdaInput.args.metadata.arrayFields = [] )
+#set( $lambdaInput.args.metadata.fieldMap = {} )
+$util.qr($lambdaInput.args.metadata.fieldMap.putAll($util.defaultIfNull($context.stash.fieldMap, {})))
+$util.qr($lambdaInput.args.metadata.keys.addAll($util.defaultIfNull($ctx.stash.keys, [])))
+#set( $lambdaInput.args.condition = $util.defaultIfNull($context.arguments.condition, {}) )
+{
+  "version": "2018-05-29",
+  "operation": "Invoke",
+  "payload":   $util.toJson($lambdaInput)
+}
+## [End] Invoke RDS Lambda data source. **

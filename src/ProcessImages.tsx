@@ -115,28 +115,38 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
               const { data } = await client.models.ImageNeighbour.get({
                 image1Id: image1.id,
                 image2Id: image2.id,
-              });
-              if (data.homography) {
-                continue
+                processStep: 'Compute image registrations'
+              };
+              await publishError('taskProgress/processImages', `Error computing registration for images ${image1.id} and ${image2.id}: ${error instanceof Error ? error.message : String(error)}`, errorDetails);
+            }
+          }
+
+          // Publish completion message
+          await client.graphql({
+            query: `mutation Publish($channelName: String!, $content: String!) {
+              publish(channelName: $channelName, content: $content) {
+                channelName
+                content
               }
+            }`,
+            variables: {
+              channelName: 'taskProgress/processImages',
+              content: JSON.stringify({
+                type: 'completion',
+                taskName: 'Compute image registrations'
+              })
             }
-            const file1 = image1.files.find((f) => f.type == 'image/jpeg').key
-            const file2 = image2.files.find((f) => f.type == 'image/jpeg').key
-            await sqsClient.send(
-              new SendMessageCommand({
-                QueueUrl: backend.custom.lightglueTaskQueueUrl,
-                MessageBody: JSON.stringify({
-                  inputBucket: backend.custom.inputsBucket,
-                  image1Id: image1.id,
-                  image2Id: image2.id,
-                  keys: [file1, file2],
-                  action: "register"
-                })
-              }))
-            }
+          });
+          break;
         }
       }
-      break;
+    } catch (error) {
+      const errorDetails = {
+        error: error instanceof Error ? error.stack : String(error),
+        selectedProcess,
+        selectedImageSets
+      };
+      await publishError('taskProgress/processImages', `Error in handleSubmit: ${error instanceof Error ? error.message : String(error)}`, errorDetails);
     }
   };
     
@@ -188,4 +198,22 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
       </Modal.Footer>
     </Modal>
   );
+}
+
+async function publishError(channelName: string, errorMessage: string) {
+  await client.graphql({
+    query: `mutation Publish($channelName: String!, $content: String!) {
+      publish(channelName: $channelName, content: $content) {
+        channelName
+        content
+      }
+    }`,
+    variables: {
+      channelName,
+      content: JSON.stringify({
+        type: 'error',
+        message: errorMessage
+      })
+    }
+  });
 }

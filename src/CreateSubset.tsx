@@ -31,7 +31,7 @@ const CreateSubsetModal: React.FC<CreateSubsetModalProps> = ({ show, handleClose
           <Button variant="primary" className="mb-2 w-75" onClick={() => showModal('Subsample')}>
             Subsampled subset
           </Button>
-          <Button variant="primary" disabled className="mb-2 w-75" onClick={() => showModal('FileStructure')}>
+          <Button variant="primary" className="mb-2 w-75" onClick={() => showModal('FileStructureSubset')}>
             File structure subset
           </Button>
         </div>

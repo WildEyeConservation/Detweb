@@ -1,0 +1,1964 @@
+{
+ "Description": "{\"createdOn\":\"Windows\",\"createdBy\":\"AmplifySandbox\",\"createdWith\":\"1.3.4\",\"stackType\":\"function-Lambda\",\"metadata\":{}}",
+ "Resources": {
+  "handleNewUserlambdaServiceRole91575107": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "handleNewUser"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/handleNewUser-lambda/ServiceRole/Resource"
+   }
+  },
+  "handleNewUserlambdaServiceRoleDefaultPolicy6F7A9AFF": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "ssm:GetParameters",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":ssm:",
+          {
+           "Ref": "AWS::Region"
+          },
+          ":",
+          {
+           "Ref": "AWS::AccountId"
+          },
+          ":parameter/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_AUTH_USERPOOL_ID"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "handleNewUserlambdaServiceRoleDefaultPolicy6F7A9AFF",
+    "Roles": [
+     {
+      "Ref": "handleNewUserlambdaServiceRole91575107"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/handleNewUser-lambda/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "handleNewUserlambdaA5621325": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "8c61d4e327f0286d672f0ca48528f26907f3ba23c1e67449bc3f1a43115d0e72.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "GROUP": "annotator",
+      "AMPLIFY_SSM_ENV_CONFIG": "{\"/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_AUTH_USERPOOL_ID\":{\"name\":\"AMPLIFY_AUTH_USERPOOL_ID\"}}",
+      "AMPLIFY_AUTH_USERPOOL_ID": "<value will be resolved during runtime>"
+     }
+    },
+    "Handler": "index.handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "handleNewUserlambdaServiceRole91575107",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "handleNewUser"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Timeout": 3
+   },
+   "DependsOn": [
+    "handleNewUserlambdaServiceRole91575107"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/handleNewUser-lambda/Resource",
+    "aws:asset:path": "asset.8c61d4e327f0286d672f0ca48528f26907f3ba23c1e67449bc3f1a43115d0e72",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "creategrouplambdaServiceRole07D2EB70": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "create-group"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/create-group-lambda/ServiceRole/Resource"
+   }
+  },
+  "creategrouplambdaServiceRoleDefaultPolicyD1F860D2": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "ssm:GetParameters",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":ssm:",
+          {
+           "Ref": "AWS::Region"
+          },
+          ":",
+          {
+           "Ref": "AWS::AccountId"
+          },
+          ":parameter/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_AUTH_USERPOOL_ID"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "creategrouplambdaServiceRoleDefaultPolicyD1F860D2",
+    "Roles": [
+     {
+      "Ref": "creategrouplambdaServiceRole07D2EB70"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/create-group-lambda/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "creategrouplambda96F839E0": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "d4377494404a8042ad72457c1127fe8af19805436cacf8b307fc5c6f296f92ec.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "AMPLIFY_SSM_ENV_CONFIG": "{\"/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_AUTH_USERPOOL_ID\":{\"name\":\"AMPLIFY_AUTH_USERPOOL_ID\"}}",
+      "AMPLIFY_AUTH_USERPOOL_ID": "<value will be resolved during runtime>"
+     }
+    },
+    "Handler": "index.handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "creategrouplambdaServiceRole07D2EB70",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "create-group"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Timeout": 3
+   },
+   "DependsOn": [
+    "creategrouplambdaServiceRole07D2EB70"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/create-group-lambda/Resource",
+    "aws:asset:path": "asset.d4377494404a8042ad72457c1127fe8af19805436cacf8b307fc5c6f296f92ec",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "listuserslambdaServiceRole603C4391": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "list-users"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/list-users-lambda/ServiceRole/Resource"
+   }
+  },
+  "listuserslambdaServiceRoleDefaultPolicy2D74C775": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "ssm:GetParameters",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":ssm:",
+          {
+           "Ref": "AWS::Region"
+          },
+          ":",
+          {
+           "Ref": "AWS::AccountId"
+          },
+          ":parameter/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_AUTH_USERPOOL_ID"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "listuserslambdaServiceRoleDefaultPolicy2D74C775",
+    "Roles": [
+     {
+      "Ref": "listuserslambdaServiceRole603C4391"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/list-users-lambda/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "listuserslambda799DD7A4": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "748283a5c21c9f3095f4fd088f657674c516a998d1b7fa4fe9e9e7f629470117.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "AMPLIFY_SSM_ENV_CONFIG": "{\"/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_AUTH_USERPOOL_ID\":{\"name\":\"AMPLIFY_AUTH_USERPOOL_ID\"}}",
+      "AMPLIFY_AUTH_USERPOOL_ID": "<value will be resolved during runtime>"
+     }
+    },
+    "Handler": "index.handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "listuserslambdaServiceRole603C4391",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "list-users"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Timeout": 3
+   },
+   "DependsOn": [
+    "listuserslambdaServiceRole603C4391"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/list-users-lambda/Resource",
+    "aws:asset:path": "asset.748283a5c21c9f3095f4fd088f657674c516a998d1b7fa4fe9e9e7f629470117",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "listgroupsforuserlambdaServiceRoleFA01E1D4": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "list-groups-for-user"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/list-groups-for-user-lambda/ServiceRole/Resource"
+   }
+  },
+  "listgroupsforuserlambdaServiceRoleDefaultPolicyDCCB924D": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "ssm:GetParameters",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":ssm:",
+          {
+           "Ref": "AWS::Region"
+          },
+          ":",
+          {
+           "Ref": "AWS::AccountId"
+          },
+          ":parameter/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_AUTH_USERPOOL_ID"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "listgroupsforuserlambdaServiceRoleDefaultPolicyDCCB924D",
+    "Roles": [
+     {
+      "Ref": "listgroupsforuserlambdaServiceRoleFA01E1D4"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/list-groups-for-user-lambda/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "listgroupsforuserlambda6A943911": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "e4fa3a8a9fcb3df08a5569ad5b41a0df8e3990ad884de5048f135ccd8198c13b.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "AMPLIFY_SSM_ENV_CONFIG": "{\"/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_AUTH_USERPOOL_ID\":{\"name\":\"AMPLIFY_AUTH_USERPOOL_ID\"}}",
+      "AMPLIFY_AUTH_USERPOOL_ID": "<value will be resolved during runtime>"
+     }
+    },
+    "Handler": "index.handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "listgroupsforuserlambdaServiceRoleFA01E1D4",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "list-groups-for-user"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Timeout": 3
+   },
+   "DependsOn": [
+    "listgroupsforuserlambdaServiceRoleFA01E1D4"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/list-groups-for-user-lambda/Resource",
+    "aws:asset:path": "asset.e4fa3a8a9fcb3df08a5569ad5b41a0df8e3990ad884de5048f135ccd8198c13b",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "removeuserfromgrouplambdaServiceRoleA308B323": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "remove-user-from-group"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/remove-user-from-group-lambda/ServiceRole/Resource"
+   }
+  },
+  "removeuserfromgrouplambdaServiceRoleDefaultPolicyE38D03E0": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "ssm:GetParameters",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":ssm:",
+          {
+           "Ref": "AWS::Region"
+          },
+          ":",
+          {
+           "Ref": "AWS::AccountId"
+          },
+          ":parameter/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_AUTH_USERPOOL_ID"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "removeuserfromgrouplambdaServiceRoleDefaultPolicyE38D03E0",
+    "Roles": [
+     {
+      "Ref": "removeuserfromgrouplambdaServiceRoleA308B323"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/remove-user-from-group-lambda/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "removeuserfromgrouplambda240D8A3C": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "bb2c48a11d9d04ad47a41a63c35c2c4d2602dd5f3f5ea8faa857d79f7daba081.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "AMPLIFY_SSM_ENV_CONFIG": "{\"/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_AUTH_USERPOOL_ID\":{\"name\":\"AMPLIFY_AUTH_USERPOOL_ID\"}}",
+      "AMPLIFY_AUTH_USERPOOL_ID": "<value will be resolved during runtime>"
+     }
+    },
+    "Handler": "index.handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "removeuserfromgrouplambdaServiceRoleA308B323",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "remove-user-from-group"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Timeout": 3
+   },
+   "DependsOn": [
+    "removeuserfromgrouplambdaServiceRoleA308B323"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/remove-user-from-group-lambda/Resource",
+    "aws:asset:path": "asset.bb2c48a11d9d04ad47a41a63c35c2c4d2602dd5f3f5ea8faa857d79f7daba081",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "addusertogrouplambdaServiceRole7118A252": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "add-user-to-group"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/add-user-to-group-lambda/ServiceRole/Resource"
+   }
+  },
+  "addusertogrouplambdaServiceRoleDefaultPolicyFDAD0DD3": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "ssm:GetParameters",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":ssm:",
+          {
+           "Ref": "AWS::Region"
+          },
+          ":",
+          {
+           "Ref": "AWS::AccountId"
+          },
+          ":parameter/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_AUTH_USERPOOL_ID"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "addusertogrouplambdaServiceRoleDefaultPolicyFDAD0DD3",
+    "Roles": [
+     {
+      "Ref": "addusertogrouplambdaServiceRole7118A252"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/add-user-to-group-lambda/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "addusertogrouplambdaEEF41CC8": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "0ce557a50f0f1453715b4164f15033d0860a66761695b27deca0fb0500aadc3f.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "AMPLIFY_SSM_ENV_CONFIG": "{\"/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_AUTH_USERPOOL_ID\":{\"name\":\"AMPLIFY_AUTH_USERPOOL_ID\"}}",
+      "AMPLIFY_AUTH_USERPOOL_ID": "<value will be resolved during runtime>"
+     }
+    },
+    "Handler": "index.handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "addusertogrouplambdaServiceRole7118A252",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "add-user-to-group"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Timeout": 3
+   },
+   "DependsOn": [
+    "addusertogrouplambdaServiceRole7118A252"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/add-user-to-group-lambda/Resource",
+    "aws:asset:path": "asset.0ce557a50f0f1453715b4164f15033d0860a66761695b27deca0fb0500aadc3f",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "processImageslambdaServiceRoleEFA05367": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "processImages"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/processImages-lambda/ServiceRole/Resource"
+   }
+  },
+  "processImageslambdaServiceRoleDefaultPolicy9C01CDD9": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Effect": "Allow",
+       "Resource": "*",
+       "Sid": "AllowPublishToDigest"
+      },
+      {
+       "Action": "ssm:GetParameters",
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":ssm:",
+           {
+            "Ref": "AWS::Region"
+           },
+           ":",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":parameter/amplify/amplifyvitereacttemplate/phiez-sandbox-1988856b66/API_KEY"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":ssm:",
+           {
+            "Ref": "AWS::Region"
+           },
+           ":",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":parameter/amplify/shared/amplify-vite-react-template/API_KEY"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":ssm:",
+           {
+            "Ref": "AWS::Region"
+           },
+           ":",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":parameter/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_DATA_GRAPHQL_ENDPOINT"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":ssm:",
+           {
+            "Ref": "AWS::Region"
+           },
+           ":",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":parameter/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/OUTPUTS_BUCKET_NAME"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":ssm:",
+           {
+            "Ref": "AWS::Region"
+           },
+           ":",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":parameter/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/INPUTS_BUCKET_NAME"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "processImageslambdaServiceRoleDefaultPolicy9C01CDD9",
+    "Roles": [
+     {
+      "Ref": "processImageslambdaServiceRoleEFA05367"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/processImages-lambda/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "processImageslambda24101414": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "9af20e1b9b948768b34cbc1f8e72f474250289962b94ab95edecfa2f2c25b82a.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "API_KEY": "<value will be resolved during runtime>",
+      "AMPLIFY_SSM_ENV_CONFIG": "{\"/amplify/amplifyvitereacttemplate/phiez-sandbox-1988856b66/API_KEY\":{\"name\":\"API_KEY\",\"sharedPath\":\"/amplify/shared/amplify-vite-react-template/API_KEY\"},\"/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_DATA_GRAPHQL_ENDPOINT\":{\"name\":\"AMPLIFY_DATA_GRAPHQL_ENDPOINT\"},\"/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/OUTPUTS_BUCKET_NAME\":{\"name\":\"OUTPUTS_BUCKET_NAME\"},\"/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/INPUTS_BUCKET_NAME\":{\"name\":\"INPUTS_BUCKET_NAME\"}}",
+      "AMPLIFY_DATA_GRAPHQL_ENDPOINT": "<value will be resolved during runtime>",
+      "OUTPUTS_BUCKET_NAME": "<value will be resolved during runtime>",
+      "INPUTS_BUCKET_NAME": "<value will be resolved during runtime>",
+      "PROCESS_QUEUE_URL": {
+       "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomNestedStackDetwebCustomNestedStackResourceB98792C6Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomMyProcessorProcessingQueue89EE0123Ref"
+      }
+     }
+    },
+    "Handler": "index.handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "processImageslambdaServiceRoleEFA05367",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "processImages"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Timeout": 3
+   },
+   "DependsOn": [
+    "processImageslambdaServiceRoleDefaultPolicy9C01CDD9",
+    "processImageslambdaServiceRoleEFA05367"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/processImages-lambda/Resource",
+    "aws:asset:path": "asset.9af20e1b9b948768b34cbc1f8e72f474250289962b94ab95edecfa2f2c25b82a",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "getAnnotationCountslambdaServiceRole05EFB1D8": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "getAnnotationCounts"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/getAnnotationCounts-lambda/ServiceRole/Resource"
+   }
+  },
+  "getAnnotationCountslambdaServiceRoleDefaultPolicy96ABE29C": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "dynamodb:Query",
+       "Effect": "Allow",
+       "Resource": "*"
+      },
+      {
+       "Action": "ssm:GetParameters",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":ssm:",
+          {
+           "Ref": "AWS::Region"
+          },
+          ":",
+          {
+           "Ref": "AWS::AccountId"
+          },
+          ":parameter/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_DATA_GRAPHQL_ENDPOINT"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "getAnnotationCountslambdaServiceRoleDefaultPolicy96ABE29C",
+    "Roles": [
+     {
+      "Ref": "getAnnotationCountslambdaServiceRole05EFB1D8"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/getAnnotationCounts-lambda/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "getAnnotationCountslambdaBA60C100": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "e89a57b89670e94ebfcd18dd641eeec2712e4be8b126684a0774fa00ddca233d.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "AMPLIFY_SSM_ENV_CONFIG": "{\"/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/AMPLIFY_DATA_GRAPHQL_ENDPOINT\":{\"name\":\"AMPLIFY_DATA_GRAPHQL_ENDPOINT\"}}",
+      "AMPLIFY_DATA_GRAPHQL_ENDPOINT": "<value will be resolved during runtime>"
+     }
+    },
+    "Handler": "index.handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "getAnnotationCountslambdaServiceRole05EFB1D8",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "getAnnotationCounts"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Timeout": 3
+   },
+   "DependsOn": [
+    "getAnnotationCountslambdaServiceRoleDefaultPolicy96ABE29C",
+    "getAnnotationCountslambdaServiceRole05EFB1D8"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/getAnnotationCounts-lambda/Resource",
+    "aws:asset:path": "asset.e89a57b89670e94ebfcd18dd641eeec2712e4be8b126684a0774fa00ddca233d",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "handleS3UploadlambdaServiceRole0E826CB1": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "handleS3Upload"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/handleS3Upload-lambda/ServiceRole/Resource"
+   }
+  },
+  "handleS3UploadlambdaServiceRoleDefaultPolicyF4AC70E0": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "ssm:GetParameters",
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":ssm:",
+           {
+            "Ref": "AWS::Region"
+           },
+           ":",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":parameter/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/OUTPUTS_BUCKET_NAME"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":ssm:",
+           {
+            "Ref": "AWS::Region"
+           },
+           ":",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":parameter/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/INPUTS_BUCKET_NAME"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "handleS3UploadlambdaServiceRoleDefaultPolicyF4AC70E0",
+    "Roles": [
+     {
+      "Ref": "handleS3UploadlambdaServiceRole0E826CB1"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/handleS3Upload-lambda/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "handleS3Uploadlambda141D7B32": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "be49752092264937f371e1e8bae1299e2deb8119250d3bc195ed9ceb9ffb7f06.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "AMPLIFY_SSM_ENV_CONFIG": "{\"/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/OUTPUTS_BUCKET_NAME\":{\"name\":\"OUTPUTS_BUCKET_NAME\"},\"/amplify/resource_reference/amplifyvitereacttemplate/phiez-sandbox-1988856b66/INPUTS_BUCKET_NAME\":{\"name\":\"INPUTS_BUCKET_NAME\"}}",
+      "OUTPUTS_BUCKET_NAME": "<value will be resolved during runtime>",
+      "INPUTS_BUCKET_NAME": "<value will be resolved during runtime>"
+     }
+    },
+    "Handler": "index.handler",
+    "Layers": [
+     {
+      "Ref": "sharpLayer7B5FD301"
+     }
+    ],
+    "MemorySize": 2048,
+    "Role": {
+     "Fn::GetAtt": [
+      "handleS3UploadlambdaServiceRole0E826CB1",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "handleS3Upload"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Timeout": 60
+   },
+   "DependsOn": [
+    "handleS3UploadlambdaServiceRole0E826CB1"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/handleS3Upload-lambda/Resource",
+    "aws:asset:path": "asset.be49752092264937f371e1e8bae1299e2deb8119250d3bc195ed9ceb9ffb7f06",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "postDeploylambdaServiceRole8877FB13": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "postDeploy"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/postDeploy-lambda/ServiceRole/Resource"
+   }
+  },
+  "postDeploylambdaC913E494": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "c3d2c385e89f53fd893fa4edbdf80a9fc1871b46a8595544b9a20e64bafacf4b.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "AMPLIFY_SSM_ENV_CONFIG": "{}"
+     }
+    },
+    "Handler": "index.handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "postDeploylambdaServiceRole8877FB13",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Tags": [
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "sandbox"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "postDeploy"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ],
+    "Timeout": 3
+   },
+   "DependsOn": [
+    "postDeploylambdaServiceRole8877FB13"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/postDeploy-lambda/Resource",
+    "aws:asset:path": "asset.c3d2c385e89f53fd893fa4edbdf80a9fc1871b46a8595544b9a20e64bafacf4b",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "sharpLayer7B5FD301": {
+   "Type": "AWS::Lambda::LayerVersion",
+   "Properties": {
+    "CompatibleArchitectures": [
+     "x86_64"
+    ],
+    "Content": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "3f29593f87b646e40069131603d52472fd14e999dc98957401f79c8bec738932.zip"
+    },
+    "Description": "Sharp layer for image processing (ph200-x86_64)"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/sharpLayer/Resource",
+    "aws:asset:path": "asset.3f29593f87b646e40069131603d52472fd14e999dc98957401f79c8bec738932",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Content"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/02Py2rDQAxFvyV7Wc2DfEAz0FUIxYFujTIjB/mhAWvcEIz/vYxNQldHlwuHqz3ujkfcbuhhhQ9t0ckNpwtb4nBN5Fugh1VTR/0tUKUxcGN4WfA1qk8SFYR6nMrYMbhaF37HTvwzx/WawQ4VmXEy/MwAO+Bp9C2nExnDqsfJ1fq2nunJww8PloOr9X+eZyjZ4jh4hsV3TXQXvS8DXoWr1UUNkm0z5OnY2Mfvfou7/HBjIsUwapKesVz5B0UedTINAQAA"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/function/CDKMetadata/Default"
+   },
+   "Condition": "CDKMetadataAvailable"
+  }
+ },
+ "Conditions": {
+  "CDKMetadataAvailable": {
+   "Fn::Or": [
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "af-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-3"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-south-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-3"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-4"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ca-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ca-west-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "cn-north-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "cn-northwest-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-central-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-north-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-south-2"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-3"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "il-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "me-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "me-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "sa-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-east-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-west-1"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Equals": [
+      {
+       "Ref": "AWS::Region"
+      },
+      "us-west-2"
+     ]
+    }
+   ]
+  }
+ },
+ "Outputs": {
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionhandleNewUserlambda3AE36DADArn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "handleNewUserlambdaA5621325",
+     "Arn"
+    ]
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionhandleNewUserlambdaServiceRole75855C89Ref": {
+   "Value": {
+    "Ref": "handleNewUserlambdaServiceRole91575107"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functioncreategrouplambdaServiceRoleEE5C759FRef": {
+   "Value": {
+    "Ref": "creategrouplambdaServiceRole07D2EB70"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionlistuserslambdaServiceRole1F15D3E1Ref": {
+   "Value": {
+    "Ref": "listuserslambdaServiceRole603C4391"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionlistgroupsforuserlambdaServiceRole7E603AB9Ref": {
+   "Value": {
+    "Ref": "listgroupsforuserlambdaServiceRoleFA01E1D4"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionremoveuserfromgrouplambdaServiceRoleF459883ERef": {
+   "Value": {
+    "Ref": "removeuserfromgrouplambdaServiceRoleA308B323"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionaddusertogrouplambdaServiceRoleCD3E0FC2Ref": {
+   "Value": {
+    "Ref": "addusertogrouplambdaServiceRole7118A252"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionhandleNewUserlambda3AE36DADRef": {
+   "Value": {
+    "Ref": "handleNewUserlambdaA5621325"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functioncreategrouplambdaBC16EA7ERef": {
+   "Value": {
+    "Ref": "creategrouplambda96F839E0"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionlistuserslambdaEECD60E0Ref": {
+   "Value": {
+    "Ref": "listuserslambda799DD7A4"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionlistgroupsforuserlambdaB3A9AC47Ref": {
+   "Value": {
+    "Ref": "listgroupsforuserlambda6A943911"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionremoveuserfromgrouplambdaFD0CB08ERef": {
+   "Value": {
+    "Ref": "removeuserfromgrouplambda240D8A3C"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionaddusertogrouplambda805A4466Ref": {
+   "Value": {
+    "Ref": "addusertogrouplambdaEEF41CC8"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionprocessImageslambda01D291F5Ref": {
+   "Value": {
+    "Ref": "processImageslambda24101414"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functiongetAnnotationCountslambdaE3EF64CDRef": {
+   "Value": {
+    "Ref": "getAnnotationCountslambdaBA60C100"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionhandleS3UploadlambdaC0C3C80ARef": {
+   "Value": {
+    "Ref": "handleS3Uploadlambda141D7B32"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionpostDeploylambda91E77B83Ref": {
+   "Value": {
+    "Ref": "postDeploylambdaC913E494"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionaddusertogrouplambda805A4466Arn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "addusertogrouplambdaEEF41CC8",
+     "Arn"
+    ]
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functioncreategrouplambdaBC16EA7EArn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "creategrouplambda96F839E0",
+     "Arn"
+    ]
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionprocessImageslambda01D291F5Arn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "processImageslambda24101414",
+     "Arn"
+    ]
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionlistuserslambdaEECD60E0Arn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "listuserslambda799DD7A4",
+     "Arn"
+    ]
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionlistgroupsforuserlambdaB3A9AC47Arn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "listgroupsforuserlambda6A943911",
+     "Arn"
+    ]
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functiongetAnnotationCountslambdaE3EF64CDArn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "getAnnotationCountslambdaBA60C100",
+     "Arn"
+    ]
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functiongetAnnotationCountslambdaServiceRole61E7E3EERef": {
+   "Value": {
+    "Ref": "getAnnotationCountslambdaServiceRole05EFB1D8"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionprocessImageslambdaServiceRole79B1BA1CRef": {
+   "Value": {
+    "Ref": "processImageslambdaServiceRoleEFA05367"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionhandleS3UploadlambdaServiceRole515AE8C4Ref": {
+   "Value": {
+    "Ref": "handleS3UploadlambdaServiceRole0E826CB1"
+   }
+  },
+  "amplifyamplifyvitereacttemplatephiezsandbox1988856b66functionhandleS3UploadlambdaC0C3C80AArn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "handleS3Uploadlambda141D7B32",
+     "Arn"
+    ]
+   }
+  }
+ },
+ "Parameters": {
+  "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomNestedStackDetwebCustomNestedStackResourceB98792C6Outputsamplifyamplifyvitereacttemplatephiezsandbox1988856b66DetwebCustomMyProcessorProcessingQueue89EE0123Ref": {
+   "Type": "String"
+  }
+ }
+}

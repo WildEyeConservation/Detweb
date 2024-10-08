@@ -1,0 +1,35 @@
+## [Start] Invoke RDS Lambda data source. **
+#if( $ctx.stash.deniedField )
+  #set( $result = {
+  "items":   []
+} )
+  #return($result)
+#end
+#set( $lambdaInput = {} )
+#set( $lambdaInput.args = {} )
+#set( $lambdaInput.table = "ImageFile" )
+#set( $lambdaInput.operation = "LIST" )
+#set( $lambdaInput.operationName = "ConnectionQuery" )
+#set( $lambdaInput.args.metadata = {} )
+#set( $lambdaInput.args.metadata.keys = [] )
+#set( $lambdaInput.args.metadata.arrayFields = [] )
+#set( $lambdaInput.args.metadata.nonScalarFields = ["project", "image"] )
+#set( $lambdaInput.args.metadata.fieldMap = {} )
+$util.qr($lambdaInput.args.metadata.fieldMap.putAll($util.defaultIfNull($context.stash.fieldMap, {})))
+$util.qr($lambdaInput.args.putAll($util.defaultIfNull($context.arguments, {})))
+#if( !$lambdaInput.args.filter )
+  #set( $lambdaInput.args.filter = {} )
+#end
+#if( !$util.isNullOrEmpty($ctx.stash.authFilter) )
+  #set( $lambdaInput.args.metadata.authFilter = $ctx.stash.authFilter )
+#end
+$util.qr($lambdaInput.args.filter.put("projectId", {
+  "eq": $ctx.source.id
+}))
+$util.qr($lambdaInput.args.metadata.keys.addAll($util.defaultIfNull($ctx.stash.keys, [])))
+{
+  "version": "2018-05-29",
+  "operation": "Invoke",
+  "payload":   $util.toJson($lambdaInput)
+}
+## [End] Invoke RDS Lambda data source. **

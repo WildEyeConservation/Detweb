@@ -1,0 +1,41 @@
+## [Start] Check if subscriptions is protected. **
+#if( $util.defaultIfNull($ctx.source.get("__operation"), null) == "Mutation" )
+  $util.qr($ctx.stash.put("deniedField", true))
+#end
+## [End] Check if subscriptions is protected. **
+## [Start] Authorization Steps. **
+$util.qr($ctx.stash.put("hasAuth", true))
+#set( $isAuthorized = false )
+#if( $util.authType() == "API Key Authorization" )
+  #set( $isAuthorized = true )
+#end
+#if( $util.authType() == "IAM Authorization" )
+  #if( $util.authType() == "IAM Authorization" && $util.isNull($ctx.identity.cognitoIdentityPoolId) && $util.isNull($ctx.identity.cognitoIdentityId) )
+    $util.qr($ctx.stash.put("hasAuth", true))
+    #set( $isAuthorized = true )
+  #else
+    #if( !$isAuthorized )
+      #if( $ctx.identity.userArn == $ctx.stash.unauthRole )
+        #set( $isAuthorized = true )
+      #end
+    #end
+  #end
+#end
+#if( $util.authType() == "User Pool Authorization" )
+  #set( $isAuthorized = true )
+  #if( !$isAuthorized )
+    #set( $staticGroupRoles = [{"claim":"cognito:groups","entity":"admin"}] )
+    #foreach( $groupRole in $staticGroupRoles )
+      #set( $groupsInToken = $util.defaultIfNull($ctx.identity.claims.get($groupRole.claim), []) )
+      #if( $groupsInToken.contains($groupRole.entity) )
+        #set( $isAuthorized = true )
+        #break
+      #end
+    #end
+  #end
+#end
+#if( !$isAuthorized && $util.isNull($ctx.stash.authFilter) )
+$util.unauthorized()
+#end
+$util.toJson({"version":"2018-05-29","payload":{}})
+## [End] Authorization Steps. **

@@ -1,0 +1,47 @@
+## [Start] Authorization Steps. **
+$util.qr($ctx.stash.put("hasAuth", true))
+#set( $isAuthorized = false )
+#if( $util.authType() == "API Key Authorization" )
+$util.unauthorized()
+#end
+#if( $util.authType() == "IAM Authorization" )
+  #if( $util.authType() == "IAM Authorization" && $util.isNull($ctx.identity.cognitoIdentityPoolId) && $util.isNull($ctx.identity.cognitoIdentityId) )
+    $util.qr($ctx.stash.put("hasAuth", true))
+    #set( $isAuthorized = true )
+  #else
+$util.unauthorized()
+  #end
+#end
+#if( $util.authType() == "User Pool Authorization" )
+  #if( !$isAuthorized )
+    #set( $staticGroupRoles = [{"claim":"cognito:groups","entity":"admin"}] )
+    #foreach( $groupRole in $staticGroupRoles )
+      #set( $groupsInToken = $util.defaultIfNull($ctx.identity.claims.get($groupRole.claim), []) )
+      #if( $groupsInToken.contains($groupRole.entity) )
+        #set( $isAuthorized = true )
+        #break
+      #end
+    #end
+  #end
+  #if( !$isAuthorized )
+    #set( $groupEntity0 = $util.defaultIfNull($ctx.result.projectId, null) )
+    #set( $groupClaim0 = $util.defaultIfNull($ctx.identity.claims.get("cognito:groups"), []) )
+    #if( $util.isString($groupClaim0) )
+      #if( $util.isList($util.parseJson($groupClaim0)) )
+        #set( $groupClaim0 = $util.parseJson($groupClaim0) )
+      #else
+        #set( $groupClaim0 = [$groupClaim0] )
+      #end
+    #end
+    #foreach( $userGroup in $groupClaim0 )
+      #if( $groupEntity0 == $userGroup )
+        #set( $isAuthorized = true )
+      #end
+    #end
+  #end
+#end
+#if( !$isAuthorized )
+$util.unauthorized()
+#end
+$util.toJson({"version":"2018-05-29","payload":{}})
+## [End] Authorization Steps. **

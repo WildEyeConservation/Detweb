@@ -36,6 +36,8 @@ import { GlobalContext } from "./Context";
 import { Schema } from "../amplify/data/resource";
 import Test from "./Test";
 import { StorageImage } from '@aws-amplify/ui-react-storage';
+import { ErrorHandler } from './ErrorHandler';
+import {TaskProgressHandler} from './TaskProgressHandler';
 
 configure({ ignoreRepeatedEventsWhenKeyHeldDown: false });
 
@@ -218,6 +220,8 @@ function App({ signOut = () => {}, user }: AppProps) {
             a laptop or desktop device.
           </p>
         </MobileView>
+        <ErrorHandler />
+        <TaskProgressHandler />
       </>
     )
   );

@@ -5,6 +5,7 @@ import MyTable from './Table';
 import { PurgeQueueCommand, GetQueueAttributesCommand } from '@aws-sdk/client-sqs'
 import { type GetQueueAttributesCommandInput } from '@aws-sdk/client-sqs'
 import { Schema } from '../amplify/data/resource'
+import { publishError } from './ErrorHandler';
 
 
 export default function QueueManagement() {
@@ -54,22 +55,42 @@ export default function QueueManagement() {
       // 1. Deleting the queue from SQS
       // 2. Updating any users who were subscribed to this queue
       // 3. Removing the queue from the local state
-      deleteQueue(queue);
+      await deleteQueue(queue);
+      console.log(`Queue ${queue.id} deleted successfully`);
     } catch (error) {
       console.error('Error deleting queue:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      publishError(`Error deleting queue: ${errorMessage}`);
     }
   };
 
-  const unsubscribeAllUsers = (queueId:string) => {
-    console.log('Unsubscribe all users button pressed for queue:', queueId);
-    projectMemberships?.filter(pm => pm.queueId === queueId)?.forEach(
-      pm => updateProjectMembership({ id: pm.id, queueId: null }))
+  const unsubscribeAllUsers = async (queueId:string) => {
+    try {
+      console.log('Unsubscribing all users from queue:', queueId);
+      const usersToUpdate = projectMemberships?.filter(pm => pm.queueId === queueId);
+      if (usersToUpdate && usersToUpdate.length > 0) {
+        await Promise.all(usersToUpdate.map(pm => updateProjectMembership({ id: pm.id, queueId: null })));
+        console.log(`Unsubscribed ${usersToUpdate.length} users from queue ${queueId}`);
+      } else {
+        console.log(`No users subscribed to queue ${queueId}`);
+      }
+    } catch (error) {
+      console.error('Error unsubscribing users:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      publishError(`Error unsubscribing users from queue: ${errorMessage}`);
+    }
   };
 
-  const purgeQueueHandler = (queueUrl:string) => {
-    console.log('Purge queue button pressed for queue:', queueUrl);
-    sqsClient.send(new PurgeQueueCommand({QueueUrl: queueUrl}));
-    // TODO: Implement purge queue logic
+  const purgeQueueHandler = async (queueUrl:string) => {
+    try {
+      console.log('Purging queue:', queueUrl);
+      await sqsClient.send(new PurgeQueueCommand({QueueUrl: queueUrl}));
+      console.log(`Queue ${queueUrl} purged successfully`);
+    } catch (error) {
+      console.error('Error purging queue:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      publishError(`Error purging queue: ${errorMessage}`);
+    }
   };
 
   const tableData = queues

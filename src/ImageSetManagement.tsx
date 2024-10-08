@@ -13,6 +13,8 @@ import SubsampleModal from "./Subsample";
 import AddGpsData from "./AddGpsData";
 import CreateTask from "./CreateTask";
 import ProcessImages from './ProcessImages.tsx';
+import TemporalSubset from "./TemporalSubset";
+import FileStructureSubset from "./filestructuresubset";
 
 export default function ImageSetManagement() {
   const { client, modalToShow, showModal } = useContext(GlobalContext)!
@@ -120,6 +122,16 @@ export default function ImageSetManagement() {
         handleClose={() => showModal(null)}
         selectedImageSets={selectedSets}
         setSelectedImageSets={setSelectedSets}
+      />
+      <TemporalSubset
+        show={modalToShow == "temporalSubset"}
+        handleClose={() => showModal(null)}
+        selectedImageSets={selectedSets}
+      />
+      <FileStructureSubset
+        show={modalToShow == "FileStructureSubset"}
+        handleClose={() => showModal(null)}
+        selectedImageSets={selectedSets}
       />
 
       <Row className="justify-content-center mt-3">

@@ -1,0 +1,1446 @@
+type Project @aws_iam @aws_cognito_user_pools {
+  name: String!
+  categories(filter: ModelCategoryFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelCategoryConnection
+  images(filter: ModelImageFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelImageConnection
+  imageMetas(filter: ModelImageMetaFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelImageMetaConnection
+  annotations(filter: ModelAnnotationFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelAnnotationConnection
+  objects(filter: ModelObjectFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelObjectConnection
+  imageSets(filter: ModelImageSetFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelImageSetConnection
+  annotationSets(filter: ModelAnnotationSetFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelAnnotationSetConnection
+  locations(filter: ModelLocationFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelLocationConnection
+  locationSets(filter: ModelLocationSetFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelLocationSetConnection
+  observations(filter: ModelObservationFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelObservationConnection
+  members(filter: ModelUserProjectMembershipFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelUserProjectMembershipConnection
+  queues(filter: ModelQueueFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelQueueConnection
+  id: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type Category @aws_iam @aws_cognito_user_pools {
+  projectId: ID!
+  project: Project
+  name: String!
+  color: String
+  shortcutKey: String
+  annotations(filter: ModelAnnotationFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelAnnotationConnection
+  objects(filter: ModelObjectFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelObjectConnection
+  id: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type ImageMeta @aws_iam @aws_cognito_user_pools {
+  projectId: ID!
+  project: Project
+  latitude: Float
+  longitude: Float
+  altitude_wgs84: Float
+  altitude_agl: Float
+  altitude_egm96: Float
+  width: Int!
+  height: Int!
+  roll: Float
+  yaw: Float
+  pitch: Float
+  timestamp: AWSDateTime
+  exifData: String
+  cameraSerial: String
+  images(filter: ModelImageFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelImageConnection
+  locations(filter: ModelLocationFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelLocationConnection
+  annotations(filter: ModelAnnotationFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelAnnotationConnection
+  id: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type Image @aws_iam @aws_cognito_user_pools {
+  projectId: ID!
+  project: Project
+  derivedFrom: ID
+  path: String!
+  metaId: ID
+  meta: ImageMeta
+  type: String!
+  sets(filter: ModelImageSetMembershipFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelImageSetMembershipConnection
+  id: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type AnnotationSet @aws_iam @aws_cognito_user_pools {
+  projectId: ID!
+  project: Project
+  name: String!
+  annotations(filter: ModelAnnotationFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelAnnotationConnection
+  observations(filter: ModelObservationFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelObservationConnection
+  id: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type Annotation @aws_iam @aws_cognito_user_pools {
+  projectId: ID!
+  project: Project
+  setId: ID!
+  set: AnnotationSet
+  source: String!
+  categoryId: ID!
+  category: Category
+  metaId: ID!
+  image: ImageMeta
+  x: Int!
+  y: Int!
+  objectId: ID
+  object: Object
+  id: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  owner: String
+}
+
+type Object @aws_iam @aws_cognito_user_pools {
+  projectId: ID!
+  project: Project
+  annotations(filter: ModelAnnotationFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelAnnotationConnection
+  categoryId: ID!
+  category: Category
+  id: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type Location @aws_iam @aws_cognito_user_pools {
+  projectId: ID!
+  project: Project
+  metaId: ID
+  meta: ImageMeta
+  setId: ID!
+  set: LocationSet
+  height: Int
+  width: Int
+  x: Int!
+  y: Int!
+  source: String!
+  confidence: Float
+  observations(filter: ModelObservationFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelObservationConnection
+  sets(filter: ModelLocationSetMembershipFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelLocationSetMembershipConnection
+  id: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type Observation @aws_iam @aws_cognito_user_pools {
+  projectId: ID!
+  project: Project
+  locationId: ID!
+  location: Location
+  annotationSetId: ID!
+  annotationSet: AnnotationSet
+  id: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  owner: String
+}
+
+type LocationSet @aws_iam @aws_cognito_user_pools {
+  projectId: ID!
+  project: Project
+  locations(filter: ModelLocationFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelLocationConnection
+  memberships(filter: ModelLocationSetMembershipFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelLocationSetMembershipConnection
+  id: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type LocationSetMembership @aws_iam @aws_cognito_user_pools {
+  locationId: ID!
+  locationSetId: ID!
+  location: Location
+  locationSet: LocationSet
+  id: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type ImageSetMembership @aws_iam @aws_cognito_user_pools {
+  imageId: ID!
+  imageSetId: ID!
+  image: Image
+  imageSet: ImageSet
+  id: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type ImageSet @aws_iam @aws_cognito_user_pools {
+  projectId: ID!
+  project: Project
+  name: String!
+  images(filter: ModelImageSetMembershipFilterInput, sortDirection: ModelSortDirection, limit: Int, nextToken: String): ModelImageSetMembershipConnection
+  id: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type UserProjectMembership @aws_iam @aws_cognito_user_pools {
+  userId: String!
+  projectId: ID!
+  project: Project
+  queueUrl: String
+  id: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type Queue @aws_iam @aws_cognito_user_pools {
+  projectId: ID!
+  project: Project
+  name: String!
+  url: String!
+  id: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type UserType @aws_cognito_user_pools(cognito_groups: ["admin"]) {
+  id: String!
+  name: String!
+  isAdmin: Boolean
+}
+
+type ListUsersReturnType @aws_cognito_user_pools(cognito_groups: ["admin"]) {
+  Users: [UserType]
+  NextToken: String
+}
+
+type Mutation {
+  createProject(input: CreateProjectInput!, condition: ModelProjectConditionInput): Project @aws_iam @aws_cognito_user_pools
+  updateProject(input: UpdateProjectInput!, condition: ModelProjectConditionInput): Project @aws_iam @aws_cognito_user_pools
+  deleteProject(input: DeleteProjectInput!, condition: ModelProjectConditionInput): Project @aws_iam @aws_cognito_user_pools
+  createCategory(input: CreateCategoryInput!, condition: ModelCategoryConditionInput): Category @aws_iam @aws_cognito_user_pools
+  updateCategory(input: UpdateCategoryInput!, condition: ModelCategoryConditionInput): Category @aws_iam @aws_cognito_user_pools
+  deleteCategory(input: DeleteCategoryInput!, condition: ModelCategoryConditionInput): Category @aws_iam @aws_cognito_user_pools
+  createImageMeta(input: CreateImageMetaInput!, condition: ModelImageMetaConditionInput): ImageMeta @aws_iam @aws_cognito_user_pools
+  updateImageMeta(input: UpdateImageMetaInput!, condition: ModelImageMetaConditionInput): ImageMeta @aws_iam @aws_cognito_user_pools
+  deleteImageMeta(input: DeleteImageMetaInput!, condition: ModelImageMetaConditionInput): ImageMeta @aws_iam @aws_cognito_user_pools
+  createImage(input: CreateImageInput!, condition: ModelImageConditionInput): Image @aws_iam @aws_cognito_user_pools
+  updateImage(input: UpdateImageInput!, condition: ModelImageConditionInput): Image @aws_iam @aws_cognito_user_pools
+  deleteImage(input: DeleteImageInput!, condition: ModelImageConditionInput): Image @aws_iam @aws_cognito_user_pools
+  createAnnotationSet(input: CreateAnnotationSetInput!, condition: ModelAnnotationSetConditionInput): AnnotationSet @aws_iam @aws_cognito_user_pools
+  updateAnnotationSet(input: UpdateAnnotationSetInput!, condition: ModelAnnotationSetConditionInput): AnnotationSet @aws_iam @aws_cognito_user_pools
+  deleteAnnotationSet(input: DeleteAnnotationSetInput!, condition: ModelAnnotationSetConditionInput): AnnotationSet @aws_iam @aws_cognito_user_pools
+  createAnnotation(input: CreateAnnotationInput!, condition: ModelAnnotationConditionInput): Annotation @aws_iam @aws_cognito_user_pools
+  updateAnnotation(input: UpdateAnnotationInput!, condition: ModelAnnotationConditionInput): Annotation @aws_iam @aws_cognito_user_pools
+  deleteAnnotation(input: DeleteAnnotationInput!, condition: ModelAnnotationConditionInput): Annotation @aws_iam @aws_cognito_user_pools
+  createObject(input: CreateObjectInput!, condition: ModelObjectConditionInput): Object @aws_iam @aws_cognito_user_pools
+  updateObject(input: UpdateObjectInput!, condition: ModelObjectConditionInput): Object @aws_iam @aws_cognito_user_pools
+  deleteObject(input: DeleteObjectInput!, condition: ModelObjectConditionInput): Object @aws_iam @aws_cognito_user_pools
+  createLocation(input: CreateLocationInput!, condition: ModelLocationConditionInput): Location @aws_iam @aws_cognito_user_pools
+  updateLocation(input: UpdateLocationInput!, condition: ModelLocationConditionInput): Location @aws_iam @aws_cognito_user_pools
+  deleteLocation(input: DeleteLocationInput!, condition: ModelLocationConditionInput): Location @aws_iam @aws_cognito_user_pools
+  createObservation(input: CreateObservationInput!, condition: ModelObservationConditionInput): Observation @aws_iam @aws_cognito_user_pools
+  updateObservation(input: UpdateObservationInput!, condition: ModelObservationConditionInput): Observation @aws_iam @aws_cognito_user_pools
+  deleteObservation(input: DeleteObservationInput!, condition: ModelObservationConditionInput): Observation @aws_iam @aws_cognito_user_pools
+  createLocationSet(input: CreateLocationSetInput!, condition: ModelLocationSetConditionInput): LocationSet @aws_iam @aws_cognito_user_pools
+  updateLocationSet(input: UpdateLocationSetInput!, condition: ModelLocationSetConditionInput): LocationSet @aws_iam @aws_cognito_user_pools
+  deleteLocationSet(input: DeleteLocationSetInput!, condition: ModelLocationSetConditionInput): LocationSet @aws_iam @aws_cognito_user_pools
+  createLocationSetMembership(input: CreateLocationSetMembershipInput!, condition: ModelLocationSetMembershipConditionInput): LocationSetMembership @aws_iam @aws_cognito_user_pools
+  updateLocationSetMembership(input: UpdateLocationSetMembershipInput!, condition: ModelLocationSetMembershipConditionInput): LocationSetMembership @aws_iam @aws_cognito_user_pools
+  deleteLocationSetMembership(input: DeleteLocationSetMembershipInput!, condition: ModelLocationSetMembershipConditionInput): LocationSetMembership @aws_iam @aws_cognito_user_pools
+  createImageSetMembership(input: CreateImageSetMembershipInput!, condition: ModelImageSetMembershipConditionInput): ImageSetMembership @aws_iam @aws_cognito_user_pools
+  updateImageSetMembership(input: UpdateImageSetMembershipInput!, condition: ModelImageSetMembershipConditionInput): ImageSetMembership @aws_iam @aws_cognito_user_pools
+  deleteImageSetMembership(input: DeleteImageSetMembershipInput!, condition: ModelImageSetMembershipConditionInput): ImageSetMembership @aws_iam @aws_cognito_user_pools
+  createImageSet(input: CreateImageSetInput!, condition: ModelImageSetConditionInput): ImageSet @aws_iam @aws_cognito_user_pools
+  updateImageSet(input: UpdateImageSetInput!, condition: ModelImageSetConditionInput): ImageSet @aws_iam @aws_cognito_user_pools
+  deleteImageSet(input: DeleteImageSetInput!, condition: ModelImageSetConditionInput): ImageSet @aws_iam @aws_cognito_user_pools
+  createUserProjectMembership(input: CreateUserProjectMembershipInput!, condition: ModelUserProjectMembershipConditionInput): UserProjectMembership @aws_iam @aws_cognito_user_pools
+  updateUserProjectMembership(input: UpdateUserProjectMembershipInput!, condition: ModelUserProjectMembershipConditionInput): UserProjectMembership @aws_iam @aws_cognito_user_pools
+  deleteUserProjectMembership(input: DeleteUserProjectMembershipInput!, condition: ModelUserProjectMembershipConditionInput): UserProjectMembership @aws_iam @aws_cognito_user_pools
+  createQueue(input: CreateQueueInput!, condition: ModelQueueConditionInput): Queue @aws_iam @aws_cognito_user_pools
+  updateQueue(input: UpdateQueueInput!, condition: ModelQueueConditionInput): Queue @aws_iam @aws_cognito_user_pools
+  deleteQueue(input: DeleteQueueInput!, condition: ModelQueueConditionInput): Queue @aws_iam @aws_cognito_user_pools
+  addUserToGroup(userId: String!, groupName: String!): AWSJSON @aws_iam @aws_cognito_user_pools
+  removeUserFromGroup(userId: String!, groupName: String!): AWSJSON @aws_iam @aws_cognito_user_pools
+  createGroup(groupName: String!): AWSJSON @aws_iam @aws_cognito_user_pools
+}
+
+type Query {
+  getProject(id: ID!): Project @aws_iam @aws_cognito_user_pools
+  listProjects(filter: ModelProjectFilterInput, limit: Int, nextToken: String): ModelProjectConnection @aws_iam @aws_cognito_user_pools
+  getCategory(id: ID!): Category @aws_iam @aws_cognito_user_pools
+  listCategories(filter: ModelCategoryFilterInput, limit: Int, nextToken: String): ModelCategoryConnection @aws_iam @aws_cognito_user_pools
+  categoriesByProjectId(projectId: ID!, sortDirection: ModelSortDirection, filter: ModelCategoryFilterInput, limit: Int, nextToken: String): ModelCategoryConnection @aws_iam @aws_cognito_user_pools
+  getImageMeta(id: ID!): ImageMeta @aws_iam @aws_cognito_user_pools
+  listImageMetas(filter: ModelImageMetaFilterInput, limit: Int, nextToken: String): ModelImageMetaConnection @aws_iam @aws_cognito_user_pools
+  getImage(id: ID!): Image @aws_iam @aws_cognito_user_pools
+  listImages(filter: ModelImageFilterInput, limit: Int, nextToken: String): ModelImageConnection @aws_iam @aws_cognito_user_pools
+  imagesByMetaId(metaId: ID!, sortDirection: ModelSortDirection, filter: ModelImageFilterInput, limit: Int, nextToken: String): ModelImageConnection @aws_iam @aws_cognito_user_pools
+  getAnnotationSet(id: ID!): AnnotationSet @aws_iam @aws_cognito_user_pools
+  listAnnotationSets(filter: ModelAnnotationSetFilterInput, limit: Int, nextToken: String): ModelAnnotationSetConnection @aws_iam @aws_cognito_user_pools
+  annotationSetsByProjectId(projectId: ID!, sortDirection: ModelSortDirection, filter: ModelAnnotationSetFilterInput, limit: Int, nextToken: String): ModelAnnotationSetConnection @aws_iam @aws_cognito_user_pools
+  getAnnotation(id: ID!): Annotation @aws_iam @aws_cognito_user_pools
+  listAnnotations(filter: ModelAnnotationFilterInput, limit: Int, nextToken: String): ModelAnnotationConnection @aws_iam @aws_cognito_user_pools
+  annotationsByAnnotationSetId(setId: ID!, sortDirection: ModelSortDirection, filter: ModelAnnotationFilterInput, limit: Int, nextToken: String): ModelAnnotationConnection @aws_iam @aws_cognito_user_pools
+  annotationsByCategoryId(categoryId: ID!, sortDirection: ModelSortDirection, filter: ModelAnnotationFilterInput, limit: Int, nextToken: String): ModelAnnotationConnection @aws_iam @aws_cognito_user_pools
+  annotationsByMetaId(metaId: ID!, sortDirection: ModelSortDirection, filter: ModelAnnotationFilterInput, limit: Int, nextToken: String): ModelAnnotationConnection @aws_iam @aws_cognito_user_pools
+  annotationsByObjectId(objectId: ID!, sortDirection: ModelSortDirection, filter: ModelAnnotationFilterInput, limit: Int, nextToken: String): ModelAnnotationConnection @aws_iam @aws_cognito_user_pools
+  getObject(id: ID!): Object @aws_iam @aws_cognito_user_pools
+  listObjects(filter: ModelObjectFilterInput, limit: Int, nextToken: String): ModelObjectConnection @aws_iam @aws_cognito_user_pools
+  objectsByCategoryId(categoryId: ID!, sortDirection: ModelSortDirection, filter: ModelObjectFilterInput, limit: Int, nextToken: String): ModelObjectConnection @aws_iam @aws_cognito_user_pools
+  getLocation(id: ID!): Location @aws_iam @aws_cognito_user_pools
+  listLocations(filter: ModelLocationFilterInput, limit: Int, nextToken: String): ModelLocationConnection @aws_iam @aws_cognito_user_pools
+  locationsByImageKey(metaId: ID!, sortDirection: ModelSortDirection, filter: ModelLocationFilterInput, limit: Int, nextToken: String): ModelLocationConnection @aws_iam @aws_cognito_user_pools
+  locationsBySetId(setId: ID!, sortDirection: ModelSortDirection, filter: ModelLocationFilterInput, limit: Int, nextToken: String): ModelLocationConnection @aws_iam @aws_cognito_user_pools
+  getObservation(id: ID!): Observation @aws_iam @aws_cognito_user_pools
+  listObservations(filter: ModelObservationFilterInput, limit: Int, nextToken: String): ModelObservationConnection @aws_iam @aws_cognito_user_pools
+  observationsByLocationId(locationId: ID!, sortDirection: ModelSortDirection, filter: ModelObservationFilterInput, limit: Int, nextToken: String): ModelObservationConnection @aws_iam @aws_cognito_user_pools
+  observationsByAnnotationSetId(annotationSetId: ID!, sortDirection: ModelSortDirection, filter: ModelObservationFilterInput, limit: Int, nextToken: String): ModelObservationConnection @aws_iam @aws_cognito_user_pools
+  getLocationSet(id: ID!): LocationSet @aws_iam @aws_cognito_user_pools
+  listLocationSets(filter: ModelLocationSetFilterInput, limit: Int, nextToken: String): ModelLocationSetConnection @aws_iam @aws_cognito_user_pools
+  locationSetsByProjectId(projectId: ID!, sortDirection: ModelSortDirection, filter: ModelLocationSetFilterInput, limit: Int, nextToken: String): ModelLocationSetConnection @aws_iam @aws_cognito_user_pools
+  getLocationSetMembership(id: ID!): LocationSetMembership @aws_iam @aws_cognito_user_pools
+  listLocationSetMemberships(filter: ModelLocationSetMembershipFilterInput, limit: Int, nextToken: String): ModelLocationSetMembershipConnection @aws_iam @aws_cognito_user_pools
+  getImageSetMembership(id: ID!): ImageSetMembership @aws_iam @aws_cognito_user_pools
+  listImageSetMemberships(filter: ModelImageSetMembershipFilterInput, limit: Int, nextToken: String): ModelImageSetMembershipConnection @aws_iam @aws_cognito_user_pools
+  imageSetMemberShipsByImageSetName(imageSetId: ID!, sortDirection: ModelSortDirection, filter: ModelImageSetMembershipFilterInput, limit: Int, nextToken: String): ModelImageSetMembershipConnection @aws_iam @aws_cognito_user_pools
+  getImageSet(id: ID!): ImageSet @aws_iam @aws_cognito_user_pools
+  listImageSets(filter: ModelImageSetFilterInput, limit: Int, nextToken: String): ModelImageSetConnection @aws_iam @aws_cognito_user_pools
+  imageSetsByProjectId(projectId: ID!, sortDirection: ModelSortDirection, filter: ModelImageSetFilterInput, limit: Int, nextToken: String): ModelImageSetConnection @aws_iam @aws_cognito_user_pools
+  getUserProjectMembership(id: ID!): UserProjectMembership @aws_iam @aws_cognito_user_pools
+  listUserProjectMemberships(filter: ModelUserProjectMembershipFilterInput, limit: Int, nextToken: String): ModelUserProjectMembershipConnection @aws_iam @aws_cognito_user_pools
+  userProjectMembershipsByUserId(userId: String!, sortDirection: ModelSortDirection, filter: ModelUserProjectMembershipFilterInput, limit: Int, nextToken: String): ModelUserProjectMembershipConnection @aws_iam @aws_cognito_user_pools
+  userProjectMembershipsByProjectId(projectId: ID!, sortDirection: ModelSortDirection, filter: ModelUserProjectMembershipFilterInput, limit: Int, nextToken: String): ModelUserProjectMembershipConnection @aws_iam @aws_cognito_user_pools
+  userProjectMembershipsByQueueUrl(queueUrl: String!, sortDirection: ModelSortDirection, filter: ModelUserProjectMembershipFilterInput, limit: Int, nextToken: String): ModelUserProjectMembershipConnection @aws_iam @aws_cognito_user_pools
+  getQueue(id: ID!): Queue @aws_iam @aws_cognito_user_pools
+  listQueues(filter: ModelQueueFilterInput, limit: Int, nextToken: String): ModelQueueConnection @aws_iam @aws_cognito_user_pools
+  queuesByProjectId(projectId: ID!, sortDirection: ModelSortDirection, filter: ModelQueueFilterInput, limit: Int, nextToken: String): ModelQueueConnection @aws_iam @aws_cognito_user_pools
+  listUsers(nextToken: String): ListUsersReturnType @aws_iam @aws_cognito_user_pools
+  listGroupsForUser(userId: String!, nextToken: String): AWSJSON @aws_iam @aws_cognito_user_pools
+}
+
+input ModelStringInput {
+  ne: String
+  eq: String
+  le: String
+  lt: String
+  ge: String
+  gt: String
+  contains: String
+  notContains: String
+  between: [String]
+  beginsWith: String
+  attributeExists: Boolean
+  attributeType: ModelAttributeTypes
+  size: ModelSizeInput
+}
+
+input ModelIntInput {
+  ne: Int
+  eq: Int
+  le: Int
+  lt: Int
+  ge: Int
+  gt: Int
+  between: [Int]
+  attributeExists: Boolean
+  attributeType: ModelAttributeTypes
+}
+
+input ModelFloatInput {
+  ne: Float
+  eq: Float
+  le: Float
+  lt: Float
+  ge: Float
+  gt: Float
+  between: [Float]
+  attributeExists: Boolean
+  attributeType: ModelAttributeTypes
+}
+
+input ModelBooleanInput {
+  ne: Boolean
+  eq: Boolean
+  attributeExists: Boolean
+  attributeType: ModelAttributeTypes
+}
+
+input ModelIDInput {
+  ne: ID
+  eq: ID
+  le: ID
+  lt: ID
+  ge: ID
+  gt: ID
+  contains: ID
+  notContains: ID
+  between: [ID]
+  beginsWith: ID
+  attributeExists: Boolean
+  attributeType: ModelAttributeTypes
+  size: ModelSizeInput
+}
+
+input ModelSubscriptionStringInput {
+  ne: String
+  eq: String
+  le: String
+  lt: String
+  ge: String
+  gt: String
+  contains: String
+  notContains: String
+  between: [String]
+  beginsWith: String
+  in: [String]
+  notIn: [String]
+}
+
+input ModelSubscriptionIntInput {
+  ne: Int
+  eq: Int
+  le: Int
+  lt: Int
+  ge: Int
+  gt: Int
+  between: [Int]
+  in: [Int]
+  notIn: [Int]
+}
+
+input ModelSubscriptionFloatInput {
+  ne: Float
+  eq: Float
+  le: Float
+  lt: Float
+  ge: Float
+  gt: Float
+  between: [Float]
+  in: [Float]
+  notIn: [Float]
+}
+
+input ModelSubscriptionBooleanInput {
+  ne: Boolean
+  eq: Boolean
+}
+
+input ModelSubscriptionIDInput {
+  ne: ID
+  eq: ID
+  le: ID
+  lt: ID
+  ge: ID
+  gt: ID
+  contains: ID
+  notContains: ID
+  between: [ID]
+  beginsWith: ID
+  in: [ID]
+  notIn: [ID]
+}
+
+enum ModelAttributeTypes {
+  binary
+  binarySet
+  bool
+  list
+  map
+  number
+  numberSet
+  string
+  stringSet
+  _null
+}
+
+input ModelSizeInput {
+  ne: Int
+  eq: Int
+  le: Int
+  lt: Int
+  ge: Int
+  gt: Int
+  between: [Int]
+}
+
+enum ModelSortDirection {
+  ASC
+  DESC
+}
+
+type ModelProjectConnection @aws_iam @aws_cognito_user_pools {
+  items: [Project]!
+  nextToken: String
+}
+
+input ModelProjectFilterInput {
+  name: ModelStringInput
+  id: ModelIDInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+  and: [ModelProjectFilterInput]
+  or: [ModelProjectFilterInput]
+  not: ModelProjectFilterInput
+}
+
+input ModelProjectConditionInput {
+  name: ModelStringInput
+  and: [ModelProjectConditionInput]
+  or: [ModelProjectConditionInput]
+  not: ModelProjectConditionInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+}
+
+input CreateProjectInput {
+  name: String!
+  id: ID
+}
+
+input UpdateProjectInput {
+  name: String
+  id: ID!
+}
+
+input DeleteProjectInput {
+  id: ID!
+}
+
+input ModelSubscriptionProjectFilterInput {
+  id: ModelSubscriptionIDInput
+  createdAt: ModelSubscriptionStringInput
+  updatedAt: ModelSubscriptionStringInput
+  and: [ModelSubscriptionProjectFilterInput]
+  or: [ModelSubscriptionProjectFilterInput]
+}
+
+type Subscription {
+  onCreateProject(filter: ModelSubscriptionProjectFilterInput): Project @aws_subscribe(mutations: ["createProject"]) @aws_iam @aws_cognito_user_pools
+  onUpdateProject(filter: ModelSubscriptionProjectFilterInput): Project @aws_subscribe(mutations: ["updateProject"]) @aws_iam @aws_cognito_user_pools
+  onDeleteProject(filter: ModelSubscriptionProjectFilterInput): Project @aws_subscribe(mutations: ["deleteProject"]) @aws_iam @aws_cognito_user_pools
+  onCreateCategory(filter: ModelSubscriptionCategoryFilterInput): Category @aws_subscribe(mutations: ["createCategory"]) @aws_iam @aws_cognito_user_pools
+  onUpdateCategory(filter: ModelSubscriptionCategoryFilterInput): Category @aws_subscribe(mutations: ["updateCategory"]) @aws_iam @aws_cognito_user_pools
+  onDeleteCategory(filter: ModelSubscriptionCategoryFilterInput): Category @aws_subscribe(mutations: ["deleteCategory"]) @aws_iam @aws_cognito_user_pools
+  onCreateImageMeta(filter: ModelSubscriptionImageMetaFilterInput): ImageMeta @aws_subscribe(mutations: ["createImageMeta"]) @aws_iam @aws_cognito_user_pools
+  onUpdateImageMeta(filter: ModelSubscriptionImageMetaFilterInput): ImageMeta @aws_subscribe(mutations: ["updateImageMeta"]) @aws_iam @aws_cognito_user_pools
+  onDeleteImageMeta(filter: ModelSubscriptionImageMetaFilterInput): ImageMeta @aws_subscribe(mutations: ["deleteImageMeta"]) @aws_iam @aws_cognito_user_pools
+  onCreateImage(filter: ModelSubscriptionImageFilterInput): Image @aws_subscribe(mutations: ["createImage"]) @aws_iam @aws_cognito_user_pools
+  onUpdateImage(filter: ModelSubscriptionImageFilterInput): Image @aws_subscribe(mutations: ["updateImage"]) @aws_iam @aws_cognito_user_pools
+  onDeleteImage(filter: ModelSubscriptionImageFilterInput): Image @aws_subscribe(mutations: ["deleteImage"]) @aws_iam @aws_cognito_user_pools
+  onCreateAnnotationSet(filter: ModelSubscriptionAnnotationSetFilterInput): AnnotationSet @aws_subscribe(mutations: ["createAnnotationSet"]) @aws_iam @aws_cognito_user_pools
+  onUpdateAnnotationSet(filter: ModelSubscriptionAnnotationSetFilterInput): AnnotationSet @aws_subscribe(mutations: ["updateAnnotationSet"]) @aws_iam @aws_cognito_user_pools
+  onDeleteAnnotationSet(filter: ModelSubscriptionAnnotationSetFilterInput): AnnotationSet @aws_subscribe(mutations: ["deleteAnnotationSet"]) @aws_iam @aws_cognito_user_pools
+  onCreateAnnotation(filter: ModelSubscriptionAnnotationFilterInput, owner: String): Annotation @aws_subscribe(mutations: ["createAnnotation"]) @aws_iam @aws_cognito_user_pools
+  onUpdateAnnotation(filter: ModelSubscriptionAnnotationFilterInput, owner: String): Annotation @aws_subscribe(mutations: ["updateAnnotation"]) @aws_iam @aws_cognito_user_pools
+  onDeleteAnnotation(filter: ModelSubscriptionAnnotationFilterInput, owner: String): Annotation @aws_subscribe(mutations: ["deleteAnnotation"]) @aws_iam @aws_cognito_user_pools
+  onCreateObject(filter: ModelSubscriptionObjectFilterInput): Object @aws_subscribe(mutations: ["createObject"]) @aws_iam @aws_cognito_user_pools
+  onUpdateObject(filter: ModelSubscriptionObjectFilterInput): Object @aws_subscribe(mutations: ["updateObject"]) @aws_iam @aws_cognito_user_pools
+  onDeleteObject(filter: ModelSubscriptionObjectFilterInput): Object @aws_subscribe(mutations: ["deleteObject"]) @aws_iam @aws_cognito_user_pools
+  onCreateLocation(filter: ModelSubscriptionLocationFilterInput): Location @aws_subscribe(mutations: ["createLocation"]) @aws_iam @aws_cognito_user_pools
+  onUpdateLocation(filter: ModelSubscriptionLocationFilterInput): Location @aws_subscribe(mutations: ["updateLocation"]) @aws_iam @aws_cognito_user_pools
+  onDeleteLocation(filter: ModelSubscriptionLocationFilterInput): Location @aws_subscribe(mutations: ["deleteLocation"]) @aws_iam @aws_cognito_user_pools
+  onCreateObservation(filter: ModelSubscriptionObservationFilterInput, owner: String): Observation @aws_subscribe(mutations: ["createObservation"]) @aws_iam @aws_cognito_user_pools
+  onUpdateObservation(filter: ModelSubscriptionObservationFilterInput, owner: String): Observation @aws_subscribe(mutations: ["updateObservation"]) @aws_iam @aws_cognito_user_pools
+  onDeleteObservation(filter: ModelSubscriptionObservationFilterInput, owner: String): Observation @aws_subscribe(mutations: ["deleteObservation"]) @aws_iam @aws_cognito_user_pools
+  onCreateLocationSet(filter: ModelSubscriptionLocationSetFilterInput): LocationSet @aws_subscribe(mutations: ["createLocationSet"]) @aws_iam @aws_cognito_user_pools
+  onUpdateLocationSet(filter: ModelSubscriptionLocationSetFilterInput): LocationSet @aws_subscribe(mutations: ["updateLocationSet"]) @aws_iam @aws_cognito_user_pools
+  onDeleteLocationSet(filter: ModelSubscriptionLocationSetFilterInput): LocationSet @aws_subscribe(mutations: ["deleteLocationSet"]) @aws_iam @aws_cognito_user_pools
+  onCreateLocationSetMembership(filter: ModelSubscriptionLocationSetMembershipFilterInput): LocationSetMembership @aws_subscribe(mutations: ["createLocationSetMembership"]) @aws_iam @aws_cognito_user_pools
+  onUpdateLocationSetMembership(filter: ModelSubscriptionLocationSetMembershipFilterInput): LocationSetMembership @aws_subscribe(mutations: ["updateLocationSetMembership"]) @aws_iam @aws_cognito_user_pools
+  onDeleteLocationSetMembership(filter: ModelSubscriptionLocationSetMembershipFilterInput): LocationSetMembership @aws_subscribe(mutations: ["deleteLocationSetMembership"]) @aws_iam @aws_cognito_user_pools
+  onCreateImageSetMembership(filter: ModelSubscriptionImageSetMembershipFilterInput): ImageSetMembership @aws_subscribe(mutations: ["createImageSetMembership"]) @aws_iam @aws_cognito_user_pools
+  onUpdateImageSetMembership(filter: ModelSubscriptionImageSetMembershipFilterInput): ImageSetMembership @aws_subscribe(mutations: ["updateImageSetMembership"]) @aws_iam @aws_cognito_user_pools
+  onDeleteImageSetMembership(filter: ModelSubscriptionImageSetMembershipFilterInput): ImageSetMembership @aws_subscribe(mutations: ["deleteImageSetMembership"]) @aws_iam @aws_cognito_user_pools
+  onCreateImageSet(filter: ModelSubscriptionImageSetFilterInput): ImageSet @aws_subscribe(mutations: ["createImageSet"]) @aws_iam @aws_cognito_user_pools
+  onUpdateImageSet(filter: ModelSubscriptionImageSetFilterInput): ImageSet @aws_subscribe(mutations: ["updateImageSet"]) @aws_iam @aws_cognito_user_pools
+  onDeleteImageSet(filter: ModelSubscriptionImageSetFilterInput): ImageSet @aws_subscribe(mutations: ["deleteImageSet"]) @aws_iam @aws_cognito_user_pools
+  onCreateUserProjectMembership(filter: ModelSubscriptionUserProjectMembershipFilterInput): UserProjectMembership @aws_subscribe(mutations: ["createUserProjectMembership"]) @aws_iam @aws_cognito_user_pools
+  onUpdateUserProjectMembership(filter: ModelSubscriptionUserProjectMembershipFilterInput): UserProjectMembership @aws_subscribe(mutations: ["updateUserProjectMembership"]) @aws_iam @aws_cognito_user_pools
+  onDeleteUserProjectMembership(filter: ModelSubscriptionUserProjectMembershipFilterInput): UserProjectMembership @aws_subscribe(mutations: ["deleteUserProjectMembership"]) @aws_iam @aws_cognito_user_pools
+  onCreateQueue(filter: ModelSubscriptionQueueFilterInput): Queue @aws_subscribe(mutations: ["createQueue"]) @aws_iam @aws_cognito_user_pools
+  onUpdateQueue(filter: ModelSubscriptionQueueFilterInput): Queue @aws_subscribe(mutations: ["updateQueue"]) @aws_iam @aws_cognito_user_pools
+  onDeleteQueue(filter: ModelSubscriptionQueueFilterInput): Queue @aws_subscribe(mutations: ["deleteQueue"]) @aws_iam @aws_cognito_user_pools
+}
+
+type ModelCategoryConnection @aws_iam @aws_cognito_user_pools {
+  items: [Category]!
+  nextToken: String
+}
+
+input ModelCategoryFilterInput {
+  projectId: ModelIDInput
+  name: ModelStringInput
+  color: ModelStringInput
+  shortcutKey: ModelStringInput
+  id: ModelIDInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+  and: [ModelCategoryFilterInput]
+  or: [ModelCategoryFilterInput]
+  not: ModelCategoryFilterInput
+}
+
+input ModelCategoryConditionInput {
+  projectId: ModelIDInput
+  name: ModelStringInput
+  color: ModelStringInput
+  shortcutKey: ModelStringInput
+  and: [ModelCategoryConditionInput]
+  or: [ModelCategoryConditionInput]
+  not: ModelCategoryConditionInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+}
+
+input CreateCategoryInput {
+  projectId: ID!
+  name: String!
+  color: String
+  shortcutKey: String
+  id: ID
+}
+
+input UpdateCategoryInput {
+  projectId: ID
+  name: String
+  color: String
+  shortcutKey: String
+  id: ID!
+}
+
+input DeleteCategoryInput {
+  id: ID!
+}
+
+input ModelSubscriptionCategoryFilterInput {
+  name: ModelSubscriptionStringInput
+  color: ModelSubscriptionStringInput
+  shortcutKey: ModelSubscriptionStringInput
+  id: ModelSubscriptionIDInput
+  createdAt: ModelSubscriptionStringInput
+  updatedAt: ModelSubscriptionStringInput
+  and: [ModelSubscriptionCategoryFilterInput]
+  or: [ModelSubscriptionCategoryFilterInput]
+}
+
+type ModelImageMetaConnection @aws_iam @aws_cognito_user_pools {
+  items: [ImageMeta]!
+  nextToken: String
+}
+
+input ModelImageMetaFilterInput {
+  projectId: ModelIDInput
+  latitude: ModelFloatInput
+  longitude: ModelFloatInput
+  altitude_wgs84: ModelFloatInput
+  altitude_agl: ModelFloatInput
+  altitude_egm96: ModelFloatInput
+  width: ModelIntInput
+  height: ModelIntInput
+  roll: ModelFloatInput
+  yaw: ModelFloatInput
+  pitch: ModelFloatInput
+  timestamp: ModelStringInput
+  exifData: ModelStringInput
+  cameraSerial: ModelStringInput
+  id: ModelIDInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+  and: [ModelImageMetaFilterInput]
+  or: [ModelImageMetaFilterInput]
+  not: ModelImageMetaFilterInput
+}
+
+input ModelImageMetaConditionInput {
+  projectId: ModelIDInput
+  latitude: ModelFloatInput
+  longitude: ModelFloatInput
+  altitude_wgs84: ModelFloatInput
+  altitude_agl: ModelFloatInput
+  altitude_egm96: ModelFloatInput
+  width: ModelIntInput
+  height: ModelIntInput
+  roll: ModelFloatInput
+  yaw: ModelFloatInput
+  pitch: ModelFloatInput
+  timestamp: ModelStringInput
+  exifData: ModelStringInput
+  cameraSerial: ModelStringInput
+  and: [ModelImageMetaConditionInput]
+  or: [ModelImageMetaConditionInput]
+  not: ModelImageMetaConditionInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+}
+
+input CreateImageMetaInput {
+  projectId: ID!
+  latitude: Float
+  longitude: Float
+  altitude_wgs84: Float
+  altitude_agl: Float
+  altitude_egm96: Float
+  width: Int!
+  height: Int!
+  roll: Float
+  yaw: Float
+  pitch: Float
+  timestamp: AWSDateTime
+  exifData: String
+  cameraSerial: String
+  id: ID
+}
+
+input UpdateImageMetaInput {
+  projectId: ID
+  latitude: Float
+  longitude: Float
+  altitude_wgs84: Float
+  altitude_agl: Float
+  altitude_egm96: Float
+  width: Int
+  height: Int
+  roll: Float
+  yaw: Float
+  pitch: Float
+  timestamp: AWSDateTime
+  exifData: String
+  cameraSerial: String
+  id: ID!
+}
+
+input DeleteImageMetaInput {
+  id: ID!
+}
+
+input ModelSubscriptionImageMetaFilterInput {
+  latitude: ModelSubscriptionFloatInput
+  longitude: ModelSubscriptionFloatInput
+  altitude_wgs84: ModelSubscriptionFloatInput
+  altitude_agl: ModelSubscriptionFloatInput
+  altitude_egm96: ModelSubscriptionFloatInput
+  width: ModelSubscriptionIntInput
+  height: ModelSubscriptionIntInput
+  roll: ModelSubscriptionFloatInput
+  yaw: ModelSubscriptionFloatInput
+  pitch: ModelSubscriptionFloatInput
+  timestamp: ModelSubscriptionStringInput
+  exifData: ModelSubscriptionStringInput
+  cameraSerial: ModelSubscriptionStringInput
+  id: ModelSubscriptionIDInput
+  createdAt: ModelSubscriptionStringInput
+  updatedAt: ModelSubscriptionStringInput
+  and: [ModelSubscriptionImageMetaFilterInput]
+  or: [ModelSubscriptionImageMetaFilterInput]
+}
+
+type ModelImageConnection @aws_iam @aws_cognito_user_pools @aws_api_key {
+  items: [Image]!
+  nextToken: String
+}
+
+input ModelImageFilterInput {
+  projectId: ModelIDInput
+  derivedFrom: ModelIDInput
+  path: ModelStringInput
+  metaId: ModelIDInput
+  type: ModelStringInput
+  id: ModelIDInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+  and: [ModelImageFilterInput]
+  or: [ModelImageFilterInput]
+  not: ModelImageFilterInput
+}
+
+input ModelImageConditionInput {
+  projectId: ModelIDInput
+  derivedFrom: ModelIDInput
+  path: ModelStringInput
+  metaId: ModelIDInput
+  type: ModelStringInput
+  and: [ModelImageConditionInput]
+  or: [ModelImageConditionInput]
+  not: ModelImageConditionInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+}
+
+input CreateImageInput {
+  projectId: ID!
+  derivedFrom: ID
+  path: String!
+  metaId: ID
+  type: String!
+  id: ID
+}
+
+input UpdateImageInput {
+  projectId: ID
+  derivedFrom: ID
+  path: String
+  metaId: ID
+  type: String
+  id: ID!
+}
+
+input DeleteImageInput {
+  id: ID!
+}
+
+input ModelSubscriptionImageFilterInput {
+  derivedFrom: ModelSubscriptionIDInput
+  path: ModelSubscriptionStringInput
+  metaId: ModelSubscriptionIDInput
+  type: ModelSubscriptionStringInput
+  id: ModelSubscriptionIDInput
+  createdAt: ModelSubscriptionStringInput
+  updatedAt: ModelSubscriptionStringInput
+  and: [ModelSubscriptionImageFilterInput]
+  or: [ModelSubscriptionImageFilterInput]
+}
+
+type ModelAnnotationSetConnection @aws_iam @aws_cognito_user_pools {
+  items: [AnnotationSet]!
+  nextToken: String
+}
+
+input ModelAnnotationSetFilterInput {
+  projectId: ModelIDInput
+  name: ModelStringInput
+  id: ModelIDInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+  and: [ModelAnnotationSetFilterInput]
+  or: [ModelAnnotationSetFilterInput]
+  not: ModelAnnotationSetFilterInput
+}
+
+input ModelAnnotationSetConditionInput {
+  projectId: ModelIDInput
+  name: ModelStringInput
+  and: [ModelAnnotationSetConditionInput]
+  or: [ModelAnnotationSetConditionInput]
+  not: ModelAnnotationSetConditionInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+}
+
+input CreateAnnotationSetInput {
+  projectId: ID!
+  name: String!
+  id: ID
+}
+
+input UpdateAnnotationSetInput {
+  projectId: ID
+  name: String
+  id: ID!
+}
+
+input DeleteAnnotationSetInput {
+  id: ID!
+}
+
+input ModelSubscriptionAnnotationSetFilterInput {
+  name: ModelSubscriptionStringInput
+  id: ModelSubscriptionIDInput
+  createdAt: ModelSubscriptionStringInput
+  updatedAt: ModelSubscriptionStringInput
+  and: [ModelSubscriptionAnnotationSetFilterInput]
+  or: [ModelSubscriptionAnnotationSetFilterInput]
+}
+
+type ModelAnnotationConnection @aws_iam @aws_cognito_user_pools @aws_api_key {
+  items: [Annotation]!
+  nextToken: String
+}
+
+input ModelAnnotationFilterInput {
+  projectId: ModelIDInput
+  setId: ModelIDInput
+  source: ModelStringInput
+  categoryId: ModelIDInput
+  metaId: ModelIDInput
+  x: ModelIntInput
+  y: ModelIntInput
+  objectId: ModelIDInput
+  id: ModelIDInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+  and: [ModelAnnotationFilterInput]
+  or: [ModelAnnotationFilterInput]
+  not: ModelAnnotationFilterInput
+  owner: ModelStringInput
+}
+
+input ModelAnnotationConditionInput {
+  projectId: ModelIDInput
+  setId: ModelIDInput
+  source: ModelStringInput
+  categoryId: ModelIDInput
+  metaId: ModelIDInput
+  x: ModelIntInput
+  y: ModelIntInput
+  objectId: ModelIDInput
+  and: [ModelAnnotationConditionInput]
+  or: [ModelAnnotationConditionInput]
+  not: ModelAnnotationConditionInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+  owner: ModelStringInput
+}
+
+input CreateAnnotationInput {
+  projectId: ID!
+  setId: ID!
+  source: String!
+  categoryId: ID!
+  metaId: ID!
+  x: Int!
+  y: Int!
+  objectId: ID
+  id: ID
+}
+
+input UpdateAnnotationInput {
+  projectId: ID
+  setId: ID
+  source: String
+  categoryId: ID
+  metaId: ID
+  x: Int
+  y: Int
+  objectId: ID
+  id: ID!
+}
+
+input DeleteAnnotationInput {
+  id: ID!
+}
+
+input ModelSubscriptionAnnotationFilterInput {
+  setId: ModelSubscriptionIDInput
+  source: ModelSubscriptionStringInput
+  categoryId: ModelSubscriptionIDInput
+  metaId: ModelSubscriptionIDInput
+  x: ModelSubscriptionIntInput
+  y: ModelSubscriptionIntInput
+  objectId: ModelSubscriptionIDInput
+  id: ModelSubscriptionIDInput
+  createdAt: ModelSubscriptionStringInput
+  updatedAt: ModelSubscriptionStringInput
+  and: [ModelSubscriptionAnnotationFilterInput]
+  or: [ModelSubscriptionAnnotationFilterInput]
+  owner: ModelStringInput
+}
+
+type ModelObjectConnection @aws_iam @aws_cognito_user_pools @aws_api_key {
+  items: [Object]!
+  nextToken: String
+}
+
+input ModelObjectFilterInput {
+  projectId: ModelIDInput
+  categoryId: ModelIDInput
+  id: ModelIDInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+  and: [ModelObjectFilterInput]
+  or: [ModelObjectFilterInput]
+  not: ModelObjectFilterInput
+}
+
+input ModelObjectConditionInput {
+  projectId: ModelIDInput
+  categoryId: ModelIDInput
+  and: [ModelObjectConditionInput]
+  or: [ModelObjectConditionInput]
+  not: ModelObjectConditionInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+}
+
+input CreateObjectInput {
+  projectId: ID!
+  categoryId: ID!
+  id: ID
+}
+
+input UpdateObjectInput {
+  projectId: ID
+  categoryId: ID
+  id: ID!
+}
+
+input DeleteObjectInput {
+  id: ID!
+}
+
+input ModelSubscriptionObjectFilterInput {
+  categoryId: ModelSubscriptionIDInput
+  id: ModelSubscriptionIDInput
+  createdAt: ModelSubscriptionStringInput
+  updatedAt: ModelSubscriptionStringInput
+  and: [ModelSubscriptionObjectFilterInput]
+  or: [ModelSubscriptionObjectFilterInput]
+}
+
+type ModelLocationConnection @aws_iam @aws_cognito_user_pools @aws_api_key {
+  items: [Location]!
+  nextToken: String
+}
+
+input ModelLocationFilterInput {
+  projectId: ModelIDInput
+  metaId: ModelIDInput
+  setId: ModelIDInput
+  height: ModelIntInput
+  width: ModelIntInput
+  x: ModelIntInput
+  y: ModelIntInput
+  source: ModelStringInput
+  confidence: ModelFloatInput
+  id: ModelIDInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+  and: [ModelLocationFilterInput]
+  or: [ModelLocationFilterInput]
+  not: ModelLocationFilterInput
+}
+
+input ModelLocationConditionInput {
+  projectId: ModelIDInput
+  metaId: ModelIDInput
+  setId: ModelIDInput
+  height: ModelIntInput
+  width: ModelIntInput
+  x: ModelIntInput
+  y: ModelIntInput
+  source: ModelStringInput
+  confidence: ModelFloatInput
+  and: [ModelLocationConditionInput]
+  or: [ModelLocationConditionInput]
+  not: ModelLocationConditionInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+}
+
+input CreateLocationInput {
+  projectId: ID!
+  metaId: ID
+  setId: ID!
+  height: Int
+  width: Int
+  x: Int!
+  y: Int!
+  source: String!
+  confidence: Float
+  id: ID
+}
+
+input UpdateLocationInput {
+  projectId: ID
+  metaId: ID
+  setId: ID
+  height: Int
+  width: Int
+  x: Int
+  y: Int
+  source: String
+  confidence: Float
+  id: ID!
+}
+
+input DeleteLocationInput {
+  id: ID!
+}
+
+input ModelSubscriptionLocationFilterInput {
+  metaId: ModelSubscriptionIDInput
+  setId: ModelSubscriptionIDInput
+  height: ModelSubscriptionIntInput
+  width: ModelSubscriptionIntInput
+  x: ModelSubscriptionIntInput
+  y: ModelSubscriptionIntInput
+  source: ModelSubscriptionStringInput
+  confidence: ModelSubscriptionFloatInput
+  id: ModelSubscriptionIDInput
+  createdAt: ModelSubscriptionStringInput
+  updatedAt: ModelSubscriptionStringInput
+  and: [ModelSubscriptionLocationFilterInput]
+  or: [ModelSubscriptionLocationFilterInput]
+}
+
+type ModelObservationConnection @aws_iam @aws_cognito_user_pools @aws_api_key {
+  items: [Observation]!
+  nextToken: String
+}
+
+input ModelObservationFilterInput {
+  projectId: ModelIDInput
+  locationId: ModelIDInput
+  annotationSetId: ModelIDInput
+  id: ModelIDInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+  and: [ModelObservationFilterInput]
+  or: [ModelObservationFilterInput]
+  not: ModelObservationFilterInput
+  owner: ModelStringInput
+}
+
+input ModelObservationConditionInput {
+  projectId: ModelIDInput
+  locationId: ModelIDInput
+  annotationSetId: ModelIDInput
+  and: [ModelObservationConditionInput]
+  or: [ModelObservationConditionInput]
+  not: ModelObservationConditionInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+  owner: ModelStringInput
+}
+
+input CreateObservationInput {
+  projectId: ID!
+  locationId: ID!
+  annotationSetId: ID!
+  id: ID
+}
+
+input UpdateObservationInput {
+  projectId: ID
+  locationId: ID
+  annotationSetId: ID
+  id: ID!
+}
+
+input DeleteObservationInput {
+  id: ID!
+}
+
+input ModelSubscriptionObservationFilterInput {
+  locationId: ModelSubscriptionIDInput
+  annotationSetId: ModelSubscriptionIDInput
+  id: ModelSubscriptionIDInput
+  createdAt: ModelSubscriptionStringInput
+  updatedAt: ModelSubscriptionStringInput
+  and: [ModelSubscriptionObservationFilterInput]
+  or: [ModelSubscriptionObservationFilterInput]
+  owner: ModelStringInput
+}
+
+type ModelLocationSetConnection @aws_iam @aws_cognito_user_pools {
+  items: [LocationSet]!
+  nextToken: String
+}
+
+input ModelLocationSetFilterInput {
+  projectId: ModelIDInput
+  id: ModelIDInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+  and: [ModelLocationSetFilterInput]
+  or: [ModelLocationSetFilterInput]
+  not: ModelLocationSetFilterInput
+}
+
+input ModelLocationSetConditionInput {
+  projectId: ModelIDInput
+  and: [ModelLocationSetConditionInput]
+  or: [ModelLocationSetConditionInput]
+  not: ModelLocationSetConditionInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+}
+
+input CreateLocationSetInput {
+  projectId: ID!
+  id: ID
+}
+
+input UpdateLocationSetInput {
+  projectId: ID
+  id: ID!
+}
+
+input DeleteLocationSetInput {
+  id: ID!
+}
+
+input ModelSubscriptionLocationSetFilterInput {
+  id: ModelSubscriptionIDInput
+  createdAt: ModelSubscriptionStringInput
+  updatedAt: ModelSubscriptionStringInput
+  and: [ModelSubscriptionLocationSetFilterInput]
+  or: [ModelSubscriptionLocationSetFilterInput]
+}
+
+type ModelLocationSetMembershipConnection @aws_iam @aws_cognito_user_pools @aws_api_key {
+  items: [LocationSetMembership]!
+  nextToken: String
+}
+
+input ModelLocationSetMembershipFilterInput {
+  locationId: ModelIDInput
+  locationSetId: ModelIDInput
+  id: ModelIDInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+  and: [ModelLocationSetMembershipFilterInput]
+  or: [ModelLocationSetMembershipFilterInput]
+  not: ModelLocationSetMembershipFilterInput
+}
+
+input ModelLocationSetMembershipConditionInput {
+  locationId: ModelIDInput
+  locationSetId: ModelIDInput
+  and: [ModelLocationSetMembershipConditionInput]
+  or: [ModelLocationSetMembershipConditionInput]
+  not: ModelLocationSetMembershipConditionInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+}
+
+input CreateLocationSetMembershipInput {
+  locationId: ID!
+  locationSetId: ID!
+  id: ID
+}
+
+input UpdateLocationSetMembershipInput {
+  locationId: ID
+  locationSetId: ID
+  id: ID!
+}
+
+input DeleteLocationSetMembershipInput {
+  id: ID!
+}
+
+input ModelSubscriptionLocationSetMembershipFilterInput {
+  locationId: ModelSubscriptionIDInput
+  locationSetId: ModelSubscriptionIDInput
+  id: ModelSubscriptionIDInput
+  createdAt: ModelSubscriptionStringInput
+  updatedAt: ModelSubscriptionStringInput
+  and: [ModelSubscriptionLocationSetMembershipFilterInput]
+  or: [ModelSubscriptionLocationSetMembershipFilterInput]
+}
+
+type ModelImageSetMembershipConnection @aws_iam @aws_cognito_user_pools @aws_api_key {
+  items: [ImageSetMembership]!
+  nextToken: String
+}
+
+input ModelImageSetMembershipFilterInput {
+  imageId: ModelIDInput
+  imageSetId: ModelIDInput
+  id: ModelIDInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+  and: [ModelImageSetMembershipFilterInput]
+  or: [ModelImageSetMembershipFilterInput]
+  not: ModelImageSetMembershipFilterInput
+}
+
+input ModelImageSetMembershipConditionInput {
+  imageId: ModelIDInput
+  imageSetId: ModelIDInput
+  and: [ModelImageSetMembershipConditionInput]
+  or: [ModelImageSetMembershipConditionInput]
+  not: ModelImageSetMembershipConditionInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+}
+
+input CreateImageSetMembershipInput {
+  imageId: ID!
+  imageSetId: ID!
+  id: ID
+}
+
+input UpdateImageSetMembershipInput {
+  imageId: ID
+  imageSetId: ID
+  id: ID!
+}
+
+input DeleteImageSetMembershipInput {
+  id: ID!
+}
+
+input ModelSubscriptionImageSetMembershipFilterInput {
+  imageId: ModelSubscriptionIDInput
+  imageSetId: ModelSubscriptionIDInput
+  id: ModelSubscriptionIDInput
+  createdAt: ModelSubscriptionStringInput
+  updatedAt: ModelSubscriptionStringInput
+  and: [ModelSubscriptionImageSetMembershipFilterInput]
+  or: [ModelSubscriptionImageSetMembershipFilterInput]
+}
+
+type ModelImageSetConnection @aws_iam @aws_cognito_user_pools {
+  items: [ImageSet]!
+  nextToken: String
+}
+
+input ModelImageSetFilterInput {
+  projectId: ModelIDInput
+  name: ModelStringInput
+  id: ModelIDInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+  and: [ModelImageSetFilterInput]
+  or: [ModelImageSetFilterInput]
+  not: ModelImageSetFilterInput
+}
+
+input ModelImageSetConditionInput {
+  projectId: ModelIDInput
+  name: ModelStringInput
+  and: [ModelImageSetConditionInput]
+  or: [ModelImageSetConditionInput]
+  not: ModelImageSetConditionInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+}
+
+input CreateImageSetInput {
+  projectId: ID!
+  name: String!
+  id: ID
+}
+
+input UpdateImageSetInput {
+  projectId: ID
+  name: String
+  id: ID!
+}
+
+input DeleteImageSetInput {
+  id: ID!
+}
+
+input ModelSubscriptionImageSetFilterInput {
+  name: ModelSubscriptionStringInput
+  id: ModelSubscriptionIDInput
+  createdAt: ModelSubscriptionStringInput
+  updatedAt: ModelSubscriptionStringInput
+  and: [ModelSubscriptionImageSetFilterInput]
+  or: [ModelSubscriptionImageSetFilterInput]
+}
+
+type ModelUserProjectMembershipConnection @aws_iam @aws_cognito_user_pools {
+  items: [UserProjectMembership]!
+  nextToken: String
+}
+
+input ModelUserProjectMembershipFilterInput {
+  userId: ModelStringInput
+  projectId: ModelIDInput
+  queueUrl: ModelStringInput
+  id: ModelIDInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+  and: [ModelUserProjectMembershipFilterInput]
+  or: [ModelUserProjectMembershipFilterInput]
+  not: ModelUserProjectMembershipFilterInput
+}
+
+input ModelUserProjectMembershipConditionInput {
+  userId: ModelStringInput
+  projectId: ModelIDInput
+  queueUrl: ModelStringInput
+  and: [ModelUserProjectMembershipConditionInput]
+  or: [ModelUserProjectMembershipConditionInput]
+  not: ModelUserProjectMembershipConditionInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+}
+
+input CreateUserProjectMembershipInput {
+  userId: String!
+  projectId: ID!
+  queueUrl: String
+  id: ID
+}
+
+input UpdateUserProjectMembershipInput {
+  userId: String
+  projectId: ID
+  queueUrl: String
+  id: ID!
+}
+
+input DeleteUserProjectMembershipInput {
+  id: ID!
+}
+
+input ModelSubscriptionUserProjectMembershipFilterInput {
+  userId: ModelSubscriptionStringInput
+  queueUrl: ModelSubscriptionStringInput
+  id: ModelSubscriptionIDInput
+  createdAt: ModelSubscriptionStringInput
+  updatedAt: ModelSubscriptionStringInput
+  and: [ModelSubscriptionUserProjectMembershipFilterInput]
+  or: [ModelSubscriptionUserProjectMembershipFilterInput]
+}
+
+type ModelQueueConnection @aws_iam @aws_cognito_user_pools {
+  items: [Queue]!
+  nextToken: String
+}
+
+input ModelQueueFilterInput {
+  projectId: ModelIDInput
+  name: ModelStringInput
+  url: ModelStringInput
+  id: ModelIDInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+  and: [ModelQueueFilterInput]
+  or: [ModelQueueFilterInput]
+  not: ModelQueueFilterInput
+}
+
+input ModelQueueConditionInput {
+  projectId: ModelIDInput
+  name: ModelStringInput
+  url: ModelStringInput
+  and: [ModelQueueConditionInput]
+  or: [ModelQueueConditionInput]
+  not: ModelQueueConditionInput
+  createdAt: ModelStringInput
+  updatedAt: ModelStringInput
+}
+
+input CreateQueueInput {
+  projectId: ID!
+  name: String!
+  url: String!
+  id: ID
+}
+
+input UpdateQueueInput {
+  projectId: ID
+  name: String
+  url: String
+  id: ID!
+}
+
+input DeleteQueueInput {
+  id: ID!
+}
+
+input ModelSubscriptionQueueFilterInput {
+  name: ModelSubscriptionStringInput
+  url: ModelSubscriptionStringInput
+  id: ModelSubscriptionIDInput
+  createdAt: ModelSubscriptionStringInput
+  updatedAt: ModelSubscriptionStringInput
+  and: [ModelSubscriptionQueueFilterInput]
+  or: [ModelSubscriptionQueueFilterInput]
+}
