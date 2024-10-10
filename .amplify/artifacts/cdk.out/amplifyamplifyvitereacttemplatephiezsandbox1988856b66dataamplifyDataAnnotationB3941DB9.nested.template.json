@@ -465,11 +465,15 @@
       }
      },
      {
-      "indexName": "annotationsByImageId",
+      "indexName": "annotationsByImageIdAndSetId",
       "keySchema": [
        {
         "attributeName": "imageId",
         "keyType": "HASH"
+       },
+       {
+        "attributeName": "setId",
+        "keyType": "RANGE"
        }
       ],
       "projection": {
@@ -2493,7 +2497,7 @@
     "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/Annotation/queryAnnotationsByCategoryIdResolver"
    }
   },
-  "QueryannotationsByimageIdauth0FunctionQueryannotationsByimageIdauth0FunctionAppSyncFunction2CDE31FA": {
+  "QueryannotationsByImageIdAndSetIdauth0FunctionQueryannotationsByImageIdAndSetIdauth0FunctionAppSyncFunctionC1A19286": {
    "Type": "AWS::AppSync::FunctionConfiguration",
    "Properties": {
     "ApiId": {
@@ -2503,17 +2507,17 @@
      "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
     },
     "FunctionVersion": "2018-05-29",
-    "Name": "QueryannotationsByimageIdauth0Function",
+    "Name": "QueryannotationsByImageIdAndSetIdauth0Function",
     "RequestMappingTemplateS3Location": {
      "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/6f1b01c4b2882f213b91241f489e2393bc199b215b8b1695ea62da2156719905.vtl"
     },
     "ResponseMappingTemplate": "$util.toJson({})"
    },
    "Metadata": {
-    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/Annotation/QueryannotationsByimageIdauth0Function/QueryannotationsByimageIdauth0Function.AppSyncFunction"
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/Annotation/QueryannotationsByImageIdAndSetIdauth0Function/QueryannotationsByImageIdAndSetIdauth0Function.AppSyncFunction"
    }
   },
-  "QueryannotationsByimageIdpostAuth0FunctionQueryannotationsByimageIdpostAuth0FunctionAppSyncFunction178EE919": {
+  "QueryannotationsByImageIdAndSetIdpostAuth0FunctionQueryannotationsByImageIdAndSetIdpostAuth0FunctionAppSyncFunctionD1217C3A": {
    "Type": "AWS::AppSync::FunctionConfiguration",
    "Properties": {
     "ApiId": {
@@ -2523,17 +2527,17 @@
      "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPINONEDS9FF0BC3EName"
     },
     "FunctionVersion": "2018-05-29",
-    "Name": "QueryannotationsByimageIdpostAuth0Function",
+    "Name": "QueryannotationsByImageIdAndSetIdpostAuth0Function",
     "RequestMappingTemplateS3Location": {
      "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/c1721bcd774e27c514d3454b5be4f9bdd094c0161b57ddf053d618e3b0086a77.vtl"
     },
     "ResponseMappingTemplate": "$util.toJson({})"
    },
    "Metadata": {
-    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/Annotation/QueryannotationsByimageIdpostAuth0Function/QueryannotationsByimageIdpostAuth0Function.AppSyncFunction"
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/Annotation/QueryannotationsByImageIdAndSetIdpostAuth0Function/QueryannotationsByImageIdAndSetIdpostAuth0Function.AppSyncFunction"
    }
   },
-  "QueryAnnotationsByimageIdDataResolverFnQueryAnnotationsByimageIdDataResolverFnAppSyncFunction3B665C0B": {
+  "QueryAnnotationsByImageIdAndSetIdDataResolverFnQueryAnnotationsByImageIdAndSetIdDataResolverFnAppSyncFunctionD88E4AAD": {
    "Type": "AWS::AppSync::FunctionConfiguration",
    "Properties": {
     "ApiId": {
@@ -2546,9 +2550,9 @@
      ]
     },
     "FunctionVersion": "2018-05-29",
-    "Name": "QueryAnnotationsByimageIdDataResolverFn",
+    "Name": "QueryAnnotationsByImageIdAndSetIdDataResolverFn",
     "RequestMappingTemplateS3Location": {
-     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/2f359ebb8c97ea9216e33e812d1e80a5c79a1154f2e5fb802a6fef53f06e14bb.vtl"
+     "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/aad04db20d15722a6602249776eeeefb491044a87e2b78cdebbc9d7fea2157d2.vtl"
     },
     "ResponseMappingTemplateS3Location": {
      "Fn::Sub": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/098c998f215c333f57348ca8912f66057ae6b574fe34013033dc54362ee2372c.vtl"
@@ -2558,34 +2562,34 @@
     "AnnotationDataSource"
    ],
    "Metadata": {
-    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/Annotation/QueryAnnotationsByimageIdDataResolverFn/QueryAnnotationsByimageIdDataResolverFn.AppSyncFunction"
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/Annotation/QueryAnnotationsByImageIdAndSetIdDataResolverFn/QueryAnnotationsByImageIdAndSetIdDataResolverFn.AppSyncFunction"
    }
   },
-  "QueryannotationsByimageIdResolver": {
+  "QueryannotationsByImageIdAndSetIdResolver": {
    "Type": "AWS::AppSync::Resolver",
    "Properties": {
     "ApiId": {
      "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
     },
-    "FieldName": "annotationsByimageId",
+    "FieldName": "annotationsByImageIdAndSetId",
     "Kind": "PIPELINE",
     "PipelineConfig": {
      "Functions": [
       {
        "Fn::GetAtt": [
-        "QueryannotationsByimageIdauth0FunctionQueryannotationsByimageIdauth0FunctionAppSyncFunction2CDE31FA",
+        "QueryannotationsByImageIdAndSetIdauth0FunctionQueryannotationsByImageIdAndSetIdauth0FunctionAppSyncFunctionC1A19286",
         "FunctionId"
        ]
       },
       {
        "Fn::GetAtt": [
-        "QueryannotationsByimageIdpostAuth0FunctionQueryannotationsByimageIdpostAuth0FunctionAppSyncFunction178EE919",
+        "QueryannotationsByImageIdAndSetIdpostAuth0FunctionQueryannotationsByImageIdAndSetIdpostAuth0FunctionAppSyncFunctionD1217C3A",
         "FunctionId"
        ]
       },
       {
        "Fn::GetAtt": [
-        "QueryAnnotationsByimageIdDataResolverFnQueryAnnotationsByimageIdDataResolverFnAppSyncFunction3B665C0B",
+        "QueryAnnotationsByImageIdAndSetIdDataResolverFnQueryAnnotationsByImageIdAndSetIdDataResolverFnAppSyncFunctionD88E4AAD",
         "FunctionId"
        ]
       }
@@ -2595,7 +2599,7 @@
      "Fn::Join": [
       "",
       [
-       "$util.qr($ctx.stash.put(\"typeName\", \"Query\"))\n$util.qr($ctx.stash.put(\"fieldName\", \"annotationsByimageId\"))\n$util.qr($ctx.stash.put(\"conditions\", []))\n$util.qr($ctx.stash.put(\"metadata\", {}))\n$util.qr($ctx.stash.metadata.put(\"dataSourceType\", \"AMAZON_DYNAMODB\"))\n$util.qr($ctx.stash.metadata.put(\"apiId\", \"",
+       "$util.qr($ctx.stash.put(\"typeName\", \"Query\"))\n$util.qr($ctx.stash.put(\"fieldName\", \"annotationsByImageIdAndSetId\"))\n$util.qr($ctx.stash.put(\"conditions\", []))\n$util.qr($ctx.stash.put(\"metadata\", {}))\n$util.qr($ctx.stash.metadata.put(\"dataSourceType\", \"AMAZON_DYNAMODB\"))\n$util.qr($ctx.stash.metadata.put(\"apiId\", \"",
        {
         "Ref": "referencetoamplifyamplifyvitereacttemplatephiezsandbox1988856b66dataamplifyDataGraphQLAPI6B9858ACApiId"
        },
@@ -2654,7 +2658,7 @@
     "TypeName": "Query"
    },
    "Metadata": {
-    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/Annotation/queryAnnotationsByimageIdResolver"
+    "aws:cdk:path": "amplify-amplifyvitereacttemplate-phiez-sandbox-1988856b66/data/amplifyData/Annotation/queryAnnotationsByImageIdAndSetIdResolver"
    }
   },
   "QueryannotationsByObjectIdauth0FunctionQueryannotationsByObjectIdauth0FunctionAppSyncFunction8DA53DF7": {

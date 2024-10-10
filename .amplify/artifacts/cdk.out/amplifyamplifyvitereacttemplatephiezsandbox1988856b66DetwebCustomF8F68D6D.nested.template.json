@@ -761,7 +761,7 @@
      ]
     },
     "InstanceType": "g4dn.xlarge",
-    "KeyName": "cvat_africa",
+    "KeyName": "phindulo",
     "SecurityGroups": [
      {
       "Fn::GetAtt": [
@@ -988,8 +988,8 @@
  },
  "Mappings": {
   "MyProcessorProcessorASGAmiMap5C50F077": {
-   "af-south-1": {
-    "ami": "ami-0779b180a7f490247"
+   "eu-west-2": {
+    "ami": "ami-0d8f73689282bd592"
    }
   }
  },

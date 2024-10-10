@@ -121,8 +121,8 @@ export const createDetwebResources=function(scope: Construct, backend : Backend<
   const processor = new EC2QueueProcessor(scope, 'MyProcessor', {
     vpc: vpc, // Your VPC
     instanceType: ec2.InstanceType.of(ec2.InstanceClass.G4DN, ec2.InstanceSize.XLARGE), // Or any instance type you prefer
-    amiId: 'ami-0779b180a7f490247', // Your AMI ID
-    keyName: 'cvat_africa', // Optional: Your EC2 key pair name
+    amiId: 'ami-0d8f73689282bd592', // Your AMI ID
+    keyName: 'phindulo', // Optional: Your EC2 key pair name
   });
 
   
