@@ -44,7 +44,7 @@ async function existsOnS3(client: S3Client, bucket: string, prefix: string) {
     const data = await client.send(
       new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix }),
     );
-    const exists = (data.Contents?.length || 0) >= 494;
+    const exists = data.Contents?.length;
     return exists;
   } catch (error) {
     if (
