@@ -66,7 +66,7 @@
     "unique-names-generator": "^4.7.1"
   },
   "devDependencies": {
-    "@aws-amplify/backend": "^1.0.4",
+    "@aws-amplify/backend": "^1.4.0",
     "@aws-amplify/backend-cli": "^1.1.1",
     "@aws-sdk/client-cognito-identity-provider": "^3.651.1",
     "@types/aws-lambda": "^8.10.145",
