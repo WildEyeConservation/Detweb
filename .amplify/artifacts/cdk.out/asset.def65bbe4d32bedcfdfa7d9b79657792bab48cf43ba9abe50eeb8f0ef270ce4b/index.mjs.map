@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["../../../../node_modules/@aws-amplify/backend-function/src/lambda-shims/cjs_shim.ts", "../../../../amplify/functions/handleUpload/handler.ts"],
-  "sourcesContent": ["import { createRequire } from 'node:module';\nimport path from 'node:path';\nimport url from 'node:url';\nglobal.require = createRequire(import.meta.url);\nglobal.__filename = url.fileURLToPath(import.meta.url);\nglobal.__dirname = path.dirname(__filename);\n", "exports.handleUpload = async () => {\r\n};\r\n"],
-  "mappings": ";AAAA,OAAS,iBAAAA,MAAqB,cAC9B,OAAOC,MAAU,YACjB,OAAOC,MAAS,WAChB,OAAO,QAAUF,EAAc,YAAY,GAAG,EAC9C,OAAO,WAAaE,EAAI,cAAc,YAAY,GAAG,EACrD,OAAO,UAAYD,EAAK,QAAQ,UAAU,ECL1C,QAAQ,aAAe,SAAY,CACnC",
-  "names": ["createRequire", "path", "url"]
-}
