@@ -253,6 +253,7 @@ export async function handler(event) {
         //const sharp = require('sharp')
         console.log("File fetched. Processing with sharp...");
         await sharp(buffer)
+          .rotate() // Called without arguments, this will auto-detect the orientation specified in exif data and rotate the image accordingly.
           .png()
           .tile({ layout: "google" })
           .toFile(localTmpPath);  
