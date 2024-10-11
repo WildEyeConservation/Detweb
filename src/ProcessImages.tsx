@@ -54,90 +54,93 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
     setRegistrationTotalSteps(0);
     setHeatmapStepsCompleted(0);
     setTotalHeatmapSteps(0);
-    switch (selectedProcess) {
-      case "Run heatmap generation": {
-        const allImages = await Promise.all(selectedImageSets.map(async (selectedSet) => 
-          (await fetchAllPaginatedResults(
-            client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
-            {imageSetId: selectedSet, selectionSet: ["imageId"]}
-          ))
-        )).then(arrays =>
-          arrays.flatMap(im => im.map(i => i.imageId)));
-        // const allImages = await fetchAllPaginatedResults(
-        //   client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
-        //   {imageSetId: selectedImageSets[0], selectionSet: ["imageId"]}
-        // )
-        // const allImages = await Promise.all(selectedImageSets.map(async (selectedSet) => 
-        //   (await client.models.ImageSetMembership.imageSetMembershipsByImageSetId(
-        //     {imageSetId: selectedSet })).data.map(im => im.imageId)
-        // )).then(arrays => arrays.flat());    
-        //const setId = crypto.randomUUID();
-        setTotalHeatmapSteps(allImages.length);
-        setHeatmapStepsCompleted(0);
-        allImages.map(async (id) => {
-          const {data :imageFiles} = await limitConnections(() => client.models.ImageFile.imagesByimageId({imageId: id}))
-          const path = imageFiles.find((imageFile) => imageFile.type == 'image/jpeg')?.path
-            if (path) {
-              client.mutations.processImages({
-                s3key: path!,
-                model: "heatmap",
-              })
-            } else {
-              console.log(`No image file found for image ${id}. Skipping`)
-            }
-            setHeatmapStepsCompleted((s) => s + 1);
-        })
-      }
-      case "Compute image registrations": {
-        const images = await Promise.all(selectedImageSets.map(async (selectedSet) => 
-          (await fetchAllPaginatedResults(
-            client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
-            {imageSetId: selectedSet, selectionSet: ["image.id", "image.timestamp", "image.files.key", "image.files.type"]}
-          ))
-        )).then(arrays =>
-          arrays.flat().map(
-            ({ image }) => image))
-          .then(images =>
-            images.sort((a, b) => a.timestamp - b.timestamp))
-        setRegistrationTotalSteps(images.length - 1);
-        setRegistrationStepsCompleted(0);
-        for (let i = 0; i < images.length - 1; i++) {
-          setRegistrationStepsCompleted(i + 1);
-          const image1 = images[i];
-          const image2 = images[i + 1];
-          if (image2.timestamp - image1.timestamp < 5) {
-            const { data } = await client.models.ImageNeighbour.create({
-              image1Id: image1.id,
-              image2Id: image2.id,
-            });
-            //If the create failed, it is typically because the record allready exists. Let us check if it allready has an associated homography before we launch a task to compute it
-            if (!data) {
+    try {
+      switch (selectedProcess) {
+        case "Run heatmap generation": {
+          const allImages = await Promise.all(selectedImageSets.map(async (selectedSet) => 
+            (await fetchAllPaginatedResults(
+              client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
+              {imageSetId: selectedSet, selectionSet: ["imageId"]}
+            ))
+          )).then(arrays =>
+            arrays.flatMap(im => im.map(i => i.imageId)));
+          // const allImages = await fetchAllPaginatedResults(
+          //   client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
+          //   {imageSetId: selectedImageSets[0], selectionSet: ["imageId"]}
+          // )
+          // const allImages = await Promise.all(selectedImageSets.map(async (selectedSet) => 
+          //   (await client.models.ImageSetMembership.imageSetMembershipsByImageSetId(
+          //     {imageSetId: selectedSet })).data.map(im => im.imageId)
+          // )).then(arrays => arrays.flat());    
+          //const setId = crypto.randomUUID();
+          setTotalHeatmapSteps(allImages.length);
+          setHeatmapStepsCompleted(0);
+          allImages.map(async (id) => {
+            const {data :imageFiles} = await limitConnections(() => client.models.ImageFile.imagesByimageId({imageId: id}))
+            const path = imageFiles.find((imageFile) => imageFile.type == 'image/jpeg')?.path
+              if (path) {
+                client.mutations.processImages({
+                  s3key: path!,
+                  model: "heatmap",
+                })
+              } else {
+                console.log(`No image file found for image ${id}. Skipping`)
+              }
+              setHeatmapStepsCompleted((s) => s + 1);
+          })
+        }
+        case "Compute image registrations": {
+          const images = await Promise.all(selectedImageSets.map(async (selectedSet) => 
+            (await fetchAllPaginatedResults(
+              client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
+              {imageSetId: selectedSet, selectionSet: ["image.id", "image.timestamp", "image.files.key", "image.files.type"]}
+            ))
+          )).then(arrays =>
+            arrays.flat().map(
+              ({ image }) => image))
+            .then(images =>
+              images.sort((a, b) => a.timestamp - b.timestamp))
+          setRegistrationTotalSteps(images.length - 1);
+          setRegistrationStepsCompleted(0);
+          for (let i = 0; i < images.length - 1; i++) {
+            setRegistrationStepsCompleted(i + 1);
+            const image1 = images[i];
+            const image2 = images[i + 1];
+            if (image2.timestamp - image1.timestamp < 5) {
               const { data } = await client.models.ImageNeighbour.get({
                 image1Id: image1.id,
                 image2Id: image2.id,
                 processStep: 'Compute image registrations'
-              };
-              await publishError('taskProgress/processImages', `Error computing registration for images ${image1.id} and ${image2.id}: ${error instanceof Error ? error.message : String(error)}`, errorDetails);
-            }
-          }
-
-          // Publish completion message
-          await client.graphql({
-            query: `mutation Publish($channelName: String!, $content: String!) {
-              publish(channelName: $channelName, content: $content) {
-                channelName
-                content
+              });
+              //If the create failed, it is typically because the record allready exists. Let us check if it allready has an associated homography before we launch a task to compute it
+              if (!data) {
+                const { data } = await client.models.ImageNeighbour.get({
+                  image1Id: image1.id,
+                  image2Id: image2.id,
+                  processStep: 'Compute image registrations'
+                });
+                await publishError('taskProgress/processImages', `Error computing registration for images ${image1.id} and ${image2.id}: ${error instanceof Error ? error.message : String(error)}`, errorDetails);
               }
-            }`,
-            variables: {
-              channelName: 'taskProgress/processImages',
-              content: JSON.stringify({
-                type: 'completion',
-                taskName: 'Compute image registrations'
-              })
             }
-          });
-          break;
+
+            // Publish completion message
+            await client.graphql({
+              query: `mutation Publish($channelName: String!, $content: String!) {
+                publish(channelName: $channelName, content: $content) {
+                  channelName
+                  content
+                }
+              }`,
+              variables: {
+                channelName: 'taskProgress/processImages',
+                content: JSON.stringify({
+                  type: 'completion',
+                  taskName: 'Compute image registrations'
+                })
+              }
+            });
+            break;
+          }
         }
       }
     } catch (error) {

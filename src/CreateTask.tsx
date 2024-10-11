@@ -72,7 +72,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
           setWidth(firstImageDimensions.width);
           setHeight(firstImageDimensions.height);
 
-          const areConsistent = allImages.every(img => 
+          const areConsistent = allImages.every(img =>
             img.image.width === firstImageDimensions.width && img.image.height === firstImageDimensions.height
           );
 
@@ -123,121 +123,59 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
     taskId: `Create task (model guided)`,
     indeterminateTaskName: `Loading images`,
     determinateTaskName: "Processing images",
-    stepFormatter: (x:number) => `${x} images`
+    stepFormatter: (x: number) => `${x} images`
   });
   const [setLocationsCompleted, setTotalLocations] = useUpdateProgress({
     taskId: `Create task`,
     indeterminateTaskName: `Loading locations`,
     determinateTaskName: "Processing locations",
-    stepFormatter: (x:number) => `${x} locations`
+    stepFormatter: (x: number) => `${x} locations`
   });
 
   const [threshold, setThreshold] = useState(5); // New state variable for threshold
 
   async function handleSubmit() {
-    // const client=new SNSClient({
-    //   region: awsExports.aws_project_region,
-    //   credentials: Auth.essentialCredentials(credentials)
-    // })
-    // const client = new SQSClient({region: backend.ProjectRegion,
-    //   credentials: Auth.essentialCredentials(credentials)
-    // });
-    handleClose();
-    //const images=await gqlClient.graphql({query: listImages,variables:{filter:{projectImageName:{eq:currentProject}}}})
-    setTotalImages(0);
-    const allImages = await fetchAllPaginatedResults(
-      client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
-      { 
-        imageSetId: selectedImageSets[0], 
-        selectionSet: ['image.timestamp', 'image.id','image.width','image.height'] 
-      }
-    );
-  setImagesCompleted(0);
-  const locationSetId = createLocationSet({ name, projectId: project.id })
-  if (modelGuided) {
-      setTotalImages(allImages.length);
-    for (const { image } of allImages) {
-      const { data: imageFiles } = await client.models.ImageFile.imagesByimageId({ imageId: image.id })
-      // FIXME: This is wrong. I am using the key from the jpeg file to deduce what the path to the h5 file is, but 
-      // the right way to do this is to create a separate ImageFile entry as soon as we create the heatmap file.
-      const key = imageFiles.find((x: any) => x.type == 'image/jpeg')?.key.replace('images','heatmaps')
-      sqsClient.send(
-        new SendMessageCommand({
-          QueueUrl: backend.custom.pointFinderTaskQueueUrl,
-          MessageBody: JSON.stringify({
-            imageId: image.id,
-            projectId: project.id,
-            key: 'heatmaps/' + key + '.h5',
-            width: 1024,
-            height: 1024,
-            threshold: 1 - Math.pow(10, -threshold),
-            bucket: backend.storage.buckets[0].bucket_name,
-            setId: locationSetId,
-          })
-        })).then(() => setImagesCompleted((s: number) => s + 1));
-      }
-    } else {
-      const promises = [];
-      let totalSteps = 0;
-      for (const { image } of allImages) {
-        const xSteps = Math.ceil((image.width - width) / (width - sidelap));
-        const ySteps = Math.ceil((image.height - height) / (height - overlap));
-        const xStepSize = (image.width - width) / xSteps;
-        const yStepSize = (image.height - height) / ySteps;
-        totalSteps += (xSteps + 1) * (ySteps + 1);
-        for (var xStep = 0; xStep < xSteps + 1; xStep++) {
-          for (var yStep = 0; yStep < ySteps + 1; yStep++) {
-            const x = Math.round(
-              xStep * (xStepSize ? xStepSize : 0) + width / 2,
-            );
-            const key = imageFiles.find((x: any) => x.type == 'image/jpeg')?.key.replace('images','heatmaps');
-            await retryOperation(
-              () => sqsClient.send(
-                new SendMessageCommand({
-                  QueueUrl: backend.custom.pointFinderTaskQueueUrl,
-                  MessageBody: JSON.stringify({
-                    imageId: image.id,
-                    projectId: project.id,
-                    key: 'heatmaps/' + key + '.h5',
-                    width: 1024,
-                    height: 1024,
-                    threshold: 1 - Math.pow(10, -threshold),
-                    bucket: backend.storage.buckets[0].bucket_name,
-                    setId: locationSetId,
-                  })
-                })
-              ),
-              { retryableErrors: ['Network error', 'Connection timeout'] }
-            );
-            setImagesCompleted((s: number) => s + 1);
-            
-            // Publish progress update
-            await client.graphql({
-              query: `mutation Publish($channelName: String!, $content: String!) {
-                publish(channelName: $channelName, content: $content) {
-                  channelName
-                  content
-                }
-              }`,
-              variables: {
-                channelName: 'taskProgress/createTask',
-                content: JSON.stringify({
-                  type: 'progress',
-                  total: allImages.length,
-                  completed: i + 1,
-                  taskName: 'Create Task (Model Guided)'
-                })
-              }
-            });
-          } catch (error) {
-            const errorDetails = {
-              error: error instanceof Error ? error.stack : String(error),
-              selectedImageSets,
-              modelGuided,
-              threshold
-            };
-            await publishError('taskProgress/createTask', `Error in handleSubmit: ${error instanceof Error ? error.message : String(error)}`, errorDetails);
-          }
+    try {
+      // const client=new SNSClient({
+      //   region: awsExports.aws_project_region,
+      //   credentials: Auth.essentialCredentials(credentials)
+      // })
+      // const client = new SQSClient({region: backend.ProjectRegion,
+      //   credentials: Auth.essentialCredentials(credentials)
+      // });
+      handleClose();
+      //const images=await gqlClient.graphql({query: listImages,variables:{filter:{projectImageName:{eq:currentProject}}}})
+      setTotalImages(0);
+      const allImages = await fetchAllPaginatedResults(
+        client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
+        {
+          imageSetId: selectedImageSets[0],
+          selectionSet: ['image.timestamp', 'image.id', 'image.width', 'image.height']
+        }
+      );
+      setImagesCompleted(0);
+      const locationSetId = createLocationSet({ name, projectId: project.id })
+      if (modelGuided) {
+        setTotalImages(allImages.length);
+        for (const { image } of allImages) {
+          const { data: imageFiles } = await client.models.ImageFile.imagesByimageId({ imageId: image.id })
+          // FIXME: This is wrong. I am using the key from the jpeg file to deduce what the path to the h5 file is, but 
+          // the right way to do this is to create a separate ImageFile entry as soon as we create the heatmap file.
+          const key = imageFiles.find((x: any) => x.type == 'image/jpeg')?.key.replace('images', 'heatmaps')
+          sqsClient.send(
+            new SendMessageCommand({
+              QueueUrl: backend.custom.pointFinderTaskQueueUrl,
+              MessageBody: JSON.stringify({
+                imageId: image.id,
+                projectId: project.id,
+                key: 'heatmaps/' + key + '.h5',
+                width: 1024,
+                height: 1024,
+                threshold: 1 - Math.pow(10, -threshold),
+                bucket: backend.storage.buckets[0].bucket_name,
+                setId: locationSetId,
+              })
+            })).then(() => setImagesCompleted((s: number) => s + 1));
         }
       } else {
         const promises = [];
@@ -253,30 +191,100 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
               const x = Math.round(
                 xStep * (xStepSize ? xStepSize : 0) + width / 2,
               );
-              const y = Math.round(
-                yStep * (yStepSize ? yStepSize : 0) + height / 2,
+              const key = imageFiles.find((x: any) => x.type == 'image/jpeg')?.key.replace('images', 'heatmaps');
+              await retryOperation(
+                () => sqsClient.send(
+                  new SendMessageCommand({
+                    QueueUrl: backend.custom.pointFinderTaskQueueUrl,
+                    MessageBody: JSON.stringify({
+                      imageId: image.id,
+                      projectId: project.id,
+                      key: 'heatmaps/' + key + '.h5',
+                      width: 1024,
+                      height: 1024,
+                      threshold: 1 - Math.pow(10, -threshold),
+                      bucket: backend.storage.buckets[0].bucket_name,
+                      setId: locationSetId,
+                    })
+                  })
+                ),
+                { retryableErrors: ['Network error', 'Connection timeout'] }
               );
-              if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
-                promises.push(
-                  client.models.Location.create({
-                    x,
-                    y,
-                    width,
-                    height,
-                    imageId: image.id,
-                    projectId: project.id,
-                    source: 'manual',
-                    setId: locationSetId,
-                  }).then(() => setLocationsCompleted((fc: any) => fc + 1)),
-                );
+              setImagesCompleted((s: number) => s + 1);
+              setTotalLocations(totalSteps);
+              await Promise.all(promises);
+              // Publish progress update
+              try {
+                await client.graphql({
+                  query: `mutation Publish($channelName: String!, $content: String!) {
+                  publish(channelName: $channelName, content: $content) {
+                    channelName
+                    content
+                  }
+                }`,
+                  variables: {
+                    channelName: 'taskProgress/createTask',
+                    content: JSON.stringify({
+                      type: 'progress',
+                      total: allImages.length,
+                      completed: i + 1,
+                      taskName: 'Create Task (Model Guided)'
+                    })
+                  }
+                });
+              } catch (error) {
+                const errorDetails = {
+                  error: error instanceof Error ? error.stack : String(error),
+                  selectedImageSets,
+                  modelGuided,
+                  threshold
+                };
+                await publishError('taskProgress/createTask', {
+                  message: `Error in handleSubmit: ${error instanceof Error ? error.message : String(error)}`,
+                  details: errorDetails
+                });
               }
             }
           }
         }
-        setTotalLocations(totalSteps);
-        await Promise.all(promises);
+        //  else {
+        //   const promises = [];
+        //   let totalSteps = 0;
+        //   for (const { image } of allImages) {
+        //     const xSteps = Math.ceil((image.width - width) / (width - sidelap));
+        //     const ySteps = Math.ceil((image.height - height) / (height - overlap));
+        //     const xStepSize = (image.width - width) / xSteps;
+        //     const yStepSize = (image.height - height) / ySteps;
+        //     totalSteps += (xSteps + 1) * (ySteps + 1);
+        //     for (var xStep = 0; xStep < xSteps + 1; xStep++) {
+        //       for (var yStep = 0; yStep < ySteps + 1; yStep++) {
+        //         const x = Math.round(
+        //           xStep * (xStepSize ? xStepSize : 0) + width / 2,
+        //         );
+        //         const y = Math.round(
+        //           yStep * (yStepSize ? yStepSize : 0) + height / 2,
+        //         );
+        //         if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
+        //           promises.push(
+        //             client.models.Location.create({
+        //               x,
+        //               y,
+        //               width,
+        //               height,
+        //               imageId: image.id,
+        //               projectId: project.id,
+        //               source: 'manual',
+        //               setId: locationSetId,
+        //             }).then(() => setLocationsCompleted((fc: any) => fc + 1)),
+        //           );
+        //         }
+        //       }
+        //     }
+        //   }
+        //   setTotalLocations(totalSteps);
+        //   await Promise.all(promises);
+        // }
       }
-
       // Publish completion message
       await client.graphql({
         query: `mutation Publish($channelName: String!, $content: String!) {
@@ -336,7 +344,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
             <>
               <Form.Group>
                 <Form.Label>Threshold</Form.Label>
-                <Form.Range 
+                <Form.Range
                   min={1}
                   max={10}
                   step={1}
