@@ -22,7 +22,7 @@
 
     "typeRoots": ["./node_modules/@types", "./src"]
   },
-  "exclude": ["amplify/**/*", ".amplify/**/*"],
+  "exclude": ["amplify/**/*"],
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }],
 }
