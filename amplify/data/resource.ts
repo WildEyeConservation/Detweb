@@ -85,7 +85,8 @@ const schema = a.schema({
     // Add this line to define the reverse relationship
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
   }).authorization(allow => [allow.authenticated()])
-  .secondaryIndexes((index)=>[index('imageId').queryField('imagesByimageId')]),
+    .secondaryIndexes((index) => [index('imageId').queryField('imagesByimageId'),
+    index('path').queryField('imagesByPath')]),
   AnnotationSet: a.model({
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
