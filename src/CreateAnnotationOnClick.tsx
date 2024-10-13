@@ -13,7 +13,7 @@ export interface CreateAnnotationOnClickProps {
 }
 
 export default function CreateAnnotationOnClick(props: CreateAnnotationOnClickProps) {
-  const {annotationSet,location,annotationsHook: {create:createAnnotation},source, image} = props;
+  const {annotationSet,location,annotationsHook: {create:createAnnotation},source, image, allowOutside} = props;
   const { latLng2xy } = useContext(ImageContext)!;
   const {project,currentCategory} = useContext(ProjectContext)!;
 
@@ -23,7 +23,7 @@ export default function CreateAnnotationOnClick(props: CreateAnnotationOnClickPr
       const xy = Array.isArray(xyResult) ? xyResult[0] : xyResult;
 
       if (
-        !(location?.width && location?.height ) ||
+        !(location?.width && location?.height ) || (allowOutside) ||
         (Math.abs(xy.x - location.x) < location.width! / 2 &&
           Math.abs(xy.y - location.y) < location.height! / 2)
       ) {

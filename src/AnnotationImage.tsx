@@ -14,11 +14,11 @@ import { useOptimisticAnnotation } from './useOptimisticUpdates';
 const Image = withCreateObservation(withAckOnTimeout(BaseImage));
 
 export default function AnnotationImage(props) {
-  const { location, next, prev, containerheight = 800, containerwidth = 1024, visible, id, ack, annotationSetId } = props
+  const { location, next, prev, containerheight = 800, containerwidth = 1024, visible, id, ack, annotationSetId, allowOutside } = props
   const {client} = useContext(GlobalContext)!;
   const subscriptionFilter = useMemo(() => ({
     filter: { and:[{setId: { eq: location.annotationSetId }}, {imageId: { eq: location.image.id }}]}
-  }), [annotationSetId,location.image.id]);
+  }), [annotationSetId, location.image.id]);
   const annotationsHook = useOptimisticAnnotation(
     async () => client.models.Annotation.annotationsByImageIdAndSetId({imageId: location.image.id, setId: {eq: annotationSetId}}),
     subscriptionFilter)
@@ -33,7 +33,7 @@ export default function AnnotationImage(props) {
             ack={ack}
             annotationSet={annotationSetId}>
             {location && <Location {...location}/>} 
-            <CreateAnnotationOnClick {...{annotationsHook, location, annotationSet: annotationSetId, source: 'manual'}}/>
+            <CreateAnnotationOnClick {...{annotationsHook,allowOutside, location, annotationSet: annotationSetId, source: 'manual'}}/>
             <ShowMarkers annotationsHook={annotationsHook}/>
             {/* <PushToSecondary {...props} /> */}
           <Legend position="bottomright" /> 

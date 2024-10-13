@@ -15,12 +15,11 @@ interface UseCreateObservationProps {
   annotationSet: AnnotationSetType;
 }
 
-export default function useCreateObservation(location: UseCreateObservationProps) {
-  const {
-    ack = () => { },
+export default function useCreateObservation(props: UseCreateObservationProps) {
+  const { location: {
     annotationSetId,
     id
-  } = location;
+  } ,ack} = props;
   const { setJobsCompleted } = useContext(UserContext)!;
   const { project } = useContext(ProjectContext)!;
   const { client } = useContext(GlobalContext)!;
@@ -51,8 +50,8 @@ export function withCreateObservation<T extends CombinedProps>(
   WrappedComponent: React.ComponentType<T>
 ) {
   const WithCreateObservation: React.FC<T> = (props) => {
-    const {location} = props;
-    const newAck = useCreateObservation(location);
+    const {location,ack} = props;
+    const newAck = useCreateObservation({location,ack});
     return <WrappedComponent {...props} location={{ ...location, ack: newAck }} />;
   };
   return WithCreateObservation;

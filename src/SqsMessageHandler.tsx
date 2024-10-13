@@ -6,7 +6,6 @@ import Button from "react-bootstrap/Button";
 import BaseImage from "./BaseImage";
 import { UserContext } from "./UserContext";
 import { ShowMarkers } from "./ShowMarkers";
-import { publishError } from './ErrorHandler';
 
 const Image = BaseImage;
 
@@ -55,7 +54,7 @@ export function MessageHandler() {
           }
         } catch (err) {
           console.error(`Failed to get URL: ${err.message}`);
-          publishError(`Error getting SQS queue URL: ${err.message}`);
+          // publishError(`Error getting SQS queue URL: ${err.message}`);
           const timer = setTimeout(triggerRetry, 30000);
           return () => {
             console.log(

@@ -31,9 +31,7 @@ interface GlobalContextType {
 
 export interface UserContextType {
     user: AuthUser,
-    sqsClient: SQSClient,
-    s3Client: S3Client,
-    lambdaClient: LambdaClient,
+    getSqsClient: ()=>Promise<SQSClient>,
     myMembershipHook: CRUDhook<'UserProjectMembership'>,
     jobsCompleted: number,
     setJobsCompleted: (jobsCompleted: number) => void,

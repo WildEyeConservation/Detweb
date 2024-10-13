@@ -33,7 +33,7 @@ interface ImageDimensions {
 
 function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets }: CreateTaskProps) {
   const { client, backend } = useContext(GlobalContext)!;
-  const { sqsClient } = useContext(UserContext)!;
+  const { getSqsClient } = useContext(UserContext)!;
   const { project } = useContext(ProjectContext)!;
   const [name, setName] = useState<string>("");
   const [modelGuided, setModelGuided] = useState(false);
@@ -227,7 +227,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
           // FIXME: This is wrong. I am using the key from the jpeg file to deduce what the path to the h5 file is, but 
           // the right way to do this is to create a separate ImageFile entry as soon as we create the heatmap file.
           const key = imageFiles.find((x: any) => x.type == 'image/jpeg')?.key.replace('images', 'heatmaps')
-          sqsClient.send(
+          getSqsClient().then((sqsClient) => sqsClient.send(
             new SendMessageCommand({
               QueueUrl: backend.custom.pointFinderTaskQueueUrl,
               MessageBody: JSON.stringify({
@@ -240,7 +240,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                 bucket: backend.storage.buckets[0].bucket_name,
                 setId: locationSetId,
               })
-            })).then(() => setImagesCompleted((s: number) => s + 1));
+            }))).then(() => setImagesCompleted((s: number) => s + 1));
         }
       }
       if (modelId === "scoutbot") {

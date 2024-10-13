@@ -8,7 +8,7 @@ import { LocationSetDropdown } from "./LocationSetDropDown";
 import { GlobalContext, ManagementContext, UserContext, ProjectContext } from "./Context";
 import { SendMessageCommand } from "@aws-sdk/client-sqs";
 import { aws_elasticloadbalancingv2_targets } from "aws-cdk-lib";
-import { publishError } from './ErrorHandler';
+// import { publishError } from './ErrorHandler';
 import { retryOperation } from './utils/retryOperation';
 import pLimit from 'p-limit';
 
@@ -29,13 +29,14 @@ interface ObservationsResponse {
 
 function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: LaunchTaskProps) {
   const { client } = useContext(GlobalContext)!;
-  const { sqsClient } = useContext(UserContext)!;
+  const { getSqsClient } = useContext(UserContext)!;
   const { queuesHook: { data: queues } } = useContext(ManagementContext)!;
   const [queueId, setQueueId] = useState<string | null>(null);
   const [url2, setUrl2] = useState<string | null>(null);
   const [annotationSet, setAnnotationSet] = useState<string | undefined>(undefined);
   const [filterObserved, setFilterObserved] = useState(false);
   const [secondaryQueue, setSecondaryQueue] = useState(false);
+  const [allowOutside, setAllowOutside] = useState(true);
   const userContext = useContext(UserContext);
   if (!userContext) {
     return null;
@@ -51,7 +52,7 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
 
 
   async function handleSubmit() {
-    try {
+    // try {
       handleClose();
       let promises = []
       const allLocations = await Promise.all(selectedTasks.map(async (task) => {
@@ -95,37 +96,37 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
         }
         location.annotationSetId = annotationSet;
         limitConnections(()=>
-          sqsClient.send(
+          getSqsClient().then(sqsClient => sqsClient.send(
             new SendMessageCommand({
             QueueUrl: queueUrl,
-            MessageBody: JSON.stringify({ location })
-          })
+            MessageBody: JSON.stringify({ location , allowOutside})
+          }))
         )).then(() => setStepsCompleted((s: number) => s + 1))
 
       }
-    } catch (error) {
-      console.error('Error in LaunchTask handleSubmit:', error);
-      const errorDetails = {
-        error: error instanceof Error ? error.stack : String(error),
-        selectedTasks,
-        queueId,
-        annotationSet,
-        filterObserved
-      };
-      if (error instanceof Error) {
-        publishError('taskProgress/launchTask', `Error launching task: ${error.message}`, errorDetails);
-      } else {
-        publishError('taskProgress/launchTask', `Error launching task: ${String(error)}`, errorDetails);
-      }
-      location.annotationSetId = annotationSet;
-      promises.push(
-        sqsClient.send(
-          new SendMessageCommand({
-            QueueUrl: queueUrl!,
-            MessageBody: JSON.stringify({location })
-          })).then(() => setStepsCompleted((s: number) => s + 1))  
-      );
-    }
+    // } catch (error) {
+    //   console.error('Error in LaunchTask handleSubmit:', error);
+    //   const errorDetails = {
+    //     error: error instanceof Error ? error.stack : String(error),
+    //     selectedTasks,
+    //     queueId,
+    //     annotationSet,
+    //     filterObserved
+    //   };
+    //   if (error instanceof Error) {
+    //     publishError('taskProgress/launchTask', `Error launching task: ${error.message}`, errorDetails);
+    //   } else {
+    //     publishError('taskProgress/launchTask', `Error launching task: ${String(error)}`, errorDetails);
+    //   }
+    //   location.annotationSetId = annotationSet;
+    //   promises.push(
+    //     sqsClient.send(
+    //       new SendMessageCommand({
+    //         QueueUrl: queueUrl!,
+    //         MessageBody: JSON.stringify({location })
+    //       })).then(() => setStepsCompleted((s: number) => s + 1))  
+    //   );
+    // }
   }
 
  
@@ -154,7 +155,13 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
                 setAnnotationSet={setAnnotationSet}
                 selectedSet={annotationSet}
               />
-              <Form.Check
+              <Form.Check className="mt-2"
+                type="switch"
+                label="Allow annotations outside location borders"
+                checked={allowOutside}
+                onChange={(x) => setAllowOutside(x.target.checked)}
+              />
+              <Form.Check className="mt-2"
                 type="switch"
                 label="Unobserved only"
                 checked={filterObserved}

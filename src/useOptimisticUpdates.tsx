@@ -1063,7 +1063,7 @@ function useOptimisticQueue(
 
 export const useQueues = () => {
   const { client } = useContext(GlobalContext)!;
-  const { sqsClient } = useContext(UserContext)!;
+  const { getSqsClient } = useContext(UserContext)!;
   const { project } = useContext(ProjectContext)!;
   const subscriptionFilter = useMemo(() => ({
     filter: { projectId: { eq: project.id } }
@@ -1073,12 +1073,12 @@ export const useQueues = () => {
   const create = (name: string) => {
     const safeName = makeSafeQueueName(name);
     const id = originalHook.create({ name: safeName, projectId: project.id});
-    sqsClient.send(new CreateQueueCommand({
+    getSqsClient().then(sqsClient => sqsClient.send(new CreateQueueCommand({
       QueueName: safeName,
       Attributes: {
         MessageRetentionPeriod: '1209600', //This value is in seconds. 1209600 corresponds to 14 days and is the maximum AWS supports      //FifoQueue: "false",
       },
-    })
+    }))
     ).then(({ QueueUrl: url }) => {
       originalHook.update({ id, url });
       return id;
@@ -1087,7 +1087,7 @@ export const useQueues = () => {
   const remove = ({ id }: { id: string }) => {
     const url = originalHook.data.find((x) => x.id == id)?.url;
     if (url) {
-      sqsClient.send(new DeleteQueueCommand({ QueueUrl: url })); 
+      getSqsClient().then(sqsClient => sqsClient.send(new DeleteQueueCommand({ QueueUrl: url }))); 
       originalHook.delete({ id });
     }
   }

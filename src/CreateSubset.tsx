@@ -19,14 +19,11 @@ const CreateSubsetModal: React.FC<CreateSubsetModalProps> = ({ show, handleClose
         <Modal.Title>Create Subset</Modal.Title>
       </Modal.Header>
       <Modal.Body>
-              <p className="text-center">Choose the type of subset you want to create for imagesets<br/> 
-                  {imageSets.filter(({id}) => selectedImageSets.includes(id)).map(({name}) => name).join(", ")}</p>
+        <p className="text-center">Choose the type of subset you want to create for imagesets<br/> 
+            {imageSets.filter(({id}) => selectedImageSets.includes(id)).map(({name}) => name).join(", ")}</p>
         <div className="d-flex flex-column align-items-center">
           <Button variant="primary" className="mb-2 w-75" onClick={() => showModal('SpatiotemporalSubset')}>
-            Spatial subset
-          </Button>
-          <Button variant="primary"  className="mb-2 w-75" onClick={() => showModal('TemporalSubset')}>
-            Temporal subset
+            Spatiotemporal subset
           </Button>
           <Button variant="primary" className="mb-2 w-75" onClick={() => showModal('Subsample')}>
             Subsampled subset

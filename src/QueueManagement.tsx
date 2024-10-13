@@ -5,11 +5,11 @@ import MyTable from './Table';
 import { PurgeQueueCommand, GetQueueAttributesCommand } from '@aws-sdk/client-sqs'
 import { type GetQueueAttributesCommandInput } from '@aws-sdk/client-sqs'
 import { Schema } from '../amplify/data/resource'
-import { publishError } from './ErrorHandler';
+// import { publishError } from './ErrorHandler';
 
 
 export default function QueueManagement() {
-  const { sqsClient } = useContext(UserContext)!;
+  const { getSqsClient } = useContext(UserContext)!;
   const { queuesHook: { data: queues, create: createQueue, delete : deleteQueue } } = useContext(ManagementContext)!;
   const { projectMembershipHook: { data: projectMemberships, update: updateProjectMembership } } = useContext(ManagementContext)!;
   const [messageCounts, setMessageCounts] = useState<{ [key: string]: number }>({});
@@ -25,6 +25,7 @@ export default function QueueManagement() {
         QueueUrl: queueUrl,
         AttributeNames: ['ApproximateNumberOfMessages'],
       };
+      const sqsClient = await getSqsClient();
       const result = await sqsClient.send(new GetQueueAttributesCommand(params));
       return parseInt(result.Attributes?.ApproximateNumberOfMessages||"0", 10);
     } catch (error) {
@@ -49,7 +50,7 @@ export default function QueueManagement() {
   }, [queues]);
 
   const deleteQueueHandler = async (queue:Schema['Queue']['type']) => {
-    try {
+    // try {
        // TODO: Implement queue deletion logic
       // This should include:
       // 1. Deleting the queue from SQS
@@ -57,15 +58,15 @@ export default function QueueManagement() {
       // 3. Removing the queue from the local state
       await deleteQueue(queue);
       console.log(`Queue ${queue.id} deleted successfully`);
-    } catch (error) {
-      console.error('Error deleting queue:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      publishError(`Error deleting queue: ${errorMessage}`);
-    }
+    // } catch (error) {
+    //   console.error('Error deleting queue:', error);
+    //   const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    //   publishError(`Error deleting queue: ${errorMessage}`);
+    // }
   };
 
   const unsubscribeAllUsers = async (queueId:string) => {
-    try {
+    // try {
       console.log('Unsubscribing all users from queue:', queueId);
       const usersToUpdate = projectMemberships?.filter(pm => pm.queueId === queueId);
       if (usersToUpdate && usersToUpdate.length > 0) {
@@ -74,23 +75,24 @@ export default function QueueManagement() {
       } else {
         console.log(`No users subscribed to queue ${queueId}`);
       }
-    } catch (error) {
-      console.error('Error unsubscribing users:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      publishError(`Error unsubscribing users from queue: ${errorMessage}`);
-    }
+    // } catch (error) {
+    //   console.error('Error unsubscribing users:', error);
+    //   const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    //   publishError(`Error unsubscribing users from queue: ${errorMessage}`);
+    // }
   };
 
   const purgeQueueHandler = async (queueUrl:string) => {
-    try {
-      console.log('Purging queue:', queueUrl);
+    // try {
+    console.log('Purging queue:', queueUrl);
+    const sqsClient = await getSqsClient();
       await sqsClient.send(new PurgeQueueCommand({QueueUrl: queueUrl}));
       console.log(`Queue ${queueUrl} purged successfully`);
-    } catch (error) {
-      console.error('Error purging queue:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      publishError(`Error purging queue: ${errorMessage}`);
-    }
+    // } catch (error) {
+    //   console.error('Error purging queue:', error);
+    //   const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    //   publishError(`Error purging queue: ${errorMessage}`);
+    // }
   };
 
   const tableData = queues

@@ -10,7 +10,7 @@ interface SQSMessage {
 
 export default function useSQS() {
   const { currentPM } = useContext(ProjectContext)!;
-  const {sqsClient} = useContext(UserContext)!;
+  const {getSqsClient} = useContext(UserContext)!;
   const [buffer, setBuffer] = useState<SQSMessage[]>([]);
   const [url,setUrl] = useState<string | undefined>(undefined);
   const [retryCount] = useState(0);
@@ -35,7 +35,7 @@ export default function useSQS() {
     console.log(`Index ${index}`);
     //Then try to get new Jobs.
 
-    sqsClient.send(new ReceiveMessageCommand({
+    getSqsClient().then(sqsClient => sqsClient.send(new ReceiveMessageCommand({
       QueueUrl: url,
       MaxNumberOfMessages: 10,
       MessageAttributeNames: ["All"],
@@ -58,6 +58,7 @@ export default function useSQS() {
           // been refetched. So we have to assign our own id upon receipt to guarantee uniqueness.
           body.ack = async () => {
             try {
+              const sqsClient = await getSqsClient();
               await sqsClient.send(new DeleteMessageCommand({
                 QueueUrl: url,
                 ReceiptHandle: entity.ReceiptHandle,
@@ -79,7 +80,7 @@ export default function useSQS() {
         //If no messages were available, try again in 5s
         setTimeout(getMessages, 5000);
       }
-    });
+    }));
   }
 
   //If the index gets too close to the end of the buffer we need to load mode messages.

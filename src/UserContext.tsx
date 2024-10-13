@@ -1,4 +1,4 @@
-import {useState, useEffect, useContext,useMemo} from "react";
+import {useState, useEffect, useContext,useMemo, useCallback} from "react";
 import {
   SQSClient,
 } from "@aws-sdk/client-sqs";
@@ -71,9 +71,6 @@ export function Project({ children, currentPM }: { children: React.ReactNode, cu
 export function User({ user, children }: { user: AuthUser, children: React.ReactNode }) {
   const [jobsCompleted, setJobsCompleted] = useState<number>(0);
   const { client,region } = useContext(GlobalContext)!;
-  const [sqsClient, setSqsClient] = useState<SQSClient | undefined>(undefined);
-  const [s3Client, setS3Client] = useState<S3Client | undefined>(undefined);
-  const [lambdaClient, setLambdaClient] = useState<LambdaClient | undefined>(undefined);
   //const { items: myMemberships } = useObserveQuery('UserProjectMembership', { filter: { userId: { eq: user!.username } } });
   // const { data: myMemberships } = useOptimisticUpdates(
   //   'UserProjectMembership',
@@ -110,29 +107,18 @@ export function User({ user, children }: { user: AuthUser, children: React.React
   //   setup()
   // },[user])
 
-  useEffect(() => {
-    async function refreshCredentials() {
+  const getSqsClient = useCallback(async () => {
     const { credentials } = await fetchAuthSession();
-      //setCredentials(credentials);
-      setSqsClient(new SQSClient({ region, credentials }));
-      setLambdaClient(new LambdaClient({ region, credentials }));
-      setS3Client(new S3Client({ region, credentials }));
-    }
-    refreshCredentials();
-    const timer = setInterval(refreshCredentials, 30 * 60 * 1000); // Refresh credentials every 30 minutes
-    return () => clearInterval(timer);
-  }, [user]);
+    return new SQSClient({ region, credentials })
+  },[])
 
   return (
-    sqsClient && s3Client && lambdaClient && 
     <UserContext.Provider
       value={{
         user,
-        sqsClient,
+        getSqsClient,
         jobsCompleted,
         setJobsCompleted,
-        s3Client,
-        lambdaClient,
         myMembershipHook,
       }}
       >

@@ -17,7 +17,7 @@ interface LaunchRegistrationProps {
 const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({ show, handleClose, selectedSets, setSelectedSets }) => {
   const [url, setUrl] = useState<string | null>(null);
   const { client }=useContext(GlobalContext)!;
-  const { sqsClient } = useContext(UserContext)!;
+  const { getSqsClient } = useContext(UserContext)!;
   const {queuesHook : { data : queues}} = useContext(ManagementContext)!;
   // const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
   //   taskId: `Launch registration task`,
@@ -74,11 +74,11 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({ show, handleClo
         })
       }
       neighbours.forEach(neighbour =>
-        sqsClient.send(
+        getSqsClient().then(sqsClient => sqsClient.send(
           new SendMessageCommand({
             QueueUrl: queues.find(queue => queue.id == url)?.url,
             MessageBody: JSON.stringify({ selectedSet: annotationSetId, images:[neighbour.image1Id,neighbour.image2Id]})
-          })
+          }))
         )
       )
     }

@@ -26,8 +26,6 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
   const limitConnections = pLimit(6);
   const { client, backend } = useContext(GlobalContext)!
   const [selectedProcess, selectProcess] = useState<string | undefined>(undefined);
-  const { sqsClient } = useContext(UserContext)!;
-
 
   const processingOptions = [
     "Run heatmap generation",
@@ -54,7 +52,7 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
     setRegistrationTotalSteps(0);
     setHeatmapStepsCompleted(0);
     setTotalHeatmapSteps(0);
-    try {
+    // try {
       switch (selectedProcess) {
         case "Run heatmap generation": {
           const allImages = await Promise.all(selectedImageSets.map(async (selectedSet) => 
@@ -119,38 +117,21 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
                   image2Id: image2.id,
                   processStep: 'Compute image registrations'
                 });
-                await publishError('taskProgress/processImages', `Error computing registration for images ${image1.id} and ${image2.id}: ${error instanceof Error ? error.message : String(error)}`, errorDetails);
+                //await publishError('taskProgress/processImages', `Error computing registration for images ${image1.id} and ${image2.id}: ${error instanceof Error ? error.message : String(error)}`, errorDetails);
               }
             }
-
-            // Publish completion message
-            await client.graphql({
-              query: `mutation Publish($channelName: String!, $content: String!) {
-                publish(channelName: $channelName, content: $content) {
-                  channelName
-                  content
-                }
-              }`,
-              variables: {
-                channelName: 'taskProgress/processImages',
-                content: JSON.stringify({
-                  type: 'completion',
-                  taskName: 'Compute image registrations'
-                })
-              }
-            });
             break;
           }
         }
       }
-    } catch (error) {
-      const errorDetails = {
-        error: error instanceof Error ? error.stack : String(error),
-        selectedProcess,
-        selectedImageSets
-      };
-      await publishError('taskProgress/processImages', `Error in handleSubmit: ${error instanceof Error ? error.message : String(error)}`, errorDetails);
-    }
+    // } catch (error) {
+    //   const errorDetails = {
+    //     error: error instanceof Error ? error.stack : String(error),
+    //     selectedProcess,
+    //     selectedImageSets
+    //   };
+    //   await publishError('taskProgress/processImages', `Error in handleSubmit: ${error instanceof Error ? error.message : String(error)}`, errorDetails);
+    // }
   };
     
 
@@ -201,22 +182,4 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
       </Modal.Footer>
     </Modal>
   );
-}
-
-async function publishError(channelName: string, errorMessage: string) {
-  await client.graphql({
-    query: `mutation Publish($channelName: String!, $content: String!) {
-      publish(channelName: $channelName, content: $content) {
-        channelName
-        content
-      }
-    }`,
-    variables: {
-      channelName,
-      content: JSON.stringify({
-        type: 'error',
-        message: errorMessage
-      })
-    }
-  });
 }

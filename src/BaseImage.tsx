@@ -131,7 +131,7 @@ const BaseImage: React.FC<BaseImageProps> = (props) => {
               url={""} />: */}
               <StorageLayer
               source={imageFiles.find(file=>file.type=='image/jpeg').key}
-              bounds={[[0,0],[-99.5,149.875]]}
+              bounds={imageBounds}
                 maxNativeZoom={5}
                 noWrap={true}
               //getObject={getObject}
