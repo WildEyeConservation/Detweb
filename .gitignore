@@ -27,4 +27,4 @@ dist-ssr
 # amplify
 amplify_outputs*
 amplifyconfiguration*
-.amplify/
+.amplify/artifacts/
