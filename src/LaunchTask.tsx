@@ -10,6 +10,7 @@ import { SendMessageCommand } from "@aws-sdk/client-sqs";
 import { aws_elasticloadbalancingv2_targets } from "aws-cdk-lib";
 import { publishError } from './ErrorHandler';
 import { retryOperation } from './utils/retryOperation';
+import pLimit from 'p-limit';
 
 interface LaunchTaskProps {
   show: boolean;
@@ -39,6 +40,7 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
   if (!userContext) {
     return null;
   }
+  const limitConnections = pLimit(10);
 
   const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
     taskId: `Launch task`,
@@ -92,54 +94,15 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
           }
         }
         location.annotationSetId = annotationSet;
-        await retryOperation(
-          () => sqsClient.send(
+        limitConnections(()=>
+          sqsClient.send(
             new SendMessageCommand({
-              QueueUrl: queueUrl,
-              MessageBody: JSON.stringify(location)
-            })
-          ),
-          { retryableErrors: ['Network error', 'Connection timeout'] }
-        );
-        setStepsCompleted((s: number) => s + 1);
-
-        // Publish progress update
-        await client.graphql({
-          query: `mutation Publish($channelName: String!, $content: String!) {
-            publish(channelName: $channelName, content: $content) {
-              channelName
-              content
-            }
-          }`,
-          variables: {
-            channelName: 'taskProgress/launchTask',
-            content: JSON.stringify({
-              type: 'progress',
-              total: allLocations.length,
-              completed: i + 1,
-              taskName: 'Launch Task'
-            })
-          }
-        });
-      }
-
-      // Publish completion message
-      await client.graphql({
-        query: `mutation Publish($channelName: String!, $content: String!) {
-          publish(channelName: $channelName, content: $content) {
-            channelName
-            content
-          }
-        }`,
-        variables: {
-          channelName: 'taskProgress/launchTask',
-          content: JSON.stringify({
-            type: 'completion',
-            taskName: 'Launch Task'
+            QueueUrl: queueUrl,
+            MessageBody: JSON.stringify({ location })
           })
-        }
-      });
+        )).then(() => setStepsCompleted((s: number) => s + 1))
 
+      }
     } catch (error) {
       console.error('Error in LaunchTask handleSubmit:', error);
       const errorDetails = {
@@ -159,7 +122,7 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
         sqsClient.send(
           new SendMessageCommand({
             QueueUrl: queueUrl!,
-            MessageBody: JSON.stringify({ location })
+            MessageBody: JSON.stringify({location })
           })).then(() => setStepsCompleted((s: number) => s + 1))  
       );
     }
