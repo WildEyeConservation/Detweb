@@ -262,10 +262,10 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                 limitConnections(async () => {
                   const id = await getImageId(row['Image Filename'])
                   client.models.Location.create({
-                    x: Number(row['Box X']),
-                    y: Number(row['Box Y']),
-                    width: Number(row['Box W']),
-                    height: Number(row['Box H']),
+                    x: Math.round(Number(row['Box X']))+Math.round(Number(row['Box W'])/2),
+                    y: Math.round(Number(row['Box Y']))+Math.round(Number(row['Box H'])/2),
+                    width: Math.round(Number(row['Box W'])),
+                    height: Math.round(Number(row['Box H'])),
                     imageId: id,
                     projectId: project.id,
                     source: 'manual',
