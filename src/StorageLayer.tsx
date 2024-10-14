@@ -9,7 +9,7 @@ use a URL template in the way that the normal Leaflet TileLayer does.
 The amplify Storage library gives a slightly more convenient interface, but it can only support a single S3 bucket.
 Having now placed our inputs and outputs in separate buckets, we find that we need to access at least one of these via raw S3.*/
 
-let cachedUrlPromises: { [key: string]: Promise<string> } = {};
+let cachedUrlPromises: { [key: string]: Promise<{url:URL,expiresAt:Date}> } = {};
 
 interface leafletS3LayerOptions extends L.GridLayerOptions {
   getObject: (params: { Bucket: string; Key: string }) => Promise<any>;
@@ -24,15 +24,24 @@ class leafletS3Layer extends L.GridLayer {
     this.source = opts.source;
   }
 
+  async getValidUrl(path: string):Promise<URL> {
+    if (!(path in cachedUrlPromises)) {
+      cachedUrlPromises[path] = getUrl({ path })
+    }
+    const result = await cachedUrlPromises[path]
+    const thirtySecondsFromNow = Date.now() + 30000; // 30 seconds in milliseconds
+    if (result.expiresAt.getTime() < thirtySecondsFromNow) {
+      delete cachedUrlPromises[path];
+      return this.getValidUrl(path);
+    }
+    return result.url;
+  }
+
   createTile(coords: L.Coords, done: (error: Error | undefined, tile: HTMLElement) => void) {
     let tile = document.createElement("img");
     const path = `slippymaps/${this.source}/${coords.z}/${coords.y}/${coords.x}.png`
-    if (!(path in cachedUrlPromises)) {
-      // Get a blob URL
-      cachedUrlPromises[path] = getUrl({ path })
-    }
-    cachedUrlPromises[path].then(url => {
-      tile.src = url.url;
+    this.getValidUrl(path).then(url => {
+      tile.src = url.toString();
       setTimeout(() => {
         done(undefined, tile);
       }, 1);
