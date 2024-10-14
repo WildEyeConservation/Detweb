@@ -177,18 +177,22 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
         do {
           const { data: images, nextToken: nextNextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
             imageSetId
-          }, { selectionSet: ['image.width', 'image.height','image.id','image.timestamp'], nextToken });
+          }, { selectionSet: ['image.width', 'image.height', 'image.id', 'image.timestamp'], nextToken });
           nextToken = nextNextToken ?? undefined;
-          setAllImages(x => x.concat(images.map(({image})=>image)))
-          acc=images.reduce((acc,x)=>{
-            acc.minWidth=Math.min(acc.minWidth,x.image.width);
-            acc.maxWidth=Math.max(acc.maxWidth,x.image.width);
-            acc.minHeight=Math.min(acc.minHeight,x.image.height);
-            acc.maxHeight=Math.max(acc.maxHeight,x.image.height);
+          setAllImages(x => x.concat(images.map(({ image }) => image)))
+          acc = images.reduce((acc, x) => {
+            acc.minWidth = Math.min(acc.minWidth, x.image.width);
+            acc.maxWidth = Math.max(acc.maxWidth, x.image.width);
+            acc.minHeight = Math.min(acc.minHeight, x.image.height);
+            acc.maxHeight = Math.max(acc.maxHeight, x.image.height);
             return acc;
           }, acc);
           if (acc.minWidth != acc.maxWidth || acc.minHeight != acc.maxHeight) {
-            throw new Error(`Inconsistent image sizes in image set ${imageSetId}`);
+            console.log(`Inconsistent image sizes in image set ${imageSetId}`)
+            setImageWidth(undefined);
+            setImageHeight(undefined);
+            setMaxX(undefined);
+            setMaxY(undefined);
           } else {
             setImageWidth(acc.maxWidth);
             setImageHeight(acc.maxHeight);
@@ -198,8 +202,10 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
         } while (nextToken);
       }
     }
-    getAllImages();
-  }, [selectedImageSets, client.models.ImageSetMembership]);
+    if (show) { 
+      getAllImages();
+    }
+  }, [show,selectedImageSets, client.models.ImageSetMembership]);
 
   const [setImagesCompleted, setTotalImages] = useUpdateProgress({
     taskId: `Create task (model guided)`,
