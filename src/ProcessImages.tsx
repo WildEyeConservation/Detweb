@@ -25,6 +25,7 @@ interface ProcessImagesProps {
 export default function ProcessImages({ show, handleClose, selectedImageSets, setSelectedImageSets }: ProcessImagesProps) {
   const limitConnections = pLimit(6);
   const { client, backend } = useContext(GlobalContext)!
+  const {getSqsClient} = useContext(UserContext)!
   const [selectedProcess, selectProcess] = useState<string | undefined>(undefined);
 
   const processingOptions = [
@@ -105,22 +106,33 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
             const image1 = images[i];
             const image2 = images[i + 1];
             if (image2.timestamp - image1.timestamp < 5) {
-              const { data } = await client.models.ImageNeighbour.get({
+              const { data } = await client.models.ImageNeighbour.create({
                 image1Id: image1.id,
                 image2Id: image2.id,
-                processStep: 'Compute image registrations'
               });
               //If the create failed, it is typically because the record allready exists. Let us check if it allready has an associated homography before we launch a task to compute it
               if (!data) {
                 const { data } = await client.models.ImageNeighbour.get({
                   image1Id: image1.id,
                   image2Id: image2.id,
-                  processStep: 'Compute image registrations'
                 });
                 //await publishError('taskProgress/processImages', `Error computing registration for images ${image1.id} and ${image2.id}: ${error instanceof Error ? error.message : String(error)}`, errorDetails);
               }
+              const file1 = image1.files.find((f) => f.type == 'image/jpeg').key
+              const file2 = image2.files.find((f) => f.type == 'image/jpeg').key
+              const sqsClient = await getSqsClient()
+              await sqsClient.send(
+                new SendMessageCommand({
+                  QueueUrl: backend.custom.lightglueTaskQueueUrl,
+                  MessageBody: JSON.stringify({
+                    inputBucket: backend.custom.inputsBucket,
+                    image1Id: image1.id,
+                    image2Id: image2.id,
+                    keys: [file1, file2],
+                    action: "register"
+                  })
+                }))
             }
-            break;
           }
         }
       }
