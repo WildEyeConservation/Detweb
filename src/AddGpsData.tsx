@@ -10,6 +10,7 @@ import { GlobalContext } from "./Context";
 import { DateTime } from 'luxon'
 import pLimit from 'p-limit'
 import {fetchAllPaginatedResults} from "./utils";
+import LabeledToggleSwitch from "./LabeledToggleSwitch";
 
 
 interface AddGpsDataProps {
@@ -25,6 +26,7 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
   const {client} = useContext(GlobalContext)!;
   const [file, setFile] = useState<File | undefined>();
   const [csvData, setCsvData] = useState<any>(undefined);
+  const [associateByTimestamp, setAssociateByTimestamp] = useState(false);
   const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
     taskId: `Add GPS data`,
     indeterminateTaskName: `Loading images`,
@@ -35,23 +37,43 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
 
   useEffect(() => {
     if (file) {
-      Papa.parse(file, {
-        complete: function (results) {
-          setCsvData({
-            ...results, data:
-              results.data.map((row: any) => {
-                return {
-                  timestamp: Number(row[1]),
-                  lat: Number(row[3]),
-                  lon: Number(row[5]),
-                  alt: Number(row[7])
-                }
-              }).filter((row) => row.timestamp)
-          });
-        }
-      });
+      if (associateByTimestamp) {
+        Papa.parse(file, {
+          complete: function (results) {
+            setCsvData({
+              ...results, data:
+                results.data.map((row: any) => {
+                  return {
+                    timestamp: Number(row[1]),
+                    lat: Number(row[3]),
+                    lon: Number(row[5]),
+                    alt: Number(row[7])
+                  }
+                }).filter((row) => row.timestamp)
+            });
+          }
+        })
+      } else {
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines:true,
+          complete: function (results) {
+            setCsvData({
+              ...results, data:
+                results.data.map((row: any) => {
+                  return {
+                    filepath: row['FilePath'],
+                    lat: Number(row['Lat']),
+                    lon: Number(row['Lon']),
+                    alt: Number(row['Elev'])
+                  }
+                })
+            });
+          }
+        })
+      }  
     }
-  }, [file]);
+  }, [file, associateByTimestamp]);
     
   const interpolateGpsData = (csvData: { timestamp: number; lat: number; lon: number; alt: number }[], queryTimestamp: number,) => {
     if (csvData.length === 0) {
@@ -96,31 +118,46 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
 
   async function handleSubmit() {
     handleClose();
-    if (!selectedImageSets) return;
-    const allImages : {image: {timestamp: number, id: string}}[]= await fetchAllPaginatedResults(
-      client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
-      { 
-        imageSetId: selectedImageSets[0], 
-        selectionSet: ['image.timestamp', 'image.id'] as const
+    if (associateByTimestamp) {
+      if (!selectedImageSets) return;
+      const allImages: { image: { timestamp: number, id: string } }[] = await fetchAllPaginatedResults(
+        client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
+        {
+          imageSetId: selectedImageSets[0],
+          selectionSet: ['image.timestamp', 'image.id'] as const
+        }
+      );
+      setTotalSteps(allImages.length);
+      let count = 0
+      await Promise.all(allImages.map(async ({ image: { timestamp, id } }) => {
+        if (timestamp > csvData.data[0].timestamp && timestamp < csvData.data[csvData.data.length - 1].timestamp) {
+          const gpsData = interpolateGpsData(csvData.data, timestamp);
+          plimit(() => client.models.Image.update({ id, latitude: gpsData.lat, longitude: gpsData.lon, altitude_agl: gpsData.alt }));
+        } else {
+          count++;
+        }
+        setStepsCompleted(s => s + 1);
+        return
+      }));
+      if (count > 0) {
+        if (count == 1) {
+          alert(`One image was not updated because it's timestamp was outside the range of the GPS data.`)
+        } else {
+          alert(`${count} images were not updated because their timestamps were outside the range of the GPS data.`)
+        }
       }
-    );
-    setTotalSteps(allImages.length);
-    let count=0
-    await Promise.all(allImages.map(async ({ image:{timestamp,id} }) => {
-      if (timestamp > csvData.data[0].timestamp && timestamp < csvData.data[csvData.data.length - 1].timestamp)  {
-        const gpsData = interpolateGpsData(csvData.data, timestamp);
-        plimit(() => client.models.Image.update({ id, latitude: gpsData.lat, longitude: gpsData.lon, altitude_agl: gpsData.alt }));
-      } else {
-        count++;
-      }
-      setStepsCompleted(s => s + 1);
-      return
-    }));
-    if (count > 0) {
-      if (count==1) {
-        alert(`One image was not updated because it's timestamp was outside the range of the GPS data.`)
-      } else {
-        alert(`${count} images were not updated because their timestamps were outside the range of the GPS data.`)
+    } else {
+      for (const row of csvData.data) {
+        plimit(() => client.models.ImageFile.imagesByPath({ path: row.filepath }, { selectionSet: ['image.id'] as const })
+          .then(({ data }) => data?.[0]?.image?.id)
+          .then((id) => {
+            if (id) {
+              client.models.Image.update({ id, latitude: row.lat, longitude: row.lon, altitude_agl: row.alt });
+            } else {
+              console.log(`No image found for filepath: ${row.filepath}`);
+            }
+          })
+        )
       }
     }
   }
@@ -138,6 +175,7 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
       </Modal.Header>
       <Modal.Body>
         <Form>
+          <LabeledToggleSwitch  leftLabel="Associate by filepath" rightLabel="Associate by timestamp" checked={associateByTimestamp} onChange={setAssociateByTimestamp} />
           <Form.Group className="mb-3">
             <div className="d-grid">
               <Button as="label" htmlFor="file-upload">
@@ -169,7 +207,7 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
         {csvData && (
           <div className="text-center">
             <p>Number of rows parsed: {csvData.data.length}<br/>
-                  {csvData.data.length && <span>
+                  {csvData.data.length && csvData.data[0].timestamp && <span>
                   Starting at : {DateTime.fromSeconds(csvData.data[0].timestamp).toFormat("yyyy-MM-dd HH:mm:ss")}<br/>
                   Ending at : {DateTime.fromSeconds(csvData.data[csvData.data.length - 1].timestamp).toFormat("yyyy-MM-dd HH:mm:ss")}<br/>
                   </span>}
