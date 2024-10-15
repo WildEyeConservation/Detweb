@@ -77,12 +77,16 @@ export default function ImageSetManagement() {
     };
   });
 
-  const tableHeadings = [{ content: "Selected" },
+  const toggleAll = () => {
+    setSelectedSets(imageSets?.map(imageSet => imageSet.id).filter(id => !selectedSets.includes(id)) || []);
+  }
+
+  const tableHeadings = [{ content: <span onClick={toggleAll}>Selected</span> },
     { content: "Name" },
     { content: "Number of images", style: { width: "500px" } },
     { content: "Actions" },
-    
   ];
+
   return (
     <>
     <CreateSubsetModal
