@@ -134,10 +134,10 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
           delete tags[tag];
         }
       }
-    const landscape = (tags['Orientation']?.value as number <=4)
+    const rotated = (tags['Orientation']?.value as number >4)
       return ({ key:file.webkitRelativePath,
-                width: landscape ? tags['Image Width']?.value : tags['Image Height']?.value,
-                height: landscape ? tags['Image Height']?.value : tags['Image Width']?.value,
+                width: rotated ? tags['Image Height']?.value : tags['Image Width']?.value,
+                height: rotated ? tags['Image Width']?.value :tags['Image Height']?.value,
                 timestamp: DateTime.fromFormat(tags.DateTimeOriginal?.description as string, 'yyyy:MM:dd HH:mm:ss').toSeconds(),
                 cameraSerial:tags['Internal Serial Number']?.value,
                 //exifData: JSON.stringify({ ...tags, 'ImageHeight':undefined, 'ImageWidth':undefined})
