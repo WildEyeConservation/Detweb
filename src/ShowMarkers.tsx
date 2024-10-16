@@ -178,7 +178,7 @@ export function ShowMarkers({ activeAnnotation, annotationsHook }:ShowMarkersPro
       text: det.obscured ? "Mark as visible" : "Mark as obscured",
       index: contextmenuItems.length,
       callback: async () => {
-        updateAnnotation({ ...det, obscured: !det.obscured });
+        updateAnnotation({ id:det.id, obscured: !det.obscured });
       },
     });
     if (det.objectId) {
@@ -202,7 +202,7 @@ export function ShowMarkers({ activeAnnotation, annotationsHook }:ShowMarkersPro
           text: `Change to ${category.name}`,
           index: contextmenuItems.length,
           callback: async () => {
-            updateAnnotation({ ...det, categoryId: category.id });
+            updateAnnotation({ id:det.id, categoryId: category.id });
           },
         };
         contextmenuItems.push(item);
@@ -254,7 +254,7 @@ export function ShowMarkers({ activeAnnotation, annotationsHook }:ShowMarkersPro
                     let coords = latLng2xy(latLng);
                     if (!Array.isArray(coords)) {
                       updateAnnotation({
-                        ...annotation,
+                        id: annotation.id,
                         y: Math.round(coords.y),
                         x: Math.round(coords.x),
                       });
