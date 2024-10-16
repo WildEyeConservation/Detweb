@@ -228,16 +228,15 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
     const locationSetId = createLocationSet({ name, projectId: project.id })
     if (modelGuided) {
       if (modelId === "ivx") {
-        for (const { image } of allImages) {
-          const { data: imageFiles } = await client.models.ImageFile.imagesByimageId({ imageId: image.id })
-          // FIXME: This is wrong. I am using the key from the jpeg file to deduce what the path to the h5 file is, but 
-          // the right way to do this is to create a separate ImageFile entry as soon as we create the heatmap file.
+        allImages.map(async ({id}) => limitConnections(async () => {
+          const { data: imageFiles } = await client.models.ImageFile.imagesByimageId({ imageId: id })
           const key = imageFiles.find((x: any) => x.type == 'image/jpeg')?.key.replace('images', 'heatmaps')
-          getSqsClient().then((sqsClient) => sqsClient.send(
+          const sqsClient = await getSqsClient()
+          await sqsClient.send(
             new SendMessageCommand({
               QueueUrl: backend.custom.pointFinderTaskQueueUrl,
               MessageBody: JSON.stringify({
-                imageId: image.id,
+                imageId: id,
                 projectId: project.id,
                 key: 'heatmaps/' + key + '.h5',
                 width: 1024,
@@ -245,9 +244,9 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                 threshold: 1 - Math.pow(10, -threshold),
                 bucket: backend.storage.buckets[0].bucket_name,
                 setId: locationSetId,
-              })
-            }))).then(() => setImagesCompleted((s: number) => s + 1));
-        }
+              })}))
+          setImagesCompleted((s: number) => s + 1)
+        }))
       }
       if (modelId === "scoutbot") {
         Papa.parse(scoutbotFile!, {
