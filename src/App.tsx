@@ -126,13 +126,13 @@ function App({ signOut = () => {}, user }: AppProps) {
               Annotate
             </Nav.Link>
             <IfProjectAdmin currentPM={currentPM}>
-              <NavDropdown title="Actions" id="collapsible-nav-dropdown">
-                {/* <NavDropdown.Item  onClick={()=>showModal("processImages")}>
+              {/* <NavDropdown title="Actions" id="collapsible-nav-dropdown">
+                <NavDropdown.Item  onClick={()=>showModal("processImages")}>
                   Process Imagery
-                </NavDropdown.Item> */}
-                {/* <NavDropdown.Item onClick={()=>showModal("createTask")}>
+                </NavDropdown.Item> 
+               <NavDropdown.Item onClick={()=>showModal("createTask")}>
                   Create annotation task
-                </NavDropdown.Item> */}
+                </NavDropdown.Item> 
                 <NavDropdown.Item onClick={()=>showModal("launchTask")}>
                   Launch annotation task
                 </NavDropdown.Item>
@@ -145,7 +145,7 @@ function App({ signOut = () => {}, user }: AppProps) {
                 <NavDropdown.Item onClick={()=>showModal("retileImages")}>
                   Retile images
                 </NavDropdown.Item>
-              </NavDropdown>
+              </NavDropdown> */}
               <Nav.Link
                 as={NavLink}
                 eventKey="/projectManagement"
@@ -154,9 +154,9 @@ function App({ signOut = () => {}, user }: AppProps) {
                 Project Management
               </Nav.Link>
               {/* <Nav.Link as={NavLink} eventKey='/registration' to="/registration">Registration</Nav.Link> */}
-              <Nav.Link as={NavLink} eventKey="/userStats" to="/userStats">
+              {/* <Nav.Link as={NavLink} eventKey="/userStats" to="/userStats">
                 User Stats
-              </Nav.Link>
+              </Nav.Link> */}
             </IfProjectAdmin>
             {(session?.tokens?.accessToken?.payload?.["cognito:groups"]?.includes("admin")) && (
               <Nav.Link as={NavLink} eventKey="/review" to="/review">
