@@ -1,4 +1,4 @@
-import { useContext, useState, useEffect } from "react";
+import React, { useContext, useState, useEffect, useMemo, useCallback } from "react";
 import { UserContext } from "./Context";
 import "./index.css";
 import { isHotkeyPressed, useHotkeys } from "react-hotkeys-hook";
@@ -15,6 +15,7 @@ import { useMap } from "react-leaflet";
 import { ProjectContext } from "./Context";
 import type { AnnotationType, CategoryType, ExtendedAnnotationType } from "./schemaTypes";
 import type { AnnotationsHook } from "./Context";
+
 interface ShowMarkersProps {
   activeAnnotation?: AnnotationType;
   annotationsHook: AnnotationsHook;
@@ -62,7 +63,7 @@ Whether annotations are editable or read-only is controlled by the presence or a
 */
 
 export function ShowMarkers({ activeAnnotation, annotationsHook }:ShowMarkersProps) {
-  const {data: annotations, delete: deleteAnnotation,update: updateAnnotation}= annotationsHook;
+  const {data: annotations, delete: deleteAnnotation,update: updateAnnotation, create: createAnnotation}= annotationsHook;
   const { latLng2xy, xy2latLng } = useContext(ImageContext) ?? {};
   const { user } = useContext(UserContext)!;
   const {categoriesHook:{data:categories}} = useContext(ProjectContext)!;
@@ -78,8 +79,7 @@ export function ShowMarkers({ activeAnnotation, annotationsHook }:ShowMarkersPro
 
   const map = useMap();
 
-
-  const handleContextMenu = (e: L.LeafletMouseEvent) => {
+  const handleContextMenu = useCallback((e: L.LeafletMouseEvent) => {
     e.originalEvent.preventDefault();
     const xy = latLng2xy(e.latlng);
     const annotation = annotations?.find(
@@ -95,31 +95,14 @@ export function ShowMarkers({ activeAnnotation, annotationsHook }:ShowMarkersPro
       );
       showContextMenu(e.originalEvent, items);
     }
-  };
+  }, [annotations, deleteAnnotation, updateAnnotation, latLng2xy, user, categories]);
 
   useEffect(() => {
-    const handleContextMenu = (e: L.LeafletMouseEvent) => {
-      e.originalEvent.preventDefault();
-      const annotation = annotations?.find(
-        (ann) => ann.x === e.latlng.lng && ann.y === e.latlng.lat
-      );
-      if (annotation && deleteAnnotation && updateAnnotation) {
-        const items = getContextMenuItems(
-          annotation,
-          user,
-          categories ?? [],
-          deleteAnnotation,
-          updateAnnotation
-        );
-        showContextMenu(e.originalEvent, items);
-      }
-    };
-
     map.on("contextmenu", handleContextMenu);
     return () => {
       map.off("contextmenu", handleContextMenu);
     };
-  }, [annotations, user, categories, deleteAnnotation, updateAnnotation, map]);
+  }, [map, handleContextMenu]);
 
   function showContextMenu(event: MouseEvent, items: any[]) {
     const contextMenu = document.createElement("div");
@@ -229,78 +212,86 @@ export function ShowMarkers({ activeAnnotation, annotationsHook }:ShowMarkersPro
     return contextmenuItems;
   }
 
-  const getType = (annotation: ExtendedAnnotationType) =>
+  const getType = useCallback((annotation: ExtendedAnnotationType) => {
     (categories?.find((category) => category.id === annotation.categoryId) as CategoryType | undefined)
       ?.name ?? "Unknown";
+  }, [categories]);
 
-  if (enabled)
-    return (
-      <>
-        {annotations.map((annotation: ExtendedAnnotationType) => {
-          const position = xy2latLng
-            ? (() => {
-                const latLng = xy2latLng([annotation.x, annotation.y]);
-                return Array.isArray(latLng) ? latLng[0] : latLng;
-              })()
-            : undefined;
+  const memoizedMarkers = useMemo(() => {
+    if (!enabled) return null;
 
-          return position ? (
-            <Marker
-              key={annotation.id || crypto.randomUUID()}
-              eventHandlers={{
-                dragend: (e: L.LeafletEvent) => {
-                  const latLng = e.target.getLatLng();
-                  if (latLng2xy && updateAnnotation) {
-                    let coords = latLng2xy(latLng);
-                    if (!Array.isArray(coords)) {
-                      updateAnnotation({
-                        id: annotation.id,
-                        y: Math.round(coords.y),
-                        x: Math.round(coords.x),
-                      });
-                    }
-                  }
-                },
-                contextmenu: (e: L.LeafletMouseEvent) => {
-                  handleContextMenu(e);
-                },
-              }}
-              position={position}
-              draggable={true}
-              autoPan={true}
-              icon={createIcon(categories ?? [], annotation, activeAnnotation)}
-            >
-              <Tooltip>
-                Category: {getType(annotation)} <br />
-                Created by : {annotation?.owner}
-                <br />
-                {annotation?.createdAt && (
-                  <>
-                    Created at : {annotation?.createdAt} <br />
-                  </>
-                )}
-                {annotation.objectId &&
-                  `Name: ${uniqueNamesGenerator({
-                    dictionaries: [adjectives, names],
-                    seed: annotation.objectId,
-                    style: "capital",
-                    separator: " ",
-                  })}`}
-                {!annotation.objectId &&
-                  annotation.proposedObjectId &&
-                  `Proposed Name: ${uniqueNamesGenerator({
-                    dictionaries: [adjectives, names],
-                    seed: annotation.proposedObjectId,
-                    style: "capital",
-                    separator: " ",
-                  })}`}
-              </Tooltip>
-            </Marker>
-          ) : null;
-        })}
-      </>
-    );
-  else {
-    return null;
-  }
-}
+    return annotations.map((annotation: ExtendedAnnotationType) => {
+      const position = xy2latLng
+        ? (() => {
+            const latLng = xy2latLng([annotation.x, annotation.y]);
+            return Array.isArray(latLng) ? latLng[0] : latLng;
+          })()
+        : undefined;
+
+      return position ? (
+        <Marker
+          key={annotation.id || crypto.randomUUID()}
+          eventHandlers={{
+            dragend: (e: L.LeafletEvent) => {
+              const latLng = e.target.getLatLng();
+              if (latLng2xy && updateAnnotation) {
+                let coords = latLng2xy(latLng);
+                if (annotation.shadow) {
+                  createAnnotation({
+                    ...annotation,
+                    shadow: undefined,
+                    proposedObjectId: undefined,
+                    x: Math.round(coords.x),
+                    y: Math.round(coords.y)
+                  });
+                } else {
+                  updateAnnotation({
+                    id: annotation.id,
+                    y: Math.round(coords.y),
+                    x: Math.round(coords.x),
+                  });
+                }
+              }
+            },
+            contextmenu: (e: L.LeafletMouseEvent) => {
+              handleContextMenu(e);
+            },
+          }}
+          position={position}
+          draggable={true}
+          autoPan={true}
+          icon={createIcon(categories ?? [], annotation, activeAnnotation)}
+        >
+          <Tooltip>
+            Category: {getType(annotation)} <br />
+            Created by : {annotation?.owner}
+            <br />
+            {annotation?.createdAt && (
+              <>
+                Created at : {annotation?.createdAt} <br />
+              </>
+            )}
+            {annotation.objectId &&
+              `Name: ${uniqueNamesGenerator({
+                dictionaries: [adjectives, names],
+                seed: annotation.objectId,
+                style: "capital",
+                separator: " ",
+              })}`}
+            {!annotation.objectId &&
+              annotation.proposedObjectId &&
+              `Proposed Name: ${uniqueNamesGenerator({
+                dictionaries: [adjectives, names],
+                seed: annotation.proposedObjectId,
+                style: "capital",
+                separator: " ",
+              })}`}
+          </Tooltip>
+        </Marker>
+      ) : null;
+    });
+  }, [enabled, annotations, xy2latLng, categories, activeAnnotation, updateAnnotation, createAnnotation, latLng2xy, handleContextMenu, getType]);
+
+  return <>{memoizedMarkers}</>;
+};
+
