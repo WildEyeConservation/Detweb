@@ -13,6 +13,7 @@ import Nav from "react-bootstrap/Nav";
 import NavDropdown from "react-bootstrap/NavDropdown";
 import ProjectManagement from "./ProjectManagement.tsx";  
 import DefineCategories from "./DefineCategories.js";
+import QuickTest from "./QuickTest";
 import {
   Routes,
   Route,
@@ -194,6 +195,7 @@ function App({ signOut = () => {}, user }: AppProps) {
                     />
 
                     <Route path="/annotate" element={<Annotate />} />
+                    <Route path="/quicktest" element={<QuickTest />} />
                     <Route path="/test" element={<Test />} />
                     {/* <Route exact path="/registration" element={<Registration/>}/>  */}
                     <Route path="/review" element={<Review />} />
