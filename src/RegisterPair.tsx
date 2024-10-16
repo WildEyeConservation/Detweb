@@ -14,6 +14,8 @@ import { Map } from 'leaflet';
 import { GlobalContext } from "./Context";
 import type { AnnotationType, ExtendedAnnotationType, ImageType } from "./schemaTypes";
 import { useOptimisticAnnotation } from "./useOptimisticUpdates";
+import { useAnnotationNavigation } from "./useAnnotationNavigation";
+import { CRUDHook } from "./Context";
 
 type RegisterPairProps = {
   images: [ImageType, ImageType]; // The pair of images in which we need to register the annotations
@@ -36,7 +38,7 @@ export function RegisterPair({
   selectedSet,
   next,
   prev,
-  homography,
+  homography, 
   visible,
   message_id,
   ack }: RegisterPairProps) {
@@ -44,6 +46,7 @@ export function RegisterPair({
   const [map1, setMap1] = useState<Map | null>(null); // The map for the first image
   const [map2, setMap2] = useState<Map | null>(null); // The map for the second image
   const [blocked, setBlocked] = useState(false);
+  const [proposedObjectidMap, setProposedObjectIdMap] = useState<Record<string, string>>({});
   // memoized subscription filters for the annotations in the two images. 
   const subscriptionFilter1 = useMemo(() => ({
     filter: { and:[{setId: { eq: selectedSet }}, {imageId: { eq: images[0].id }}]}
@@ -61,7 +64,7 @@ export function RegisterPair({
       subscriptionFilter1),
     useOptimisticAnnotation(
       async () => client.models.Annotation.annotationsByImageIdAndSetId({imageId: images[1].id, setId: {eq: selectedSet}}),
-      subscriptionFilter2)]
+      subscriptionFilter2)] as [CRUDHook<AnnotationType>, CRUDHook<AnnotationType>]
   /* We need to keep track of which potential matches has been rejected by the user, so that we don't keep suggesting the same
   previously rejected match. This dictionary is keyed by a string which is just id1 concatenated to id2 where id1 and id2 are 
   the ids of the two annotations that are potential matches. The value is 1 if the match is accepted, -1 if it is rejected, and 0 if 
@@ -81,9 +84,9 @@ export function RegisterPair({
   };
 
   // The transforms to map points image 1 coordinates to image 2 coordinates and vice versa. 
-  const transforms = homography
+  const transforms = useMemo(() => homography
     ? [transform(homography), transform(inv(homography))]
-    : null;
+    : null, [homography]);
   
     /* This function is used to get the status of a potential match. It is used by the useOptimalAssignment hook to avoid
   suggesting previously rejected matches.
@@ -103,68 +106,57 @@ export function RegisterPair({
   // It also provides a list of matches which is a list of pairs of annotations that are potential matches, so that we can itarte through
   // the matches and confirm or reject them one by one..
   
-  const { matches, getAugmentedHook } = useOptimalAssignment({
+  // const { matches, getAugmentedHook } = useOptimalAssignment({
+  //   annotationsHooks,
+  //   transforms: transforms || [],
+  //   getMatchStatus,
+  //   images,
+  // });
+  const { enhancedAnnotationHooks } = useOptimalAssignment({
     annotationsHooks,
     transforms: transforms || [],
     getMatchStatus,
     images,
   });
 
+  const {next:nextAnnotation, prev:prevAnnotation, activeObjectId,confirmMatch} = useAnnotationNavigation({
+    annotationHooks: enhancedAnnotationHooks,
+    next,
+    prev,
+  })
+
+  const activeAnnotation = enhancedAnnotationHooks[0].data.find(anno => anno.proposedObjectId === activeObjectId) ||
+                           enhancedAnnotationHooks[1].data.find(anno => anno.proposedObjectId === activeObjectId)
+
   // This just allows us to automatically acknowledge a pair as having been registered similar to how we acknowledge locations in AnnotationImage.
   // This doesn't currently go anywhere (there is no equivalent of the observations table to keep track of which user registered which pair)
   // but it is here if or when we need it.
-  const newNext = useAckOnTimeout({ next, visible, ack });
 
-  const nextAnnotation = () => {
-    // If we are still iterating through the matches, just move to the next one.
-    if (index < matches.length - 1) {
-      setIndex((i) => i + 1);
-    } else {
-    // Once we get to the end, send all the updates 
-      getAugmentedHook(0).annotations?.map((anno: AnnotationType) =>
-        confirmAnnotation(anno, getAugmentedHook(0)),
-      );
-      getAugmentedHook(1).annotations?.map((anno: Annotation) =>
-        confirmAnnotation(anno, getAugmentedHook(1)),
-      );// Move to the next pair and set the index to -1, which corresponds to a zoomed out overview.
-      setIndex(-1);
-      newNext?.();
-    }
-    //setLocalAnnotations(localAnnotations)
-  };
+  // const nextAnnotation = () => {
+  //   // If we are still iterating through the matches, just move to the next one.
+  //   if (index < matches.length - 1) {
+  //     setIndex((i) => i + 1);
+  //   } else {
+  //   // Once we get to the end, send all the updates 
+  //     getAugmentedHook(0).annotations?.map((anno: AnnotationType) =>
+  //       confirmAnnotation(anno, getAugmentedHook(0)),
+  //     );
+  //     getAugmentedHook(1).annotations?.map((anno: Annotation) =>
+  //       confirmAnnotation(anno, getAugmentedHook(1)),
+  //     );// Move to the next pair and set the index to -1, which corresponds to a zoomed out overview.
+  //     setIndex(-1);
+  //     newNext?.();
+  //   }
+  //   //setLocalAnnotations(localAnnotations)
+  // };
 
-  // useHotkeys("ArrowRight", () => {
-  //   nextAnnotation();
-  // }, [matches, index]);
-
-  function confirmAnnotation(anno: AnnotationType, hook: any) {
-    if (!anno.objectId && anno.proposedObjectId) {
-      anno.objectId = anno.proposedObjectId; // The proposed ObjectID becomes the actual objectId
-      anno.shadow = false; // Once the annotation has been confirmed, it is no longer a shadow annotation.
-    }
-    if (anno.id) { // If the annotation already exists, update it
-      hook.update(anno);
-    } else { // Otherwise create it (ie. it was a shadow annotation).
-      hook.create(anno);
-    }
-  }
-
+  useHotkeys("ArrowRight", nextAnnotation,{enabled:visible});
+  useHotkeys("Ctrl+ArrowRight", next, { enabled: visible });
+  useHotkeys("ArrowLeft", prevAnnotation, { enabled: visible });
+  useHotkeys("Ctrl+ArrowLeft",prev, { enabled: visible });
+  useHotkeys("Space",confirmMatch,{ enabled: visible });
   useHotkeys(
-    "Space",
-    () => {
-      console.log("Spacebar");
-      if (index >= 0) {
-        matches[index].forEach((anno, i) => {
-          confirmAnnotation(anno, annotationsHooks[i]);
-        })
-      }
-      nextAnnotation();
-    },
-    { enabled: visible },
-  );
-
-  useHotkeys(
-    "`",
+    "BACKSPACE",
     () => {
       if (index >= 0) {
         rejectMatch(matches[index]);
@@ -173,88 +165,58 @@ export function RegisterPair({
     { enabled: visible },
   );
 
-  useHotkeys(
-    "Ctrl+ArrowRight",
-    () => {
-      setIndex(-1);
-      newNext?.();
-    },
-    { enabled: visible },
-  );
 
-  const prevAnnotation = () => {
-    if (index > -1) {
-      setIndex((i) => i - 1);
-    } else {
-      prev();
-    }
-    console.log("+");
-  };
-
-  // useHotkeys("ArrowLeft", prevAnnotation , [index]);
-
-  useHotkeys(
-    "Ctrl+ArrowLeft",
-    () => {
-      setIndex(-1);
-      prev();
-    },
-    { enabled: visible },
-  );
-
-  const activeAnnotation = matches?.[index]?.[0] || matches?.[index]?.[1];
-
-  return <>{images?.length == 2 && images?.map((image, i) => 
-          <BaseImage
-              key={i}
-              visible={visible}
-            //activeAnnotation={activeAnnotation}
-              location={{ image }}
-              setId={selectedSet}
-              fullImage={false}
-              boundsxy={[
-                [0, 0],
-                [image.width, image.height],
-              ]}
-              containerwidth="45vw"
-              containerheight="80vh"
-              img={image}
-              x={image.width / 2}
-              y={image.height / 2}
-              width={image.width}
-              height={image.height}
-              next={i === 0 ? nextAnnotation : undefined}
-              prev={i === 0 ? prevAnnotation : undefined}
-            >
-              {transforms && (
-                <GotoAnnotation
-                  image={image}
-                  activeAnnotation={activeAnnotation}
-                  transform={transforms![1 - i]}
-                />
-              )}
-              {transforms && (
-                <OverlapOutline image={image} transform={transforms![1 - i]} />
-              )}
-              <CreateAnnotationOnClick
-                setId={selectedSet}
-                image={image}
-                annotationsHook={annotationsHooks[i]}
-                location={{ x: image.width / 2, y: image.height / 2, width: image.width, height: image.height }}
-                // Removed activeAnnotation prop
-              />
-                <ShowMarkers annotationsHook={getAugmentedHook(i as 0 | 1)} activeAnnotation={activeAnnotation}/>
-              {transforms && (
-                <LinkMaps
-                  otherMap={[map2, map1][i]}
-                  setMap={[setMap1, setMap2][i]}
-                  transform={transforms![i]}
-                  blocked={blocked}
-                  setBlocked={setBlocked}
-                />
-              )}
-              {i == 1 && <Legend position="bottomright" />}
-            </BaseImage>)
-        }
+  return <>{images?.length == 2 && images?.map((image, i) =>
+    <BaseImage
+      key={i}
+      visible={visible}
+      activeAnnotation={activeAnnotation}
+      location={{ image }}
+      setId={selectedSet}
+      fullImage={false}
+      boundsxy={[
+        [0, 0],
+        [image.width, image.height],
+      ]}
+      containerwidth="45vw"
+      containerheight="80vh"
+      img={image}
+      x={image.width / 2}
+      y={image.height / 2}
+      width={image.width}
+      height={image.height}
+      // next={i === 0 ? nextAnnotation : undefined}
+      // prev={i === 0 ? prevAnnotation : undefined}
+    >
+      {transforms && (
+        <GotoAnnotation
+          image={image}
+          activeAnnotation={activeAnnotation}
+          transform={transforms![1 - i]}
+        />
+      )}
+      {transforms && (
+        <OverlapOutline image={image} transform={transforms![1 - i]} />
+      )}
+      <CreateAnnotationOnClick
+        setId={selectedSet}
+        image={image}
+        annotationsHook={enhancedAnnotationHooks[i]}
+        source="registerpair"
+        location={{ x: image.width / 2, y: image.height / 2, width: image.width, height: image.height }}
+      // Removed activeAnnotation prop
+      />
+      <ShowMarkers annotationsHook={enhancedAnnotationHooks[i]} activeAnnotation={activeAnnotation} />
+      {transforms && (
+        <LinkMaps
+          otherMap={[map2, map1][i]}
+          setMap={[setMap1, setMap2][i]}
+          transform={transforms![i]}
+          blocked={blocked}
+          setBlocked={setBlocked}
+        />
+      )}
+      {i == 1 && <Legend position="bottomright" />}
+    </BaseImage>)}
     </>
 }

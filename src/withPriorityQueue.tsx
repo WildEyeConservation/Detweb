@@ -67,7 +67,7 @@ export function withPreloading2(WrappedComponent: React.ComponentType<any>) {
                 next={i < subset.length - 1 ? next : undefined}
                 prev={i > 0 ? prev : undefined} 
               />
-              <div></div>
+              <div>{JSON.stringify(entry)}</div>
             </div>
           ))}
 

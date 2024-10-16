@@ -15,7 +15,6 @@ export function GotoAnnotation({ activeAnnotation, image, transform }: GotoAnnot
 
   useEffect(() => {
     if (activeAnnotation) {
-      activeAnnotation.selected = true;
       if (image.id == activeAnnotation.imageId) {
         const latLng = xy2latLng([activeAnnotation.x, activeAnnotation.y]) as L.LatLng; 
         map.setView(latLng, 6, {

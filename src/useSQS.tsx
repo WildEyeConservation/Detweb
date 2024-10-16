@@ -31,8 +31,6 @@ export default function useSQS() {
   }, [currentPM]);
 
   function getMessages() {
-    console.log(`Buffer Length ${buffer.length}`);
-    console.log(`Index ${index}`);
     //Then try to get new Jobs.
 
     getSqsClient().then(sqsClient => sqsClient.send(new ReceiveMessageCommand({
