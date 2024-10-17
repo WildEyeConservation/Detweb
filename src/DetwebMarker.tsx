@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, memo, useContext } from 'react';
+import React, { useRef, useEffect, memo, useContext, useMemo } from 'react';
 import { ImageContext } from './BaseImage';
 import { Marker, Tooltip } from "react-leaflet";
 import { uniqueNamesGenerator, adjectives, names } from "unique-names-generator";
@@ -64,13 +64,15 @@ function createIcon(
     updateAnnotation: (annotation: AnnotationType) => void
   ) {
     let contextmenuItems = [];
-    contextmenuItems.push({
-      text: "Delete",
-      index: contextmenuItems.length,
-      callback: async () => {
-        deleteAnnotation(det);
-      },
-    });
+      if (!det.shadow) {
+          contextmenuItems.push({
+              text: "Delete",
+              index: contextmenuItems.length,
+              callback: async () => {
+                  deleteAnnotation(det);
+              },
+          });
+      }
     contextmenuItems.push({
       text: det.obscured ? "Mark as visible" : "Mark as obscured",
       index: contextmenuItems.length,
@@ -185,7 +187,7 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
         console.log(`creating marker for ${annotation.id}`);
         return (
             <Marker
-              key={annotation.id || crypto.randomUUID()}
+              key={crypto.randomUUID()}
               eventHandlers={{
                 dragend: (e) => {
                   let coords = latLng2xy(e.target.getLatLng());
@@ -230,6 +232,22 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
     } else {
         return null;
     }
-});
+}, (prevProps, nextProps) => {
+    const prevAnno = prevProps.annotation;
+    const nextAnno = nextProps.annotation;
+    const arePropsEqual = (
+        prevAnno.id === nextAnno.id &&
+        prevAnno.x === nextAnno.x &&
+        prevAnno.y === nextAnno.y &&
+        prevAnno.categoryId === nextAnno.categoryId &&
+        prevAnno.objectId === nextAnno.objectId &&
+        prevAnno.proposedObjectId === nextAnno.proposedObjectId &&
+        prevAnno.shadow === nextAnno.shadow &&
+        prevAnno.obscured === nextAnno.obscured &&
+        prevProps.activeAnnotation?.id === nextProps.activeAnnotation?.id
+    );
+    return arePropsEqual;
+}
+);
 
 export default DetwebMarker;

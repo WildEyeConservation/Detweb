@@ -55,7 +55,7 @@ export function ShowMarkers({ activeAnnotation, annotationsHook }:ShowMarkersPro
       <>
         {annotations?.map((annotation) => (
           <DetwebMarker
-            key={annotation.id || crypto.randomUUID()}
+            key={annotation.id}
             annotation={annotation}
             categories={categories}
             activeAnnotation={activeAnnotation}

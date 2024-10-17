@@ -1,5 +1,5 @@
 import computeMunkres from "munkres-js";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { square, sqrt } from "mathjs";
 import { AnnotationType, ImageType , ExtendedAnnotationType } from "./schemaTypes";
 import { CRUDhook } from "./Context";
@@ -62,7 +62,7 @@ export function useOptimalAssignment({
       projected[0] > image.width ||
       projected[1] > image.height;
     return {
-      id: crypto.randomUUID(), // Generate a unique id for the new annotation
+      id: 'shadow'+anno.id, // Generate a unique id for the new annotation
       projectId: anno.projectId,
       shadow: true, /* Indicates that this is a shadow annotation, in other words, it corresponds to an annotation that we think 
       should exist, but it doesn't (yet), either because an animal was missed by annotators/algorithms or because the animal in 
@@ -178,13 +178,13 @@ export function useOptimalAssignment({
       return {
         data: enhancedAnnotations[i],
         create: annotationsHooks[i].create,
-        update: (anno: ExtendedAnnotationType) => {
+        update: useCallback((anno: ExtendedAnnotationType) => {
           if (anno.shadow) {
             annotationsHooks[i].create({...anno, objectId:anno.proposedObjectId, proposedObjectId:undefined, shadow:undefined});
           } else {
             annotationsHooks[i].update({id:anno.id,objectId:anno.proposedObjectId});
           }
-        },
+        }, []),
         delete: annotationsHooks[i].delete,
       }
     })
