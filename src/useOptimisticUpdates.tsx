@@ -802,10 +802,7 @@ export function useOptimisticAnnotation(
   createMutation.mutate(item);
   return item.id;
   },
-    update: (item: Parameters<typeof createMutation.mutate>[0]) => {
-      //remove all members of item where typeof(member) == 'function'
-      updateMutation.mutate(item);
-    },
+    update: updateMutation.mutate,
   delete: deleteMutation.mutate,
   };
 }

@@ -30,7 +30,7 @@ export default function CreateAnnotationOnClick(props: CreateAnnotationOnClickPr
         console.log('yay')
         currentCategory && source && project &&
         createAnnotation({
-          imageId: image.id,
+          imageId: image?.id || location?.image.id,
           setId: location?.annotationSetId,
           projectId: project.id,
           x: Math.round(xy.x),

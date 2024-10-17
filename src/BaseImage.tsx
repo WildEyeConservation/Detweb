@@ -1,5 +1,5 @@
 // @flow
-import React, {createContext, ReactNode, useState, useEffect, useContext } from "react";
+import React, {createContext, ReactNode, useState, useEffect, useContext, useCallback, useMemo } from "react";
 import { MapContainer, LayersControl} from "react-leaflet";
 import { NavButtons } from "./NavButtons";
 import * as L from "leaflet";
@@ -44,7 +44,7 @@ const BaseImage: React.FC<BaseImageProps> = (props) => {
       response => setImageFiles(response.data))
   }, [image]);
 
-  function xy2latLng(input: L.Point | [number, number] | Array<L.Point | [number, number]>): L.LatLng | L.LatLng[] {
+  const xy2latLng = useCallback((input: L.Point | [number, number] | Array<L.Point | [number, number]>): L.LatLng | L.LatLng[] => {
     if (Array.isArray(input)) {
       if (Array.isArray(input[0])) {
         return (input as [number, number][]).map((x) => xy2latLng(x) as L.LatLng);
@@ -55,9 +55,9 @@ const BaseImage: React.FC<BaseImageProps> = (props) => {
     } else {
       return L.latLng(-input.y / scale, input.x / scale);
     }
-  }
+  }, [scale]);
   
-  function latLng2xy(input: L.LatLng | [number, number] | Array<L.LatLng | [number, number]>): L.Point | L.Point[] {
+  const latLng2xy = useCallback((input: L.LatLng | [number, number] | Array<L.LatLng | [number, number]>): L.Point | L.Point[] => {
     if (Array.isArray(input)) {
       if (Array.isArray(input[0])) {
         return (input as Array<L.LatLng | [number, number]>).map((x) => latLng2xy(x) as L.Point);
@@ -67,7 +67,7 @@ const BaseImage: React.FC<BaseImageProps> = (props) => {
     } else {
       return L.point(input.lng * scale, -input.lat * scale);
     }
-  }
+  }, [scale]);
   
   
 
@@ -90,6 +90,7 @@ const BaseImage: React.FC<BaseImageProps> = (props) => {
   //     }
   //   }
   // });
+  const imageContextValue = useMemo(() => ({ latLng2xy, xy2latLng }), [latLng2xy, xy2latLng]);
   const fullImageTypes = ['Complete JPG', 'Complete TIFF', 'Complete PNG'];
   //If a location is provided, use the location bounds, otherwise use the image bounds
   const imageBounds=xy2latLng([[0, 0], [image.width, image.height]])
@@ -98,7 +99,7 @@ const BaseImage: React.FC<BaseImageProps> = (props) => {
     imageBounds;
   if (imageFiles.length === 0) return null;
   return (
-    <ImageContext.Provider value={{ latLng2xy, xy2latLng }}>
+    <ImageContext.Provider value={imageContextValue}>
       <MapContainer
         
         // id={id}
