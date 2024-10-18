@@ -5,7 +5,7 @@ import "leaflet/dist/leaflet.css";
 import "leaflet-contextmenu/dist/leaflet.contextmenu.css";
 import { Marker, Popup } from "react-leaflet";
 import { UserContext } from "./UserContext";
-import { ImageContext } from "./BaseImage";
+import { ImageContext } from "./Context";
 
 function createIcon(categories: any[], annotation: Annotation) {
   const color =

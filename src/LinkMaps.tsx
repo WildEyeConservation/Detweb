@@ -1,6 +1,6 @@
 import { useMapEvents, useMap } from "react-leaflet";
 import { useEffect, useContext } from "react";
-import { ImageContext } from "./BaseImage";
+import { ImageContext } from "./Context";
 import { Map as LeafletMap, LatLng } from "leaflet";
 
 type LinkMapsProps = {

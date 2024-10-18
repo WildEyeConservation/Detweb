@@ -66,11 +66,17 @@ export interface ProgressContextType {
     progress: ProgressType,
     setProgress: React.Dispatch<React.SetStateAction<ProgressType>>,
 }
-    
+
+interface ImageContextType {
+    latLng2xy: (input: L.LatLng | [number, number] | Array<L.LatLng | [number, number]>) => L.Point | L.Point[];
+    xy2latLng: (input: L.Point | [number, number] | Array<L.Point | [number, number]>) => L.LatLng | L.LatLng[];
+    annotationsHook: AnnotationsHook;
+}
+      
 export const GlobalContext = createContext<GlobalContextType | null>(null);
 export const UserContext = createContext<UserContextType | null>(null);
 export const ProjectContext = createContext<ProjectContextType | null>(null);
 export const ManagementContext = createContext<ManagementContextType | null>(null);
 export const ProgressContext = createContext<ProgressContextType | null>(null);
-
+export const ImageContext = createContext<ImageContextType | undefined>(undefined);
 

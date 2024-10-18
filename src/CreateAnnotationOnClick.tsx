@@ -1,6 +1,6 @@
 import { useMapEvents } from "react-leaflet";
 import { useContext } from "react";
-import { ImageContext } from "./BaseImage";
+import { ImageContext } from "./Context";
 import { UserContext, ProjectContext } from "./Context";
 import type { LocationType, AnnotationSetType, ImageType } from "./schemaTypes";
 
@@ -13,7 +13,8 @@ export interface CreateAnnotationOnClickProps {
 }
 
 export default function CreateAnnotationOnClick(props: CreateAnnotationOnClickProps) {
-  const {annotationSet,location,annotationsHook: {create:createAnnotation},source, image, allowOutside} = props;
+  const { annotationSet, location, source, image, allowOutside } = props;
+  const { annotationsHook: { create: createAnnotation } } = useContext(ImageContext)!;
   const { latLng2xy } = useContext(ImageContext)!;
   const {project,currentCategory} = useContext(ProjectContext)!;
 

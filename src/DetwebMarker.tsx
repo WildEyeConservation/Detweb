@@ -1,5 +1,4 @@
-import React, { useRef, useEffect, memo, useContext, useMemo } from 'react';
-import { ImageContext } from './BaseImage';
+import React, { memo } from 'react';
 import { Marker, Tooltip } from "react-leaflet";
 import { uniqueNamesGenerator, adjectives, names } from "unique-names-generator";
 import * as L from "leaflet";
@@ -13,7 +12,9 @@ interface DetwebMarkerProps {
   user: any;
   updateAnnotation: (annotation: Partial<AnnotationType>) => void;
   deleteAnnotation: (annotation: AnnotationType) => void;
-  getType: (annotation: AnnotationType) => string;
+    getType: (annotation: AnnotationType) => string;
+    latLng2xy: (input: L.LatLng | [number, number] | Array<L.LatLng | [number, number]>) => L.Point | L.Point[];
+    xy2latLng: (input: L.Point | [number, number] | Array<L.Point | [number, number]>) => L.LatLng | L.LatLng[];
 }
 
 function createIcon(
@@ -39,7 +40,8 @@ function createIcon(
         ? "#888888"
         : "#000000"
     }">
-         <span class="markerLabel">${id ? jdenticon.toSvg(id, 24) : ""}</svg></span></div></div>`;
+         <span class="markerLabel">${id ? jdenticon.toSvg(id, 24) : ""}</svg></span>
+         </div></div>`;
     //let html = `<svg width="80" height="80" data-jdenticon-value="user127"/>`;
     //TODO : Confirm the units implicit in the various anchors defined below. If these are in pixels (or any other
     // absolute unit) then things may break upon a resize or even just on different resolution screens.
@@ -107,7 +109,7 @@ function createIcon(
           text: `Change to ${category.name}`,
           index: contextmenuItems.length,
           callback: async () => {
-            updateAnnotation({ ...det, categoryId: category.id });
+            updateAnnotation({ id:det.id, categoryId: category.id });
           },
         };
         contextmenuItems.push(item);
@@ -145,49 +147,51 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
         user,
         updateAnnotation,
         deleteAnnotation,
-        getType
+        getType,
+        latLng2xy,
+        xy2latLng
     } = props;
-    const imageContext = useContext(ImageContext!);
-    const prevPropsRef = useRef<DetWebMarkerProps>();
-    const prevContextRef = useRef<typeof imageContext>();
+    // const prevPropsRef = useRef<DetWebMarkerProps>();
+    // const prevContextRef = useRef<typeof imageContext>();
 
-    useEffect(() => {
-        // Compare current props with previous props
-        if (prevPropsRef.current) {
-            Object.entries(props).forEach(([key, value]) => {
-                if (prevPropsRef.current[key as keyof DetWebMarkerProps] !== value) {
-                    console.log(`Prop "${key}" changed:`, {
-                        from: prevPropsRef.current[key as keyof DetWebMarkerProps],
-                        to: value
-                    });
-                }
-            });
-        }
+    // useEffect(() => {
+    //     // Compare current props with previous props
+    //     if (prevPropsRef.current) {
+    //         Object.entries(props).forEach(([key, value]) => {
+    //             if (prevPropsRef.current[key as keyof DetWebMarkerProps] !== value) {
+    //                 console.log(`Prop "${key}" changed:`, {
+    //                     from: prevPropsRef.current[key as keyof DetWebMarkerProps],
+    //                     to: value
+    //                 });
+    //             }
+    //         });
+    //     }
 
-        // Compare current context with previous context
-        if (prevContextRef.current) {
-            Object.entries(imageContext).forEach(([key, value]) => {
-                if (prevContextRef.current[key as keyof typeof imageContext] !== value) {
-                    console.log(`ImageContext "${key}" changed:`, {
-                        from: prevContextRef.current[key as keyof typeof imageContext],
-                        to: value
-                    });
-                }
-            });
-        }
+    //     // Compare current context with previous context
+    //     if (prevContextRef.current) {
+    //         Object.entries(imageContext).forEach(([key, value]) => {
+    //             if (prevContextRef.current[key as keyof typeof imageContext] !== value) {
+    //                 console.log(`ImageContext "${key}" changed:`, {
+    //                     from: prevContextRef.current[key as keyof typeof imageContext],
+    //                     to: value
+    //                 });
+    //             }
+    //         });
+    //     }
 
-        // Update the refs with the current props and context
-        prevPropsRef.current = props;
-        prevContextRef.current = imageContext;
-    }, [props, imageContext]);
-
-    const { latLng2xy, xy2latLng } = imageContext;
+    //     // Update the refs with the current props and context
+    //     prevPropsRef.current = props;
+    //     prevContextRef.current = imageContext;
+    // }, [props, imageContext]);
 
     if (xy2latLng){
         console.log(`creating marker for ${annotation.id}`);
         return (
+            // <Marker key={annotation.id} position={xy2latLng(annotation)} />
+            
+
             <Marker
-              key={crypto.randomUUID()}
+                key={crypto.randomUUID()}
               eventHandlers={{
                 dragend: (e) => {
                   let coords = latLng2xy(e.target.getLatLng());

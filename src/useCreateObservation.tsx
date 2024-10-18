@@ -1,4 +1,4 @@
-import React, { useCallback, useContext } from "react";
+import React, { useCallback, useContext,memo} from "react";
 import { UserContext, ProjectContext, GlobalContext } from "./Context";
 import { UseAckOnTimeoutProps } from "./useAckOnTimeout"; 
 import { BaseImageProps } from "./BaseImage";
@@ -54,5 +54,5 @@ export function withCreateObservation<T extends CombinedProps>(
     const newAck = useCreateObservation({location,ack});
     return <WrappedComponent {...props} location={{ ...location, ack: newAck }} />;
   };
-  return WithCreateObservation;
+  return memo(WithCreateObservation);
 }

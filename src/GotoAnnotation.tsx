@@ -1,6 +1,6 @@
 import { useContext, useEffect } from "react";
 import { useMap } from "react-leaflet";
-import { ImageContext } from "./BaseImage";
+import { ImageContext } from "./Context";
 import { ExtendedAnnotationType, ImageType } from "./schemaTypes";
 
 interface GotoAnnotationProps {

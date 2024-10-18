@@ -1,7 +1,7 @@
 import { useMap } from "react-leaflet";
 import { useContext,  useEffect } from "react";
 import "leaflet-contextmenu/dist/leaflet.contextmenu.css";
-import { ImageContext } from "./BaseImage";
+import { ImageContext } from "./Context";
 import L from "leaflet";
 import "leaflet-contextmenu";
 import { LocationType } from "./schemaTypes";

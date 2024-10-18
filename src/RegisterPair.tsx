@@ -16,6 +16,7 @@ import type { AnnotationType, ExtendedAnnotationType, ImageType } from "./schema
 import { useOptimisticAnnotation } from "./useOptimisticUpdates";
 import { useAnnotationNavigation } from "./useAnnotationNavigation";
 import { CRUDHook } from "./Context";
+import { ImageContextFromHook } from "./ImageContext";
 
 type RegisterPairProps = {
   images: [ImageType, ImageType]; // The pair of images in which we need to register the annotations
@@ -167,6 +168,7 @@ export function RegisterPair({
 
 
   return <>{images?.length == 2 && images?.map((image, i) =>
+    <ImageContextFromHook hook={enhancedAnnotationHooks[i]} image={image}>
     <BaseImage
       key={i}
       visible={visible}
@@ -203,7 +205,7 @@ export function RegisterPair({
         image={image}
         annotationsHook={enhancedAnnotationHooks[i]}
         source="registerpair"
-        location={{ x: image.width / 2, y: image.height / 2, width: image.width, height: image.height }}
+        location={{ x: image.width / 2, y: image.height / 2, width: image.width, height: image.height, annotationSetId: selectedSet, image }}
       // Removed activeAnnotation prop
       />
       <ShowMarkers annotationsHook={enhancedAnnotationHooks[i]} activeAnnotation={activeAnnotation} />
@@ -217,6 +219,7 @@ export function RegisterPair({
         />
       )}
       {i == 1 && <Legend position="bottomright" />}
-    </BaseImage>)}
+      </BaseImage>
+    </ImageContextFromHook>)}
     </>
 }

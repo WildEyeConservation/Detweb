@@ -170,8 +170,11 @@ export function useOptimalAssignment({
           annotations[1].concat(proposed[1]).map(anno => ({ ...anno, proposedObjectId: proposedObjectIdMap[anno.id] }))
         ]);
       }
+      else{
+        setEnhancedAnnotations([[],[]]);
+      }
     }
-  }, [annotations[0],annotations[1], transforms]);
+  }, [annotations[0].length,annotations[1], transforms]);
 
   return {
     enhancedAnnotationHooks: [0, 1].map(i => {
@@ -184,7 +187,7 @@ export function useOptimalAssignment({
           } else {
             annotationsHooks[i].update({id:anno.id,objectId:anno.proposedObjectId});
           }
-        }, []),
+        }, [annotationsHooks[i]]),
         delete: annotationsHooks[i].delete,
       }
     })

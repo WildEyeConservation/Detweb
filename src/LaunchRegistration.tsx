@@ -6,7 +6,7 @@ import { AnnotationSetDropdown } from "./AnnotationSetDropdownMulti";
 import { fetchAllPaginatedResults } from "./utils";
 import { ImageNeighbourType } from "./schemaTypes";
 import { SendMessageCommand } from "@aws-sdk/client-sqs";
-import { ImageSetDropdown } from "./ImageSetDropdown";
+import { ImageSetDropdown } from "./ImageSetDropDown";
 import * as math from 'mathjs';
 
 interface LaunchRegistrationProps {

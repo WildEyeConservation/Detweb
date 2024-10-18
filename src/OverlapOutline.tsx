@@ -1,7 +1,7 @@
 import { Polygon } from "react-leaflet";
 import { isHotkeyPressed, useHotkeys } from "react-hotkeys-hook";
 import { useContext, useState } from "react";
-import { ImageContext } from "./BaseImage";
+import { ImageContext } from "./Context";
 
 
 interface OverlapOutlineProps {

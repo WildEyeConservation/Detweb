@@ -1,4 +1,4 @@
-import { useMemo,useContext} from 'react';
+import { useMemo,useContext,useCallback} from 'react';
 import BaseImage from './BaseImage';
 import { withAckOnTimeout } from './useAckOnTimeout';
 import { Legend } from './Legend';
@@ -10,6 +10,7 @@ import { GlobalContext, ProjectContext } from './Context';
 // import { useMapEvents } from 'react-leaflet';
 import { ShowMarkers } from './ShowMarkers';
 import { useOptimisticAnnotation } from './useOptimisticUpdates';
+import { ImageContextFromHook } from './ImageContext';
 import CreateAnnotationOnHotKey from './CreateAnnotationOnHotKey';
 
 const Image = withCreateObservation(withAckOnTimeout(BaseImage));
@@ -24,24 +25,30 @@ export default function AnnotationImage(props) {
   }), [annotationSetId, location.image.id]);
   const {categoriesHook:{data:categories},currentCategory,setCurrentCategory} = useContext(ProjectContext)!;
   const annotationsHook = useOptimisticAnnotation(
-    async () => client.models.Annotation.annotationsByImageIdAndSetId({imageId: location.image.id, setId: {eq: annotationSetId}}),
+    async (nextToken) => client.models.Annotation.annotationsByImageIdAndSetId({ imageId: location.image.id, setId: { eq: location.annotationSetId }},{nextToken}),
     subscriptionFilter)
-  const memoizedChildren = useMemo(() => (
-    <>
-      {categories?.map(category => (
-        <CreateAnnotationOnHotKey
-          key={category.id}
-          hotkey={category.shortcutKey}
-          setId={location.annotationSetId}
-          category={category}
-          image={location.image.id}
-          createAnnotation={annotationsHook.create}
-        />
-      ))}
-    </>
-  ), [categories, location.annotationSetId, location.image.id, annotationsHook.create]);
-    
-  return (<Image
+  const memoizedChildren = useMemo(() => {
+    console.log('memoizing')
+    return [
+      <CreateAnnotationOnClick key="caok" allowOutside={allowOutside} location={location} annotationSet={annotationSetId} source='manual' />,
+      <ShowMarkers key="showMarkers" />,
+      <Location key="location"{...location} />,
+      <Legend key="legend" position="bottomright" />
+    ].concat(categories?.map(category => (
+      <CreateAnnotationOnHotKey
+        key={category.id}
+        hotkey={category.shortcutKey}
+        setId={location.annotationSetId}
+        category={category}
+        imageId={location.image.id}
+        createAnnotation={annotationsHook.create}
+        source='manual'
+      />
+    )))
+  }, []);
+
+  return (<ImageContextFromHook hook={annotationsHook} image={location.image}>
+            <Image
             containerwidth={containerwidth}
             containerheight={containerheight}
             visible={visible}
@@ -50,15 +57,11 @@ export default function AnnotationImage(props) {
             prev={prev}
             next={next}
             ack={ack}
-            annotationSet={annotationSetId}>
-            {location && <Location {...location}/>} 
-            <CreateAnnotationOnClick {...{ annotationsHook, allowOutside, location, annotationSet: annotationSetId, source: 'manual' }} />
-            {visible && memoizedChildren}
-            <ShowMarkers annotationsHook={annotationsHook}/>
+            annotationSet={annotationSetId}> 
+            {visible &&memoizedChildren}
     {/* <PushToSecondary {...props} /> */}
-    
-          <Legend position="bottomright" /> 
-        </Image >
+    </Image >
+    </ImageContextFromHook>
   );
 }
 
