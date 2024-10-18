@@ -682,7 +682,7 @@ export function useOptimisticImageSet(
 
 type Annotation = Schema['Annotation']['type'];
 export function useOptimisticAnnotation(
-  listFunction: () => Promise<{ data: Annotation[] }> = () => client['models']['Annotation'].list(), 
+  listFunction: (string?) => Promise<{ data: Annotation[] }> = (nextToken) => client['models']['Annotation'].list({nextToken}), 
   subscriptionFilter?: Parameters<ClientType['models']['Annotation']['onCreate']>[0]){
   const queryClient = useQueryClient();
   const queryKey = ['Annotation', subscriptionFilter];
@@ -692,8 +692,14 @@ export function useOptimisticAnnotation(
   const { data, ...queryResult } = useQuery({
     queryKey,
     queryFn: async () => {
-      const result = await listFunction();
-      return result.data;
+      let nextToken = undefined;
+      const allresults = [];
+      do {
+        const result = await listFunction(nextToken);
+        allresults.push(...result.data);
+        nextToken = result.nextToken;
+      } while (nextToken);
+      return allresults;
     },
   });
 
