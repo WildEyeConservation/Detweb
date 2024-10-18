@@ -84,11 +84,16 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
   const viewBounds = useMemo(() => location?.x ?
     xy2latLng([[location.x - location.width / 2, location.y - location.height / 2], [location.x + location.width / 2, location.y + location.height / 2]]) :
     imageBounds, [location.x, location.y, location.width, location.height, imageBounds]);
+  const viewCenter = useMemo(() => location?.x ?
+    xy2latLng([location.x, location.y]) :
+    xy2latLng([image.width/2,image.height/2]), [location.x, location.y, image.width,image.height]);
   return useMemo(() => (<MapContainer
     // id={id}
     style={style}
     crs={L.CRS.Simple}
-    bounds={viewBounds}
+    // bounds={viewBounds}
+    center={viewCenter}
+    zoom={6}
     zoomSnap={1}
     zoomDelta={1}
     keyboardPanDelta={0}
