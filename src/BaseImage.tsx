@@ -129,16 +129,10 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
   ), [next, prev, imageFiles, location, style, viewBounds, image])
 }, (prevProps, nextProps) => {
       //Iterate over all the props except children and compare them for equality
-      Object.entries(prevProps).forEach(([key, value]) => {
-        if (key !== 'children' && prevProps[key] !== nextProps[key]) {
-          console.log(`Prop "${key}" changed:`, {
-            from: prevProps[key],
-            to: nextProps[key]
-          });
-          return false;
-        }
-      }); 
-      return true;
+  return prevProps.visible === nextProps.visible &&
+    prevProps.next === nextProps.next &&
+    prevProps.prev === nextProps.prev &&
+    prevProps.location === nextProps.location;
   }
 );
 
