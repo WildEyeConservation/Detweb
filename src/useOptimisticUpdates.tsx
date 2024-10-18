@@ -32,7 +32,7 @@ delete({
 
 */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useContext, useMemo} from 'react';
+import { useEffect, useContext, useMemo, useCallback} from 'react';
 import type { Schema } from "../amplify/data/resource";
 import { V6Client } from '@aws-amplify/api-graphql'
 import { client } from './main';
@@ -743,7 +743,11 @@ export function useOptimisticAnnotation(
 
 // Create mutation
   const createMutation = useMutation({
-    mutationFn: model.create,
+    mutationFn: useCallback(async (anno) => {
+      const result = await model.create(anno);
+      if (result.errors) { throw result.errors[0] }
+      return result.data;
+    },[]),
     onMutate: async (newItem) => {
       newItem.id ||= crypto.randomUUID(); // If the item does not have an id, we generate a random UUID for it.
       // Normally we wouldn't need to do this as the server will generate an id for us. But our onCreate subscription will inform us of all newly created items (including
