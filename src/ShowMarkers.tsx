@@ -57,7 +57,7 @@ export function ShowMarkers() {
         {annotations?.map((annotation) => (
           <DetwebMarker
             key={annotation.id}
-            annotation={{...annotation, proposedObjectId: annotation.id}}
+            annotation={{...annotation}}
             categories={categories}
             activeAnnotation={activeAnnotation}
             user={user}

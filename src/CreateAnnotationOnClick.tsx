@@ -38,8 +38,7 @@ export default function CreateAnnotationOnClick(props: CreateAnnotationOnClickPr
           y: Math.round(xy.y),
           categoryId: currentCategory.id,
           source: source,
-          obscured: false,
-          objectId: null,
+          obscured: false
         });
       }
     },
