@@ -21,7 +21,6 @@ import * as turf from '@turf/turf';
 import L from 'leaflet';
 import { getUrl } from 'aws-amplify/storage';
 import Spinner from 'react-bootstrap/Spinner';
-import pLimit from 'p-limit';
 
 interface CreateSubsetModalProps {
     show: boolean;
@@ -75,9 +74,7 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
     const [imageFilenames, setImageFilenames] = useState<string[]>([]);
     const [imageURL, setImageURL] = useState<string|undefined>(undefined);
     const [loading, setLoading] = useState(true);
-    const limitConnections=pLimit(10)
-
-    console.log('Component rendering', { subsets, currentPolygon, imageSetsData });
+    
 
     const fetchFilenames = async (imageId: string) => {
         const { data: images } = await client.models.ImageFile.imagesByimageId({imageId})
@@ -90,7 +87,6 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
     };
 
     useEffect(() => {
-        console.log('fetchImagesData effect running');
         const fetchImagesData = async () => {
             if (selectedImageSets.length === 0) {
                 setLoading(false);
@@ -128,20 +124,16 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
     const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
 
     const handleCreated = useCallback((e: any) => {
-        console.log('handleCreated called', e);
         const { layer } = e;
         const drawnPolygon = layer.getLatLngs()[0];
         
         setCurrentPolygon(drawnPolygon);
         setShowNamePrompt(true);
 
-        console.log('About to remove layer');
         featureGroupRef.current?.removeLayer(layer);
-        console.log('Layer removed');
     }, []);
 
     const handleEdited = useCallback((e: any) => {
-        console.log('handleEdited called', e);
         const { layers } = e;
         layers.eachLayer((layer: L.Layer) => {
             if (layer instanceof L.Polygon) {
@@ -159,7 +151,6 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
     }, []);
 
     const handleDeleted = useCallback((e: any) => {
-        console.log('handleDeleted called', e);
         const { layers } = e;
         layers.eachLayer((layer: L.Layer) => {
             if (layer instanceof L.Polygon) {
@@ -170,16 +161,13 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
     }, []);
 
     const handleNameSubmit = useCallback(() => {
-        console.log('handleNameSubmit called', { newSubsetName, currentPolygon });
         if (newSubsetName && currentPolygon) {
             const newSubset: Subset = {
                 id: Date.now().toString(),
                 name: newSubsetName,
                 polygon: currentPolygon,
             };
-            console.log('Adding new subset', newSubset);
             setSubsets(prevSubsets => {
-                console.log('Previous subsets', prevSubsets);
                 return [...prevSubsets, newSubset];
             });
             setNewSubsetName('');
@@ -188,36 +176,31 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
 
             // Add the new subset polygon to the FeatureGroup
             if (featureGroupRef.current) {
-                console.log('Adding layer to FeatureGroup');
                 const layer = L.polygon(newSubset.polygon);
                 (layer as any).subsetId = newSubset.id;
                 layer.bindTooltip(newSubset.name, { permanent: true });
                 featureGroupRef.current.addLayer(layer);
-                console.log('Layer added to FeatureGroup');
             }
         }
     }, [newSubsetName, currentPolygon]);
 
     const createNewImageSet = useCallback(async (name: string, imageIds: string[]) => {
-        console.log(`Creating new ImageSet "${name}" with ${imageIds.length} images`);
         // Implement the actual creation logic here
         const subsetId = crypto.randomUUID()
         await Promise.all(imageIds.map(imageId => 
-            limitConnections(()=>client.models.ImageSetMembership.create({
+            client.models.ImageSetMembership.create({
                 imageSetId: subsetId,
                 imageId: imageId,
-            }))
+            })
         ));
         await client.models.ImageSet.create({
             id: subsetId,
             name: name,
             projectId: project.id 
         })
-        console.log(`Created new ImageSet "${name}" with ${imageIds.length} images`);
     }, [client.models.ImageSetMembership, client.models.ImageSet, project.id]);
 
     const handleCreateSubsets = useCallback(() => {
-        console.log('handleCreateSubsets called', { subsets });
         subsets.forEach(subset => {
             const selectedIds: string[] = [];
             let polygonCoords = subset.polygon.map(latlng => 
@@ -242,7 +225,6 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
                         }
                     });
                 });
-                console.log(`Subset "${subset.name}" contains ${selectedIds.length} images`);
                 createNewImageSet(subset.name, selectedIds);
             } catch (error) {
                 console.error(`Error processing subset "${subset.name}":`, error);
@@ -289,7 +271,6 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
                         center={[0, 0]}
                         zoom={2}
                         scrollWheelZoom={true}
-                        whenCreated={(map) => console.log('MapContainer created', map)}
                     >
                         <FitBoundsToImages imageSetsData={imageSetsData} />
                         <LayersControl position="topright">

@@ -8,7 +8,6 @@ import { ImageSetDropdown } from "./ImageSetDropDown";
 import { GlobalContext } from "./Context";
 import { SendMessageCommand } from "@aws-sdk/client-sqs";
 import { fetchAllPaginatedResults } from "./utils";
-import pLimit from 'p-limit'
 // const createPair = `mutation MyMutation($image1Key: String!, $image2Key: String!) {
 //   createImageNeighbour(input: {image1key: $image1Key, image2key: $image2Key}) {
 //     id
@@ -23,7 +22,6 @@ interface ProcessImagesProps {
 }
 
 export default function ProcessImages({ show, handleClose, selectedImageSets, setSelectedImageSets }: ProcessImagesProps) {
-  const limitConnections = pLimit(6);
   const { client, backend } = useContext(GlobalContext)!
   const {getSqsClient} = useContext(UserContext)!
   const [selectedProcess, selectProcess] = useState<string | undefined>(undefined);
@@ -75,7 +73,7 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
           setTotalHeatmapSteps(allImages.length);
           setHeatmapStepsCompleted(0);
           allImages.map(async (id) => {
-            const {data :imageFiles} = await limitConnections(() => client.models.ImageFile.imagesByimageId({imageId: id}))
+            const {data :imageFiles} = await client.models.ImageFile.imagesByimageId({imageId: id})
             const path = imageFiles.find((imageFile) => imageFile.type == 'image/jpeg')?.path
               if (path) {
                 client.mutations.processImages({

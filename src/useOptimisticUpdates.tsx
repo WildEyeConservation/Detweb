@@ -35,7 +35,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useContext, useMemo, useCallback} from 'react';
 import type { Schema } from "../amplify/data/resource";
 import { V6Client } from '@aws-amplify/api-graphql'
-import { client } from './main';
 import { CreateQueueCommand, DeleteQueueCommand } from '@aws-sdk/client-sqs';
 import { makeSafeQueueName } from './utils';
 import { GlobalContext, UserContext, ProjectContext } from './Context';
@@ -179,7 +178,8 @@ type ProjectMembership = Schema['UserProjectMembership']['type'];
 export function useOptimisticMembership(
   listFunction: () => Promise<{ data: ProjectMembership[] }> = () => client['models']['UserProjectMembership'].list(), 
   subscriptionFilter?: Parameters<ClientType['models']['UserProjectMembership']['onCreate']>[0]){
-  const queryClient = useQueryClient();
+    const { client } = useContext(GlobalContext);
+    const queryClient = useQueryClient();
   const queryKey = ['UserProjectMembership', subscriptionFilter];
   const model = client.models['UserProjectMembership'];
 
@@ -302,7 +302,8 @@ type Category = Schema['Category']['type'];
 export function useOptimisticCategory(
   listFunction: () => Promise<{ data: Category[] }> = () => client['models']['Category'].list(), 
   subscriptionFilter?: Parameters<ClientType['models']['Category']['onCreate']>[0]){
-  const queryClient = useQueryClient();
+    const { client } = useContext(GlobalContext);
+    const queryClient = useQueryClient();
   const queryKey = ['Category', subscriptionFilter];
   const model = client.models['Category'];
 
@@ -361,7 +362,10 @@ export function useOptimisticCategory(
 
 // Create mutation
   const createMutation = useMutation({
-    mutationFn: model.create,
+    mutationFn: async (newItem) => {
+      const result = await model.create(newItem); 
+      console.log(result);
+    },
     onMutate: async (newItem) => {
       newItem.id ||= crypto.randomUUID(); // If the item does not have an id, we generate a random UUID for it.
       // Normally we wouldn't need to do this as the server will generate an id for us. But our onCreate subscription will inform us of all newly created items (including
@@ -429,7 +433,8 @@ type LocationSet = Schema['LocationSet']['type'];
 export function useOptimisticLocationSet(
   listFunction: () => Promise<{ data: LocationSet[] }> = () => client['models']['LocationSet'].list(), 
   subscriptionFilter?: Parameters<ClientType['models']['LocationSet']['onCreate']>[0]){
-  const queryClient = useQueryClient();
+    const { client } = useContext(GlobalContext);
+    const queryClient = useQueryClient();
   const queryKey = ['LocationSet', subscriptionFilter];
   const model = client.models['LocationSet'];
 
@@ -557,6 +562,7 @@ type ImageSet = Schema['ImageSet']['type'];
 export function useOptimisticImageSet(
   listFunction: () => Promise<{ data: ImageSet[] }> = () => client['models']['ImageSet'].list(), 
   subscriptionFilter?: Parameters<ClientType['models']['ImageSet']['onCreate']>[0]){
+  const { client } = useContext(GlobalContext);
   const queryClient = useQueryClient();
   const queryKey = ['ImageSet', subscriptionFilter];
   const model = client.models['ImageSet'];
@@ -683,7 +689,8 @@ export function useOptimisticImageSet(
 type Annotation = Schema['Annotation']['type'];
 export function useOptimisticAnnotation(
   listFunction: (string?) => Promise<{ data: Annotation[] }> = (nextToken) => client['models']['Annotation'].list({nextToken}), 
-  subscriptionFilter?: Parameters<ClientType['models']['Annotation']['onCreate']>[0]){
+  subscriptionFilter?: Parameters<ClientType['models']['Annotation']['onCreate']>[0]) {
+  const { client } = useContext(GlobalContext);
   const queryClient = useQueryClient();
   const queryKey = ['Annotation', subscriptionFilter];
   const model = client.models['Annotation'];
@@ -749,10 +756,7 @@ export function useOptimisticAnnotation(
 
 // Create mutation
   const createMutation = useMutation({
-    mutationFn: useCallback(async (anno) => {
-      const result = await model.create(anno);
-      if (result.errors) { throw result.errors[0] }
-      return result.data;
+    mutationFn: model.create
     },[]),
     onMutate: async (newItem) => {
       newItem.id ||= crypto.randomUUID(); // If the item does not have an id, we generate a random UUID for it.
@@ -821,6 +825,7 @@ type AnnotationSet = Schema['AnnotationSet']['type'];
 export function useOptimisticAnnotationSet(
   listFunction: () => Promise<{ data: AnnotationSet[] }> = () => client['models']['AnnotationSet'].list(), 
   subscriptionFilter?: Parameters<ClientType['models']['AnnotationSet']['onCreate']>[0]){
+  const { client } = useContext(GlobalContext);
   const queryClient = useQueryClient();
   const queryKey = ['AnnotationSet', subscriptionFilter];
   const model = client.models['AnnotationSet'];
@@ -947,7 +952,8 @@ export function useOptimisticAnnotationSet(
 type Queue = Schema['Queue']['type'];
 function useOptimisticQueue(
   listFunction: () => Promise<{ data: Queue[] }> = () => client['models']['Queue'].list(), 
-  subscriptionFilter?: Parameters<ClientType['models']['Queue']['onCreate']>[0]){
+  subscriptionFilter?: Parameters<ClientType['models']['Queue']['onCreate']>[0]) {
+    const { client } = useContext(GlobalContext);
   const queryClient = useQueryClient();
   const queryKey = ['Queue', subscriptionFilter];
   const model = client.models['Queue'];

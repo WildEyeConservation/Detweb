@@ -1,4 +1,6 @@
-import { createContext } from "react";
+import { Amplify } from 'aws-amplify'
+Amplify.configure(outputs)
+import { createContext, useState } from "react";
 import { Schema } from '../amplify/data/resource'; // Path to your backend resource definition
 import outputs from '../amplify_outputs.json'
 import { AuthUser } from "@aws-amplify/auth";
@@ -6,6 +8,9 @@ import { SQSClient } from "@aws-sdk/client-sqs";
 import { S3Client } from "@aws-sdk/client-s3";
 import { LambdaClient } from "@aws-sdk/client-lambda";
 import { V6Client } from '@aws-amplify/api-graphql'
+import { generateClient } from "aws-amplify/api";
+import { client,limitedClient } from "./limitedClient";
+
 
 export interface ProgressType {
     [key: string]: {value?:number, detail:JSX.Element};
@@ -21,7 +26,7 @@ export type CRUDhook<T extends ModelType> = {
 }
 export type AnnotationsHook = CRUDhook<'Annotation'>;
 
-interface GlobalContextType {
+export interface GlobalContextType {
     client: V6Client<Schema>,
     backend: typeof outputs,
     region: string,
@@ -72,11 +77,40 @@ interface ImageContextType {
     xy2latLng: (input: L.Point | [number, number] | Array<L.Point | [number, number]>) => L.LatLng | L.LatLng[];
     annotationsHook: AnnotationsHook;
 }
-      
-export const GlobalContext = createContext<GlobalContextType | null>(null);
+
+
 export const UserContext = createContext<UserContextType | null>(null);
 export const ProjectContext = createContext<ProjectContextType | null>(null);
 export const ManagementContext = createContext<ManagementContextType | null>(null);
 export const ProgressContext = createContext<ProgressContextType | null>(null);
 export const ImageContext = createContext<ImageContextType | undefined>(undefined);
+
+export const GlobalContext = createContext<GlobalContextType>(
+    {
+        backend: outputs,
+        region: outputs.auth.aws_region,
+        client: limitedClient,
+        showModal: () => { },
+        modalToShow: null
+    }
+);
+
+export function GlobalContextProvider({ children }: { children: React.ReactNode }) {
+    const [modalToShow, showModal] = useState<string | null>(null)
+    return (
+        //Return a GlobalContextProvider with all members at their default values except
+        //for showModal and modalToShow
+        <GlobalContext.Consumer>
+            {(value) => (
+                <GlobalContext.Provider value={{
+                    ...value,
+                    showModal,
+                    modalToShow
+                }}>
+                    {children}
+                </GlobalContext.Provider>
+            )}
+        </GlobalContext.Consumer>
+    );
+  }
 

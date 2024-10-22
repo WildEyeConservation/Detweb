@@ -4,7 +4,6 @@ import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import { ImageSetDropdown } from './ImageSetDropDown';
 import { GlobalContext, ProjectContext } from './Context';
-import pLimit from 'p-limit';
 
 interface SubsampleModalProps {
     show: boolean;
@@ -22,7 +21,6 @@ const SubsampleModal: React.FC<SubsampleModalProps> = ({
     const [subsampleInterval, setSubsampleInterval] = useState<number>(2);
     const { client } = useContext(GlobalContext)!;
     const { project } = useContext(ProjectContext)!;
-    const limitConnections = pLimit(10);
 
     const  handleSubmit = async () => {
         // Implement the subsampling logic here
@@ -44,10 +42,10 @@ const SubsampleModal: React.FC<SubsampleModalProps> = ({
             //Subsample images
             const subsampledImages = allImages.filter((_, index) => index % subsampleInterval === 0)
             const newImageSetId = crypto.randomUUID()
-            const promises=subsampledImages.map(image=>limitConnections(()=>client.models.ImageSetMembership.create({
+            const promises=subsampledImages.map(image=>client.models.ImageSetMembership.create({
                 imageSetId: newImageSetId,
                 imageId: image.id,
-            })))
+            }))
             await Promise.all(promises)
             await client.models.ImageSet.create({
                 id: newImageSetId,

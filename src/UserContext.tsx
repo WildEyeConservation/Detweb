@@ -164,22 +164,22 @@ export function Management({ children }: { children: React.ReactNode }) {
 
 }
 
-export function Global({ children }: { children: React.ReactNode }) {
-  const [modalToShow, showModal] = useState<string | null>(null)
+// export function Global({ children }: { children: React.ReactNode }) {
+//   const [modalToShow, showModal] = useState<string | null>(null)
   
 
-  return (
-    <GlobalContext.Provider value={{
-      backend: outputs,
-      region: outputs.auth.aws_region,
-      client: generateClient<Schema>({authMode:"userPool"}),
-      showModal,
-      modalToShow
-    }}>
-      {children}
-    </GlobalContext.Provider>
-  );
-}
+//   return (
+//     <GlobalContext.Provider value={{
+//       backend: outputs,
+//       region: outputs.auth.aws_region,
+//       client: generateClient<Schema>({authMode:"userPool"}),
+//       showModal,
+//       modalToShow
+//     }}>
+//       {children}
+//     </GlobalContext.Provider>
+//   );
+// }
 
 export function Progress({ children }: { children: React.ReactNode }) {
   const [progress, setProgress] = useState<ProgressType>({})

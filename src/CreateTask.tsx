@@ -9,7 +9,6 @@ import { ImageSetDropdown } from "./ImageSetDropDown";
 import { SendMessageCommand } from "@aws-sdk/client-sqs";
 import { fetchAllPaginatedResults } from "./utils";
 import LabeledToggleSwitch from './LabeledToggleSwitch';
-import pLimit from 'p-limit';
 import Papa from 'papaparse';
 import { StringMap } from "aws-lambda/trigger/cognito-user-pool-trigger/_common";
 
@@ -62,8 +61,6 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
   const fileInputRef = useRef<HTMLInputElement>(null);
   const effectiveImageWidth = maxX - minX;
   const effectiveImageHeight = maxY - minY;
-  const limitConnections = useCallback(pLimit(10), []);
-
   
   const getImageId = useMemo(() => {
     const cache: { [path: string]: string } = {};

@@ -2,8 +2,6 @@ export function graphqlOperation(query: string, variables: any) {
   return { query, variables };
 }
 import { fetchUserAttributes } from "@aws-amplify/auth";
-import pLimit from "p-limit";
-export const limitConnections = pLimit(30);
 import { useEffect, useState, useContext } from "react";
 import "./App.css";
 import "leaflet/dist/leaflet.css";
@@ -175,7 +173,7 @@ function App({ signOut = () => {}, user }: AppProps) {
           <Nav.Link onClick={signOut}>Log out {userAttributes?.preferred_username}</Nav.Link>
         </Nav>
       </Container>
-    </Navbar><SubscriptionComponent/>
+    </Navbar>
               {currentPM && <Project currentPM={currentPM}>
                 <Container
                   fluid

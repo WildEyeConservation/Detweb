@@ -8,7 +8,6 @@ import { ImageSetDropdown } from "./ImageSetDropDown";
 import PropTypes from "prop-types";
 import { GlobalContext } from "./Context";
 import { DateTime } from 'luxon'
-import pLimit from 'p-limit'
 import {fetchAllPaginatedResults} from "./utils";
 import LabeledToggleSwitch from "./LabeledToggleSwitch";
 
@@ -22,7 +21,6 @@ interface AddGpsDataProps {
 
 
 function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets }: AddGpsDataProps) {
-  const plimit = pLimit(10);
   const {client} = useContext(GlobalContext)!;
   const [file, setFile] = useState<File | undefined>();
   const [csvData, setCsvData] = useState<any>(undefined);
@@ -132,7 +130,7 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
       await Promise.all(allImages.map(async ({ image: { timestamp, id } }) => {
         if (timestamp > csvData.data[0].timestamp && timestamp < csvData.data[csvData.data.length - 1].timestamp) {
           const gpsData = interpolateGpsData(csvData.data, timestamp);
-          plimit(() => client.models.Image.update({ id, latitude: gpsData.lat, longitude: gpsData.lon, altitude_agl: gpsData.alt }));
+          client.models.Image.update({ id, latitude: gpsData.lat, longitude: gpsData.lon, altitude_agl: gpsData.alt });
         } else {
           count++;
         }
@@ -148,7 +146,7 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
       }
     } else {
       for (const row of csvData.data) {
-        plimit(() => client.models.ImageFile.imagesByPath({ path: row.filepath }, { selectionSet: ['image.id'] as const })
+        client.models.ImageFile.imagesByPath({ path: row.filepath }, { selectionSet: ['image.id'] as const })
           .then(({ data }) => data?.[0]?.image?.id)
           .then((id) => {
             if (id) {
@@ -157,7 +155,6 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
               console.log(`No image found for filepath: ${row.filepath}`);
             }
           })
-        )
       }
     }
   }
