@@ -5,6 +5,8 @@ import Modal from "react-bootstrap/Modal";
 import Form from "react-bootstrap/Form";
 import Col from "react-bootstrap/Col";
 import Row from "react-bootstrap/Row";
+import Popover from "react-bootstrap/Popover";
+import OverlayTrigger from "react-bootstrap/OverlayTrigger";
 import { GlobalContext, ProjectContext } from "./Context.tsx";
 import { Schema } from "../amplify/data/resource.ts";
 
@@ -73,7 +75,8 @@ export default function DefineCategories() {
             size="lg"
             value={color || "red"}
             title="Category color"
-          />,<>
+          />,
+          <>
             <Button
               variant="info"
               className="me-2 fixed-width-button"
@@ -83,16 +86,31 @@ export default function DefineCategories() {
             >
               Edit
             </Button>
-            <Button
-              variant="danger"
-              className="me-2 fixed-width-button"
-              onClick={() => {
-                deleteCategory(item);
-              }}
+            <OverlayTrigger
+              trigger={["hover", "focus"]}
+              placement="top"
+              overlay={
+                <Popover id={`popover-${id}`}>
+                  <Popover.Body>
+                    Deletion of categories temporarily disabled. Contact support if you need to delete a category.
+                  </Popover.Body>
+                </Popover>
+              }
             >
-              Delete
-            </Button>
-            </>
+              <span>
+                <Button
+                  variant="danger"
+                  className="me-2 fixed-width-button"
+                  disabled
+                  onClick={() => {
+                    deleteCategory(item);
+                  }}
+                >
+                  Delete
+                </Button>
+              </span>
+            </OverlayTrigger>
+          </>
         ],
       };
     });
