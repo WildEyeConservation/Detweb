@@ -756,8 +756,7 @@ export function useOptimisticAnnotation(
 
 // Create mutation
   const createMutation = useMutation({
-    mutationFn: model.create
-    },[]),
+    mutationFn: model.create,
     onMutate: async (newItem) => {
       newItem.id ||= crypto.randomUUID(); // If the item does not have an id, we generate a random UUID for it.
       // Normally we wouldn't need to do this as the server will generate an id for us. But our onCreate subscription will inform us of all newly created items (including
