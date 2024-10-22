@@ -45,8 +45,9 @@ type AutoProcessorProps={
 }
 
 export class AutoProcessor extends Construct {
-  queue: sqs.Queue;
-  asg: autoscaling.AutoScalingGroup;
+  public queue: sqs.Queue;
+  public asg: autoscaling.AutoScalingGroup;
+  public service: ecs.Ec2Service;
   constructor(scope: Construct, id: string, props: AutoProcessorProps) {
     super(scope, id);
 
@@ -75,7 +76,7 @@ export class AutoProcessor extends Construct {
       maxCapacity: 1,
       desiredCapacity: 0,
       keyName: "phindulo",
-      associatePublicIpAddress: true, // Ensure instances get a public IP
+      associatePublicIpAddress: true,
     });
 
 
@@ -103,7 +104,7 @@ export class AutoProcessor extends Construct {
     });
 
     // Create ECS Service
-    const service = new ecs.Ec2Service(this, 'ProcessorService', {
+    this.service = new ecs.Ec2Service(this, 'ProcessorService', {
       cluster: cluster,
       taskDefinition: taskDefinition,
       desiredCount: 0,
@@ -119,7 +120,7 @@ export class AutoProcessor extends Construct {
     this.queue.grantConsumeMessages(taskDefinition.taskRole);
 
     // Set up scaling based on SQS queue
-    const scaling = service.autoScaleTaskCount({
+    const scaling = this.service.autoScaleTaskCount({
       minCapacity: 0,
       maxCapacity: 1,
     });
@@ -180,7 +181,11 @@ export class AutoProcessorEC2 extends Construct {
       securityGroup,
       role,
       keyName: "phindulo",
-      userData: createUserData(inputqueue,outputqueue),
+      userData: createUserData(inputqueue, outputqueue),
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PUBLIC,
+      },
+      associatePublicIpAddress: true,
     });
 
     scaling.scaleOnMetric('ScaleOnSQSMessages', {

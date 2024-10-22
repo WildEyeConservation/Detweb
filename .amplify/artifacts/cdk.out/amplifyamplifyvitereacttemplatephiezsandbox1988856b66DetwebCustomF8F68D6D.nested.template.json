@@ -988,8 +988,8 @@
  },
  "Mappings": {
   "MyProcessorProcessorASGAmiMap5C50F077": {
-   "eu-west-2": {
-    "ami": "ami-0d8f73689282bd592"
+   "eu-west-3": {
+    "ami": "ami-05eb7fc2a936daecb"
    }
   }
  },

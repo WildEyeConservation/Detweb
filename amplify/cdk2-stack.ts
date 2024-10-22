@@ -5,7 +5,7 @@ import * as ecs from "aws-cdk-lib/aws-ecs";
 import * as rds from 'aws-cdk-lib/aws-rds';
 import { AutoProcessor } from "./autoProcessor";
 import { EC2QueueProcessor } from './ec2QueueProcessor';
-
+import * as cdk from 'aws-cdk-lib';
 
 import { Construct } from "constructs";
 import { AmplifyGraphqlApi } from "@aws-amplify/graphql-api-construct";
@@ -13,6 +13,7 @@ import * as sts from "@aws-sdk/client-sts";
 import { BackendAuth } from "@aws-amplify/backend-auth";
 import { Backend } from "@aws-amplify/backend";
 import { ConstructFactory, FunctionResources, ResourceAccessAcceptorFactory, ResourceProvider, BackendSecret } from '@aws-amplify/plugin-types';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 
 export type AddEnvironmentFactory = {
   addEnvironment: (key: string, value: string | BackendSecret) => void;
@@ -121,17 +122,105 @@ export const createDetwebResources=function(scope: Construct, backend : Backend<
   const processor = new EC2QueueProcessor(scope, 'MyProcessor', {
     vpc: vpc, // Your VPC
     instanceType: ec2.InstanceType.of(ec2.InstanceClass.G4DN, ec2.InstanceSize.XLARGE), // Or any instance type you prefer
-    amiId: 'ami-0d8f73689282bd592', // Your AMI ID
+    amiId: 'ami-05eb7fc2a936daecb', // Your AMI ID
     keyName: 'phindulo', // Optional: Your EC2 key pair name
   });
 
-  
+  const userInterfaceTaskRole = new iam.Role(scope, "UserInterfaceTaskRole", {
+    assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+  });
+
+  userInterfaceTaskRole.addManagedPolicy(
+    iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonSQSFullAccess")
+  );
+  userInterfaceTaskRole.addManagedPolicy(
+    iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonEC2FullAccess")
+  );
+
+  const userInterfaceAutoProcessor = new AutoProcessor(scope, "UserInterfaceProcessor", {
+    vpc,
+    instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.SMALL),
+    ecsImage: ecs.ContainerImage.fromAsset("containerImages/user_interface"),
+    ecsTaskRole: userInterfaceTaskRole,
+    environment: {
+      API_ENDPOINT: backend.data.graphqlUrl,
+      API_KEY: backend.data.apiKey || "",
+    },
+    machineImage: ecs.EcsOptimizedImage.amazonLinux2(),
+  });
+
+  const userInterfaceSG = new ec2.SecurityGroup(scope, "UserInterfaceSG", {
+    vpc,
+    description: "Allow HTTP traffic to User Interface",
+    allowAllOutbound: true,
+  });
+  userInterfaceSG.addIngressRule(
+    ec2.Peer.anyIpv4(),
+    ec2.Port.tcp(7861),
+    "Allow HTTP traffic on port 7861"
+  );
+
+  userInterfaceAutoProcessor.asg.addSecurityGroup(userInterfaceSG);
+
+  const userInterfaceALB = new elbv2.ApplicationLoadBalancer(scope, 'UserInterfaceALB', {
+    vpc,
+    internetFacing: true,
+  });
+
+  const listener = userInterfaceALB.addListener('Listener', {
+    port: 80,
+    open: true,
+  });
+
+  listener.addTargets('UserInterfaceTargets', {
+    port: 7861,
+    targets: [userInterfaceAutoProcessor.service],
+    healthCheck: {
+      path: "/health",
+      interval: cdk.Duration.seconds(30),
+    },
+  });
+
+  const scoutbotTaskRole = new iam.Role(scope, "ScoutBotTaskRole", {
+    assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+  });
+
+  scoutbotTaskRole.addManagedPolicy(
+    iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonSQSFullAccess")
+  );
+  scoutbotTaskRole.addManagedPolicy(
+    iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonEC2FullAccess")
+  );
+
+  const scoutbotAutoProcessor = new AutoProcessor(scope, "ScoutBotProcessor", {
+    vpc,
+    instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM),
+    ecsImage: ecs.ContainerImage.fromAsset("containerImages/scoutbot"),
+    ecsTaskRole: scoutbotTaskRole,
+    environment: {
+      API_ENDPOINT: backend.data.graphqlUrl,
+      API_KEY: backend.data.apiKey || ""
+    },
+    machineImage: ecs.EcsOptimizedImage.amazonLinux2(),
+  });
+
+  const scoutbotSG = new ec2.SecurityGroup(scope, "ScoutBotSG", {
+    vpc,
+    description: "Allow HTTP traffic to ScoutBot",
+    allowAllOutbound: true,
+  });
+  scoutbotSG.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(8080), "Allow HTTP traffic on port 8080");
+
+  scoutbotAutoProcessor.asg.addSecurityGroup(scoutbotSG);
+
   return {
     processTaskQueueUrl: processor.queue.queueUrl,
     pointFinderTaskQueueUrl: pointFinderAutoProcessor.queue.queueUrl,
-    //auroraClusterEndpoint: cluster.clusterEndpoint.socketAddress,
-    //auroraClusterReadEndpoint: cluster.clusterReadEndpoint.socketAddress,
-    //auroraClusterSecretArn: cluster.secret?.secretArn || 'Secret not available',  
+    userInterfaceUrl: userInterfaceALB.loadBalancerDnsName,
+    //scoutBotUrl: scoutbotAutoProcessor.asg.loadBalancerDnsName,
+    // auroraClusterEndpoint: cluster.clusterEndpoint.socketAddress,
+    // auroraClusterReadEndpoint: cluster.clusterReadEndpoint.socketAddress,
+    // auroraClusterSecretArn: cluster.secret?.secretArn || 'Secret not available',
   };
 
 }

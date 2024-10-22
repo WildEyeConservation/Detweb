@@ -41,11 +41,7 @@ export class EC2QueueProcessor extends Construct {
     role.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonEC2FullAccess'));
     const s3Policy = new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
-      actions: [
-        's3:GetObject',
-        's3:PutObject',
-        's3:ListBucket',
-      ],
+      actions: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'],
       resources: ['*'],
     });
     role.addToPolicy(s3Policy);
@@ -61,27 +57,36 @@ export class EC2QueueProcessor extends Construct {
       'source /etc/environment',
       'QUEUE_URL=$QUEUE_URL AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION docker-compose up'
     );
-    
 
-    // Create Auto Scaling Group
+    // Create Launch Template
+    const launchTemplate = new ec2.LaunchTemplate(this, 'LaunchTemplate', {
+      machineImage: ec2.MachineImage.genericLinux({ 'eu-west-3': props.amiId }),
+      instanceType: props.instanceType,
+      keyName: props.keyName,
+      securityGroup: securityGroup,
+      userData: userData,
+      role: role, // Correct property to associate IAM Role
+      // Optionally, you can specify additional properties here
+    });
+
+    // Create Auto Scaling Group using Launch Template
     this.autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'ProcessorASG', {
       vpc: props.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
-      instanceType: props.instanceType,
-      machineImage: ec2.MachineImage.genericLinux({ 'eu-west-2': props.amiId }),
       minCapacity: 0,
       maxCapacity: 1,
       desiredCapacity: 0,
-      //cooldown: cdk.Duration.seconds(1), // Set cooldown to minimum allowed value
-      securityGroup,
-      role,
-      keyName: props.keyName,
-      userData,
+      securityGroup, // Optional, since it's already defined in the Launch Template
+      launchTemplate: {
+        launchTemplateId: launchTemplate.launchTemplateId,
+        version: launchTemplate.latestVersionNumber,
+      },
       associatePublicIpAddress: true,
     });
 
+    // Scaling Policy
     this.autoScalingGroup.scaleOnMetric('ScaleOnSQSMessages', {
-      metric: this.queue.metricApproximateNumberOfMessagesVisible({period:cdk.Duration.minutes(1),}),
+      metric: this.queue.metricApproximateNumberOfMessagesVisible({ period: cdk.Duration.minutes(1) }),
       scalingSteps: [
         { upper: 0, change: 0 },
         { lower: 1, change: +1 },

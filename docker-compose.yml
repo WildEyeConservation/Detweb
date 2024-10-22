@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  scoutbot:
+    image: wildme/scoutbot:main
+    command: python3 app2.py
+    ports:
+      - "7860:7860"
+    environment:
+      CONFIG: phase1
+      WIC_BATCH_SIZE: 512
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["all"]
+              capabilities: [gpu]
+
+networks:
+  app-network:
+    driver: bridge

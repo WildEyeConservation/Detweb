@@ -51,7 +51,7 @@ interface Subset {
 }
 
 const FitBoundsToImages: React.FC<{ imageSetsData: ImageSetData[] }> = ({ imageSetsData }) => {
-    const map = useMap();
+    const map = useMap();4
 
     useEffect(() => {
         if (imageSetsData.length > 0) {

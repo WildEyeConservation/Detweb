@@ -13,7 +13,6 @@ import SubsampleModal from "./Subsample";
 import AddGpsData from "./AddGpsData";
 import CreateTask from "./CreateTask";
 import ProcessImages from './ProcessImages.tsx';
-import TemporalSubset from "./TemporalSubset";
 import FileStructureSubset from "./filestructuresubset";
 
 export default function ImageSetManagement() {

@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  scoutbot:
+    build:
+      context: ./scoutbot
+      dockerfile: Dockerfile
+    ports:
+      - "7860:7860"
+    environment:
+      CONFIG: phase1
+      WIC_BATCH_SIZE: 512
+    networks:
+      - app-network
+
+  user-interface:
+    build:
+      context: .
+      dockerfile: ./user_interface/Dockerfile
+    ports:
+      - "7861:7861"
+    networks:
+      - app-network
+    depends_on:
+      - scoutbot
+
+  queue-consumer:
+    build:
+      context: .
+      dockerfile: ./queueconsumer/Dockerfile
+    env_file:
+      - .env
+    environment:
+      - USER_INTERFACE_URL=http://user-interface:7861
+    networks:
+      - app-network
+    depends_on:
+      - scoutbot
+      - user-interface
+
+networks:
+  app-network:
+    driver: bridge
