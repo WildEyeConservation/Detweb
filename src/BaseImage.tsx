@@ -16,6 +16,7 @@ export interface BaseImageProps {
   next?: () => void;
   prev?: () => void;
   children: ReactNode;
+  zoom?: number;
   containerheight?: number;
   containerwidth?: number;
   visible: boolean;
@@ -27,7 +28,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
   const { client } = useContext(GlobalContext)!;
   const { xy2latLng } = useContext(ImageContext)!;
   const [imageFiles, setImageFiles] = useState<ImageFileType[]>([]);
-  const { next, prev, visible, containerheight, containerwidth, children, location } = props;
+  const { next, prev, visible, containerheight, containerwidth, children, location, zoom } = props;
   const { image } = location;
   const prevPropsRef = useRef(props);
   useEffect(() => {
@@ -91,9 +92,9 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
     // id={id}
     style={style}
     crs={L.CRS.Simple}
-    // bounds={viewBounds}
-    center={viewCenter}
-    zoom={6}
+    bounds={zoom ? undefined : viewBounds}
+    center={zoom && viewCenter}
+    zoom={zoom}
     zoomSnap={1}
     zoomDelta={1}
     keyboardPanDelta={0}

@@ -18,7 +18,7 @@ const Image = withCreateObservation(withAckOnTimeout(BaseImage));
 
 
 export default function AnnotationImage(props) {
-  const { location, next, prev, containerheight = 800, containerwidth = 1024, visible, id, ack, annotationSetId, allowOutside } = props
+  const { location, next, prev, containerheight = 800, containerwidth = 1024, visible, id, ack, annotationSetId, allowOutside, zoom } = props
   const {client} = useContext(GlobalContext)!;
   const subscriptionFilter = useMemo(() => ({
     filter: { and:[{setId: { eq: location.annotationSetId }}, {imageId: { eq: location.image.id }}]}
@@ -53,6 +53,7 @@ export default function AnnotationImage(props) {
             containerheight={containerheight}
             visible={visible}
             location={location}
+            zoom={zoom}
             id={id} 
             prev={prev}
             next={next}
