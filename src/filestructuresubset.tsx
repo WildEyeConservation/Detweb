@@ -36,7 +36,7 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
     const { imageSetsHook: { data: imageSets } } = useContext(ManagementContext)!;
 
     const [fileStructure, setFileStructure] = useState<FileNode[]>([]);
-    const [selectedFilePaths, setSelectedFilePaths] = useState<string[]>([]);
+    const [selectedImageIds, setselectedImageIds] = useState<string[]>([]);
     const [showNamePrompt, setShowNamePrompt] = useState(false);
     const [newSubsetName, setNewSubsetName] = useState('');
     const [subsets, setSubsets] = useState<Subset[]>([]);
@@ -114,16 +114,12 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
                     let nextToken: string | null = null;
                     let accumulatedFileNodes: FileNode[] = [];
 
-                    // Assuming you have a way to map imageSetId to folder name
-                    const folderName = imageSets.find(({ id }) => id === imageSetId)?.name || imageSetId;
-
                     do {
                         try {
                             //console.log(`Fetching files for ImageSet ID: ${imageSetId} with nextToken: ${nextToken}`);
                             const response = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
                                 imageSetId,
-                                selectionSet: ['image.id', 'image.files.id', 'image.files.path'],
-                                limit: LOAD_MORE_ITEMS,
+                                selectionSet: ['image.id', 'image.files.path'],
                                 nextToken: nextToken,
                             });
 
@@ -134,7 +130,7 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
                             const fileNodes = imageSetMemberships.flatMap((membership: any) => {
                                 if (membership.image && membership.image.files) {
                                     return membership.image.files.map((file: any) => ({
-                                        id: file.id,
+                                        id: membership.image.id,
                                         name: file.path.split('/').pop() || file.path,
                                         path: file.path.replace(`${imageSetId}/`, ''), // Ensure paths are relative
                                         type: 'file',
@@ -183,17 +179,17 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
 
     const handleNodeSelect = async (node: FileNode, isChecked: boolean) => {
         if (node.type === 'file') {
-            setSelectedFilePaths(prev => isChecked ? [...prev, node.path] : prev.filter(path => path !== node.path));
+            setselectedImageIds(prev => isChecked ? [...prev, node.id] : prev.filter(path => path !== node.id));
             setSelectedFile(node);
         } else if (node.type === 'directory') {
             if (isChecked) {
                 // Select all child files
-                const allPaths = getAllFilePaths(node);
-                setSelectedFilePaths(prev => [...new Set([...prev, ...allPaths])]);
+                const allIds = getAllImageIds(node);
+                setselectedImageIds(prev => [...new Set([...prev, ...allIds])]);
             } else {
                 // Deselect all child files
-                const allPaths = getAllFilePaths(node);
-                setSelectedFilePaths(prev => prev.filter(path => !allPaths.includes(path)));
+                const allIds = getAllImageIds(node);
+                setselectedImageIds(prev => prev.filter(id => !allIds.includes(id)));
             }
         }
     };
@@ -209,6 +205,19 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
         }
         return paths;
     };
+
+    const getAllImageIds = (node: FileNode): string[] => {
+        let ids: string[] = [];
+        if (node.type === 'file') {
+            ids.push(node.id);
+        } else if (node.children) {
+            node.children.forEach(child => {
+                ids = ids.concat(getAllImageIds(child));
+            });
+        }
+        return ids;
+    };
+
 
     const toggleNodeExpansion = (nodes: FileNode[], targetId: string): FileNode[] => {
         return nodes.map(node => {
@@ -268,26 +277,26 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
     };
 
     const handleNameSubmit = () => {
-        if (newSubsetName && selectedFilePaths.length > 0) {
+        if (newSubsetName && selectedImageIds.length > 0) {
             const newSubset: Subset = {
                 id: Date.now().toString(),
                 name: newSubsetName,
-                filePaths: selectedFilePaths,
+                ids: selectedImageIds,
             };
             setSubsets([...subsets, newSubset]);
             setNewSubsetName('');
             setShowNamePrompt(false);
-            setSelectedFilePaths([]);
+            setselectedImageIds([]);
         }
     };
 
-    const createNewImageSet = async (name: string, filePaths: string[]) => {
-        //console.log(`Creating new ImageSet "${name}" with ${filePaths.length} files`);
+    const createNewImageSet = async (name: string, imageIds: string[]) => { 
+        //console.log(`Creating new ImageSet "${name}" with ${imageIds.length} images`); // Updated log message
         const subsetId = crypto.randomUUID();
-        await Promise.all(filePaths.map(filePath =>
+        await Promise.all(imageIds.map(imageId =>
             client.models.ImageSetMembership.create({
                 imageSetId: subsetId,
-                imageId: filePath,
+                imageId: imageId,
             })
         ));
         await client.models.ImageSet.create({
@@ -304,7 +313,7 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
 
     const confirmCreateSubsets = async () => {
         for (const subset of subsets) {
-            await createNewImageSet(subset.name, subset.filePaths);
+            await createNewImageSet(subset.name, subset.ids);
         }
         setSubsets([]);
     };
@@ -333,7 +342,7 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
                             <>
                                 <input
                                     type="checkbox"
-                                    checked={node.children ? node.children.every(child => selectedFilePaths.includes(child.path)) : false}
+                                    checked={node.children ? node.children.every(child => selectedImageIds.includes(child.id)) : false}
                                     onChange={(e) => handleNodeSelect(node, e.target.checked)}
                                     style={{ marginRight: '5px' }}
                                 />
@@ -347,7 +356,7 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
                             <>
                                 <input
                                     type="checkbox"
-                                    checked={selectedFilePaths.includes(node.path)}
+                                    checked={selectedImageIds.includes(node.id)}
                                     onChange={(e) => handleNodeSelect(node, e.target.checked)}
                                     style={{ marginRight: '5px' }}
                                 />
@@ -426,12 +435,12 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
                     <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
                         {renderTreeNodes(fileStructure, true)}
                     </div>
-                    <p>Selected files: {selectedFilePaths.length}</p>
+                    <p>Selected files: {selectedImageIds.length}</p>
                     <p>Defined subsets: {subsets.length}</p>
                     <div>
                         {subsets.map((subset, index) => (
                             <div key={subset.id}>
-                                <strong>{subset.name}</strong>: {subset.filePaths.length} files selected
+                                <strong>{subset.name}</strong>: {subset.ids.length} files selected
                             </div>
                         ))}
                     </div>
@@ -439,7 +448,7 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
                         <Button
                             variant="primary"
                             onClick={handleCreateSubsets}
-                            disabled={selectedFilePaths.length === 0}
+                            disabled={selectedImageIds.length === 0}
                         >
                             Create subsets
                         </Button>
