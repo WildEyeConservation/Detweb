@@ -145,8 +145,8 @@ const schema = a.schema({
     sets: a.hasMany('LocationSetMembership', 'locationId')
   }).authorization(allow => [allow.authenticated()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
-  .secondaryIndexes((index)=>[index('imageId').queryField('locationsByImageKey'), 
-    index('setId').queryField('locationsBySetId')
+    .secondaryIndexes((index) => [index('imageId').sortKeys(['confidence']).queryField('locationsByImageKey'), 
+    index('setId').sortKeys(['confidence']).queryField('locationsBySetIdAndConfidence')
   ]),
   Observation: a.model({
     projectId: a.id().required(),

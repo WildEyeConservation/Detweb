@@ -2,7 +2,7 @@ import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { addUserToGroup } from "./functions/add-user-to-group/resource";
-import { Stack } from "aws-cdk-lib";
+import { Stack, Fn } from "aws-cdk-lib";
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { outputBucket, inputBucket } from "./storage/resource";
 import { handleS3Upload } from "./storage/handleS3Upload/resource";
@@ -151,6 +151,27 @@ lightGlueAutoProcessor.asg.role.addManagedPolicy(
   iam.ManagedPolicy.fromAwsManagedPolicyName("AWSAppSyncInvokeFullAccess"),
 );
 
+const scoutbotAutoProcessor = new AutoProcessor(ecsStack, "ScoutbotAutoProcessor",
+  {
+    vpc,
+    instanceType: ec2.InstanceType.of(ec2.InstanceClass.G4DN, ec2.InstanceSize.XLARGE),
+    ecsImage: ecs.ContainerImage.fromAsset("containerImages/scoutbot"),
+    ecsTaskRole,
+    memoryLimitMiB: 1024 * 12,
+    gpuCount: 1,
+    environment: {
+      API_ENDPOINT: backend.data.graphqlUrl,
+      API_KEY: backend.data.apiKey || "",
+      BUCKET: backend.inputBucket.resources.bucket.bucketName
+    },
+    machineImage: ecs.EcsOptimizedImage.amazonLinux2(ecs.AmiHardwareType.GPU),
+    rootVolumeSize: 100
+  })
+
+scoutbotAutoProcessor.asg.role.addManagedPolicy(
+  iam.ManagedPolicy.fromAwsManagedPolicyName("AWSAppSyncInvokeFullAccess"),
+);
+
 //const devRole = iam.Role.fromRoleArn(scope, "DevRole", devUserArn);
 
 // Grant the devuser permission to assume the Subsample Lambda role
@@ -179,6 +200,7 @@ backend.processImages.resources.lambda.addToRolePolicy(statement)
 backend.addOutput({
   custom: {
     lightglueTaskQueueUrl: lightGlueAutoProcessor.queue.queueUrl,
+    scoutbotTaskQueueUrl: scoutbotAutoProcessor.queue.queueUrl,
     processTaskQueueUrl: processor.queue.queueUrl,
     pointFinderTaskQueueUrl: pointFinderAutoProcessor.queue.queueUrl,
     annotationTable: backend.data.resources.tables['Annotation'].tableName

@@ -14,8 +14,10 @@ import { StringMap } from "aws-lambda/trigger/cognito-user-pool-trigger/_common"
 
 const thresholdRange = {
   ivx: { min: 1, max: 10, step: 1 },
-  scoutbot: { min: 0, max: 1, step: 0.01 }
+  scoutbot: { min: 0, max: 1, step: 0.01 },
+  scoutbotV3: { min: 0, max: 1, step: 0.01 },
 }
+
 type Nullable<T> = T | null;
 interface CreateTaskProps {
   show: boolean;
@@ -174,7 +176,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
         do {
           const { data: images, nextToken: nextNextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
             imageSetId
-          }, { selectionSet: ['image.width', 'image.height', 'image.id', 'image.timestamp'], nextToken });
+          }, { selectionSet: ['image.width', 'image.height', 'image.id', 'image.timestamp','image.files.key','image.files.type'], nextToken });
           nextToken = nextNextToken ?? undefined;
           setAllImages(x => x.concat(images.map(({ image }) => image)))
           acc = images.reduce((acc, x) => {
@@ -225,9 +227,8 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
     const locationSetId = createLocationSet({ name, projectId: project.id })
     if (modelGuided) {
       if (modelId === "ivx") {
-        allImages.map(async ({id}) => limitConnections(async () => {
-          const { data: imageFiles } = await client.models.ImageFile.imagesByimageId({ imageId: id })
-          const key = imageFiles.find((x: any) => x.type == 'image/jpeg')?.key.replace('images', 'heatmaps')
+        allImages.map(async (image) => {
+          const key = image.files.find((x: any) => x.type == 'image/jpeg')?.key.replace('images', 'heatmaps')
           const sqsClient = await getSqsClient()
           await sqsClient.send(
             new SendMessageCommand({
@@ -243,7 +244,33 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                 setId: locationSetId,
               })}))
           setImagesCompleted((s: number) => s + 1)
-        }))
+        })
+      }
+      if (modelId === "scoutbotV3") {
+        // Chunk allImages into groups of 4
+        const chunkSize = 4;
+        for (let i = 0; i < allImages.length; i += chunkSize) {
+          const chunk = allImages.slice(i, i + chunkSize);
+          
+          const sqsClient = await getSqsClient();
+          await sqsClient.send(
+            new SendMessageCommand({
+              QueueUrl: backend.custom.scoutbotTaskQueueUrl,
+              MessageBody: JSON.stringify({
+                images: chunk.map(image => ({
+                  imageId: image.id,
+                  key: 'images/' + image.files.find((x: any) => x.type == 'image/jpeg')?.key,
+                })),
+                projectId: project.id,
+                bucket: backend.storage.buckets[1].bucket_name,
+                setId: locationSetId,
+              })
+            })
+          );
+          
+          // Update progress for the entire chunk
+          setImagesCompleted((s: number) => s + chunk.length);
+        }
       }
       if (modelId === "scoutbot") {
         Papa.parse(scoutbotFile!, {
@@ -261,19 +288,20 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
             console.log("Parsed CSV data:", result.data);
             for (const row of result.data) {
               if (Number(row['Label Confidence']) > threshold) {
-                limitConnections(async () => {
-                  const id = await getImageId(row['Image Filename'])
-                  client.models.Location.create({
-                    x: Math.round(Number(row['Box X']))+Math.round(Number(row['Box W'])/2),
-                    y: Math.round(Number(row['Box Y']))+Math.round(Number(row['Box H'])/2),
-                    width: Math.round(Number(row['Box W'])),
-                    height: Math.round(Number(row['Box H'])),
-                    imageId: id,
-                    projectId: project.id,
-                    source: 'manual',
-                    setId: locationSetId,
+                getImageId(row['Image Filename'])
+                  .then((id) => {
+                    client.models.Location.create({
+                      x: Math.round(Number(row['Box X']))+Math.round(Number(row['Box W'])/2),
+                      y: Math.round(Number(row['Box Y']))+Math.round(Number(row['Box H'])/2),
+                      width: Math.round(Number(row['Box W'])),
+                      height: Math.round(Number(row['Box H'])),
+                      imageId: id,
+                      projectId: project.id,
+                      source: 'manual',
+                      setId: locationSetId,
+                    })
                   })
-                }).then(() => setLocationsCompleted((fc: any) => fc + 1))
+                  .then(() => setLocationsCompleted((fc: any) => fc + 1))
               } 
             }
           },
@@ -299,7 +327,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                 yStep * (yStepSize ? yStepSize : 0) + minY + height / 2,
               );
               promises.push(
-                limitConnections(() => client.models.Location.create({
+                client.models.Location.create({
                   x,
                   y,
                   width,
@@ -308,8 +336,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                   projectId: project.id,
                   source: 'manual',
                   setId: locationSetId,
-                })).then(() => setLocationsCompleted((fc: any) => fc + 1)),
-                );
+                }).then(() => setLocationsCompleted((fc: any) => fc + 1)))
               }
             }
           }
@@ -339,19 +366,20 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
           />
           {modelGuided ? (
             <>
-              <Form.Group>
-                <Form.Label>Threshold</Form.Label>
-                <Form.Range
-                  min={thresholdRange[modelId].min}
-                  max={thresholdRange[modelId].max}
-                  step={thresholdRange[modelId].step}
-                  value={threshold}
-                  onChange={(e) => setThreshold(parseFloat(e.target.value))}
-                />
-                <Form.Text>
-                  {`Threshold value: ${threshold}`}
-                </Form.Text>
-              </Form.Group>
+              {modelId === "ivx" &&
+                <Form.Group>
+                  <Form.Label>Threshold</Form.Label>
+                  <Form.Range
+                    min={thresholdRange[modelId].min}
+                    max={thresholdRange[modelId].max}
+                    step={thresholdRange[modelId].step}
+                    value={threshold}
+                    onChange={(e) => setThreshold(parseFloat(e.target.value))}
+                  />
+                  <Form.Text>
+                    {`Threshold value: ${threshold}`}
+                  </Form.Text>
+                </Form.Group>}
               <Form.Group>
                 <Form.Label>Model</Form.Label>
                 <Form.Select
@@ -366,7 +394,8 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                 >
                   <option>Select AI model to use to guide annotation</option>
                   <option value="ivx">Elephant detection (nadir)</option>
-                  <option value="scoutbot">ScoutBot export</option>
+                  <option value="scoutbotV3">ScoutBot v3</option>
+                  <option value="scoutbot">ScoutBot export file</option>
                 </Form.Select>
               </Form.Group>
               {modelId === "scoutbot" && (
@@ -530,3 +559,4 @@ function InputBox({ label, enabled, getter, setter }: { label: string, enabled: 
     </Form.Group>
   </div>;
 }
+

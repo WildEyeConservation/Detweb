@@ -60,7 +60,7 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
         let allData = [];
         do {
           const result = await retryOperation(
-            () => client.models.Location.locationsBySetId({ 
+            () => client.models.Location.locationsBySetIdAndConfidence({ 
               setId: task, 
               nextToken: prevNextToken,
               selectionSet: ['id','x','y','width','height','confidence','image.id','image.width','image.height'] 
