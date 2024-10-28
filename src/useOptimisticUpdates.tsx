@@ -1086,8 +1086,8 @@ export const useQueues = () => {
   const originalHook = useOptimisticQueue(() => client.models.Queue.list(subscriptionFilter), 
     subscriptionFilter);
   const create = (name: string) => {
-    const safeName = makeSafeQueueName(name);
-    const id = originalHook.create({ name: safeName, projectId: project.id});
+    const safeName = makeSafeQueueName(name+crypto.randomUUID());
+    const id = originalHook.create({ name, projectId: project.id});
     getSqsClient().then(sqsClient => sqsClient.send(new CreateQueueCommand({
       QueueName: safeName,
       Attributes: {
