@@ -7,7 +7,7 @@ import { ImageContext,ProjectContext } from './Context';
 export default function CreateAnnotationOnHotKey({ hotkey, category, createAnnotation,setId,imageId,source }) {
   const [currentPosition, setCurrentPosition] = React.useState({ x: 0, y: 0 });
     const { latLng2xy } = useContext(ImageContext);
-    const {project} = useContext(ProjectContext)!;
+    const {project,setCurrentCategory} = useContext(ProjectContext)!;
 
     useMapEvents({
         mousemove: (e) => {
@@ -25,6 +25,7 @@ export default function CreateAnnotationOnHotKey({ hotkey, category, createAnnot
             projectId: project.id,
             source: source
         });
+        setCurrentCategory(category);
     }, [category.id, createAnnotation, currentPosition,imageId,setId,project.id,source]);
 
     useHotkeys(hotkey, handleHotkey, [handleHotkey]);
