@@ -35,11 +35,11 @@ code {
 .marker>div { width: 1rem;
       height: 1rem;
       display: block;
-      left: -0.353rem;
-      top: -1.207rem;
+      left: -0.5rem;
+      top:  -0.5rem;
       opacity: 1;
       position: relative;
-      border-radius: 0.5rem 0.5rem 0;
+      border-radius: 0.5rem;
       transform: rotate(45deg);
       border: 2px solid;}
 
