@@ -1,8 +1,10 @@
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import { Stack, Modal, Form, Button } from "react-bootstrap";
 import { AnnotationSetDropdown } from "./AnnotationSetDropDown";
 //import { UserContext } from "./UserContext";
-
+import { GlobalContext } from "./Context";
+import { fetchAllPaginatedResults } from "./utils";
+import exportFromJSON from 'export-from-json';
 interface ExportDataProps {
   show: boolean;
   handleClose: () => void;
@@ -10,82 +12,38 @@ interface ExportDataProps {
 
 export const ExportData: React.FC<ExportDataProps> = ({ show, handleClose }) => {
   const [annotationSet, setAnnotationSet] = useState<string | undefined>(undefined);
-  //const { gqlSend } = useContext(UserContext)!;
+  const { client } = useContext(GlobalContext)!;
 
-  /*const annotationsByAnnotationSetId = `
-  query AnnotationsByAnnotationSetId(
-    $annotationSetId: ID!
-    $sortDirection: ModelSortDirection
-    $filter: ModelAnnotationFilterInput
-    $limit: Int
-    $nextToken: String
-  ) {
-    annotationsByAnnotationSetId(
-      annotationSetId: $annotationSetId
-      sortDirection: $sortDirection
-      filter: $filter
-      limit: $limit
-      nextToken: $nextToken
-    ) {
-      items {
-        x
-        y
-        obscured
-        image{
-          key
-          latitude
-          longitude
-          timestamp
-        }
-        category{
-          name
-        }
-        owner
-      }
-      nextToken
-    }
-  }
-`;*/
 
   async function handleSubmit() {
-    // console.log("wtf");
-    // handleClose();
-    // const fileName = "DetWebExport";
-    // const exportType = exportFromJSON.types.csv;
-    // let nextToken: string | undefined = undefined;
-    // let items: AnnotationType[] = [];
-    // let allItems: AnnotationType[] = [];
-    // do {
-    //   const result = await gqlSend(annotationsByAnnotationSetId, {
-    //     annotationSetId: annotationSet,
-    //     nextToken,
-    //   });
-    //   const data = result as unknown as AnnotationsResponse;
-    //   const { items: fetchedItems, nextToken: fetchedNextToken } = data.annotationsByAnnotationSetId;
-    //   items = fetchedItems;
-    //   nextToken = fetchedNextToken ?? undefined;
-    //   allItems = allItems.concat(items);
-    // } while (nextToken);
-
-    // exportFromJSON({
-    //   data: allItems.map((xx: AnnotationType) => {
-    //     const imageMeta: ImageMetaType = xx.imageMeta;
-    //     const timestamp = imageMeta.timestamp;
-    //     return {
-    //       category: xx.category.name,
-    //       image: xx.image.key,
-    //       timestamp: xx.image.timestamp,
-    //       latitude: xx.image.latitude,
-    //       longitude: xx.image.longitude,
-    //       obscured: xx.obscured,
-    //       objectId: xx.owner,
-    //       x: xx.x,
-    //       y: xx.y,
-    //     };
-    //   }),
-    //   fileName,
-    //   exportType,
-    // });
+    handleClose();
+    const annotations = await fetchAllPaginatedResults(
+      client.models.Annotation.annotationsByAnnotationSetId,
+      {
+        setId: annotationSet,
+        selectionSet: ['y', 'x', 'category.name','image.*','image.files.*','owner','source','obscured'] as const
+      }
+    );
+    const fileName = `DetWebExport-${annotationSet}`;
+    const exportType = exportFromJSON.types.csv;
+    exportFromJSON({
+      data: annotations.map((anno) => {
+        return {
+          category: anno.category?.name,
+          image: anno.image.files.find(f => f.type == 'image/jpeg')?.path,
+          timestamp: anno.image.timestamp,
+          latitude: anno.image.latitude,
+          longitude: anno.image.longitude,
+          obscured: anno.obscured,
+          annotator: anno.owner,
+          x: anno.x,
+          y: anno.y,
+          source: anno.source,
+        };
+      }),
+      fileName,
+      exportType,
+    });
   }
 
   return (
