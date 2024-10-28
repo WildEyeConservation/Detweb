@@ -295,6 +295,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                       y: Math.round(Number(row['Box Y']))+Math.round(Number(row['Box H'])/2),
                       width: Math.round(Number(row['Box W'])),
                       height: Math.round(Number(row['Box H'])),
+                      confidence: 1,
                       imageId: id,
                       projectId: project.id,
                       source: 'manual',
@@ -334,6 +335,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                   height,
                   imageId: id,
                   projectId: project.id,
+                  confidence: 1,
                   source: 'manual',
                   setId: locationSetId,
                 }).then(() => setLocationsCompleted((fc: any) => fc + 1)))
