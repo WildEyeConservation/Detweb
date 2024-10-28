@@ -5,6 +5,7 @@ import { NavButtons } from "./NavButtons";
 import * as L from "leaflet";
 import "leaflet-contextmenu";
 import "leaflet-contextmenu/dist/leaflet.contextmenu.css";
+import "./BaseImage.css"
 import { useHotkeys } from "react-hotkeys-hook";
 import { ImageType, ImageFileType, LocationType, AnnotationSetType } from './schemaTypes';
 import { GlobalContext, ImageContext } from "./Context";
