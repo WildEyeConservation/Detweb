@@ -1,16 +1,9 @@
 version: 1
 backend:
   phases:
-    preBuild:
-      commands:
-        - sudo yum update -y
-        - sudo yum install -y docker
-        - sudo service docker start
-        - sudo usermod -a -G docker ec2-user
-        - docker info
     build:
       commands:
-        - npm ci --cache .npm --prefer-offline
+        - npm install --cache .npm --prefer-offline
         - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
 frontend:
   phases:
