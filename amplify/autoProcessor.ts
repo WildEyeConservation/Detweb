@@ -75,8 +75,6 @@ export class AutoProcessor extends Construct {
       securityGroup: sg,
       maxCapacity: 1,
       desiredCapacity: 0,
-      keyName: "cvat_africa",
-      associatePublicIpAddress: true, // Ensure instances get a public IP
       blockDevices: props.rootVolumeSize ? [
         {
           deviceName: '/dev/xvda',
@@ -189,7 +187,6 @@ export class AutoProcessorEC2 extends Construct {
       desiredCapacity: 0,
       securityGroup,
       role,
-      keyName: "cvat_africa",
       userData: createUserData(inputqueue,outputqueue),
     });
 
