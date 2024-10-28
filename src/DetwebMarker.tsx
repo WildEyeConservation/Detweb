@@ -196,7 +196,7 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
                 dragend: (e) => {
                   let coords = latLng2xy(e.target.getLatLng());
                   updateAnnotation({
-                    ...annotation,
+                    id: annotation.id,
                     y: Math.round(coords.y),
                     x: Math.round(coords.x),
                   });
