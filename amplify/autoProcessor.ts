@@ -35,7 +35,7 @@ function createUserData(inputqueue: any,outputqueue: any) {
 
 type AutoProcessorProps={
   vpc: ec2.Vpc;
-  ecsImage: ecs.AssetImage;
+  ecsImage: ecs.ContainerImage;
   instanceType: ec2.InstanceType;
   environment: { [key: string]: string };
   ecsTaskRole: iam.Role;
