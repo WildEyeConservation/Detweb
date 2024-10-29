@@ -10,6 +10,7 @@ import FilesUploadComponent from './FilesUploadComponent.tsx';
 import ExportData from './ExportData.tsx';
 import TaskManagement from './TaskManagement.tsx';
 import AnnotationSetManagement from './AnnotationSetManagement.tsx';
+import { DevActions } from './DevActions.tsx';
 
 const ProjectManagement = () => {
   const { project } = useContext(ProjectContext)!;
@@ -39,6 +40,8 @@ const ProjectManagement = () => {
           //dirHandle={dirHandle}
           handleClose={() => showModal(null)}
         />
+        {/* Devactions are only available in dev mode */}
+        {process.env.NODE_ENV == "development" && <DevActions />}
           </Management>
     </div>
   );

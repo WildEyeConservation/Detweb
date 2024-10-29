@@ -32,7 +32,7 @@ export const inputBucket = defineStorage({
     'images/*': [
       allow.resource(handleS3Upload).to(['get']),
       allow.resource(processImages).to(['read']),
-      allow.authenticated.to(['read','write'])
+      allow.authenticated.to(['read','write','delete'])
     ]
   }),
   triggers: {
