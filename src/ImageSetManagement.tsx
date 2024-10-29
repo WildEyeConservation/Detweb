@@ -53,10 +53,24 @@ export default function ImageSetManagement() {
         <span>
             <Button 
               variant="danger"
-              className="me-2 fixed-width-button"
+            className="me-2 fixed-width-button"
+            disabled={true}
               onClick={()=> deleteImageSet({id: id})}
             >
               Delete
+            </Button>
+            <Button 
+              variant="info"
+            className="me-2 fixed-width-button"
+            onClick={() => {
+              const newName = prompt("Enter new name for image set",name);
+              if (newName) {
+                client.models.ImageSet.update({ id, name: newName })
+              }
+            }
+            }
+            >
+              Rename
             </Button>
         </span>
         // <Form.Check

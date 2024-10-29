@@ -176,7 +176,7 @@ type ProjectMembership = Schema['UserProjectMembership']['type'];
 
 
 export function useOptimisticMembership(
-  listFunction: () => Promise<{ data: ProjectMembership[] }> = () => client['models']['UserProjectMembership'].list(), 
+  listFunction: (string?) => Promise<{ data: ProjectMembership[] }> = (nextToken) => client['models']['UserProjectMembership'].list({nextToken}), 
   subscriptionFilter?: Parameters<ClientType['models']['UserProjectMembership']['onCreate']>[0]){
     const { client } = useContext(GlobalContext);
     const queryClient = useQueryClient();
@@ -187,8 +187,14 @@ export function useOptimisticMembership(
   const { data, ...queryResult } = useQuery({
     queryKey,
     queryFn: async () => {
-      const result = await listFunction();
-      return result.data;
+      let nextToken = undefined;
+      const allresults = [];
+      do {
+        const result = await listFunction(nextToken);
+        allresults.push(...result.data);
+        nextToken = result.nextToken;
+      } while (nextToken);
+      return allresults;
     },
   });
 
@@ -300,7 +306,7 @@ export function useOptimisticMembership(
 
 type Category = Schema['Category']['type'];
 export function useOptimisticCategory(
-  listFunction: () => Promise<{ data: Category[] }> = () => client['models']['Category'].list(), 
+  listFunction: (string?) => Promise<{ data: Category[] }> = (nextToken) => client['models']['Category'].list({nextToken}), 
   subscriptionFilter?: Parameters<ClientType['models']['Category']['onCreate']>[0]){
     const { client } = useContext(GlobalContext);
     const queryClient = useQueryClient();
@@ -311,8 +317,14 @@ export function useOptimisticCategory(
   const { data, ...queryResult } = useQuery({
     queryKey,
     queryFn: async () => {
-      const result = await listFunction();
-      return result.data;
+      let nextToken = undefined;
+      const allresults = [];
+      do {
+        const result = await listFunction(nextToken);
+        allresults.push(...result.data);
+        nextToken = result.nextToken;
+      } while (nextToken);
+      return allresults;
     },
   });
 
@@ -431,7 +443,7 @@ export function useOptimisticCategory(
 
 type LocationSet = Schema['LocationSet']['type'];
 export function useOptimisticLocationSet(
-  listFunction: () => Promise<{ data: LocationSet[] }> = () => client['models']['LocationSet'].list(), 
+  listFunction: (string?) => Promise<{ data: LocationSet[] }> = (nextToken) => client['models']['LocationSet'].list({nextToken}), 
   subscriptionFilter?: Parameters<ClientType['models']['LocationSet']['onCreate']>[0]){
     const { client } = useContext(GlobalContext);
     const queryClient = useQueryClient();
@@ -442,8 +454,14 @@ export function useOptimisticLocationSet(
   const { data, ...queryResult } = useQuery({
     queryKey,
     queryFn: async () => {
-      const result = await listFunction();
-      return result.data;
+      let nextToken = undefined;
+      const allresults = [];
+      do {
+        const result = await listFunction(nextToken);
+        allresults.push(...result.data);
+        nextToken = result.nextToken;
+      } while (nextToken);
+      return allresults;
     },
   });
 
@@ -560,7 +578,7 @@ export function useOptimisticLocationSet(
 
 type ImageSet = Schema['ImageSet']['type'];
 export function useOptimisticImageSet(
-  listFunction: () => Promise<{ data: ImageSet[] }> = () => client['models']['ImageSet'].list(), 
+  listFunction: (string?) => Promise<{ data: ImageSet[] }>, 
   subscriptionFilter?: Parameters<ClientType['models']['ImageSet']['onCreate']>[0]){
   const { client } = useContext(GlobalContext);
   const queryClient = useQueryClient();
@@ -571,8 +589,14 @@ export function useOptimisticImageSet(
   const { data, ...queryResult } = useQuery({
     queryKey,
     queryFn: async () => {
-      const result = await listFunction();
-      return result.data;
+      let nextToken = undefined;
+      const allresults = [];
+      do {
+        const result = await listFunction(nextToken);
+        allresults.push(...result.data);
+        nextToken = result.nextToken;
+      } while (nextToken);
+      return allresults;
     },
   });
 
@@ -688,7 +712,7 @@ export function useOptimisticImageSet(
 
 type Annotation = Schema['Annotation']['type'];
 export function useOptimisticAnnotation(
-  listFunction: (string?) => Promise<{ data: Annotation[] }> = (nextToken) => client['models']['Annotation'].list({nextToken}), 
+  listFunction: (nextToken?: string) => Promise<{ data: Annotation[] }>, 
   subscriptionFilter?: Parameters<ClientType['models']['Annotation']['onCreate']>[0]) {
   const { client } = useContext(GlobalContext);
   const queryClient = useQueryClient();
@@ -822,7 +846,7 @@ export function useOptimisticAnnotation(
 
 type AnnotationSet = Schema['AnnotationSet']['type'];
 export function useOptimisticAnnotationSet(
-  listFunction: () => Promise<{ data: AnnotationSet[] }> = () => client['models']['AnnotationSet'].list(), 
+  listFunction: (string?) => Promise<{ data: AnnotationSet[] }> = (nextToken) => client['models']['AnnotationSet'].list({nextToken}), 
   subscriptionFilter?: Parameters<ClientType['models']['AnnotationSet']['onCreate']>[0]){
   const { client } = useContext(GlobalContext);
   const queryClient = useQueryClient();
@@ -833,8 +857,14 @@ export function useOptimisticAnnotationSet(
   const { data, ...queryResult } = useQuery({
     queryKey,
     queryFn: async () => {
-      const result = await listFunction();
-      return result.data;
+      let nextToken = undefined;
+      const allresults = [];
+      do {
+        const result = await listFunction(nextToken);
+        allresults.push(...result.data);
+        nextToken = result.nextToken;
+      } while (nextToken);
+      return allresults;
     },
   });
 
@@ -950,7 +980,7 @@ export function useOptimisticAnnotationSet(
 
 type Queue = Schema['Queue']['type'];
 function useOptimisticQueue(
-  listFunction: () => Promise<{ data: Queue[] }> = () => client['models']['Queue'].list(), 
+  listFunction: (nextToken?: string) => Promise<{ data: Queue[] }> = (nextToken) => client['models']['Queue'].list({nextToken}), 
   subscriptionFilter?: Parameters<ClientType['models']['Queue']['onCreate']>[0]) {
     const { client } = useContext(GlobalContext);
   const queryClient = useQueryClient();
@@ -961,8 +991,14 @@ function useOptimisticQueue(
   const { data, ...queryResult } = useQuery({
     queryKey,
     queryFn: async () => {
-      const result = await listFunction();
-      return result.data;
+      let nextToken = undefined;
+      const allresults = [];
+      do {
+        const result = await listFunction(nextToken);
+        allresults.push(...result.data);
+        nextToken = result.nextToken;
+      } while (nextToken);
+      return allresults;
     },
   });
 

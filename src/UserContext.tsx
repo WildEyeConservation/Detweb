@@ -32,7 +32,7 @@ export function Project({ children, currentPM }: { children: React.ReactNode, cu
   }), [currentPM?.projectId]);
   const [currentProject, setCurrentProject] = useState<Schema['Project']['type'] | undefined>(undefined)
   const categoriesHook = useOptimisticCategory(
-    async () => client.models.Category.list({ filter: { projectId: { eq: currentPM?.projectId } } }),
+    async (nextToken) => client.models.Category.list({ filter: { projectId: { eq: currentPM?.projectId } } },{nextToken}),
     subscriptionFilter)
   const [currentCategory, setCurrentCategory] = useState<Schema['Category']['type']|undefined>(categoriesHook.data?.[0])
     useEffect(() => {
@@ -81,7 +81,7 @@ export function User({ user, children }: { user: AuthUser, children: React.React
   }), [user.username]);
 
   const myMembershipHook = useOptimisticMembership(
-    async () => client.models.UserProjectMembership.list({ filter: { userId: { eq: user!.username } } }),
+    async (nextToken) => client.models.UserProjectMembership.list({ filter: { userId: { eq: user!.username } },nextToken}),
     subscriptionFilter)
 
   // useEffect(() => {
@@ -132,21 +132,20 @@ export function Management({ children }: { children: React.ReactNode }) {
   const { client } = useContext(GlobalContext)!;
   const {project} = useContext(ProjectContext)!;
   const { users: allUsers } = useUsers();
-  const subscriptionFilter = useMemo(() => ({
-    filter: { projectId: { eq: project.id } }
-  }), [project.id]);
+  const subscriptionFilter = useMemo(() => (
+    { projectId: { eq: project.id } }), [project.id]);
   //const {items: projectMemberships} = useObserveQuery('UserProjectMembership',{ filter: { projectId: { eq: project.id } } });
   const projectMembershipHook = useOptimisticMembership(
-    async () => client.models.UserProjectMembership.list(subscriptionFilter),
+    async (nextToken) => client.models.UserProjectMembership.list({ filter: subscriptionFilter,nextToken }),
     subscriptionFilter)  
   const imageSetsHook = useOptimisticImageSet(
-    async () => client.models.ImageSet.list(subscriptionFilter),
+    async (nextToken) => client.models.ImageSet.list({ filter: subscriptionFilter,nextToken }),
     subscriptionFilter)
   const locationSetsHook = useOptimisticLocationSet(
-    async () => client.models.LocationSet.list(subscriptionFilter),
+    async (nextToken) => client.models.LocationSet.list({ filter: subscriptionFilter,nextToken }),
     subscriptionFilter)
   const annotationSetsHook = useOptimisticAnnotationSet(
-    async () => client.models.AnnotationSet.list(subscriptionFilter),
+    async (nextToken) => client.models.AnnotationSet.list({ filter: subscriptionFilter,nextToken }),
     subscriptionFilter)
   const queuesHook = useQueues()
   
