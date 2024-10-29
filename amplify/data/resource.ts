@@ -59,6 +59,7 @@ const schema = a.schema({
     roll: a.float(),
     yaw: a.float(),
     pitch: a.float(),
+    originalPath: a.string(),
     timestamp: a.timestamp(),
     exifData: a.string(),
     cameraSerial: a.string(),
