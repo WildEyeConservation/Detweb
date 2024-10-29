@@ -59,18 +59,14 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
         let prevNextToken: String | undefined = undefined;
         let allData = [];
         do {
-          const result = await retryOperation(
-            () => client.models.Location.locationsBySetIdAndConfidence({ 
-              setId: task, 
-              confidence : {gt: 0},
-              nextToken: prevNextToken,
-              selectionSet: ['id','x','y','width','height','confidence','image.id','image.width','image.height'] 
-            }),
-            { retryableErrors: ['Network error', 'Connection timeout'] }
-          );
-          const { data, nextToken } = result;
-          prevNextToken = nextToken;
-          allData = allData.concat(data);
+          const {data,nextToken} = await client.models.Location.locationsBySetIdAndConfidence({ 
+                setId: task, 
+                confidence : {gt: 0},
+                nextToken: prevNextToken,
+                selectionSet: ['id','x','y','width','height','confidence','image.id','image.width','image.height'] 
+                });
+              prevNextToken = nextToken || undefined;
+              allData = allData.concat(data);
         } while (prevNextToken)
         return allData;
       })).then(arrays => arrays.flat());

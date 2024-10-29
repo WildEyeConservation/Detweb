@@ -61,10 +61,10 @@ export function RegisterPair({
   //realtime and functions to create / update / delete them.
   const annotationsHooks = [
     useOptimisticAnnotation(
-      async () => client.models.Annotation.annotationsByImageIdAndSetId({imageId: images[0].id, setId: {eq: selectedSet}}),
+      async (nextToken) => client.models.Annotation.annotationsByImageIdAndSetId({imageId: images[0].id, setId: {eq: selectedSet}},{nextToken}),
       subscriptionFilter1),
     useOptimisticAnnotation(
-      async () => client.models.Annotation.annotationsByImageIdAndSetId({imageId: images[1].id, setId: {eq: selectedSet}}),
+      async (nextToken) => client.models.Annotation.annotationsByImageIdAndSetId({imageId: images[1].id, setId: {eq: selectedSet}},{nextToken}),
       subscriptionFilter2)] as [CRUDHook<AnnotationType>, CRUDHook<AnnotationType>]
   /* We need to keep track of which potential matches has been rejected by the user, so that we don't keep suggesting the same
   previously rejected match. This dictionary is keyed by a string which is just id1 concatenated to id2 where id1 and id2 are 

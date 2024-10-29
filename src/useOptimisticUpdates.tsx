@@ -1139,8 +1139,8 @@ export const useQueues = () => {
     const url = originalHook.data.find((x) => x.id == id)?.url;
     if (url) {
       getSqsClient().then(sqsClient => sqsClient.send(new DeleteQueueCommand({ QueueUrl: url }))); 
-      originalHook.delete({ id });
     }
+    originalHook.delete({ id });
   }
   return { ...originalHook, create, delete:remove };
 }
