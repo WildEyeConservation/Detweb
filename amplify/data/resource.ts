@@ -5,6 +5,7 @@ import { listUsers } from '../data/list-users/resource'
 import { listGroupsForUser } from '../data/list-groups-for-user/resource'
 import {processImages} from '../functions/processImages/resource'
 import { getAnnotationCounts } from '../functions/getAnnotationCounts/resource'
+import { updateUserObservationStats } from '../functions/updateUserObservationStats/resource'
 
 /*== STEP 1 ===============================================================
 The section below creates a Todo database table with a "content" field. Try
@@ -157,10 +158,10 @@ const schema = a.schema({
     annotationSetId: a.id().required(),
     annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId')
   }).authorization(allow => [allow.authenticated(), allow.owner()])
-  .secondaryIndexes((index)=>[index('locationId').queryField('observationsByLocationId'), 
+  .secondaryIndexes((index)=>[
+    index('locationId').queryField('observationsByLocationId'), 
     index('annotationSetId').queryField('observationsByAnnotationSetId')
   ]),
-
   LocationSet: a.model({
     projectId: a.id().required(),
     name: a.string().required(),
@@ -238,7 +239,16 @@ const schema = a.schema({
     url: a.url(),
   }).authorization(allow => [allow.authenticated()])
     //.authorization(allow => [allow.groupDefinedIn('projectId')])
-  .secondaryIndexes((index)=>[index('projectId').queryField('queuesByProjectId')]),
+    .secondaryIndexes((index) => [index('projectId').queryField('queuesByProjectId')]),
+  UserObservationStats: a.model({
+    projectId: a.id().required(),
+    userId: a.id().required(),
+    count: a.integer().required(),
+    activeTime: a.integer(),
+    lastUpdated: a.timestamp(),
+  })
+    .identifier(['projectId', 'userId'])
+    .authorization(allow => [allow.authenticated(), allow.publicApiKey()]),
   addUserToGroup: a.mutation().arguments({
       userId:a.string().required(), 
       groupName:a.string().required()
@@ -337,7 +347,8 @@ const schema = a.schema({
   //     level: a.float(),
   //   })
 }).authorization(allow => [allow.resource(getAnnotationCounts),
-  allow.resource(processImages)])
+  allow.resource(processImages),
+  allow.resource(updateUserObservationStats)])
 export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
   schema,

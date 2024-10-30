@@ -15,6 +15,7 @@ export type ImageSetType = Schema["ImageSet"]["type"];
 export type ImageNeighbourType = Schema["ImageNeighbour"]["type"];
 export type UserProjectMembershipType = Schema["UserProjectMembership"]["type"];
 export type QueueType = Schema["Queue"]["type"];
+export type UserObservationStatsType = Schema["UserObservationStats"]["type"];
 
 /* Here we add some local that may affect the rendering of a particular annotation, while actually being 
 state of the current user session. As such these are not properties that need to be stored in the database,

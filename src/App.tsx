@@ -8,10 +8,12 @@ import "leaflet/dist/leaflet.css";
 import Navbar from "react-bootstrap/Navbar";
 import Container from "react-bootstrap/Container";
 import Nav from "react-bootstrap/Nav";
+import UserStats from "./UserStats";
 import NavDropdown from "react-bootstrap/NavDropdown";
 import ProjectManagement from "./ProjectManagement.tsx";  
 import DefineCategories from "./DefineCategories.js";
 import QuickTest from "./QuickTest";
+import { Management } from "./UserContext.tsx";
 import {
   Routes,
   Route,
@@ -156,7 +158,16 @@ function App({ signOut = () => {}, user }: AppProps) {
               {/* <Nav.Link as={NavLink} eventKey="/userStats" to="/userStats">
                 User Stats
               </Nav.Link> */}
-            </IfProjectAdmin>
+                      </IfProjectAdmin>
+            <Nav.Link
+              as={NavLink}
+              eventKey="/userStats"
+              to="/userStats"
+              key="/userStats"
+            >
+              Leaderboard
+            </Nav.Link>
+
             {(session?.tokens?.accessToken?.payload?.["cognito:groups"]?.includes("admin")) && (
               <Nav.Link as={NavLink} eventKey="/review" to="/review">
                 Review
@@ -193,6 +204,7 @@ function App({ signOut = () => {}, user }: AppProps) {
                     />
 
                     <Route path="/annotate" element={<Annotate />} />
+                    <Route path="/userStats" element={<Management><UserStats /></Management>}/>
                     <Route path="/quicktest" element={<QuickTest />} />
                     <Route path="/test" element={<Test />} />
                     {/* <Route exact path="/registration" element={<Registration/>}/>  */}
