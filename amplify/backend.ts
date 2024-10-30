@@ -62,6 +62,7 @@ const mapping = new EventSourceMapping(
     startingPosition: StartingPosition.LATEST,
   }
 );
+mapping.node.addDependency(policy)
 
 
 const authenticatedRole = backend.auth.resources.authenticatedUserIamRole;

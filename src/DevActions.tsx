@@ -165,8 +165,8 @@ export function DevActions() {
 
     async function recomputeUserStats() {
         let records = {}
-        //const allObservations = await fetchAllPaginatedResults(client.models.Observation.list)
-        const { data: allObservations } = await client.models.Observation.list()
+        const allObservations = await fetchAllPaginatedResults(client.models.Observation.list)
+        //const { data: allObservations } = await client.models.Observation.list()
         //Sort the observations by updatedAt
         allObservations.sort((a,b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime())
         for (const observation of allObservations) {
