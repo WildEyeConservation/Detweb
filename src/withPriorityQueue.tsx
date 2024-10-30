@@ -47,7 +47,11 @@ export function withPreloading2(WrappedComponent: React.ComponentType<any>) {
     // buffer.forEach((msg,i)=>{console.log(`Buffer [${i}].id=${msg.id}`)})
     if (subset?.length) {
       return (
-        <>
+        <div style={{ 
+          position: 'relative',  // Add this container
+          width: '100%',
+          minHeight: '800px'     // Adjust this value based on your needs
+        }}>
           {subset.map((entry, i) => (
             <div
               key={entry.message_id}
@@ -55,11 +59,13 @@ export function withPreloading2(WrappedComponent: React.ComponentType<any>) {
                 visibility: i === index - subsetStart ? "visible" : "hidden",
                 position: "absolute",
                 justifyContent: "center",
-                display: i === index - subsetStart ? "contents" : "flex",
+                display: "flex",
                 width: "80%",
+                left: '50%',                    // Add these positioning properties
+                transform: 'translateX(-50%)',   // to maintain horizontal centering
+                top: 0
               }}
             >
-              {/*  */}
               <WrappedComponent
                 {...rest}
                 {...entry}
@@ -112,7 +118,7 @@ export function withPreloading2(WrappedComponent: React.ComponentType<any>) {
               </Button>
             </Modal.Footer>
           </Modal>
-        </>
+        </div>
       );
     } else {
       return <></>;

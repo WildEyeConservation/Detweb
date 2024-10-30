@@ -10,21 +10,22 @@ import { LivenessIndicator } from "./LivenessIndicator";
 //await gqlClient.graphql(graphqlOperation(createImage, {input: image}));
 
 export function ScratchPad() {
-  //let DetWebImage=withEditableDetections(withDetectionSubscription(withMetaData(withCreateDetections(withUpdateDetections(withAckLocation(BaseImage)))),client))
-  //let DetWebImage=withEditableDetections(withMetaData(withCreateDetections(withUpdateDetections(withAckLocation(BaseImage)))))
-  // let DetWebArray=withTestFailureHandler(withReload(withWorkSource(withPreloading2(DetWebImage),client)))
-  //let DetWebArray=withTestFailureHandler(withReload(withSimpleWorkSource(withPreloading2(DetWebImage),client)))
   let TestImage = withPreloading2(TaskSelector);
-  // let TestImage=withPreloading2(DebugComponent)
+  
   let scratch = function () {
     return (
-      <Row className="align-items-center h-100">
+      <div style={{ 
+        display: 'flex', 
+        marginTop: '1rem',
+        flexDirection: 'column', 
+        alignItems: 'center',
+        width: '100%',
+        gap: '1rem'  // Adds vertical spacing between components
+      }}>
         <TestImage />
-        <JobsRemaining/>
-        <LivenessIndicator />
-      </Row>
+        <JobsRemaining />
+      </div>
     );
-    //return <DetWebArray width="512px" height="512px"/>;
   };
   return scratch;
 }
