@@ -101,7 +101,7 @@ export default function DefineCategories() {
                 <Button
                   variant="danger"
                   className="me-2 fixed-width-button"
-                  disabled
+                  disabled = {process.env.NODE_ENV != "development"}
                   onClick={() => {
                     deleteCategory(item);
                   }}
