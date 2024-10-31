@@ -15,7 +15,6 @@ import { postDeploy } from "./functions/postDeploy/resource";
 import { getAnnotationCounts } from "./functions/getAnnotationCounts/resource";
 import * as iam from "aws-cdk-lib/aws-iam"
 import * as ec2 from "aws-cdk-lib/aws-ec2";
-import { updateUserObservationStats } from "./functions/updateUserObservationStats/resource";
 import { updateUserStats } from "./functions/updateUserStats/resource";
 import { Policy, PolicyStatement, Effect } from "aws-cdk-lib/aws-iam";
 import { StartingPosition, EventSourceMapping } from "aws-cdk-lib/aws-lambda";
@@ -24,7 +23,6 @@ const backend=defineBackend({
   auth,
   data,
   addUserToGroup,
-  updateUserObservationStats,
   outputBucket,
   inputBucket,
   handleS3Upload,
@@ -54,19 +52,8 @@ const policy = new Policy(
     ],
   }
 );
-backend.updateUserObservationStats.resources.lambda.role?.attachInlinePolicy(policy);
 backend.updateUserStats.resources.lambda.role?.attachInlinePolicy(policy);
 
-const mapping = new EventSourceMapping(
-  Stack.of(observationTable),
-  "MyDynamoDBFunctionObservationEventStreamMapping",
-  {
-    target: backend.updateUserObservationStats.resources.lambda,
-    eventSourceArn: observationTable.tableStreamArn,
-    startingPosition: StartingPosition.LATEST,
-  }
-);
-mapping.node.addDependency(policy)
 const mapping1 = new EventSourceMapping(
   Stack.of(observationTable),
   "ObservationEventStreamMapping",

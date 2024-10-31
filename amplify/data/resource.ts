@@ -5,7 +5,6 @@ import { listUsers } from '../data/list-users/resource'
 import { listGroupsForUser } from '../data/list-groups-for-user/resource'
 import {processImages} from '../functions/processImages/resource'
 import { getAnnotationCounts } from '../functions/getAnnotationCounts/resource'
-import { updateUserObservationStats } from '../functions/updateUserObservationStats/resource'
 import { updateUserStats } from '../functions/updateUserStats/resource'
 /*== STEP 1 ===============================================================
 The section below creates a Todo database table with a "content" field. Try
@@ -240,15 +239,6 @@ const schema = a.schema({
   }).authorization(allow => [allow.authenticated()])
     //.authorization(allow => [allow.groupDefinedIn('projectId')])
     .secondaryIndexes((index) => [index('projectId').queryField('queuesByProjectId')]),
-  UserObservationStats: a.model({
-    projectId: a.id().required(),
-    userId: a.id().required(),
-    count: a.integer().required(),
-    activeTime: a.integer(),
-    lastUpdated: a.timestamp(),
-  })
-    .identifier(['projectId', 'userId'])
-    .authorization(allow => [allow.authenticated(), allow.publicApiKey()]),
   UserStats: a.model({
     projectId: a.id().required(),
     setId: a.id().required(),
@@ -359,8 +349,7 @@ const schema = a.schema({
   //   })
 }).authorization(allow => [allow.resource(getAnnotationCounts),
   allow.resource(processImages),
-  allow.resource(updateUserStats),
-  allow.resource(updateUserObservationStats)])
+  allow.resource(updateUserStats)])
 
 export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
