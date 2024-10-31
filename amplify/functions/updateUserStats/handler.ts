@@ -1,7 +1,7 @@
 import type { DynamoDBStreamHandler } from "aws-lambda";
 import { Logger } from "@aws-lambda-powertools/logger";
 import { Amplify } from "aws-amplify";
-import { env } from '$amplify/env/updateUserObservationStats'
+import { env } from '$amplify/env/updateUserStats'
 import { generateClient } from "aws-amplify/data";
 import { Handler } from "aws-lambda";
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
