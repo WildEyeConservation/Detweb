@@ -16,6 +16,7 @@ import { getAnnotationCounts } from "./functions/getAnnotationCounts/resource";
 import * as iam from "aws-cdk-lib/aws-iam"
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import { updateUserObservationStats } from "./functions/updateUserObservationStats/resource";
+import { updateUserStats } from "./functions/updateUserStats/resource";
 import { Policy, PolicyStatement, Effect } from "aws-cdk-lib/aws-iam";
 import { StartingPosition, EventSourceMapping } from "aws-cdk-lib/aws-lambda";
 
@@ -29,10 +30,12 @@ const backend=defineBackend({
   handleS3Upload,
   processImages,
   postDeploy,
-  getAnnotationCounts
+  getAnnotationCounts,
+  updateUserStats
 });
 
 const observationTable = backend.data.resources.tables["Observation"];
+const annotationTable = backend.data.resources.tables["Annotation"];
 const policy = new Policy(
   Stack.of(observationTable),
   "MyDynamoDBFunctionStreamingPolicy",
@@ -52,6 +55,7 @@ const policy = new Policy(
   }
 );
 backend.updateUserObservationStats.resources.lambda.role?.attachInlinePolicy(policy);
+backend.updateUserStats.resources.lambda.role?.attachInlinePolicy(policy);
 
 const mapping = new EventSourceMapping(
   Stack.of(observationTable),
@@ -63,6 +67,26 @@ const mapping = new EventSourceMapping(
   }
 );
 mapping.node.addDependency(policy)
+const mapping1 = new EventSourceMapping(
+  Stack.of(observationTable),
+  "ObservationEventStreamMapping",
+  {
+    target: backend.updateUserStats.resources.lambda,
+    eventSourceArn: observationTable.tableStreamArn,
+    startingPosition: StartingPosition.LATEST,
+  }
+);
+mapping1.node.addDependency(policy)
+const mapping2 = new EventSourceMapping(
+  Stack.of(annotationTable),
+  "AnnotationEventStreamMapping",
+  {
+    target: backend.updateUserStats.resources.lambda,
+    eventSourceArn: annotationTable.tableStreamArn,
+    startingPosition: StartingPosition.LATEST,
+  }
+);
+mapping2.node.addDependency(policy)
 
 
 const authenticatedRole = backend.auth.resources.authenticatedUserIamRole;

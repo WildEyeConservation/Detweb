@@ -6,7 +6,7 @@ import { listGroupsForUser } from '../data/list-groups-for-user/resource'
 import {processImages} from '../functions/processImages/resource'
 import { getAnnotationCounts } from '../functions/getAnnotationCounts/resource'
 import { updateUserObservationStats } from '../functions/updateUserObservationStats/resource'
-
+import { updateUserStats } from '../functions/updateUserStats/resource'
 /*== STEP 1 ===============================================================
 The section below creates a Todo database table with a "content" field. Try
 adding a new "isDone" field as a boolean. The authorization rule below
@@ -249,6 +249,17 @@ const schema = a.schema({
   })
     .identifier(['projectId', 'userId'])
     .authorization(allow => [allow.authenticated(), allow.publicApiKey()]),
+  UserStats: a.model({
+    projectId: a.id().required(),
+    setId: a.id().required(),
+    date: a.date().required(),
+    userId: a.id().required(),
+    observationCount: a.integer().required(),
+    annotationCount: a.integer().required(),
+    activeTime: a.float().required()
+  })
+  .identifier(['projectId', 'userId','date','setId'])
+  .authorization(allow => [allow.authenticated(), allow.publicApiKey()]),
   addUserToGroup: a.mutation().arguments({
       userId:a.string().required(), 
       groupName:a.string().required()
@@ -348,7 +359,9 @@ const schema = a.schema({
   //   })
 }).authorization(allow => [allow.resource(getAnnotationCounts),
   allow.resource(processImages),
+  allow.resource(updateUserStats),
   allow.resource(updateUserObservationStats)])
+
 export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
   schema,
