@@ -166,44 +166,73 @@ export function DevActions() {
     async function recomputeUserStats() {
         let records = {}
         const allObservations = await fetchAllPaginatedResults(client.models.Observation.list)
+        const allAnnotations = await fetchAllPaginatedResults(client.models.Annotation.list)
         //const { data: allObservations } = await client.models.Observation.list()
-        //Sort the observations by updatedAt
-        allObservations.sort((a,b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime())
-        for (const observation of allObservations) {
-            let projectrecords = records?.[observation.projectId];
+        //Sort the observations by createdAt
+        //Combine the observations and annotations
+        const allEvents = [...allObservations, ...allAnnotations]
+        allEvents.sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+        for (const event of allEvents) {
+            let projectrecords = records?.[event.projectId];
             if (!projectrecords) {
                 projectrecords = {}
-                records[observation.projectId] = projectrecords
+                records[event.projectId] = projectrecords
             }
-            let userrecords = projectrecords[observation.owner];
+            // Extract the date of the observation from the createdAt field
+            const observationDate = new Date(event.createdAt).toISOString().split('T')[0];
+            let daterecords = projectrecords[observationDate];
+            if (!daterecords) {
+                daterecords = {}
+                projectrecords[observationDate] = daterecords
+            }
+            const setId = event.annotationSetId ?? event.setId;
+            let setrecords = daterecords[setId];
+            if (!setrecords) {
+                setrecords = {}
+                daterecords[setId] = setrecords
+            }
+            let userrecords = setrecords[event.owner];
             if (!userrecords) {
-                userrecords = { count: 0, activeTime: 0, lastUpdated: observation.updatedAt }
-                projectrecords[observation.owner] = userrecords
+                userrecords = { observationCount: 0, annotationCount: 0, activeTime: 0, lastUpdated: event.createdAt }
+                setrecords[event.owner] = userrecords
             }
-            userrecords.count += 1
-            const elapsed = (new Date(observation.updatedAt).getTime() - new Date(userrecords.lastUpdated).getTime()) / 1000;
-            console.log(observation.updatedAt)
-            console.log(elapsed)
+            if (event.x) {//Event is an annotation
+                userrecords.annotationCount+=1    
+            } else{ // Event is an observation
+                userrecords.observationCount+=1    
+            }
+            const elapsed = (new Date(event.createdAt).getTime() - new Date(userrecords.lastUpdated).getTime()) / 1000;
             userrecords.activeTime += (elapsed < 120) ? elapsed : 0
-            userrecords.lastUpdated = observation.updatedAt
+            userrecords.lastUpdated = event.createdAt
         }
         // Now iterate over the records and update the UserObservationStats
         for (const projectId in records) {
-            for (const userId in records[projectId]) {
-                try{
-                    await client.models.UserObservationStats.create({
-                        userId: userId,
-                        projectId: projectId,
-                        count: records[projectId][userId].count,
-                        activeTime: Math.round(records[projectId][userId].activeTime)
-                    })
-                } catch (e) {
-                    await client.models.UserObservationStats.update({
-                        userId: userId,
-                        projectId: projectId,
-                        count: records[projectId][userId].count,
-                        activeTime: Math.round(records[projectId][userId].activeTime)
-                    })
+            for (const date in records[projectId]) {
+                for (const setId in records[projectId][date]) {
+                    for (const userId in records[projectId][date][setId]) {
+                        const record=records[projectId][date][setId][userId];
+                        try {
+                            await client.models.UserStats.create({
+                                userId: userId,
+                                projectId: projectId,
+                                setId: setId,
+                                date: date,
+                                annotationCount: record.annotationCount,
+                                observationCount: record.observationCount,
+                                activeTime: record.activeTime
+                            })
+                        } catch (e) {
+                            await client.models.UserStats.update({
+                                userId: userId,
+                                projectId: projectId,
+                                setId: setId,
+                                date: date,
+                                annotationCount: record.annotationCount,
+                                observationCount: record.observationCount,
+                                activeTime: record.activeTime
+                            })
+                        }
+                    }
                 }
             }
         }

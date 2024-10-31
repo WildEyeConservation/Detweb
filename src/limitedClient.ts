@@ -44,7 +44,7 @@ function wrapClientMethods(obj: any): any {
   const wrappedObj: any = {};
   for (const [key, value] of Object.entries(obj)) {
     if (typeof value === 'function') {
-      if (key.startsWith('on')) {
+      if (key.startsWith('on') || key.startsWith('observe')) {
         // Do not wrap the onCreate, onUpdate, onDelete, functions as these are sync methods (no 
         // underlying network request). It would have been better make the distinction based on 
         // the return type, but that info is not available at runtime without invoking the method.  

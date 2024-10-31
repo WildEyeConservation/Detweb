@@ -1,4 +1,4 @@
-import React, { useCallback, useContext,memo} from "react";
+import React, { useCallback, useContext,memo,useState} from "react";
 import { UserContext, ProjectContext, GlobalContext } from "./Context";
 import { UseAckOnTimeoutProps } from "./useAckOnTimeout"; 
 import { BaseImageProps } from "./BaseImage";
@@ -23,18 +23,20 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
   const { setJobsCompleted } = useContext(UserContext)!;
   const { project } = useContext(ProjectContext)!;
   const { client } = useContext(GlobalContext)!;
+  const [acked, setAcked] = useState(false);
 
   const newAck = useCallback(() => {
-    if (location && annotationSetId && project) {
+    if (!acked && location && annotationSetId && project) {
       client.models.Observation.create({
         annotationSetId: annotationSetId,
         locationId: id,
         projectId: project.id,
       });
+      setAcked(true);
     }
     ack();
     setJobsCompleted?.((x: number) => x + 1);
-  }, [location, project]);
+  }, [location, project, acked]);
 
   return newAck;
 }
