@@ -16,6 +16,7 @@ export interface BaseImageProps {
   location?: LocationType;
   next?: () => void;
   prev?: () => void;
+  loadingComplete?: () => void;
   children: ReactNode;
   zoom?: number;
   containerheight?: number;
@@ -28,6 +29,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
 {
   const { client } = useContext(GlobalContext)!;
   const { xy2latLng } = useContext(ImageContext)!;
+  const [fullyLoaded, setFullyLoaded] = useState(false);
   const [imageFiles, setImageFiles] = useState<ImageFileType[]>([]);
   const { next, prev, visible, containerheight, containerwidth, children, location, zoom } = props;
   const { image } = location;
@@ -82,14 +84,20 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
     justifyContent: "center",
     borderRadius: 10,
     alignItems: "center",
-  }), [containerwidth, containerheight]);
+  }), [containerwidth, containerheight,fullyLoaded]);
   const viewBounds = useMemo(() => location?.x ?
     xy2latLng([[location.x - location.width / 2, location.y - location.height / 2], [location.x + location.width / 2, location.y + location.height / 2]]) :
     imageBounds, [location.x, location.y, location.width, location.height, imageBounds]);
   const viewCenter = useMemo(() => location?.x ?
     xy2latLng([location.x, location.y]) :
     xy2latLng([image.width/2,image.height/2]), [location.x, location.y, image.width,image.height]);
-  return useMemo(() => (<MapContainer
+  return useMemo(() => (
+    <div style={{
+      visibility: (visible && fullyLoaded) ? "visible" : "hidden",
+      width: '100%',
+      height: '100%'
+    }}>
+    <MapContainer
     // id={id}
     style={style}
     crs={L.CRS.Simple}
@@ -113,6 +121,12 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
               source={image.s3key} 
               url={""} />: */}
           <StorageLayer
+            eventHandlers={{
+              load: () => {
+                console.log("All visible tiles have loaded");
+                setFullyLoaded(true);
+              }
+            }}
             source={imageFiles.find(file => file.type == 'image/jpeg').key}
             bounds={imageBounds}
             maxNativeZoom={5}
@@ -123,17 +137,17 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
       )}
     </LayersControl>
     {children}
-    {(next || prev) && (
+    {(next || prev) && fullyLoaded && 
       <NavButtons
         position="bottomleft"
         prev={prev}
         next={next}
         prevEnabled={prev !== undefined}
         nextEnabled={next !== undefined}
-      />
-    )}
-  </MapContainer>
-  ), [next, prev, imageFiles, location, style, viewBounds, image])
+      />}
+      </MapContainer>
+      </div>
+  ), [next, prev, imageFiles, location, style, viewBounds, image, fullyLoaded])
 }, (prevProps, nextProps) => {
       //Iterate over all the props except children and compare them for equality
   return prevProps.visible === nextProps.visible &&

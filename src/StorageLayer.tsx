@@ -1,7 +1,10 @@
-import { useLeafletContext } from "@react-leaflet/core";
-import L from "leaflet";
-import { useEffect } from "react";
+import {
+  createElementObject,
+  createLayerComponent,
+  extendContext,
+} from '@react-leaflet/core'
 import { getUrl } from 'aws-amplify/storage';
+import L from 'leaflet'
 /* This is a custom Leaflet layer that uses a slippy map stored on S3 storage, accessed via the aws-sdk/aws-s3
 library. Because the URLs that we use to access files stored there need to be individually signed, we cannot 
 use a URL template in the way that the normal Leaflet TileLayer does. 
@@ -16,53 +19,53 @@ interface leafletS3LayerOptions extends L.GridLayerOptions {
   source: string;
 }
 
-class leafletS3Layer extends L.GridLayer {
-  private source: string;
-  
-  constructor(opts: leafletS3LayerOptions) {
-    super(opts);
-    this.source = opts.source;
+async function getValidUrl(path: string):Promise<URL> {
+  if (!(path in cachedUrlPromises)) {
+    cachedUrlPromises[path] = getUrl({ path })
   }
-
-  async getValidUrl(path: string):Promise<URL> {
-    if (!(path in cachedUrlPromises)) {
-      cachedUrlPromises[path] = getUrl({ path })
-    }
-    const result = await cachedUrlPromises[path]
-    const thirtySecondsFromNow = Date.now() + 30000; // 30 seconds in milliseconds
-    if (result.expiresAt.getTime() < thirtySecondsFromNow) {
-      delete cachedUrlPromises[path];
-      return this.getValidUrl(path);
-    }
-    return result.url;
+  const result = await cachedUrlPromises[path]
+  const thirtySecondsFromNow = Date.now() + 30000; // 30 seconds in milliseconds
+  if (result.expiresAt.getTime() < thirtySecondsFromNow) {
+    delete cachedUrlPromises[path];
+    return getValidUrl(path);
   }
+  return result.url;
+}
 
-  createTile(coords: L.Coords, done: (error: Error | undefined, tile: HTMLElement) => void) {
-    let tile = document.createElement("img");
-    const path = `slippymaps/${this.source}/${coords.z}/${coords.y}/${coords.x}.png`
-    this.getValidUrl(path).then(url => {
-      tile.src = url.toString();
-      setTimeout(() => {
+// Add this type declaration before the extension
+declare module 'leaflet' {
+  namespace GridLayer {
+    let Storage: any;
+  }
+}
+
+L.GridLayer.Storage = L.GridLayer.extend({
+    createTile: function (coords: L.Coords, done: (error: Error | undefined, tile: HTMLElement) => void) {
+      let tile = document.createElement("img");
+      const path = `slippymaps/${this.options.source}/${coords.z}/${coords.y}/${coords.x}.png`
+      
+      tile.onload = () => {
         done(undefined, tile);
-      }, 1);
-    })
-    return tile
-  }
+      };
+
+      tile.onerror = () => {
+        done(new Error(`Failed to load tile at ${path}`), tile);
+      };
+
+      getValidUrl(path).then(url => {
+        tile.src = url.toString();
+      });
+
+      return tile;
+    }
+});
+
+function createStorageLayer(props, context) {
+  const layer = new L.GridLayer.Storage(props);
+  return createElementObject(layer, extendContext(context, {layerContainer: layer}));
 }
 
-interface S3LayerProps extends leafletS3LayerOptions {}
+function updateStorageLayer() {
+} 
 
-export function StorageLayer(props: S3LayerProps) {
-  const context = useLeafletContext();
-//  const { getObject } = useContext(UserContext)!;
-
-  useEffect(() => {
-    const s3layer = new leafletS3Layer({ ...props});
-    const container = context.layerContainer || context.map;
-    container.addLayer(s3layer);
-    return () => {
-      container.removeLayer(s3layer);
-    };
-  }, [props, context]);
-  return null;
-}
+export const StorageLayer = createLayerComponent(createStorageLayer, updateStorageLayer);
