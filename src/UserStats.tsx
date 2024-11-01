@@ -76,7 +76,6 @@ export default function UserStats() {
               timeZone="UTC"
               startDate={startDate}
               endDate={endDate}
-              placeholderText="Start Date"
               className="form-control"
               isClearable
               placeholderText="No start date"
@@ -92,7 +91,6 @@ export default function UserStats() {
               timeZone="UTC"
               startDate={startDate}
               endDate={endDate}
-              placeholderText="End Date"
               className="form-control"
               isClearable
               placeholderText="No end date"
