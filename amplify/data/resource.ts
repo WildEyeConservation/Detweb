@@ -152,6 +152,8 @@ const schema = a.schema({
   Observation: a.model({
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
+    timeTaken: a.float(),
+    annotationCount: a.integer(),
     locationId: a.id().required(),
     location: a.belongsTo('Location', 'locationId'),
     annotationSetId: a.id().required(),
