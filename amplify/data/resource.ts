@@ -154,6 +154,8 @@ const schema = a.schema({
     project: a.belongsTo('Project', 'projectId'),
     timeTaken: a.float(),
     annotationCount: a.integer(),
+    waitingTime: a.float(),
+    loadingTime: a.float(),
     locationId: a.id().required(),
     location: a.belongsTo('Location', 'locationId'),
     annotationSetId: a.id().required(),
@@ -247,6 +249,8 @@ const schema = a.schema({
     date: a.date().required(),
     userId: a.id().required(),
     observationCount: a.integer().required(),
+    sightingCount: a.integer(),
+    annotationTime: a.float(),
     annotationCount: a.integer().required(),
     activeTime: a.float().required()
   })
