@@ -64,17 +64,6 @@ const mapping1 = new EventSourceMapping(
   }
 );
 mapping1.node.addDependency(policy)
-const mapping2 = new EventSourceMapping(
-  Stack.of(annotationTable),
-  "AnnotationEventStreamMapping",
-  {
-    target: backend.updateUserStats.resources.lambda,
-    eventSourceArn: annotationTable.tableStreamArn,
-    startingPosition: StartingPosition.LATEST,
-  }
-);
-mapping2.node.addDependency(policy)
-
 
 const authenticatedRole = backend.auth.resources.authenticatedUserIamRole;
 const dynamoDbPolicy = new iam.PolicyStatement({
@@ -198,27 +187,26 @@ lightGlueAutoProcessor.asg.role.addManagedPolicy(
   iam.ManagedPolicy.fromAwsManagedPolicyName("AWSAppSyncInvokeFullAccess"),
 );
 
-// const scoutbotAutoProcessor = new AutoProcessor(ecsStack, "ScoutbotAutoProcessor",
-//   {
-//     vpc,
-//     instanceType: ec2.InstanceType.of(ec2.InstanceClass.G4DN, ec2.InstanceSize.XLARGE),
-//     //ecsImage``: ecs.ContainerImage.fromRegistry("275736403632.dkr.ecr.eu-west-2.amazonaws.com/ec38e10662240460a49dc1c1350eb324ef5b33534dfa90bd7768fb76362783ef"),
-//     ecsImage: ecs.ContainerImage.fromRegistry("275736403632.dkr.ecr.eu-west-2.amazonaws.com/ec38e10662240460a49dc1c1350eb324ef5b33534dfa90bd7768fb76362783ef"),    
-//     ecsTaskRole,
-//     memoryLimitMiB: 1024 * 12,
-//     gpuCount: 1,
-//     environment: {
-//       API_ENDPOINT: backend.data.graphqlUrl,
-//       API_KEY: backend.data.apiKey || "",
-//       BUCKET: backend.inputBucket.resources.bucket.bucketName
-//     },
-//     machineImage: ecs.EcsOptimizedImage.amazonLinux2(ecs.AmiHardwareType.GPU),
-//     rootVolumeSize: 100
-//   })
+const scoutbotAutoProcessor = new AutoProcessor(ecsStack, "ScoutbotAutoProcessor",
+  {
+    vpc,
+    instanceType: ec2.InstanceType.of(ec2.InstanceClass.G4DN, ec2.InstanceSize.XLARGE),
+    ecsImage: ecs.ContainerImage.fromRegistry("275736403632.dkr.ecr.eu-west-2.amazonaws.com/ec38e10662240460a49dc1c1350eb324ef5b33534dfa90bd7768fb76362783ef"),    
+    ecsTaskRole,
+    memoryLimitMiB: 1024 * 12,
+    gpuCount: 1,
+    environment: {
+      API_ENDPOINT: backend.data.graphqlUrl,
+      API_KEY: backend.data.apiKey || "",
+      BUCKET: backend.inputBucket.resources.bucket.bucketName
+    },
+    machineImage: ecs.EcsOptimizedImage.amazonLinux2(ecs.AmiHardwareType.GPU),
+    rootVolumeSize: 100
+  })
 
-// scoutbotAutoProcessor.asg.role.addManagedPolicy(
-//   iam.ManagedPolicy.fromAwsManagedPolicyName("AWSAppSyncInvokeFullAccess"),
-// );
+scoutbotAutoProcessor.asg.role.addManagedPolicy(
+  iam.ManagedPolicy.fromAwsManagedPolicyName("AWSAppSyncInvokeFullAccess"),
+);
 
 //const devRole = iam.Role.fromRoleArn(scope, "DevRole", devUserArn);
 
@@ -248,7 +236,7 @@ backend.processImages.resources.lambda.addToRolePolicy(statement)
 backend.addOutput({
   custom: {
     lightglueTaskQueueUrl: lightGlueAutoProcessor.queue.queueUrl,
-    //scoutbotTaskQueueUrl: scoutbotAutoProcessor.queue.queueUrl,
+    scoutbotTaskQueueUrl: scoutbotAutoProcessor.queue.queueUrl,
     processTaskQueueUrl: processor.queue.queueUrl,
     pointFinderTaskQueueUrl: pointFinderAutoProcessor.queue.queueUrl,
     annotationTable: backend.data.resources.tables['Annotation'].tableName
