@@ -1,5 +1,5 @@
 // @flow
-import React, {ReactNode, useState, useEffect, useContext, memo, useMemo, useRef } from "react";
+import React, {ReactNode, useState, useEffect, useContext, memo, useMemo, useRef,useCallback } from "react";
 import { MapContainer, LayersControl} from "react-leaflet";
 import { NavButtons } from "./NavButtons";
 import * as L from "leaflet";
@@ -28,12 +28,28 @@ export interface BaseImageProps {
 const BaseImage: React.FC<BaseImageProps> = memo((props) =>
 {
   const { client } = useContext(GlobalContext)!;
-  const { xy2latLng } = useContext(ImageContext)!;
+  const { xy2latLng, setVisibleTimestamp, setFullyLoadedTimestamp } = useContext(ImageContext)!;
   const [fullyLoaded, setFullyLoaded] = useState(false);
   const [imageFiles, setImageFiles] = useState<ImageFileType[]>([]);
   const { next, prev, visible, containerheight, containerwidth, children, location, zoom } = props;
   const { image } = location;
   const prevPropsRef = useRef(props);
+
+
+  useEffect(() => {
+    if (fullyLoaded) {
+      setFullyLoadedTimestamp(Date.now())
+    }
+  }, [fullyLoaded])
+
+
+  useEffect(() => {
+    if (visible) {
+      setVisibleTimestamp(Date.now())
+    }
+  }, [visible])
+
+
   useEffect(() => {
     // Compare current props with previous props
     if (prevPropsRef.current) {

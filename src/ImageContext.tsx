@@ -1,16 +1,29 @@
-import { useCallback } from "react";
+import { useCallback , useState} from "react";
 import { ImageContext, ImageContextType } from "./Context";
 import type { ImageType } from "./schemaTypes";
 import type { AnnotationsHook } from "./Context";
 import L from "leaflet";
 
 export function ImageContextFromHook({ hook, image, children }: { hook: AnnotationsHook, image: ImageType, children: React.ReactNode }) {
+    const [annoCount, setAnnoCount] = useState(0)
+    const [startLoadingTimestamp, _] = useState<number>(Date.now())
+    const [visibleTimestamp, setVisibleTimestamp] = useState<number | undefined>(undefined)
+    const [fullyLoadedTimestamp, setFullyLoadedTimestamp] = useState<number | undefined>(undefined)
+
+    const create = useCallback((annotation) => {
+        setAnnoCount(old=>old + 1)
+        return hook.create(annotation)
+    }, [hook.create,setAnnoCount])
+
+    const _delete = useCallback((annotation) => {
+        setAnnoCount(old=>old - 1)
+        return hook.delete(annotation)
+    }, [hook.delete,setAnnoCount])
 
     const scale = Math.pow(
         2,
         Math.ceil(Math.log2(Math.max(image.width, image.height))) - 8,
     );
-
 
     const xy2latLng = useCallback((input: L.Point | [number, number] | Array<L.Point | [number, number]>): L.LatLng | L.LatLng[] => {
         if (Array.isArray(input)) {
@@ -40,8 +53,14 @@ export function ImageContextFromHook({ hook, image, children }: { hook: Annotati
     return <ImageContext.Provider value={{
             latLng2xy,
             xy2latLng,
-            annotationsHook: hook
-        }}>
+        annotationsHook: { ...hook, create, delete:_delete },
+        annoCount,
+        startLoadingTimestamp,
+        visibleTimestamp,
+        fullyLoadedTimestamp,
+        setVisibleTimestamp,
+        setFullyLoadedTimestamp,
+    }}>
         {children}
     </ImageContext.Provider>
 }
