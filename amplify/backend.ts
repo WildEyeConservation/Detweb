@@ -18,6 +18,7 @@ import * as ec2 from "aws-cdk-lib/aws-ec2";
 import { updateUserStats } from "./functions/updateUserStats/resource";
 import { Policy, PolicyStatement, Effect } from "aws-cdk-lib/aws-iam";
 import { StartingPosition, EventSourceMapping } from "aws-cdk-lib/aws-lambda";
+import { Repository } from "aws-cdk-lib/aws-ecr";
 
 const backend=defineBackend({
   auth,
@@ -187,11 +188,13 @@ lightGlueAutoProcessor.asg.role.addManagedPolicy(
   iam.ManagedPolicy.fromAwsManagedPolicyName("AWSAppSyncInvokeFullAccess"),
 );
 
+const repo=Repository.fromRepositoryArn(ecsStack, "ScoutbotRepo", "arn:aws:ecr:eu-west-2:275736403632:repository/cdk-hnb659fds-container-assets-275736403632-eu-west-2")
+
 const scoutbotAutoProcessor = new AutoProcessor(ecsStack, "ScoutbotAutoProcessor",
   {
     vpc,
     instanceType: ec2.InstanceType.of(ec2.InstanceClass.G4DN, ec2.InstanceSize.XLARGE),
-    ecsImage: ecs.ContainerImage.fromRegistry("275736403632.dkr.ecr.eu-west-2.amazonaws.com/cdk-hnb659fds-container-assets-275736403632-eu-west-2:249ab41353c9e512c4d4520e37446a75ddcf4d5871f84a7f76318336a8efb4ab"),    
+    ecsImage: ecs.ContainerImage.fromEcrRepository(repo,"249ab41353c9e512c4d4520e37446a75ddcf4d5871f84a7f76318336a8efb4ab"),    
     ecsTaskRole,
     memoryLimitMiB: 1024 * 12,
     gpuCount: 1,
