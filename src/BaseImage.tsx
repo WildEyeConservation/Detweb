@@ -34,6 +34,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
   const { next, prev, visible, containerheight, containerwidth, children, location, zoom } = props;
   const { image } = location;
   const prevPropsRef = useRef(props);
+  const source= imageFiles.find(file => file.type == 'image/jpeg')?.key
 
 
   useEffect(() => {
@@ -113,57 +114,67 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
       width: '100%',
       height: '100%'
     }}>
-    <MapContainer
-    // id={id}
-    style={style}
-    crs={L.CRS.Simple}
-    bounds={zoom ? undefined : viewBounds}
-    center={zoom && viewCenter}
-    zoom={zoom}
-    zoomSnap={1}
-    zoomDelta={1}
-    keyboardPanDelta={0}
-  >
-    <LayersControl position="topright">
-      {imageFiles.map(image =>
-        <LayersControl.BaseLayer
-          key={image.id}
-          name={image.type}
-          checked={true}
-        >
-          {/* {fullImageTypes.includes(image.type) ? 
+      {source && <MapContainer
+        // id={id}
+        style={style}
+        crs={L.CRS.Simple}
+        bounds={zoom ? undefined : viewBounds}
+        center={zoom && viewCenter}
+        contextmenu={true}
+        contextmenuItems={[{ 
+          text: source, 
+          index: 0, 
+          callback: () => {
+            navigator.clipboard.writeText(source || '')
+              .catch(err => console.error('Failed to copy to clipboard:', err));
+          }
+        }]}
+
+        zoom={zoom}
+        zoomSnap={1}
+        zoomDelta={1}
+        keyboardPanDelta={0}
+      >
+        <LayersControl position="topright">
+          {imageFiles.map(image =>
+            <LayersControl.BaseLayer
+              key={image.id}
+              name={image.type}
+              checked={true}
+            >
+              {/* {fullImageTypes.includes(image.type) ? 
               <S3ImageOverlay
               bounds={imageBounds}
               source={image.s3key} 
               url={""} />: */}
-          <StorageLayer
-            eventHandlers={{
-              load: () => {
-                console.log("All visible tiles have loaded");
-                setFullyLoaded(true);
-              }
-            }}
-            source={imageFiles.find(file => file.type == 'image/jpeg').key}
-            bounds={imageBounds}
-            maxNativeZoom={5}
-            noWrap={true}
-          //getObject={getObject}
-          />
-        </LayersControl.BaseLayer>
-      )}
-    </LayersControl>
-    {children}
-    {(next || prev) && fullyLoaded && 
-      <NavButtons
-        position="bottomleft"
-        prev={prev}
-        next={next}
-        prevEnabled={prev !== undefined}
-        nextEnabled={next !== undefined}
-      />}
-      </MapContainer>
+              <StorageLayer
+                eventHandlers={{
+                  load: () => {
+                    console.log("All visible tiles have loaded");
+                    setFullyLoaded(true);
+                  }
+                }}
+                source={source}
+                bounds={imageBounds}
+                maxNativeZoom={5}
+                noWrap={true}
+              //getObject={getObject}
+              />
+            </LayersControl.BaseLayer>
+          )}
+        </LayersControl>
+        {children}
+        {(next || prev) && fullyLoaded &&
+          <NavButtons
+            position="bottomleft"
+            prev={prev}
+            next={next}
+            prevEnabled={prev !== undefined}
+            nextEnabled={next !== undefined}
+          />}
+      </MapContainer>}
       </div>
-  ), [next, prev, imageFiles, location, style, viewBounds, image, fullyLoaded])
+  ), [next, prev, imageFiles, location, style, viewBounds, image, fullyLoaded,source])
 }, (prevProps, nextProps) => {
       //Iterate over all the props except children and compare them for equality
   return prevProps.visible === nextProps.visible &&
