@@ -244,7 +244,14 @@ backend.addOutput({
     scoutbotTaskQueueUrl: scoutbotAutoProcessor.queue.queueUrl,
     processTaskQueueUrl: processor.queue.queueUrl,
     pointFinderTaskQueueUrl: pointFinderAutoProcessor.queue.queueUrl,
-    annotationTable: backend.data.resources.tables['Annotation'].tableName
+    annotationTable: backend.data.resources.tables['Annotation'].tableName,
+    locationTable: backend.data.resources.tables['Location'].tableName,
+    imageTable: backend.data.resources.tables['Image'].tableName,
+    imageSetTable: backend.data.resources.tables['ImageSet'].tableName,
+    categoryTable: backend.data.resources.tables['Category'].tableName,
+    projectTable: backend.data.resources.tables['Project'].tableName,
+    userTable: backend.data.resources.tables['User'].tableName,
+    imageSetMembershipsTable: backend.data.resources.tables['ImageSetMemberships'].tableName
   }
 }
 )
