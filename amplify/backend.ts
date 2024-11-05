@@ -250,7 +250,8 @@ backend.addOutput({
     imageSetTable: backend.data.resources.tables['ImageSet'].tableName,
     categoryTable: backend.data.resources.tables['Category'].tableName,
     projectTable: backend.data.resources.tables['Project'].tableName,
-    imageSetMembershipsTable: backend.data.resources.tables['ImageSetMembership'].tableName
+    imageSetMembershipsTable: backend.data.resources.tables['ImageSetMembership'].tableName,
+    observationTable: backend.data.resources.tables['Observation'].tableName
   }
 }
 )
