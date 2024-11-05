@@ -75,6 +75,8 @@ const dynamoDbPolicy = new iam.PolicyStatement({
 });
 
 backend.getAnnotationCounts.resources.lambda.addToRolePolicy(dynamoDbPolicy);
+//Attach the dynamoDbPolicy to the authenticatedRole
+authenticatedRole.addToPrincipalPolicy(dynamoDbPolicy);
 
 //backend.data.resources.tables['Annotation'].grantReadData(backend.getAnnotationCounts.resources.lambda)
 //backend.getAnnotationCounts.addEnvironment('ANNOTATION_TABLE', backend.data.resources.tables['Annotation'].tableName)
