@@ -252,7 +252,10 @@ const schema = a.schema({
     sightingCount: a.integer(),
     annotationTime: a.float(),
     annotationCount: a.integer().required(),
-    activeTime: a.float().required()
+    activeTime: a.float().required(),
+    searchTime: a.float(),
+    searchCount: a.integer(),
+    waitingTime: a.float()
   })
   .identifier(['projectId', 'userId','date','setId'])
   .authorization(allow => [allow.authenticated(), allow.publicApiKey()]),
@@ -328,7 +331,7 @@ const schema = a.schema({
     .authorization(allow => [allow.authenticated()])
     .handler(a.handler.custom({
       entry: './getImageCounts.js',
-      dataSource: a.ref('ImageSetMembership'),
+      dataSource: a.ref('ImageSet hip'),
     })),
   getAnnotationCounts: a.query()
     .arguments({
