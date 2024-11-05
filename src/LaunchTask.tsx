@@ -6,9 +6,9 @@ import { useUpdateProgress } from "./useUpdateProgress";
 import { AnnotationSetDropdown } from "./AnnotationSetDropDown";
 import { LocationSetDropdown } from "./LocationSetDropDown";
 import { GlobalContext, ManagementContext, UserContext, ProjectContext } from "./Context";
-import { SendMessageCommand } from "@aws-sdk/client-sqs";
+import { SendMessageCommand, SendMessageBatchCommand } from "@aws-sdk/client-sqs";
 import { aws_elasticloadbalancingv2_targets } from "aws-cdk-lib";
-// import { publishError } from './ErrorHandler';
+import { QueryCommand } from "@aws-sdk/client-dynamodb";
 import { retryOperation } from './utils/retryOperation';
 import pLimit from 'p-limit';
 
@@ -28,8 +28,8 @@ interface ObservationsResponse {
 }
 
 function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: LaunchTaskProps) {
-  const { client } = useContext(GlobalContext)!;
-  const { getSqsClient } = useContext(UserContext)!;
+  const { client, backend } = useContext(GlobalContext)!;
+  const { getSqsClient, getDynamoClient } = useContext(UserContext)!;
   const { queuesHook: { data: queues } } = useContext(ManagementContext)!;
   const [queueId, setQueueId] = useState<string | null>(null);
   const [url2, setUrl2] = useState<string | null>(null);
@@ -38,10 +38,95 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
   const [secondaryQueue, setSecondaryQueue] = useState(false);
   const [allowOutside, setAllowOutside] = useState(true);
   const userContext = useContext(UserContext);
+  const [zoom, setZoom] = useState<number | undefined>(undefined);
+  const [lowerLimit, setLowerLimit] = useState(0);
+  const [upperLimit, setUpperLimit] = useState(1);
   if (!userContext) {
     return null;
   }
   const limitConnections = pLimit(10);
+
+  async function queryLocations(locationSetId: string): Promise<string[]> {
+    const dynamoClient = await getDynamoClient();
+    const locationIds: string[] = [];
+    let lastEvaluatedKey: Record<string, any> | undefined = undefined;
+    do {
+        const command = new QueryCommand({
+            TableName: backend.custom.locationTable,
+            IndexName: "locationsBySetIdAndConfidence",
+            KeyConditionExpression: "setId = :locationSetId and confidence BETWEEN :lowerLimit and :upperLimit",
+            ExpressionAttributeValues: {
+                ":locationSetId": {
+                    "S": locationSetId
+                },
+              ":lowerLimit": {
+                "N": lowerLimit.toString()
+              },
+              ":upperLimit": {
+                "N": upperLimit.toString()
+              }
+            },
+            ProjectionExpression: "id",
+            ExclusiveStartKey: lastEvaluatedKey,
+            // Increase page size for better throughput
+            Limit: 1000
+        });
+
+        try {
+          const response = await dynamoClient.send(command);
+          setStepsCompleted((s: number) => s + response.Items.length)
+            // Extract imageIds from the response
+            if (response.Items) {
+                const pageLocationIds = response.Items.map(item => item.id.S!);
+                locationIds.push(...pageLocationIds);
+            }
+            lastEvaluatedKey = response.LastEvaluatedKey;
+        } catch (error) {
+            console.error("Error querying DynamoDB:", error);
+            throw error;
+        }
+    } while (lastEvaluatedKey);
+
+    return locationIds;
+  }
+  
+  async function queryObservations(annotationSetId: string): Promise<string[]> {
+    const dynamoClient = await getDynamoClient();
+    const locationIds: string[] = [];
+    let lastEvaluatedKey: Record<string, any> | undefined = undefined;
+    do {
+        const command = new QueryCommand({
+            TableName: backend.custom.observationTable,
+            IndexName: "observationsByAnnotationSetId",
+            KeyConditionExpression: "annotationSetId  = :annotationSetId ",
+            ExpressionAttributeValues: {
+                ":annotationSetId": {
+                    "S": annotationSetId 
+                }
+            },
+            ProjectionExpression: "locationId",
+            ExclusiveStartKey: lastEvaluatedKey,
+            // Increase page size for better throughput
+            Limit: 1000
+        });
+
+        try {
+          const response = await dynamoClient.send(command);
+          setStepsCompleted((s: number) => s + response.Items.length)
+            // Extract imageIds from the response
+            if (response.Items) {
+                const pageLocationIds = response.Items.map(item => item.locationId.S!);
+                locationIds.push(...pageLocationIds);
+            }
+            lastEvaluatedKey = response.LastEvaluatedKey;
+        } catch (error) {
+            console.error("Error querying DynamoDB:", error);
+            throw error;
+        }
+    } while (lastEvaluatedKey);
+    return locationIds;
+}
+
 
   const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
     taskId: `Launch task`,
@@ -50,57 +135,50 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
     stepFormatter: (count)=>`${count} locations`,
   });
 
-
   async function handleSubmit() {
     // try {
-      handleClose();
-      let promises = []
-      const allLocations = await Promise.all(selectedTasks.map(async (task) => {
-        let prevNextToken: String | undefined = undefined;
-        let allData = [];
-        do {
-          const {data,nextToken} = await client.models.Location.locationsBySetIdAndConfidence({ 
-                setId: task, 
-                confidence : {gt: 0},
-                nextToken: prevNextToken,
-                selectionSet: ['id','x','y','width','height','confidence','image.id','image.width','image.height'] 
-                });
-              prevNextToken = nextToken || undefined;
-              allData = allData.concat(data);
-        } while (prevNextToken)
-        return allData;
-      })).then(arrays => arrays.flat());
+    handleClose();
+    let promises = []
+    setStepsCompleted(0);
+    setTotalSteps(0);
+
+    const allSeenLocations = filterObserved ? await queryObservations(annotationSet!) : [];
+    const allLocations = await Promise.all(selectedTasks.map(async (task) => {
+        return await queryLocations(task)
+    })).then(arrays => arrays.flat()).then(locations => locations.filter(l => !allSeenLocations.includes(l)));
+          
+    setStepsCompleted(0);
+    setTotalSteps(allLocations.length);
+    let queueUrl = queues?.find(q => q.id == queueId)?.url;
+    
+    if (!queueUrl) {
+      throw new Error("Queue URL not found");
+    }
+
+    const batchSize = 10;
+    for (let i = 0; i < allLocations.length; i += batchSize) {
+      const locationBatch = allLocations.slice(i, i + batchSize);
+      const batchEntries = [];
       
-      setStepsCompleted(0);
-      setTotalSteps(allLocations.length);
-      let queueUrl = queues?.find(q => q.id == queueId)?.url;
-      
-      if (!queueUrl) {
-        throw new Error("Queue URL not found");
+      for (const locationId of locationBatch) {
+        const location = {id: locationId, annotationSetId: annotationSet};
+        batchEntries.push({
+          Id: `msg-${locationId}`, // Required unique ID for each message in batch
+          MessageBody: JSON.stringify({ location, allowOutside, zoom })
+        });
       }
 
-      for (let i = 0; i < allLocations.length; i++) {
-        const location = allLocations[i];
-        if (filterObserved) {
-          const { data } = await retryOperation(
-            () => client.models.Observation.observationsByLocationId({ locationId: location.id }),
-            { retryableErrors: ['Network error', 'Connection timeout'] }
-          );
-          if (data.length > 0) {
-            setStepsCompleted((fc: any) => fc + 1);
-            continue;
-          }
-        }
-        location.annotationSetId = annotationSet;
-        limitConnections(()=>
+      if (batchEntries.length > 0) {
+        limitConnections(() =>
           getSqsClient().then(sqsClient => sqsClient.send(
-            new SendMessageCommand({
-            QueueUrl: queueUrl,
-            MessageBody: JSON.stringify({ location , allowOutside})
-          }))
-        )).then(() => setStepsCompleted((s: number) => s + 1))
-
+            new SendMessageBatchCommand({
+              QueueUrl: queueUrl,
+              Entries: batchEntries
+            })
+          ))
+        ).then(() => setStepsCompleted((s: number) => s + batchEntries.length));
       }
+    }
     // } catch (error) {
     //   console.error('Error in LaunchTask handleSubmit:', error);
     //   const errorDetails = {
@@ -160,7 +238,7 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
               />
               <Form.Check className="mt-2"
                 type="switch"
-                label="Unobserved only"
+                label="Unobserved (on this annotationset) only"
                 checked={filterObserved}
                 onChange={(x) => setFilterObserved(x.target.checked)}
               />
@@ -189,6 +267,42 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
                   <QueueDropdown setQueue={setUrl2} currentQueue={url2} />
                 </Form.Group>
               )}
+            </Form.Group>
+            <Form.Group>
+              <Form.Label>Zoom Level</Form.Label>
+              <Form.Select 
+                value={zoom} 
+                onChange={(e) => setZoom(e.target.value=="auto" ? undefined : e.target.value)}
+              >
+                <option value="auto">Auto</option>
+                {[...Array(13)].map((_, i) => (
+                  <option key={i} value={i}>Level {i}</option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+            <Form.Group>
+              <Form.Label>Filter by confidence value:</Form.Label>
+              <div className="d-flex align-items-center gap-2">
+                <Form.Control
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={lowerLimit}
+                  onChange={(e) => setLowerLimit(Number(e.target.value))}
+                  style={{ width: '80px' }}
+                />
+                <span>to</span>
+                <Form.Control
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={upperLimit}
+                  onChange={(e) => setUpperLimit(Number(e.target.value))}
+                  style={{ width: '80px' }}
+                />
+              </div>
             </Form.Group>
           </Stack>
         </Form>

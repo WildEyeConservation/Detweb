@@ -2,6 +2,7 @@ import { useContext, useState, useEffect } from "react";
 import AnnotationImage from "./AnnotationImage";
 import { RegisterPair } from "./RegisterPair";
 import { GlobalContext } from "./Context";
+import { data } from "../amplify/data/resource";
 /* In the current implementation, we can push both registration and annotation tasks to the same queue. The task of the TaskSelector component is to identify based on 
 the props that were passed whether we are dealing with an annotation or registration task and instantiate the correct component to display the task*/
 
@@ -27,7 +28,9 @@ export function TaskSelector(props: TaskSelectorProps) {
   useEffect(() => {
     console.log('taskselector props', props);
     if (props.location) {
-      setElement(<AnnotationImage {...props} />);
+      client.models.Location.get({ id: props.location.id }, { selectionSet: ['id', 'x', 'y', 'width', 'height', 'confidence', 'image.id', 'image.width', 'image.height'] }).then(({ data }) => {
+        setElement(<AnnotationImage {...props} location={{...data,annotationSetId:props.location.annotationSetId}} />);
+      });
     } else {
       client.models.ImageNeighbour.get({ image1Id: props.images[0], image2Id: props.images[1] }, {selectionSet: ['homography', 'image1.*', 'image2.*'] })
         .then(({ data: { homography, image1, image2 } }) => {

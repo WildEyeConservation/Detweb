@@ -20,7 +20,7 @@ import {
   useOptimisticAnnotationSet,
   useQueues
 } from "./useOptimisticUpdates.tsx";
-
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 
 
 
@@ -110,7 +110,15 @@ export function User({ user, children }: { user: AuthUser, children: React.React
   const getSqsClient = useCallback(async () => {
     const { credentials } = await fetchAuthSession();
     return new SQSClient({ region, credentials })
-  },[])
+  }, [])
+  
+  const getDynamoClient = useCallback(async () => {
+  const { credentials } = await fetchAuthSession();
+  return new DynamoDBClient({
+      region, credentials
+    });
+  }, [])
+
 
   return (
     <UserContext.Provider
@@ -120,6 +128,7 @@ export function User({ user, children }: { user: AuthUser, children: React.React
         jobsCompleted,
         setJobsCompleted,
         myMembershipHook,
+        getDynamoClient
       }}
       >
             {children}
