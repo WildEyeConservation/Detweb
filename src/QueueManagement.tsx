@@ -45,7 +45,7 @@ export default function QueueManagement() {
       setMessageCounts(newCounts);
     };
     updateMessageCounts();
-    const intervalId = setInterval(updateMessageCounts, 10000);
+    const intervalId = setInterval(updateMessageCounts, 60000);
     return () => clearInterval(intervalId);
   }, [queues]);
 
