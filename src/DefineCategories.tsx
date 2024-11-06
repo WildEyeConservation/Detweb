@@ -9,13 +9,15 @@ import Popover from "react-bootstrap/Popover";
 import OverlayTrigger from "react-bootstrap/OverlayTrigger";
 import { GlobalContext, ProjectContext } from "./Context.tsx";
 import { Schema } from "../amplify/data/resource.ts";
+import { useRecordHotkeys } from "react-hotkeys-hook";
 
 
 export default function DefineCategories() {
   const { client } = useContext(GlobalContext)!;
   const [showModal, setShowModal] = useState(false);
   const {project,categoriesHook: {data: categories, create: createCategory, delete: deleteCategory, update: updateCategory }} = useContext(ProjectContext)!;
-  
+  const [keys, { start, stop, isRecording }] = useRecordHotkeys()
+
   const initialCategoryState = {
     name: "Object",
     color: "#563d7c",
@@ -47,9 +49,9 @@ export default function DefineCategories() {
   const handleSubmit = () => {
     setShowModal(false);
     if (category?.id) {
-      updateCategory(category);
+      updateCategory({...category, shortcutKey: Array.from(keys).join("+")});
     } else {
-      createCategory({ ...category, id: undefined });
+      createCategory({ ...category, shortcutKey: Array.from(keys).join("+") });
     }
   };
 
@@ -135,8 +137,10 @@ export default function DefineCategories() {
               <Form.Label>Shortcut key</Form.Label>
               <Form.Control
                 type="text"
-                value={category.shortcutKey ?? ""}
-                onChange={(x) => setShortcutKey(x.target.value)}
+                disabled={false}
+                value={Array.from(keys).join("+")}
+                onFocus={start}
+                onBlur={stop}
               />
             </Form.Group>
             <Form.Group>
