@@ -19,13 +19,13 @@ export default function AnnotationSetManagement() {
   const [busy,setBusy] = useState<boolean>(false);
  
  
-  useEffect(() => {
-    const fetchCounts = async () => {
-      setCounts(Object.fromEntries(await Promise.all(annotationSets?.map(async (annotationSet) => 
-        [annotationSet.id, (await client.queries.getAnnotationCounts({ annotationSetId: annotationSet.id })).data]))));
-    };
-    fetchCounts();
-  }, [annotationSets]);
+  // useEffect(() => {
+  //   const fetchCounts = async () => {
+  //     setCounts(Object.fromEntries(await Promise.all(annotationSets?.map(async (annotationSet) => 
+  //       [annotationSet.id, (await client.queries.getAnnotationCounts({ annotationSetId: annotationSet.id })).data]))));
+  //   };
+  //   fetchCounts();
+  // }, [annotationSets]);
 
   const tableHeadings = [{ content: "Selected" },
     { content: "Name" },
