@@ -38,11 +38,15 @@ export default function UserStats() {
           if (selectedSets.length > 0 && selectedSets.includes(s.setId)) {
             setStats(prev => {
               if (!prev[s.userId]) {
-                prev[s.userId] = { observationCount: 0, annotationCount: 0, activeTime: 0 };
+                prev[s.userId] = { observationCount: 0, annotationCount: 0, activeTime: 0, sightingCount: 0, searchTime: 0, annotationTime: 0, waitingTime: 0};
               }
               prev[s.userId].observationCount += s.observationCount;
               prev[s.userId].annotationCount += s.annotationCount;
               prev[s.userId].activeTime += s.activeTime;
+              prev[s.userId].sightingCount += s.sightingCount;
+              prev[s.userId].searchTime += s.searchTime;
+              prev[s.userId].annotationTime += s.annotationTime;
+              prev[s.userId].waitingTime += s.waitingTime;
               return prev;
             })
           }
@@ -56,16 +60,25 @@ export default function UserStats() {
     rowData: [allUsers.find(u => u.id == userId)?.name,
       humanizeDuration(stats[userId].activeTime, { units: ["h", "m", "s"], round: true, largest: 2 }),
       stats[userId].observationCount,
-      (stats[userId].activeTime/1000 / stats[userId].observationCount || 0).toFixed(1),
-      stats[userId].annotationCount]
+      (stats[userId].searchTime/1000 / stats[userId].observationCount || 0).toFixed(1),
+      stats[userId].annotationCount,
+      stats[userId].sightingCount,
+      humanizeDuration(stats[userId].searchTime, { units: ["h", "m", "s"], round: true, largest: 2 }),
+      humanizeDuration(stats[userId].annotationTime, { units: ["h", "m", "s"], round: true, largest: 2 }),
+      (stats[userId].observationCount / stats[userId].sightingCount || 0).toFixed(1)
+    ]
   }))  
   
   const tableHeadings = [
     { content: "Username", style: undefined },
     { content: "Time spent", style: undefined },
     { content: `Jobs completed`, style: undefined },
-    { content: "Average time (s/job)", style: undefined },
+    { content: "Average search time (s/job)", style: undefined },
     { content: "Total Annotations", style: undefined },
+    { content: "Total Sightings", style: undefined },
+    { content: "Total Search Time", style: undefined },
+    { content: "Total Annotation Time", style: undefined },
+    { content: "Locations/Sighting", style: undefined },
   ];
   return (
     <div className="h-100">
