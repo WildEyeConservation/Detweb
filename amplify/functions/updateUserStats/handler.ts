@@ -93,7 +93,7 @@ async function updateStats(input: any) {
                 waitingTime:  (stats.waitingTime || 0) + Math.min(waitingTime, 0)
             }
         }
-        if (stats) {
+        if (result.data?.getUserStats) {
             logger.info(JSON.stringify(await client.graphql({
                 query: updateUserStats,variables
             })))
