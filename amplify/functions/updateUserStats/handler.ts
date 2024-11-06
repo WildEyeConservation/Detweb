@@ -52,7 +52,10 @@ async function updateStats(input: any) {
         const date = input.createdAt.S.split('T')[0]
         const userId = input.owner.S.split('::')[1]
         const projectId = input.projectId.S
-        const sighting = (input.annotationCount.N > 0 ? 1 : 0)
+        const annotationCount = parseInt(input.annotationCount.N)
+        const timeTaken = parseFloat(input.timeTaken.N)
+        const waitingTime = parseFloat(input.waitingTime.N)
+        const sighting = (annotationCount > 0 ? 1 : 0)
 
         logger.info({
             message: 'Processing stats update',
@@ -81,13 +84,13 @@ async function updateStats(input: any) {
                 setId,
                 date,
                 observationCount: stats.observationCount + 1,
-                annotationCount: stats.annotationCount + input.annotationCount.N,
+                annotationCount: stats.annotationCount + annotationCount,
                 sightingCount: (stats.sightingCount || 0) + sighting,
-                activeTime: stats.activeTime + input.timeTaken.N,
-                searchTime: (stats.searchTime || 0) + (1-sighting) * input.timeTaken.N,
+                activeTime: stats.activeTime + timeTaken,
+                searchTime: (stats.searchTime || 0) + (1-sighting) * timeTaken,
                 searchCount: (stats.searchCount || 0) + (1 - sighting),
-                annotationTime: (stats.annotationTime || 0) + sighting * input.timeTaken.N,
-                waitingTime:  (stats.waitingTime || 0) + Math.min(input.waitingTime.N, 0)
+                annotationTime: (stats.annotationTime || 0) + sighting * timeTaken,
+                waitingTime:  (stats.waitingTime || 0) + Math.min(waitingTime, 0)
             }
         }
         if (stats) {
