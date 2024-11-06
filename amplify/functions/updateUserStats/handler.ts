@@ -87,7 +87,7 @@ async function updateStats(input: any) {
                 searchTime: (stats.searchTime || 0) + (1-sighting) * input.timeTaken.N,
                 searchCount: (stats.searchCount || 0) + (1 - sighting),
                 annotationTime: (stats.annotationTime || 0) + sighting * input.timeTaken.N,
-                waitingTime: (stats.waitingTime || 0) + input.waitingTime.N
+                waitingTime:  (stats.waitingTime || 0) + Math.min(input.waitingTime.N, 0)
             }
         }
         if (stats) {
