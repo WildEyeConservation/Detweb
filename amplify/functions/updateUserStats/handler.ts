@@ -46,22 +46,17 @@ const logger = new Logger({
   serviceName: "dynamodb-stream-handler",
 });
 
-async function updateStats(input: any, isDeletion: boolean = false) {
+async function updateStats(input: any) {
     try {
-        const isAnnotation = input.__typename.S == "Annotation"
-        const setId = isAnnotation ? input.setId.S : input.annotationSetId.S
+        const setId = input.annotationSetId.S
         const date = input.createdAt.S.split('T')[0]
         const userId = input.owner.S.split('::')[1]
         const projectId = input.projectId.S
+        const sighting = (input.annotationCount.N > 0 ? 1 : 0)
 
         logger.info({
             message: 'Processing stats update',
-            date,
-            userId,
-            projectId,
-            setId,
-            isAnnotation,
-            isDeletion
+            input: JSON.stringify(input, null, 2)
         });
 
         const result = await client.graphql({
@@ -78,42 +73,31 @@ async function updateStats(input: any, isDeletion: boolean = false) {
         });
 
         logger.info(JSON.stringify(result))
-        const stats = result.data?.getUserStats;
+        const stats = result.data?.getUserStats || {observationCount: 0, annotationCount: 0, sightingCount: 0, activeTime: 0, searchTime: 0, searchCount: 0, annotationTime: 0, waitingTime: 0}
+        const variables={
+            input: {
+                userId,
+                projectId,
+                setId,
+                date,
+                observationCount: stats.observationCount + 1,
+                annotationCount: stats.annotationCount + input.annotationCount.N,
+                sightingCount: (stats.sightingCount || 0) + sighting,
+                activeTime: stats.activeTime + input.timeTaken.N,
+                searchTime: (stats.searchTime || 0) + (1-sighting) * input.timeTaken.N,
+                searchCount: (stats.searchCount || 0) + (1 - sighting),
+                annotationTime: (stats.annotationTime || 0) + sighting * input.timeTaken.N,
+                waitingTime: (stats.waitingTime || 0) + input.waitingTime.N
+            }
+        }
         if (stats) {
-            // Calculate the number of seconds elapsed since stats.updatedAt which is an ISO string
-            let elapsed = (new Date().getTime() - new Date(stats.updatedAt).getTime()) / 1000;
-            // If more than 2 minutes have passed without a user action, we assume this was a break and 
-            // don't count it towards active time.
-            if (elapsed > 120) { elapsed = 0 };
             logger.info(JSON.stringify(await client.graphql({
-                query: updateUserStats,
-                variables: {
-                    input: {
-                        userId,
-                        projectId,
-                        setId,
-                        date,
-                        observationCount: stats.observationCount + (isAnnotation ? 0 : 1) * (isDeletion ? -1 : 1),
-                        annotationCount: stats.annotationCount + (isAnnotation ? 1 : 0) * (isDeletion ? -1 : 1),
-                        activeTime: stats.activeTime + elapsed
-                    }
-                }
+                query: updateUserStats,variables
             })))
         } else {
             logger.info(JSON.stringify(await client.graphql({
                 query: createUserStats,
-                variables: {
-                    input: {
-                        userId,
-                        projectId,
-                        setId,
-                        date,
-                        observationCount: isAnnotation ? 0 : 1 * (isDeletion ? -1 : 1),
-                        annotationCount: isAnnotation ? 1 : 0 * (isDeletion ? -1 : 1),
-                        activeTime: 0
-                    }
-                }
-            })))
+                variables})))
         }
     } catch (error) {
         logger.error('Error in updateStats:', {
@@ -138,9 +122,7 @@ export const handler: DynamoDBStreamHandler = async (event) => {
             }
 
             if (record.eventName === "INSERT") {
-                await updateStats(record.dynamodb.NewImage, false);
-            } else if (record.eventName === "REMOVE") {
-                await updateStats(record.dynamodb.OldImage, true);
+                await updateStats(record.dynamodb.NewImage);
             }
         }
 

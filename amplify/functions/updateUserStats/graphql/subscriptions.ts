@@ -555,6 +555,7 @@ export const onCreateObservation = /* GraphQL */ `subscription OnCreateObservati
   $owner: String
 ) {
   onCreateObservation(filter: $filter, owner: $owner) {
+    annotationCount
     annotationSet {
       createdAt
       id
@@ -566,6 +567,7 @@ export const onCreateObservation = /* GraphQL */ `subscription OnCreateObservati
     annotationSetId
     createdAt
     id
+    loadingTime
     location {
       confidence
       createdAt
@@ -591,7 +593,9 @@ export const onCreateObservation = /* GraphQL */ `subscription OnCreateObservati
       __typename
     }
     projectId
+    timeTaken
     updatedAt
+    waitingTime
     __typename
   }
 }
@@ -686,24 +690,6 @@ export const onCreateQueue = /* GraphQL */ `subscription OnCreateQueue($filter: 
   APITypes.OnCreateQueueSubscriptionVariables,
   APITypes.OnCreateQueueSubscription
 >;
-export const onCreateUserObservationStats = /* GraphQL */ `subscription OnCreateUserObservationStats(
-  $filter: ModelSubscriptionUserObservationStatsFilterInput
-) {
-  onCreateUserObservationStats(filter: $filter) {
-    activeTime
-    count
-    createdAt
-    lastUpdated
-    projectId
-    updatedAt
-    userId
-    __typename
-  }
-}
-` as GeneratedSubscription<
-  APITypes.OnCreateUserObservationStatsSubscriptionVariables,
-  APITypes.OnCreateUserObservationStatsSubscription
->;
 export const onCreateUserProjectMembership = /* GraphQL */ `subscription OnCreateUserProjectMembership(
   $filter: ModelSubscriptionUserProjectMembershipFilterInput
 ) {
@@ -742,13 +728,18 @@ export const onCreateUserStats = /* GraphQL */ `subscription OnCreateUserStats($
   onCreateUserStats(filter: $filter) {
     activeTime
     annotationCount
+    annotationTime
     createdAt
     date
     observationCount
     projectId
+    searchCount
+    searchTime
     setId
+    sightingCount
     updatedAt
     userId
+    waitingTime
     __typename
   }
 }
@@ -1303,6 +1294,7 @@ export const onDeleteObservation = /* GraphQL */ `subscription OnDeleteObservati
   $owner: String
 ) {
   onDeleteObservation(filter: $filter, owner: $owner) {
+    annotationCount
     annotationSet {
       createdAt
       id
@@ -1314,6 +1306,7 @@ export const onDeleteObservation = /* GraphQL */ `subscription OnDeleteObservati
     annotationSetId
     createdAt
     id
+    loadingTime
     location {
       confidence
       createdAt
@@ -1339,7 +1332,9 @@ export const onDeleteObservation = /* GraphQL */ `subscription OnDeleteObservati
       __typename
     }
     projectId
+    timeTaken
     updatedAt
+    waitingTime
     __typename
   }
 }
@@ -1434,24 +1429,6 @@ export const onDeleteQueue = /* GraphQL */ `subscription OnDeleteQueue($filter: 
   APITypes.OnDeleteQueueSubscriptionVariables,
   APITypes.OnDeleteQueueSubscription
 >;
-export const onDeleteUserObservationStats = /* GraphQL */ `subscription OnDeleteUserObservationStats(
-  $filter: ModelSubscriptionUserObservationStatsFilterInput
-) {
-  onDeleteUserObservationStats(filter: $filter) {
-    activeTime
-    count
-    createdAt
-    lastUpdated
-    projectId
-    updatedAt
-    userId
-    __typename
-  }
-}
-` as GeneratedSubscription<
-  APITypes.OnDeleteUserObservationStatsSubscriptionVariables,
-  APITypes.OnDeleteUserObservationStatsSubscription
->;
 export const onDeleteUserProjectMembership = /* GraphQL */ `subscription OnDeleteUserProjectMembership(
   $filter: ModelSubscriptionUserProjectMembershipFilterInput
 ) {
@@ -1490,13 +1467,18 @@ export const onDeleteUserStats = /* GraphQL */ `subscription OnDeleteUserStats($
   onDeleteUserStats(filter: $filter) {
     activeTime
     annotationCount
+    annotationTime
     createdAt
     date
     observationCount
     projectId
+    searchCount
+    searchTime
     setId
+    sightingCount
     updatedAt
     userId
+    waitingTime
     __typename
   }
 }
@@ -2051,6 +2033,7 @@ export const onUpdateObservation = /* GraphQL */ `subscription OnUpdateObservati
   $owner: String
 ) {
   onUpdateObservation(filter: $filter, owner: $owner) {
+    annotationCount
     annotationSet {
       createdAt
       id
@@ -2062,6 +2045,7 @@ export const onUpdateObservation = /* GraphQL */ `subscription OnUpdateObservati
     annotationSetId
     createdAt
     id
+    loadingTime
     location {
       confidence
       createdAt
@@ -2087,7 +2071,9 @@ export const onUpdateObservation = /* GraphQL */ `subscription OnUpdateObservati
       __typename
     }
     projectId
+    timeTaken
     updatedAt
+    waitingTime
     __typename
   }
 }
@@ -2182,24 +2168,6 @@ export const onUpdateQueue = /* GraphQL */ `subscription OnUpdateQueue($filter: 
   APITypes.OnUpdateQueueSubscriptionVariables,
   APITypes.OnUpdateQueueSubscription
 >;
-export const onUpdateUserObservationStats = /* GraphQL */ `subscription OnUpdateUserObservationStats(
-  $filter: ModelSubscriptionUserObservationStatsFilterInput
-) {
-  onUpdateUserObservationStats(filter: $filter) {
-    activeTime
-    count
-    createdAt
-    lastUpdated
-    projectId
-    updatedAt
-    userId
-    __typename
-  }
-}
-` as GeneratedSubscription<
-  APITypes.OnUpdateUserObservationStatsSubscriptionVariables,
-  APITypes.OnUpdateUserObservationStatsSubscription
->;
 export const onUpdateUserProjectMembership = /* GraphQL */ `subscription OnUpdateUserProjectMembership(
   $filter: ModelSubscriptionUserProjectMembershipFilterInput
 ) {
@@ -2238,13 +2206,18 @@ export const onUpdateUserStats = /* GraphQL */ `subscription OnUpdateUserStats($
   onUpdateUserStats(filter: $filter) {
     activeTime
     annotationCount
+    annotationTime
     createdAt
     date
     observationCount
     projectId
+    searchCount
+    searchTime
     setId
+    sightingCount
     updatedAt
     userId
+    waitingTime
     __typename
   }
 }

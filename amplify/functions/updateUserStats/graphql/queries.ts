@@ -763,6 +763,7 @@ export const getObject = /* GraphQL */ `query GetObject($id: ID!) {
 ` as GeneratedQuery<APITypes.GetObjectQueryVariables, APITypes.GetObjectQuery>;
 export const getObservation = /* GraphQL */ `query GetObservation($id: ID!) {
   getObservation(id: $id) {
+    annotationCount
     annotationSet {
       createdAt
       id
@@ -774,6 +775,7 @@ export const getObservation = /* GraphQL */ `query GetObservation($id: ID!) {
     annotationSetId
     createdAt
     id
+    loadingTime
     location {
       confidence
       createdAt
@@ -799,7 +801,9 @@ export const getObservation = /* GraphQL */ `query GetObservation($id: ID!) {
       __typename
     }
     projectId
+    timeTaken
     updatedAt
+    waitingTime
     __typename
   }
 }
@@ -891,22 +895,6 @@ export const getQueue = /* GraphQL */ `query GetQueue($id: ID!) {
   }
 }
 ` as GeneratedQuery<APITypes.GetQueueQueryVariables, APITypes.GetQueueQuery>;
-export const getUserObservationStats = /* GraphQL */ `query GetUserObservationStats($projectId: ID!, $userId: ID!) {
-  getUserObservationStats(projectId: $projectId, userId: $userId) {
-    activeTime
-    count
-    createdAt
-    lastUpdated
-    projectId
-    updatedAt
-    userId
-    __typename
-  }
-}
-` as GeneratedQuery<
-  APITypes.GetUserObservationStatsQueryVariables,
-  APITypes.GetUserObservationStatsQuery
->;
 export const getUserProjectMembership = /* GraphQL */ `query GetUserProjectMembership($id: ID!) {
   getUserProjectMembership(id: $id) {
     createdAt
@@ -953,13 +941,18 @@ export const getUserStats = /* GraphQL */ `query GetUserStats(
   ) {
     activeTime
     annotationCount
+    annotationTime
     createdAt
     date
     observationCount
     projectId
+    searchCount
+    searchTime
     setId
+    sightingCount
     updatedAt
     userId
+    waitingTime
     __typename
   }
 }
@@ -1482,13 +1475,17 @@ export const listObservations = /* GraphQL */ `query ListObservations(
 ) {
   listObservations(filter: $filter, limit: $limit, nextToken: $nextToken) {
     items {
+      annotationCount
       annotationSetId
       createdAt
       id
+      loadingTime
       locationId
       owner
       projectId
+      timeTaken
       updatedAt
+      waitingTime
       __typename
     }
     nextToken
@@ -1543,40 +1540,6 @@ export const listQueues = /* GraphQL */ `query ListQueues(
   APITypes.ListQueuesQueryVariables,
   APITypes.ListQueuesQuery
 >;
-export const listUserObservationStats = /* GraphQL */ `query ListUserObservationStats(
-  $filter: ModelUserObservationStatsFilterInput
-  $limit: Int
-  $nextToken: String
-  $projectId: ID
-  $sortDirection: ModelSortDirection
-  $userId: ModelIDKeyConditionInput
-) {
-  listUserObservationStats(
-    filter: $filter
-    limit: $limit
-    nextToken: $nextToken
-    projectId: $projectId
-    sortDirection: $sortDirection
-    userId: $userId
-  ) {
-    items {
-      activeTime
-      count
-      createdAt
-      lastUpdated
-      projectId
-      updatedAt
-      userId
-      __typename
-    }
-    nextToken
-    __typename
-  }
-}
-` as GeneratedQuery<
-  APITypes.ListUserObservationStatsQueryVariables,
-  APITypes.ListUserObservationStatsQuery
->;
 export const listUserProjectMemberships = /* GraphQL */ `query ListUserProjectMemberships(
   $filter: ModelUserProjectMembershipFilterInput
   $limit: Int
@@ -1624,13 +1587,18 @@ export const listUserStats = /* GraphQL */ `query ListUserStats(
     items {
       activeTime
       annotationCount
+      annotationTime
       createdAt
       date
       observationCount
       projectId
+      searchCount
+      searchTime
       setId
+      sightingCount
       updatedAt
       userId
+      waitingTime
       __typename
     }
     nextToken
@@ -1807,13 +1775,17 @@ export const observationsByAnnotationSetId = /* GraphQL */ `query ObservationsBy
     sortDirection: $sortDirection
   ) {
     items {
+      annotationCount
       annotationSetId
       createdAt
       id
+      loadingTime
       locationId
       owner
       projectId
+      timeTaken
       updatedAt
+      waitingTime
       __typename
     }
     nextToken
@@ -1839,13 +1811,17 @@ export const observationsByLocationId = /* GraphQL */ `query ObservationsByLocat
     sortDirection: $sortDirection
   ) {
     items {
+      annotationCount
       annotationSetId
       createdAt
       id
+      loadingTime
       locationId
       owner
       projectId
+      timeTaken
       updatedAt
+      waitingTime
       __typename
     }
     nextToken

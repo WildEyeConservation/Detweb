@@ -592,6 +592,7 @@ export const createObservation = /* GraphQL */ `mutation CreateObservation(
   $input: CreateObservationInput!
 ) {
   createObservation(condition: $condition, input: $input) {
+    annotationCount
     annotationSet {
       createdAt
       id
@@ -603,6 +604,7 @@ export const createObservation = /* GraphQL */ `mutation CreateObservation(
     annotationSetId
     createdAt
     id
+    loadingTime
     location {
       confidence
       createdAt
@@ -628,7 +630,9 @@ export const createObservation = /* GraphQL */ `mutation CreateObservation(
       __typename
     }
     projectId
+    timeTaken
     updatedAt
+    waitingTime
     __typename
   }
 }
@@ -729,25 +733,6 @@ export const createQueue = /* GraphQL */ `mutation CreateQueue(
   APITypes.CreateQueueMutationVariables,
   APITypes.CreateQueueMutation
 >;
-export const createUserObservationStats = /* GraphQL */ `mutation CreateUserObservationStats(
-  $condition: ModelUserObservationStatsConditionInput
-  $input: CreateUserObservationStatsInput!
-) {
-  createUserObservationStats(condition: $condition, input: $input) {
-    activeTime
-    count
-    createdAt
-    lastUpdated
-    projectId
-    updatedAt
-    userId
-    __typename
-  }
-}
-` as GeneratedMutation<
-  APITypes.CreateUserObservationStatsMutationVariables,
-  APITypes.CreateUserObservationStatsMutation
->;
 export const createUserProjectMembership = /* GraphQL */ `mutation CreateUserProjectMembership(
   $condition: ModelUserProjectMembershipConditionInput
   $input: CreateUserProjectMembershipInput!
@@ -790,13 +775,18 @@ export const createUserStats = /* GraphQL */ `mutation CreateUserStats(
   createUserStats(condition: $condition, input: $input) {
     activeTime
     annotationCount
+    annotationTime
     createdAt
     date
     observationCount
     projectId
+    searchCount
+    searchTime
     setId
+    sightingCount
     updatedAt
     userId
+    waitingTime
     __typename
   }
 }
@@ -1374,6 +1364,7 @@ export const deleteObservation = /* GraphQL */ `mutation DeleteObservation(
   $input: DeleteObservationInput!
 ) {
   deleteObservation(condition: $condition, input: $input) {
+    annotationCount
     annotationSet {
       createdAt
       id
@@ -1385,6 +1376,7 @@ export const deleteObservation = /* GraphQL */ `mutation DeleteObservation(
     annotationSetId
     createdAt
     id
+    loadingTime
     location {
       confidence
       createdAt
@@ -1410,7 +1402,9 @@ export const deleteObservation = /* GraphQL */ `mutation DeleteObservation(
       __typename
     }
     projectId
+    timeTaken
     updatedAt
+    waitingTime
     __typename
   }
 }
@@ -1511,25 +1505,6 @@ export const deleteQueue = /* GraphQL */ `mutation DeleteQueue(
   APITypes.DeleteQueueMutationVariables,
   APITypes.DeleteQueueMutation
 >;
-export const deleteUserObservationStats = /* GraphQL */ `mutation DeleteUserObservationStats(
-  $condition: ModelUserObservationStatsConditionInput
-  $input: DeleteUserObservationStatsInput!
-) {
-  deleteUserObservationStats(condition: $condition, input: $input) {
-    activeTime
-    count
-    createdAt
-    lastUpdated
-    projectId
-    updatedAt
-    userId
-    __typename
-  }
-}
-` as GeneratedMutation<
-  APITypes.DeleteUserObservationStatsMutationVariables,
-  APITypes.DeleteUserObservationStatsMutation
->;
 export const deleteUserProjectMembership = /* GraphQL */ `mutation DeleteUserProjectMembership(
   $condition: ModelUserProjectMembershipConditionInput
   $input: DeleteUserProjectMembershipInput!
@@ -1572,13 +1547,18 @@ export const deleteUserStats = /* GraphQL */ `mutation DeleteUserStats(
   deleteUserStats(condition: $condition, input: $input) {
     activeTime
     annotationCount
+    annotationTime
     createdAt
     date
     observationCount
     projectId
+    searchCount
+    searchTime
     setId
+    sightingCount
     updatedAt
     userId
+    waitingTime
     __typename
   }
 }
@@ -2181,6 +2161,7 @@ export const updateObservation = /* GraphQL */ `mutation UpdateObservation(
   $input: UpdateObservationInput!
 ) {
   updateObservation(condition: $condition, input: $input) {
+    annotationCount
     annotationSet {
       createdAt
       id
@@ -2192,6 +2173,7 @@ export const updateObservation = /* GraphQL */ `mutation UpdateObservation(
     annotationSetId
     createdAt
     id
+    loadingTime
     location {
       confidence
       createdAt
@@ -2217,7 +2199,9 @@ export const updateObservation = /* GraphQL */ `mutation UpdateObservation(
       __typename
     }
     projectId
+    timeTaken
     updatedAt
+    waitingTime
     __typename
   }
 }
@@ -2318,25 +2302,6 @@ export const updateQueue = /* GraphQL */ `mutation UpdateQueue(
   APITypes.UpdateQueueMutationVariables,
   APITypes.UpdateQueueMutation
 >;
-export const updateUserObservationStats = /* GraphQL */ `mutation UpdateUserObservationStats(
-  $condition: ModelUserObservationStatsConditionInput
-  $input: UpdateUserObservationStatsInput!
-) {
-  updateUserObservationStats(condition: $condition, input: $input) {
-    activeTime
-    count
-    createdAt
-    lastUpdated
-    projectId
-    updatedAt
-    userId
-    __typename
-  }
-}
-` as GeneratedMutation<
-  APITypes.UpdateUserObservationStatsMutationVariables,
-  APITypes.UpdateUserObservationStatsMutation
->;
 export const updateUserProjectMembership = /* GraphQL */ `mutation UpdateUserProjectMembership(
   $condition: ModelUserProjectMembershipConditionInput
   $input: UpdateUserProjectMembershipInput!
@@ -2379,13 +2344,18 @@ export const updateUserStats = /* GraphQL */ `mutation UpdateUserStats(
   updateUserStats(condition: $condition, input: $input) {
     activeTime
     annotationCount
+    annotationTime
     createdAt
     date
     observationCount
     projectId
+    searchCount
+    searchTime
     setId
+    sightingCount
     updatedAt
     userId
+    waitingTime
     __typename
   }
 }

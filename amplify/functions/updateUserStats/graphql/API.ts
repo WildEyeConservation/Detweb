@@ -280,16 +280,20 @@ export type ModelObservationConnection = {
 
 export type Observation = {
   __typename: "Observation",
+  annotationCount?: number | null,
   annotationSet?: AnnotationSet | null,
   annotationSetId: string,
   createdAt: string,
   id: string,
+  loadingTime?: number | null,
   location?: Location | null,
   locationId: string,
   owner?: string | null,
   project?: Project | null,
   projectId: string,
+  timeTaken?: number | null,
   updatedAt: string,
+  waitingTime?: number | null,
 };
 
 export type LocationSet = {
@@ -465,28 +469,22 @@ export type ModelCategoryFilterInput = {
   updatedAt?: ModelStringInput | null,
 };
 
-export type UserObservationStats = {
-  __typename: "UserObservationStats",
-  activeTime?: number | null,
-  count: number,
-  createdAt: string,
-  lastUpdated?: number | null,
-  projectId: string,
-  updatedAt: string,
-  userId: string,
-};
-
 export type UserStats = {
   __typename: "UserStats",
   activeTime: number,
   annotationCount: number,
+  annotationTime?: number | null,
   createdAt: string,
   date: string,
   observationCount: number,
   projectId: string,
+  searchCount?: number | null,
+  searchTime?: number | null,
   setId: string,
+  sightingCount?: number | null,
   updatedAt: string,
   userId: string,
+  waitingTime?: number | null,
 };
 
 export type ModelImageNeighbourFilterInput = {
@@ -626,15 +624,19 @@ export type ModelObjectFilterInput = {
 
 export type ModelObservationFilterInput = {
   and?: Array< ModelObservationFilterInput | null > | null,
+  annotationCount?: ModelIntInput | null,
   annotationSetId?: ModelIDInput | null,
   createdAt?: ModelStringInput | null,
   id?: ModelIDInput | null,
+  loadingTime?: ModelFloatInput | null,
   locationId?: ModelIDInput | null,
   not?: ModelObservationFilterInput | null,
   or?: Array< ModelObservationFilterInput | null > | null,
   owner?: ModelStringInput | null,
   projectId?: ModelIDInput | null,
+  timeTaken?: ModelFloatInput | null,
   updatedAt?: ModelStringInput | null,
+  waitingTime?: ModelFloatInput | null,
 };
 
 export type ModelProjectFilterInput = {
@@ -665,26 +667,6 @@ export type ModelQueueFilterInput = {
   url?: ModelStringInput | null,
 };
 
-export type ModelUserObservationStatsFilterInput = {
-  activeTime?: ModelIntInput | null,
-  and?: Array< ModelUserObservationStatsFilterInput | null > | null,
-  count?: ModelIntInput | null,
-  createdAt?: ModelStringInput | null,
-  id?: ModelIDInput | null,
-  lastUpdated?: ModelIntInput | null,
-  not?: ModelUserObservationStatsFilterInput | null,
-  or?: Array< ModelUserObservationStatsFilterInput | null > | null,
-  projectId?: ModelIDInput | null,
-  updatedAt?: ModelStringInput | null,
-  userId?: ModelIDInput | null,
-};
-
-export type ModelUserObservationStatsConnection = {
-  __typename: "ModelUserObservationStatsConnection",
-  items:  Array<UserObservationStats | null >,
-  nextToken?: string | null,
-};
-
 export type ModelUserProjectMembershipFilterInput = {
   and?: Array< ModelUserProjectMembershipFilterInput | null > | null,
   createdAt?: ModelStringInput | null,
@@ -702,6 +684,7 @@ export type ModelUserStatsFilterInput = {
   activeTime?: ModelFloatInput | null,
   and?: Array< ModelUserStatsFilterInput | null > | null,
   annotationCount?: ModelIntInput | null,
+  annotationTime?: ModelFloatInput | null,
   createdAt?: ModelStringInput | null,
   date?: ModelStringInput | null,
   id?: ModelIDInput | null,
@@ -709,9 +692,13 @@ export type ModelUserStatsFilterInput = {
   observationCount?: ModelIntInput | null,
   or?: Array< ModelUserStatsFilterInput | null > | null,
   projectId?: ModelIDInput | null,
+  searchCount?: ModelIntInput | null,
+  searchTime?: ModelFloatInput | null,
   setId?: ModelIDInput | null,
+  sightingCount?: ModelIntInput | null,
   updatedAt?: ModelStringInput | null,
   userId?: ModelIDInput | null,
+  waitingTime?: ModelFloatInput | null,
 };
 
 export type ModelUserStatsPrimaryCompositeKeyConditionInput = {
@@ -1016,21 +1003,29 @@ export type CreateObjectInput = {
 
 export type ModelObservationConditionInput = {
   and?: Array< ModelObservationConditionInput | null > | null,
+  annotationCount?: ModelIntInput | null,
   annotationSetId?: ModelIDInput | null,
   createdAt?: ModelStringInput | null,
+  loadingTime?: ModelFloatInput | null,
   locationId?: ModelIDInput | null,
   not?: ModelObservationConditionInput | null,
   or?: Array< ModelObservationConditionInput | null > | null,
   owner?: ModelStringInput | null,
   projectId?: ModelIDInput | null,
+  timeTaken?: ModelFloatInput | null,
   updatedAt?: ModelStringInput | null,
+  waitingTime?: ModelFloatInput | null,
 };
 
 export type CreateObservationInput = {
+  annotationCount?: number | null,
   annotationSetId: string,
   id?: string | null,
+  loadingTime?: number | null,
   locationId: string,
   projectId: string,
+  timeTaken?: number | null,
+  waitingTime?: number | null,
 };
 
 export type ModelProjectConditionInput = {
@@ -1065,25 +1060,6 @@ export type CreateQueueInput = {
   url?: string | null,
 };
 
-export type ModelUserObservationStatsConditionInput = {
-  activeTime?: ModelIntInput | null,
-  and?: Array< ModelUserObservationStatsConditionInput | null > | null,
-  count?: ModelIntInput | null,
-  createdAt?: ModelStringInput | null,
-  lastUpdated?: ModelIntInput | null,
-  not?: ModelUserObservationStatsConditionInput | null,
-  or?: Array< ModelUserObservationStatsConditionInput | null > | null,
-  updatedAt?: ModelStringInput | null,
-};
-
-export type CreateUserObservationStatsInput = {
-  activeTime?: number | null,
-  count: number,
-  lastUpdated?: number | null,
-  projectId: string,
-  userId: string,
-};
-
 export type ModelUserProjectMembershipConditionInput = {
   and?: Array< ModelUserProjectMembershipConditionInput | null > | null,
   createdAt?: ModelStringInput | null,
@@ -1108,21 +1084,31 @@ export type ModelUserStatsConditionInput = {
   activeTime?: ModelFloatInput | null,
   and?: Array< ModelUserStatsConditionInput | null > | null,
   annotationCount?: ModelIntInput | null,
+  annotationTime?: ModelFloatInput | null,
   createdAt?: ModelStringInput | null,
   not?: ModelUserStatsConditionInput | null,
   observationCount?: ModelIntInput | null,
   or?: Array< ModelUserStatsConditionInput | null > | null,
+  searchCount?: ModelIntInput | null,
+  searchTime?: ModelFloatInput | null,
+  sightingCount?: ModelIntInput | null,
   updatedAt?: ModelStringInput | null,
+  waitingTime?: ModelFloatInput | null,
 };
 
 export type CreateUserStatsInput = {
   activeTime: number,
   annotationCount: number,
+  annotationTime?: number | null,
   date: string,
   observationCount: number,
   projectId: string,
+  searchCount?: number | null,
+  searchTime?: number | null,
   setId: string,
+  sightingCount?: number | null,
   userId: string,
+  waitingTime?: number | null,
 };
 
 export type DeleteAnnotationInput = {
@@ -1184,11 +1170,6 @@ export type DeleteProjectInput = {
 
 export type DeleteQueueInput = {
   id: string,
-};
-
-export type DeleteUserObservationStatsInput = {
-  projectId: string,
-  userId: string,
 };
 
 export type DeleteUserProjectMembershipInput = {
@@ -1313,10 +1294,14 @@ export type UpdateObjectInput = {
 };
 
 export type UpdateObservationInput = {
+  annotationCount?: number | null,
   annotationSetId?: string | null,
   id: string,
+  loadingTime?: number | null,
   locationId?: string | null,
   projectId?: string | null,
+  timeTaken?: number | null,
+  waitingTime?: number | null,
 };
 
 export type UpdateProjectInput = {
@@ -1331,14 +1316,6 @@ export type UpdateQueueInput = {
   url?: string | null,
 };
 
-export type UpdateUserObservationStatsInput = {
-  activeTime?: number | null,
-  count?: number | null,
-  lastUpdated?: number | null,
-  projectId: string,
-  userId: string,
-};
-
 export type UpdateUserProjectMembershipInput = {
   id: string,
   isAdmin?: boolean | null,
@@ -1350,11 +1327,16 @@ export type UpdateUserProjectMembershipInput = {
 export type UpdateUserStatsInput = {
   activeTime?: number | null,
   annotationCount?: number | null,
+  annotationTime?: number | null,
   date: string,
   observationCount?: number | null,
   projectId: string,
+  searchCount?: number | null,
+  searchTime?: number | null,
   setId: string,
+  sightingCount?: number | null,
   userId: string,
+  waitingTime?: number | null,
 };
 
 export type ModelSubscriptionAnnotationFilterInput = {
@@ -1572,14 +1554,18 @@ export type ModelSubscriptionObjectFilterInput = {
 
 export type ModelSubscriptionObservationFilterInput = {
   and?: Array< ModelSubscriptionObservationFilterInput | null > | null,
+  annotationCount?: ModelSubscriptionIntInput | null,
   annotationSetId?: ModelSubscriptionIDInput | null,
   createdAt?: ModelSubscriptionStringInput | null,
   id?: ModelSubscriptionIDInput | null,
+  loadingTime?: ModelSubscriptionFloatInput | null,
   locationId?: ModelSubscriptionIDInput | null,
   or?: Array< ModelSubscriptionObservationFilterInput | null > | null,
   owner?: ModelStringInput | null,
   projectId?: ModelSubscriptionIDInput | null,
+  timeTaken?: ModelSubscriptionFloatInput | null,
   updatedAt?: ModelSubscriptionStringInput | null,
+  waitingTime?: ModelSubscriptionFloatInput | null,
 };
 
 export type ModelSubscriptionProjectFilterInput = {
@@ -1602,19 +1588,6 @@ export type ModelSubscriptionQueueFilterInput = {
   url?: ModelSubscriptionStringInput | null,
 };
 
-export type ModelSubscriptionUserObservationStatsFilterInput = {
-  activeTime?: ModelSubscriptionIntInput | null,
-  and?: Array< ModelSubscriptionUserObservationStatsFilterInput | null > | null,
-  count?: ModelSubscriptionIntInput | null,
-  createdAt?: ModelSubscriptionStringInput | null,
-  id?: ModelSubscriptionIDInput | null,
-  lastUpdated?: ModelSubscriptionIntInput | null,
-  or?: Array< ModelSubscriptionUserObservationStatsFilterInput | null > | null,
-  projectId?: ModelSubscriptionIDInput | null,
-  updatedAt?: ModelSubscriptionStringInput | null,
-  userId?: ModelSubscriptionIDInput | null,
-};
-
 export type ModelSubscriptionUserProjectMembershipFilterInput = {
   and?: Array< ModelSubscriptionUserProjectMembershipFilterInput | null > | null,
   createdAt?: ModelSubscriptionStringInput | null,
@@ -1631,15 +1604,20 @@ export type ModelSubscriptionUserStatsFilterInput = {
   activeTime?: ModelSubscriptionFloatInput | null,
   and?: Array< ModelSubscriptionUserStatsFilterInput | null > | null,
   annotationCount?: ModelSubscriptionIntInput | null,
+  annotationTime?: ModelSubscriptionFloatInput | null,
   createdAt?: ModelSubscriptionStringInput | null,
   date?: ModelSubscriptionStringInput | null,
   id?: ModelSubscriptionIDInput | null,
   observationCount?: ModelSubscriptionIntInput | null,
   or?: Array< ModelSubscriptionUserStatsFilterInput | null > | null,
   projectId?: ModelSubscriptionIDInput | null,
+  searchCount?: ModelSubscriptionIntInput | null,
+  searchTime?: ModelSubscriptionFloatInput | null,
   setId?: ModelSubscriptionIDInput | null,
+  sightingCount?: ModelSubscriptionIntInput | null,
   updatedAt?: ModelSubscriptionStringInput | null,
   userId?: ModelSubscriptionIDInput | null,
+  waitingTime?: ModelSubscriptionFloatInput | null,
 };
 
 export type AnnotationSetsByProjectIdQueryVariables = {
@@ -2380,6 +2358,7 @@ export type GetObservationQueryVariables = {
 export type GetObservationQuery = {
   getObservation?:  {
     __typename: "Observation",
+    annotationCount?: number | null,
     annotationSet?:  {
       __typename: "AnnotationSet",
       createdAt: string,
@@ -2391,6 +2370,7 @@ export type GetObservationQuery = {
     annotationSetId: string,
     createdAt: string,
     id: string,
+    loadingTime?: number | null,
     location?:  {
       __typename: "Location",
       confidence?: number | null,
@@ -2416,7 +2396,9 @@ export type GetObservationQuery = {
       updatedAt: string,
     } | null,
     projectId: string,
+    timeTaken?: number | null,
     updatedAt: string,
+    waitingTime?: number | null,
   } | null,
 };
 
@@ -2509,24 +2491,6 @@ export type GetQueueQuery = {
   } | null,
 };
 
-export type GetUserObservationStatsQueryVariables = {
-  projectId: string,
-  userId: string,
-};
-
-export type GetUserObservationStatsQuery = {
-  getUserObservationStats?:  {
-    __typename: "UserObservationStats",
-    activeTime?: number | null,
-    count: number,
-    createdAt: string,
-    lastUpdated?: number | null,
-    projectId: string,
-    updatedAt: string,
-    userId: string,
-  } | null,
-};
-
 export type GetUserProjectMembershipQueryVariables = {
   id: string,
 };
@@ -2572,13 +2536,18 @@ export type GetUserStatsQuery = {
     __typename: "UserStats",
     activeTime: number,
     annotationCount: number,
+    annotationTime?: number | null,
     createdAt: string,
     date: string,
     observationCount: number,
     projectId: string,
+    searchCount?: number | null,
+    searchTime?: number | null,
     setId: string,
+    sightingCount?: number | null,
     updatedAt: string,
     userId: string,
+    waitingTime?: number | null,
   } | null,
 };
 
@@ -3034,13 +3003,17 @@ export type ListObservationsQuery = {
     __typename: "ModelObservationConnection",
     items:  Array< {
       __typename: "Observation",
+      annotationCount?: number | null,
       annotationSetId: string,
       createdAt: string,
       id: string,
+      loadingTime?: number | null,
       locationId: string,
       owner?: string | null,
       projectId: string,
+      timeTaken?: number | null,
       updatedAt: string,
+      waitingTime?: number | null,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -3088,32 +3061,6 @@ export type ListQueuesQuery = {
   } | null,
 };
 
-export type ListUserObservationStatsQueryVariables = {
-  filter?: ModelUserObservationStatsFilterInput | null,
-  limit?: number | null,
-  nextToken?: string | null,
-  projectId?: string | null,
-  sortDirection?: ModelSortDirection | null,
-  userId?: ModelIDKeyConditionInput | null,
-};
-
-export type ListUserObservationStatsQuery = {
-  listUserObservationStats?:  {
-    __typename: "ModelUserObservationStatsConnection",
-    items:  Array< {
-      __typename: "UserObservationStats",
-      activeTime?: number | null,
-      count: number,
-      createdAt: string,
-      lastUpdated?: number | null,
-      projectId: string,
-      updatedAt: string,
-      userId: string,
-    } | null >,
-    nextToken?: string | null,
-  } | null,
-};
-
 export type ListUserProjectMembershipsQueryVariables = {
   filter?: ModelUserProjectMembershipFilterInput | null,
   limit?: number | null,
@@ -3153,13 +3100,18 @@ export type ListUserStatsQuery = {
       __typename: "UserStats",
       activeTime: number,
       annotationCount: number,
+      annotationTime?: number | null,
       createdAt: string,
       date: string,
       observationCount: number,
       projectId: string,
+      searchCount?: number | null,
+      searchTime?: number | null,
       setId: string,
+      sightingCount?: number | null,
       updatedAt: string,
       userId: string,
+      waitingTime?: number | null,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -3303,13 +3255,17 @@ export type ObservationsByAnnotationSetIdQuery = {
     __typename: "ModelObservationConnection",
     items:  Array< {
       __typename: "Observation",
+      annotationCount?: number | null,
       annotationSetId: string,
       createdAt: string,
       id: string,
+      loadingTime?: number | null,
       locationId: string,
       owner?: string | null,
       projectId: string,
+      timeTaken?: number | null,
       updatedAt: string,
+      waitingTime?: number | null,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -3328,13 +3284,17 @@ export type ObservationsByLocationIdQuery = {
     __typename: "ModelObservationConnection",
     items:  Array< {
       __typename: "Observation",
+      annotationCount?: number | null,
       annotationSetId: string,
       createdAt: string,
       id: string,
+      loadingTime?: number | null,
       locationId: string,
       owner?: string | null,
       projectId: string,
+      timeTaken?: number | null,
       updatedAt: string,
+      waitingTime?: number | null,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -4017,6 +3977,7 @@ export type CreateObservationMutationVariables = {
 export type CreateObservationMutation = {
   createObservation?:  {
     __typename: "Observation",
+    annotationCount?: number | null,
     annotationSet?:  {
       __typename: "AnnotationSet",
       createdAt: string,
@@ -4028,6 +3989,7 @@ export type CreateObservationMutation = {
     annotationSetId: string,
     createdAt: string,
     id: string,
+    loadingTime?: number | null,
     location?:  {
       __typename: "Location",
       confidence?: number | null,
@@ -4053,7 +4015,9 @@ export type CreateObservationMutation = {
       updatedAt: string,
     } | null,
     projectId: string,
+    timeTaken?: number | null,
     updatedAt: string,
+    waitingTime?: number | null,
   } | null,
 };
 
@@ -4148,24 +4112,6 @@ export type CreateQueueMutation = {
   } | null,
 };
 
-export type CreateUserObservationStatsMutationVariables = {
-  condition?: ModelUserObservationStatsConditionInput | null,
-  input: CreateUserObservationStatsInput,
-};
-
-export type CreateUserObservationStatsMutation = {
-  createUserObservationStats?:  {
-    __typename: "UserObservationStats",
-    activeTime?: number | null,
-    count: number,
-    createdAt: string,
-    lastUpdated?: number | null,
-    projectId: string,
-    updatedAt: string,
-    userId: string,
-  } | null,
-};
-
 export type CreateUserProjectMembershipMutationVariables = {
   condition?: ModelUserProjectMembershipConditionInput | null,
   input: CreateUserProjectMembershipInput,
@@ -4210,13 +4156,18 @@ export type CreateUserStatsMutation = {
     __typename: "UserStats",
     activeTime: number,
     annotationCount: number,
+    annotationTime?: number | null,
     createdAt: string,
     date: string,
     observationCount: number,
     projectId: string,
+    searchCount?: number | null,
+    searchTime?: number | null,
     setId: string,
+    sightingCount?: number | null,
     updatedAt: string,
     userId: string,
+    waitingTime?: number | null,
   } | null,
 };
 
@@ -4781,6 +4732,7 @@ export type DeleteObservationMutationVariables = {
 export type DeleteObservationMutation = {
   deleteObservation?:  {
     __typename: "Observation",
+    annotationCount?: number | null,
     annotationSet?:  {
       __typename: "AnnotationSet",
       createdAt: string,
@@ -4792,6 +4744,7 @@ export type DeleteObservationMutation = {
     annotationSetId: string,
     createdAt: string,
     id: string,
+    loadingTime?: number | null,
     location?:  {
       __typename: "Location",
       confidence?: number | null,
@@ -4817,7 +4770,9 @@ export type DeleteObservationMutation = {
       updatedAt: string,
     } | null,
     projectId: string,
+    timeTaken?: number | null,
     updatedAt: string,
+    waitingTime?: number | null,
   } | null,
 };
 
@@ -4912,24 +4867,6 @@ export type DeleteQueueMutation = {
   } | null,
 };
 
-export type DeleteUserObservationStatsMutationVariables = {
-  condition?: ModelUserObservationStatsConditionInput | null,
-  input: DeleteUserObservationStatsInput,
-};
-
-export type DeleteUserObservationStatsMutation = {
-  deleteUserObservationStats?:  {
-    __typename: "UserObservationStats",
-    activeTime?: number | null,
-    count: number,
-    createdAt: string,
-    lastUpdated?: number | null,
-    projectId: string,
-    updatedAt: string,
-    userId: string,
-  } | null,
-};
-
 export type DeleteUserProjectMembershipMutationVariables = {
   condition?: ModelUserProjectMembershipConditionInput | null,
   input: DeleteUserProjectMembershipInput,
@@ -4974,13 +4911,18 @@ export type DeleteUserStatsMutation = {
     __typename: "UserStats",
     activeTime: number,
     annotationCount: number,
+    annotationTime?: number | null,
     createdAt: string,
     date: string,
     observationCount: number,
     projectId: string,
+    searchCount?: number | null,
+    searchTime?: number | null,
     setId: string,
+    sightingCount?: number | null,
     updatedAt: string,
     userId: string,
+    waitingTime?: number | null,
   } | null,
 };
 
@@ -5577,6 +5519,7 @@ export type UpdateObservationMutationVariables = {
 export type UpdateObservationMutation = {
   updateObservation?:  {
     __typename: "Observation",
+    annotationCount?: number | null,
     annotationSet?:  {
       __typename: "AnnotationSet",
       createdAt: string,
@@ -5588,6 +5531,7 @@ export type UpdateObservationMutation = {
     annotationSetId: string,
     createdAt: string,
     id: string,
+    loadingTime?: number | null,
     location?:  {
       __typename: "Location",
       confidence?: number | null,
@@ -5613,7 +5557,9 @@ export type UpdateObservationMutation = {
       updatedAt: string,
     } | null,
     projectId: string,
+    timeTaken?: number | null,
     updatedAt: string,
+    waitingTime?: number | null,
   } | null,
 };
 
@@ -5708,24 +5654,6 @@ export type UpdateQueueMutation = {
   } | null,
 };
 
-export type UpdateUserObservationStatsMutationVariables = {
-  condition?: ModelUserObservationStatsConditionInput | null,
-  input: UpdateUserObservationStatsInput,
-};
-
-export type UpdateUserObservationStatsMutation = {
-  updateUserObservationStats?:  {
-    __typename: "UserObservationStats",
-    activeTime?: number | null,
-    count: number,
-    createdAt: string,
-    lastUpdated?: number | null,
-    projectId: string,
-    updatedAt: string,
-    userId: string,
-  } | null,
-};
-
 export type UpdateUserProjectMembershipMutationVariables = {
   condition?: ModelUserProjectMembershipConditionInput | null,
   input: UpdateUserProjectMembershipInput,
@@ -5770,13 +5698,18 @@ export type UpdateUserStatsMutation = {
     __typename: "UserStats",
     activeTime: number,
     annotationCount: number,
+    annotationTime?: number | null,
     createdAt: string,
     date: string,
     observationCount: number,
     projectId: string,
+    searchCount?: number | null,
+    searchTime?: number | null,
     setId: string,
+    sightingCount?: number | null,
     updatedAt: string,
     userId: string,
+    waitingTime?: number | null,
   } | null,
 };
 
@@ -6330,6 +6263,7 @@ export type OnCreateObservationSubscriptionVariables = {
 export type OnCreateObservationSubscription = {
   onCreateObservation?:  {
     __typename: "Observation",
+    annotationCount?: number | null,
     annotationSet?:  {
       __typename: "AnnotationSet",
       createdAt: string,
@@ -6341,6 +6275,7 @@ export type OnCreateObservationSubscription = {
     annotationSetId: string,
     createdAt: string,
     id: string,
+    loadingTime?: number | null,
     location?:  {
       __typename: "Location",
       confidence?: number | null,
@@ -6366,7 +6301,9 @@ export type OnCreateObservationSubscription = {
       updatedAt: string,
     } | null,
     projectId: string,
+    timeTaken?: number | null,
     updatedAt: string,
+    waitingTime?: number | null,
   } | null,
 };
 
@@ -6459,23 +6396,6 @@ export type OnCreateQueueSubscription = {
   } | null,
 };
 
-export type OnCreateUserObservationStatsSubscriptionVariables = {
-  filter?: ModelSubscriptionUserObservationStatsFilterInput | null,
-};
-
-export type OnCreateUserObservationStatsSubscription = {
-  onCreateUserObservationStats?:  {
-    __typename: "UserObservationStats",
-    activeTime?: number | null,
-    count: number,
-    createdAt: string,
-    lastUpdated?: number | null,
-    projectId: string,
-    updatedAt: string,
-    userId: string,
-  } | null,
-};
-
 export type OnCreateUserProjectMembershipSubscriptionVariables = {
   filter?: ModelSubscriptionUserProjectMembershipFilterInput | null,
 };
@@ -6518,13 +6438,18 @@ export type OnCreateUserStatsSubscription = {
     __typename: "UserStats",
     activeTime: number,
     annotationCount: number,
+    annotationTime?: number | null,
     createdAt: string,
     date: string,
     observationCount: number,
     projectId: string,
+    searchCount?: number | null,
+    searchTime?: number | null,
     setId: string,
+    sightingCount?: number | null,
     updatedAt: string,
     userId: string,
+    waitingTime?: number | null,
   } | null,
 };
 
@@ -7078,6 +7003,7 @@ export type OnDeleteObservationSubscriptionVariables = {
 export type OnDeleteObservationSubscription = {
   onDeleteObservation?:  {
     __typename: "Observation",
+    annotationCount?: number | null,
     annotationSet?:  {
       __typename: "AnnotationSet",
       createdAt: string,
@@ -7089,6 +7015,7 @@ export type OnDeleteObservationSubscription = {
     annotationSetId: string,
     createdAt: string,
     id: string,
+    loadingTime?: number | null,
     location?:  {
       __typename: "Location",
       confidence?: number | null,
@@ -7114,7 +7041,9 @@ export type OnDeleteObservationSubscription = {
       updatedAt: string,
     } | null,
     projectId: string,
+    timeTaken?: number | null,
     updatedAt: string,
+    waitingTime?: number | null,
   } | null,
 };
 
@@ -7207,23 +7136,6 @@ export type OnDeleteQueueSubscription = {
   } | null,
 };
 
-export type OnDeleteUserObservationStatsSubscriptionVariables = {
-  filter?: ModelSubscriptionUserObservationStatsFilterInput | null,
-};
-
-export type OnDeleteUserObservationStatsSubscription = {
-  onDeleteUserObservationStats?:  {
-    __typename: "UserObservationStats",
-    activeTime?: number | null,
-    count: number,
-    createdAt: string,
-    lastUpdated?: number | null,
-    projectId: string,
-    updatedAt: string,
-    userId: string,
-  } | null,
-};
-
 export type OnDeleteUserProjectMembershipSubscriptionVariables = {
   filter?: ModelSubscriptionUserProjectMembershipFilterInput | null,
 };
@@ -7266,13 +7178,18 @@ export type OnDeleteUserStatsSubscription = {
     __typename: "UserStats",
     activeTime: number,
     annotationCount: number,
+    annotationTime?: number | null,
     createdAt: string,
     date: string,
     observationCount: number,
     projectId: string,
+    searchCount?: number | null,
+    searchTime?: number | null,
     setId: string,
+    sightingCount?: number | null,
     updatedAt: string,
     userId: string,
+    waitingTime?: number | null,
   } | null,
 };
 
@@ -7826,6 +7743,7 @@ export type OnUpdateObservationSubscriptionVariables = {
 export type OnUpdateObservationSubscription = {
   onUpdateObservation?:  {
     __typename: "Observation",
+    annotationCount?: number | null,
     annotationSet?:  {
       __typename: "AnnotationSet",
       createdAt: string,
@@ -7837,6 +7755,7 @@ export type OnUpdateObservationSubscription = {
     annotationSetId: string,
     createdAt: string,
     id: string,
+    loadingTime?: number | null,
     location?:  {
       __typename: "Location",
       confidence?: number | null,
@@ -7862,7 +7781,9 @@ export type OnUpdateObservationSubscription = {
       updatedAt: string,
     } | null,
     projectId: string,
+    timeTaken?: number | null,
     updatedAt: string,
+    waitingTime?: number | null,
   } | null,
 };
 
@@ -7955,23 +7876,6 @@ export type OnUpdateQueueSubscription = {
   } | null,
 };
 
-export type OnUpdateUserObservationStatsSubscriptionVariables = {
-  filter?: ModelSubscriptionUserObservationStatsFilterInput | null,
-};
-
-export type OnUpdateUserObservationStatsSubscription = {
-  onUpdateUserObservationStats?:  {
-    __typename: "UserObservationStats",
-    activeTime?: number | null,
-    count: number,
-    createdAt: string,
-    lastUpdated?: number | null,
-    projectId: string,
-    updatedAt: string,
-    userId: string,
-  } | null,
-};
-
 export type OnUpdateUserProjectMembershipSubscriptionVariables = {
   filter?: ModelSubscriptionUserProjectMembershipFilterInput | null,
 };
@@ -8014,13 +7918,18 @@ export type OnUpdateUserStatsSubscription = {
     __typename: "UserStats",
     activeTime: number,
     annotationCount: number,
+    annotationTime?: number | null,
     createdAt: string,
     date: string,
     observationCount: number,
     projectId: string,
+    searchCount?: number | null,
+    searchTime?: number | null,
     setId: string,
+    sightingCount?: number | null,
     updatedAt: string,
     userId: string,
+    waitingTime?: number | null,
   } | null,
 };
 
