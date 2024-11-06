@@ -331,7 +331,7 @@ const schema = a.schema({
     .authorization(allow => [allow.authenticated()])
     .handler(a.handler.custom({
       entry: './getImageCounts.js',
-      dataSource: a.ref('ImageSet hip'),
+      dataSource: a.ref('ImageSetMembership'),
     })),
   getAnnotationCounts: a.query()
     .arguments({
