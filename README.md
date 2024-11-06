@@ -25,7 +25,7 @@ amplify-amplifyvitereacttemplate-naude-sandbox-86256f2328: fail: docker push 275
 Failed to publish asset 986890dc61c207efc47fcd6460813d114cf054971c343c4a87443559ed7b2239:current_account-current_regio
 
 You can manually fix this by running:
-aws ecr get-login-password --region af-south-1 | docker login --username AWS --password-stdin 275736403632.dkr.ecr.af-south-1.amazonaws.com
+aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 275736403632.dkr.ecr.eu-west-2.amazonaws.com
 
-Replace 275736403632 with your account number and both occurrences of af-south-1 with your region.
+Replace 275736403632 with your account number and both occurrences of eu-west-2 with your region.
 
