@@ -5,6 +5,7 @@ import { GlobalContext, ManagementContext, ProjectContext } from "./Context";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import type { UserStatsType } from "./schemaTypes";
+import { AnnotationSetDropdown } from "./AnnotationSetDropdownMulti";
 
 export default function UserStats() {
   const { project } = useContext(ProjectContext)!;
@@ -14,6 +15,8 @@ export default function UserStats() {
   const [startDate, setStartDate] = useState<String | null>(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
   const [endDate, setEndDate] = useState<Date | null>(new Date());
   const [userStats, setUserStats] = useState<UserStatsType[]>([]);
+  const [selectedSets, setSelectedSets] = useState<string[] | undefined>([]);
+
 
   useEffect(() => {
     const sub = client.models.UserStats.observeQuery().subscribe({
@@ -32,26 +35,28 @@ export default function UserStats() {
     if (project) {
       userStats.forEach(s => {
         if (!startString || (s.date >= startString) && (!endString || (s.date <= endString))) {
-          setStats(prev => {
-            if (!prev[s.userId]) {
-              prev[s.userId]={observationCount: 0, annotationCount: 0, activeTime: 0};
-            }
-            prev[s.userId].observationCount += s.observationCount;
-            prev[s.userId].annotationCount += s.annotationCount;
-            prev[s.userId].activeTime += s.activeTime;
-            return prev;
-          })
+          if (selectedSets.length > 0 && selectedSets.includes(s.setId)) {
+            setStats(prev => {
+              if (!prev[s.userId]) {
+                prev[s.userId] = { observationCount: 0, annotationCount: 0, activeTime: 0 };
+              }
+              prev[s.userId].observationCount += s.observationCount;
+              prev[s.userId].annotationCount += s.annotationCount;
+              prev[s.userId].activeTime += s.activeTime;
+              return prev;
+            })
+          }
         }
       })
     }
-  }, [project, startDate, endDate, userStats]);
+  }, [project, startDate, endDate, userStats,selectedSets]);
 
   const tableData = Object.keys(stats).map(userId => ({
     id: userId,
     rowData: [allUsers.find(u => u.id == userId)?.name,
-      humanizeDuration(stats[userId].activeTime*1000, { units: ["h", "m", "s"], round: true, largest: 2 }),
+      humanizeDuration(stats[userId].activeTime, { units: ["h", "m", "s"], round: true, largest: 2 }),
       stats[userId].observationCount,
-      (stats[userId].activeTime / stats[userId].observationCount || 0).toFixed(1),
+      (stats[userId].activeTime/1000 / stats[userId].observationCount || 0).toFixed(1),
       stats[userId].annotationCount]
   }))  
   
@@ -65,7 +70,7 @@ export default function UserStats() {
   return (
     <div className="h-100">
       <div className="mt-2">
-        <div className="d-flex gap-3 align-items-center">
+        <div className="d-flex justify-content-between align-items-center">
           <div className="d-flex align-items-center gap-2">
             <label htmlFor="start-date" className="mb-0">From:</label>
             <DatePicker
@@ -97,6 +102,16 @@ export default function UserStats() {
             />
           </div>
         </div>
+        
+        <div className="mt-4">
+          <label className="mb-2">Select Annotation Sets</label>
+          <AnnotationSetDropdown
+            selectedSets={selectedSets}
+            setSelectedSets={setSelectedSets}
+            canCreate={false}
+          />
+        </div>
+
         <div className="mt-3">
           <MyTable
             tableHeadings={tableHeadings}
