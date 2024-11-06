@@ -18,7 +18,6 @@ const ProjectManagement = () => {
   const {modalToShow, showModal} = useContext(GlobalContext)!;
   return (
       <div className="project-management">
-        <Management>
         {/* We use this key to force a component reload when the project changes */}
         <ImageSetManagement key={"imsets"+  project.id} />
         <DefineCategories key={"cats"+project.id}/>
@@ -42,7 +41,6 @@ const ProjectManagement = () => {
         />
         {/* Devactions are only available in dev mode */}
         {process.env.NODE_ENV == "development" && <DevActions />}
-          </Management>
     </div>
   );
 };

@@ -1,9 +1,10 @@
-import React, { memo } from 'react';
+import React, { memo, useContext } from 'react';
 import { Marker, Tooltip } from "react-leaflet";
 import { uniqueNamesGenerator, adjectives, names } from "unique-names-generator";
 import * as L from "leaflet";
 import * as jdenticon from "jdenticon";
 import type { AnnotationType, CategoryType, ExtendedAnnotationType } from "./schemaTypes";
+import { ManagementContext } from './Context';
 
 interface DetwebMarkerProps {
   annotation: ExtendedAnnotationType;
@@ -150,7 +151,8 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
         getType,
         latLng2xy,
         xy2latLng
-    } = props;
+  } = props;
+  const { allUsers } = useContext(ManagementContext)!;
     // const prevPropsRef = useRef<DetWebMarkerProps>();
     // const prevContextRef = useRef<typeof imageContext>();
 
@@ -218,7 +220,7 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
             >
               <Tooltip>
                 Category: {getType(annotation)} <br />
-                Created by : {annotation?.owner}
+                Created by : {allUsers.find(u => u.id == annotation.owner)?.name || "Unknown"}
                 <br />
                 {annotation?.createdAt && (
                   <>

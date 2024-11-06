@@ -184,8 +184,9 @@ function App({ signOut = () => {}, user }: AppProps) {
           <Nav.Link onClick={signOut}>Log out {userAttributes?.preferred_username}</Nav.Link>
         </Nav>
       </Container>
-    </Navbar>
-              {currentPM && <Project currentPM={currentPM}>
+              </Navbar>
+              
+              {currentPM && <Project currentPM={currentPM}><Management>
                 <Container
                   fluid
                   className="d-flex justify-content-center h-100"
@@ -204,7 +205,7 @@ function App({ signOut = () => {}, user }: AppProps) {
                     />
 
                     <Route path="/annotate" element={<Annotate />} />
-                    <Route path="/userStats" element={<Management><UserStats /></Management>}/>
+                    <Route path="/userStats" element={<UserStats />}/>
                     <Route path="/quicktest" element={<QuickTest />} />
                     <Route path="/test" element={<Test />} />
                     {/* <Route exact path="/registration" element={<Registration/>}/>  */}
@@ -221,7 +222,8 @@ function App({ signOut = () => {}, user }: AppProps) {
                     />,
                   </Routes>
                 </Container>
-              </Project>}
+                </Management>
+                </Project>}
                   </div>
             </User>
         </BrowserView>
