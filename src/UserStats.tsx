@@ -33,7 +33,7 @@ export default function UserStats() {
     const endString = endDate ? `${endDate?.getFullYear()}-${String(endDate?.getMonth() + 1).padStart(2, '0')}-${String(endDate?.getDate()).padStart(2, '0')}` : null
 
     if (project) {
-      userStats.forEach(s => {
+      userStats.filter(s => s!=null ).forEach(s => {
         if (!startString || (s.date >= startString) && (!endString || (s.date <= endString))) {
           if (selectedSets.length > 0 && selectedSets.includes(s.setId)) {
             setStats(prev => {
@@ -65,7 +65,8 @@ export default function UserStats() {
       stats[userId].sightingCount,
       humanizeDuration(stats[userId].searchTime, { units: ["h", "m", "s"], round: true, largest: 2 }),
       humanizeDuration(stats[userId].annotationTime, { units: ["h", "m", "s"], round: true, largest: 2 }),
-      (stats[userId].observationCount / stats[userId].sightingCount || 0).toFixed(1)
+      (stats[userId].observationCount / stats[userId].sightingCount || 0).toFixed(1),
+      humanizeDuration(stats[userId].waitingTime, { units: ["h", "m", "s"], round: true, largest: 2 })
     ]
   }))  
   
@@ -79,6 +80,7 @@ export default function UserStats() {
     { content: "Total Search Time", style: undefined },
     { content: "Total Annotation Time", style: undefined },
     { content: "Locations/Sighting", style: undefined },
+    { content: "Waiting time", style: undefined },
   ];
   return (
     <div className="h-100">
