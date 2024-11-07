@@ -85,7 +85,7 @@ async function updateStats(input: any) {
                 waitingTime:  (stats.waitingTime || 0) + Math.max(waitingTime, 0)
             }
         }
-        if (!(variables.input.activeTime && variables.input.annotationTime && variables.input.searchTime && variables.input.waitingTime)) {
+        if (!(variables.input.activeTime)) {
             logger.warn('Missing stats', JSON.stringify(variables))
         }
         if (result.data?.getUserStats) {
