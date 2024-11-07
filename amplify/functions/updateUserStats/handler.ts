@@ -53,8 +53,8 @@ async function updateStats(input: any) {
         const userId = input.owner.S.split('::')[1]
         const projectId = input.projectId.S
         const annotationCount = parseInt(input.annotationCount.N)
-        const timeTaken = parseFloat(input.timeTaken.N)
-        const waitingTime = parseFloat(input.waitingTime.N)
+        const timeTaken = parseFloat(input.timeTaken.N) 
+        const waitingTime = parseFloat(input.waitingTime.N) || 0
         const sighting = (annotationCount > 0 ? 1 : 0)
 
         logger.info({
@@ -93,6 +93,7 @@ async function updateStats(input: any) {
                 waitingTime:  (stats.waitingTime || 0) + Math.max(waitingTime, 0)
             }
         }
+        logger.info(JSON.stringify(variables))
         if (result.data?.getUserStats) {
             logger.info(JSON.stringify(await client.graphql({
                 query: updateUserStats,variables
