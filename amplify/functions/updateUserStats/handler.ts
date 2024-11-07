@@ -90,7 +90,7 @@ async function updateStats(input: any) {
                 searchTime: (stats.searchTime || 0) + (1-sighting) * timeTaken,
                 searchCount: (stats.searchCount || 0) + (1 - sighting),
                 annotationTime: (stats.annotationTime || 0) + sighting * timeTaken,
-                waitingTime:  (stats.waitingTime || 0) + Math.min(-waitingTime, 0)
+                waitingTime:  (stats.waitingTime || 0) + Math.min(waitingTime, 0)
             }
         }
         if (result.data?.getUserStats) {
