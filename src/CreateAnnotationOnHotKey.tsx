@@ -4,7 +4,8 @@ import { useMapEvents } from 'react-leaflet';
 import { ImageContext,ProjectContext } from './Context';
 
 
-export default function CreateAnnotationOnHotKey({ hotkey, category, createAnnotation,setId,imageId,source }) {
+export default function CreateAnnotationOnHotKey({ hotkey, category, setId, imageId, source }) {
+    const { annotationsHook: { create: createAnnotation } } = useContext(ImageContext)!;
   const [currentPosition, setCurrentPosition] = React.useState({ x: 0, y: 0 });
     const { latLng2xy } = useContext(ImageContext);
     const {project,setCurrentCategory} = useContext(ProjectContext)!;

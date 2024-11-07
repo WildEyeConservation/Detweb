@@ -41,7 +41,6 @@ export default function AnnotationImage(props) {
         setId={location.annotationSetId}
         category={category}
         imageId={location.image.id}
-        createAnnotation={annotationsHook.create}
         source='manual'
       />
     )))
