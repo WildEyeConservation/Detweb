@@ -143,6 +143,7 @@ async function updateStats() {
 }
 
 export const handler: DynamoDBStreamHandler = async (event) => {
+    stats = {}
     try {
         logger.info(`Processing ${event.Records.length} records`);
         
