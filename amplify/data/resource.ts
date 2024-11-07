@@ -159,11 +159,12 @@ const schema = a.schema({
     locationId: a.id().required(),
     location: a.belongsTo('Location', 'locationId'),
     annotationSetId: a.id().required(),
-    annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId')
+    annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
+    createdAt: a.string().required()
   }).authorization(allow => [allow.authenticated(), allow.owner()])
   .secondaryIndexes((index)=>[
     index('locationId').queryField('observationsByLocationId'), 
-    index('annotationSetId').queryField('observationsByAnnotationSetId')
+    index('annotationSetId').sortKeys(['createdAt']).queryField('observationsByAnnotationSetId')
   ]),
   LocationSet: a.model({
     projectId: a.id().required(),
