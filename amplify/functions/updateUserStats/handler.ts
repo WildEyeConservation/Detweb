@@ -86,7 +86,7 @@ async function updateStats(input: any) {
                 observationCount: stats.observationCount + 1,
                 annotationCount: stats.annotationCount + annotationCount,
                 sightingCount: (stats.sightingCount || 0) + sighting,
-                activeTime: stats.activeTime + timeTaken,
+                activeTime: (stats.activeTime || 0) + timeTaken,
                 searchTime: (stats.searchTime || 0) + (1-sighting) * timeTaken,
                 searchCount: (stats.searchCount || 0) + (1 - sighting),
                 annotationTime: (stats.annotationTime || 0) + sighting * timeTaken,
