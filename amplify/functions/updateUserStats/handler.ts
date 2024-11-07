@@ -46,7 +46,22 @@ const logger = new Logger({
   serviceName: "dynamodb-stream-handler",
 });
 
-let stats = {}
+interface StatsEntry {
+    setId: string;
+    date: string;
+    userId: string;
+    projectId: string;
+    observationCount: number;
+    annotationCount: number;
+    sightingCount: number;
+    activeTime: number;
+    searchTime: number;
+    searchCount: number;
+    annotationTime: number;
+    waitingTime: number;
+}
+
+let stats: Record<string, StatsEntry> = {};
 
 function accumulateStats(input: any) {
     const setId = input.annotationSetId.S
