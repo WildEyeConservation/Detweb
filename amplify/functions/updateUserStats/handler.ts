@@ -56,12 +56,6 @@ async function updateStats(input: any) {
         const timeTaken = parseFloat(input.timeTaken.N) 
         const waitingTime = parseFloat(input.waitingTime.N) || 0
         const sighting = (annotationCount > 0 ? 1 : 0)
-
-        logger.info({
-            message: 'Processing stats update',
-            input: JSON.stringify(input, null, 2)
-        });
-
         const result = await client.graphql({
             query: getUserStats,
             variables: {
@@ -74,8 +68,6 @@ async function updateStats(input: any) {
             logger.error('GraphQL getUserStats error:', { error: JSON.stringify(error, null, 2) });
             throw error;
         });
-
-        logger.info(JSON.stringify(result))
         const stats = result.data?.getUserStats || {observationCount: 0, annotationCount: 0, sightingCount: 0, activeTime: 0, searchTime: 0, searchCount: 0, annotationTime: 0, waitingTime: 0}
         const variables={
             input: {
@@ -93,7 +85,9 @@ async function updateStats(input: any) {
                 waitingTime:  (stats.waitingTime || 0) + Math.max(waitingTime, 0)
             }
         }
-        logger.info(JSON.stringify(variables))
+        if (!(variables.input.activeTime && variables.input.annotationTime && variables.input.searchTime && variables.input.waitingTime)) {
+            logger.warn('Missing stats', JSON.stringify(variables))
+        }
         if (result.data?.getUserStats) {
             logger.info(JSON.stringify(await client.graphql({
                 query: updateUserStats,variables
@@ -124,14 +118,10 @@ export const handler: DynamoDBStreamHandler = async (event) => {
                 logger.warn('No dynamodb data in record', { record });
                 continue;
             }
-
             if (record.eventName === "INSERT") {
                 await updateStats(record.dynamodb.NewImage);
             }
         }
-
-        logger.info(`Successfully processed ${event.Records.length} records.`);
-
         return {
             batchItemFailures: [],
         };
