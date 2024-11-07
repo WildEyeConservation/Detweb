@@ -86,54 +86,45 @@ function accumulateStats(input: any) {
     logger.info(`Accumulated stats for ${key}`)
 }
 
+async function applyUpdate(update: any) {
+    const result = await client.graphql({
+        query: getUserStats,
+        variables: {
+            userId: update.userId,
+            projectId: update.projectId,
+            setId: update.setId,
+            date: update.date
+        }
+    })
+    const statExists = result.data?.getUserStats
+    const stats = result.data?.getUserStats || { observationCount: 0, annotationCount: 0, sightingCount: 0, activeTime: 0, searchTime: 0, searchCount: 0, annotationTime: 0, waitingTime: 0 }
+    const variables={
+        input: {
+            userId : update.userId,
+            projectId: update.projectId,
+            setId: update.setId,
+            date: update.date,
+            observationCount: stats.observationCount + 1,
+            annotationCount: stats.annotationCount + update.annotationCount,
+            sightingCount: (stats.sightingCount || 0) + update.sightingCount,
+            activeTime: (stats.activeTime || 0) + update.activeTime,
+            searchTime: (stats.searchTime || 0) + update.searchTime,
+            searchCount: (stats.searchCount || 0) + update.searchCount,
+            annotationTime: (stats.annotationTime || 0) + update.annotationTime,
+            waitingTime:  (stats.waitingTime || 0) + update.waitingTime
+        }
+    }
+    if (statExists) {
+        await client.graphql({query: updateUserStats, variables: variables})
+    } else {
+        await client.graphql({query: createUserStats, variables: variables})
+    }
+}
 
 async function updateStats() {
-    const promises = [];
-    try {
-        for (const key in stats) {
-            const update = stats[key]
-            const result = await client.graphql({
-                query: getUserStats,
-                variables: {
-                    userId: update.userId,
-                    projectId: update.projectId,
-                    setId: update.setId,
-                    date: update.date
-                }
-            }) 
-            const statExists = result.data?.getUserStats
-            const stats = result.data?.getUserStats || { observationCount: 0, annotationCount: 0, sightingCount: 0, activeTime: 0, searchTime: 0, searchCount: 0, annotationTime: 0, waitingTime: 0 }
-            const variables={
-                input: {
-                    userId : update.userId,
-                    projectId: update.projectId,
-                    setId: update.setId,
-                    date: update.date,
-                    observationCount: stats.observationCount + 1,
-                    annotationCount: stats.annotationCount + update.annotationCount,
-                    sightingCount: (stats.sightingCount || 0) + update.sightingCount,
-                    activeTime: (stats.activeTime || 0) + update.activeTime,
-                    searchTime: (stats.searchTime || 0) + update.searchTime,
-                    searchCount: (stats.searchCount || 0) + update.searchCount,
-                    annotationTime: (stats.annotationTime || 0) + update.annotationTime,
-                    waitingTime:  (stats.waitingTime || 0) + update.waitingTime
-                }
-            }
-            if (statExists) {
-                promises.push(client.graphql({query: updateUserStats, variables: variables}))
-            } else {
-                promises.push(client.graphql({query: createUserStats, variables: variables}))
-            }
-        }
-        await Promise.all(promises)
-        logger.info(`Updated ${promises.length} stats`)
-    } catch (error) {
-        logger.error('Error in updateStats:', {
-            error: JSON.stringify(error, null, 2),
-            input: JSON.stringify(input, null, 2)
-        });
-        throw error;
-    }
+    const promises = Object.values(stats).map(async (update) => await applyUpdate(update))
+    await Promise.all(promises)
+    logger.info(`Updated ${promises.length} stats`)
 }
 
 export const handler: DynamoDBStreamHandler = async (event) => {
