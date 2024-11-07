@@ -31,6 +31,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
   const { xy2latLng, setVisibleTimestamp, setFullyLoadedTimestamp } = useContext(ImageContext)!;
   const [fullyLoaded, setFullyLoaded] = useState(false);
   const [imageFiles, setImageFiles] = useState<ImageFileType[]>([]);
+  const [canAdvance, setCanAdvance] = useState(false);
   const { next, prev, visible, containerheight, containerwidth, children, location, zoom } = props;
   const { image } = location;
   const prevPropsRef = useRef(props);
@@ -40,6 +41,12 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
   useEffect(() => {
     if (fullyLoaded) {
       setFullyLoadedTimestamp(Date.now())
+      if (visible) {
+        setTimeout(() => {
+          console.log("Setting can advance to true")
+          setCanAdvance(true)
+        }, 1000);
+      }
     }
   }, [fullyLoaded])
 
@@ -47,6 +54,12 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
   useEffect(() => {
     if (visible) {
       setVisibleTimestamp(Date.now())
+      if (fullyLoaded) {
+        setTimeout(() => {
+          console.log("Setting can advance to true")
+          setCanAdvance(true)
+        }, 1000);
+      }
     }
   }, [visible])
 
@@ -71,7 +84,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
       response => setImageFiles(response.data))
   }, [image]);
   
-  useHotkeys("RightArrow", next ? next : () => { }, { enabled: visible }, [
+  useHotkeys("RightArrow", next ? next : () => { }, { enabled: canAdvance && visible}, [
     next,
   ]);
   useHotkeys("LeftArrow", prev ? prev : () => { }, { enabled: visible }, [
@@ -168,9 +181,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
           <NavButtons
             position="bottomleft"
             prev={prev}
-            next={next}
-            prevEnabled={prev !== undefined}
-            nextEnabled={next !== undefined}
+            next={canAdvance ? next : undefined}
           />}
       </MapContainer>}
       </div>
