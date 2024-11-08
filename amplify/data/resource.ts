@@ -15,7 +15,8 @@ specifies that any user authenticated via an API key can "create", "read",
 const schema = a.schema({
   UserType: a.customType({
     name: a.string().required(),
-    id : a.id().required(),
+    id: a.id().required(),
+    email: a.string(),
     isAdmin:a.boolean()}),
   Project: a.model({
     name: a.string().required(),
