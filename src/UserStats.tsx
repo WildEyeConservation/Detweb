@@ -1,28 +1,21 @@
 import MyTable from "./Table";
 import { useContext, useEffect, useState } from "react";
 import humanizeDuration from "humanize-duration";
-import { GlobalContext, ManagementContext, ProjectContext, UserContext } from "./Context";
+import { GlobalContext, ManagementContext, ProjectContext } from "./Context";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import type { UserStatsType } from "./schemaTypes";
 import { AnnotationSetDropdown } from "./AnnotationSetDropdownMulti";
-import exportFromJSON from 'export-from-json';
-import { QueryCommand } from "@aws-sdk/client-dynamodb";
-import { unmarshall } from "@aws-sdk/util-dynamodb";
 
 export default function UserStats() {
   const { project } = useContext(ProjectContext)!;
-  const { getDynamoClient } = useContext(UserContext)!;
-  const {client,backend} = useContext(GlobalContext)!;
+  const {client} = useContext(GlobalContext)!;
   const { allUsers } = useContext(ManagementContext)!;
   const [stats, setStats] = useState<Record<string,{observationCount: number, annotationCount: number, activeTime: number}>>({});
-  const [startDate, setStartDate] = useState<String | null>(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+  const [startDate, setStartDate] = useState<Date| null>(new Date());
   const [endDate, setEndDate] = useState<Date | null>(new Date());
   const [userStats, setUserStats] = useState<UserStatsType[]>([]);
   const [selectedSets, setSelectedSets] = useState<string[] | undefined>([]);
-  const startString = startDate ? `${startDate?.getFullYear()}-${String(startDate?.getMonth() + 1).padStart(2, '0')}-${String(startDate?.getDate()).padStart(2, '0')}` : null
-  const endString = endDate ? `${endDate?.getFullYear()}-${String(endDate?.getMonth() + 1).padStart(2, '0')}-${String(endDate?.getDate()).padStart(2, '0')}` : null
-
 
 
   useEffect(() => {
@@ -34,9 +27,10 @@ export default function UserStats() {
     return () => sub.unsubscribe();
   }, []);
 
-
   useEffect(() => {
     setStats({});
+    const startString = startDate ? `${startDate?.getFullYear()}-${String(startDate?.getMonth() + 1).padStart(2, '0')}-${String(startDate?.getDate()).padStart(2, '0')}` : null
+    const endString = endDate ? `${endDate?.getFullYear()}-${String(endDate?.getMonth() + 1).padStart(2, '0')}-${String(endDate?.getDate()).padStart(2, '0')}` : null
 
     if (project) {
       userStats.filter(s => s!=null ).forEach(s => {
@@ -88,111 +82,6 @@ export default function UserStats() {
     { content: "Locations/Sighting", style: undefined },
     { content: "Waiting time", style: undefined },
   ];
-
-  async function queryObservations(annotationSetId: string): Promise<string[]> {
-    const dynamoClient = await getDynamoClient();
-    const locationIds: string[] = [];
-    let lastEvaluatedKey: Record<string, any> | undefined = undefined;
-    do {
-        const command = new QueryCommand({
-            TableName: backend.custom.observationTable,
-            IndexName: "observationsByAnnotationSetIdAndCreatedAt",
-            KeyConditionExpression: "annotationSetId  = :annotationSetId and createdAt BETWEEN :lowerLimit and :upperLimit",
-            ExpressionAttributeValues: {
-                ":annotationSetId": {
-                    "S": annotationSetId 
-                },
-                ":lowerLimit": {
-                  "S": startString+'T00:00:00Z'
-                },
-                ":upperLimit": {
-                  "S": endString+'T23:59:59Z'
-                }
-              },
-          ProjectionExpression: "createdAt,annotationCount, timeTaken, waitingTime, #o",
-          ExpressionAttributeNames : {'#o': 'owner'},
-          ExclusiveStartKey: lastEvaluatedKey,
-          // Increase page size for better throughput
-          Limit: 1000
-        });
-        try {
-          const response = await dynamoClient.send(command);
-          // Extract imageIds from the response
-            locationIds.push(...response.Items.map(item => unmarshall(item)));
-            lastEvaluatedKey = response.LastEvaluatedKey;
-        } catch (error) {
-            console.error("Error querying DynamoDB:", error);
-            throw error;
-        }
-    } while (lastEvaluatedKey);
-    return locationIds;
-}
-  
-async function queryAnnotations(annotationSetId: string): Promise<string[]> {
-  const dynamoClient = await getDynamoClient();
-  const locationIds: string[] = [];
-  let lastEvaluatedKey: Record<string, any> | undefined = undefined;
-  do {
-      const command = new QueryCommand({
-          TableName: backend.custom.annotationTable,
-          IndexName: "annotationsBySetId",
-          KeyConditionExpression: "setId  = :annotationSetId",
-          ExpressionAttributeValues: {
-              ":annotationSetId": {
-                  "S": annotationSetId 
-              }
-            },
-        ProjectionExpression: "categoryId,createdAt, #o",
-        ExpressionAttributeNames : {'#o': 'owner'},
-        ExclusiveStartKey: lastEvaluatedKey,
-        // Increase page size for better throughput
-        Limit: 1000
-      });
-      try {
-        const response = await dynamoClient.send(command);
-        // Extract imageIds from the response
-          locationIds.push(...response.Items.map(item => unmarshall(item)));
-          lastEvaluatedKey = response.LastEvaluatedKey;
-      } catch (error) {
-          console.error("Error querying DynamoDB:", error);
-          throw error;
-      }
-  } while (lastEvaluatedKey);
-  return locationIds;
-}
-
-  const handleExportData = async () => {
-    //Create a lookup table for user names
-    const userLookup = new Map<string, string>();
-    allUsers.forEach(u => userLookup.set(u.id+'::'+u.id, u.name));
-    for (const annotationSetId of selectedSets) {
-      const observations = await queryObservations(annotationSetId);
-      const fileName = `DetWebObservations-${annotationSetId}`;
-      const exportType = exportFromJSON.types.csv;
-      exportFromJSON({
-        data: observations.map(o => ({...o, owner: userLookup.get(o.owner)})),
-        fileName,
-        exportType,
-      });
-    }
-  };
-
-  const handleExportAnnotations = async () => {
-    //Create a lookup table for user names
-    const userLookup = new Map<string, string>();
-    allUsers.forEach(u => userLookup.set(u.id+'::'+u.id, u.name));
-    for (const annotationSetId of selectedSets) {
-      const annotations = await queryAnnotations(annotationSetId);
-      const fileName = `DetWebAnnotations-${annotationSetId}`;
-      const exportType = exportFromJSON.types.csv;
-      exportFromJSON({
-        data: annotations.map(o => ({...o, owner: userLookup.get(o.owner)})),
-        fileName,
-        exportType,
-      });
-    }
-  };
-
   return (
     <div className="h-100">
       <div className="mt-2">
@@ -244,16 +133,6 @@ async function queryAnnotations(annotationSetId: string): Promise<string[]> {
             tableData={tableData}
           />
         </div>
-        <div className="mt-3">
-          <button onClick={handleExportData} className="btn btn-primary">
-            Export raw observation data
-          </button>
-        </div>
-        {/* <div className="mt-3">
-          <button onClick={handleExportAnnotations} className="btn btn-primary">
-            Export raw annotation data
-          </button>
-        </div> */}
       </div>
     </div>
   );
