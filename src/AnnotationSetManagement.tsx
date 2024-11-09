@@ -93,7 +93,7 @@ export default function AnnotationSetManagement() {
             <Button 
               variant="danger"
               className="me-2 fixed-width-button"
-              onClick={()=> deleteAnnotationSet({id: id})}
+              onClick={()=> {if (confirm(`Are you sure you want to delete annotation set ${name}?`)) deleteAnnotationSet({id: id})}}
             >
               Delete
             </Button>

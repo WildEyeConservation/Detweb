@@ -62,14 +62,15 @@ export default function UserManagement() {
   // };
 
   const tableData = allUsers?.map((user) => {
-    const { id, name } = user;
+    const { id, name, email } = user;
     const belongsToCurrentProject =  projectMemberships?.find(
       (pm) => pm.userId == user.id && pm.projectId == project.id,
     );
     return {
       id,
       rowData: [
-        name          ,
+        name,
+        email,
         belongsToCurrentProject ? (
           <QueueDropdown
             key={id + "2"}
@@ -146,6 +147,7 @@ export default function UserManagement() {
 
   const tableHeadings = [
     { content: "Name" },
+    { content: "Email" },
     { content: "Queue", style: { width: "500px" } },
     { content: "Actions" },
     

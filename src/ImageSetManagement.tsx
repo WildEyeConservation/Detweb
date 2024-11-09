@@ -54,8 +54,7 @@ export default function ImageSetManagement() {
             <Button 
               variant="danger"
             className="me-2 fixed-width-button"
-            disabled={process.env.NODE_ENV != "development"}
-              onClick={()=> deleteImageSet({id: id})}
+              onClick={()=> {if (confirm(`Are you sure you want to delete image set ${name}?`)) deleteImageSet({id: id})}}
             >
               Delete
             </Button>

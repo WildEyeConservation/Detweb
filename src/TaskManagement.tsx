@@ -48,8 +48,7 @@ export default function TaskManagement() {
             <Button 
               variant="danger"
               className="me-2 fixed-width-button"
-            onClick={() => deleteTask({ id: id })}
-            disabled={process.env.NODE_ENV != "development"}
+            onClick={() => {if (confirm(`Are you sure you want to delete task ${name}?`)) deleteTask({ id: id })}}
             >
               Delete
             </Button>

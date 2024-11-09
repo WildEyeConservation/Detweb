@@ -88,30 +88,19 @@ export default function DefineCategories() {
             >
               Edit
             </Button>
-            <OverlayTrigger
-              trigger={["hover", "focus"]}
-              placement="top"
-              overlay={
-                <Popover id={`popover-${id}`}>
-                  <Popover.Body>
-                    Deletion of categories temporarily disabled. Contact support if you need to delete a category.
-                  </Popover.Body>
-                </Popover>
-              }
-            >
               <span>
                 <Button
                   variant="danger"
                   className="me-2 fixed-width-button"
-                  disabled = {process.env.NODE_ENV != "development"}
                   onClick={() => {
-                    deleteCategory(item);
+                    if (confirm(`Are you sure you want to delete category ${name}?`)) {
+                      deleteCategory(item);
+                    }
                   }}
                 >
                   Delete
                 </Button>
               </span>
-            </OverlayTrigger>
           </>
         ],
       };
