@@ -1,4 +1,5 @@
-import { useContext } from 'react';
+import { useContext, useRef } from 'react';
+import { Nav, Container, Row, Col } from 'react-bootstrap';
 import QueueManagement from './QueueManagement.tsx';
 import UserManagement from './UserManagement.tsx';
 import ImageSetManagement from './ImageSetManagement.tsx';
@@ -16,32 +17,67 @@ const ProjectManagement = () => {
   const { project } = useContext(ProjectContext)!;
 
   const {modalToShow, showModal} = useContext(GlobalContext)!;
+
+  // Add refs for each section
+  const imageSetsRef = useRef<HTMLDivElement>(null);
+  const categoriesRef = useRef<HTMLDivElement>(null);
+  const tasksRef = useRef<HTMLDivElement>(null);
+  const annotationSetsRef = useRef<HTMLDivElement>(null);
+  const usersRef = useRef<HTMLDivElement>(null);
+
+  const scrollToSection = (ref: React.RefObject<HTMLDivElement>) => {
+    ref.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
-      <div className="project-management">
-        {/* We use this key to force a component reload when the project changes */}
-        <ImageSetManagement key={"imsets"+  project.id} />
-        <DefineCategories key={"cats"+project.id}/>
-        <QueueManagement key={"queue"+project.id}/>
-        <TaskManagement key={"tasks"+project.id}/>
-        <AnnotationSetManagement key={"asets"+project.id}/>
-        <UserManagement key={"users"+project.id}/>
-        {/* <Rescan show={modalToShow=="rescan"} handleClose={()=>setModalToShow(null)}/> */}
-        <DeleteImageSet
-          show={modalToShow == "deleteImageSet"}
-          handleClose={() => showModal(null)}
-        />
-        <FilesUploadComponent
-          show={modalToShow == "addFiles"}
-          handleClose={() => showModal(null)}
-        />
-        <ExportData
-          show={modalToShow == "exportData"}
-          //dirHandle={dirHandle}
-          handleClose={() => showModal(null)}
-        />
-        {/* Devactions are only available in dev mode */}
-        {process.env.NODE_ENV == "development" && <DevActions />}
-    </div>
+    <Container fluid>
+      <Row>
+        <Col md={2} className="position-sticky" style={{ top: 0, height: '100vh' }}>
+          <Nav className="flex-column">
+            <Nav.Link onClick={() => scrollToSection(imageSetsRef)}>Image Sets</Nav.Link>
+            <Nav.Link onClick={() => scrollToSection(categoriesRef)}>Categories</Nav.Link>
+            <Nav.Link onClick={() => scrollToSection(tasksRef)}>Tasks</Nav.Link>
+            <Nav.Link onClick={() => scrollToSection(annotationSetsRef)}>Annotation Sets</Nav.Link>
+            <Nav.Link onClick={() => scrollToSection(usersRef)}>Users</Nav.Link>
+          </Nav>
+        </Col>
+
+        <Col md={10}>
+          <div ref={imageSetsRef}>
+            <ImageSetManagement key={"imsets"+project.id} />
+          </div>
+          <div ref={categoriesRef}>
+            <DefineCategories key={"cats"+project.id}/>
+          </div>
+          <div ref={tasksRef}>
+            <TaskManagement key={"tasks"+project.id}/>
+          </div>
+          <div ref={annotationSetsRef}>
+            <AnnotationSetManagement key={"asets"+project.id}/>
+          </div>
+          <div ref={usersRef}>
+            <UserManagement key={"users"+project.id}/>
+          </div>
+
+          {/* <Rescan show={modalToShow=="rescan"} handleClose={()=>setModalToShow(null)}/> */}
+          <DeleteImageSet
+            show={modalToShow == "deleteImageSet"}
+            handleClose={() => showModal(null)}
+          />
+          <FilesUploadComponent
+            show={modalToShow == "addFiles"}
+            handleClose={() => showModal(null)}
+          />
+          <ExportData
+            show={modalToShow == "exportData"}
+            //dirHandle={dirHandle}
+            handleClose={() => showModal(null)}
+          />
+          {/* Devactions are only available in dev mode */}
+          {process.env.NODE_ENV == "development" && <DevActions />}
+        </Col>
+      </Row>
+    </Container>
   );
 };
 
