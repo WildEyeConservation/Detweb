@@ -9,6 +9,7 @@ import { GlobalContextProvider } from "./Context";
 import ScratchPad from "./ScratchPad";
 import ProjectManagement from "./ProjectManagement";
 import UserStats from "./UserStats";
+import { LocationLoader } from "./LocationLoader";
 import {
   createBrowserRouter,
   RouterProvider,
@@ -52,6 +53,10 @@ const router = createBrowserRouter([
       {
         path: "leaderboard",
         element: <UserStats />
+      },
+      {
+        path: "location/:locationId/:annotationSetId",
+        element: <LocationLoader/>
       }
     ]
   },

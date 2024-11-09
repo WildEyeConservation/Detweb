@@ -134,11 +134,20 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
         bounds={zoom ? undefined : viewBounds}
         center={zoom && viewCenter}
         contextmenu={true}
-        contextmenuItems={[{ 
-          text: source, 
-          index: 0, 
+        contextmenuItems={[{
+          text: source,
+          index: 0,
           callback: () => {
             navigator.clipboard.writeText(source || '')
+              .catch(err => console.error('Failed to copy to clipboard:', err));
+          }
+        },{
+          text: "Copy permalink to this location",
+          callback: () => {
+            const url = window.location.href
+            // now replace the last part of the url with the location id
+            const newUrl = url.replace(/\/[^/]+$/, `/location/${location?.id}/${location?.annotationSetId}`)
+            navigator.clipboard.writeText(newUrl)
               .catch(err => console.error('Failed to copy to clipboard:', err));
           }
         }]}
