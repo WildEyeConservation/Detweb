@@ -29,3 +29,8 @@ aws ecr get-login-password --region eu-west-2 | docker login --username AWS --pa
 
 Replace 275736403632 with your account number and both occurrences of eu-west-2 with your region.
 
+Writing this up as it has now happened twice. Sometimes API calls would "randomly" start failing with the following error reported in the browser console:
+
+Cannot destructure property 'isReadOnly' of 'fields7[fieldName]' as it is undefined.
+
+This is not very informative, but it usually means that your client.models.SomeModel.someAction call is referring to a field that does not exist. If you checked against the schema, and everything seems correct, then the likely cause is simply that your amplify_outputs.json file is out of date. If you are testing against the production backend, then just make sure your latest schema is deployed in production, download the latest amplify_outputs.json from the aws amplify dashboard and place it in the project folder. If you are testing in your sandbox, you just need to make sure npx ampx sandbox has completed succesfully against your latest backend definition.
