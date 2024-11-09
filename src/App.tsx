@@ -36,6 +36,7 @@ import { BrowserView, MobileView } from "react-device-detect";
 import { GlobalContext } from "./Context";
 import { Schema } from "../amplify/data/resource";
 import Test from "./Test";
+import {Outlet} from "react-router-dom";
 import { StorageImage } from '@aws-amplify/ui-react-storage';
 //import { ErrorHandler } from './ErrorHandler';
 //import {TaskProgressHandler} from './TaskProgressHandler';
@@ -89,7 +90,7 @@ function App({ signOut = () => {}, user }: AppProps) {
   useEffect(() => {
     fetchAuthSession().then((sess) => setSession(sess));
   }, [user]);
-  let Annotate = ScratchPad();
+  
   return (
     session && (
       <>
@@ -103,80 +104,38 @@ function App({ signOut = () => {}, user }: AppProps) {
               <Navbar bg="primary" variant="dark" fixed="top">
                 
       <Container fluid>
-        {/* <LaunchRegistration
-          show={modalToShow == "launchRegistration"}
-          handleClose={() => setModalToShow(null)}
-        /> */}
-        {/* <Retile
-          show={modalToShow == "retile"}
-          //dirHandle={dirHandle}
-          handleClose={() => setModalToShow(null)}
-        /> */}
-        {/* <MessageHandler/>  */}
-        {/* <Navbar.Brand href="#home">Detweb</Navbar.Brand> */}
-        {/* <Messages/> */}
         <Navbar.Toggle aria-controls="basic-navbar-nav" />
         <Navbar.Collapse id="basic-navbar-nav">
           <Nav fill activeKey={location.pathname}>
             <Nav.Link
               as={NavLink}
               eventKey="/annotate"
-              to="/annotate"
-              key="/annotate"
+              to="annotate"
             >
               Annotate
             </Nav.Link>
             <IfProjectAdmin currentPM={currentPM}>
-              {/* <NavDropdown title="Actions" id="collapsible-nav-dropdown">
-                <NavDropdown.Item  onClick={()=>showModal("processImages")}>
-                  Process Imagery
-                </NavDropdown.Item> 
-               <NavDropdown.Item onClick={()=>showModal("createTask")}>
-                  Create annotation task
-                </NavDropdown.Item> 
-                <NavDropdown.Item onClick={()=>showModal("launchTask")}>
-                  Launch annotation task
-                </NavDropdown.Item>
-                <NavDropdown.Item onClick={()=>showModal("launchTask")}>
-                  Launch registration task
-                </NavDropdown.Item>
-                <NavDropdown.Item onClick={()=>showModal("exportData")}>
-                  Export Data
-                </NavDropdown.Item>
-                <NavDropdown.Item onClick={()=>showModal("retileImages")}>
-                  Retile images
-                </NavDropdown.Item>
-              </NavDropdown> */}
               <Nav.Link
                 as={NavLink}
                 eventKey="/projectManagement"
-                to="/projectManagement"
+                to="projectManagement"
               >
                 Project Management
               </Nav.Link>
-              {/* <Nav.Link as={NavLink} eventKey='/registration' to="/registration">Registration</Nav.Link> */}
-              {/* <Nav.Link as={NavLink} eventKey="/userStats" to="/userStats">
-                User Stats
-              </Nav.Link> */}
-                      </IfProjectAdmin>
+            </IfProjectAdmin>
             <Nav.Link
               as={NavLink}
               eventKey="/userStats"
-              to="/userStats"
-              key="/userStats"
+              to="leaderboard"
             >
               Leaderboard
             </Nav.Link>
-
             {(session?.tokens?.accessToken?.payload?.["cognito:groups"]?.includes("admin")) && (
               <Nav.Link as={NavLink} eventKey="/review" to="/review">
                 Review
               </Nav.Link>
             )}
-            {/* <CheckPermission permission='results'>
-      <Nav.Link as={Link} eventKey='results' to="/results">Results</Nav.Link>
-      </CheckPermission> */}
-          </Nav>
+        </Nav>
         </Navbar.Collapse>
         <Nav className="navbar-right">
           <ProgressIndicators />
@@ -192,35 +151,7 @@ function App({ signOut = () => {}, user }: AppProps) {
                   className="d-flex justify-content-center h-100"
                   style={{ marginTop: "56px", overflowY: "auto" }} // Added marginTop and overflowY
                 >
-                  {/* <DebugDetails/> */}
-                  <Routes>
-                    {/* <Route exact path="register" element={<Register/>}/>
-              <Route path="image/:im_id" render={({match}) => (<BaseImage im_id={match.params.im_id} height="100%"/>)}/>
-              <Route path="location/:loc_id" render={({match}) => (<BaseImage loc_id={match.params.loc_id} height="100%"/>)}/>
-              <Route path="detection/:det_id" render={({match}) => (<BaseImage det_id={match.params.det_id} height="100%"/>)}/>
-              <Route path="cluster/:cluster_id" render={({match}) => (<BaseImage cluster_id={match.params.cluster_id} height="100%"/>)}/> */}
-                    <Route
-                      path="/"
-                      element={null}
-                    />
-
-                    <Route path="/annotate" element={<Annotate />} />
-                    <Route path="/userStats" element={<UserStats />}/>
-                    <Route path="/quicktest" element={<QuickTest />} />
-                    <Route path="/test" element={<Test />} />
-                    {/* <Route exact path="/registration" element={<Registration/>}/>  */}
-                    <Route path="/review" element={<Review />} />
-                    <Route
-                      key="1"
-                      path="/defineCategories"
-                      element={<DefineCategories />}
-                    />,
-                    <Route
-                      key="2"
-                      path="/projectManagement"
-                      element={<ProjectManagement />}
-                    />,
-                  </Routes>
+                  <Outlet />
                 </Container>
                 </Management>
                 </Project>}

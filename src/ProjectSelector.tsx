@@ -2,7 +2,7 @@ import { useContext, useEffect,useState } from "react";
 import Form from "react-bootstrap/Form";
 import { GlobalContext,UserContext } from "./Context";
 import { Schema } from "../amplify/data/resource";
-
+import { useNavigate,useParams } from "react-router-dom";
 interface ProjectSelectorProps {
   currentPM: Schema['UserProjectMembership']['type'] | undefined,
   setCurrentPM: React.Dispatch<React.SetStateAction<Schema['UserProjectMembership']['type'] | undefined>>
@@ -13,12 +13,17 @@ function ProjectSelector({ currentPM, setCurrentPM }: ProjectSelectorProps) {
   const { myMembershipHook:{ data: myMemberships, create: createProjectMembership}, user } = useContext(UserContext)!;
   const createProject = client.models.Project.create
   const [projects, setProjects] = useState<Schema['Project']['type'][]>([])
-  
+  const { projectId } = useParams();
+
+  const navigate = useNavigate();
   useEffect(() => {
     console.log("myMemberships", myMemberships)
     Promise.all(myMemberships?.map(async (membership) => (await client.models.Project.get({ id: membership.projectId })).data))
       .then((projects) => {
         setProjects(projects.filter(project => project !== null));
+        if (projectId) {
+          setCurrentPM(myMemberships.find(membership => membership.projectId === projectId));
+        }
       });
   }, [myMemberships.length])
   
@@ -47,10 +52,12 @@ function ProjectSelector({ currentPM, setCurrentPM }: ProjectSelectorProps) {
                   onNewProject().then((value) => {
                     if (value) {
                       setCurrentPM(myMemberships.find(membership => membership.projectId === value));
+                      navigate(`/${value}`);
                     }
                   });
                 } else {
                   setCurrentPM(myMemberships.find(membership => membership.projectId === e.target.value))
+                  navigate(`/${e.target.value}`);
                 }
               }}
               value={currentPM?.projectId}
