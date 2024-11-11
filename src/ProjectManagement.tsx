@@ -24,6 +24,7 @@ const ProjectManagement = () => {
   const tasksRef = useRef<HTMLDivElement>(null);
   const annotationSetsRef = useRef<HTMLDivElement>(null);
   const usersRef = useRef<HTMLDivElement>(null);
+  const queuesRef = useRef<HTMLDivElement>(null);
 
   const scrollToSection = (ref: React.RefObject<HTMLDivElement>) => {
     ref.current?.scrollIntoView({ behavior: 'smooth' });
@@ -38,6 +39,7 @@ const ProjectManagement = () => {
             <Nav.Link onClick={() => scrollToSection(categoriesRef)}>Categories</Nav.Link>
             <Nav.Link onClick={() => scrollToSection(tasksRef)}>Tasks</Nav.Link>
             <Nav.Link onClick={() => scrollToSection(annotationSetsRef)}>Annotation Sets</Nav.Link>
+            <Nav.Link onClick={() => scrollToSection(queuesRef)}>Queues</Nav.Link>
             <Nav.Link onClick={() => scrollToSection(usersRef)}>Users</Nav.Link>
           </Nav>
         </Col>
@@ -54,6 +56,9 @@ const ProjectManagement = () => {
           </div>
           <div ref={annotationSetsRef}>
             <AnnotationSetManagement key={"asets"+project.id}/>
+          </div>
+          <div ref={queuesRef}>
+            <QueueManagement key={"queues"+project.id}/>
           </div>
           <div ref={usersRef}>
             <UserManagement key={"users"+project.id}/>
