@@ -3,6 +3,7 @@ import AnnotationImage from "./AnnotationImage";
 import { RegisterPair } from "./RegisterPair";
 import { GlobalContext } from "./Context";
 import { data } from "../amplify/data/resource";
+import { multiply, inv} from "mathjs";
 /* In the current implementation, we can push both registration and annotation tasks to the same queue. The task of the TaskSelector component is to identify based on 
 the props that were passed whether we are dealing with an annotation or registration task and instantiate the correct component to display the task*/
 
@@ -15,7 +16,12 @@ const array2Matrix = (hc: number[] | null): number[][] | null => {
   if (hc && hc.length == 9) {
     const matrix = [];
     while (hc.length) matrix.push(hc.splice(0, 3));
-    return matrix;
+    //Create a matrix that represents a 90 degree rotation
+    const rotationMatrix = [[0, 1, 0], [-1, 0, 0], [0, 0, 1]];  
+    //matrix = rotationMatrix * matrix *inv(rotationMatrix)
+    const inverseRotationMatrix = [[0, -1, 0], [1, 0, 0], [0, 0, 1]];
+    const result = inv(multiply(multiply(inverseRotationMatrix, matrix), rotationMatrix));
+    return result;
   } else {
     return null;
   }
