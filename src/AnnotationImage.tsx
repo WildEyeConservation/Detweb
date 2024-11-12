@@ -29,8 +29,9 @@ export default function AnnotationImage(props) {
     subscriptionFilter)
   const memoizedChildren = useMemo(() => {
     console.log('memoizing')
+    const source = props.taskTag ? `manual-${props.taskTag}` : 'manual';
     return [
-      <CreateAnnotationOnClick key="caok" allowOutside={allowOutside} location={location} annotationSet={annotationSetId} source='manual' />,
+      <CreateAnnotationOnClick key="caok" allowOutside={allowOutside} location={location} annotationSet={annotationSetId} source={source} />,
       <ShowMarkers key="showMarkers" />,
       <Location key="location"{...location} />,
       <Legend key="legend" position="bottomright" />
@@ -41,10 +42,10 @@ export default function AnnotationImage(props) {
         setId={location.annotationSetId}
         category={category}
         imageId={location.image.id}
-        source='manual'
+        source={source}
       />
     )))
-  }, []);
+  }, [props.taskTag,location.image.id,annotationSetId]);
 
   return (<ImageContextFromHook hook={annotationsHook} image={location.image}>
             <Image
@@ -58,9 +59,8 @@ export default function AnnotationImage(props) {
             next={next}
             ack={ack}
             annotationSet={annotationSetId}> 
-            {visible &&memoizedChildren}
-    {/* <PushToSecondary {...props} /> */}
-    </Image >
+            {visible && memoizedChildren}
+    </Image>
     </ImageContextFromHook>
   );
 }

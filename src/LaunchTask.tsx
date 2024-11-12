@@ -41,6 +41,7 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
   const [zoom, setZoom] = useState<number | undefined>(undefined);
   const [lowerLimit, setLowerLimit] = useState(0);
   const [upperLimit, setUpperLimit] = useState(1);
+  const [taskTag, setTaskTag] = useState<string>('');
   if (!userContext) {
     return null;
   }
@@ -164,7 +165,7 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
         const location = {id: locationId, annotationSetId: annotationSet};
         batchEntries.push({
           Id: `msg-${locationId}`, // Required unique ID for each message in batch
-          MessageBody: JSON.stringify({ location, allowOutside, zoom })
+          MessageBody: JSON.stringify({ location, allowOutside, zoom, taskTag })
         });
       }
 
@@ -223,6 +224,15 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
       {locationSet =="none" && <option>Select a location set to process:</option>}
       {locationSets?.map( q => <option key={q.id} value={q.id} >{q.name}</option>)}
       </Form.Select>   */}
+            </Form.Group>
+            <Form.Group>
+              <Form.Label>Task Tag</Form.Label>
+              <Form.Control
+                type="text"
+                value={taskTag}
+                onChange={(e) => setTaskTag(e.target.value)}
+                placeholder="Enter a tag for this task"
+              />
             </Form.Group>
             <Form.Group>
               <Form.Label>Annotation Set</Form.Label>
