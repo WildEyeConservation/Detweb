@@ -45,7 +45,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
         setTimeout(() => {
           console.log("Setting can advance to true")
           setCanAdvance(true)
-        }, 1000);
+        }, 100);
       }
     }
   }, [fullyLoaded])
@@ -58,7 +58,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
         setTimeout(() => {
           console.log("Setting can advance to true")
           setCanAdvance(true)
-        }, 1000);
+        }, 100);
       }
     }
   }, [visible])
