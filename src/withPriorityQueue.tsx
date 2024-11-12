@@ -50,7 +50,7 @@ export function withPreloading2(WrappedComponent: React.ComponentType<any>) {
         <div style={{ 
           position: 'relative',  // Add this container
           width: '100%',
-          minHeight: '800px'     // Adjust this value based on your needs
+          minHeight: '820px'     // Adjust this value based on your needs
         }}>
           {subset.map((entry, i) => (
             <div

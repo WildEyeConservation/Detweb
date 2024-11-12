@@ -48,19 +48,36 @@ export default function AnnotationImage(props) {
   }, [props.taskTag,location.image.id,annotationSetId]);
 
   return (<ImageContextFromHook hook={annotationsHook} image={location.image}>
-            <Image
-            containerwidth={containerwidth}
-            containerheight={containerheight}
-            visible={visible}
-            location={location}
-            zoom={zoom}
-            id={id} 
-            prev={prev}
-            next={next}
-            ack={ack}
-            annotationSet={annotationSetId}> 
-            {visible && memoizedChildren}
-    </Image>
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center',
+              width: '80%',  // Match the parent container width from withPriorityQueue
+              position: 'relative'
+            }}>
+              <Image
+                containerwidth={containerwidth}
+                containerheight={containerheight}
+                visible={visible}
+                location={location}
+                zoom={zoom}
+                id={id} 
+                prev={prev}
+                next={next}
+                ack={ack}
+                annotationSet={annotationSetId}> 
+                {visible && memoizedChildren}
+              </Image>
+              {visible && props.taskTag && 
+                <div style={{ 
+                  marginTop: '1rem',
+                  position: 'absolute',
+                  bottom: '-2rem'  // Position below the image container
+                }}>
+                  Now working on task {props.taskTag}
+                </div>
+              }
+            </div>
     </ImageContextFromHook>
   );
 }
