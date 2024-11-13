@@ -46,7 +46,7 @@ export function Legend({ position }: LegendProps) {
         >
           <div>
             {expanded
-              ? categories?.map((item, index) => {
+              ? categories?.sort((a, b) => a.name.localeCompare(b.name)).map((item, index) => {
                   return (
                     <div
                       key={index}
