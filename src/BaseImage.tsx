@@ -146,7 +146,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
           callback: () => {
             const url = window.location.href
             // now replace the last part of the url with the location id
-            const newUrl = url.replace(/\/[^/]+$/, `/location/${location?.id}/${location?.annotationSetId}`)
+            const newUrl = url.replace(/\/[^/]+\/?$/, `/location/${location?.id}/${location?.annotationSetId}`)
             navigator.clipboard.writeText(newUrl)
               .catch(err => console.error('Failed to copy to clipboard:', err));
           }
