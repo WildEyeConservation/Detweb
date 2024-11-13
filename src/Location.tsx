@@ -27,10 +27,8 @@ export default function Location({x,y,width,height,confidence}: LocationType) {
   ];
 
   useHotkeys(
-    "Shift",
-    () => {
-      setEnabled(!isHotkeyPressed("Shift"));
-    },
+    "tab",
+    (event) => {event.preventDefault(); setEnabled(!isHotkeyPressed("tab"))},
     { keyup: true, keydown: true },
   );
 

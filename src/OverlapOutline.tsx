@@ -18,10 +18,8 @@ export default function OverlapOutline({ transform, image }: OverlapOutlineProps
   const [enabled, setEnabled] = useState(true);
 
   useHotkeys(
-    "Shift",
-    () => {
-      setEnabled(!isHotkeyPressed("Shift"));
-    },
+    "Tab",
+    (event) => {event.preventDefault(); setEnabled(!isHotkeyPressed("Tab"))},
     { keyup: true, keydown: true }
   );
 

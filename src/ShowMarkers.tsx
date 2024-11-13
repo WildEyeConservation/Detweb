@@ -40,10 +40,8 @@ export function ShowMarkers() {
   const {data: annotations, delete: deleteAnnotation,update: updateAnnotation, create: createAnnotation}= annotationsHook;
   const activeAnnotation = undefined;
   useHotkeys(
-    "Shift",
-    () => {
-      setEnabled(!isHotkeyPressed("Shift"));
-    },
+    "Tab",
+    (event) => {event.preventDefault(); setEnabled(!isHotkeyPressed("Tab"))},
     { keyup: true, keydown: true },
   );
 
