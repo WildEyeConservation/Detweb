@@ -9,9 +9,10 @@ import { GlobalContext, ProjectContext } from './Context';
 // import { UserContext } from './UserContext';
 // import { useMapEvents } from 'react-leaflet';
 import { ShowMarkers } from './ShowMarkers';
-import { useOptimisticAnnotation } from './useOptimisticUpdates';
+import { useOptimisticUpdates } from './useOptimisticUpdates';
 import { ImageContextFromHook } from './ImageContext';
 import CreateAnnotationOnHotKey from './CreateAnnotationOnHotKey';
+import { Schema } from '../amplify/data/resource';
 
 const Image = withCreateObservation(withAckOnTimeout(BaseImage));
 
@@ -24,9 +25,14 @@ export default function AnnotationImage(props) {
     filter: { and:[{setId: { eq: location.annotationSetId }}, {imageId: { eq: location.image.id }}]}
   }), [annotationSetId, location.image.id]);
   const {categoriesHook:{data:categories},currentCategory,setCurrentCategory} = useContext(ProjectContext)!;
-  const annotationsHook = useOptimisticAnnotation(
-    async (nextToken) => client.models.Annotation.annotationsByImageIdAndSetId({ imageId: location.image.id, setId: { eq: location.annotationSetId }},{nextToken}),
-    subscriptionFilter)
+  const annotationsHook = useOptimisticUpdates<Schema['Annotation']['type'], 'Annotation'>(
+    'Annotation',
+    async (nextToken) => client.models.Annotation.annotationsByImageIdAndSetId(
+      { imageId: location.image.id, setId: { eq: location.annotationSetId } },
+      { nextToken }
+    ),
+    subscriptionFilter
+  )
   const memoizedChildren = useMemo(() => {
     console.log('memoizing')
     const source = props.taskTag ? `manual-${props.taskTag}` : 'manual';

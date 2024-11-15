@@ -13,10 +13,11 @@ import { ShowMarkers } from "./ShowMarkers";
 import { Map } from 'leaflet';
 import { GlobalContext } from "./Context";
 import type { AnnotationType, ExtendedAnnotationType, ImageType } from "./schemaTypes";
-import { useOptimisticAnnotation } from "./useOptimisticUpdates";
+import { useOptimisticUpdates } from "./useOptimisticUpdates";
 import { useAnnotationNavigation } from "./useAnnotationNavigation";
 import { CRUDHook } from "./Context";
 import { ImageContextFromHook } from "./ImageContext";
+import { Schema } from "../amplify/data/resource";
 
 type RegisterPairProps = {
   images: [ImageType, ImageType]; // The pair of images in which we need to register the annotations
@@ -60,12 +61,23 @@ export function RegisterPair({
   // The annotations hooks for the two images. Each hook provides a list of annotations (called Data) that is kept updated in 
   //realtime and functions to create / update / delete them.
   const annotationsHooks = [
-    useOptimisticAnnotation(
-      async (nextToken) => client.models.Annotation.annotationsByImageIdAndSetId({imageId: images[0].id, setId: {eq: selectedSet}},{nextToken}),
-      subscriptionFilter1),
-    useOptimisticAnnotation(
-      async (nextToken) => client.models.Annotation.annotationsByImageIdAndSetId({imageId: images[1].id, setId: {eq: selectedSet}},{nextToken}),
-      subscriptionFilter2)] as [CRUDHook<AnnotationType>, CRUDHook<AnnotationType>]
+    useOptimisticUpdates<Schema['Annotation']['type'], 'Annotation'>(
+      'Annotation',
+      async (nextToken) => client.models.Annotation.annotationsByImageIdAndSetId(
+        { imageId: images[0].id, setId: { eq: selectedSet } },
+        { nextToken }
+      ),
+      subscriptionFilter1
+    ),
+    useOptimisticUpdates<Schema['Annotation']['type'], 'Annotation'>(
+      'Annotation',
+      async (nextToken) => client.models.Annotation.annotationsByImageIdAndSetId(
+        { imageId: images[1].id, setId: { eq: selectedSet } },
+        { nextToken }
+      ),
+      subscriptionFilter2
+    )
+  ] as [CRUDHook<AnnotationType>, CRUDHook<AnnotationType>]
   /* We need to keep track of which potential matches has been rejected by the user, so that we don't keep suggesting the same
   previously rejected match. This dictionary is keyed by a string which is just id1 concatenated to id2 where id1 and id2 are 
   the ids of the two annotations that are potential matches. The value is 1 if the match is accepted, -1 if it is rejected, and 0 if 
