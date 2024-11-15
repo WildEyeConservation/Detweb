@@ -1,4 +1,4 @@
-import React, { memo, useContext } from 'react';
+import React, { memo, useContext, useState, useEffect } from 'react';
 import { Marker, Tooltip } from "react-leaflet";
 import { uniqueNamesGenerator, adjectives, names } from "unique-names-generator";
 import * as L from "leaflet";
@@ -186,6 +186,28 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
     //     prevContextRef.current = imageContext;
     // }, [props, imageContext]);
 
+    const [isHovered, setIsHovered] = useState(false);
+
+    //handle backspace key when hovered
+    useEffect(() => {
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === 'Backspace') {
+          event.preventDefault();
+          deleteAnnotation(annotation);
+        }
+      };
+
+      if (isHovered) {
+        window.addEventListener('keydown', handleKeyDown);
+      }
+
+      return () => {
+        if (isHovered) {
+          window.removeEventListener('keydown', handleKeyDown);
+        }
+      };
+    }, [isHovered, deleteAnnotation, annotation]);
+
     if (xy2latLng){
         console.log(`creating marker for ${annotation.id}`);
         return (
@@ -203,6 +225,8 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
                     x: Math.round(coords.x),
                   });
                 },
+                mouseover: () => setIsHovered(true),
+                mouseout: () => setIsHovered(false),
               }}
               position={xy2latLng(annotation)}
               draggable={true}
