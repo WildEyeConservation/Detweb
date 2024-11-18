@@ -5,6 +5,8 @@ import * as L from "leaflet";
 import * as jdenticon from "jdenticon";
 import type { AnnotationType, CategoryType, ExtendedAnnotationType } from "./schemaTypes";
 import { ManagementContext } from './Context';
+import { useHotkeys } from 'react-hotkeys-hook';
+
 
 interface DetwebMarkerProps {
   annotation: ExtendedAnnotationType;
@@ -188,25 +190,11 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
 
     const [isHovered, setIsHovered] = useState(false);
 
-    //handle backspace key when hovered
-    useEffect(() => {
-      const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === 'Backspace') {
-          event.preventDefault();
-          deleteAnnotation(annotation);
-        }
-      };
-
+    useHotkeys('backspace', () => {
       if (isHovered) {
-        window.addEventListener('keydown', handleKeyDown);
+        deleteAnnotation(annotation);
       }
-
-      return () => {
-        if (isHovered) {
-          window.removeEventListener('keydown', handleKeyDown);
-        }
-      };
-    }, [isHovered, deleteAnnotation, annotation]);
+    });
 
     if (xy2latLng){
         console.log(`creating marker for ${annotation.id}`);
