@@ -13,12 +13,8 @@ import {
 import { generateClient } from "aws-amplify/api";
 import outputs from "../amplify_outputs.json";
 import {
-  useOptimisticMembership,
-  useOptimisticCategory,
-  useOptimisticImageSet,
-  useOptimisticLocationSet,
-  useOptimisticAnnotationSet,
-  useQueues
+  useOptimisticUpdates,
+  useQueues,
 } from "./useOptimisticUpdates.tsx";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 
@@ -31,9 +27,12 @@ export function Project({ children, currentPM }: { children: React.ReactNode, cu
     filter: { projectId: { eq: currentPM?.projectId } }
   }), [currentPM?.projectId]);
   const [currentProject, setCurrentProject] = useState<Schema['Project']['type'] | undefined>(undefined)
-  const categoriesHook = useOptimisticCategory(
-    async (nextToken) => client.models.Category.list({ filter: { projectId: { eq: currentPM?.projectId } } },{nextToken}),
-    subscriptionFilter)
+    const categoriesHook = useOptimisticUpdates<Schema['Category']['type'], 'Category'>('Category',
+      async (nextToken) => client.models.Category.list({
+        filter: { projectId: { eq: currentPM?.projectId } },
+        nextToken
+      }),
+      subscriptionFilter)
   const [currentCategory, setCurrentCategory] = useState<Schema['Category']['type']|undefined>(categoriesHook.data?.[0])
     useEffect(() => {
     if (currentPM) {
@@ -80,9 +79,15 @@ export function User({ user, children }: { user: AuthUser, children: React.React
     filter: { userId: { eq: user.username } }
   }), [user.username]);
 
-  const myMembershipHook = useOptimisticMembership(
-    async (nextToken) => client.models.UserProjectMembership.list({ filter: { userId: { eq: user!.username } },nextToken}),
-    subscriptionFilter)
+  // const myMembershipHook = useOptimisticMembership(
+  //   async (nextToken) => client.models.UserProjectMembership.list({ filter: { userId: { eq: user!.username } },nextToken}),
+  //   subscriptionFilter)
+
+  const myMembershipHook = useOptimisticUpdates<Schema['UserProjectMembership']['type'], 'UserProjectMembership'>(
+    'UserProjectMembership',
+    async (nextToken) => client.models.UserProjectMembership.list({ filter: { userId: { eq: user!.username } }, nextToken }),
+    subscriptionFilter
+  );
 
   // useEffect(() => {
   //   const sub = client.models.UserProjectMembership.observeQuery({ filter: { userId: { eq: user!.username } } }).subscribe({
@@ -141,21 +146,33 @@ export function Management({ children }: { children: React.ReactNode }) {
   const { client } = useContext(GlobalContext)!;
   const {project} = useContext(ProjectContext)!;
   const { users: allUsers } = useUsers();
-  const subscriptionFilter = useMemo(() => (
-    { projectId: { eq: project.id } }), [project.id]);
+  // const subscriptionFilter = useMemo(() => (
+  //   { projectId: { eq: project.id } }), [project.id]);
+  const subscriptionFilter = useMemo(() => ({ filter: { projectId: { eq: project.id } } }), [project.id]);
   //const {items: projectMemberships} = useObserveQuery('UserProjectMembership',{ filter: { projectId: { eq: project.id } } });
-  const projectMembershipHook = useOptimisticMembership(
-    async (nextToken) => client.models.UserProjectMembership.list({ filter: subscriptionFilter,nextToken }),
-    subscriptionFilter)  
-  const imageSetsHook = useOptimisticImageSet(
-    async (nextToken) => client.models.ImageSet.list({ filter: subscriptionFilter,nextToken }),
-    subscriptionFilter)
-  const locationSetsHook = useOptimisticLocationSet(
-    async (nextToken) => client.models.LocationSet.list({ filter: subscriptionFilter,nextToken }),
-    subscriptionFilter)
-  const annotationSetsHook = useOptimisticAnnotationSet(
-    async (nextToken) => client.models.AnnotationSet.list({ filter: subscriptionFilter,nextToken }),
-    subscriptionFilter)
+  // const projectMembershipHook = useOptimisticMembership(
+  //   async (nextToken) => client.models.UserProjectMembership.list({ filter: subscriptionFilter,nextToken }),
+  //   subscriptionFilter) 
+  const projectMembershipHook = useOptimisticUpdates<Schema['UserProjectMembership']['type'], 'UserProjectMembership'>(
+    'UserProjectMembership',
+    async (nextToken) => client.models.UserProjectMembership.list({ filter: subscriptionFilter.filter, nextToken }),
+    subscriptionFilter
+  ); 
+  const imageSetsHook = useOptimisticUpdates<Schema['ImageSet']['type'], 'ImageSet'>(
+    'ImageSet',
+    async (nextToken) => client.models.ImageSet.list({ filter: subscriptionFilter.filter, nextToken }),
+    subscriptionFilter
+  );
+  const locationSetsHook = useOptimisticUpdates<Schema['LocationSet']['type'], 'LocationSet'>(
+    'LocationSet',
+    async (nextToken) => client.models.LocationSet.list({ filter: subscriptionFilter.filter, nextToken }),
+    subscriptionFilter
+  )
+  const annotationSetsHook = useOptimisticUpdates<Schema['AnnotationSet']['type'], 'AnnotationSet'>(
+    'AnnotationSet',
+    async (nextToken) => client.models.AnnotationSet.list({ filter: subscriptionFilter.filter, nextToken }),
+    subscriptionFilter
+  )
   const queuesHook = useQueues()
   
   return ( 
