@@ -15,6 +15,7 @@ import { useRecordHotkeys } from "react-hotkeys-hook";
 export default function DefineCategories() {
   const { client } = useContext(GlobalContext)!;
   const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState("create");
   const {project,categoriesHook: {data: categories, create: createCategory, delete: deleteCategory, update: updateCategory }} = useContext(ProjectContext)!;
   const [keys, { start, stop, isRecording }] = useRecordHotkeys()
 
@@ -49,14 +50,15 @@ export default function DefineCategories() {
   const handleSubmit = () => {
     setShowModal(false);
     if (category?.id) {
-      updateCategory({...category, shortcutKey: Array.from(keys).join("+")});
+      updateCategory(category);
     } else {
-      createCategory({ ...category, shortcutKey: Array.from(keys).join("+") });
+      createCategory(category);
     }
   };
 
   const editCategory = (category : any) => {
     setCategory(category);
+    setModalType("edit");
     setShowModal(true);
   };
 
@@ -110,7 +112,7 @@ export default function DefineCategories() {
     <>
       <Modal show={showModal} onHide={() => setShowModal(false)}>
         <Modal.Header closeButton>
-          <Modal.Title>Create New Category</Modal.Title>
+          <Modal.Title>{`${modalType === "create" ? "Create New" : "Edit"} Category`}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form>
@@ -127,10 +129,14 @@ export default function DefineCategories() {
               <Form.Control
                 type="text"
                 disabled={false}
-                value={Array.from(keys).join("+")}
+                value={isRecording ? Array.from(keys).join("+") : category.shortcutKey}
                 onFocus={start}
-                onBlur={stop}
-              />
+                onBlur={() => {
+                  stop();
+                  setShortcutKey(Array.from(keys).join("+"));
+                }}
+                onChange={() => {}} //suppress React warning
+              />             
             </Form.Group>
             <Form.Group>
               <Form.Label>Category color</Form.Label>
@@ -169,7 +175,8 @@ export default function DefineCategories() {
       </Row>
       <Col className="text-center mt-3">
           <Button variant="primary"         onClick={() => {
-          setCategory({ ...category, id:undefined});
+          setCategory(initialCategoryState);
+          setModalType("create");
           setShowModal(true);
         }}>
             Add new category
