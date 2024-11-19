@@ -1,11 +1,10 @@
-import React, { memo, useContext, useState, useEffect } from 'react';
+import React, { memo, useContext} from 'react';
 import { Marker, Tooltip } from "react-leaflet";
 import { uniqueNamesGenerator, adjectives, names } from "unique-names-generator";
 import * as L from "leaflet";
 import * as jdenticon from "jdenticon";
 import type { AnnotationType, CategoryType, ExtendedAnnotationType } from "./schemaTypes";
 import { ManagementContext } from './Context';
-import { useHotkeys } from 'react-hotkeys-hook';
 
 
 interface DetwebMarkerProps {
@@ -188,14 +187,6 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
     //     prevContextRef.current = imageContext;
     // }, [props, imageContext]);
 
-    const [isHovered, setIsHovered] = useState(false);
-
-    useHotkeys('backspace', () => {
-      if (isHovered) {
-        deleteAnnotation(annotation);
-      }
-    });
-
     if (xy2latLng){
         console.log(`creating marker for ${annotation.id}`);
         return (
@@ -213,8 +204,20 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
                     x: Math.round(coords.x),
                   });
                 },
-                mouseover: () => setIsHovered(true),
-                mouseout: () => setIsHovered(false),
+                mouseover: (e) => {
+                  //If the user hovers over the marker, move the input focus here.
+                  e.target.getElement().focus();
+                },
+                mouseout: (e) => {
+                  //If the user moves the mouse away from the marker, blur the input field.
+                  e.target.getElement().blur();
+                },
+                keydown: (e) => {
+                  //if the user presses the backspace key, delete the annotation
+                  if (e.originalEvent.key === 'Backspace') {
+                    deleteAnnotation(annotation);
+                  } 
+                }
               }}
               position={xy2latLng(annotation)}
               draggable={true}
