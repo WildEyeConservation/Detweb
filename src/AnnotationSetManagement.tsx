@@ -1,21 +1,21 @@
 import MyTable from "./Table";
-import Button from "react-bootstrap/Button";
-import { Row,Col } from "react-bootstrap";
+import { Row,Col, Button, Form } from "react-bootstrap";
 import { GlobalContext } from "./Context";
 import { useContext, useState,useEffect } from "react";
 import "./UserManagement.css"; // Import the CSS file
-import Form from "react-bootstrap/Form";
 import { ManagementContext } from "./Context";
 import LaunchRegistration from "./LaunchRegistration";
 import { ExportData } from "./ExportData";
 import { fetchAllPaginatedResults } from "./utils";
 import exportFromJSON from 'export-from-json';
 import { useUpdateProgress } from "./useUpdateProgress";
+import EditAnnotationSet from "./EditAnnotationSet";
 
 export default function AnnotationSetManagement() {
   const { client, modalToShow, showModal } = useContext(GlobalContext)!
   const { annotationSetsHook: { data: annotationSets, delete: deleteAnnotationSet } } = useContext(ManagementContext)!;
   const [selectedSets, setSelectedSets] = useState<string[]>([]);
+  const [editSetName, setEditSetName] = useState<string>("");
   const [busy, setBusy] = useState<boolean>(false);
   // const [counts, setCounts] = useState<{ [key: string]: number }>({});
   const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
@@ -105,6 +105,19 @@ export default function AnnotationSetManagement() {
         ,
         <span>
             <Button 
+              variant="warning"
+              className="me-2"
+              onClick={() => { 
+                // select only this set
+                setSelectedSets([id]);
+                setEditSetName(name);
+                showModal('editAnnotationSet') 
+              }
+            }
+            >
+              Edit
+            </Button>
+            <Button 
               variant="danger"
               className="me-2 fixed-width-button"
               onClick={()=> {if (confirm(`Are you sure you want to delete annotation set ${name}?`)) deleteAnnotationSet({id: id})}}
@@ -154,6 +167,13 @@ export default function AnnotationSetManagement() {
         show={modalToShow == "launchRegistration"}
         handleClose={() => showModal(null)}
         selectedSets={selectedSets}
+        setSelectedSets={setSelectedSets}
+      />
+
+      <EditAnnotationSet
+        show={modalToShow == "editAnnotationSet"}
+        handleClose={() => showModal(null)}
+        annotationSet={{id: selectedSets[0], name: editSetName}}
         setSelectedSets={setSelectedSets}
       />
       <Row className="justify-content-center mt-3">
