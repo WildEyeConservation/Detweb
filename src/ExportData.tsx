@@ -5,6 +5,7 @@ import { AnnotationSetDropdown } from "./AnnotationSetDropDown";
 import { GlobalContext } from "./Context";
 import { fetchAllPaginatedResults } from "./utils";
 import exportFromJSON from 'export-from-json';
+import { useUpdateProgress } from "./useUpdateProgress";
 interface ExportDataProps {
   show: boolean;
   handleClose: () => void;
@@ -13,24 +14,38 @@ interface ExportDataProps {
 export const ExportData: React.FC<ExportDataProps> = ({ show, handleClose }) => {
   const [annotationSet, setAnnotationSet] = useState<string | undefined>(undefined);
   const { client } = useContext(GlobalContext)!;
+  const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
+    taskId: `Export data`,
+    indeterminateTaskName: `Exporting data`,
+    determinateTaskName: "Exporting data",
+    stepFormatter: (count)=>`${count} annotations`,
+  }); 
 
 
   async function handleSubmit() {
     handleClose();
+    
+    setStepsCompleted(0);
+    setTotalSteps(0);
+
     const annotations = await fetchAllPaginatedResults(
       client.models.Annotation.annotationsByAnnotationSetId,
       {
         setId: annotationSet,
-        selectionSet: ['y', 'x', 'category.name','image.*','image.files.*','owner','source','obscured'] as const
-      }
+        selectionSet: ['y', 'x', 'category.name','image.*','owner','source','obscured'] as const
+      },
+      setStepsCompleted
     );
+
+    setTotalSteps(annotations.length);
+    
     const fileName = `DetWebExport-${annotationSet}`;
     const exportType = exportFromJSON.types.csv;
     exportFromJSON({
       data: annotations.map((anno) => {
         return {
           category: anno.category?.name,
-          image: anno.image.files.find(f => f.type == 'image/jpeg')?.path,
+          image: anno.image.originalPath,
           timestamp: anno.image.timestamp,
           latitude: anno.image.latitude,
           longitude: anno.image.longitude,
