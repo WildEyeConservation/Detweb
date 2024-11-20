@@ -10,6 +10,7 @@ import { fetchAllPaginatedResults } from "./utils";
 import exportFromJSON from 'export-from-json';
 import { useUpdateProgress } from "./useUpdateProgress";
 import EditAnnotationSet from "./EditAnnotationSet";
+import MoveObservations from "./MoveObservations";
 
 export default function AnnotationSetManagement() {
   const { client, modalToShow, showModal } = useContext(GlobalContext)!
@@ -152,6 +153,12 @@ export default function AnnotationSetManagement() {
 
   return (
     <>
+    <MoveObservations
+        show={modalToShow == "moveObservations"}
+        handleClose={() => showModal(null)}
+        selectedAnnotationSets={selectedSets}
+        setSelectedAnnotationSets={setSelectedSets}
+    />
         {busy && (
             <div className="text-center mt-3">
                 <p>Exporting data...</p>
@@ -189,6 +196,13 @@ export default function AnnotationSetManagement() {
           <Button variant="primary" disabled={selectedSets.length == 0} className="me-2" onClick={() => showModal('launchRegistration')}>
             Launch registration task
           </Button>
+          <Button 
+              variant="primary"
+              onClick={() => showModal("moveObservations")}
+              disabled={selectedSets.length === 0}
+            >
+              Move Observations
+            </Button>
           </span>
         </Col>
         </div>
