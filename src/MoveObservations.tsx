@@ -1,9 +1,10 @@
-import { useState, useContext } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import { Modal, Button, Form } from 'react-bootstrap';
 import { AnnotationSetDropdown } from './AnnotationSetDropDown';
 import { ManagementContext, GlobalContext } from './Context';
 import { MultiAnnotationSetDropdown } from './MultiAnnotationSetDropDown';
 import {fetchAllPaginatedResults} from "./utils";
+import { useUpdateProgress } from './useUpdateProgress';
 
 type MoveObservationsProps = {
     show: boolean;
@@ -16,7 +17,19 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
     // const { allUsers } = useContext(ManagementContext)!;
     const { client } = useContext(GlobalContext)!;
 
-    // TODO: default state
+    const [setObservationsFetched, setTotalObservationsFetched] = useUpdateProgress({
+        taskId: `Fetching observations`,
+        indeterminateTaskName: `Fetching observations`,
+        determinateTaskName: "Fetching observations",
+        stepFormatter: (count)=>`${count} observations`,
+    });
+
+    const [setObservationsUpdated, setTotalObservationsUpdated] = useUpdateProgress({
+        taskId: `Updating observations`,
+        indeterminateTaskName: `Updating observations`,
+        determinateTaskName: "Updating observations",
+        stepFormatter: (count)=>`${count} observations`,
+    });
 
     // const [selectedUserId, setSelectedUserId] = useState<string>('');
     const [observationTime, setObservationTime] = useState<number | ''>('');
@@ -44,22 +57,37 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
 
         // For every annotation set, find all observations that match the criteria and move them to the new annotation set.
         for (const setId of selectedAnnotationSets) {
+            setObservationsFetched(0);
             const observations = await fetchAllPaginatedResults(client.models.Observation.observationsByAnnotationSetId, 
                 {
                     annotationSetId: setId, 
                     filter: criteria
-                }
+                },
+                setObservationsFetched
             ); 
 
+            setTotalObservationsFetched(observations.length);
+
             // move observations to new/other annotation set
+            setObservationsUpdated(0);
+            let totalObservationsUpdated = 0;
             for (const observation of observations) {
                 await client.models.Observation.update({
                     id: observation.id,
                     annotationSetId: newAnnotationSetId
                 });
+
+                setObservationsUpdated(prev => prev + 1);
+                totalObservationsUpdated++;
             }
+            setTotalObservationsUpdated(totalObservationsUpdated);
         }
     };
+
+    useEffect(() => {
+        setObservationTime('');
+        setNewAnnotationSetId('');
+    }, [show]);
 
     return (
         <Modal show={show} onHide={handleClose}>
@@ -120,7 +148,7 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
                 </Button>
                 <Button
                     variant="primary"
-                    onClick={() => {handleMove(); handleClose();}}
+                    onClick={() => {handleClose(); handleMove();}}
                     disabled={
                         // !selectedUserId && 
                         !observationTime || selectedAnnotationSets.length === 0 || newAnnotationSetId === ''
