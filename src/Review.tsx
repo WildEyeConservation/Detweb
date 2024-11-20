@@ -4,7 +4,7 @@ import { PreloaderFactory } from './Preloader';
 import { client } from './optimisticExperiment';
 import BufferSource from './BufferSource';
 import AnnotationImage from './AnnotationImage';
-import { AnnotationSetDropdown } from './AnnotationSetDropdown';
+import { AnnotationSetDropDown } from './AnnotationSetDropdown';
 import Select, { MultiValue, Options  } from "react-select";
 import { ProjectContext } from './Context';
 import { Form } from 'react-bootstrap';
