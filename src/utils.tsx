@@ -31,15 +31,23 @@ export async function fetchAllPaginatedResults<
   R = P['selectionSet'] extends SelectionSet<T> ? Pick<T, P['selectionSet'][number]> : T
 >(
   queryFn: QueryFunction<R, P>,
-  params: P
+  params: P,
+  setStepsCompleted?: (steps: number) => void
 ): Promise<R[]> {
   let allResults: R[] = [];
   let nextToken: string | null | undefined = undefined;
+  let stepCount = 0;
 
   do {
     const result = await queryFn({ ...params, nextToken });
     allResults = allResults.concat(result.data);
     nextToken = result.nextToken;
+    stepCount += result.data.length;
+
+    if (setStepsCompleted) {
+      setStepsCompleted(stepCount);
+    }
+
   } while (nextToken);
 
   return allResults;

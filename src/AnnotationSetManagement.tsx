@@ -1,6 +1,6 @@
 import MyTable from "./Table";
 import Button from "react-bootstrap/Button";
-import { Row,Col, Spinner } from "react-bootstrap";
+import { Row,Col } from "react-bootstrap";
 import { GlobalContext } from "./Context";
 import { useContext, useState,useEffect } from "react";
 import "./UserManagement.css"; // Import the CSS file
@@ -10,14 +10,20 @@ import LaunchRegistration from "./LaunchRegistration";
 import { ExportData } from "./ExportData";
 import { fetchAllPaginatedResults } from "./utils";
 import exportFromJSON from 'export-from-json';
+import { useUpdateProgress } from "./useUpdateProgress";
 
 export default function AnnotationSetManagement() {
   const { client, modalToShow, showModal } = useContext(GlobalContext)!
   const { annotationSetsHook: { data: annotationSets, delete: deleteAnnotationSet } } = useContext(ManagementContext)!;
   const [selectedSets, setSelectedSets] = useState<string[]>([]);
-  const [counts, setCounts] = useState<{ [key: string]: number }>({}); 
-  const [busy,setBusy] = useState<boolean>(false);
- 
+  const [busy, setBusy] = useState<boolean>(false);
+  // const [counts, setCounts] = useState<{ [key: string]: number }>({});
+  const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
+    taskId: `Export data`,
+    indeterminateTaskName: `Exporting data`,
+    determinateTaskName: "Exporting data",
+    stepFormatter: (count)=>`${count} annotations`,
+  }); 
  
   // useEffect(() => {
   //   const fetchCounts = async () => {
@@ -36,14 +42,22 @@ export default function AnnotationSetManagement() {
 
   async function exportData(annotationSets: { id: string, name: string }[]) {
     setBusy(true);
+
     for (const annotationSet of annotationSets) {
-    const annotations = await fetchAllPaginatedResults(
+      setStepsCompleted(0);
+      setTotalSteps(0);
+
+      const annotations = await fetchAllPaginatedResults(
       client.models.Annotation.annotationsByAnnotationSetId,
       {
         setId: annotationSet.id,
         selectionSet: ['y', 'x', 'category.name','image.*','image.files.*','owner','source','obscured'] as const
-      }
+      },
+      setStepsCompleted
     );
+
+    setTotalSteps(annotations.length);
+
     const fileName = `DetWebExport-${annotationSet.name}`;
     const exportType = exportFromJSON.types.csv;
     exportFromJSON({
@@ -127,8 +141,7 @@ export default function AnnotationSetManagement() {
     <>
         {busy && (
             <div className="text-center mt-3">
-                <Spinner animation="border" role="status" />
-                <p>Please be patient while exported data is gathered.</p>
+                <p>Exporting data...</p>
             </div>
         )}
         <ExportData
