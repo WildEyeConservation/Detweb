@@ -130,11 +130,9 @@ function App({ signOut = () => {}, user }: AppProps) {
             >
               Leaderboard
             </Nav.Link>
-            {(session?.tokens?.accessToken?.payload?.["cognito:groups"]?.includes("admin")) && (
-              <Nav.Link as={NavLink} eventKey="/review" to="/review">
-                Review
-              </Nav.Link>
-            )}
+            <Nav.Link as={NavLink} eventKey="/review" to="review">
+              Review
+            </Nav.Link>
         </Nav>
         </Navbar.Collapse>
         <Nav className="navbar-right">

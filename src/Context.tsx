@@ -36,7 +36,8 @@ export interface GlobalContextType {
 
 export interface UserContextType {
     user: AuthUser,
-    getSqsClient: ()=>Promise<SQSClient>,
+    getSqsClient: () => Promise<SQSClient>,
+    getDynamoClient: () => Promise<DynamoDBDocumentClient>,
     myMembershipHook: CRUDhook<'UserProjectMembership'>,
     jobsCompleted: number,
     setJobsCompleted: (jobsCompleted: number) => void,

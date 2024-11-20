@@ -10,6 +10,8 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { ImageType, ImageFileType, LocationType, AnnotationSetType } from './schemaTypes';
 import { GlobalContext, ImageContext } from "./Context";
 import { StorageLayer } from "./StorageLayer";
+import { getUrl } from 'aws-amplify/storage';
+
 
 export interface BaseImageProps {
   image: ImageType;
@@ -32,11 +34,10 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
   const [fullyLoaded, setFullyLoaded] = useState(false);
   const [imageFiles, setImageFiles] = useState<ImageFileType[]>([]);
   const [canAdvance, setCanAdvance] = useState(false);
-  const { next, prev, visible, containerheight, containerwidth, children, location, zoom } = props;
+  const { next, prev, visible, containerheight, containerwidth, children, location, zoom, stats } = props;
   const { image } = location;
   const prevPropsRef = useRef(props);
-  const source= imageFiles.find(file => file.type == 'image/jpeg')?.key
-
+  const source = imageFiles.find(file => file.type == 'image/jpeg')?.key
 
   useEffect(() => {
     if (fullyLoaded) {
@@ -130,6 +131,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
       {source && <MapContainer
         // id={id}
         style={style}
+        key={JSON.stringify(stats)}
         crs={L.CRS.Simple}
         bounds={zoom ? undefined : viewBounds}
         center={zoom && viewCenter}
@@ -143,6 +145,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
           }
         },{
           text: "Copy permalink to this location",
+          disabled: !location?.id,
           callback: () => {
             const url = window.location.href
             // now replace the last part of the url with the location id
@@ -150,7 +153,54 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
             navigator.clipboard.writeText(newUrl)
               .catch(err => console.error('Failed to copy to clipboard:', err));
           }
-        }]}
+          },{
+            text: "Copy permalink to this image",
+            callback: () => {
+              const url = window.location.href
+              // now replace the last part of the url with the location id
+              const newUrl = url.replace(/\/[^/]+\/?$/, `/image/${location.image.id}/${location?.annotationSetId}`)
+              navigator.clipboard.writeText(newUrl)
+                .catch(err => console.error('Failed to copy to clipboard:', err));
+            }
+          },{
+            text: "Display Image Statistics",
+            callback: () => {
+              alert(JSON.stringify(stats));
+            }
+          },
+          {
+            text: "Download this image",
+            callback: () => {
+              getUrl({ path: 'images/' + source, options: {
+                bucket: 'inputs',
+                validateObjectExistence: true,
+                expiresIn: 300
+                }
+              }).then(async (url) => {
+                navigator.clipboard.writeText(url.url.toString());
+                
+                // Fetch the image first
+                const response = await fetch(url.url);
+                const blob = await response.blob();
+                
+                // Create object URL from blob
+                const objectUrl = window.URL.createObjectURL(blob);
+                
+                // Setup download link
+                const a = document.createElement('a');
+                a.href = objectUrl;
+                a.download = source.split('/').pop() || 'image.jpg'; // Get filename from source
+                
+                // Trigger download
+                document.body.appendChild(a);
+                a.click();
+                
+                // Cleanup
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(objectUrl);
+              })
+            }
+          }]}
 
         zoom={zoom}
         zoomSnap={1}
@@ -194,7 +244,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
           />}
       </MapContainer>}
       </div>
-  ), [next, prev, imageFiles, location, style, viewBounds, image, fullyLoaded,source])
+  ), [next, prev, imageFiles, location, style, viewBounds, image, fullyLoaded,source, canAdvance,stats ])
 }, (prevProps, nextProps) => {
       //Iterate over all the props except children and compare them for equality
   return prevProps.visible === nextProps.visible &&

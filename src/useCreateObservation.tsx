@@ -62,7 +62,7 @@ export function withCreateObservation<T extends CombinedProps>(
 ) {
   const WithCreateObservation: React.FC<T> = (props) => {
     const {location,ack} = props;
-    const newAck = useCreateObservation({location,ack});
+    const newAck = location.id ? useCreateObservation({location,ack}) : ack;
     return <WrappedComponent {...props} location={{ ...location, ack: newAck }} />;
   };
   return memo(WithCreateObservation);

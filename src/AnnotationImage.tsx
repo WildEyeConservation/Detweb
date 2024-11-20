@@ -6,17 +6,13 @@ import Location from './Location';
 import { withCreateObservation } from './useCreateObservation';
 import CreateAnnotationOnClick from './CreateAnnotationOnClick';
 import { GlobalContext, ProjectContext } from './Context';
-// import { UserContext } from './UserContext';
-// import { useMapEvents } from 'react-leaflet';
 import { ShowMarkers } from './ShowMarkers';
 import { useOptimisticUpdates } from './useOptimisticUpdates';
 import { ImageContextFromHook } from './ImageContext';
 import CreateAnnotationOnHotKey from './CreateAnnotationOnHotKey';
 import { Schema } from '../amplify/data/resource';
-
+import useImageStats from './useImageStats';
 const Image = withCreateObservation(withAckOnTimeout(BaseImage));
-
-
 
 export default function AnnotationImage(props) {
   const { location, next, prev, containerheight = 800, containerwidth = 1024, visible, id, ack, annotationSetId, allowOutside, zoom } = props
@@ -33,6 +29,7 @@ export default function AnnotationImage(props) {
     ),
     subscriptionFilter
   )
+  const stats = useImageStats(annotationsHook);
   const memoizedChildren = useMemo(() => {
     console.log('memoizing')
     const source = props.taskTag ? `manual-${props.taskTag}` : 'manual';
@@ -61,7 +58,8 @@ export default function AnnotationImage(props) {
               width: '80%',  // Match the parent container width from withPriorityQueue
               position: 'relative'
             }}>
-              <Image
+      <Image
+                stats={stats}
                 containerwidth={containerwidth}
                 containerheight={containerheight}
                 visible={visible}
