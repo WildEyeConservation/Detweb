@@ -196,13 +196,15 @@ export default function AnnotationSetManagement() {
           <Button variant="primary" disabled={selectedSets.length == 0} className="me-2" onClick={() => showModal('launchRegistration')}>
             Launch registration task
           </Button>
+          {/* WIP*/}
+          {process.env.NODE_ENV !== 'production' && (
           <Button 
               variant="primary"
               onClick={() => showModal("moveObservations")}
               disabled={selectedSets.length === 0}
             >
               Move Observations
-            </Button>
+            </Button> )}
           </span>
         </Col>
         </div>
