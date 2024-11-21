@@ -14,7 +14,7 @@ type MoveObservationsProps = {
 }
 
 export default function MoveObservations({ show, handleClose, selectedAnnotationSets, setSelectedAnnotationSets }: MoveObservationsProps) {
-    // const { allUsers } = useContext(ManagementContext)!;
+    const { allUsers } = useContext(ManagementContext)!;
     const { client } = useContext(GlobalContext)!;
 
     const [setObservationsFetched, setTotalObservationsFetched] = useUpdateProgress({
@@ -31,9 +31,10 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
         stepFormatter: (count)=>`${count} observations`,
     });
 
-    // const [selectedUserId, setSelectedUserId] = useState<string>('');
+    const [selectedUserId, setSelectedUserId] = useState<string>('');
     const [observationTime, setObservationTime] = useState<number | ''>('');
     const [newAnnotationSetId, setNewAnnotationSetId] = useState<string>(''); 
+    const [filterByUser, setFilterByUser] = useState<boolean>(true);
 
     const handleMove = async () => {
         if (selectedAnnotationSets.includes(newAnnotationSetId)) {
@@ -42,14 +43,13 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
         }
         
         const criteria: {
-            owner?: { eq: string };
+            owner?: { contains: string };
             timeTaken?: { le: number };
         } = {};
     
-        // if (selectedUserId) {
-        //     criteria.owner = { eq: selectedUserId };
-        //     console.log(`Selected user: ${selectedUserId}`);
-        // }
+        if (selectedUserId) {
+            criteria.owner = { contains: selectedUserId };
+        }
         
         if (observationTime) {
             criteria.timeTaken = { le: observationTime };
@@ -85,6 +85,7 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
     };
 
     useEffect(() => {
+        setSelectedUserId('');
         setObservationTime('');
         setNewAnnotationSetId('');
     }, [show]);
@@ -95,7 +96,7 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
                 <Modal.Title>Move Observations</Modal.Title>
             </Modal.Header>
             <Modal.Body>
-                <Form>
+                <Form style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
                     <Form.Group controlId="formAnnotationSets">
                         <Form.Label>Select Annotation Sets</Form.Label>
                         <MultiAnnotationSetDropdown
@@ -103,12 +104,30 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
                             setAnnotationSets={setSelectedAnnotationSets}
                         />
                     </Form.Group>
-                    {/* <Form.Group controlId="formUser">
+                    <Form.Group>
+                        <Form.Label style={{display: 'block'}}>Filter by</Form.Label>
+                            <Form.Check
+                                inline
+                                type="radio"
+                                label="User"
+                                checked={filterByUser}
+                                onChange={() => {setFilterByUser(true); setObservationTime('');}}
+                            />
+                            <Form.Check
+                                inline
+                                type="radio"
+                                label="Time"
+                                checked={!filterByUser}
+                                onChange={() => {setFilterByUser(false); setSelectedUserId('');}}
+                            />  
+                    </Form.Group>
+                    <Form.Group controlId="formUser">
                         <Form.Label>Select User</Form.Label>
                         <Form.Control
                             as="select"
                             value={selectedUserId}
                             onChange={(e) => setSelectedUserId(e.target.value)}
+                            disabled={!filterByUser}
                         >
                             <option value="">Choose...</option>
                             {allUsers.map((user) => (
@@ -118,9 +137,6 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
                             ))}
                         </Form.Control>
                     </Form.Group>
-                    <small className="text-muted">
-                        and/or
-                    </small> */}
                     <Form.Group controlId="formTime">
                         <Form.Label>Maximum Observation Time (milliseconds)</Form.Label>
                         <Form.Control
@@ -128,6 +144,7 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
                             placeholder="Enter time taken"
                             value={observationTime}
                             onChange={(e) => setObservationTime(e.target.value === '' ? '' : Number(e.target.value) < 0 ? 0 : Number(e.target.value))}
+                            disabled={filterByUser}
                         />
                     </Form.Group>
                     <Form.Group>
@@ -138,9 +155,9 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
                         />
                     </Form.Group>
                 </Form>
-                {/* <small className="text-muted">
+                <small className="text-muted">
                     Note: Provide either a user or observation time to filter observations.
-                </small> */}
+                </small>
             </Modal.Body>
             <Modal.Footer>
                 <Button variant="secondary" onClick={handleClose}>
@@ -150,8 +167,7 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
                     variant="primary"
                     onClick={() => {handleClose(); handleMove();}}
                     disabled={
-                        // !selectedUserId && 
-                        !observationTime || selectedAnnotationSets.length === 0 || newAnnotationSetId === ''
+                        !selectedUserId && !observationTime || selectedAnnotationSets.length === 0 || newAnnotationSetId === ''
                     }
                 >
                     Move Observations
