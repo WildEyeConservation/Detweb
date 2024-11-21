@@ -131,7 +131,6 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
       {source && <MapContainer
         // id={id}
         style={style}
-        key={JSON.stringify(stats)}
         crs={L.CRS.Simple}
         bounds={zoom ? undefined : viewBounds}
         center={zoom && viewCenter}
