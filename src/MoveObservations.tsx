@@ -3,8 +3,10 @@ import { Modal, Button, Form } from 'react-bootstrap';
 import { AnnotationSetDropdown } from './AnnotationSetDropDown';
 import { ManagementContext, GlobalContext } from './Context';
 import { MultiAnnotationSetDropdown } from './MultiAnnotationSetDropDown';
-import {fetchAllPaginatedResults} from "./utils";
+import { fetchAllPaginatedResults } from "./utils";
 import { useUpdateProgress } from './useUpdateProgress';
+import LabeledToggleSwitch from './LabeledToggleSwitch';
+import { MultiLocationSetDropdown } from './MultiLocationSetDropdown';
 
 type MoveObservationsProps = {
     show: boolean;
@@ -14,7 +16,7 @@ type MoveObservationsProps = {
 }
 
 export default function MoveObservations({ show, handleClose, selectedAnnotationSets, setSelectedAnnotationSets }: MoveObservationsProps) {
-    const { allUsers } = useContext(ManagementContext)!;
+    const { allUsers, locationSetsHook: { data: locationSets } } = useContext(ManagementContext)!;
     const { client } = useContext(GlobalContext)!;
 
     const [setObservationsFetched, setTotalObservationsFetched] = useUpdateProgress({
@@ -35,6 +37,7 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
     const [observationTime, setObservationTime] = useState<number | ''>('');
     const [newAnnotationSetId, setNewAnnotationSetId] = useState<string>(''); 
     const [filterByUser, setFilterByUser] = useState<boolean>(true);
+    const [selectedLocationSets, setSelectedLocationSets] = useState<string[]>([]);
 
     const handleMove = async () => {
         if (selectedAnnotationSets.includes(newAnnotationSetId)) {
@@ -62,27 +65,28 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
             const observations = await fetchAllPaginatedResults(client.models.Observation.observationsByAnnotationSetId, 
                 {
                     annotationSetId: setId, 
+                    selectionSet: ['id', 'location.setId'] as const,
                     filter: criteria
                 },
                 setObservationsFetched
             ); 
 
-            setTotalObservationsFetched(observations.length);
+            // filter observations to those that are in the selected location sets
+            const filteredObservations = observations.filter(observation => selectedLocationSets.includes(observation.location.setId));
+
+            setTotalObservationsFetched(filteredObservations.length);
 
             // move observations to new/other annotation set
             setObservationsUpdated(0);
-            setTotalObservationsUpdated(0);
-            let totalObservationsUpdated = 0;
-            for (const observation of observations) {
+            setTotalObservationsUpdated(filteredObservations.length);
+            for (const observation of filteredObservations) {
                 await client.models.Observation.update({
                     id: observation.id,
                     annotationSetId: newAnnotationSetId
                 });
 
                 setObservationsUpdated(prev => prev + 1);
-                totalObservationsUpdated++;
             }
-            setTotalObservationsUpdated(totalObservationsUpdated);
         }
     };
 
@@ -90,6 +94,7 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
         setSelectedUserId('');
         setObservationTime('');
         setNewAnnotationSetId('');
+        setSelectedLocationSets([]);
     }, [show]);
 
     return (
@@ -106,22 +111,23 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
                             setAnnotationSets={setSelectedAnnotationSets}
                         />
                     </Form.Group>
+                    <Form.Group controlId="formLocationSets">
+                        <Form.Label>Select Location Sets (Tasks)</Form.Label>
+                        <MultiLocationSetDropdown
+                            selectedSets={selectedLocationSets}
+                            setLocationSets={setSelectedLocationSets}
+                        />
+                    </Form.Group>
                     <Form.Group>
-                        <Form.Label style={{display: 'block'}}>Filter by</Form.Label>
-                            <Form.Check
-                                inline
-                                type="radio"
-                                label="User"
-                                checked={filterByUser}
-                                onChange={() => {setFilterByUser(true); setObservationTime('');}}
-                            />
-                            <Form.Check
-                                inline
-                                type="radio"
-                                label="Time"
-                                checked={!filterByUser}
-                                onChange={() => {setFilterByUser(false); setSelectedUserId('');}}
-                            />  
+                        <Form.Label>Filter by</Form.Label>
+                        <LabeledToggleSwitch
+                            leftLabel="User"
+                            rightLabel="Time"
+                            checked={!filterByUser}
+                            onChange={(checked) => {
+                                setFilterByUser(!checked);
+                            }}
+                        /> 
                     </Form.Group>
                     <Form.Group controlId="formUser">
                         <Form.Label>Select User</Form.Label>
