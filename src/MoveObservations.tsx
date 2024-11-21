@@ -58,6 +58,7 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
         // For every annotation set, find all observations that match the criteria and move them to the new annotation set.
         for (const setId of selectedAnnotationSets) {
             setObservationsFetched(0);
+            setTotalObservationsFetched(0);
             const observations = await fetchAllPaginatedResults(client.models.Observation.observationsByAnnotationSetId, 
                 {
                     annotationSetId: setId, 
@@ -70,6 +71,7 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
 
             // move observations to new/other annotation set
             setObservationsUpdated(0);
+            setTotalObservationsUpdated(0);
             let totalObservationsUpdated = 0;
             for (const observation of observations) {
                 await client.models.Observation.update({
