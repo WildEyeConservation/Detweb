@@ -32,11 +32,14 @@ export function TaskSelector(props: TaskSelectorProps) {
   const [element, setElement] = useState<JSX.Element | null>(null);
   
   useEffect(() => {
-    console.log('taskselector props', props);
     if (props.location) {
-      client.models.Location.get({ id: props.location.id }, { selectionSet: ['id', 'x', 'y', 'width', 'height', 'confidence', 'image.id', 'image.width', 'image.height'] }).then(({ data }) => {
-        setElement(<AnnotationImage {...props} location={{...data,annotationSetId:props.location.annotationSetId}} />);
-      });
+      if (props.location.id) {
+        client.models.Location.get({ id: props.location.id }, { selectionSet: ['id', 'x', 'y', 'width', 'height', 'confidence', 'image.id', 'image.width', 'image.height'] }).then(({ data }) => {
+          setElement(<AnnotationImage {...props} location={{ ...data, annotationSetId: props.location.annotationSetId }} />);
+        });
+      } else {
+          setElement(<AnnotationImage {...props}/>);
+      };
     } else {
       client.models.ImageNeighbour.get({ image1Id: props.images[0], image2Id: props.images[1] }, {selectionSet: ['homography', 'image1.*', 'image2.*'] })
         .then(({ data: { homography, image1, image2 } }) => {

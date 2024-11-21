@@ -1,6 +1,6 @@
-import { Form } from "react-bootstrap";
 import { useContext, ChangeEvent  } from "react";
 import { ProjectContext, ManagementContext } from "./Context";
+import Select, { SingleValue } from "react-select";
 
 interface AnnotationSetDropdownProps{
   setAnnotationSet: (arg0:string) => void;
@@ -22,28 +22,28 @@ export function AnnotationSetDropdown({
       setAnnotationSet(createAnnotationSet({ name, projectId: project.id }))
     }
   };
+  const options=annotationSets?.map((q) => (
+    {label:q.name,value:q.id}
+  ))
+  if (canCreate) {
+    options.push({label:"Add a new annotation set",value:"new"})
+  }
 
-  const onSelect = (e: ChangeEvent<HTMLSelectElement>) => {
-    if (e.target.value == "new") {
+  const onSelect = (e: SingleValue<OptionType>) => {
+    if (e.value == "new") {
       onNewAnnotationSet();
     } else {
-      setAnnotationSet(e.target.value);
+      setAnnotationSet(e.value);
     }
   };
 
   return (
-    <Form.Select 
-      value={selectedSet || "none"} 
+    <Select 
+      className="annotation-set-dropdown"
+      value={options.find(o=>o.value==selectedSet)}
       onChange={onSelect}
-      aria-label="Select annotation set"
-    >
-      {!selectedSet && <option value="none">Select an annotation set</option>}
-      {annotationSets?.map((q) => (
-        <option key={q.id} value={q.id}>
-          {q.name}
-        </option>
-      ))}
-      {canCreate && <option value="new">Add a new annotation set</option>}
-    </Form.Select>
+      name="Select annotation set"
+      options={options}
+    />
   );
 }

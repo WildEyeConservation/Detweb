@@ -10,6 +10,9 @@ import ScratchPad from "./ScratchPad";
 import ProjectManagement from "./ProjectManagement";
 import UserStats from "./UserStats";
 import { LocationLoader } from "./LocationLoader";
+import { ImageLoader } from "./ImageLoader";
+import QuickTest from "./QuickTest";
+import { Review } from "./Review";
 import {
   createBrowserRouter,
   RouterProvider,
@@ -32,7 +35,7 @@ const router = createBrowserRouter([
   {
     path: "/:projectId?",
     element:
-    <GlobalContextProvider>
+    <GlobalContextProvider> 
     <Progress>
     <QueryClientProvider client={queryClient}>
     <ReactQueryDevtools initialIsOpen={false} />
@@ -55,8 +58,20 @@ const router = createBrowserRouter([
         element: <UserStats />
       },
       {
+        path: "quickTest",
+        element: <QuickTest />
+      },
+      {
         path: "location/:locationId/:annotationSetId",
         element: <LocationLoader/>
+      },
+      {
+        path: "image/:imageId/:annotationSetId",
+        element: <ImageLoader/>
+      },
+      {
+        path: "review",
+        element: <Review/>
       }
     ]
   },
@@ -65,9 +80,7 @@ const router = createBrowserRouter([
 const rootElement = document.getElementById("root");
 if (rootElement) {
   ReactDOM.createRoot(rootElement).render(
-    <React.StrictMode>
     <RouterProvider router={router} />
-    </React.StrictMode>
   );
 } else {
   console.error("Root element not found");

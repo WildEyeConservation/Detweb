@@ -29,7 +29,7 @@ export default function CreateAnnotationOnHotKey({ hotkey, category, setId, imag
         setCurrentCategory(category);
     }, [category.id, createAnnotation, currentPosition,imageId,setId,project.id,source]);
 
-    useHotkeys(hotkey, (event) => {event.preventDefault(); handleHotkey?.()}, [handleHotkey]);
+    useHotkeys(hotkey, (event) => {event.preventDefault(); event.stopPropagation();     handleHotkey?.()}, [handleHotkey]);
 
     return null;
 }
