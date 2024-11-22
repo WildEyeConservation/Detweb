@@ -109,7 +109,6 @@ export default function AnnotationSetManagement() {
               variant="warning"
               className="me-2"
               onClick={() => { 
-                // select only this set
                 setSelectedSets([id]);
                 setEditSetName(name);
                 showModal('editAnnotationSet') 
@@ -132,6 +131,17 @@ export default function AnnotationSetManagement() {
             >
               Export
             </Button>
+              <Button 
+              variant="info"
+              className="fixed-width-button"
+              onClick={() => {
+                setSelectedSets([id]);
+                showModal('moveObservations') 
+              }}
+            >
+              Move Observations
+            </Button>
+            
         </span>
         // <Form.Check
         //   id="custom-switch"
@@ -196,15 +206,6 @@ export default function AnnotationSetManagement() {
           <Button variant="primary" disabled={selectedSets.length == 0} className="me-2" onClick={() => showModal('launchRegistration')}>
             Launch registration task
           </Button>
-          {/* WIP*/}
-          {process.env.NODE_ENV !== 'production' && (
-          <Button 
-              variant="primary"
-              onClick={() => showModal("moveObservations")}
-              disabled={selectedSets.length === 0}
-            >
-              Move Observations
-            </Button> )}
           </span>
         </Col>
         </div>
