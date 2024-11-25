@@ -59,60 +59,65 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
             criteria.timeTaken = { le: observationTime };
         }
 
-        // For every annotation set, find all observations that match the criteria and move them to the new annotation set.
-        setObservationsFetched(0);
-        setTotalObservationsFetched(0);
-        const observations = await fetchAllPaginatedResults(client.models.Observation.observationsByAnnotationSetId, 
-            {
-                annotationSetId: selectedAnnotationSets[0], 
-                selectionSet: ['id', 'location.setId'] as const,
-                filter: criteria
-            },
-            setObservationsFetched
-        ); 
+        try {
+            // For every annotation set, find all observations that match the criteria and move them to the new annotation set.
+            setObservationsFetched(0);
+            setTotalObservationsFetched(0);
+            const observations = await fetchAllPaginatedResults(client.models.Observation.observationsByAnnotationSetId, 
+                {
+                    annotationSetId: selectedAnnotationSets[0], 
+                    selectionSet: ['id', 'location.setId'] as const,
+                    filter: criteria
+                },
+                setObservationsFetched
+            ); 
 
-        setTotalObservationsFetched(observations.length);
+            setTotalObservationsFetched(observations.length);
 
-        const filteredObservations = selectedLocationSets.length > 0 
-            ? observations.filter(observation => selectedLocationSets.includes(observation.location?.setId || ''))
-            : observations;
+            const filteredObservations = selectedLocationSets.length > 0 
+                ? observations.filter(observation => selectedLocationSets.includes(observation.location?.setId || ''))
+                : observations;
 
-        if (!confirm(`Are you sure you want to move ${filteredObservations.length} observations${selectedLocationSets.length > 0 ? ` (filtered)` : ''}?`)) {
-            return;
-        }
+            if (!confirm(`Are you sure you want to move ${filteredObservations.length} observations${selectedLocationSets.length > 0 ? ` (filtered)` : ''}?`)) {
+                return;
+            }
 
-        const previousAnnotationSetName = (annotationSets.find(set => set.id === selectedAnnotationSets[0])?.name || 'set').replace(/ /g, '_');
-        const user = allUsers.find(user => user.id === selectedUserId)?.name;
-        let targetAnnotationSetId = '';
-        if (moveToNewAnnotationSet) {
-            targetAnnotationSetId = createAnnotationSet(
-                { 
-                    // name format: M(moved observation) - previous annotation set name - criteria
-                    name: `M_${
-                        previousAnnotationSetName.length <= 10
-                            ? previousAnnotationSetName
-                            : `${previousAnnotationSetName.slice(0, 5)}_${previousAnnotationSetName.slice(-4)}`
-                    }_${
-                        criteria.owner ? user : criteria.timeTaken ? observationTime : ''
-                    }`, 
-                    projectId: project.id 
-                }
-            );
-            
-        } else {
-            targetAnnotationSetId = existingAnnotationSetId;
-        }
+            const previousAnnotationSetName = (annotationSets.find(set => set.id === selectedAnnotationSets[0])?.name || 'set').replace(/ /g, '_');
+            const user = allUsers.find(user => user.id === selectedUserId)?.name;
+            let targetAnnotationSetId = '';
+            if (moveToNewAnnotationSet) {
+                targetAnnotationSetId = createAnnotationSet(
+                    { 
+                        // name format: M(moved observation) - previous annotation set name - criteria
+                        name: `M_${
+                            previousAnnotationSetName.length <= 10
+                                ? previousAnnotationSetName
+                                : `${previousAnnotationSetName.slice(0, 5)}_${previousAnnotationSetName.slice(-4)}`
+                        }_${
+                            criteria.owner ? user : criteria.timeTaken ? observationTime : ''
+                        }`, 
+                        projectId: project.id 
+                    }
+                );
+                
+            } else {
+                targetAnnotationSetId = existingAnnotationSetId;
+            }
 
-        // move observations to new/other annotation set
-        setObservationsUpdated(0);
-        setTotalObservationsUpdated(filteredObservations.length);
-        for (const observation of filteredObservations) {
-            await client.models.Observation.update({
-                id: observation.id,
-                annotationSetId: targetAnnotationSetId
-            });
+            // move observations to new/other annotation set
+            setObservationsUpdated(0);
+            setTotalObservationsUpdated(filteredObservations.length);
+            for (const observation of filteredObservations) {
+                await client.models.Observation.update({
+                    id: observation.id,
+                    annotationSetId: targetAnnotationSetId
+                });
 
-            setObservationsUpdated(prev => prev + 1);
+                setObservationsUpdated(prev => prev + 1);
+            }
+        } catch (error) {
+            console.error("Error moving observations:", error);
+            alert("Error moving observations. (See console for details)");
         }
     };
 
