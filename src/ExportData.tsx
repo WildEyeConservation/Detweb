@@ -32,7 +32,7 @@ export const ExportData: React.FC<ExportDataProps> = ({ show, handleClose }) => 
       client.models.Annotation.annotationsByAnnotationSetId,
       {
         setId: annotationSet,
-        selectionSet: ['y', 'x', 'category.name','image.*','image.files.*','owner','source','obscured'] as const
+        selectionSet: ['y', 'x', 'category.name','owner','source','obscured', 'image.originalPath', 'image.timestamp', 'image.latitude', 'image.longitude'] as const
       },
       setStepsCompleted
     );
@@ -45,7 +45,7 @@ export const ExportData: React.FC<ExportDataProps> = ({ show, handleClose }) => 
       data: annotations.map((anno) => {
         return {
           category: anno.category?.name,
-          image: anno.image.files.find(f => f.type == 'image/jpeg')?.path,
+          image: anno.image.originalPath || 'Unknown',
           timestamp: anno.image.timestamp,
           latitude: anno.image.latitude,
           longitude: anno.image.longitude,

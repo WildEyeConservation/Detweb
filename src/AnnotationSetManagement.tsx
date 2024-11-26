@@ -52,7 +52,7 @@ export default function AnnotationSetManagement() {
       client.models.Annotation.annotationsByAnnotationSetId,
       {
         setId: annotationSet.id,
-        selectionSet: ['y', 'x', 'category.name','image.*','image.files.*','owner','source','obscured'] as const
+        selectionSet: ['y', 'x', 'category.name','owner','source','obscured', 'image.originalPath', 'image.timestamp', 'image.latitude', 'image.longitude'] as const
       },
       setStepsCompleted
     );
@@ -65,7 +65,7 @@ export default function AnnotationSetManagement() {
       data: annotations.map((anno) => {
         return {
           category: anno.category?.name,
-          image: anno.image.files.find(f => f.type == 'image/jpeg')?.path,
+          image: anno.image.originalPath || 'Unknown',
           timestamp: anno.image.timestamp,
           latitude: anno.image.latitude,
           longitude: anno.image.longitude,

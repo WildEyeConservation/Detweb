@@ -12,6 +12,7 @@ import pLimit from 'p-limit'
 import ExifReader from 'exifreader'
 import { ManagementContext } from "./Context.tsx";
 import { DateTime } from 'luxon'
+import { useRetry } from "./useRetry.ts";
 
 
 
@@ -49,6 +50,7 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
   const [filteredImageSize, setFilteredImageSize] = useState(0);
   const manContext = useContext(ManagementContext)!;
   const {imageSetsHook:{data:imageSets,create:createImageSet} } = manContext!;
+  const { executeWithRetry } = useRetry();
 
   if (!userContext) {
     return null;
@@ -181,28 +183,29 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
         const results=await Promise.all(tasks)
         const exifmeta = results[1]
         // Get the exif metadata from the second task
-        client.models.Image.create({
+        executeWithRetry(() => client.models.Image.create({
           projectId: project.id,
           width: exifmeta.width || 0,
           height: exifmeta.height || 0,
           timestamp: exifmeta.timestamp!,
           cameraSerial: exifmeta.cameraSerial,
           //exifData: exifmeta.exifData,
-        }).then(({ data: image }) => {
+          originalPath: file.webkitRelativePath,
+        })).then(async ({ data: image }) => {
           if (!image) {
             throw new Error("Image not created");
           }
-          client.models.ImageSetMembership.create({
+          await executeWithRetry(() => client.models.ImageSetMembership.create({
             imageId: image.id,
             imageSetId: imageSetId
-          });
-          client.models.ImageFile.create({
+          }));
+          await executeWithRetry(() => client.models.ImageFile.create({
             projectId: project.id,
             imageId: image.id,
             key: file.webkitRelativePath,
             path: file.webkitRelativePath,
             type: file.type
-          })
+          }))
         })
       })
     );
