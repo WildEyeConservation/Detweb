@@ -1,10 +1,12 @@
 import { useState, useContext, useEffect } from 'react';
 import { Modal, Button, Form } from 'react-bootstrap';
 import { AnnotationSetDropdown } from './AnnotationSetDropDown';
-import { ManagementContext, GlobalContext } from './Context';
-import { MultiAnnotationSetDropdown } from './MultiAnnotationSetDropDown';
-import {fetchAllPaginatedResults} from "./utils";
+import { ManagementContext, GlobalContext, ProjectContext } from './Context';
+import { fetchAllPaginatedResults } from "./utils";
 import { useUpdateProgress } from './useUpdateProgress';
+import LabeledToggleSwitch from './LabeledToggleSwitch';
+import { MultiLocationSetDropdown } from './MultiLocationSetDropdown';
+import { useRetry } from './useRetry';
 
 type MoveObservationsProps = {
     show: boolean;
@@ -14,9 +16,10 @@ type MoveObservationsProps = {
 }
 
 export default function MoveObservations({ show, handleClose, selectedAnnotationSets, setSelectedAnnotationSets }: MoveObservationsProps) {
-    const { allUsers } = useContext(ManagementContext)!;
+    const { allUsers, annotationSetsHook: { data: annotationSets, create: createAnnotationSet } } = useContext(ManagementContext)!;
     const { client } = useContext(GlobalContext)!;
-
+    const { project } = useContext(ProjectContext)!;
+    
     const [setObservationsFetched, setTotalObservationsFetched] = useUpdateProgress({
         taskId: `Fetching observations`,
         indeterminateTaskName: `Fetching observations`,
@@ -33,15 +36,18 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
 
     const [selectedUserId, setSelectedUserId] = useState<string>('');
     const [observationTime, setObservationTime] = useState<number | ''>('');
-    const [newAnnotationSetId, setNewAnnotationSetId] = useState<string>(''); 
+    const [existingAnnotationSetId, setExistingAnnotationSetId] = useState<string>(''); 
     const [filterByUser, setFilterByUser] = useState<boolean>(true);
+    const [selectedLocationSets, setSelectedLocationSets] = useState<string[]>([]);
+    const [moveToNewAnnotationSet, setMoveToNewAnnotationSet] = useState<boolean>(true);
+    const { executeWithRetry } = useRetry();
 
     const handleMove = async () => {
-        if (selectedAnnotationSets.includes(newAnnotationSetId)) {
+        if (!moveToNewAnnotationSet && selectedAnnotationSets.includes(existingAnnotationSetId)) {
             alert("Cannot move observations to the same annotation set");
             return;
         }
-        
+
         const criteria: {
             owner?: { contains: string };
             timeTaken?: { le: number };
@@ -55,13 +61,14 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
             criteria.timeTaken = { le: observationTime };
         }
 
-        // For every annotation set, find all observations that match the criteria and move them to the new annotation set.
-        for (const setId of selectedAnnotationSets) {
+        try {
+            // For every annotation set, find all observations that match the criteria and move them to the new annotation set.
             setObservationsFetched(0);
             setTotalObservationsFetched(0);
             const observations = await fetchAllPaginatedResults(client.models.Observation.observationsByAnnotationSetId, 
                 {
-                    annotationSetId: setId, 
+                    annotationSetId: selectedAnnotationSets[0], 
+                    selectionSet: ['id', 'location.setId'] as const,
                     filter: criteria
                 },
                 setObservationsFetched
@@ -69,27 +76,59 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
 
             setTotalObservationsFetched(observations.length);
 
+            const filteredObservations = selectedLocationSets.length > 0 
+                ? observations.filter(observation => selectedLocationSets.includes(observation.location?.setId || ''))
+                : observations;
+
+            if (!confirm(`Are you sure you want to move ${filteredObservations.length} observations${selectedLocationSets.length > 0 ? ` (filtered)` : ''}?`)) {
+                return;
+            }
+
+            const previousAnnotationSetName = (annotationSets.find(set => set.id === selectedAnnotationSets[0])?.name || 'set').replace(/ /g, '_');
+            const user = allUsers.find(user => user.id === selectedUserId)?.name;
+            let targetAnnotationSetId = '';
+            if (moveToNewAnnotationSet) {
+                targetAnnotationSetId = createAnnotationSet(
+                    { 
+                        // name format: M(moved observation) - previous annotation set name - criteria
+                        name: `M_${
+                            previousAnnotationSetName.length <= 10
+                                ? previousAnnotationSetName
+                                : `${previousAnnotationSetName.slice(0, 5)}_${previousAnnotationSetName.slice(-4)}`
+                        }_${
+                            criteria.owner ? user : criteria.timeTaken ? observationTime : ''
+                        }`, 
+                        projectId: project.id 
+                    }
+                );
+                
+            } else {
+                targetAnnotationSetId = existingAnnotationSetId;
+            }
+
             // move observations to new/other annotation set
             setObservationsUpdated(0);
-            setTotalObservationsUpdated(0);
-            let totalObservationsUpdated = 0;
-            for (const observation of observations) {
-                await client.models.Observation.update({
+            setTotalObservationsUpdated(filteredObservations.length);
+            for (const observation of filteredObservations) {
+                await executeWithRetry(() => 
+                    client.models.Observation.update({
                     id: observation.id,
-                    annotationSetId: newAnnotationSetId
-                });
+                    annotationSetId: targetAnnotationSetId
+                }))
 
                 setObservationsUpdated(prev => prev + 1);
-                totalObservationsUpdated++;
             }
-            setTotalObservationsUpdated(totalObservationsUpdated);
+        } catch (error) {
+            console.error("Error moving observations:", error);
+            alert("Error moving observations. (See console for details)");
         }
     };
 
     useEffect(() => {
         setSelectedUserId('');
         setObservationTime('');
-        setNewAnnotationSetId('');
+        setExistingAnnotationSetId('');
+        setSelectedLocationSets([]);
     }, [show]);
 
     return (
@@ -99,37 +138,40 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
             </Modal.Header>
             <Modal.Body>
                 <Form style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
-                    <Form.Group controlId="formAnnotationSets">
-                        <Form.Label>Select Annotation Sets</Form.Label>
-                        <MultiAnnotationSetDropdown
-                            selectedSets={selectedAnnotationSets}
-                            setAnnotationSets={setSelectedAnnotationSets}
+                    <Form.Group controlId="formAnnotationSet">
+                        <Form.Label>Select Annotation Set</Form.Label>
+                        <AnnotationSetDropdown 
+                            selectedSet={selectedAnnotationSets[0]} 
+                            setAnnotationSet={(set) => setSelectedAnnotationSets([set])} 
+                            canCreate={false}
+                        />
+                    </Form.Group>
+                    <Form.Group controlId="formLocationSets">
+                        <Form.Label>Select Location Sets (Tasks)</Form.Label>
+                        <MultiLocationSetDropdown
+                            selectedSets={selectedLocationSets}
+                            setLocationSets={setSelectedLocationSets}
                         />
                     </Form.Group>
                     <Form.Group>
-                        <Form.Label style={{display: 'block'}}>Filter by</Form.Label>
-                            <Form.Check
-                                inline
-                                type="radio"
-                                label="User"
-                                checked={filterByUser}
-                                onChange={() => {setFilterByUser(true); setObservationTime('');}}
-                            />
-                            <Form.Check
-                                inline
-                                type="radio"
-                                label="Time"
-                                checked={!filterByUser}
-                                onChange={() => {setFilterByUser(false); setSelectedUserId('');}}
-                            />  
+                        <Form.Label>Filter by</Form.Label>
+                        <LabeledToggleSwitch
+                            leftLabel="User"
+                            rightLabel="Time"
+                            checked={!filterByUser}
+                            onChange={(checked) => {
+                                setFilterByUser(!checked);
+                            }}
+                        /> 
                     </Form.Group>
                     <Form.Group controlId="formUser">
-                        <Form.Label>Select User</Form.Label>
+                        <Form.Label style={{display: filterByUser ? 'block' : 'none'}}>Select User</Form.Label>
                         <Form.Control
                             as="select"
                             value={selectedUserId}
                             onChange={(e) => setSelectedUserId(e.target.value)}
                             disabled={!filterByUser}
+                            hidden={!filterByUser}
                         >
                             <option value="">Choose...</option>
                             {allUsers.map((user) => (
@@ -140,25 +182,37 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
                         </Form.Control>
                     </Form.Group>
                     <Form.Group controlId="formTime">
-                        <Form.Label>Maximum Observation Time (milliseconds)</Form.Label>
+                        <Form.Label style={{display: !filterByUser ? 'block' : 'none'}}>Maximum Observation Time (milliseconds)</Form.Label>
                         <Form.Control
                             type="number"
                             placeholder="Enter time taken"
                             value={observationTime}
                             onChange={(e) => setObservationTime(e.target.value === '' ? '' : Number(e.target.value) < 0 ? 0 : Number(e.target.value))}
                             disabled={filterByUser}
+                            hidden={filterByUser}
                         />
                     </Form.Group>
                     <Form.Group>
-                    <Form.Label>Move to Annotation Set</Form.Label>
+                        <Form.Label>Move to * annotation set</Form.Label>
+                        <LabeledToggleSwitch
+                            leftLabel="Existing"
+                            rightLabel="New"
+                            checked={moveToNewAnnotationSet}
+                            onChange={(checked) => {
+                                setMoveToNewAnnotationSet(checked);
+                            }}
+                        /> 
+                    </Form.Group>
+                    <Form.Group style={{display: !moveToNewAnnotationSet ? 'block' : 'none'}}>
                         <AnnotationSetDropdown 
-                            selectedSet={newAnnotationSetId} 
-                            setAnnotationSet={setNewAnnotationSetId} 
+                            selectedSet={existingAnnotationSetId} 
+                            setAnnotationSet={setExistingAnnotationSetId} 
+                            canCreate={false}
                         />
                     </Form.Group>
                 </Form>
-                <small className="text-muted">
-                    Note: Provide either a user or observation time to filter observations.
+                <small style={{display: moveToNewAnnotationSet ? 'block' : 'none'}} className="text-muted">
+                    Note: A new set will automatically be created with a unique name.
                 </small>
             </Modal.Body>
             <Modal.Footer>
@@ -169,7 +223,7 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
                     variant="primary"
                     onClick={() => {handleClose(); handleMove();}}
                     disabled={
-                        !selectedUserId && !observationTime || selectedAnnotationSets.length === 0 || newAnnotationSetId === ''
+                        !selectedUserId && !observationTime || selectedAnnotationSets.length === 0 || (existingAnnotationSetId === '' && !moveToNewAnnotationSet)
                     }
                 >
                     Move Observations

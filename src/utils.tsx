@@ -25,6 +25,12 @@ type QueryFunction<T, P> = (
 
 type SelectionSet<T> = (keyof T)[] | string[];
 
+interface RetryConfig {
+  maxRetries?: number;
+  baseDelay?: number;
+  maxDelay?: number;
+}
+
 export async function fetchAllPaginatedResults<
   T,
   P extends { selectionSet?: SelectionSet<T> },
@@ -32,22 +38,54 @@ export async function fetchAllPaginatedResults<
 >(
   queryFn: QueryFunction<R, P>,
   params: P,
-  setStepsCompleted?: (steps: number) => void
+  setStepsCompleted?: (steps: number) => void,
+  retryConfig: RetryConfig = {}
 ): Promise<R[]> {
+  const {
+    maxRetries = 5,
+    baseDelay = 1000,
+    maxDelay = 30000
+  } = retryConfig;
+
   let allResults: R[] = [];
   let nextToken: string | null | undefined = undefined;
   let stepCount = 0;
 
   do {
-    const result = await queryFn({ ...params, nextToken });
-    allResults = allResults.concat(result.data);
-    nextToken = result.nextToken;
-    stepCount += result.data.length;
+    let retryCount = 0;
+    let success = false;
+    
+    while (!success && retryCount < maxRetries) {
+      try {
+        const result = await queryFn({ ...params, nextToken });
+        if (!result) {
+          throw new Error('Operation returned errors');
+        }
+        
+        allResults = allResults.concat(result.data);
+        nextToken = result.nextToken;
+        stepCount += result.data.length;
 
-    if (setStepsCompleted) {
-      setStepsCompleted(stepCount);
+        if (setStepsCompleted) {
+          setStepsCompleted(stepCount);
+        }
+        
+        success = true; // Mark this iteration as successful
+      } catch (error) {
+        retryCount++;
+        if (retryCount === maxRetries) {
+          console.error(`Pagination query failed after ${maxRetries} attempts:`, error);
+          throw error;
+        }
+
+        const delay = Math.min(
+          baseDelay * Math.pow(2, retryCount) + Math.random() * 1000,
+          maxDelay
+        );
+        console.warn(`Retry ${retryCount}/${maxRetries} after ${delay}ms`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
-
   } while (nextToken);
 
   return allResults;
