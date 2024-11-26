@@ -1,12 +1,18 @@
-
 import { FetcherType } from './Preloader';
 
-export default function BufferSource(buffer: any[]) {
-  let index=0
-  const fetcher: FetcherType = async () => {
-    console.log(`fetching ${index} of ${buffer.length}`);
-    const annotation = buffer[index];
-    index++;
+export default class BufferSource {
+  private index: number = 0;
+  private buffer: any[];
+
+  constructor(buffer: any[]) {
+    this.buffer = buffer;
+  }
+
+  async fetch(): Promise<any> {
+    console.log(`fetching ${this.index} of ${this.buffer.length}`);
+    const annotation = this.buffer[this.index];
+    this.index++;
+    
     if (annotation) {
       return annotation;
     } else {
@@ -16,5 +22,4 @@ export default function BufferSource(buffer: any[]) {
       }
     }
   }
-  return fetcher;
 }

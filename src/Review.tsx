@@ -20,6 +20,8 @@ export function Review() {
     const [isLoading, setIsLoading] = useState(false);
     const { categoriesHook: { data: categories } } = useContext(ProjectContext)!;
     const [locationsLoaded, setLocationsLoaded] = useState(0);
+    const [index, setIndex] = useState(0);
+    const [bufferSource, setBufferSource] = useState<BufferSource | null>(null);
 
     useEffect(() => {
         async function fetchAnnotations() {
@@ -29,9 +31,9 @@ export function Review() {
                     { categoryId: categoryId ?? "" },
                     { selectionSet: ['x', 'y', 'image.id', 'image.width', 'image.height', 'image.timestamp'], filter: { setId: { eq: annotationSetId } }, nextToken: nextNextToken });
                 const { data, nextToken } = result;
-                setAnnotations(prev=>[...prev,...(
+                setAnnotations(prev => [...prev, ...(
                     data.map(({ x, y, image: { id: imageId, width: imageWidth, height: imageHeight } }) =>
-                        ({ location: { x, y, width: 100, height: 100, image: { id: imageId, width: imageWidth, height: imageHeight }, annotationSetId },id: crypto.randomUUID() })
+                        ({ location: { x, y, width: 100, height: 100, image: { id: imageId, width: imageWidth, height: imageHeight }, annotationSetId }, id: crypto.randomUUID() })
                     ))]);
                 nextNextToken = nextToken;
             } while (nextNextToken);
@@ -42,35 +44,36 @@ export function Review() {
             if (selectedCategories.length && selectedAnnotationSet) {
                 setIsLoading(true);
                 let imagesFound: Set<string> = new Set();
-                const locations=[]
+                const locations = []
                 for (const { value: categoryId } of selectedCategories) {
-                let nextNextToken: string | null | undefined = undefined;
-                do {
-                    const result = await client.models.Annotation.annotationsByCategoryId(
-                        { categoryId: categoryId ?? "" },
-                        { selectionSet: ['image.id', 'image.width', 'image.height', 'image.timestamp'], filter: { setId: { eq: selectedAnnotationSet } }, nextToken: nextNextToken });
-                    const { data, nextToken } = result;
-                    data.forEach(({ image: { id: imageId, width: imageWidth, height: imageHeight,timestamp } }) => {
-                        if (!imagesFound.has(imageId)) {
-                            imagesFound.add(imageId);
-                            locations.push({location: {
+                    let nextNextToken: string | null | undefined = undefined;
+                    do {
+                        const result = await client.models.Annotation.annotationsByCategoryId(
+                            { categoryId: categoryId ?? "" },
+                            { selectionSet: ['image.id', 'image.width', 'image.height', 'image.timestamp'], filter: { setId: { eq: selectedAnnotationSet } }, nextToken: nextNextToken });
+                        const { data, nextToken } = result;
+                        data.forEach(({ image: { id: imageId, width: imageWidth, height: imageHeight, timestamp } }) => {
+                            if (!imagesFound.has(imageId)) {
+                                imagesFound.add(imageId);
+                                locations.push({
+                                    location: {
                                         x: imageWidth / 2,
                                         y: imageHeight / 2,
                                         width: imageWidth,
                                         height: imageHeight,
-                                        image: { id: imageId, width: imageWidth, height: imageHeight,timestamp: timestamp },
+                                        image: { id: imageId, width: imageWidth, height: imageHeight, timestamp: timestamp },
                                         annotationSetId: selectedAnnotationSet
-                                },
-                                taskTag: 'review',
+                                    },
+                                    taskTag: 'review',
                                     id: crypto.randomUUID()
-                            })
-                            setLocationsLoaded(prev=>prev+1);
-                        }
-                    });
-                    nextNextToken = nextToken;
+                                })
+                                setLocationsLoaded(prev => prev + 1);
+                            }
+                        });
+                        nextNextToken = nextToken;
                     } while (nextNextToken);
                 }
-                setAnnotations(locations.sort((a,b)=>a.location.image.timestamp-b.location.image.timestamp));
+                setAnnotations(locations.sort((a, b) => a.location.image.timestamp - b.location.image.timestamp));
             }
             setIsLoading(false);
         }
@@ -87,19 +90,24 @@ export function Review() {
             setIsLoading(false);
             setLocationsLoaded(0);
         };
-}, [selectedCategories, selectedAnnotationSet, imageBased]);
+    }, [selectedCategories, selectedAnnotationSet, imageBased]);
+
+    useEffect(() => {
+        if (annotations.length) {
+            setBufferSource(new BufferSource(annotations));
+        }
+    }, [annotations]);
     
-    const fetcher = BufferSource(annotations);
     const Preloader = useMemo(() => PreloaderFactory(AnnotationImage), []);
     return (
-        <div style={{ 
-            display: 'flex', 
+        <div style={{
+            display: 'flex',
             marginTop: '1rem',
-            flexDirection: 'column', 
+            flexDirection: 'column',
             alignItems: 'center',
             width: '100%',
             gap: '1rem'  // Adds vertical spacing between components
-          }}>    
+        }}>
             <div className="controls" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px' }}>
                 <Select
                     value={selectedCategories}
@@ -127,9 +135,22 @@ export function Review() {
 
             {!annotations.length && isLoading ? (
                 <div>Loading... Please be patient. {locationsLoaded} locations loaded so far...</div>
-            ) : (
-                <Preloader key={selectedAnnotationSet+selectedCategories.join(',')} fetcher={fetcher} preloadN={2} historyN={2} />
-            )}
+            ) : bufferSource &&
+                <>
+                    <Preloader key={selectedAnnotationSet + selectedCategories.join(',')} index={index} setIndex={setIndex} fetcher={()=>bufferSource.fetch()} preloadN={2} historyN={2} />
+                    <div style={{ width: '80%', margin: '1rem 0' }}>
+                        <Form.Range
+                            value={index}
+                            onChange={(e) => setIndex(parseInt(e.target.value))}
+                            min={0}
+                            max={annotations.length-1}
+                        />
+                        <div style={{ textAlign: 'center', marginTop: '0.5rem' }}>
+                            Done with {index} out of {annotations.length} locations
+                        </div>
+                    </div>
+                </>
+            }
         </div>
     );
 }

@@ -11,14 +11,16 @@ interface PreloaderProps {
     fetcher: FetcherType;
     historyN: number;
     preloadN: number;
-    visible?: boolean;
+    visible: boolean;
+    prefetch: number;
+    index: number;
+    setIndex: (index: number | ((prevState: number) => number)) => void;
     [key: string]: any;
   }
 
 export function PreloaderFactory(WrappedComponent: React.ComponentType<any>) {
-    const PreloadingComponent = ({ historyN = 2, preloadN = 3, fetcher, visible=true, ...rest }: PreloaderProps) => {
+    const PreloadingComponent = ({ historyN = 2, preloadN = 3, fetcher, visible = true, index, setIndex,prefetch = 0, ...rest  }: PreloaderProps) => {
       const [buffer, setBuffer] = useState<any[]>([]);
-      const [index, setIndex] = useState<number>(0);
       const [waitingCount, setWaitingCount] = useState<number>(0);
   
       useEffect(() => {
@@ -32,7 +34,7 @@ export function PreloaderFactory(WrappedComponent: React.ComponentType<any>) {
   
       useEffect(() => {
         console.log(`index: ${index}, buffer.length: ${buffer.length}, waitingCount: ${waitingCount}`);
-        if (index > buffer.length + Math.max(waitingCount, 0) - preloadN - 1) {
+        if (index > buffer.length + Math.max(waitingCount, 0) - preloadN - 1 - prefetch) {
           console.log(`fetching ${index} of ${buffer.length + waitingCount}`);
           console.log('INCREMENT: waitingCount will become:', waitingCount + 1);
           setWaitingCount(wc => {
@@ -53,7 +55,7 @@ export function PreloaderFactory(WrappedComponent: React.ComponentType<any>) {
           return () => {
             console.log('useEffect cleanup code');
           };
-      }, [buffer.length, waitingCount, index]);
+      }, [buffer.length, index]);
   
       const subsetStart = Math.max(index - historyN, 0); // Keep at the least the last historyN entries in memory
       const subset = buffer.slice(subsetStart, index + preloadN+1);
