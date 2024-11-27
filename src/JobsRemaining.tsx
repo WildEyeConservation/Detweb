@@ -37,9 +37,12 @@ export function JobsRemaining() {
     }
   }, [url, getSqsClient]);
   return (
-    <p style={{ textAlign: "center" }}>
-      {" "}
-      {`Approximate number of jobs remaining (globally): ${jobsRemaining} Approximate number of jobs completed in this session: ${jobsCompleted}`}
-    </p>
+    <div style={{textAlign: "center", flexDirection: "column", width: "100%"}}>
+        <p style={{marginBottom: "4px"}}>
+          Approximate number of jobs remaining (globally): {jobsRemaining}
+        </p>
+        <p>Approximate number of jobs completed in this session: {jobsCompleted}</p>
+    </div>
+    
   );
 }
