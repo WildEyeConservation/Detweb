@@ -3,9 +3,10 @@ import React, { useContext } from "react";
 import { ProjectContext, ManagementContext } from "./Context";
 import Select, { MultiValue, Options  } from "react-select";
 
-interface LocationSetDropdownProps {
-  selectedTasks: string[] | undefined;
-  setTasks: (selected: string[]) => void;
+interface LocationSetDropdownProps<IsMulti extends boolean = true> {
+  selectedTasks: IsMulti extends true ? string[] | undefined : string | undefined;
+  setTasks: IsMulti extends true ? (selected: string[]) => void : (selected: string) => void;
+  isMulti?: IsMulti;
 }
 
 interface OptionType {
@@ -13,21 +14,31 @@ interface OptionType {
   value: string;
 }
 
-export function LocationSetDropdown({
+export function LocationSetDropdown<IsMulti extends boolean = true>({
   selectedTasks,
-  setTasks 
-}: LocationSetDropdownProps) {
+  setTasks,
+  isMulti = true as IsMulti
+}: LocationSetDropdownProps<IsMulti>) {
   const { project } = useContext(ProjectContext)!;
   const {locationSetsHook:{data:tasks}} = useContext(ManagementContext)!;
   const options: Options<OptionType> | undefined = tasks?.map((x) => ({
-      label: x.name,
-      value: x.id,
-    }))
-    .sort((a, b) => (a.label > b.label ? 1 : -1));
-  const selectedOptions=options?.filter(o=>selectedTasks?.includes(o.value))
+    label: x.name,
+    value: x.id,
+  }))
+  .sort((a, b) => (a.label > b.label ? 1 : -1));
+  
+  const selectedOptions = isMulti 
+    ? options?.filter(o => (selectedTasks as string[])?.includes(o.value))
+    : options?.find(o => o.value === selectedTasks);
 
-  function handleChange(selectedOptions: MultiValue<OptionType>) {
-    setTasks(selectedOptions.map(o => o.value));
+  function handleChange(
+    selectedOptions: MultiValue<OptionType> | OptionType | null
+  ) {
+    if (isMulti) {
+      (setTasks as (selected: string[]) => void)((selectedOptions as MultiValue<OptionType>).map(o => o.value));
+    } else {
+      (setTasks as (selected: string) => void)(selectedOptions ? (selectedOptions as OptionType).value : '');
+    }
   }
 
   return (
@@ -35,7 +46,7 @@ export function LocationSetDropdown({
     <Select
       value={selectedOptions}
       onChange={handleChange}
-      isMulti
+      isMulti={isMulti}
       name="Image sets"
       options={options}
       className="basic-multi-select"

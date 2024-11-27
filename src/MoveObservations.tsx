@@ -6,6 +6,7 @@ import { fetchAllPaginatedResults } from "./utils";
 import { useUpdateProgress } from './useUpdateProgress';
 import LabeledToggleSwitch from './LabeledToggleSwitch';
 import { MultiLocationSetDropdown } from './MultiLocationSetDropdown';
+import { LocationSetDropdown } from './LocationSetDropDown';
 import { useRetry } from './useRetry';
 
 type MoveObservationsProps = {
@@ -148,9 +149,13 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
                     </Form.Group>
                     <Form.Group controlId="formLocationSets">
                         <Form.Label>Select Location Sets (Tasks)</Form.Label>
-                        <MultiLocationSetDropdown
+                        {/* <MultiLocationSetDropdown
                             selectedSets={selectedLocationSets}
                             setLocationSets={setSelectedLocationSets}
+                        /> */}
+                        <LocationSetDropdown 
+                            selectedTasks={selectedLocationSets}
+                            setTasks={setSelectedLocationSets}
                         />
                     </Form.Group>
                     <Form.Group>
