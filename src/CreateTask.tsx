@@ -53,7 +53,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
   const [minSidelap, setMinSidelap] = useState<number>(0);
   const [minOverlapPercentage, setMinOverlapPercentage] = useState<number>(0);
   const [minSidelapPercentage, setMinSidelapPercentage] = useState<number>(0);
-  const [allImages, setAllImages] = useState<{ timestamp: Nullable<number>, width: number, height: number, id: string }[]>([]);
+  const [allImages, setAllImages] = useState<{ timestamp: Nullable<number>, width: number, height: number, id: string, originalPath: string }[]>([]);
   const [width, setWidth] = useState<number>(1024);
   const [height, setHeight] = useState<number>(1024);
   const [horizontalTiles, setHorizontalTiles] = useState<number>(3);
@@ -176,7 +176,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
         do {
           const { data: images, nextToken: nextNextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
             imageSetId
-          }, { selectionSet: ['image.width', 'image.height', 'image.id', 'image.timestamp','image.files.key','image.files.type'], nextToken });
+          }, { selectionSet: ['image.width', 'image.height', 'image.id', 'image.timestamp', 'image.originalPath'], nextToken });
           nextToken = nextNextToken ?? undefined;
           setAllImages(x => x.concat(images.map(({ image }) => image)))
           acc = images.reduce((acc, x) => {
@@ -228,7 +228,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
     if (modelGuided) {
       if (modelId === "ivx") {
         allImages.map(async (image) => {
-          const key = image.files.find((x: any) => x.type == 'image/jpeg')?.key.replace('images', 'heatmaps')
+          const key = image.originalPath.replace('images', 'heatmaps')
           const sqsClient = await getSqsClient()
           await sqsClient.send(
             new SendMessageCommand({
@@ -259,7 +259,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
               MessageBody: JSON.stringify({
                 images: chunk.map(image => ({
                   imageId: image.id,
-                  key: 'images/' + image.files.find((x: any) => x.type == 'image/jpeg')?.key,
+                  key: 'images/' + image.originalPath,
                 })),
                 projectId: project.id,
                 bucket: backend.storage.buckets[1].bucket_name,
