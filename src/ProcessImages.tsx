@@ -8,6 +8,7 @@ import { ImageSetDropdown } from "./ImageSetDropDown";
 import { GlobalContext } from "./Context";
 import { SendMessageCommand } from "@aws-sdk/client-sqs";
 import { fetchAllPaginatedResults } from "./utils";
+import { useRetry } from "./useRetry";
 // const createPair = `mutation MyMutation($image1Key: String!, $image2Key: String!) {
 //   createImageNeighbour(input: {image1key: $image1Key, image2key: $image2Key}) {
 //     id
@@ -25,6 +26,7 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
   const { client, backend } = useContext(GlobalContext)!
   const {getSqsClient} = useContext(UserContext)!
   const [selectedProcess, selectProcess] = useState<string | undefined>(undefined);
+  const { executeWithRetry } = useRetry();
 
   const processingOptions = [
     "Run heatmap generation",
@@ -73,19 +75,20 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
           setTotalHeatmapSteps(allImages.length);
           setHeatmapStepsCompleted(0);
           allImages.map(async (id) => {
-            const {data :imageFiles} = await client.models.ImageFile.imagesByimageId({imageId: id})
+            const {data :imageFiles} = await executeWithRetry(() => client.models.ImageFile.imagesByimageId({imageId: id}))
             const path = imageFiles.find((imageFile) => imageFile.type == 'image/jpeg')?.path
               if (path) {
-                client.mutations.processImages({
+                await executeWithRetry(() => client.mutations.processImages({
                   s3key: path!,
                   model: "heatmap",
-                })
+                }))
               } else {
                 console.log(`No image file found for image ${id}. Skipping`)
               }
               setHeatmapStepsCompleted((s) => s + 1);
           })
         }
+        break;
         case "Compute image registrations": {
           const images = await Promise.all(selectedImageSets.map(async (selectedSet) => 
             (await fetchAllPaginatedResults(
@@ -104,20 +107,20 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
             const image1 = images[i];
             const image2 = images[i + 1];
             if (image2.timestamp - image1.timestamp < 5) {
-              const { data } = await client.models.ImageNeighbour.create({
+              const { data } = await executeWithRetry(() => client.models.ImageNeighbour.create({
                 image1Id: image1.id,
                 image2Id: image2.id,
-              });
+              }));
               //If the create failed, it is typically because the record allready exists. Let us check if it allready has an associated homography before we launch a task to compute it
               if (!data) {
-                const { data } = await client.models.ImageNeighbour.get({
+                const { data } = await executeWithRetry(() => client.models.ImageNeighbour.get({
                   image1Id: image1.id,
                   image2Id: image2.id,
-                });
+                }));
                 //await publishError('taskProgress/processImages', `Error computing registration for images ${image1.id} and ${image2.id}: ${error instanceof Error ? error.message : String(error)}`, errorDetails);
               }
-              const file1 = image1.files.find((f) => f.type == 'image/jpeg').key
-              const file2 = image2.files.find((f) => f.type == 'image/jpeg').key
+              const file1 = image1.originalPath
+              const file2 = image2.originalPath
               const sqsClient = await getSqsClient()
               await sqsClient.send(
                 new SendMessageCommand({

@@ -11,6 +11,7 @@ import { fetchAllPaginatedResults } from "./utils";
 import LabeledToggleSwitch from './LabeledToggleSwitch';
 import Papa from 'papaparse';
 import { StringMap } from "aws-lambda/trigger/cognito-user-pool-trigger/_common";
+import { useRetry } from "./useRetry";
 
 const thresholdRange = {
   ivx: { min: 1, max: 10, step: 1 },
@@ -63,6 +64,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
   const fileInputRef = useRef<HTMLInputElement>(null);
   const effectiveImageWidth = maxX - minX;
   const effectiveImageHeight = maxY - minY;
+  const { executeWithRetry } = useRetry();
   
   const getImageId = useMemo(() => {
     const cache: { [path: string]: string } = {};
@@ -174,9 +176,9 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
       setAllImages([]);
       for (const imageSetId of selectedImageSets) {
         do {
-          const { data: images, nextToken: nextNextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
+          const { data: images, nextToken: nextNextToken } = await executeWithRetry(() => client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
             imageSetId
-          }, { selectionSet: ['image.width', 'image.height', 'image.id', 'image.timestamp', 'image.originalPath'], nextToken });
+          }, { selectionSet: ['image.width', 'image.height', 'image.id', 'image.timestamp', 'image.originalPath'], nextToken }));
           nextToken = nextNextToken ?? undefined;
           setAllImages(x => x.concat(images.map(({ image }) => image)))
           acc = images.reduce((acc, x) => {
@@ -289,8 +291,8 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
             for (const row of result.data) {
               if (Number(row['Label Confidence']) > threshold) {
                 getImageId(row['Image Filename'])
-                  .then((id) => {
-                    client.models.Location.create({
+                  .then(async (id) => {
+                    await executeWithRetry(() => client.models.Location.create({
                       x: Math.round(Number(row['Box X']))+Math.round(Number(row['Box W'])/2),
                       y: Math.round(Number(row['Box Y']))+Math.round(Number(row['Box H'])/2),
                       width: Math.round(Number(row['Box W'])),
@@ -300,7 +302,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                       projectId: project.id,
                       source: 'manual',
                       setId: locationSetId,
-                    })
+                    }))
                   })
                   .then(() => setLocationsCompleted((fc: any) => fc + 1))
               } 
@@ -328,7 +330,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                 yStep * (yStepSize ? yStepSize : 0) + minY + height / 2,
               );
               promises.push(
-                client.models.Location.create({
+                executeWithRetry(() => client.models.Location.create({
                   x,
                   y,
                   width,
@@ -338,7 +340,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                   confidence: 1,
                   source: 'manual',
                   setId: locationSetId,
-                }).then(() => setLocationsCompleted((fc: any) => fc + 1)))
+                }))).then(() => setLocationsCompleted((fc: any) => fc + 1))
               }
             }
           }

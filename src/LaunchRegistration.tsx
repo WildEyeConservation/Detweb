@@ -8,6 +8,7 @@ import { ImageNeighbourType } from "./schemaTypes";
 import { SendMessageCommand } from "@aws-sdk/client-sqs";
 import { ImageSetDropdown } from "./ImageSetDropDown";
 import * as math from 'mathjs';
+import { useRetry } from "./useRetry";
 
 interface LaunchRegistrationProps {
   show: boolean;
@@ -23,6 +24,7 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({ show, handleClo
   const {queuesHook : { data : queues}} = useContext(ManagementContext)!;
   const [selectedImageSets, setSelectedImageSets] = useState<string[]>([]);
   const [selectedType, setSelectedType] = useState<boolean>(false);
+  const { executeWithRetry } = useRetry();
   // const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
   //   taskId: `Launch registration task`,
   //   indeterminateTaskName: `Finding images with annotations`,
@@ -34,7 +36,7 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({ show, handleClo
     const homographies: number[][] = []
     let currentId = image1.id
     do {
-      const { data: neighbour } = await client.models.ImageNeighbour.imageNeighboursByImage1key({ image1Id: currentId }, { selectionSet: ['image2.id', 'image2.timestamp', 'homography'] })
+      const { data: neighbour } = await executeWithRetry(() => client.models.ImageNeighbour.imageNeighboursByImage1key({ image1Id: currentId }, { selectionSet: ['image2.id', 'image2.timestamp', 'homography'] }))
       homographies.push(neighbour[0].homography)
       if (neighbour[0].image2.id == image2.id) break;
       currentId = neighbour[0].image2.id
@@ -98,14 +100,14 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({ show, handleClo
         const sortedTimestamps = Object.keys(images).sort();
         const neighbours: ImageNeighbourType[] = []
         for (const timestamp of sortedTimestamps) {
-          const neighbours1 = await client.models.ImageNeighbour.imageNeighboursByImage1key({ image1Id: images[timestamp] })
+          const neighbours1 = await executeWithRetry(() => client.models.ImageNeighbour.imageNeighboursByImage1key({ image1Id: images[timestamp] }))
           neighbours1.data.forEach(neighbour => {
             if (!neighboursAllreadyAdded.has(neighbour.image1Id)) {
               neighboursAllreadyAdded.add(neighbour.image1Id)
               neighbours.push(neighbour)
             }
           })
-          const neighbours2 = await client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: images[timestamp] })
+          const neighbours2 = await executeWithRetry(() => client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: images[timestamp] }))
           neighbours2.data.forEach(neighbour => {
             if (!neighboursAllreadyAdded.has(neighbour.image2Id)) {
               neighboursAllreadyAdded.add(neighbour.image2Id)
@@ -129,13 +131,13 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({ show, handleClo
         //Paginate through the image set memberships
         let nextToken: string | undefined;
         do {
-          const { data: imageBatch, nextToken: nextTokenBatch } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({ imageSetId },
+          const { data: imageBatch, nextToken: nextTokenBatch } = await executeWithRetry(() => client.models.ImageSetMembership.imageSetMembershipsByImageSetId({ imageSetId },
           {
             selectionSet: ['image.id',
               'image.timestamp',
               'image.annotations.setId'],
             nextToken
-          })
+          }))
         //Filter out images that don't have annotations in the selected annotation sets
           images.push(...imageBatch)
           nextToken = nextTokenBatch
@@ -149,11 +151,11 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({ show, handleClo
           if (image.image.annotations?.some(annotation => selectedSets.includes(annotation.setId)) ||
             (previousImage && previousImage.image.annotations.some(annotation => selectedSets.includes(annotation.setId)))) {
             const homography = await findPath(previousImage.image, image.image)
-            const { data: imageNeighbour } = await client.models.ImageNeighbour.create({
+            const { data: imageNeighbour } = await executeWithRetry(() => client.models.ImageNeighbour.create({
               image1Id: previousImage.image.id,
               image2Id: image.image.id,
               homography
-            })
+            }))
             await getSqsClient().then(sqsClient => sqsClient.send(
               new SendMessageCommand({
                 QueueUrl: queues.find(queue => queue.id == url)?.url,
