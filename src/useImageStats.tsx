@@ -12,7 +12,7 @@ export default function useImageStats(annotationsHook: OptimisticUpdatesHook<Sch
         if (annotations.length > 0 && categories.length > 0) {
             const tempStats = annotations?.reduce((acc, annotation) => {
                 const category = categories?.find(c => c.id === annotation.categoryId);
-                acc[category.name] = (acc[category.name] || 0) + 1;
+                acc[category?.name || 'Invalid category'] = (acc[category?.name || 'Invalid category'] || 0) + 1;
                 return acc;
             }, {});
             setStats(tempStats);
