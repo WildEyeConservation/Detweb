@@ -109,15 +109,20 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
             // move observations to new/other annotation set
             setObservationsUpdated(0);
             setTotalObservationsUpdated(filteredObservations.length);
-            for (const observation of filteredObservations) {
-                await executeWithRetry(() => 
-                    client.models.Observation.update({
-                    id: observation.id,
-                    annotationSetId: targetAnnotationSetId
-                }))
 
-                setObservationsUpdated(prev => prev + 1);
+            const updateObservationQ = [];
+            for (const observation of filteredObservations) {
+                updateObservationQ.push(executeWithRetry(() => 
+                        client.models.Observation.update({
+                        id: observation.id,
+                        annotationSetId: targetAnnotationSetId
+                    })).then(() => {
+                        setObservationsUpdated(prev => prev + 1);
+                    })
+                )
             }
+
+            await Promise.all(updateObservationQ);
         } catch (error) {
             console.error("Error moving observations:", error);
             alert("Error moving observations. (See console for details)");

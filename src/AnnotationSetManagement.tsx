@@ -44,42 +44,56 @@ export default function AnnotationSetManagement() {
   async function exportData(annotationSets: { id: string, name: string }[]) {
     setBusy(true);
 
+    setStepsCompleted(0);
+    setTotalSteps(0);
+
+    const annotationSetQ = [];
+
     for (const annotationSet of annotationSets) {
-      setStepsCompleted(0);
-      setTotalSteps(0);
+      annotationSetQ.push(fetchAllPaginatedResults(
+        client.models.Annotation.annotationsByAnnotationSetId,
+        {
+          setId: annotationSet.id,
 
-      const annotations = await fetchAllPaginatedResults(
-      client.models.Annotation.annotationsByAnnotationSetId,
-      {
-        setId: annotationSet.id,
-        selectionSet: ['y', 'x', 'category.name','owner','source','obscured', 'image.originalPath', 'image.timestamp', 'image.latitude', 'image.longitude'] as const
-      },
-      setStepsCompleted
-    );
-
-    setTotalSteps(annotations.length);
-
-    const fileName = `DetWebExport-${annotationSet.name}`;
-    const exportType = exportFromJSON.types.csv;
-    exportFromJSON({
-      data: annotations.map((anno) => {
-        return {
-          category: anno.category?.name,
-          image: anno.image.originalPath || 'Unknown',
-          timestamp: anno.image.timestamp,
-          latitude: anno.image.latitude,
-          longitude: anno.image.longitude,
-          obscured: anno.obscured,
-          annotator: anno.owner,
-          x: anno.x,
-          y: anno.y,
-          source: anno.source,
-        };
-      }),
-      fileName,
-        exportType,
-      });
+          selectionSet: ['y', 'x', 'category.name','owner','source','obscured', 'image.originalPath', 'image.timestamp', 'image.latitude', 'image.longitude'] as const
+        },
+        setStepsCompleted
+      ));
     }
+
+    const annotationSetsResult = await Promise.all(annotationSetQ);
+
+    let i = 0;
+    let a = 0;
+ 
+    for (const annotations of annotationSetsResult) {
+      a += annotations.length;
+
+      const fileName = `DetWebExport-${annotationSets[i].name}`;
+      const exportType = exportFromJSON.types.csv;
+      exportFromJSON({
+        data: annotations.map((anno) => {
+          return {
+            category: anno.category?.name,
+            image: anno.image.originalPath || 'Unknown',
+            timestamp: anno.image.timestamp,
+            latitude: anno.image.latitude,
+            longitude: anno.image.longitude,
+            obscured: anno.obscured,
+            annotator: anno.owner,
+            x: anno.x,
+            y: anno.y,
+            source: anno.source,
+          };
+        }),
+        fileName,
+          exportType,
+        });
+
+        i++;
+    }
+
+    setTotalSteps(a);
     setBusy(false);
   }
 
