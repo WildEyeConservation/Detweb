@@ -151,7 +151,7 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
     setStepsCompleted(0);
     setTotalSteps(allLocations.length);
     let queueUrl = queues?.find(q => q.id == queueId)?.url;
-    
+    let secondaryQueueUrl = secondaryQueue ? queues?.find(q => q.id == url2)?.url : undefined;
     if (!queueUrl) {
       throw new Error("Queue URL not found");
     }
@@ -165,11 +165,11 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
         const location = {id: locationId, annotationSetId: annotationSet};
         batchEntries.push({
           Id: `msg-${locationId}`, // Required unique ID for each message in batch
-          MessageBody: JSON.stringify({ location, allowOutside, zoom, taskTag })
+          MessageBody: JSON.stringify({ location, allowOutside, zoom, taskTag, secondaryQueueUrl})
         });
       }
 
-      if (batchEntries.length > 0) {
+      if (batchEntries.length > 0) {  
         limitConnections(() =>
           getSqsClient().then(sqsClient => sqsClient.send(
             new SendMessageBatchCommand({
