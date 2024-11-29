@@ -15,5 +15,5 @@
 .annotation-set-dropdown {
   flex: 1; /* Allow the dropdown to grow */
   min-width: 400px; /* Minimum width */
-  max-width: 400px; /* Maximum width */
+  max-width: 100%; /* Maximum width */
 }

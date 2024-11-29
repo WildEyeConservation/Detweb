@@ -340,7 +340,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                   confidence: 1,
                   source: 'manual',
                   setId: locationSetId,
-                }))).then(() => setLocationsCompleted((fc: any) => fc + 1))
+                })).then(() => setLocationsCompleted((fc: any) => fc + 1)))
               }
             }
           }

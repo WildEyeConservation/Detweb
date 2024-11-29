@@ -327,9 +327,10 @@ const schema = a.schema({
   }),
   getImageCounts: a.query()
     .arguments({
-      imageSetId: a.string().required()
+      imageSetId: a.string().required(),
+      nextToken: a.string()
     })
-    .returns(a.integer())
+    .returns(a.customType({count: a.integer(), nextToken: a.string()}))
     .authorization(allow => [allow.authenticated()])
     .handler(a.handler.custom({
       entry: './getImageCounts.js',
