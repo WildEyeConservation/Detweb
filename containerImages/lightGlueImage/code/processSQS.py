@@ -64,8 +64,8 @@ def process(body):
     with NamedTemporaryFile(suffix=os.path.splitext(keys[0])[1]) as tmpFile1,NamedTemporaryFile(suffix=os.path.splitext(keys[1])[1]) as tmpFile2:
         s3_client.download_file(os.environ['BUCKET'],'images/'+keys[0],tmpFile1.name)
         s3_client.download_file(os.environ['BUCKET'],'images/'+keys[1],tmpFile2.name)
-        img1=read_image(tmpFile1.name,mode=ImageReadMode.GRAY).to('cuda',dtype=torch.float32)/255
-        img2=read_image(tmpFile2.name,mode=ImageReadMode.GRAY).to('cuda',dtype=torch.float32)/255
+        img1=read_image(tmpFile1.name,mode=ImageReadMode.GRAY,apply_exif_orientation=True).to('cuda',dtype=torch.float32)/255
+        img2=read_image(tmpFile2.name,mode=ImageReadMode.GRAY,apply_exif_orientation=True).to('cuda',dtype=torch.float32)/255
     img1 = K.geometry.resize(img1, 528, antialias=True).unsqueeze(0)
     img2 = K.geometry.resize(img2, 528, antialias=True).unsqueeze(0)
     input_dict = {

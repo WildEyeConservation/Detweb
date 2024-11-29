@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+FROM pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
 #NVidia updated their key. See https://developer.nvidia.com/blog/updating-the-cuda-linux-gpg-repository-key/
 #RUN apt-key del 7fa2af80
 #RUN curl -O https://developer.download.nvidia.com/compute/cuda/repos/$distro/$arch/cuda-keyring_1.0-1_all.deb 
