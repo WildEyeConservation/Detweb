@@ -6,7 +6,6 @@ import { fetchAllPaginatedResults } from "./utils";
 import { useUpdateProgress } from './useUpdateProgress';
 import LabeledToggleSwitch from './LabeledToggleSwitch';
 import { LocationSetDropdown } from './LocationSetDropDown';
-import { useRetry } from './useRetry';
 
 type MoveObservationsProps = {
     show: boolean;
@@ -40,7 +39,6 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
     const [filterByUser, setFilterByUser] = useState<boolean>(true);
     const [selectedLocationSets, setSelectedLocationSets] = useState<string[]>([]);
     const [moveToNewAnnotationSet, setMoveToNewAnnotationSet] = useState<boolean>(true);
-    const { executeWithRetry } = useRetry();
 
     const handleMove = async () => {
         if (!moveToNewAnnotationSet && selectedAnnotationSets.includes(existingAnnotationSetId)) {
@@ -112,14 +110,12 @@ export default function MoveObservations({ show, handleClose, selectedAnnotation
 
             const updateObservationQ = [];
             for (const observation of filteredObservations) {
-                updateObservationQ.push(executeWithRetry(() => 
-                        client.models.Observation.update({
+                updateObservationQ.push(client.models.Observation.update({
                         id: observation.id,
                         annotationSetId: targetAnnotationSetId
                     })).then(() => {
                         setObservationsUpdated(prev => prev + 1);
-                    })
-                )
+                    });
             }
 
             await Promise.all(updateObservationQ);

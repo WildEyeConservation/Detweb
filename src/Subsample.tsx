@@ -4,7 +4,6 @@ import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import { ImageSetDropdown } from './ImageSetDropDown';
 import { GlobalContext, ProjectContext } from './Context';
-import { useRetry } from './useRetry';
 
 interface SubsampleModalProps {
     show: boolean;
@@ -22,7 +21,6 @@ const SubsampleModal: React.FC<SubsampleModalProps> = ({
     const [subsampleInterval, setSubsampleInterval] = useState<number>(2);
     const { client } = useContext(GlobalContext)!;
     const { project } = useContext(ProjectContext)!;
-    const { executeWithRetry } = useRetry();
 
     const  handleSubmit = async () => {
         // Implement the subsampling logic here
@@ -30,11 +28,11 @@ const SubsampleModal: React.FC<SubsampleModalProps> = ({
         console.log(`Selected Image Sets: ${selectedImageSets.join(', ')}`);
         for (const imageSet of selectedImageSets) {
             const allImages: { id: string, timestamp: number }[] = []
-            const { data } = await executeWithRetry(() => client.models.ImageSet.get({ id: imageSet }))
+            const { data } = await client.models.ImageSet.get({ id: imageSet })
             const { name, images } = data
             let prevNextToken: String | undefined = undefined;
             do {
-                const result = await executeWithRetry(() => client.models.ImageSetMembership.imageSetMembershipsByImageSetId({ imageSetId: imageSet }, { selectionSet: ['image.id', 'image.timestamp'], nextToken: prevNextToken }))
+                const result = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({ imageSetId: imageSet }, { selectionSet: ['image.id', 'image.timestamp'], nextToken: prevNextToken })
                 const { data, nextToken } = result
                 prevNextToken = nextToken
                 allImages.push(...data.map(({ image }) => image))
@@ -44,16 +42,16 @@ const SubsampleModal: React.FC<SubsampleModalProps> = ({
             //Subsample images
             const subsampledImages = allImages.filter((_, index) => index % subsampleInterval === 0)
             const newImageSetId = crypto.randomUUID()
-            const promises=subsampledImages.map(image=>executeWithRetry(() => client.models.ImageSetMembership.create({
+            const promises=subsampledImages.map(image=>client.models.ImageSetMembership.create({
                 imageSetId: newImageSetId,
                 imageId: image.id,
-            })))
+            }))
             await Promise.all(promises)
-            await executeWithRetry(() => client.models.ImageSet.create({
+            await client.models.ImageSet.create({
                 id: newImageSetId,
                 projectId: project.id,
                 name: `${name}-sub-${subsampleInterval}`,
-            }))
+            })
             console.log(allImages)
         }
         handleClose();

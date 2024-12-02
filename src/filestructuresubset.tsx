@@ -4,7 +4,6 @@ import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import Spinner from 'react-bootstrap/Spinner';
 import { ManagementContext, GlobalContext, ProjectContext } from './Context';
-import { useRetry } from "./useRetry";
 
 interface CreateSubsetModalProps {
     show: boolean;
@@ -35,7 +34,6 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
     const { client } = useContext(GlobalContext)!;
     const { project } = useContext(ProjectContext)!;
     const { imageSetsHook: { data: imageSets } } = useContext(ManagementContext)!;
-    const { executeWithRetry } = useRetry();
 
     const [fileStructure, setFileStructure] = useState<FileNode[]>([]);
     const [selectedImageIds, setselectedImageIds] = useState<string[]>([]);
@@ -119,11 +117,11 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
                     do {
                         try {
                             //console.log(`Fetching files for ImageSet ID: ${imageSetId} with nextToken: ${nextToken}`);
-                            const response = await executeWithRetry(() => client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
+                            const response = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
                                 imageSetId,
                                 selectionSet: ['image.id', 'image.files.path'],
                                 nextToken: nextToken,
-                            }));
+                            });
 
                             const { data: imageSetMemberships, nextToken: newNextToken } = response;
 
@@ -296,16 +294,16 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
         //console.log(`Creating new ImageSet "${name}" with ${imageIds.length} images`); // Updated log message
         const subsetId = crypto.randomUUID();
         await Promise.all(imageIds.map(imageId =>
-            executeWithRetry(() => client.models.ImageSetMembership.create({
+            client.models.ImageSetMembership.create({
                 imageSetId: subsetId,
                 imageId: imageId,
-            }))
+            })
         ));
-        await executeWithRetry(() => client.models.ImageSet.create({
+        await client.models.ImageSet.create({
             id: subsetId,
             name: name,
             projectId: project.id 
-        }));
+        });
         //console.log(`Created new ImageSet "${name}" with ${filePaths.length} files`);
     };
 

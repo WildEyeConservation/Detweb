@@ -10,7 +10,6 @@ import { GlobalContext } from "./Context";
 import { DateTime } from 'luxon'
 import {fetchAllPaginatedResults} from "./utils";
 import LabeledToggleSwitch from "./LabeledToggleSwitch";
-import { useRetry } from "./useRetry";
 
 
 interface AddGpsDataProps {
@@ -23,7 +22,6 @@ interface AddGpsDataProps {
 
 function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets }: AddGpsDataProps) {
   const {client} = useContext(GlobalContext)!;
-  const { executeWithRetry } = useRetry();
   const [file, setFile] = useState<File | undefined>();
   const [csvData, setCsvData] = useState<any>(undefined);
   const [associateByTimestamp, setAssociateByTimestamp] = useState(false);
@@ -132,7 +130,7 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
       await Promise.all(allImages.map(async ({ image: { timestamp, id } }) => {
         if (timestamp > csvData.data[0].timestamp && timestamp < csvData.data[csvData.data.length - 1].timestamp) {
           const gpsData = interpolateGpsData(csvData.data, timestamp);
-          await executeWithRetry(() => client.models.Image.update({ id, latitude: gpsData.lat, longitude: gpsData.lon, altitude_agl: gpsData.alt }));
+          await client.models.Image.update({ id, latitude: gpsData.lat, longitude: gpsData.lon, altitude_agl: gpsData.alt });
         } else {
           count++;
         }
@@ -148,11 +146,11 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
       }
     } else {
       for (const row of csvData.data) {
-        executeWithRetry(() => client.models.ImageFile.imagesByPath({ path: row.filepath }, { selectionSet: ['image.id'] as const }))
+        client.models.ImageFile.imagesByPath({ path: row.filepath }, { selectionSet: ['image.id'] as const })
           .then(({ data }) => data?.[0]?.image?.id)
           .then(async (id) => {
             if (id) {
-              await executeWithRetry(() => client.models.Image.update({ id, latitude: row.lat, longitude: row.lon, altitude_agl: row.alt }));
+              await client.models.Image.update({ id, latitude: row.lat, longitude: row.lon, altitude_agl: row.alt });
             } else {
               console.log(`No image found for filepath: ${row.filepath}`);
             }

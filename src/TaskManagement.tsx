@@ -42,8 +42,7 @@ export default function TaskManagement() {
         }}
         />,
         name,
-        counts[id]
-        ,
+        counts[id] || "Unknown",
         <span>
             <Button 
               variant="danger"

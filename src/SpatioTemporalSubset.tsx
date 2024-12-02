@@ -21,7 +21,6 @@ import * as turf from '@turf/turf';
 import L from 'leaflet';
 import { getUrl } from 'aws-amplify/storage';
 import Spinner from 'react-bootstrap/Spinner';
-import { useRetry } from './useRetry';
 
 interface CreateSubsetModalProps {
     show: boolean;
@@ -66,7 +65,6 @@ const FitBoundsToImages: React.FC<{ imageSetsData: ImageSetData[] }> = ({ imageS
 const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClose, selectedImageSets }) => {
     const { client } = useContext(GlobalContext)!;
     const {project} = useContext(ProjectContext)!;
-    const { executeWithRetry } = useRetry();
     const [imageSetsData, setImageSetsData] = useState<ImageSetData[]>([]);
     const [showNamePrompt, setShowNamePrompt] = useState(false);
     const [newSubsetName, setNewSubsetName] = useState('');
@@ -99,17 +97,17 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
                 let prevNextToken: string | null | undefined = undefined;
                 let allImages: any[] = [];
                 do {
-                    const { data: images, nextToken } = await executeWithRetry(() => client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
+                    const { data: images, nextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
                         imageSetId: selectedSetId,
                         selectionSet: ['image.timestamp', 'image.id','image.latitude','image.longitude','image.width','image.height'],
                         nextToken: prevNextToken
-                    }))
+                    })
                   prevNextToken = nextToken
                   allImages = allImages.concat(images)
                 } while (prevNextToken)            
-                const {data:imageSet} = await executeWithRetry(() => client.models.ImageSet.get({ id: selectedSetId },
+                const {data:imageSet} = await client.models.ImageSet.get({ id: selectedSetId },
                     { selectionSet: ["id", "name"] }
-                ));
+                );
                 return {
                     id: imageSet.id,
                     name: imageSet.name,
@@ -190,16 +188,16 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
         // Implement the actual creation logic here
         const subsetId = crypto.randomUUID()
         await Promise.all(imageIds.map(imageId => 
-            executeWithRetry(() => client.models.ImageSetMembership.create({
+            client.models.ImageSetMembership.create({
                 imageSetId: subsetId,
                 imageId: imageId,
-            }))
+            })
         ));
-        await executeWithRetry(() => client.models.ImageSet.create({
+        await client.models.ImageSet.create({
             id: subsetId,
             name: name,
             projectId: project.id 
-        }))
+        })
     }, [client.models.ImageSetMembership, client.models.ImageSet, project.id]);
 
     const handleCreateSubsets = useCallback(() => {
