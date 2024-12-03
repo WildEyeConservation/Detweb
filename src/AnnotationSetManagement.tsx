@@ -116,7 +116,7 @@ export default function AnnotationSetManagement() {
         }}
         />,
         name,
-        annotationCount || "Unknown",
+        annotationCount && annotationCount >= 0 ? annotationCount : "Unknown",
         <span>
             <Button 
               variant="warning"
