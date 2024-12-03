@@ -1,1 +1,1 @@
-docker run -v "$(pwd)"/code:/workspace \ --gpus all -it --env-file .env lh /bin/bash
+docker run -v "%cd%/code:/workspace" --gpus all -it lh /bin/bash

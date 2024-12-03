@@ -1,10 +1,10 @@
 /**
- * Scans the DynamoDB datasource. Scans up to the provided `limit` and stards from the provided `NextToken` (optional).
+ * Queries the DynamoDB datasource with pagination support
  * @param {import('@aws-appsync/utils').Context} ctx the context
- * @returns {import('@aws-appsync/utils').DynamoDBScanRequest} the request
+ * @returns {import('@aws-appsync/utils').DynamoDBQueryRequest} the request
  */
 export function request(ctx) {
-  return {
+  const query = {
     operation: 'Query',
     query: {
       expression: 'imageSetId = :imageSetId',
@@ -12,14 +12,25 @@ export function request(ctx) {
     },
     index: 'gsi-ImageSet.images', // Make sure this matches your GSI name
     select: 'COUNT',
+    limit: 10000, // Increase the limit
+    nextToken: ctx.args.nextToken // Handle pagination
   };
+  
+  return query;
 }
 
 /**
- * Returns the scanned items
+ * Accumulates counts across paginated results
  * @param {import('@aws-appsync/utils').Context} ctx the context
- * @returns {*} a flat list of results from the Scan operation
+ * @returns {number} total count of items
  */
 export function response(ctx) {
-    return ctx.result.scannedCount;
+    if (ctx.error) {
+        util.error(ctx.error.message, ctx.error.type);
+    }
+
+    return {
+        count: ctx.result.scannedCount,
+        nextToken: ctx.result.nextToken || undefined
+    };
 }

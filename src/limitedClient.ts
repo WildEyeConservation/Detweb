@@ -36,7 +36,44 @@ function checkForErrors(result: any) {
   return result;
 }
 
-// Recursive function to wrap client methods
+async function executeWithRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 5,
+  baseDelay: number = 1000,
+  maxDelay: number = 30000
+): Promise<T> {
+  let retryCount = 0;
+
+  while (retryCount < maxRetries) {
+    try {
+      const result = await operation();
+
+      // Handle GraphQL-style responses that might contain errors
+      if (result && (result as any).errors) {
+        throw new Error('Operation returned errors');
+      }
+
+      return result;
+    } catch (error) {
+      retryCount++;
+      if (retryCount === maxRetries) {
+        console.error(`Operation failed after ${maxRetries} attempts:`, error);
+        throw error;
+      }
+
+      const delay = Math.min(
+        baseDelay * Math.pow(2, retryCount) + Math.random() * 1000,
+        maxDelay
+      );
+      console.warn(`Retry ${retryCount}/${maxRetries} after ${delay}ms`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  throw new Error('Unexpected end of retry loop');
+}
+
+// Recursive function to wrap client methods with retry logic
 function wrapClientMethods(obj: any): any {
   if (typeof obj !== 'object' || obj === null) {
     return obj;
@@ -51,9 +88,9 @@ function wrapClientMethods(obj: any): any {
         wrappedObj[key] = value;
       } else {
         wrappedObj[key] = async (...args: any[]) => {
-        const result = await limit(() => value(...args));
-        const checkedResult = checkForErrors(result);
-        return wrapClientMethods(checkedResult);
+          const result = await executeWithRetry(() => limit(() => value(...args)));
+          const checkedResult = checkForErrors(result);
+          return wrapClientMethods(checkedResult);
         };
       }
     } else if (typeof value === 'object') {
