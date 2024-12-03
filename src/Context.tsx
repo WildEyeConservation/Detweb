@@ -77,6 +77,8 @@ interface ImageContextType {
     latLng2xy: (input: L.LatLng | [number, number] | Array<L.LatLng | [number, number]>) => L.Point | L.Point[];
     xy2latLng: (input: L.Point | [number, number] | Array<L.Point | [number, number]>) => L.LatLng | L.LatLng[];
     annotationsHook: AnnotationsHook;
+    zoom: number;
+    setZoom: React.Dispatch<React.SetStateAction<number>>;
 }
 
 

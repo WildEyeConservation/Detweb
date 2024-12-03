@@ -1,19 +1,28 @@
-import { useCallback , useState} from "react";
-import { ImageContext, ImageContextType } from "./Context";
+import { useCallback , useState,useContext} from "react";
+import { ImageContext, UserContext } from "./Context";
 import type { ImageType } from "./schemaTypes";
 import type { AnnotationsHook } from "./Context";
 import L from "leaflet";
+import { SendMessageCommand } from "@aws-sdk/client-sqs";
 
-export function ImageContextFromHook({ hook, image, children }: { hook: AnnotationsHook, image: ImageType, children: React.ReactNode }) {
+export function ImageContextFromHook({ hook, image, children, secondaryQueueUrl, taskTag }: { hook: AnnotationsHook, image: ImageType, children: React.ReactNode,secondaryQueueUrl?:string,taskTag:string }) {
     const [annoCount, setAnnoCount] = useState(0)
     const [startLoadingTimestamp, _] = useState<number>(Date.now())
     const [visibleTimestamp, setVisibleTimestamp] = useState<number | undefined>(undefined)
     const [fullyLoadedTimestamp, setFullyLoadedTimestamp] = useState<number | undefined>(undefined)
+    const {getSqsClient} = useContext(UserContext);
+    const [zoom,setZoom] = useState(1)
 
     const create = useCallback((annotation) => {
+        if (secondaryQueueUrl) {
+            getSqsClient().then(sqsClient => sqsClient.send(new SendMessageCommand({
+                QueueUrl: secondaryQueueUrl,
+                MessageBody: JSON.stringify({location:{x:annotation.x,y:annotation.y,width:100,height:100,image,annotationSetId:annotation.setId},allowOutside:true,zoom,taskTag:taskTag+'Secondary'})
+            })));
+        }
         setAnnoCount(old=>old + 1)
         return hook.create(annotation)
-    }, [hook.create,setAnnoCount])
+    }, [hook.create,setAnnoCount,secondaryQueueUrl,zoom,taskTag])
 
     const _delete = useCallback((annotation) => {
         setAnnoCount(old=>old - 1)
@@ -60,6 +69,8 @@ export function ImageContextFromHook({ hook, image, children }: { hook: Annotati
         fullyLoadedTimestamp,
         setVisibleTimestamp,
         setFullyLoadedTimestamp,
+        zoom,
+        setZoom,
     }}>
         {children}
     </ImageContext.Provider>

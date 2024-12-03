@@ -11,7 +11,7 @@ import { ImageType, ImageFileType, LocationType, AnnotationSetType } from './sch
 import { GlobalContext, ImageContext } from "./Context";
 import { StorageLayer } from "./StorageLayer";
 import { getUrl } from 'aws-amplify/storage';
-
+import ZoomTracker from "./ZoomTracker";
 
 export interface BaseImageProps {
   image: ImageType;
@@ -50,7 +50,6 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
       }
     }
   }, [fullyLoaded])
-
 
   useEffect(() => {
     if (visible) {
@@ -241,6 +240,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
             prev={prev}
             next={canAdvance ? next : undefined}
           />}
+        <ZoomTracker />
       </MapContainer>}
       </div>
   ), [next, prev, imageFiles, location, style, viewBounds, image, fullyLoaded,source, canAdvance,stats ])
