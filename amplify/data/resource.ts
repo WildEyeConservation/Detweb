@@ -6,6 +6,7 @@ import { listGroupsForUser } from '../data/list-groups-for-user/resource'
 import {processImages} from '../functions/processImages/resource'
 import { getAnnotationCounts } from '../functions/getAnnotationCounts/resource'
 import { updateUserStats } from '../functions/updateUserStats/resource'
+import { updateAnnotationCounts } from "../functions/updateAnnotationCounts/resource";
 /*== STEP 1 ===============================================================
 The section below creates a Todo database table with a "content" field. Try
 adding a new "isDone" field as a boolean. The authorization rule below
@@ -43,6 +44,7 @@ const schema = a.schema({
     color: a.string(),
     shortcutKey: a.string(),
     annotations: a.hasMany('Annotation','categoryId'),
+    annotationCount: a.integer().default(0),
     objects: a.hasMany('Object', 'categoryId')
   }).authorization(allow => [allow.authenticated()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
@@ -94,6 +96,7 @@ const schema = a.schema({
     project: a.belongsTo('Project', 'projectId'),
     name: a.string().required(),
     annotations: a.hasMany('Annotation', 'setId'),
+    annotationCount: a.integer().default(0),
     observations: a.hasMany('Observation', 'annotationSetId')
   }).authorization(allow => [allow.authenticated()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
@@ -152,6 +155,7 @@ const schema = a.schema({
   ]),
   Observation: a.model({
     projectId: a.id().required(),
+    owner: a.string().required(),
     project: a.belongsTo('Project', 'projectId'),
     timeTaken: a.float(),
     annotationCount: a.integer(),
@@ -165,14 +169,16 @@ const schema = a.schema({
   }).authorization(allow => [allow.authenticated(), allow.owner()])
   .secondaryIndexes((index)=>[
     index('locationId').queryField('observationsByLocationId'), 
-    index('annotationSetId').sortKeys(['createdAt']).queryField('observationsByAnnotationSetId')
+    index('annotationSetId').sortKeys(['createdAt']).queryField('observationsByAnnotationSetId'),
+    index('owner').queryField('observationsByOwner')
   ]),
   LocationSet: a.model({
     projectId: a.id().required(),
     name: a.string().required(),
     project: a.belongsTo('Project', 'projectId'),
     locations: a.hasMany('Location', 'setId'),
-    memberships: a.hasMany('LocationSetMembership', 'locationSetId')
+    memberships: a.hasMany('LocationSetMembership', 'locationSetId'),
+    locationCount: a.integer().default(0)
   }).authorization(allow => [allow.authenticated()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('projectId').queryField('locationSetsByProjectId')]),
@@ -193,7 +199,8 @@ const schema = a.schema({
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
     name: a.string().required(),
-    images: a.hasMany('ImageSetMembership', 'imageSetId')
+    images: a.hasMany('ImageSetMembership', 'imageSetId'),
+    imageCount: a.integer().default(0)
   }).authorization(allow => [allow.authenticated()])
     //.authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('projectId').queryField('imageSetsByProjectId')]),
@@ -204,11 +211,13 @@ const schema = a.schema({
     isAdmin: a.boolean(),
     queueId: a.id(),
     queue: a.belongsTo('Queue', 'queueId')
+    // backupQueueId: a.id(),
+    // backupQueue: a.belongsTo('Queue', 'backupQueueId')
   }).authorization(allow => [allow.authenticated()])
     //.authorization(allow => [allow.groupDefinedIn('projectId'), allow.group('orgadmin')])
   .secondaryIndexes((index)=>[index('projectId').queryField('userProjectMembershipsByProjectId'),
     index('userId').queryField('userProjectMembershipsByUserId'),
-    index('queueId').queryField('userProjectMembershipsByQueueId')
+    // index('queueId')  .queryField('userProjectMembershipsByQueueId')
   ]),
 //   type ImageNeighbour 
 //   @model
@@ -241,6 +250,7 @@ const schema = a.schema({
     project: a.belongsTo('Project', 'projectId'),
     name: a.string().required(),
     users: a.hasMany('UserProjectMembership', 'queueId'),
+    // backupUsers: a.hasMany('UserProjectMembership', 'backupQueueId'),
     url: a.url(),
   }).authorization(allow => [allow.authenticated()])
     //.authorization(allow => [allow.groupDefinedIn('projectId')])
@@ -361,7 +371,8 @@ const schema = a.schema({
   //   })
 }).authorization(allow => [allow.resource(getAnnotationCounts),
   allow.resource(processImages),
-  allow.resource(updateUserStats)])
+  allow.resource(updateUserStats),
+  allow.resource(updateAnnotationCounts)])
 
 export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({

@@ -207,6 +207,11 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
         })
       })
     );
+
+    await client.models.ImageSet.update({
+      id: imageSetId,
+      imageCount: filteredImageFiles.length
+    });
   };
 
   // This just ensures that the modal closes if the user closes the filepicker without making a selection

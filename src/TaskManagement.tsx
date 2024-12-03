@@ -24,7 +24,7 @@ export default function TaskManagement() {
   // }, [tasks]);
 
   const tableData = tasks?.sort((a,b)=> a.name.localeCompare(b.name)).map((task) => {
-    const { id, name } = task;
+    const { id, name, locationCount } = task;
     return {
       id,
       rowData: [
@@ -42,7 +42,7 @@ export default function TaskManagement() {
         }}
         />,
         name,
-        counts[id] || "Unknown",
+        locationCount || "Unknown",
         <span>
             <Button 
               variant="danger"

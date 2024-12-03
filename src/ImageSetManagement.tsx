@@ -18,34 +18,9 @@ export default function ImageSetManagement() {
   const { client, modalToShow, showModal } = useContext(GlobalContext)!
   const { imageSetsHook: { data: imageSets, delete: deleteImageSet } } = useContext(ManagementContext)!;
   const [selectedSets, setSelectedSets] = useState<string[]>([]);
-  const [counts, setCounts] = useState<{ [key: string]: number }>({});
- 
- 
-  useEffect(() => {
-    const fetchCounts = async () => {
-      const fetchAllPages = async (imageSetId: string) => {
-        let totalCount = 0;
-        let nextToken: string | null = null;
-
-        do {
-          const response = await client.queries.getImageCounts({ imageSetId, nextToken });
-          totalCount += response.data.count;
-          nextToken = response.data.nextToken;
-        } while (nextToken);
-
-        return totalCount;
-      };
-
-      setCounts(Object.fromEntries(await Promise.all(imageSets?.map(async (imageSet) => {
-        const totalCount = await fetchAllPages(imageSet.id);
-        return [imageSet.id, totalCount];
-      }))));
-    };
-    fetchCounts();
-  }, [imageSets]);
 
   const tableData = imageSets?.sort((a,b)=> a.name.localeCompare(b.name)).map((imageSet) => {
-    const { id, name } = imageSet;
+    const { id, name, imageCount } = imageSet;
     return {
       id,
       rowData: [
@@ -63,7 +38,7 @@ export default function ImageSetManagement() {
         }}
         />,
         name,
-        counts[id] || "Loading...",
+        imageCount || "Unknown",
         <span>
             <Button 
               variant="danger"

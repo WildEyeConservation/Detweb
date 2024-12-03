@@ -98,7 +98,7 @@ export default function AnnotationSetManagement() {
   }
 
   const tableData = annotationSets?.sort((a,b)=> a.name.localeCompare(b.name)).map((annotationSet) => {
-    const { id, name } = annotationSet;
+    const { id, name, annotationCount } = annotationSet;
     return {
       id,
       rowData: [
@@ -116,8 +116,7 @@ export default function AnnotationSetManagement() {
         }}
         />,
         name,
-        "Unknown"
-        ,
+        annotationCount || "Unknown",
         <span>
             <Button 
               variant="warning"

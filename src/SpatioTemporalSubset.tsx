@@ -196,7 +196,8 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
         await client.models.ImageSet.create({
             id: subsetId,
             name: name,
-            projectId: project.id 
+            projectId: project.id,
+            imageCount: imageIds.length
         })
     }, [client.models.ImageSetMembership, client.models.ImageSet, project.id]);
 

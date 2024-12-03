@@ -302,7 +302,8 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClo
         await client.models.ImageSet.create({
             id: subsetId,
             name: name,
-            projectId: project.id 
+            projectId: project.id,
+            imageCount: imageIds.length
         });
         //console.log(`Created new ImageSet "${name}" with ${filePaths.length} files`);
     };

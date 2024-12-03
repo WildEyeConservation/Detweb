@@ -51,6 +51,7 @@ const SubsampleModal: React.FC<SubsampleModalProps> = ({
                 id: newImageSetId,
                 projectId: project.id,
                 name: `${name}-sub-${subsampleInterval}`,
+                imageCount: subsampledImages.length
             })
             console.log(allImages)
         }

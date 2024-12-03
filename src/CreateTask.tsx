@@ -224,7 +224,11 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
 
   async function handleSubmit() {
     handleClose();
-    const locationSetId = createLocationSet({ name, projectId: project.id })
+    const locationSetId = createLocationSet({ 
+        name, 
+        projectId: project.id,
+        locationCount: !modelGuided ? allImages.length * horizontalTiles * verticalTiles : 0
+    });
     if (modelGuided) {
       if (modelId === "ivx") {
         allImages.map(async (image) => {
