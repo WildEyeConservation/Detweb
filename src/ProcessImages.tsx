@@ -8,6 +8,8 @@ import { ImageSetDropdown } from "./ImageSetDropDown";
 import { GlobalContext } from "./Context";
 import { SendMessageCommand } from "@aws-sdk/client-sqs";
 import { fetchAllPaginatedResults } from "./utils";
+import { ImageType } from "./schemaTypes";
+import pLimit from "p-limit";
 // const createPair = `mutation MyMutation($image1Key: String!, $image2Key: String!) {
 //   createImageNeighbour(input: {image1key: $image1Key, image2key: $image2Key}) {
 //     id
@@ -25,6 +27,7 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
   const { client, backend } = useContext(GlobalContext)!
   const {getSqsClient} = useContext(UserContext)!
   const [selectedProcess, selectProcess] = useState<string | undefined>(undefined);
+  const limit = pLimit(10);
 
   const processingOptions = [
     "Run heatmap generation",
@@ -44,6 +47,39 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
     determinateTaskName: "Pushing images to taskqueue",
     stepFormatter: (pairs:number)=>`steps ${pairs}`,
   });
+
+  async function handlePair(image1: ImageType, image2: ImageType) {
+    console.log(`Processing pair ${image1.id} and ${image2.id}`)
+    setRegistrationStepsCompleted((s) => s + 1);
+    const {data: existingNeighbour } = await client.models.ImageNeighbour.get({
+      image1Id: image1.id,
+      image2Id: image2.id,
+    }, { selectionSet: ["homography"] });
+    if (existingNeighbour?.homography) {
+      console.log(`Homography already exists for pair ${image1.id} and ${image2.id}`)
+      return
+    }
+    if (!existingNeighbour) {
+      await client.models.ImageNeighbour.create({
+        image1Id: image1.id,
+        image2Id: image2.id,
+      });
+    }
+    const file1 = image1.originalPath
+    const file2 = image2.originalPath
+    const sqsClient = await getSqsClient()
+    await limit(() =>sqsClient.send(
+      new SendMessageCommand({
+        QueueUrl: backend.custom.lightglueTaskQueueUrl,
+        MessageBody: JSON.stringify({
+          inputBucket: backend.custom.inputsBucket,
+          image1Id: image1.id,
+          image2Id: image2.id,
+          keys: [file1, file2],
+          action: "register"
+        })
+      })))
+  }
 
   async function handleSubmit() {
     handleClose();
@@ -88,10 +124,12 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
         }
         break;
         case "Compute image registrations": {
+          setRegistrationStepsCompleted(0)
+          setRegistrationTotalSteps(0)
           const images = await Promise.all(selectedImageSets.map(async (selectedSet) => 
             (await fetchAllPaginatedResults(
               client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
-              {imageSetId: selectedSet, selectionSet: ["image.id", "image.timestamp", "image.files.key", "image.files.type"]}
+              {imageSetId: selectedSet, selectionSet: ["image.id", "image.timestamp", "image.originalPath"]}, setRegistrationStepsCompleted
             ))
           )).then(arrays =>
             arrays.flat().map(
@@ -100,39 +138,16 @@ export default function ProcessImages({ show, handleClose, selectedImageSets, se
               images.sort((a, b) => a.timestamp - b.timestamp))
           setRegistrationTotalSteps(images.length - 1);
           setRegistrationStepsCompleted(0);
+          const promises=[]
           for (let i = 0; i < images.length - 1; i++) {
             setRegistrationStepsCompleted(i + 1);
             const image1 = images[i];
             const image2 = images[i + 1];
             if (image2.timestamp - image1.timestamp < 5) {
-              const { data } = await client.models.ImageNeighbour.create({
-                image1Id: image1.id,
-                image2Id: image2.id,
-              });
-              //If the create failed, it is typically because the record allready exists. Let us check if it allready has an associated homography before we launch a task to compute it
-              if (!data) {
-                const { data } = await client.models.ImageNeighbour.get({
-                  image1Id: image1.id,
-                  image2Id: image2.id,
-                });
-                //await publishError('taskProgress/processImages', `Error computing registration for images ${image1.id} and ${image2.id}: ${error instanceof Error ? error.message : String(error)}`, errorDetails);
-              }
-              const file1 = image1.originalPath
-              const file2 = image2.originalPath
-              const sqsClient = await getSqsClient()
-              await sqsClient.send(
-                new SendMessageCommand({
-                  QueueUrl: backend.custom.lightglueTaskQueueUrl,
-                  MessageBody: JSON.stringify({
-                    inputBucket: backend.custom.inputsBucket,
-                    image1Id: image1.id,
-                    image2Id: image2.id,
-                    keys: [file1, file2],
-                    action: "register"
-                  })
-                }))
+              promises.push(handlePair(image1, image2))
             }
           }
+          await Promise.all(promises)
         }
       }
     // } catch (error) {

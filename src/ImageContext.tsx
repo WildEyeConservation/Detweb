@@ -1,19 +1,39 @@
-import { useCallback , useState,useContext} from "react";
-import { ImageContext, UserContext } from "./Context";
+import { useCallback , useState,useContext,useEffect} from "react";
+import { ImageContext, UserContext, GlobalContext } from "./Context";
 import type { ImageType } from "./schemaTypes";
 import type { AnnotationsHook } from "./Context";
 import L from "leaflet";
 import { SendMessageCommand } from "@aws-sdk/client-sqs";
+import { inv } from "mathjs";
+import { array2Matrix, makeTransform } from "./utils";
 
 export function ImageContextFromHook({ hook, image, children, secondaryQueueUrl, taskTag }: { hook: AnnotationsHook, image: ImageType, children: React.ReactNode,secondaryQueueUrl?:string,taskTag:string }) {
     const [annoCount, setAnnoCount] = useState(0)
+    const {client} = useContext(GlobalContext);
     const [startLoadingTimestamp, _] = useState<number>(Date.now())
     const [visibleTimestamp, setVisibleTimestamp] = useState<number | undefined>(undefined)
     const [fullyLoadedTimestamp, setFullyLoadedTimestamp] = useState<number | undefined>(undefined)
     const {getSqsClient} = useContext(UserContext);
-    const [zoom,setZoom] = useState(1)
+    const [zoom, setZoom] = useState(1)
+    const [transformToPrev, setTransformToPrev] = useState<((c1: [number, number]) => [number, number]) | null>(null);
+
+    useEffect(() => {
+        client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: image.id }).then((neighbours) => {
+            if (neighbours?.data[0]?.homography)
+                setTransformToPrev(() => makeTransform(inv(array2Matrix(neighbours.data[0].homography))));
+        })
+    }, [image])
+  
 
     const create = useCallback((annotation) => {
+        // Create an objectID if this is the primary observation (first time this object was observed)
+        if (transformToPrev) {
+            const transformedPoint = transformToPrev([annotation.x, annotation.y]);
+            if (!(transformedPoint[0] >= 0 && transformedPoint[0] <= image.width && transformedPoint[1] >= 0 && transformedPoint[1] <= image.height)) {
+                annotation.id=crypto.randomUUID()
+                annotation.objectId = annotation.id;
+            }
+        }
         if (secondaryQueueUrl) {
             getSqsClient().then(sqsClient => sqsClient.send(new SendMessageCommand({
                 QueueUrl: secondaryQueueUrl,
@@ -23,6 +43,26 @@ export function ImageContextFromHook({ hook, image, children, secondaryQueueUrl,
         setAnnoCount(old=>old + 1)
         return hook.create(annotation)
     }, [hook.create,setAnnoCount,secondaryQueueUrl,zoom,taskTag])
+
+    const update = useCallback((annotation) => {
+        // Create an objectID if this is the primary observation (first time this object was observed)
+        if (transformToPrev) {
+            const transformedPoint = transformToPrev([annotation.x, annotation.y]);
+            if (!(transformedPoint[0] >= 0 && transformedPoint[0] <= image.width && transformedPoint[1] >= 0 && transformedPoint[1] <= image.height)) {
+                annotation.objectId = annotation.id;
+            } else {
+                annotation.objectId = null;
+            }
+        }
+        if (secondaryQueueUrl) {
+            getSqsClient().then(sqsClient => sqsClient.send(new SendMessageCommand({
+                QueueUrl: secondaryQueueUrl,
+                MessageBody: JSON.stringify({location:{x:annotation.x,y:annotation.y,width:100,height:100,image,annotationSetId:annotation.setId},allowOutside:true,zoom,taskTag:taskTag+'Secondary'})
+            })));
+        }
+        return hook.update(annotation)
+    }, [hook.create,setAnnoCount,secondaryQueueUrl,zoom,taskTag])
+
 
     const _delete = useCallback((annotation) => {
         setAnnoCount(old=>old - 1)
@@ -62,7 +102,7 @@ export function ImageContextFromHook({ hook, image, children, secondaryQueueUrl,
     return <ImageContext.Provider value={{
             latLng2xy,
             xy2latLng,
-        annotationsHook: { ...hook, create, delete:_delete },
+        annotationsHook: { ...hook, create,update, delete:_delete },
         annoCount,
         startLoadingTimestamp,
         visibleTimestamp,

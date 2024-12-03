@@ -6,12 +6,21 @@ import { remove } from 'aws-amplify/storage';
 import { fetchAllPaginatedResults } from "./utils";
 import { ProjectContext, UserContext } from "./Context";
 import UserStats from "./UserStats";
+import { useUpdateProgress } from "./useUpdateProgress";
+import { makeTransform, array2Matrix } from "./utils";
+import {inv} from 'mathjs'
 
 export function DevActions() {
     const { client } = useContext(GlobalContext)!;
     const { project } = useContext(ProjectContext)!;
     const { user: currentUser } = useContext(UserContext)!;
-    const {allUsers} = useContext(ManagementContext)
+    const { allUsers } = useContext(ManagementContext)
+    const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
+        taskId: `Deleting ImageNeighbour entries`,
+        indeterminateTaskName: `Loading entries`,
+        determinateTaskName: "Deleting entries",
+        stepFormatter: (count)=>`${count} entries`,
+      }); 
     
     const deleteOrphans = async () => {
         const prefix = prompt('Provide the prefix to scan (omit images/)');
@@ -248,6 +257,59 @@ export function DevActions() {
         console.log(table)
     }
 
+    async function deleteImageNeighbours() {
+        setStepsCompleted(0)
+        setTotalSteps(0)
+        const allImageNeighbours = await fetchAllPaginatedResults(client.models.ImageNeighbour.list,{},setStepsCompleted)
+        setTotalSteps(allImageNeighbours.length)
+        setStepsCompleted(0)
+        await Promise.all(allImageNeighbours.map(async (i) => {
+            await client.models.ImageNeighbour.delete({ image1Id: i.image1Id, image2Id: i.image2Id })
+            setStepsCompleted((i)=>i+1)
+        }))
+    }
+
+
+    async function backfillObjectID() {
+        const name = prompt('Provide the annotationSet to scan');
+        const annotationSets = await fetchAllPaginatedResults(client.models.AnnotationSet.list);
+        const set = annotationSets.find(s => s.name == name);
+        if (!set) {
+            console.log(`Annotation set ${name} not found`);
+            return;
+        }
+        const annotations = await fetchAllPaginatedResults(client.models.Annotation.annotationsByAnnotationSetId,
+           { setId: set.id })
+        // const { data: annotations } = await client.models.Annotation.annotationsByAnnotationSetId({ setId: set.id })
+        // Group the annotations by imageId
+        // const { data: annotations } = await client.models.Annotation.annotationsByImageIdAndSetId({ imageId: '715cc7c0-34b6-44e6-992e-3a9238ab8aeb', setId: { eq : '7cac128f-1072-4b64-97be-072cd56955fc'} })
+        const imageAnnotations = annotations.reduce((acc, annotation) => {
+            acc[annotation.imageId] = (acc[annotation.imageId] || []).concat(annotation);
+            return acc;
+        }, {});
+        //Loop over the imageAnnotations and read the ImageNeighbour entries
+        for (const imageId in imageAnnotations) {
+            const { data: image } = await client.models.Image.get({ id: imageId })
+            const neighbours = await client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: imageId })
+            if (neighbours?.data[0]?.homography) {
+                const f = makeTransform(inv(array2Matrix(neighbours.data[0].homography)));
+                const annotations = imageAnnotations[imageId];
+                for (const annotation of annotations) {
+                    const point = [annotation.x, annotation.y];
+                    const transformedPoint = f(point);
+                    if (transformedPoint[0] >= 0 && transformedPoint[0] <= image.width && transformedPoint[1] >= 0 && transformedPoint[1] <= image.height) {
+                        continue    
+                    }
+                    client.models.Annotation.update({
+                        id: annotation.id,
+                        objectId: annotation.id
+                    })
+                }
+            }
+        }
+    }
+
+
 
         
         
@@ -264,5 +326,7 @@ export function DevActions() {
         <Button onClick={() => updateStats(createInput())}>Simulate UserStat update.</Button>
         <Button onClick={recomputeUserStats}>Recompute UserStats</Button>
         <Button onClick={createUserStatsTable}>Create UserStats Table</Button>
+        <Button onClick={deleteImageNeighbours}>Delete ImageNeighbours Entries</Button>
+        <Button onClick={backfillObjectID}>Backfill ObjectID data</Button>
     </div>
 }

@@ -36,13 +36,13 @@ function createIcon(
     if (annotation.obscured) attributes += " obscured";
     if (annotation.shadow) attributes += " shadow";
     let html = `<div class="marker" ${attributes}><div style="background-color: ${color}; border-color: ${
-      annotation.objectId
+      annotation.objectId   
         ? "#ffffff"
         : annotation.proposedObjectId
         ? "#888888"
         : "#000000"
     }">
-         <span class="markerLabel">${id ? jdenticon.toSvg(id, 24) : ""}</svg></span>
+         <span class="markerLabel" style="position: relative; top: -1px; left: 0px;">${id ? jdenticon.toSvg(id, 20) : ""}</svg></span>
          </div></div>`;
     //let html = `<svg width="80" height="80" data-jdenticon-value="user127"/>`;
     //TODO : Confirm the units implicit in the various anchors defined below. If these are in pixels (or any other

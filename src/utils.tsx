@@ -1,4 +1,5 @@
 import { GraphQLResult, GraphqlSubscriptionResult } from '@aws-amplify/api-graphql';
+import { Matrix,multiply } from 'mathjs';
 
 export type UnknownGraphQLResponse = GraphQLResult<any> | GraphqlSubscriptionResult<any>;
 
@@ -52,5 +53,24 @@ export async function fetchAllPaginatedResults<
 
   return allResults;
 }
+// ReturnTypeOfFirstElementWithX is inferred as number
+export const makeTransform = (H: Matrix) => (c1: [number, number]): [number, number] => {
+  const result = multiply(H, [c1[0], c1[1], 1]).valueOf() as number[];
+  return [result[0] / result[2], result[1] / result[2]]; 
+};
+
+export const array2Matrix = (hc: number[] | null): number[][] | null => {
+  if (hc && hc.length == 9) {
+      const matrix = [];
+      while (hc.length) matrix.push(hc.splice(0, 3));
+      const result = matrix;
+      return result;
+  } else {
+      return null;
+  }
+};  
+
 
 // ReturnTypeOfFirstElementWithX is inferred as number
+
+

@@ -1,6 +1,6 @@
 // @flow
 import React, {ReactNode, useState, useEffect, useContext, memo, useMemo, useRef,useCallback } from "react";
-import { MapContainer, LayersControl} from "react-leaflet";
+import { MapContainer, LayersControl, LayerGroup } from "react-leaflet";
 import { NavButtons } from "./NavButtons";
 import * as L from "leaflet";
 import "leaflet-contextmenu";
@@ -12,6 +12,10 @@ import { GlobalContext, ImageContext } from "./Context";
 import { StorageLayer } from "./StorageLayer";
 import { getUrl } from 'aws-amplify/storage';
 import ZoomTracker from "./ZoomTracker";
+import OverlapLoader from "./OverlapLoader";
+import { inv } from "mathjs";
+import { makeTransform } from "./utils";
+
 
 export interface BaseImageProps {
   image: ImageType;
@@ -38,6 +42,8 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
   const { image } = location;
   const prevPropsRef = useRef(props);
   const source = imageFiles.find(file => file.type == 'image/jpeg')?.key
+  
+
 
   useEffect(() => {
     if (fullyLoaded) {
@@ -165,6 +171,20 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
             callback: () => {
               alert(JSON.stringify(stats));
             }
+          },{
+            text: "Open previous image in new tab",
+            callback: async () => {
+              const prevImage = await client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: image.id }).then(response => response.data[0].image1Id);
+              const newUrl = window.location.href.replace(/\/[^/]+\/?$/, `/image/${prevImage}/${location?.annotationSetId}`)
+              window.open(newUrl, '_blank');
+            }
+          },{
+            text: "Open next image in new tab",
+            callback: async () => {
+              const nextImage = await client.models.ImageNeighbour.imageNeighboursByImage1key({ image1Id: image.id }).then(response => response.data[0].image2Id);
+              const newUrl = window.location.href.replace(/\/[^/]+\/?$/, `/image/${nextImage}/${location?.annotationSetId}`)
+              window.open(newUrl, '_blank');
+            }
           },
           {
             text: "Download this image",
@@ -232,6 +252,17 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
               />
             </LayersControl.BaseLayer>
           )}
+          <LayersControl.Overlay name="Overlap Previous" checked={false}>
+            <LayerGroup>
+              <OverlapLoader image={image} loadPrevious={true} />
+            </LayerGroup>
+          </LayersControl.Overlay>
+          <LayersControl.Overlay name="Overlap Next" checked={false}>
+            <LayerGroup>
+              <OverlapLoader image={image} loadPrevious={false} />
+            </LayerGroup>
+          </LayersControl.Overlay>
+
         </LayersControl>
         {children}
         {(next || prev) && fullyLoaded &&

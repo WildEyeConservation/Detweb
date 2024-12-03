@@ -32,15 +32,15 @@ code {
     monospace;
 }
 
-.marker>div { width: 1rem;
-      height: 1rem;
+.marker>div { width: 1.5rem;
+      height: 1.5rem;
       display: block;
-      left: -0.5rem;
-      top:  -0.5rem;
+      left: -0.75rem;
+      top:  -0.75rem;
       opacity: 1;
       position: relative;
-      border-radius: 0.5rem;
-      transform: rotate(45deg);
+      border-radius: 0.75rem;
+      transform: rotate(0);
       border: 2px solid;}
 
 .marker[selected]>div,.marker[candidate]>div {
