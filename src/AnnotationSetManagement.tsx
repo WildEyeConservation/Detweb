@@ -55,7 +55,7 @@ export default function AnnotationSetManagement() {
         {
           setId: annotationSet.id,
 
-          selectionSet: ['y', 'x', 'category.name','owner','source','obscured', 'image.originalPath', 'image.timestamp', 'image.latitude', 'image.longitude'] as const
+          selectionSet: ['y', 'x', 'category.name','owner','source','obscured', 'id','objectId','image.originalPath', 'image.timestamp', 'image.latitude', 'image.longitude'] as const
         },
         setStepsCompleted
       ));
@@ -81,6 +81,8 @@ export default function AnnotationSetManagement() {
             longitude: anno.image.longitude,
             obscured: anno.obscured,
             annotator: anno.owner,
+            isPrimary: anno.objectId === anno.id,
+            objectId: anno.objectId,
             x: anno.x,
             y: anno.y,
             source: anno.source,
