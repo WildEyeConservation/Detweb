@@ -41,8 +41,9 @@ export const handler: DynamoDBStreamHandler = async (event) => {
     for (const record of event.Records) {
         if (record.eventName === 'INSERT' || record.eventName === 'REMOVE') {
             const incrementValue = record.eventName === 'INSERT' ? 1 : -1;
-            const annotationSetId = record.dynamodb?.NewImage?.setId?.S;
-            const categoryId = record.dynamodb?.NewImage?.categoryId?.S;
+            const image = record.eventName === 'INSERT' ? record.dynamodb?.NewImage : record.dynamodb?.OldImage;
+            const annotationSetId = image?.setId?.S;
+            const categoryId = image?.categoryId?.S;
 
             if (annotationSetId) {
                 await updateAnnotationCount('AnnotationSet', annotationSetId, incrementValue);
