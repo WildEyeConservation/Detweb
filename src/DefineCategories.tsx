@@ -65,7 +65,7 @@ export default function DefineCategories() {
   const tableData = categories
     ?.sort((a, b) => ((a.createdAt|| 0) > (b.createdAt || 0) ? 1 : -1))
     ?.map((item) => {
-      const { id, name, color, shortcutKey } = item;
+      const { id, name, color, shortcutKey, annotationCount } = item;
       return {
         id,
         rowData: [
@@ -80,6 +80,7 @@ export default function DefineCategories() {
             value={color || "red"}
             title="Category color"
           />,
+          annotationCount || 0,
           <>
             <Button
               variant="info"
@@ -167,7 +168,7 @@ export default function DefineCategories() {
         <h2>Categories</h2>
         {tableData && (
           <MyTable
-            tableHeadings={[{content:"Name", style: { width: "500px" } }, {content:"Shortcut"}, {content:"Color"}, {content:"Actions"}]}
+            tableHeadings={[{content:"Name", style: { width: "500px" } }, {content:"Shortcut"}, {content:"Color"}, {content:"Raw annotations"}, {content:"Actions"}]}
             tableData={tableData}
           />
           )}
