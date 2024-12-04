@@ -36,7 +36,7 @@ export default function AnnotationSetManagement() {
 
   const tableHeadings = [{ content: "Selected" },
     { content: "Name" },
-    { content: "Number of annotations", style: { width: "500px" } },
+    { content: "Number of raw annotations", style: { width: "500px" } },
     { content: "Actions" },
     
   ];

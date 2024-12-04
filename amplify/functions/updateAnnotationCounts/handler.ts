@@ -1,7 +1,9 @@
-import { DynamoDB } from 'aws-sdk';
 import type { DynamoDBStreamHandler } from 'aws-lambda';
 import { env } from '$amplify/env/updateAnnotationCounts'
 import { Amplify } from "aws-amplify";
+import { generateClient } from "aws-amplify/data";
+import { getAnnotationSet, getCategory } from './graphql/queries';
+import { updateAnnotationSet, updateCategory } from './graphql/mutations';
 
 Amplify.configure(
     {
@@ -31,7 +33,9 @@ Amplify.configure(
     }
   );
 
-const dynamoDB = new DynamoDB.DocumentClient();
+  const client = generateClient({
+    authMode: "iam",
+  });
 
 export const handler: DynamoDBStreamHandler = async (event) => {
     for (const record of event.Records) {
@@ -52,18 +56,41 @@ export const handler: DynamoDBStreamHandler = async (event) => {
 };
 
 async function updateAnnotationCount(tableName: string, id: string, incrementValue: number) {
-    const params = {
-        TableName: tableName,
-        Key: { id },
-        UpdateExpression: 'SET #attrName = #attrName + :incrementValue',
-        ExpressionAttributeNames: { '#attrName': 'annotationCount' },
-        ExpressionAttributeValues: { ':incrementValue': incrementValue },
-        ReturnValues: 'UPDATED_NEW'
-    };
-
     try {
-        const result = await dynamoDB.update(params).promise();
-        console.log(`${tableName} update succeeded:`, JSON.stringify(result, null, 2));
+        let result = 0;
+        if (tableName === 'AnnotationSet') {
+            const getResponse = await client.graphql({
+                query: getAnnotationSet,
+                variables: { id }
+              });
+      
+              const current = getResponse.data.getAnnotationSet?.annotationCount || 0;
+              const newValue = current + incrementValue;
+      
+              const updateResponse = await client.graphql({
+                query: updateAnnotationSet,
+                variables: { input: { id, annotationCount: newValue } }
+              });
+
+              result = updateResponse.data.updateAnnotationSet.annotationCount || 0;
+        }
+        else if (tableName === 'Category') {
+            const getResponse = await client.graphql({
+                query: getCategory,
+                variables: { id }
+              });
+      
+              const current = getResponse.data.getCategory?.annotationCount || 0;
+              const newValue = current + incrementValue;
+      
+              const updateResponse = await client.graphql({
+                query: updateCategory,
+                variables: { input: { id, annotationCount: newValue } }
+              });
+
+              result = updateResponse.data.updateCategory.annotationCount || 0;
+        }
+        console.log(`${tableName} update succeeded - annotation count: `, JSON.stringify(result, null, 2));
     } catch (error) {
         console.error(`Unable to update ${tableName}. Error JSON:`, JSON.stringify(error, null, 2));
     }
