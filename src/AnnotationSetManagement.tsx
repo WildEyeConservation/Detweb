@@ -14,29 +14,37 @@ import MoveObservations from "./MoveObservations";
 
 export default function AnnotationSetManagement() {
   const { client, modalToShow, showModal } = useContext(GlobalContext)!
-  const { annotationSetsHook: { data: annotationSets, delete: deleteAnnotationSet } } = useContext(ManagementContext)!;
+  const { annotationSetsHook: { data: annotationSets, delete: deleteAnnotationSet }, locationSetsHook: { data: locationSets } } = useContext(ManagementContext)!;
   const [selectedSets, setSelectedSets] = useState<string[]>([]);
   const [editSetName, setEditSetName] = useState<string>("");
   const [busy, setBusy] = useState<boolean>(false);
-  // const [counts, setCounts] = useState<{ [key: string]: number }>({});
+  const [tasks, setTasks] = useState<{name: string}[][]>([]);
   const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
     taskId: `Export data`,
     indeterminateTaskName: `Exporting data`,
     determinateTaskName: "Exporting data",
     stepFormatter: (count)=>`${count} annotations`,
   }); 
- 
-  // useEffect(() => {
-  //   const fetchCounts = async () => {
-  //     setCounts(Object.fromEntries(await Promise.all(annotationSets?.map(async (annotationSet) => 
-  //       [annotationSet.id, (await client.queries.getAnnotationCounts({ annotationSetId: annotationSet.id })).data]))));
-  //   };
-  //   fetchCounts();
-  // }, [annotationSets]);
+
+  useEffect(() => {
+    async function getTasks() {
+      const result = await Promise.all(annotationSets.map((annotationSet) => {
+        return fetchAllPaginatedResults(client.models.TasksOnAnnotationSet.locationSetsByAnnotationSetId, {annotationSetId: annotationSet.id, selectionSet: ['locationSetId'] as const});
+    }));
+      
+    setTasks(result.map((locationSetIds) => {
+      return locationSets
+        .filter(locationSet => locationSetIds.map(ls => ls.locationSetId).includes(locationSet.id))
+        .map(locationSet => ({name: locationSet.name}));
+    }));
+  }
+  getTasks();
+  }, [annotationSets]);
 
   const tableHeadings = [{ content: "Selected" },
     { content: "Name" },
-    { content: "Number of raw annotations", style: { width: "500px" } },
+    { content: "Raw annotations", style: { width: "300px" } },
+    { content: "Tasks launched on set", style: { width: "300px" } },
     { content: "Actions" },
     
   ];
@@ -47,10 +55,8 @@ export default function AnnotationSetManagement() {
     setStepsCompleted(0);
     setTotalSteps(0);
 
-    const annotationSetQ = [];
-
-    for (const annotationSet of annotationSets) {
-      annotationSetQ.push(fetchAllPaginatedResults(
+    const annotationSetsResult = await Promise.all(annotationSets.map((annotationSet) => {
+      return fetchAllPaginatedResults(
         client.models.Annotation.annotationsByAnnotationSetId,
         {
           setId: annotationSet.id,
@@ -58,10 +64,8 @@ export default function AnnotationSetManagement() {
           selectionSet: ['y', 'x', 'category.name','owner','source','obscured', 'id','objectId','image.originalPath', 'image.timestamp', 'image.latitude', 'image.longitude'] as const
         },
         setStepsCompleted
-      ));
-    }
-
-    const annotationSetsResult = await Promise.all(annotationSetQ);
+      )
+    }));
 
     let i = 0;
     let a = 0;
@@ -99,7 +103,7 @@ export default function AnnotationSetManagement() {
     setBusy(false);
   }
 
-  const tableData = annotationSets?.sort((a,b)=> a.name.localeCompare(b.name)).map((annotationSet) => {
+  const tableData = annotationSets?.sort((a,b)=> a.name.localeCompare(b.name)).map((annotationSet, i) => {
     const { id, name, annotationCount } = annotationSet;
     return {
       id,
@@ -118,7 +122,8 @@ export default function AnnotationSetManagement() {
         }}
         />,
         name,
-        annotationCount != null ? annotationCount : "Unknown",
+        annotationCount != null ? Math.max(0, annotationCount) : "Unknown",
+        tasks[i]?.length > 0 ? tasks[i].map(t => t.name).join(", ") : "None",
         <span>
             <Button 
               variant="warning"

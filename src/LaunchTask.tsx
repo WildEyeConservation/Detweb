@@ -180,6 +180,13 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
         ).then(() => setStepsCompleted((s: number) => s + batchEntries.length));
       }
     }
+
+    for (const taskId of selectedTasks) {
+      await client.models.TasksOnAnnotationSet.create({
+        annotationSetId: annotationSet!,
+        locationSetId: taskId,
+      });
+    }
     // } catch (error) {
     //   console.error('Error in LaunchTask handleSubmit:', error);
     //   const errorDetails = {
