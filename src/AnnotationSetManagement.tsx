@@ -27,18 +27,23 @@ export default function AnnotationSetManagement() {
   }); 
 
   useEffect(() => {
+    let isCancelled = false; 
+
     async function getTasks() {
       const result = await Promise.all(annotationSets.map((annotationSet) => {
-        return fetchAllPaginatedResults(client.models.TasksOnAnnotationSet.locationSetsByAnnotationSetId, {annotationSetId: annotationSet.id, selectionSet: ['locationSetId'] as const});
-    }));
-      
-    setTasks(result.map((locationSetIds) => {
-      return locationSets
-        .filter(locationSet => locationSetIds.map(ls => ls.locationSetId).includes(locationSet.id))
-        .map(locationSet => ({name: locationSet.name}));
-    }));
-  }
-  getTasks();
+        return fetchAllPaginatedResults(client.models.TasksOnAnnotationSet.list, { filter: { annotationSetId: { eq: annotationSet.id } }, selectionSet: ['locationSet.name'] as const});
+      }));
+
+      if (!isCancelled) { // Only update state if the effect hasn't been cancelled
+        setTasks(result.map(tasks => tasks.map(task => ({name: task.locationSet.name}))));
+      }
+    }
+
+    getTasks();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [annotationSets]);
 
   const tableHeadings = [{ content: "Selected" },

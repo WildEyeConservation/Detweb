@@ -187,6 +187,9 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
         locationSetId: taskId,
       });
     }
+
+    // hack to trigger effect that updates tasks launched on annotation set
+    await client.models.AnnotationSet.update({id: annotationSet!});
     // } catch (error) {
     //   console.error('Error in LaunchTask handleSubmit:', error);
     //   const errorDetails = {
