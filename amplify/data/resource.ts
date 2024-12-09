@@ -156,7 +156,7 @@ const schema = a.schema({
   ]),
   Observation: a.model({
     projectId: a.id().required(),
-    owner: a.string().required(),
+    owner: a.string(),
     project: a.belongsTo('Project', 'projectId'),
     timeTaken: a.float(),
     annotationCount: a.integer(),
