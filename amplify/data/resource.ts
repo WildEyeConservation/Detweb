@@ -97,7 +97,8 @@ const schema = a.schema({
     name: a.string().required(),
     annotations: a.hasMany('Annotation', 'setId'),
     annotationCount: a.integer().default(0),
-    observations: a.hasMany('Observation', 'annotationSetId')
+    observations: a.hasMany('Observation', 'annotationSetId'),
+    tasks: a.hasMany('TasksOnAnnotationSet', 'annotationSetId')
   }).authorization(allow => [allow.authenticated()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('projectId').queryField('annotationSetsByProjectId')]),
@@ -155,7 +156,7 @@ const schema = a.schema({
   ]),
   Observation: a.model({
     projectId: a.id().required(),
-    owner: a.string().required(),
+    owner: a.string(),
     project: a.belongsTo('Project', 'projectId'),
     timeTaken: a.float(),
     annotationCount: a.integer(),
@@ -178,7 +179,8 @@ const schema = a.schema({
     project: a.belongsTo('Project', 'projectId'),
     locations: a.hasMany('Location', 'setId'),
     memberships: a.hasMany('LocationSetMembership', 'locationSetId'),
-    locationCount: a.integer().default(0)
+    locationCount: a.integer().default(0),
+    tasks: a.hasMany('TasksOnAnnotationSet', 'locationSetId')
   }).authorization(allow => [allow.authenticated()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('projectId').queryField('locationSetsByProjectId')]),
@@ -271,6 +273,15 @@ const schema = a.schema({
   })
   .identifier(['projectId', 'userId','date','setId'])
   .authorization(allow => [allow.authenticated(), allow.publicApiKey()]),
+  TasksOnAnnotationSet: a.model({
+    annotationSetId: a.id().required(),
+    annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
+    locationSetId: a.id().required(),
+    locationSet: a.belongsTo('LocationSet', 'locationSetId')
+  }).authorization(allow => [allow.authenticated()])
+  .secondaryIndexes((index) => [
+    index('annotationSetId').queryField('locationSetsByAnnotationSetId'),
+  ]),
   addUserToGroup: a.mutation().arguments({
       userId:a.string().required(), 
       groupName:a.string().required()

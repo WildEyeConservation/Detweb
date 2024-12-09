@@ -80,7 +80,7 @@ export default function DefineCategories() {
             value={color || "red"}
             title="Category color"
           />,
-          annotationCount || 0,
+          Math.max(annotationCount || 0, 0),
           <>
             <Button
               variant="info"

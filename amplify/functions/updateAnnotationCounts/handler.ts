@@ -65,7 +65,7 @@ async function updateAnnotationCount(tableName: string, id: string, incrementVal
                 variables: { id }
               });
       
-              const current = getResponse.data.getAnnotationSet?.annotationCount || 0;
+              const current = Math.max(getResponse.data.getAnnotationSet?.annotationCount || 0, 0);
               const newValue = current + incrementValue;
       
               const updateResponse = await client.graphql({
@@ -81,7 +81,7 @@ async function updateAnnotationCount(tableName: string, id: string, incrementVal
                 variables: { id }
               });
       
-              const current = getResponse.data.getCategory?.annotationCount || 0;
+              const current = Math.max(getResponse.data.getCategory?.annotationCount || 0, 0);
               const newValue = current + incrementValue;
       
               const updateResponse = await client.graphql({
