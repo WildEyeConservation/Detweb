@@ -1,6 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { Modal, Button, Spinner } from 'react-bootstrap';
 import { GlobalContext, ProjectContext } from './Context';
+import { fetchAllPaginatedResults } from './utils';
 
 interface Props {
   show: boolean;
@@ -19,14 +20,12 @@ const AnnotationCountModal: React.FC<Props> = ({ show, handleClose, setId }) => 
         async function getAnnotationCounts() {
             setLoading(true);
 
-            const { data: result } = await client.models.AnnotationCountPerCategoryPerSet.categoryCountsByAnnotationSetId (
-                { 
-                    annotationSetId: setId,
-                    selectionSet: ['categoryId', 'annotationCount'] as const
-                }
-            );
+            const result = await fetchAllPaginatedResults(client.models.AnnotationCountPerCategoryPerSet.categoryCountsByAnnotationSetId, {
+                annotationSetId: setId,
+                selectionSet: ['categoryId', 'annotationCount'] as const
+            });
             setCategoryCounts(result);
-
+            
             setLoading(false);
         }
 

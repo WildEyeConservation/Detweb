@@ -128,7 +128,7 @@ export default function AnnotationSetManagement() {
         }}
         />,
         name,
-        <div style={{display: 'flex', alignItems: 'center'}}>
+        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
           {annotationCount != null ? Math.max(0, annotationCount) : "Unknown"}
           <Button 
             variant="outline-info"
