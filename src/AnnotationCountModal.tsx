@@ -25,7 +25,7 @@ const AnnotationCountModal: React.FC<Props> = ({ show, handleClose, setId }) => 
                 selectionSet: ['categoryId', 'annotationCount'] as const
             });
             setCategoryCounts(result);
-            
+
             setLoading(false);
         }
 
@@ -45,26 +45,28 @@ const AnnotationCountModal: React.FC<Props> = ({ show, handleClose, setId }) => 
                     <Spinner animation="border" variant="secondary" />
                 </div>
             : categoryCounts.length > 0 ?
-                categoryCounts.map((categoryCount, i) => (
-                    <div 
-                        key={i}
-                        style={{
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            alignItems: 'center', 
-                            borderTop: `${i > 0 ? '1px solid rgba(0, 0, 0, 0.2)' : 'none'}`, 
-                            paddingTop: '10px', 
-                            paddingBottom: '10px', 
-                            // todo: prob use CSS hover - state is a quick fix
-                            backgroundColor: hoveredId === i ? 'rgba(0, 0, 0, 0.1)' : 'transparent'
-                        }}
-                        onMouseEnter={() => setHoveredId(i)}
-                        onMouseLeave={() => setHoveredId(null)}
-                    >
-                        <p style={{marginBottom: '0px'}}>{categories.find(category => category.id === categoryCount.categoryId)?.name}:</p>
-                        <p style={{marginBottom: '0px'}}>{categoryCount.annotationCount}</p>
-                    </div>
-                ))
+                categoryCounts
+                    .filter(categoryCount => categoryCount.annotationCount > 0)
+                    .map((categoryCount, i) => (
+                        <div 
+                            key={i}
+                            style={{
+                                display: 'flex', 
+                                justifyContent: 'space-between', 
+                                alignItems: 'center', 
+                                borderTop: `${i > 0 ? '1px solid rgba(0, 0, 0, 0.2)' : 'none'}`, 
+                                paddingTop: '10px', 
+                                paddingBottom: '10px', 
+                                // todo: prob use CSS hover - state is a quick fix
+                                backgroundColor: hoveredId === i ? 'rgba(0, 0, 0, 0.1)' : 'transparent'
+                            }}
+                            onMouseEnter={() => setHoveredId(i)}
+                            onMouseLeave={() => setHoveredId(null)}
+                        >
+                            <p style={{marginBottom: '0px'}}>{categories.find(category => category.id === categoryCount.categoryId)?.name}:</p>
+                            <p style={{marginBottom: '0px'}}>{categoryCount.annotationCount}</p>
+                        </div>
+                    ))
             : <p style={{marginBottom: '0px'}}>No annotation counts found</p> }
         </Modal.Body>
         <Modal.Footer>

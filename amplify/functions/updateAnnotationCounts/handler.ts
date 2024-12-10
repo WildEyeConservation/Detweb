@@ -44,28 +44,39 @@ export const handler: DynamoDBStreamHandler = async (event) => {
             const image = record.eventName === 'INSERT' ? record.dynamodb?.NewImage : record.dynamodb?.OldImage;
             const annotationSetId = image?.setId?.S;
             const categoryId = image?.categoryId?.S;
+            const projectId = image?.projectId?.S;
 
             if (annotationSetId && categoryId) {
                 await updateAnnotationCount('AnnotationSet', annotationSetId, categoryId, incrementValue);
                 await updateAnnotationCount('Category', annotationSetId, categoryId, incrementValue);
+                await updateCountPerCategoryPerSet(projectId!, annotationSetId, categoryId, incrementValue);
             }
         }
 
         if (record.eventName === 'MODIFY') {
             const oldCategoryId = record.dynamodb?.OldImage?.categoryId?.S;
             const newCategoryId = record.dynamodb?.NewImage?.categoryId?.S;
-            const annotationSetId = record.dynamodb?.NewImage?.setId?.S;
 
-            if (oldCategoryId && newCategoryId && annotationSetId) {
-                await swapAnnotationCategory(oldCategoryId, newCategoryId, annotationSetId);
+            if (oldCategoryId === newCategoryId) {
+                return;
+            }
+
+            const annotationSetId = record.dynamodb?.NewImage?.setId?.S;
+            const projectId = record.dynamodb?.NewImage?.projectId?.S;
+            
+            if (projectId && oldCategoryId && newCategoryId && annotationSetId) {
+                await swapAnnotationCategory(projectId, oldCategoryId, newCategoryId, annotationSetId);
             }
         }
     }
 };
 
-async function swapAnnotationCategory(oldCategoryId: string, newCategoryId: string, annotationSetId: string) {
+async function swapAnnotationCategory(projectId: string, oldCategoryId: string, newCategoryId: string, annotationSetId: string) {
     await updateAnnotationCount('Category', annotationSetId, newCategoryId, 1);
+    await updateCountPerCategoryPerSet(projectId!, annotationSetId, newCategoryId, 1);
+
     await updateAnnotationCount('Category', annotationSetId, oldCategoryId, -1);
+    await updateCountPerCategoryPerSet(projectId!, annotationSetId, oldCategoryId, -1);
 }
 
 async function updateAnnotationCount(tableName: string, annotationSetId: string, categoryId: string, incrementValue: number) {
@@ -79,15 +90,11 @@ async function updateAnnotationCount(tableName: string, annotationSetId: string,
       
               const current = Math.max(getResponse.data.getAnnotationSet?.annotationCount || 0, 0);
               const newValue = current + incrementValue;
-
-              const projectId = getResponse.data.getAnnotationSet?.projectId;
       
               const updateResponse = await client.graphql({
                 query: updateAnnotationSet,
                 variables: { input: { id: annotationSetId, annotationCount: newValue } }
               });
-
-              await updateCountPerCategoryPerSet(projectId!, annotationSetId, categoryId, incrementValue);
 
               result = updateResponse.data.updateAnnotationSet.annotationCount || 0;
         }
@@ -99,15 +106,11 @@ async function updateAnnotationCount(tableName: string, annotationSetId: string,
       
               const current = Math.max(getResponse.data.getCategory?.annotationCount || 0, 0);
               const newValue = current + incrementValue;
-      
-              const projectId = getResponse.data.getCategory?.projectId;
 
               const updateResponse = await client.graphql({
                 query: updateCategory,
                 variables: { input: { id: categoryId, annotationCount: newValue } }
               });
-
-              await updateCountPerCategoryPerSet(projectId!, annotationSetId, categoryId, incrementValue);
 
               result = updateResponse.data.updateCategory.annotationCount || 0;
         }
