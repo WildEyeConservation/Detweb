@@ -53,8 +53,24 @@ export const handler: DynamoDBStreamHandler = async (event) => {
                 await updateAnnotationCount('Category', categoryId, incrementValue);
             }
         }
+
+        if (record.eventName === 'MODIFY') {
+            const oldCategoryId = record.dynamodb?.OldImage?.categoryId?.S;
+            const newCategoryId = record.dynamodb?.NewImage?.categoryId?.S;
+
+            if (oldCategoryId && newCategoryId) {
+                await swapAnnotationCategory(oldCategoryId, newCategoryId);
+            }
+        }
     }
 };
+
+async function swapAnnotationCategory(oldCategoryId: string, newCategoryId: string) {
+    // Increase annotation count for the new category
+    await updateAnnotationCount('Category', newCategoryId, 1);
+    // Decrease annotation count for the old category
+    await updateAnnotationCount('Category', oldCategoryId, -1);
+}
 
 async function updateAnnotationCount(tableName: string, id: string, incrementValue: number) {
     try {
