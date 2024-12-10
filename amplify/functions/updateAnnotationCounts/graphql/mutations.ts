@@ -96,12 +96,61 @@ export const createAnnotation = /* GraphQL */ `mutation CreateAnnotation(
   APITypes.CreateAnnotationMutationVariables,
   APITypes.CreateAnnotationMutation
 >;
+export const createAnnotationCountPerCategoryPerSet = /* GraphQL */ `mutation CreateAnnotationCountPerCategoryPerSet(
+  $condition: ModelAnnotationCountPerCategoryPerSetConditionInput
+  $input: CreateAnnotationCountPerCategoryPerSetInput!
+) {
+  createAnnotationCountPerCategoryPerSet(condition: $condition, input: $input) {
+    annotationCount
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    category {
+      annotationCount
+      color
+      createdAt
+      id
+      name
+      projectId
+      shortcutKey
+      updatedAt
+      __typename
+    }
+    categoryId
+    createdAt
+    project {
+      createdAt
+      id
+      name
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.CreateAnnotationCountPerCategoryPerSetMutationVariables,
+  APITypes.CreateAnnotationCountPerCategoryPerSetMutation
+>;
 export const createAnnotationSet = /* GraphQL */ `mutation CreateAnnotationSet(
   $condition: ModelAnnotationSetConditionInput
   $input: CreateAnnotationSetInput!
 ) {
   createAnnotationSet(condition: $condition, input: $input) {
     annotationCount
+    annotationCountPerCategory {
+      nextToken
+      __typename
+    }
     annotations {
       nextToken
       __typename
@@ -121,6 +170,10 @@ export const createAnnotationSet = /* GraphQL */ `mutation CreateAnnotationSet(
       __typename
     }
     projectId
+    tasks {
+      nextToken
+      __typename
+    }
     updatedAt
     __typename
   }
@@ -135,6 +188,10 @@ export const createCategory = /* GraphQL */ `mutation CreateCategory(
 ) {
   createCategory(condition: $condition, input: $input) {
     annotationCount
+    annotationCountPerSet {
+      nextToken
+      __typename
+    }
     annotations {
       nextToken
       __typename
@@ -509,6 +566,10 @@ export const createLocationSet = /* GraphQL */ `mutation CreateLocationSet(
       __typename
     }
     projectId
+    tasks {
+      nextToken
+      __typename
+    }
     updatedAt
     __typename
   }
@@ -656,6 +717,10 @@ export const createProject = /* GraphQL */ `mutation CreateProject(
   $input: CreateProjectInput!
 ) {
   createProject(condition: $condition, input: $input) {
+    annotationCountsPerCategoryPerSet {
+      nextToken
+      __typename
+    }
     annotationSets {
       nextToken
       __typename
@@ -743,6 +808,41 @@ export const createQueue = /* GraphQL */ `mutation CreateQueue(
 ` as GeneratedMutation<
   APITypes.CreateQueueMutationVariables,
   APITypes.CreateQueueMutation
+>;
+export const createTasksOnAnnotationSet = /* GraphQL */ `mutation CreateTasksOnAnnotationSet(
+  $condition: ModelTasksOnAnnotationSetConditionInput
+  $input: CreateTasksOnAnnotationSetInput!
+) {
+  createTasksOnAnnotationSet(condition: $condition, input: $input) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    createdAt
+    id
+    locationSet {
+      createdAt
+      id
+      locationCount
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    locationSetId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.CreateTasksOnAnnotationSetMutationVariables,
+  APITypes.CreateTasksOnAnnotationSetMutation
 >;
 export const createUserProjectMembership = /* GraphQL */ `mutation CreateUserProjectMembership(
   $condition: ModelUserProjectMembershipConditionInput
@@ -886,12 +986,61 @@ export const deleteAnnotation = /* GraphQL */ `mutation DeleteAnnotation(
   APITypes.DeleteAnnotationMutationVariables,
   APITypes.DeleteAnnotationMutation
 >;
+export const deleteAnnotationCountPerCategoryPerSet = /* GraphQL */ `mutation DeleteAnnotationCountPerCategoryPerSet(
+  $condition: ModelAnnotationCountPerCategoryPerSetConditionInput
+  $input: DeleteAnnotationCountPerCategoryPerSetInput!
+) {
+  deleteAnnotationCountPerCategoryPerSet(condition: $condition, input: $input) {
+    annotationCount
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    category {
+      annotationCount
+      color
+      createdAt
+      id
+      name
+      projectId
+      shortcutKey
+      updatedAt
+      __typename
+    }
+    categoryId
+    createdAt
+    project {
+      createdAt
+      id
+      name
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.DeleteAnnotationCountPerCategoryPerSetMutationVariables,
+  APITypes.DeleteAnnotationCountPerCategoryPerSetMutation
+>;
 export const deleteAnnotationSet = /* GraphQL */ `mutation DeleteAnnotationSet(
   $condition: ModelAnnotationSetConditionInput
   $input: DeleteAnnotationSetInput!
 ) {
   deleteAnnotationSet(condition: $condition, input: $input) {
     annotationCount
+    annotationCountPerCategory {
+      nextToken
+      __typename
+    }
     annotations {
       nextToken
       __typename
@@ -911,6 +1060,10 @@ export const deleteAnnotationSet = /* GraphQL */ `mutation DeleteAnnotationSet(
       __typename
     }
     projectId
+    tasks {
+      nextToken
+      __typename
+    }
     updatedAt
     __typename
   }
@@ -925,6 +1078,10 @@ export const deleteCategory = /* GraphQL */ `mutation DeleteCategory(
 ) {
   deleteCategory(condition: $condition, input: $input) {
     annotationCount
+    annotationCountPerSet {
+      nextToken
+      __typename
+    }
     annotations {
       nextToken
       __typename
@@ -1292,6 +1449,10 @@ export const deleteLocationSet = /* GraphQL */ `mutation DeleteLocationSet(
       __typename
     }
     projectId
+    tasks {
+      nextToken
+      __typename
+    }
     updatedAt
     __typename
   }
@@ -1439,6 +1600,10 @@ export const deleteProject = /* GraphQL */ `mutation DeleteProject(
   $input: DeleteProjectInput!
 ) {
   deleteProject(condition: $condition, input: $input) {
+    annotationCountsPerCategoryPerSet {
+      nextToken
+      __typename
+    }
     annotationSets {
       nextToken
       __typename
@@ -1526,6 +1691,41 @@ export const deleteQueue = /* GraphQL */ `mutation DeleteQueue(
 ` as GeneratedMutation<
   APITypes.DeleteQueueMutationVariables,
   APITypes.DeleteQueueMutation
+>;
+export const deleteTasksOnAnnotationSet = /* GraphQL */ `mutation DeleteTasksOnAnnotationSet(
+  $condition: ModelTasksOnAnnotationSetConditionInput
+  $input: DeleteTasksOnAnnotationSetInput!
+) {
+  deleteTasksOnAnnotationSet(condition: $condition, input: $input) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    createdAt
+    id
+    locationSet {
+      createdAt
+      id
+      locationCount
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    locationSetId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.DeleteTasksOnAnnotationSetMutationVariables,
+  APITypes.DeleteTasksOnAnnotationSetMutation
 >;
 export const deleteUserProjectMembership = /* GraphQL */ `mutation DeleteUserProjectMembership(
   $condition: ModelUserProjectMembershipConditionInput
@@ -1694,12 +1894,61 @@ export const updateAnnotation = /* GraphQL */ `mutation UpdateAnnotation(
   APITypes.UpdateAnnotationMutationVariables,
   APITypes.UpdateAnnotationMutation
 >;
+export const updateAnnotationCountPerCategoryPerSet = /* GraphQL */ `mutation UpdateAnnotationCountPerCategoryPerSet(
+  $condition: ModelAnnotationCountPerCategoryPerSetConditionInput
+  $input: UpdateAnnotationCountPerCategoryPerSetInput!
+) {
+  updateAnnotationCountPerCategoryPerSet(condition: $condition, input: $input) {
+    annotationCount
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    category {
+      annotationCount
+      color
+      createdAt
+      id
+      name
+      projectId
+      shortcutKey
+      updatedAt
+      __typename
+    }
+    categoryId
+    createdAt
+    project {
+      createdAt
+      id
+      name
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.UpdateAnnotationCountPerCategoryPerSetMutationVariables,
+  APITypes.UpdateAnnotationCountPerCategoryPerSetMutation
+>;
 export const updateAnnotationSet = /* GraphQL */ `mutation UpdateAnnotationSet(
   $condition: ModelAnnotationSetConditionInput
   $input: UpdateAnnotationSetInput!
 ) {
   updateAnnotationSet(condition: $condition, input: $input) {
     annotationCount
+    annotationCountPerCategory {
+      nextToken
+      __typename
+    }
     annotations {
       nextToken
       __typename
@@ -1719,6 +1968,10 @@ export const updateAnnotationSet = /* GraphQL */ `mutation UpdateAnnotationSet(
       __typename
     }
     projectId
+    tasks {
+      nextToken
+      __typename
+    }
     updatedAt
     __typename
   }
@@ -1733,6 +1986,10 @@ export const updateCategory = /* GraphQL */ `mutation UpdateCategory(
 ) {
   updateCategory(condition: $condition, input: $input) {
     annotationCount
+    annotationCountPerSet {
+      nextToken
+      __typename
+    }
     annotations {
       nextToken
       __typename
@@ -2100,6 +2357,10 @@ export const updateLocationSet = /* GraphQL */ `mutation UpdateLocationSet(
       __typename
     }
     projectId
+    tasks {
+      nextToken
+      __typename
+    }
     updatedAt
     __typename
   }
@@ -2247,6 +2508,10 @@ export const updateProject = /* GraphQL */ `mutation UpdateProject(
   $input: UpdateProjectInput!
 ) {
   updateProject(condition: $condition, input: $input) {
+    annotationCountsPerCategoryPerSet {
+      nextToken
+      __typename
+    }
     annotationSets {
       nextToken
       __typename
@@ -2334,6 +2599,41 @@ export const updateQueue = /* GraphQL */ `mutation UpdateQueue(
 ` as GeneratedMutation<
   APITypes.UpdateQueueMutationVariables,
   APITypes.UpdateQueueMutation
+>;
+export const updateTasksOnAnnotationSet = /* GraphQL */ `mutation UpdateTasksOnAnnotationSet(
+  $condition: ModelTasksOnAnnotationSetConditionInput
+  $input: UpdateTasksOnAnnotationSetInput!
+) {
+  updateTasksOnAnnotationSet(condition: $condition, input: $input) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    createdAt
+    id
+    locationSet {
+      createdAt
+      id
+      locationCount
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    locationSetId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.UpdateTasksOnAnnotationSetMutationVariables,
+  APITypes.UpdateTasksOnAnnotationSetMutation
 >;
 export const updateUserProjectMembership = /* GraphQL */ `mutation UpdateUserProjectMembership(
   $condition: ModelUserProjectMembershipConditionInput

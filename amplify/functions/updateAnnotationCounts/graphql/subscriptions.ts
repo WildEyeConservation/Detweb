@@ -89,11 +89,59 @@ export const onCreateAnnotation = /* GraphQL */ `subscription OnCreateAnnotation
   APITypes.OnCreateAnnotationSubscriptionVariables,
   APITypes.OnCreateAnnotationSubscription
 >;
+export const onCreateAnnotationCountPerCategoryPerSet = /* GraphQL */ `subscription OnCreateAnnotationCountPerCategoryPerSet(
+  $filter: ModelSubscriptionAnnotationCountPerCategoryPerSetFilterInput
+) {
+  onCreateAnnotationCountPerCategoryPerSet(filter: $filter) {
+    annotationCount
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    category {
+      annotationCount
+      color
+      createdAt
+      id
+      name
+      projectId
+      shortcutKey
+      updatedAt
+      __typename
+    }
+    categoryId
+    createdAt
+    project {
+      createdAt
+      id
+      name
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnCreateAnnotationCountPerCategoryPerSetSubscriptionVariables,
+  APITypes.OnCreateAnnotationCountPerCategoryPerSetSubscription
+>;
 export const onCreateAnnotationSet = /* GraphQL */ `subscription OnCreateAnnotationSet(
   $filter: ModelSubscriptionAnnotationSetFilterInput
 ) {
   onCreateAnnotationSet(filter: $filter) {
     annotationCount
+    annotationCountPerCategory {
+      nextToken
+      __typename
+    }
     annotations {
       nextToken
       __typename
@@ -113,6 +161,10 @@ export const onCreateAnnotationSet = /* GraphQL */ `subscription OnCreateAnnotat
       __typename
     }
     projectId
+    tasks {
+      nextToken
+      __typename
+    }
     updatedAt
     __typename
   }
@@ -124,6 +176,10 @@ export const onCreateAnnotationSet = /* GraphQL */ `subscription OnCreateAnnotat
 export const onCreateCategory = /* GraphQL */ `subscription OnCreateCategory($filter: ModelSubscriptionCategoryFilterInput) {
   onCreateCategory(filter: $filter) {
     annotationCount
+    annotationCountPerSet {
+      nextToken
+      __typename
+    }
     annotations {
       nextToken
       __typename
@@ -476,6 +532,10 @@ export const onCreateLocationSet = /* GraphQL */ `subscription OnCreateLocationS
       __typename
     }
     projectId
+    tasks {
+      nextToken
+      __typename
+    }
     updatedAt
     __typename
   }
@@ -616,6 +676,10 @@ export const onCreateObservation = /* GraphQL */ `subscription OnCreateObservati
 >;
 export const onCreateProject = /* GraphQL */ `subscription OnCreateProject($filter: ModelSubscriptionProjectFilterInput) {
   onCreateProject(filter: $filter) {
+    annotationCountsPerCategoryPerSet {
+      nextToken
+      __typename
+    }
     annotationSets {
       nextToken
       __typename
@@ -700,6 +764,40 @@ export const onCreateQueue = /* GraphQL */ `subscription OnCreateQueue($filter: 
 ` as GeneratedSubscription<
   APITypes.OnCreateQueueSubscriptionVariables,
   APITypes.OnCreateQueueSubscription
+>;
+export const onCreateTasksOnAnnotationSet = /* GraphQL */ `subscription OnCreateTasksOnAnnotationSet(
+  $filter: ModelSubscriptionTasksOnAnnotationSetFilterInput
+) {
+  onCreateTasksOnAnnotationSet(filter: $filter) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    createdAt
+    id
+    locationSet {
+      createdAt
+      id
+      locationCount
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    locationSetId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnCreateTasksOnAnnotationSetSubscriptionVariables,
+  APITypes.OnCreateTasksOnAnnotationSetSubscription
 >;
 export const onCreateUserProjectMembership = /* GraphQL */ `subscription OnCreateUserProjectMembership(
   $filter: ModelSubscriptionUserProjectMembershipFilterInput
@@ -839,11 +937,59 @@ export const onDeleteAnnotation = /* GraphQL */ `subscription OnDeleteAnnotation
   APITypes.OnDeleteAnnotationSubscriptionVariables,
   APITypes.OnDeleteAnnotationSubscription
 >;
+export const onDeleteAnnotationCountPerCategoryPerSet = /* GraphQL */ `subscription OnDeleteAnnotationCountPerCategoryPerSet(
+  $filter: ModelSubscriptionAnnotationCountPerCategoryPerSetFilterInput
+) {
+  onDeleteAnnotationCountPerCategoryPerSet(filter: $filter) {
+    annotationCount
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    category {
+      annotationCount
+      color
+      createdAt
+      id
+      name
+      projectId
+      shortcutKey
+      updatedAt
+      __typename
+    }
+    categoryId
+    createdAt
+    project {
+      createdAt
+      id
+      name
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnDeleteAnnotationCountPerCategoryPerSetSubscriptionVariables,
+  APITypes.OnDeleteAnnotationCountPerCategoryPerSetSubscription
+>;
 export const onDeleteAnnotationSet = /* GraphQL */ `subscription OnDeleteAnnotationSet(
   $filter: ModelSubscriptionAnnotationSetFilterInput
 ) {
   onDeleteAnnotationSet(filter: $filter) {
     annotationCount
+    annotationCountPerCategory {
+      nextToken
+      __typename
+    }
     annotations {
       nextToken
       __typename
@@ -863,6 +1009,10 @@ export const onDeleteAnnotationSet = /* GraphQL */ `subscription OnDeleteAnnotat
       __typename
     }
     projectId
+    tasks {
+      nextToken
+      __typename
+    }
     updatedAt
     __typename
   }
@@ -874,6 +1024,10 @@ export const onDeleteAnnotationSet = /* GraphQL */ `subscription OnDeleteAnnotat
 export const onDeleteCategory = /* GraphQL */ `subscription OnDeleteCategory($filter: ModelSubscriptionCategoryFilterInput) {
   onDeleteCategory(filter: $filter) {
     annotationCount
+    annotationCountPerSet {
+      nextToken
+      __typename
+    }
     annotations {
       nextToken
       __typename
@@ -1226,6 +1380,10 @@ export const onDeleteLocationSet = /* GraphQL */ `subscription OnDeleteLocationS
       __typename
     }
     projectId
+    tasks {
+      nextToken
+      __typename
+    }
     updatedAt
     __typename
   }
@@ -1366,6 +1524,10 @@ export const onDeleteObservation = /* GraphQL */ `subscription OnDeleteObservati
 >;
 export const onDeleteProject = /* GraphQL */ `subscription OnDeleteProject($filter: ModelSubscriptionProjectFilterInput) {
   onDeleteProject(filter: $filter) {
+    annotationCountsPerCategoryPerSet {
+      nextToken
+      __typename
+    }
     annotationSets {
       nextToken
       __typename
@@ -1450,6 +1612,40 @@ export const onDeleteQueue = /* GraphQL */ `subscription OnDeleteQueue($filter: 
 ` as GeneratedSubscription<
   APITypes.OnDeleteQueueSubscriptionVariables,
   APITypes.OnDeleteQueueSubscription
+>;
+export const onDeleteTasksOnAnnotationSet = /* GraphQL */ `subscription OnDeleteTasksOnAnnotationSet(
+  $filter: ModelSubscriptionTasksOnAnnotationSetFilterInput
+) {
+  onDeleteTasksOnAnnotationSet(filter: $filter) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    createdAt
+    id
+    locationSet {
+      createdAt
+      id
+      locationCount
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    locationSetId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnDeleteTasksOnAnnotationSetSubscriptionVariables,
+  APITypes.OnDeleteTasksOnAnnotationSetSubscription
 >;
 export const onDeleteUserProjectMembership = /* GraphQL */ `subscription OnDeleteUserProjectMembership(
   $filter: ModelSubscriptionUserProjectMembershipFilterInput
@@ -1589,11 +1785,59 @@ export const onUpdateAnnotation = /* GraphQL */ `subscription OnUpdateAnnotation
   APITypes.OnUpdateAnnotationSubscriptionVariables,
   APITypes.OnUpdateAnnotationSubscription
 >;
+export const onUpdateAnnotationCountPerCategoryPerSet = /* GraphQL */ `subscription OnUpdateAnnotationCountPerCategoryPerSet(
+  $filter: ModelSubscriptionAnnotationCountPerCategoryPerSetFilterInput
+) {
+  onUpdateAnnotationCountPerCategoryPerSet(filter: $filter) {
+    annotationCount
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    category {
+      annotationCount
+      color
+      createdAt
+      id
+      name
+      projectId
+      shortcutKey
+      updatedAt
+      __typename
+    }
+    categoryId
+    createdAt
+    project {
+      createdAt
+      id
+      name
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnUpdateAnnotationCountPerCategoryPerSetSubscriptionVariables,
+  APITypes.OnUpdateAnnotationCountPerCategoryPerSetSubscription
+>;
 export const onUpdateAnnotationSet = /* GraphQL */ `subscription OnUpdateAnnotationSet(
   $filter: ModelSubscriptionAnnotationSetFilterInput
 ) {
   onUpdateAnnotationSet(filter: $filter) {
     annotationCount
+    annotationCountPerCategory {
+      nextToken
+      __typename
+    }
     annotations {
       nextToken
       __typename
@@ -1613,6 +1857,10 @@ export const onUpdateAnnotationSet = /* GraphQL */ `subscription OnUpdateAnnotat
       __typename
     }
     projectId
+    tasks {
+      nextToken
+      __typename
+    }
     updatedAt
     __typename
   }
@@ -1624,6 +1872,10 @@ export const onUpdateAnnotationSet = /* GraphQL */ `subscription OnUpdateAnnotat
 export const onUpdateCategory = /* GraphQL */ `subscription OnUpdateCategory($filter: ModelSubscriptionCategoryFilterInput) {
   onUpdateCategory(filter: $filter) {
     annotationCount
+    annotationCountPerSet {
+      nextToken
+      __typename
+    }
     annotations {
       nextToken
       __typename
@@ -1976,6 +2228,10 @@ export const onUpdateLocationSet = /* GraphQL */ `subscription OnUpdateLocationS
       __typename
     }
     projectId
+    tasks {
+      nextToken
+      __typename
+    }
     updatedAt
     __typename
   }
@@ -2116,6 +2372,10 @@ export const onUpdateObservation = /* GraphQL */ `subscription OnUpdateObservati
 >;
 export const onUpdateProject = /* GraphQL */ `subscription OnUpdateProject($filter: ModelSubscriptionProjectFilterInput) {
   onUpdateProject(filter: $filter) {
+    annotationCountsPerCategoryPerSet {
+      nextToken
+      __typename
+    }
     annotationSets {
       nextToken
       __typename
@@ -2200,6 +2460,40 @@ export const onUpdateQueue = /* GraphQL */ `subscription OnUpdateQueue($filter: 
 ` as GeneratedSubscription<
   APITypes.OnUpdateQueueSubscriptionVariables,
   APITypes.OnUpdateQueueSubscription
+>;
+export const onUpdateTasksOnAnnotationSet = /* GraphQL */ `subscription OnUpdateTasksOnAnnotationSet(
+  $filter: ModelSubscriptionTasksOnAnnotationSetFilterInput
+) {
+  onUpdateTasksOnAnnotationSet(filter: $filter) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    createdAt
+    id
+    locationSet {
+      createdAt
+      id
+      locationCount
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    locationSetId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnUpdateTasksOnAnnotationSetSubscriptionVariables,
+  APITypes.OnUpdateTasksOnAnnotationSetSubscription
 >;
 export const onUpdateUserProjectMembership = /* GraphQL */ `subscription OnUpdateUserProjectMembership(
   $filter: ModelSubscriptionUserProjectMembershipFilterInput

@@ -2,8 +2,8 @@ import type { DynamoDBStreamHandler } from 'aws-lambda';
 import { env } from '$amplify/env/updateAnnotationCounts'
 import { Amplify } from "aws-amplify";
 import { generateClient } from "aws-amplify/data";
-import { getAnnotationSet, getCategory } from './graphql/queries';
-import { updateAnnotationSet, updateCategory } from './graphql/mutations';
+import { getAnnotationCountPerCategoryPerSet, getAnnotationSet, getCategory } from './graphql/queries';
+import { updateAnnotationCountPerCategoryPerSet, updateAnnotationSet, updateCategory } from './graphql/mutations';
 
 Amplify.configure(
     {
@@ -45,40 +45,36 @@ export const handler: DynamoDBStreamHandler = async (event) => {
             const annotationSetId = image?.setId?.S;
             const categoryId = image?.categoryId?.S;
 
-            if (annotationSetId) {
-                await updateAnnotationCount('AnnotationSet', annotationSetId, incrementValue);
-            }
-
-            if (categoryId) {
-                await updateAnnotationCount('Category', categoryId, incrementValue);
+            if (annotationSetId && categoryId) {
+                await updateAnnotationCount('AnnotationSet', annotationSetId, categoryId, incrementValue);
+                await updateAnnotationCount('Category', annotationSetId, categoryId, incrementValue);
             }
         }
 
         if (record.eventName === 'MODIFY') {
             const oldCategoryId = record.dynamodb?.OldImage?.categoryId?.S;
             const newCategoryId = record.dynamodb?.NewImage?.categoryId?.S;
+            const annotationSetId = record.dynamodb?.NewImage?.setId?.S;
 
-            if (oldCategoryId && newCategoryId) {
-                await swapAnnotationCategory(oldCategoryId, newCategoryId);
+            if (oldCategoryId && newCategoryId && annotationSetId) {
+                await swapAnnotationCategory(oldCategoryId, newCategoryId, annotationSetId);
             }
         }
     }
 };
 
-async function swapAnnotationCategory(oldCategoryId: string, newCategoryId: string) {
-    // Increase annotation count for the new category
-    await updateAnnotationCount('Category', newCategoryId, 1);
-    // Decrease annotation count for the old category
-    await updateAnnotationCount('Category', oldCategoryId, -1);
+async function swapAnnotationCategory(oldCategoryId: string, newCategoryId: string, annotationSetId: string) {
+    await updateAnnotationCount('Category', annotationSetId, newCategoryId, 1);
+    await updateAnnotationCount('Category', annotationSetId, oldCategoryId, -1);
 }
 
-async function updateAnnotationCount(tableName: string, id: string, incrementValue: number) {
+async function updateAnnotationCount(tableName: string, annotationSetId: string, categoryId: string, incrementValue: number) {
     try {
         let result = 0;
         if (tableName === 'AnnotationSet') {
             const getResponse = await client.graphql({
                 query: getAnnotationSet,
-                variables: { id }
+                variables: { id: annotationSetId }
               });
       
               const current = Math.max(getResponse.data.getAnnotationSet?.annotationCount || 0, 0);
@@ -86,15 +82,17 @@ async function updateAnnotationCount(tableName: string, id: string, incrementVal
       
               const updateResponse = await client.graphql({
                 query: updateAnnotationSet,
-                variables: { input: { id, annotationCount: newValue } }
+                variables: { input: { id: annotationSetId, annotationCount: newValue } }
               });
+
+              await updateCountPerCategoryPerSet(annotationSetId, categoryId, incrementValue);
 
               result = updateResponse.data.updateAnnotationSet.annotationCount || 0;
         }
         else if (tableName === 'Category') {
             const getResponse = await client.graphql({
                 query: getCategory,
-                variables: { id }
+                variables: { id: categoryId }
               });
       
               const current = Math.max(getResponse.data.getCategory?.annotationCount || 0, 0);
@@ -102,8 +100,10 @@ async function updateAnnotationCount(tableName: string, id: string, incrementVal
       
               const updateResponse = await client.graphql({
                 query: updateCategory,
-                variables: { input: { id, annotationCount: newValue } }
+                variables: { input: { id: categoryId, annotationCount: newValue } }
               });
+
+              await updateCountPerCategoryPerSet(annotationSetId, categoryId, incrementValue);
 
               result = updateResponse.data.updateCategory.annotationCount || 0;
         }
@@ -111,4 +111,25 @@ async function updateAnnotationCount(tableName: string, id: string, incrementVal
     } catch (error) {
         console.error(`Unable to update ${tableName}. Error JSON:`, JSON.stringify(error, null, 2));
     }
+}
+
+async function updateCountPerCategoryPerSet(annotationSetId: string, categoryId: string, incrementValue: number) {
+  try {
+    const getResponse = await client.graphql({
+        query: getAnnotationCountPerCategoryPerSet,
+        variables: { annotationSetId, categoryId }
+      });
+
+    const current = Math.max(getResponse.data.getAnnotationCountPerCategoryPerSet?.annotationCount || 0, 0);
+    const newValue = current + incrementValue;
+
+    const updateResponse = await client.graphql({
+        query: updateAnnotationCountPerCategoryPerSet,
+        variables: { input: { annotationSetId, categoryId, annotationCount: newValue } }
+      });
+
+    console.log(`Annotation set (${annotationSetId}) category (${categoryId}) update succeeded - annotation count: `, JSON.stringify(updateResponse.data.updateAnnotationCountPerCategoryPerSet.annotationCount, null, 2));
+  } catch (error) {
+    console.error(`Unable to update annotation set (${annotationSetId}) category (${categoryId}). Error JSON:`, JSON.stringify(error, null, 2));
+  }
 }
