@@ -63,7 +63,7 @@ const AnnotationCountModal: React.FC<Props> = ({ show, handleClose, setId }) => 
                             onMouseEnter={() => setHoveredId(i)}
                             onMouseLeave={() => setHoveredId(null)}
                         >
-                            <p style={{marginBottom: '0px'}}>{categories.find(category => category.id === categoryCount.categoryId)?.name}:</p>
+                            <p style={{marginBottom: '0px'}}>{categories.find(category => category.id === categoryCount.categoryId)?.name || 'Unknown'}:</p>
                             <p style={{marginBottom: '0px'}}>{categoryCount.annotationCount}</p>
                         </div>
                     ))
