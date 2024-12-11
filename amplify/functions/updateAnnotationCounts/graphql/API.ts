@@ -97,6 +97,7 @@ export type ModelAnnotationSetConnection = {
 export type AnnotationSet = {
   __typename: "AnnotationSet",
   annotationCount?: number | null,
+  annotationCountPerCategory?: ModelAnnotationCountPerCategoryPerSetConnection | null,
   annotations?: ModelAnnotationConnection | null,
   createdAt: string,
   id: string,
@@ -104,6 +105,42 @@ export type AnnotationSet = {
   observations?: ModelObservationConnection | null,
   project?: Project | null,
   projectId: string,
+  tasks?: ModelTasksOnAnnotationSetConnection | null,
+  updatedAt: string,
+};
+
+export type ModelAnnotationCountPerCategoryPerSetConnection = {
+  __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+  items:  Array<AnnotationCountPerCategoryPerSet | null >,
+  nextToken?: string | null,
+};
+
+export type AnnotationCountPerCategoryPerSet = {
+  __typename: "AnnotationCountPerCategoryPerSet",
+  annotationCount?: number | null,
+  annotationSet?: AnnotationSet | null,
+  annotationSetId: string,
+  category?: Category | null,
+  categoryId: string,
+  createdAt: string,
+  project?: Project | null,
+  projectId: string,
+  updatedAt: string,
+};
+
+export type Category = {
+  __typename: "Category",
+  annotationCount?: number | null,
+  annotationCountPerSet?: ModelAnnotationCountPerCategoryPerSetConnection | null,
+  annotations?: ModelAnnotationConnection | null,
+  color?: string | null,
+  createdAt: string,
+  id: string,
+  name: string,
+  objects?: ModelObjectConnection | null,
+  project?: Project | null,
+  projectId: string,
+  shortcutKey?: string | null,
   updatedAt: string,
 };
 
@@ -135,85 +172,6 @@ export type Annotation = {
   y: number,
 };
 
-export type Category = {
-  __typename: "Category",
-  annotationCount?: number | null,
-  annotations?: ModelAnnotationConnection | null,
-  color?: string | null,
-  createdAt: string,
-  id: string,
-  name: string,
-  objects?: ModelObjectConnection | null,
-  project?: Project | null,
-  projectId: string,
-  shortcutKey?: string | null,
-  updatedAt: string,
-};
-
-export type ModelObjectConnection = {
-  __typename: "ModelObjectConnection",
-  items:  Array<Object | null >,
-  nextToken?: string | null,
-};
-
-export type Object = {
-  __typename: "Object",
-  annotations?: ModelAnnotationConnection | null,
-  category?: Category | null,
-  categoryId: string,
-  createdAt: string,
-  id: string,
-  project?: Project | null,
-  projectId: string,
-  updatedAt: string,
-};
-
-export type Project = {
-  __typename: "Project",
-  annotationSets?: ModelAnnotationSetConnection | null,
-  annotations?: ModelAnnotationConnection | null,
-  categories?: ModelCategoryConnection | null,
-  createdAt: string,
-  id: string,
-  imageFiles?: ModelImageFileConnection | null,
-  imageSets?: ModelImageSetConnection | null,
-  images?: ModelImageConnection | null,
-  locationSets?: ModelLocationSetConnection | null,
-  locations?: ModelLocationConnection | null,
-  members?: ModelUserProjectMembershipConnection | null,
-  name: string,
-  objects?: ModelObjectConnection | null,
-  observations?: ModelObservationConnection | null,
-  queues?: ModelQueueConnection | null,
-  updatedAt: string,
-};
-
-export type ModelCategoryConnection = {
-  __typename: "ModelCategoryConnection",
-  items:  Array<Category | null >,
-  nextToken?: string | null,
-};
-
-export type ModelImageFileConnection = {
-  __typename: "ModelImageFileConnection",
-  items:  Array<ImageFile | null >,
-  nextToken?: string | null,
-};
-
-export type ImageFile = {
-  __typename: "ImageFile",
-  createdAt: string,
-  id: string,
-  image?: Image | null,
-  imageId?: string | null,
-  key: string,
-  path: string,
-  project?: Project | null,
-  projectId: string,
-  type: string,
-  updatedAt: string,
-};
-
 export type Image = {
   __typename: "Image",
   altitude_agl?: number | null,
@@ -243,20 +201,111 @@ export type Image = {
   yaw?: number | null,
 };
 
-export type ModelImageNeighbourConnection = {
-  __typename: "ModelImageNeighbourConnection",
-  items:  Array<ImageNeighbour | null >,
+export type ModelImageFileConnection = {
+  __typename: "ModelImageFileConnection",
+  items:  Array<ImageFile | null >,
   nextToken?: string | null,
 };
 
-export type ImageNeighbour = {
-  __typename: "ImageNeighbour",
+export type ImageFile = {
+  __typename: "ImageFile",
   createdAt: string,
-  homography?: Array< number | null > | null,
-  image1?: Image | null,
-  image1Id: string,
-  image2?: Image | null,
-  image2Id: string,
+  id: string,
+  image?: Image | null,
+  imageId?: string | null,
+  key: string,
+  path: string,
+  project?: Project | null,
+  projectId: string,
+  type: string,
+  updatedAt: string,
+};
+
+export type Project = {
+  __typename: "Project",
+  annotationCountsPerCategoryPerSet?: ModelAnnotationCountPerCategoryPerSetConnection | null,
+  annotationSets?: ModelAnnotationSetConnection | null,
+  annotations?: ModelAnnotationConnection | null,
+  categories?: ModelCategoryConnection | null,
+  createdAt: string,
+  id: string,
+  imageFiles?: ModelImageFileConnection | null,
+  imageSets?: ModelImageSetConnection | null,
+  images?: ModelImageConnection | null,
+  locationSets?: ModelLocationSetConnection | null,
+  locations?: ModelLocationConnection | null,
+  members?: ModelUserProjectMembershipConnection | null,
+  name: string,
+  objects?: ModelObjectConnection | null,
+  observations?: ModelObservationConnection | null,
+  queues?: ModelQueueConnection | null,
+  updatedAt: string,
+};
+
+export type ModelCategoryConnection = {
+  __typename: "ModelCategoryConnection",
+  items:  Array<Category | null >,
+  nextToken?: string | null,
+};
+
+export type ModelImageSetConnection = {
+  __typename: "ModelImageSetConnection",
+  items:  Array<ImageSet | null >,
+  nextToken?: string | null,
+};
+
+export type ImageSet = {
+  __typename: "ImageSet",
+  createdAt: string,
+  id: string,
+  imageCount?: number | null,
+  images?: ModelImageSetMembershipConnection | null,
+  name: string,
+  project?: Project | null,
+  projectId: string,
+  updatedAt: string,
+};
+
+export type ModelImageSetMembershipConnection = {
+  __typename: "ModelImageSetMembershipConnection",
+  items:  Array<ImageSetMembership | null >,
+  nextToken?: string | null,
+};
+
+export type ImageSetMembership = {
+  __typename: "ImageSetMembership",
+  createdAt: string,
+  id: string,
+  image?: Image | null,
+  imageId: string,
+  imageSet?: ImageSet | null,
+  imageSetId: string,
+  updatedAt: string,
+};
+
+export type ModelImageConnection = {
+  __typename: "ModelImageConnection",
+  items:  Array<Image | null >,
+  nextToken?: string | null,
+};
+
+export type ModelLocationSetConnection = {
+  __typename: "ModelLocationSetConnection",
+  items:  Array<LocationSet | null >,
+  nextToken?: string | null,
+};
+
+export type LocationSet = {
+  __typename: "LocationSet",
+  createdAt: string,
+  id: string,
+  locationCount?: number | null,
+  locations?: ModelLocationConnection | null,
+  memberships?: ModelLocationSetMembershipConnection | null,
+  name: string,
+  project?: Project | null,
+  projectId: string,
+  tasks?: ModelTasksOnAnnotationSetConnection | null,
   updatedAt: string,
 };
 
@@ -303,25 +352,12 @@ export type Observation = {
   loadingTime?: number | null,
   location?: Location | null,
   locationId: string,
-  owner: string,
+  owner?: string | null,
   project?: Project | null,
   projectId: string,
   timeTaken?: number | null,
   updatedAt: string,
   waitingTime?: number | null,
-};
-
-export type LocationSet = {
-  __typename: "LocationSet",
-  createdAt: string,
-  id: string,
-  locationCount?: number | null,
-  locations?: ModelLocationConnection | null,
-  memberships?: ModelLocationSetMembershipConnection | null,
-  name: string,
-  project?: Project | null,
-  projectId: string,
-  updatedAt: string,
 };
 
 export type ModelLocationSetMembershipConnection = {
@@ -341,51 +377,21 @@ export type LocationSetMembership = {
   updatedAt: string,
 };
 
-export type ModelImageSetMembershipConnection = {
-  __typename: "ModelImageSetMembershipConnection",
-  items:  Array<ImageSetMembership | null >,
+export type ModelTasksOnAnnotationSetConnection = {
+  __typename: "ModelTasksOnAnnotationSetConnection",
+  items:  Array<TasksOnAnnotationSet | null >,
   nextToken?: string | null,
 };
 
-export type ImageSetMembership = {
-  __typename: "ImageSetMembership",
+export type TasksOnAnnotationSet = {
+  __typename: "TasksOnAnnotationSet",
+  annotationSet?: AnnotationSet | null,
+  annotationSetId: string,
   createdAt: string,
   id: string,
-  image?: Image | null,
-  imageId: string,
-  imageSet?: ImageSet | null,
-  imageSetId: string,
+  locationSet?: LocationSet | null,
+  locationSetId: string,
   updatedAt: string,
-};
-
-export type ImageSet = {
-  __typename: "ImageSet",
-  createdAt: string,
-  id: string,
-  imageCount?: number | null,
-  images?: ModelImageSetMembershipConnection | null,
-  name: string,
-  project?: Project | null,
-  projectId: string,
-  updatedAt: string,
-};
-
-export type ModelImageSetConnection = {
-  __typename: "ModelImageSetConnection",
-  items:  Array<ImageSet | null >,
-  nextToken?: string | null,
-};
-
-export type ModelImageConnection = {
-  __typename: "ModelImageConnection",
-  items:  Array<Image | null >,
-  nextToken?: string | null,
-};
-
-export type ModelLocationSetConnection = {
-  __typename: "ModelLocationSetConnection",
-  items:  Array<LocationSet | null >,
-  nextToken?: string | null,
 };
 
 export type ModelUserProjectMembershipConnection = {
@@ -419,10 +425,45 @@ export type Queue = {
   users?: ModelUserProjectMembershipConnection | null,
 };
 
+export type ModelObjectConnection = {
+  __typename: "ModelObjectConnection",
+  items:  Array<Object | null >,
+  nextToken?: string | null,
+};
+
+export type Object = {
+  __typename: "Object",
+  annotations?: ModelAnnotationConnection | null,
+  category?: Category | null,
+  categoryId: string,
+  createdAt: string,
+  id: string,
+  project?: Project | null,
+  projectId: string,
+  updatedAt: string,
+};
+
 export type ModelQueueConnection = {
   __typename: "ModelQueueConnection",
   items:  Array<Queue | null >,
   nextToken?: string | null,
+};
+
+export type ModelImageNeighbourConnection = {
+  __typename: "ModelImageNeighbourConnection",
+  items:  Array<ImageNeighbour | null >,
+  nextToken?: string | null,
+};
+
+export type ImageNeighbour = {
+  __typename: "ImageNeighbour",
+  createdAt: string,
+  homography?: Array< number | null > | null,
+  image1?: Image | null,
+  image1Id: string,
+  image2?: Image | null,
+  image2Id: string,
+  updatedAt: string,
 };
 
 export type ModelAnnotationFilterInput = {
@@ -472,6 +513,19 @@ export type ModelCategoryFilterInput = {
   or?: Array< ModelCategoryFilterInput | null > | null,
   projectId?: ModelIDInput | null,
   shortcutKey?: ModelStringInput | null,
+  updatedAt?: ModelStringInput | null,
+};
+
+export type ModelAnnotationCountPerCategoryPerSetFilterInput = {
+  and?: Array< ModelAnnotationCountPerCategoryPerSetFilterInput | null > | null,
+  annotationCount?: ModelIntInput | null,
+  annotationSetId?: ModelIDInput | null,
+  categoryId?: ModelIDInput | null,
+  createdAt?: ModelStringInput | null,
+  id?: ModelIDInput | null,
+  not?: ModelAnnotationCountPerCategoryPerSetFilterInput | null,
+  or?: Array< ModelAnnotationCountPerCategoryPerSetFilterInput | null > | null,
+  projectId?: ModelIDInput | null,
   updatedAt?: ModelStringInput | null,
 };
 
@@ -681,6 +735,17 @@ export type ModelQueueFilterInput = {
   url?: ModelStringInput | null,
 };
 
+export type ModelTasksOnAnnotationSetFilterInput = {
+  and?: Array< ModelTasksOnAnnotationSetFilterInput | null > | null,
+  annotationSetId?: ModelIDInput | null,
+  createdAt?: ModelStringInput | null,
+  id?: ModelIDInput | null,
+  locationSetId?: ModelIDInput | null,
+  not?: ModelTasksOnAnnotationSetFilterInput | null,
+  or?: Array< ModelTasksOnAnnotationSetFilterInput | null > | null,
+  updatedAt?: ModelStringInput | null,
+};
+
 export type ModelUserProjectMembershipFilterInput = {
   and?: Array< ModelUserProjectMembershipFilterInput | null > | null,
   createdAt?: ModelStringInput | null,
@@ -799,6 +864,23 @@ export type CreateAnnotationInput = {
   source: string,
   x: number,
   y: number,
+};
+
+export type ModelAnnotationCountPerCategoryPerSetConditionInput = {
+  and?: Array< ModelAnnotationCountPerCategoryPerSetConditionInput | null > | null,
+  annotationCount?: ModelIntInput | null,
+  createdAt?: ModelStringInput | null,
+  not?: ModelAnnotationCountPerCategoryPerSetConditionInput | null,
+  or?: Array< ModelAnnotationCountPerCategoryPerSetConditionInput | null > | null,
+  projectId?: ModelIDInput | null,
+  updatedAt?: ModelStringInput | null,
+};
+
+export type CreateAnnotationCountPerCategoryPerSetInput = {
+  annotationCount?: number | null,
+  annotationSetId: string,
+  categoryId: string,
+  projectId: string,
 };
 
 export type ModelAnnotationSetConditionInput = {
@@ -1057,7 +1139,7 @@ export type CreateObservationInput = {
   id?: string | null,
   loadingTime?: number | null,
   locationId: string,
-  owner: string,
+  owner?: string | null,
   projectId: string,
   timeTaken?: number | null,
   waitingTime?: number | null,
@@ -1093,6 +1175,22 @@ export type CreateQueueInput = {
   name: string,
   projectId: string,
   url?: string | null,
+};
+
+export type ModelTasksOnAnnotationSetConditionInput = {
+  and?: Array< ModelTasksOnAnnotationSetConditionInput | null > | null,
+  annotationSetId?: ModelIDInput | null,
+  createdAt?: ModelStringInput | null,
+  locationSetId?: ModelIDInput | null,
+  not?: ModelTasksOnAnnotationSetConditionInput | null,
+  or?: Array< ModelTasksOnAnnotationSetConditionInput | null > | null,
+  updatedAt?: ModelStringInput | null,
+};
+
+export type CreateTasksOnAnnotationSetInput = {
+  annotationSetId: string,
+  id?: string | null,
+  locationSetId: string,
 };
 
 export type ModelUserProjectMembershipConditionInput = {
@@ -1148,6 +1246,11 @@ export type CreateUserStatsInput = {
 
 export type DeleteAnnotationInput = {
   id: string,
+};
+
+export type DeleteAnnotationCountPerCategoryPerSetInput = {
+  annotationSetId: string,
+  categoryId: string,
 };
 
 export type DeleteAnnotationSetInput = {
@@ -1207,6 +1310,10 @@ export type DeleteQueueInput = {
   id: string,
 };
 
+export type DeleteTasksOnAnnotationSetInput = {
+  id: string,
+};
+
 export type DeleteUserProjectMembershipInput = {
   id: string,
 };
@@ -1235,6 +1342,13 @@ export type UpdateAnnotationInput = {
   source?: string | null,
   x?: number | null,
   y?: number | null,
+};
+
+export type UpdateAnnotationCountPerCategoryPerSetInput = {
+  annotationCount?: number | null,
+  annotationSetId: string,
+  categoryId: string,
+  projectId?: string | null,
 };
 
 export type UpdateAnnotationSetInput = {
@@ -1357,6 +1471,12 @@ export type UpdateQueueInput = {
   url?: string | null,
 };
 
+export type UpdateTasksOnAnnotationSetInput = {
+  annotationSetId?: string | null,
+  id: string,
+  locationSetId?: string | null,
+};
+
 export type UpdateUserProjectMembershipInput = {
   id: string,
   isAdmin?: boolean | null,
@@ -1443,6 +1563,18 @@ export type ModelSubscriptionIntInput = {
   lt?: number | null,
   ne?: number | null,
   notIn?: Array< number | null > | null,
+};
+
+export type ModelSubscriptionAnnotationCountPerCategoryPerSetFilterInput = {
+  and?: Array< ModelSubscriptionAnnotationCountPerCategoryPerSetFilterInput | null > | null,
+  annotationCount?: ModelSubscriptionIntInput | null,
+  annotationSetId?: ModelSubscriptionIDInput | null,
+  categoryId?: ModelSubscriptionIDInput | null,
+  createdAt?: ModelSubscriptionStringInput | null,
+  id?: ModelSubscriptionIDInput | null,
+  or?: Array< ModelSubscriptionAnnotationCountPerCategoryPerSetFilterInput | null > | null,
+  projectId?: ModelSubscriptionIDInput | null,
+  updatedAt?: ModelSubscriptionStringInput | null,
 };
 
 export type ModelSubscriptionAnnotationSetFilterInput = {
@@ -1631,6 +1763,16 @@ export type ModelSubscriptionQueueFilterInput = {
   projectId?: ModelSubscriptionIDInput | null,
   updatedAt?: ModelSubscriptionStringInput | null,
   url?: ModelSubscriptionStringInput | null,
+};
+
+export type ModelSubscriptionTasksOnAnnotationSetFilterInput = {
+  and?: Array< ModelSubscriptionTasksOnAnnotationSetFilterInput | null > | null,
+  annotationSetId?: ModelSubscriptionIDInput | null,
+  createdAt?: ModelSubscriptionStringInput | null,
+  id?: ModelSubscriptionIDInput | null,
+  locationSetId?: ModelSubscriptionIDInput | null,
+  or?: Array< ModelSubscriptionTasksOnAnnotationSetFilterInput | null > | null,
+  updatedAt?: ModelSubscriptionStringInput | null,
 };
 
 export type ModelSubscriptionUserProjectMembershipFilterInput = {
@@ -1840,6 +1982,30 @@ export type CategoriesByProjectIdQuery = {
   } | null,
 };
 
+export type CategoryCountsByAnnotationSetIdQueryVariables = {
+  annotationSetId: string,
+  filter?: ModelAnnotationCountPerCategoryPerSetFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  sortDirection?: ModelSortDirection | null,
+};
+
+export type CategoryCountsByAnnotationSetIdQuery = {
+  categoryCountsByAnnotationSetId?:  {
+    __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+    items:  Array< {
+      __typename: "AnnotationCountPerCategoryPerSet",
+      annotationCount?: number | null,
+      annotationSetId: string,
+      categoryId: string,
+      createdAt: string,
+      projectId: string,
+      updatedAt: string,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
 export type GetAnnotationQueryVariables = {
   id: string,
 };
@@ -1919,6 +2085,50 @@ export type GetAnnotationQuery = {
   } | null,
 };
 
+export type GetAnnotationCountPerCategoryPerSetQueryVariables = {
+  annotationSetId: string,
+  categoryId: string,
+};
+
+export type GetAnnotationCountPerCategoryPerSetQuery = {
+  getAnnotationCountPerCategoryPerSet?:  {
+    __typename: "AnnotationCountPerCategoryPerSet",
+    annotationCount?: number | null,
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
+    category?:  {
+      __typename: "Category",
+      annotationCount?: number | null,
+      color?: string | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      shortcutKey?: string | null,
+      updatedAt: string,
+    } | null,
+    categoryId: string,
+    createdAt: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      id: string,
+      name: string,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type GetAnnotationCountsQueryVariables = {
   annotationSetId: string,
 };
@@ -1935,6 +2145,10 @@ export type GetAnnotationSetQuery = {
   getAnnotationSet?:  {
     __typename: "AnnotationSet",
     annotationCount?: number | null,
+    annotationCountPerCategory?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -1954,6 +2168,10 @@ export type GetAnnotationSetQuery = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tasks?:  {
+      __typename: "ModelTasksOnAnnotationSetConnection",
+      nextToken?: string | null,
+    } | null,
     updatedAt: string,
   } | null,
 };
@@ -1966,6 +2184,10 @@ export type GetCategoryQuery = {
   getCategory?:  {
     __typename: "Category",
     annotationCount?: number | null,
+    annotationCountPerSet?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -2333,6 +2555,10 @@ export type GetLocationSetQuery = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tasks?:  {
+      __typename: "ModelTasksOnAnnotationSetConnection",
+      nextToken?: string | null,
+    } | null,
     updatedAt: string,
   } | null,
 };
@@ -2450,7 +2676,7 @@ export type GetObservationQuery = {
       y: number,
     } | null,
     locationId: string,
-    owner: string,
+    owner?: string | null,
     project?:  {
       __typename: "Project",
       createdAt: string,
@@ -2472,6 +2698,10 @@ export type GetProjectQueryVariables = {
 export type GetProjectQuery = {
   getProject?:  {
     __typename: "Project",
+    annotationCountsPerCategoryPerSet?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotationSets?:  {
       __typename: "ModelAnnotationSetConnection",
       nextToken?: string | null,
@@ -2551,6 +2781,39 @@ export type GetQueueQuery = {
       __typename: "ModelUserProjectMembershipConnection",
       nextToken?: string | null,
     } | null,
+  } | null,
+};
+
+export type GetTasksOnAnnotationSetQueryVariables = {
+  id: string,
+};
+
+export type GetTasksOnAnnotationSetQuery = {
+  getTasksOnAnnotationSet?:  {
+    __typename: "TasksOnAnnotationSet",
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
+    createdAt: string,
+    id: string,
+    locationSet?:  {
+      __typename: "LocationSet",
+      createdAt: string,
+      id: string,
+      locationCount?: number | null,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    locationSetId: string,
+    updatedAt: string,
   } | null,
 };
 
@@ -2753,6 +3016,31 @@ export type ImagesByimageIdQuery = {
       path: string,
       projectId: string,
       type: string,
+      updatedAt: string,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type ListAnnotationCountPerCategoryPerSetsQueryVariables = {
+  annotationSetId?: string | null,
+  categoryId?: ModelIDKeyConditionInput | null,
+  filter?: ModelAnnotationCountPerCategoryPerSetFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  sortDirection?: ModelSortDirection | null,
+};
+
+export type ListAnnotationCountPerCategoryPerSetsQuery = {
+  listAnnotationCountPerCategoryPerSets?:  {
+    __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+    items:  Array< {
+      __typename: "AnnotationCountPerCategoryPerSet",
+      annotationCount?: number | null,
+      annotationSetId: string,
+      categoryId: string,
+      createdAt: string,
+      projectId: string,
       updatedAt: string,
     } | null >,
     nextToken?: string | null,
@@ -3077,7 +3365,7 @@ export type ListObservationsQuery = {
       id: string,
       loadingTime?: number | null,
       locationId: string,
-      owner: string,
+      owner?: string | null,
       projectId: string,
       timeTaken?: number | null,
       updatedAt: string,
@@ -3124,6 +3412,27 @@ export type ListQueuesQuery = {
       projectId: string,
       updatedAt: string,
       url?: string | null,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type ListTasksOnAnnotationSetsQueryVariables = {
+  filter?: ModelTasksOnAnnotationSetFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+};
+
+export type ListTasksOnAnnotationSetsQuery = {
+  listTasksOnAnnotationSets?:  {
+    __typename: "ModelTasksOnAnnotationSetConnection",
+    items:  Array< {
+      __typename: "TasksOnAnnotationSet",
+      annotationSetId: string,
+      createdAt: string,
+      id: string,
+      locationSetId: string,
+      updatedAt: string,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -3200,6 +3509,29 @@ export type ListUsersQuery = {
       isAdmin?: boolean | null,
       name: string,
     } | null > | null,
+  } | null,
+};
+
+export type LocationSetsByAnnotationSetIdQueryVariables = {
+  annotationSetId: string,
+  filter?: ModelTasksOnAnnotationSetFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  sortDirection?: ModelSortDirection | null,
+};
+
+export type LocationSetsByAnnotationSetIdQuery = {
+  locationSetsByAnnotationSetId?:  {
+    __typename: "ModelTasksOnAnnotationSetConnection",
+    items:  Array< {
+      __typename: "TasksOnAnnotationSet",
+      annotationSetId: string,
+      createdAt: string,
+      id: string,
+      locationSetId: string,
+      updatedAt: string,
+    } | null >,
+    nextToken?: string | null,
   } | null,
 };
 
@@ -3332,7 +3664,7 @@ export type ObservationsByAnnotationSetIdQuery = {
       id: string,
       loadingTime?: number | null,
       locationId: string,
-      owner: string,
+      owner?: string | null,
       projectId: string,
       timeTaken?: number | null,
       updatedAt: string,
@@ -3361,7 +3693,7 @@ export type ObservationsByLocationIdQuery = {
       id: string,
       loadingTime?: number | null,
       locationId: string,
-      owner: string,
+      owner?: string | null,
       projectId: string,
       timeTaken?: number | null,
       updatedAt: string,
@@ -3390,7 +3722,7 @@ export type ObservationsByOwnerQuery = {
       id: string,
       loadingTime?: number | null,
       locationId: string,
-      owner: string,
+      owner?: string | null,
       projectId: string,
       timeTaken?: number | null,
       updatedAt: string,
@@ -3563,6 +3895,50 @@ export type CreateAnnotationMutation = {
   } | null,
 };
 
+export type CreateAnnotationCountPerCategoryPerSetMutationVariables = {
+  condition?: ModelAnnotationCountPerCategoryPerSetConditionInput | null,
+  input: CreateAnnotationCountPerCategoryPerSetInput,
+};
+
+export type CreateAnnotationCountPerCategoryPerSetMutation = {
+  createAnnotationCountPerCategoryPerSet?:  {
+    __typename: "AnnotationCountPerCategoryPerSet",
+    annotationCount?: number | null,
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
+    category?:  {
+      __typename: "Category",
+      annotationCount?: number | null,
+      color?: string | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      shortcutKey?: string | null,
+      updatedAt: string,
+    } | null,
+    categoryId: string,
+    createdAt: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      id: string,
+      name: string,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type CreateAnnotationSetMutationVariables = {
   condition?: ModelAnnotationSetConditionInput | null,
   input: CreateAnnotationSetInput,
@@ -3572,6 +3948,10 @@ export type CreateAnnotationSetMutation = {
   createAnnotationSet?:  {
     __typename: "AnnotationSet",
     annotationCount?: number | null,
+    annotationCountPerCategory?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -3591,6 +3971,10 @@ export type CreateAnnotationSetMutation = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tasks?:  {
+      __typename: "ModelTasksOnAnnotationSetConnection",
+      nextToken?: string | null,
+    } | null,
     updatedAt: string,
   } | null,
 };
@@ -3604,6 +3988,10 @@ export type CreateCategoryMutation = {
   createCategory?:  {
     __typename: "Category",
     annotationCount?: number | null,
+    annotationCountPerSet?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -3972,6 +4360,10 @@ export type CreateLocationSetMutation = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tasks?:  {
+      __typename: "ModelTasksOnAnnotationSetConnection",
+      nextToken?: string | null,
+    } | null,
     updatedAt: string,
   } | null,
 };
@@ -4092,7 +4484,7 @@ export type CreateObservationMutation = {
       y: number,
     } | null,
     locationId: string,
-    owner: string,
+    owner?: string | null,
     project?:  {
       __typename: "Project",
       createdAt: string,
@@ -4115,6 +4507,10 @@ export type CreateProjectMutationVariables = {
 export type CreateProjectMutation = {
   createProject?:  {
     __typename: "Project",
+    annotationCountsPerCategoryPerSet?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotationSets?:  {
       __typename: "ModelAnnotationSetConnection",
       nextToken?: string | null,
@@ -4195,6 +4591,40 @@ export type CreateQueueMutation = {
       __typename: "ModelUserProjectMembershipConnection",
       nextToken?: string | null,
     } | null,
+  } | null,
+};
+
+export type CreateTasksOnAnnotationSetMutationVariables = {
+  condition?: ModelTasksOnAnnotationSetConditionInput | null,
+  input: CreateTasksOnAnnotationSetInput,
+};
+
+export type CreateTasksOnAnnotationSetMutation = {
+  createTasksOnAnnotationSet?:  {
+    __typename: "TasksOnAnnotationSet",
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
+    createdAt: string,
+    id: string,
+    locationSet?:  {
+      __typename: "LocationSet",
+      createdAt: string,
+      id: string,
+      locationCount?: number | null,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    locationSetId: string,
+    updatedAt: string,
   } | null,
 };
 
@@ -4337,6 +4767,50 @@ export type DeleteAnnotationMutation = {
   } | null,
 };
 
+export type DeleteAnnotationCountPerCategoryPerSetMutationVariables = {
+  condition?: ModelAnnotationCountPerCategoryPerSetConditionInput | null,
+  input: DeleteAnnotationCountPerCategoryPerSetInput,
+};
+
+export type DeleteAnnotationCountPerCategoryPerSetMutation = {
+  deleteAnnotationCountPerCategoryPerSet?:  {
+    __typename: "AnnotationCountPerCategoryPerSet",
+    annotationCount?: number | null,
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
+    category?:  {
+      __typename: "Category",
+      annotationCount?: number | null,
+      color?: string | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      shortcutKey?: string | null,
+      updatedAt: string,
+    } | null,
+    categoryId: string,
+    createdAt: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      id: string,
+      name: string,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type DeleteAnnotationSetMutationVariables = {
   condition?: ModelAnnotationSetConditionInput | null,
   input: DeleteAnnotationSetInput,
@@ -4346,6 +4820,10 @@ export type DeleteAnnotationSetMutation = {
   deleteAnnotationSet?:  {
     __typename: "AnnotationSet",
     annotationCount?: number | null,
+    annotationCountPerCategory?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -4365,6 +4843,10 @@ export type DeleteAnnotationSetMutation = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tasks?:  {
+      __typename: "ModelTasksOnAnnotationSetConnection",
+      nextToken?: string | null,
+    } | null,
     updatedAt: string,
   } | null,
 };
@@ -4378,6 +4860,10 @@ export type DeleteCategoryMutation = {
   deleteCategory?:  {
     __typename: "Category",
     annotationCount?: number | null,
+    annotationCountPerSet?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -4738,6 +5224,10 @@ export type DeleteLocationSetMutation = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tasks?:  {
+      __typename: "ModelTasksOnAnnotationSetConnection",
+      nextToken?: string | null,
+    } | null,
     updatedAt: string,
   } | null,
 };
@@ -4858,7 +5348,7 @@ export type DeleteObservationMutation = {
       y: number,
     } | null,
     locationId: string,
-    owner: string,
+    owner?: string | null,
     project?:  {
       __typename: "Project",
       createdAt: string,
@@ -4881,6 +5371,10 @@ export type DeleteProjectMutationVariables = {
 export type DeleteProjectMutation = {
   deleteProject?:  {
     __typename: "Project",
+    annotationCountsPerCategoryPerSet?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotationSets?:  {
       __typename: "ModelAnnotationSetConnection",
       nextToken?: string | null,
@@ -4961,6 +5455,40 @@ export type DeleteQueueMutation = {
       __typename: "ModelUserProjectMembershipConnection",
       nextToken?: string | null,
     } | null,
+  } | null,
+};
+
+export type DeleteTasksOnAnnotationSetMutationVariables = {
+  condition?: ModelTasksOnAnnotationSetConditionInput | null,
+  input: DeleteTasksOnAnnotationSetInput,
+};
+
+export type DeleteTasksOnAnnotationSetMutation = {
+  deleteTasksOnAnnotationSet?:  {
+    __typename: "TasksOnAnnotationSet",
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
+    createdAt: string,
+    id: string,
+    locationSet?:  {
+      __typename: "LocationSet",
+      createdAt: string,
+      id: string,
+      locationCount?: number | null,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    locationSetId: string,
+    updatedAt: string,
   } | null,
 };
 
@@ -5135,6 +5663,50 @@ export type UpdateAnnotationMutation = {
   } | null,
 };
 
+export type UpdateAnnotationCountPerCategoryPerSetMutationVariables = {
+  condition?: ModelAnnotationCountPerCategoryPerSetConditionInput | null,
+  input: UpdateAnnotationCountPerCategoryPerSetInput,
+};
+
+export type UpdateAnnotationCountPerCategoryPerSetMutation = {
+  updateAnnotationCountPerCategoryPerSet?:  {
+    __typename: "AnnotationCountPerCategoryPerSet",
+    annotationCount?: number | null,
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
+    category?:  {
+      __typename: "Category",
+      annotationCount?: number | null,
+      color?: string | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      shortcutKey?: string | null,
+      updatedAt: string,
+    } | null,
+    categoryId: string,
+    createdAt: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      id: string,
+      name: string,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type UpdateAnnotationSetMutationVariables = {
   condition?: ModelAnnotationSetConditionInput | null,
   input: UpdateAnnotationSetInput,
@@ -5144,6 +5716,10 @@ export type UpdateAnnotationSetMutation = {
   updateAnnotationSet?:  {
     __typename: "AnnotationSet",
     annotationCount?: number | null,
+    annotationCountPerCategory?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -5163,6 +5739,10 @@ export type UpdateAnnotationSetMutation = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tasks?:  {
+      __typename: "ModelTasksOnAnnotationSetConnection",
+      nextToken?: string | null,
+    } | null,
     updatedAt: string,
   } | null,
 };
@@ -5176,6 +5756,10 @@ export type UpdateCategoryMutation = {
   updateCategory?:  {
     __typename: "Category",
     annotationCount?: number | null,
+    annotationCountPerSet?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -5536,6 +6120,10 @@ export type UpdateLocationSetMutation = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tasks?:  {
+      __typename: "ModelTasksOnAnnotationSetConnection",
+      nextToken?: string | null,
+    } | null,
     updatedAt: string,
   } | null,
 };
@@ -5656,7 +6244,7 @@ export type UpdateObservationMutation = {
       y: number,
     } | null,
     locationId: string,
-    owner: string,
+    owner?: string | null,
     project?:  {
       __typename: "Project",
       createdAt: string,
@@ -5679,6 +6267,10 @@ export type UpdateProjectMutationVariables = {
 export type UpdateProjectMutation = {
   updateProject?:  {
     __typename: "Project",
+    annotationCountsPerCategoryPerSet?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotationSets?:  {
       __typename: "ModelAnnotationSetConnection",
       nextToken?: string | null,
@@ -5759,6 +6351,40 @@ export type UpdateQueueMutation = {
       __typename: "ModelUserProjectMembershipConnection",
       nextToken?: string | null,
     } | null,
+  } | null,
+};
+
+export type UpdateTasksOnAnnotationSetMutationVariables = {
+  condition?: ModelTasksOnAnnotationSetConditionInput | null,
+  input: UpdateTasksOnAnnotationSetInput,
+};
+
+export type UpdateTasksOnAnnotationSetMutation = {
+  updateTasksOnAnnotationSet?:  {
+    __typename: "TasksOnAnnotationSet",
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
+    createdAt: string,
+    id: string,
+    locationSet?:  {
+      __typename: "LocationSet",
+      createdAt: string,
+      id: string,
+      locationCount?: number | null,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    locationSetId: string,
+    updatedAt: string,
   } | null,
 };
 
@@ -5901,6 +6527,49 @@ export type OnCreateAnnotationSubscription = {
   } | null,
 };
 
+export type OnCreateAnnotationCountPerCategoryPerSetSubscriptionVariables = {
+  filter?: ModelSubscriptionAnnotationCountPerCategoryPerSetFilterInput | null,
+};
+
+export type OnCreateAnnotationCountPerCategoryPerSetSubscription = {
+  onCreateAnnotationCountPerCategoryPerSet?:  {
+    __typename: "AnnotationCountPerCategoryPerSet",
+    annotationCount?: number | null,
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
+    category?:  {
+      __typename: "Category",
+      annotationCount?: number | null,
+      color?: string | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      shortcutKey?: string | null,
+      updatedAt: string,
+    } | null,
+    categoryId: string,
+    createdAt: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      id: string,
+      name: string,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type OnCreateAnnotationSetSubscriptionVariables = {
   filter?: ModelSubscriptionAnnotationSetFilterInput | null,
 };
@@ -5909,6 +6578,10 @@ export type OnCreateAnnotationSetSubscription = {
   onCreateAnnotationSet?:  {
     __typename: "AnnotationSet",
     annotationCount?: number | null,
+    annotationCountPerCategory?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -5928,6 +6601,10 @@ export type OnCreateAnnotationSetSubscription = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tasks?:  {
+      __typename: "ModelTasksOnAnnotationSetConnection",
+      nextToken?: string | null,
+    } | null,
     updatedAt: string,
   } | null,
 };
@@ -5940,6 +6617,10 @@ export type OnCreateCategorySubscription = {
   onCreateCategory?:  {
     __typename: "Category",
     annotationCount?: number | null,
+    annotationCountPerSet?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -6293,6 +6974,10 @@ export type OnCreateLocationSetSubscription = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tasks?:  {
+      __typename: "ModelTasksOnAnnotationSetConnection",
+      nextToken?: string | null,
+    } | null,
     updatedAt: string,
   } | null,
 };
@@ -6411,7 +7096,7 @@ export type OnCreateObservationSubscription = {
       y: number,
     } | null,
     locationId: string,
-    owner: string,
+    owner?: string | null,
     project?:  {
       __typename: "Project",
       createdAt: string,
@@ -6433,6 +7118,10 @@ export type OnCreateProjectSubscriptionVariables = {
 export type OnCreateProjectSubscription = {
   onCreateProject?:  {
     __typename: "Project",
+    annotationCountsPerCategoryPerSet?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotationSets?:  {
       __typename: "ModelAnnotationSetConnection",
       nextToken?: string | null,
@@ -6512,6 +7201,39 @@ export type OnCreateQueueSubscription = {
       __typename: "ModelUserProjectMembershipConnection",
       nextToken?: string | null,
     } | null,
+  } | null,
+};
+
+export type OnCreateTasksOnAnnotationSetSubscriptionVariables = {
+  filter?: ModelSubscriptionTasksOnAnnotationSetFilterInput | null,
+};
+
+export type OnCreateTasksOnAnnotationSetSubscription = {
+  onCreateTasksOnAnnotationSet?:  {
+    __typename: "TasksOnAnnotationSet",
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
+    createdAt: string,
+    id: string,
+    locationSet?:  {
+      __typename: "LocationSet",
+      createdAt: string,
+      id: string,
+      locationCount?: number | null,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    locationSetId: string,
+    updatedAt: string,
   } | null,
 };
 
@@ -6652,6 +7374,49 @@ export type OnDeleteAnnotationSubscription = {
   } | null,
 };
 
+export type OnDeleteAnnotationCountPerCategoryPerSetSubscriptionVariables = {
+  filter?: ModelSubscriptionAnnotationCountPerCategoryPerSetFilterInput | null,
+};
+
+export type OnDeleteAnnotationCountPerCategoryPerSetSubscription = {
+  onDeleteAnnotationCountPerCategoryPerSet?:  {
+    __typename: "AnnotationCountPerCategoryPerSet",
+    annotationCount?: number | null,
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
+    category?:  {
+      __typename: "Category",
+      annotationCount?: number | null,
+      color?: string | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      shortcutKey?: string | null,
+      updatedAt: string,
+    } | null,
+    categoryId: string,
+    createdAt: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      id: string,
+      name: string,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type OnDeleteAnnotationSetSubscriptionVariables = {
   filter?: ModelSubscriptionAnnotationSetFilterInput | null,
 };
@@ -6660,6 +7425,10 @@ export type OnDeleteAnnotationSetSubscription = {
   onDeleteAnnotationSet?:  {
     __typename: "AnnotationSet",
     annotationCount?: number | null,
+    annotationCountPerCategory?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -6679,6 +7448,10 @@ export type OnDeleteAnnotationSetSubscription = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tasks?:  {
+      __typename: "ModelTasksOnAnnotationSetConnection",
+      nextToken?: string | null,
+    } | null,
     updatedAt: string,
   } | null,
 };
@@ -6691,6 +7464,10 @@ export type OnDeleteCategorySubscription = {
   onDeleteCategory?:  {
     __typename: "Category",
     annotationCount?: number | null,
+    annotationCountPerSet?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -7044,6 +7821,10 @@ export type OnDeleteLocationSetSubscription = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tasks?:  {
+      __typename: "ModelTasksOnAnnotationSetConnection",
+      nextToken?: string | null,
+    } | null,
     updatedAt: string,
   } | null,
 };
@@ -7162,7 +7943,7 @@ export type OnDeleteObservationSubscription = {
       y: number,
     } | null,
     locationId: string,
-    owner: string,
+    owner?: string | null,
     project?:  {
       __typename: "Project",
       createdAt: string,
@@ -7184,6 +7965,10 @@ export type OnDeleteProjectSubscriptionVariables = {
 export type OnDeleteProjectSubscription = {
   onDeleteProject?:  {
     __typename: "Project",
+    annotationCountsPerCategoryPerSet?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotationSets?:  {
       __typename: "ModelAnnotationSetConnection",
       nextToken?: string | null,
@@ -7263,6 +8048,39 @@ export type OnDeleteQueueSubscription = {
       __typename: "ModelUserProjectMembershipConnection",
       nextToken?: string | null,
     } | null,
+  } | null,
+};
+
+export type OnDeleteTasksOnAnnotationSetSubscriptionVariables = {
+  filter?: ModelSubscriptionTasksOnAnnotationSetFilterInput | null,
+};
+
+export type OnDeleteTasksOnAnnotationSetSubscription = {
+  onDeleteTasksOnAnnotationSet?:  {
+    __typename: "TasksOnAnnotationSet",
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
+    createdAt: string,
+    id: string,
+    locationSet?:  {
+      __typename: "LocationSet",
+      createdAt: string,
+      id: string,
+      locationCount?: number | null,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    locationSetId: string,
+    updatedAt: string,
   } | null,
 };
 
@@ -7403,6 +8221,49 @@ export type OnUpdateAnnotationSubscription = {
   } | null,
 };
 
+export type OnUpdateAnnotationCountPerCategoryPerSetSubscriptionVariables = {
+  filter?: ModelSubscriptionAnnotationCountPerCategoryPerSetFilterInput | null,
+};
+
+export type OnUpdateAnnotationCountPerCategoryPerSetSubscription = {
+  onUpdateAnnotationCountPerCategoryPerSet?:  {
+    __typename: "AnnotationCountPerCategoryPerSet",
+    annotationCount?: number | null,
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
+    category?:  {
+      __typename: "Category",
+      annotationCount?: number | null,
+      color?: string | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      shortcutKey?: string | null,
+      updatedAt: string,
+    } | null,
+    categoryId: string,
+    createdAt: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      id: string,
+      name: string,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type OnUpdateAnnotationSetSubscriptionVariables = {
   filter?: ModelSubscriptionAnnotationSetFilterInput | null,
 };
@@ -7411,6 +8272,10 @@ export type OnUpdateAnnotationSetSubscription = {
   onUpdateAnnotationSet?:  {
     __typename: "AnnotationSet",
     annotationCount?: number | null,
+    annotationCountPerCategory?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -7430,6 +8295,10 @@ export type OnUpdateAnnotationSetSubscription = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tasks?:  {
+      __typename: "ModelTasksOnAnnotationSetConnection",
+      nextToken?: string | null,
+    } | null,
     updatedAt: string,
   } | null,
 };
@@ -7442,6 +8311,10 @@ export type OnUpdateCategorySubscription = {
   onUpdateCategory?:  {
     __typename: "Category",
     annotationCount?: number | null,
+    annotationCountPerSet?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -7795,6 +8668,10 @@ export type OnUpdateLocationSetSubscription = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tasks?:  {
+      __typename: "ModelTasksOnAnnotationSetConnection",
+      nextToken?: string | null,
+    } | null,
     updatedAt: string,
   } | null,
 };
@@ -7913,7 +8790,7 @@ export type OnUpdateObservationSubscription = {
       y: number,
     } | null,
     locationId: string,
-    owner: string,
+    owner?: string | null,
     project?:  {
       __typename: "Project",
       createdAt: string,
@@ -7935,6 +8812,10 @@ export type OnUpdateProjectSubscriptionVariables = {
 export type OnUpdateProjectSubscription = {
   onUpdateProject?:  {
     __typename: "Project",
+    annotationCountsPerCategoryPerSet?:  {
+      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
+      nextToken?: string | null,
+    } | null,
     annotationSets?:  {
       __typename: "ModelAnnotationSetConnection",
       nextToken?: string | null,
@@ -8014,6 +8895,39 @@ export type OnUpdateQueueSubscription = {
       __typename: "ModelUserProjectMembershipConnection",
       nextToken?: string | null,
     } | null,
+  } | null,
+};
+
+export type OnUpdateTasksOnAnnotationSetSubscriptionVariables = {
+  filter?: ModelSubscriptionTasksOnAnnotationSetFilterInput | null,
+};
+
+export type OnUpdateTasksOnAnnotationSetSubscription = {
+  onUpdateTasksOnAnnotationSet?:  {
+    __typename: "TasksOnAnnotationSet",
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
+    createdAt: string,
+    id: string,
+    locationSet?:  {
+      __typename: "LocationSet",
+      createdAt: string,
+      id: string,
+      locationCount?: number | null,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    locationSetId: string,
+    updatedAt: string,
   } | null,
 };
 

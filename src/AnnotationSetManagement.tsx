@@ -11,6 +11,7 @@ import exportFromJSON from 'export-from-json';
 import { useUpdateProgress } from "./useUpdateProgress";
 import EditAnnotationSet from "./EditAnnotationSet";
 import MoveObservations from "./MoveObservations";
+import AnnotationCountModal from "./AnnotationCountModal";
 
 export default function AnnotationSetManagement() {
   const { client, modalToShow, showModal } = useContext(GlobalContext)!
@@ -127,7 +128,22 @@ export default function AnnotationSetManagement() {
         }}
         />,
         name,
-        annotationCount != null ? Math.max(0, annotationCount) : "Unknown",
+        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+          {annotationCount != null ? Math.max(0, annotationCount) : "Unknown"}
+          <Button 
+            variant="outline-info"
+            size="sm"
+            style={{
+                marginLeft: '10px',
+                marginRight: '10px',
+              }}
+            onClick={() => {
+              setSelectedSets([id]);
+              showModal('annotationCountModal');
+            }}>
+              Expand
+          </Button>
+        </div>,
         tasks[i]?.length > 0 ? tasks[i].map(t => t.name).join(", ") : "None",
         <span>
             <Button 
@@ -217,6 +233,12 @@ export default function AnnotationSetManagement() {
         handleClose={() => showModal(null)}
         annotationSet={{id: selectedSets[0], name: editSetName}}
         setSelectedSets={setSelectedSets}
+      />
+
+      <AnnotationCountModal 
+        setId={selectedSets[0]}
+        show={modalToShow == "annotationCountModal"}
+        handleClose={() => showModal(null)}
       />
       <Row className="justify-content-center mt-3">
       <div>

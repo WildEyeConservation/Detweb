@@ -226,6 +226,37 @@ export const categoriesByProjectId = /* GraphQL */ `query CategoriesByProjectId(
   APITypes.CategoriesByProjectIdQueryVariables,
   APITypes.CategoriesByProjectIdQuery
 >;
+export const categoryCountsByAnnotationSetId = /* GraphQL */ `query CategoryCountsByAnnotationSetId(
+  $annotationSetId: ID!
+  $filter: ModelAnnotationCountPerCategoryPerSetFilterInput
+  $limit: Int
+  $nextToken: String
+  $sortDirection: ModelSortDirection
+) {
+  categoryCountsByAnnotationSetId(
+    annotationSetId: $annotationSetId
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    sortDirection: $sortDirection
+  ) {
+    items {
+      annotationCount
+      annotationSetId
+      categoryId
+      createdAt
+      projectId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.CategoryCountsByAnnotationSetIdQueryVariables,
+  APITypes.CategoryCountsByAnnotationSetIdQuery
+>;
 export const getAnnotation = /* GraphQL */ `query GetAnnotation($id: ID!) {
   getAnnotation(id: $id) {
     category {
@@ -304,6 +335,54 @@ export const getAnnotation = /* GraphQL */ `query GetAnnotation($id: ID!) {
   APITypes.GetAnnotationQueryVariables,
   APITypes.GetAnnotationQuery
 >;
+export const getAnnotationCountPerCategoryPerSet = /* GraphQL */ `query GetAnnotationCountPerCategoryPerSet(
+  $annotationSetId: ID!
+  $categoryId: ID!
+) {
+  getAnnotationCountPerCategoryPerSet(
+    annotationSetId: $annotationSetId
+    categoryId: $categoryId
+  ) {
+    annotationCount
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    category {
+      annotationCount
+      color
+      createdAt
+      id
+      name
+      projectId
+      shortcutKey
+      updatedAt
+      __typename
+    }
+    categoryId
+    createdAt
+    project {
+      createdAt
+      id
+      name
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.GetAnnotationCountPerCategoryPerSetQueryVariables,
+  APITypes.GetAnnotationCountPerCategoryPerSetQuery
+>;
 export const getAnnotationCounts = /* GraphQL */ `query GetAnnotationCounts($annotationSetId: String!) {
   getAnnotationCounts(annotationSetId: $annotationSetId)
 }
@@ -314,6 +393,10 @@ export const getAnnotationCounts = /* GraphQL */ `query GetAnnotationCounts($ann
 export const getAnnotationSet = /* GraphQL */ `query GetAnnotationSet($id: ID!) {
   getAnnotationSet(id: $id) {
     annotationCount
+    annotationCountPerCategory {
+      nextToken
+      __typename
+    }
     annotations {
       nextToken
       __typename
@@ -333,6 +416,10 @@ export const getAnnotationSet = /* GraphQL */ `query GetAnnotationSet($id: ID!) 
       __typename
     }
     projectId
+    tasks {
+      nextToken
+      __typename
+    }
     updatedAt
     __typename
   }
@@ -344,6 +431,10 @@ export const getAnnotationSet = /* GraphQL */ `query GetAnnotationSet($id: ID!) 
 export const getCategory = /* GraphQL */ `query GetCategory($id: ID!) {
   getCategory(id: $id) {
     annotationCount
+    annotationCountPerSet {
+      nextToken
+      __typename
+    }
     annotations {
       nextToken
       __typename
@@ -698,6 +789,10 @@ export const getLocationSet = /* GraphQL */ `query GetLocationSet($id: ID!) {
       __typename
     }
     projectId
+    tasks {
+      nextToken
+      __typename
+    }
     updatedAt
     __typename
   }
@@ -830,6 +925,10 @@ export const getObservation = /* GraphQL */ `query GetObservation($id: ID!) {
 >;
 export const getProject = /* GraphQL */ `query GetProject($id: ID!) {
   getProject(id: $id) {
+    annotationCountsPerCategoryPerSet {
+      nextToken
+      __typename
+    }
     annotationSets {
       nextToken
       __typename
@@ -912,6 +1011,38 @@ export const getQueue = /* GraphQL */ `query GetQueue($id: ID!) {
   }
 }
 ` as GeneratedQuery<APITypes.GetQueueQueryVariables, APITypes.GetQueueQuery>;
+export const getTasksOnAnnotationSet = /* GraphQL */ `query GetTasksOnAnnotationSet($id: ID!) {
+  getTasksOnAnnotationSet(id: $id) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    createdAt
+    id
+    locationSet {
+      createdAt
+      id
+      locationCount
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    locationSetId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.GetTasksOnAnnotationSetQueryVariables,
+  APITypes.GetTasksOnAnnotationSetQuery
+>;
 export const getUserProjectMembership = /* GraphQL */ `query GetUserProjectMembership($id: ID!) {
   getUserProjectMembership(id: $id) {
     createdAt
@@ -1163,6 +1294,39 @@ export const imagesByimageId = /* GraphQL */ `query ImagesByimageId(
 ` as GeneratedQuery<
   APITypes.ImagesByimageIdQueryVariables,
   APITypes.ImagesByimageIdQuery
+>;
+export const listAnnotationCountPerCategoryPerSets = /* GraphQL */ `query ListAnnotationCountPerCategoryPerSets(
+  $annotationSetId: ID
+  $categoryId: ModelIDKeyConditionInput
+  $filter: ModelAnnotationCountPerCategoryPerSetFilterInput
+  $limit: Int
+  $nextToken: String
+  $sortDirection: ModelSortDirection
+) {
+  listAnnotationCountPerCategoryPerSets(
+    annotationSetId: $annotationSetId
+    categoryId: $categoryId
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    sortDirection: $sortDirection
+  ) {
+    items {
+      annotationCount
+      annotationSetId
+      categoryId
+      createdAt
+      projectId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ListAnnotationCountPerCategoryPerSetsQueryVariables,
+  APITypes.ListAnnotationCountPerCategoryPerSetsQuery
 >;
 export const listAnnotationSets = /* GraphQL */ `query ListAnnotationSets(
   $filter: ModelAnnotationSetFilterInput
@@ -1562,6 +1726,32 @@ export const listQueues = /* GraphQL */ `query ListQueues(
   APITypes.ListQueuesQueryVariables,
   APITypes.ListQueuesQuery
 >;
+export const listTasksOnAnnotationSets = /* GraphQL */ `query ListTasksOnAnnotationSets(
+  $filter: ModelTasksOnAnnotationSetFilterInput
+  $limit: Int
+  $nextToken: String
+) {
+  listTasksOnAnnotationSets(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+  ) {
+    items {
+      annotationSetId
+      createdAt
+      id
+      locationSetId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ListTasksOnAnnotationSetsQueryVariables,
+  APITypes.ListTasksOnAnnotationSetsQuery
+>;
 export const listUserProjectMemberships = /* GraphQL */ `query ListUserProjectMemberships(
   $filter: ModelUserProjectMembershipFilterInput
   $limit: Int
@@ -1645,6 +1835,36 @@ export const listUsers = /* GraphQL */ `query ListUsers($nextToken: String) {
   }
 }
 ` as GeneratedQuery<APITypes.ListUsersQueryVariables, APITypes.ListUsersQuery>;
+export const locationSetsByAnnotationSetId = /* GraphQL */ `query LocationSetsByAnnotationSetId(
+  $annotationSetId: ID!
+  $filter: ModelTasksOnAnnotationSetFilterInput
+  $limit: Int
+  $nextToken: String
+  $sortDirection: ModelSortDirection
+) {
+  locationSetsByAnnotationSetId(
+    annotationSetId: $annotationSetId
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    sortDirection: $sortDirection
+  ) {
+    items {
+      annotationSetId
+      createdAt
+      id
+      locationSetId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.LocationSetsByAnnotationSetIdQueryVariables,
+  APITypes.LocationSetsByAnnotationSetIdQuery
+>;
 export const locationSetsByProjectId = /* GraphQL */ `query LocationSetsByProjectId(
   $filter: ModelLocationSetFilterInput
   $limit: Int

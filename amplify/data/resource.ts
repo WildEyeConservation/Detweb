@@ -33,6 +33,7 @@ const schema = a.schema({
     observations: a.hasMany('Observation', 'projectId'),
     members: a.hasMany('UserProjectMembership', 'projectId'),
     queues: a.hasMany('Queue', 'projectId'),
+    annotationCountsPerCategoryPerSet: a.hasMany('AnnotationCountPerCategoryPerSet', 'projectId')
   }).authorization(allow => [allow.authenticated()]),
     // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
     // allow.group('orgadmin').to(['create', 'update', 'delete', 'read']),
@@ -45,7 +46,8 @@ const schema = a.schema({
     shortcutKey: a.string(),
     annotations: a.hasMany('Annotation','categoryId'),
     annotationCount: a.integer().default(0),
-    objects: a.hasMany('Object', 'categoryId')
+    objects: a.hasMany('Object', 'categoryId'),
+    annotationCountPerSet: a.hasMany('AnnotationCountPerCategoryPerSet', 'categoryId')
   }).authorization(allow => [allow.authenticated()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
     .secondaryIndexes((index)=>[index('projectId').queryField('categoriesByProjectId')]),
@@ -98,10 +100,23 @@ const schema = a.schema({
     annotations: a.hasMany('Annotation', 'setId'),
     annotationCount: a.integer().default(0),
     observations: a.hasMany('Observation', 'annotationSetId'),
-    tasks: a.hasMany('TasksOnAnnotationSet', 'annotationSetId')
+    tasks: a.hasMany('TasksOnAnnotationSet', 'annotationSetId'),
+    annotationCountPerCategory: a.hasMany('AnnotationCountPerCategoryPerSet', 'annotationSetId')
   }).authorization(allow => [allow.authenticated()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('projectId').queryField('annotationSetsByProjectId')]),
+  AnnotationCountPerCategoryPerSet: a.model({
+    projectId: a.id().required(),
+    project: a.belongsTo('Project', 'projectId'),
+    categoryId: a.id().required(),
+    category: a.belongsTo('Category', 'categoryId'),
+    annotationSetId: a.id().required(),
+    annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
+    annotationCount: a.integer().default(0)
+  })
+  .identifier(['annotationSetId', 'categoryId'])
+  .authorization(allow => [allow.authenticated()])
+  .secondaryIndexes((index) => [index('annotationSetId').queryField('categoryCountsByAnnotationSetId')]),
   Annotation: a.model({
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
