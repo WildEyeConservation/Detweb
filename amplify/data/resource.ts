@@ -267,6 +267,7 @@ const schema = a.schema({
     project: a.belongsTo('Project', 'projectId'),
     name: a.string().required(),
     users: a.hasMany('UserProjectMembership', 'queueId'),
+    batchSize: a.integer().default(0),
     // backupUsers: a.hasMany('UserProjectMembership', 'backupQueueId'),
     url: a.url(),
   }).authorization(allow => [allow.authenticated()])
