@@ -40,14 +40,7 @@ export default function ImageSetManagement() {
         name,
         imageCount || "Unknown",
         <span>
-            <Button 
-              variant="danger"
-            className="me-2 fixed-width-button"
-              onClick={()=> {if (confirm(`Are you sure you want to delete image set ${name}?`)) deleteImageSet({id: id})}}
-            >
-              Delete
-            </Button>
-            <Button 
+          <Button 
               variant="info"
             className="me-2 fixed-width-button"
             onClick={() => {
@@ -60,6 +53,14 @@ export default function ImageSetManagement() {
             >
               Rename
             </Button>
+            <Button 
+              variant="danger"
+            className="me-2 fixed-width-button"
+              onClick={()=> {if (confirm(`Are you sure you want to delete image set ${name}?`)) deleteImageSet({id: id})}}
+            >
+              Delete
+            </Button>
+            
         </span>
         // <Form.Check
         //   id="custom-switch"

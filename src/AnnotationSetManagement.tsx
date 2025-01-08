@@ -12,6 +12,7 @@ import { useUpdateProgress } from "./useUpdateProgress";
 import EditAnnotationSet from "./EditAnnotationSet";
 import MoveObservations from "./MoveObservations";
 import AnnotationCountModal from "./AnnotationCountModal";
+import ActionsDropdown from "./ActionsDropdown";
 
 export default function AnnotationSetManagement() {
   const { client, modalToShow, showModal } = useContext(GlobalContext)!
@@ -144,20 +145,31 @@ export default function AnnotationSetManagement() {
               Expand
           </Button>
         </div>,
-        tasks[i]?.length > 0 ? tasks[i].map(t => t.name).join(", ") : "None",
+        tasks[i]?.length > 0 ? 
+          Object.entries(
+            tasks[i].reduce((acc, t) => {
+              acc[t.name] = (acc[t.name] || 0) + 1;
+              return acc;
+            }, {})
+          )
+          .map(([name, count]) => count > 1 ? `${name} (${count})` : name)
+          .join(", ") 
+        : "None",
         <span>
-            <Button 
-              variant="warning"
-              className="me-2"
-              onClick={() => { 
+            <ActionsDropdown actions={[
+              {label: "Edit", onClick: () => {
                 setSelectedSets([id]);
                 setEditSetName(name);
                 showModal('editAnnotationSet') 
-              }
-            }
-            >
-              Edit
-            </Button>
+              }},
+              {label: "Export", onClick: () => {
+                exportData([{ id, name }])
+              }},
+              {label: "Move Observations", onClick: () => {
+                setSelectedSets([id]);
+                showModal('moveObservations') 
+              }}
+            ]} />
             <Button 
               variant="danger"
               className="me-2 fixed-width-button"
@@ -165,24 +177,6 @@ export default function AnnotationSetManagement() {
             >
               Delete
             </Button>
-            <Button 
-              variant="info"
-              className="me-2 fixed-width-button"
-            onClick={() => { exportData([{ id, name }])}}
-            >
-              Export
-            </Button>
-              <Button 
-              variant="info"
-              className="fixed-width-button"
-              onClick={() => {
-                setSelectedSets([id]);
-                showModal('moveObservations') 
-              }}
-            >
-              Move Observations
-            </Button>
-            
         </span>
         // <Form.Check
         //   id="custom-switch"

@@ -34,7 +34,7 @@ const ProjectManagement = () => {
     <Container fluid>
       <Row>
         <Col md={2} className="position-sticky" style={{ top: 0, height: '100vh' }}>
-          <Nav className="flex-column">
+          <Nav className="flex-column mt-2">
             <Nav.Link onClick={() => scrollToSection(imageSetsRef)}>Image Sets</Nav.Link>
             <Nav.Link onClick={() => scrollToSection(categoriesRef)}>Categories</Nav.Link>
             <Nav.Link onClick={() => scrollToSection(tasksRef)}>Tasks</Nav.Link>
