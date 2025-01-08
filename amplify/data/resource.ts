@@ -227,9 +227,9 @@ const schema = a.schema({
     project: a.belongsTo('Project', 'projectId'),
     isAdmin: a.boolean(),
     queueId: a.id(),
-    queue: a.belongsTo('Queue', 'queueId')
-    // backupQueueId: a.id(),
-    // backupQueue: a.belongsTo('Queue', 'backupQueueId')
+    queue: a.belongsTo('Queue', 'queueId'),
+    backupQueueId: a.id(),
+    backupQueue: a.belongsTo('Queue', 'backupQueueId')
   }).authorization(allow => [allow.authenticated()])
     //.authorization(allow => [allow.groupDefinedIn('projectId'), allow.group('orgadmin')])
   .secondaryIndexes((index)=>[index('projectId').queryField('userProjectMembershipsByProjectId'),
@@ -268,7 +268,7 @@ const schema = a.schema({
     name: a.string().required(),
     users: a.hasMany('UserProjectMembership', 'queueId'),
     batchSize: a.integer().default(0),
-    // backupUsers: a.hasMany('UserProjectMembership', 'backupQueueId'),
+    backupUsers: a.hasMany('UserProjectMembership', 'backupQueueId'),
     url: a.url(),
   }).authorization(allow => [allow.authenticated()])
     //.authorization(allow => [allow.groupDefinedIn('projectId')])

@@ -18,8 +18,10 @@ export default function QueueManagement() {
   const [editQueueId, setEditQueueId] = useState<string | null>(null);
   
 
-  const getSubscribedUsersCount = (queueId:string) => {
-    return projectMemberships!.filter((pm) => pm.queueId === queueId).length;
+  const getSubscribedUsersCount = (queueId: string) => {
+    return projectMemberships!.filter(
+      (pm) => pm.queueId === queueId || pm.backupQueueId === queueId
+    ).length;
   };
 
   async function getMessageCount(queueUrl:string) {
