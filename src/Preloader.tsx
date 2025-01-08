@@ -48,7 +48,7 @@ export function PreloaderFactory(WrappedComponent: React.ComponentType<any>) {
               return wc - 1;
             });
             if (props) {
-              setBuffer(b => [...b, props]);
+              setBuffer(b => [...b, { ...props, id: crypto.randomUUID() }]);
             }
           });
           }
@@ -58,7 +58,7 @@ export function PreloaderFactory(WrappedComponent: React.ComponentType<any>) {
       }, [buffer.length, index]);
   
       const subsetStart = Math.max(index - historyN, 0); // Keep at the least the last historyN entries in memory
-      const subset = buffer.slice(subsetStart, index + preloadN+1);
+      const subset = buffer.slice(subsetStart, index + preloadN);
       if (subset?.length) {
         return (
           <div style={{ 
