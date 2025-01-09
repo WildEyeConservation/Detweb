@@ -74,13 +74,42 @@ export default function UserManagement() {
         belongsToCurrentProject ? (
           <QueueDropdown
             key={id + "2"}
-            setQueue={(q) => updateProjectMembership({ id: belongsToCurrentProject?.id, queueId: q })}
-            currentQueue={belongsToCurrentProject?.queueId || ""}
+            setQueue={(q) => {
+              if (q === belongsToCurrentProject?.backupQueueId) {
+                // Swap the main and backup queues
+                updateProjectMembership({
+                  id: belongsToCurrentProject?.id,
+                  queueId: belongsToCurrentProject?.backupQueueId,
+                  backupQueueId: belongsToCurrentProject?.queueId,
+                });
+              } else {
+                updateProjectMembership({ id: belongsToCurrentProject?.id, queueId: q });
+              }
+            }}
+            currentQueue={belongsToCurrentProject?.queueId || null}
+            allowNewOption={false}
           />
         ) : (
           <p>To select a queue, first add user to this project</p>
         )
         ,
+        belongsToCurrentProject ? (
+          <QueueDropdown
+            key={id + "2"}
+            setQueue={(q) => {
+              if (q === belongsToCurrentProject?.queueId) {
+                alert("Backup queue cannot be the same as the main queue.");
+                return;
+              }
+              updateProjectMembership({ id: belongsToCurrentProject?.id, backupQueueId: q });
+            }}
+            currentQueue={belongsToCurrentProject?.backupQueueId || null}
+            allowNoneOption={true}
+            allowNewOption={false}
+          />
+        ) : (
+          <p>To select a backup queue, first add user to this project</p>
+        ),
         <span>
         <OverlayTrigger
           placement="top"
@@ -148,7 +177,8 @@ export default function UserManagement() {
   const tableHeadings = [
     { content: "Name" },
     { content: "Email" },
-    { content: "Queue", style: { width: "500px" } },
+    { content: "Queue", style: { width: "300px" } },
+    { content: "Backup Queue", style: { width: "300px" } },
     { content: "Actions" },
     
   ];

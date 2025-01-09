@@ -1,22 +1,27 @@
 import { useContext, useEffect, useState } from 'react';
 import { Button, Row, Tooltip, OverlayTrigger, Col } from 'react-bootstrap';
-import { UserContext, ManagementContext } from './Context';
+import { UserContext, ManagementContext, GlobalContext } from './Context';
 import MyTable from './Table';
 import { PurgeQueueCommand, GetQueueAttributesCommand } from '@aws-sdk/client-sqs'
 import { type GetQueueAttributesCommandInput } from '@aws-sdk/client-sqs'
 import { Schema } from '../amplify/data/resource'
+import EditQueueModal from './EditQueueModal';
 // import { publishError } from './ErrorHandler';
-
+import ActionsDropdown from './ActionsDropdown';
 
 export default function QueueManagement() {
   const { getSqsClient } = useContext(UserContext)!;
+  const { modalToShow, showModal } = useContext(GlobalContext)!
   const { queuesHook: { data: queues, create: createQueue, delete : deleteQueue } } = useContext(ManagementContext)!;
   const { projectMembershipHook: { data: projectMemberships, update: updateProjectMembership } } = useContext(ManagementContext)!;
   const [messageCounts, setMessageCounts] = useState<{ [key: string]: number }>({});
+  const [editQueueId, setEditQueueId] = useState<string | null>(null);
   
 
-  const getSubscribedUsersCount = (queueId:string) => {
-    return projectMemberships!.filter((pm) => pm.queueId === queueId).length;
+  const getSubscribedUsersCount = (queueId: string) => {
+    return projectMemberships!.filter(
+      (pm) => pm.queueId === queueId || pm.backupQueueId === queueId
+    ).length;
   };
 
   async function getMessageCount(queueUrl:string) {
@@ -115,12 +120,14 @@ export default function QueueManagement() {
           subscribedUsersCount,
           <span key={`${queue.url}-count`}>{messageCount}</span>,
           <div key={`${queue.url}-actions`}>
-            <Button variant="warning" className="me-2" onClick={() => unsubscribeAllUsers(queue.id)}>
-              Unsubscribe All
-            </Button>
-            <Button variant="info" disabled={!(queue.url)} className="me-2" onClick={() => purgeQueueHandler(queue.url!)}>
-              Purge Queue
-            </Button>
+            <ActionsDropdown actions={[
+              {label: "Edit", onClick: () => {
+                setEditQueueId(queue.id);
+                showModal('editQueue');
+              }},
+              {label: "Unsubscribe All", onClick: () => unsubscribeAllUsers(queue.id)},
+              {label: "Purge Queue", onClick: () => purgeQueueHandler(queue.url!)}
+            ]} />
             <OverlayTrigger
               placement="top"
               overlay={deleteTooltip}
@@ -129,7 +136,7 @@ export default function QueueManagement() {
             >
               <span>
                 <Button 
-                  className="me-2"
+                  className="me-2 fixed-width-button"
                   variant="danger" 
                   onClick={() => deleteQueueHandler(queue)}
                   disabled={isDeleteDisabled}
@@ -171,6 +178,7 @@ export default function QueueManagement() {
           </Button>
         </Col>
       </div>
+      <EditQueueModal show={modalToShow === 'editQueue'} onClose={() => showModal(null)} queueId={editQueueId} />
     </Row>
   );
 }

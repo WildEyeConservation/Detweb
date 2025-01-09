@@ -3,11 +3,13 @@ import { useContext } from "react";
 import { ManagementContext } from "./Context";
 import React from "react";
 interface QueueDropdownProps {
-  setQueue: (url: string) => void;
+  setQueue: (url: string | null) => void;
   currentQueue: string | null;
+  allowNoneOption?: boolean;
+  allowNewOption?: boolean;
 }
 
-export function QueueDropdown({ setQueue, currentQueue }: QueueDropdownProps) {
+export function QueueDropdown({ setQueue, currentQueue, allowNoneOption = false, allowNewOption = true }: QueueDropdownProps) {
   const { queuesHook: { data: queues, create: createQueue } } = useContext(ManagementContext)!;
   console.log(`queue: ${JSON.stringify(queues)}`)
   
@@ -25,6 +27,8 @@ export function QueueDropdown({ setQueue, currentQueue }: QueueDropdownProps) {
   const onSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (e.target.value === "new") {
       onNewQueue();
+    } else if (e.target.value === "none") {
+      setQueue(null);
     } else {
       setQueue(e.target.value);
     }
@@ -38,7 +42,8 @@ export function QueueDropdown({ setQueue, currentQueue }: QueueDropdownProps) {
           {q.name}
         </option>
       ))}
-      <option value="new">Add new queue</option>
+      {allowNoneOption && <option value="none">None</option>}
+      {allowNewOption && <option value="new">Add new queue</option>}
     </Form.Select>
   );
 }

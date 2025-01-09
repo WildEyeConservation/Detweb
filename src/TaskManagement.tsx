@@ -44,19 +44,19 @@ export default function TaskManagement() {
         name,
         locationCount || "Unknown",
         <span>
-            <Button 
-              variant="danger"
-              className="me-2 fixed-width-button"
-            onClick={() => {if (confirm(`Are you sure you want to delete task ${name}?`)) deleteTask({ id: id })}}
-            >
-              Delete
-            </Button>
           <Button
             variant="info"
             className="me-2 fixed-width-button"
             onClick={() => {showModal("launchTask")}}
             >
               Launch
+            </Button>
+            <Button 
+              variant="danger"
+              className="me-2 fixed-width-button"
+            onClick={() => {if (confirm(`Are you sure you want to delete task ${name}?`)) deleteTask({ id: id })}}
+            >
+              Delete
             </Button>
         </span>
         // <Form.Check

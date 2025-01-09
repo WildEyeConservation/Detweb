@@ -6,6 +6,7 @@ export default function useSQS(filterPredicate: (message: any) => Promise<boolea
   const { currentPM } = useContext(ProjectContext)!;
   const {getSqsClient} = useContext(UserContext)!;
   const [url,setUrl] = useState<string | undefined>(undefined);
+  const [backupUrl,setBackupUrl] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (currentPM.queueId) {
@@ -13,23 +14,49 @@ export default function useSQS(filterPredicate: (message: any) => Promise<boolea
         ({ data: { url } }) => {
           setUrl(url);
         });
+      if (currentPM.backupQueueId) {
+        currentPM.backupQueue().then(
+          ({ data: { url } }) => {
+            setBackupUrl(url);
+          });
+      }
     }
   }, [currentPM]);
     
-    const fetcher= useCallback(async (): Promise<Identifiable> => {
+    const fetcher = useCallback(async (): Promise<Identifiable> => {
         while (true) {
             if (!url) {
                 console.log('No queue URL set');
                 await new Promise(resolve => setTimeout(resolve, 5000));
                 continue;
             }
-            const sqsClient = await getSqsClient()
-            const response = await sqsClient.send(new ReceiveMessageCommand({
+
+            const sqsClient = await getSqsClient();
+
+            const getResponse = async (url: string) => {
+              const response = await sqsClient.send(new ReceiveMessageCommand({
                 QueueUrl: url,
                 MaxNumberOfMessages: 1,
                 MessageAttributeNames: ["All"],
                 VisibilityTimeout: 600,
-            }))
+              }));
+
+              return response;
+            }
+
+            let usingBackup = false;
+            let response = await getResponse(url);
+
+            if (!response.Messages && backupUrl) {
+                console.log('No message from main queue, checking backup queue');
+                response = await getResponse(backupUrl);
+
+                if (response.Messages) {
+                    usingBackup = true;
+                }
+            }
+
+            // Messages from either queue
             if (response.Messages) {
                 const entity = response.Messages[0];
                 const body = JSON.parse(entity.Body!);
@@ -41,7 +68,7 @@ export default function useSQS(filterPredicate: (message: any) => Promise<boolea
                     try {
                         const sqsClient = await getSqsClient();
                         await sqsClient.send(new DeleteMessageCommand({
-                            QueueUrl: url,
+                            QueueUrl: usingBackup ? backupUrl : url,
                             ReceiptHandle: entity.ReceiptHandle,
                         }));
                     } catch {
@@ -53,13 +80,13 @@ export default function useSQS(filterPredicate: (message: any) => Promise<boolea
                 if (await filterPredicate(body)) {
                     return body;
                 } else {
-                    body.ack()
+                    body.ack();
                 }
             } else {
                 await new Promise(resolve => setTimeout(resolve, 5000));
             }
         }
-  }, [url, getSqsClient, filterPredicate]);
+    }, [url, backupUrl, getSqsClient, filterPredicate]);
 
   return {fetcher : url ? fetcher : undefined};
 }

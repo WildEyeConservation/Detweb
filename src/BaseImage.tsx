@@ -274,7 +274,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
         <ZoomTracker />
       </MapContainer>}
       </div>
-  ), [next, prev, imageFiles, location, style, viewBounds, image, fullyLoaded,source, canAdvance,stats ])
+  ), [visible, fullyLoaded, source, style, zoom, viewBounds, viewCenter, location?.id, location?.annotationSetId, location.image.id, imageFiles, image, children, next, prev, canAdvance, stats, client.models.ImageNeighbour, imageBounds])
 }, (prevProps, nextProps) => {
       //Iterate over all the props except children and compare them for equality
   return prevProps.visible === nextProps.visible &&
