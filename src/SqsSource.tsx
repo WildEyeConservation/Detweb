@@ -14,10 +14,12 @@ export default function useSQS(filterPredicate: (message: any) => Promise<boolea
         ({ data: { url } }) => {
           setUrl(url);
         });
-      currentPM.backupQueue().then(
-        ({ data: { url } }) => {
-          setBackupUrl(url);
-        });
+      if (currentPM.backupQueueId) {
+        currentPM.backupQueue().then(
+          ({ data: { url } }) => {
+            setBackupUrl(url);
+          });
+      }
     }
   }, [currentPM]);
     
@@ -28,24 +30,33 @@ export default function useSQS(filterPredicate: (message: any) => Promise<boolea
                 await new Promise(resolve => setTimeout(resolve, 5000));
                 continue;
             }
+
             const sqsClient = await getSqsClient();
-            let response = await sqsClient.send(new ReceiveMessageCommand({
+
+            const getResponse = async (url: string) => {
+              const response = await sqsClient.send(new ReceiveMessageCommand({
                 QueueUrl: url,
                 MaxNumberOfMessages: 1,
                 MessageAttributeNames: ["All"],
                 VisibilityTimeout: 600,
-            }));
+              }));
+
+              return response;
+            }
+
+            let usingBackup = false;
+            let response = await getResponse(url);
 
             if (!response.Messages && backupUrl) {
                 console.log('No message from main queue, checking backup queue');
-                response = await sqsClient.send(new ReceiveMessageCommand({
-                    QueueUrl: backupUrl,
-                    MaxNumberOfMessages: 1,
-                    MessageAttributeNames: ["All"],
-                    VisibilityTimeout: 600,
-                }));
+                response = await getResponse(backupUrl);
+
+                if (response.Messages) {
+                    usingBackup = true;
+                }
             }
 
+            // Messages from either queue
             if (response.Messages) {
                 const entity = response.Messages[0];
                 const body = JSON.parse(entity.Body!);
@@ -57,7 +68,7 @@ export default function useSQS(filterPredicate: (message: any) => Promise<boolea
                     try {
                         const sqsClient = await getSqsClient();
                         await sqsClient.send(new DeleteMessageCommand({
-                            QueueUrl: url,
+                            QueueUrl: usingBackup ? backupUrl : url,
                             ReceiptHandle: entity.ReceiptHandle,
                         }));
                     } catch {

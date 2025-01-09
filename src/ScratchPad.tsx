@@ -79,7 +79,7 @@ export function ScratchPad() {
         width: '100%',
         gap: '1rem'  // Adds vertical spacing between components
       }}>
-        {fetcher && <Preloader index={index} setIndex={setIndex} fetcher={fetcher} preloadN={3} historyN={1} />}
+        {fetcher && <Preloader index={index} setIndex={setIndex} fetcher={fetcher} preloadN={3} historyN={2} />}
         <JobsRemaining />
       </div>
     );
