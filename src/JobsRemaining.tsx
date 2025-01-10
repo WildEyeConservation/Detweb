@@ -72,7 +72,7 @@ export function JobsRemaining() {
 
   useEffect(() => {
     function handleJobsCompleted() {
-      if (batchSize && jobsCompleted === batchSize - 1 || jobsRemaining === "0") {   
+      if (batchSize && (jobsCompleted === batchSize - 1 || jobsRemaining === "0")) {   
         const batchNumber = Math.floor(sessionJobsCompleted / batchSize);
         alert(`You've completed ${batchNumber} batch${batchNumber > 1 ? "es" : ""}!`);
         setJobsCompleted(0);
