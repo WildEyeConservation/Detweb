@@ -42,6 +42,7 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
   const [lowerLimit, setLowerLimit] = useState(0);
   const [upperLimit, setUpperLimit] = useState(1);
   const [taskTag, setTaskTag] = useState<string>('');
+  const [skipLocationWithAnnotations, setSkipLocationWithAnnotations] = useState(false);
   if (!userContext) {
     return null;
   }
@@ -165,7 +166,7 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
         const location = {id: locationId, annotationSetId: annotationSet};
         batchEntries.push({
           Id: `msg-${locationId}`, // Required unique ID for each message in batch
-          MessageBody: JSON.stringify({ location, allowOutside, zoom, taskTag, secondaryQueueUrl})
+          MessageBody: JSON.stringify({ location, allowOutside, zoom, taskTag, secondaryQueueUrl, skipLocationWithAnnotations})
         });
       }
 
@@ -229,6 +230,12 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
               <LocationSetDropdown
                 setTasks={setSelectedTasks}
                 selectedTasks={selectedTasks}
+              />
+              <Form.Check className="mt-2"
+                type="switch"
+                label="Skip locations with annotations"
+                checked={skipLocationWithAnnotations}
+                onChange={(x) => setSkipLocationWithAnnotations(x.target.checked)}
               />
               {/* <Form.Select onChange={(e)=>{setLocationSet(e.target.value)}} value={locationSet}>  
       {locationSet =="none" && <option>Select a location set to process:</option>}

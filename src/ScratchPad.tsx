@@ -65,8 +65,7 @@ export function ScratchPad() {
       // return false if any annotation is within the location
       return !isWithin;
     }
-    // const { fetcher } = useSQS(filter); Untested
-    const { fetcher } = useSQS();
+    const { fetcher } = useSQS(filter);
 
     const Preloader = useMemo(() => PreloaderFactory(TaskSelector), []);
 
