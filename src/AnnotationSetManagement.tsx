@@ -37,7 +37,7 @@ export default function AnnotationSetManagement() {
       }));
 
       if (!isCancelled) { // Only update state if the effect hasn't been cancelled
-        setTasks(result.map(tasks => tasks.map(task => ({name: task.locationSet.name}))));
+        setTasks(result.map(tasks => tasks.map(task => ({name: task.locationSet?.name || ""})).filter(task => task.name)));
       }
     }
 
