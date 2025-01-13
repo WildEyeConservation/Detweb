@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
+import { UserContext } from './Context';
 
 interface Identifiable {
     id: string;
@@ -22,7 +23,8 @@ export function PreloaderFactory(WrappedComponent: React.ComponentType<any>) {
     const PreloadingComponent = ({ historyN = 2, preloadN = 3, fetcher, visible = true, index, setIndex,prefetch = 0, ...rest  }: PreloaderProps) => {
       const [buffer, setBuffer] = useState<any[]>([]);
       const [waitingCount, setWaitingCount] = useState<number>(0);
-  
+      const { setJobsCompleted } = useContext(UserContext)!;
+
       useEffect(() => {
         console.log('Preloader mounted', { 
           bufferLength: buffer.length, 
@@ -85,8 +87,14 @@ export function PreloaderFactory(WrappedComponent: React.ComponentType<any>) {
                   {...entry}
                   setIsReady={()=>{}}
                   visible={i === index - subsetStart}
-                  next={i<subset.length-1 ? ()=>setIndex(index=>index+1) : undefined}
-                  prev={i>0 ? ()=>setIndex(index=>index-1) : undefined} 
+                  next={i<subset.length-1 ? ()=>{
+                    setIndex(index=>index+1)
+                    setJobsCompleted(x => x + 1);
+                  } : undefined}
+                  prev={i>0 ? ()=>{
+                    setIndex(index=>index-1)
+                    setJobsCompleted(x => x - 1);
+                  } : undefined} 
                 />
                 <div></div>
               </div>

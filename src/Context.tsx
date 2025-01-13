@@ -40,7 +40,7 @@ export interface UserContextType {
     getDynamoClient: () => Promise<DynamoDBDocumentClient>,
     myMembershipHook: CRUDhook<'UserProjectMembership'>,
     jobsCompleted: number,
-    setJobsCompleted: (jobsCompleted: number) => void,
+    setJobsCompleted: React.Dispatch<React.SetStateAction<number>>,
     } 
 
 export interface ManagementContextType {

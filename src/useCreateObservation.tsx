@@ -44,7 +44,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
       setAcked(true);
     }
     ack();
-    setJobsCompleted?.((x: number) => x + 1);
+    // setJobsCompleted?.((x: number) => x + 1);
   }, [location, project, acked,visibleTimestamp,startLoadingTimestamp,fullyLoadedTimestamp,annoCount]);
 
   return newAck;

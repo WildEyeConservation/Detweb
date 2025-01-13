@@ -7,7 +7,6 @@ import ProgressBar from 'react-bootstrap/ProgressBar';
 export function JobsRemaining() {
   const { getSqsClient, jobsCompleted: sessionJobsCompleted } = useContext(UserContext)!;
   const { currentPM } = useContext(ProjectContext)!;
-  const [jobsCompleted, setJobsCompleted] = useState<number>(0);
   const [jobsRemaining, setJobsRemaining] = useState<string>("Unknown");
   const [url, setUrl] = useState<string | undefined>(undefined);
   const [backupUrl, setBackupUrl] = useState<string | undefined>(undefined);
@@ -22,9 +21,6 @@ export function JobsRemaining() {
 
           if (batchSize) {
             setBatchSize(batchSize);
-            
-            const j = sessionJobsCompleted % batchSize;
-            setJobsCompleted(j);
           }
         });
         if (currentPM.backupQueueId) {
@@ -70,21 +66,6 @@ export function JobsRemaining() {
     }
   }, [url, backupUrl, getSqsClient]);
 
-  useEffect(() => {
-    function handleJobsCompleted() {
-      if (batchSize && (jobsCompleted === batchSize - 1 || jobsRemaining === "0")) {   
-        const batchNumber = Math.floor(sessionJobsCompleted / batchSize);
-        alert(`You've completed ${batchNumber} batch${batchNumber > 1 ? "es" : ""}!`);
-        setJobsCompleted(0);
-        return;
-      }
-
-      setJobsCompleted((j) => j + 1);
-    }
-
-    handleJobsCompleted();
-  }, [sessionJobsCompleted]);
-
   return (
       jobsRemaining === "0" || batchSize === 0 ?
         <div style={{textAlign: "center", flexDirection: "column", width: "100%"}}>
@@ -94,13 +75,15 @@ export function JobsRemaining() {
           <p>Approximate number of jobs completed in this session: {sessionJobsCompleted}</p>
         </div>
       :
+        <div style={{textAlign: "center", flexDirection: "column", width: "80%"}}>
           <ProgressBar 
             striped 
             variant="info" 
             max={batchSize} 
-            now={jobsCompleted} 
-            label={`${jobsCompleted} / ${batchSize}`} 
-            className="mt-2 w-75"
+            now={sessionJobsCompleted % batchSize} 
+            label={`${sessionJobsCompleted % batchSize} / ${batchSize}`} 
           />
+          <p style={{marginTop: "10px"}}>Batches completed: {Math.floor(sessionJobsCompleted / batchSize)}</p>
+        </div>
   );
 }
