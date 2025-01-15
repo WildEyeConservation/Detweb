@@ -99,7 +99,7 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
     do {
         const command = new QueryCommand({
             TableName: backend.custom.observationTable,
-            IndexName: "observationsByAnnotationSetId",
+            IndexName: "observationsByAnnotationSetIdAndCreatedAt",
             KeyConditionExpression: "annotationSetId  = :annotationSetId ",
             ExpressionAttributeValues: {
                 ":annotationSetId": {
