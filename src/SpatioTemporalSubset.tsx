@@ -347,24 +347,29 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleCl
                                                     }}
                                                 >
                                                         <div style={{ textAlign: 'center' }}>
-                                                        ImageSet: {imageSet.name}<br />
-                                                    Timestamp: {DateTime.fromSeconds(image.timestamp).toFormat("yyyy-MM-dd HH:mm:ss")}<br />
-                                                        {imageURL && (
-                                                            <>
-                                                            <img 
-                                                                src={imageURL} 
-                                                                alt={image.id} 
-                                                                style={{ 
-                                                                    width: `${Math.ceil(image.width/Math.pow(2,Math.ceil(Math.log2(Math.max(image.width,image.height)))-8))}px`, 
-                                                                    height: `${Math.ceil(image.height/Math.pow(2,Math.ceil(Math.log2(Math.max(image.width,image.height)))-8))}px`, 
-                                                                    objectFit: 'none', 
-                                                                    objectPosition: '0 0',
-                                                                    display: 'inline-block'
-                                                                }} 
-                                                            /><br /></>
-                                                    )}
-                                                    Associated Filenames: {imageFilenames.length > 0 ? imageFilenames.join('\n').replace(/\n/g, '<br />') : 'Loading...'}
-                                                    </div>
+                                                            ImageSet: {imageSet.name}<br />
+                                                            {image.timestamp ?
+                                                                <>Timestamp: {DateTime.fromSeconds(image.timestamp).toFormat("yyyy-MM-dd HH:mm:ss")}</>
+                                                            :
+                                                                <>No timestamp</>
+                                                            }
+                                                            <br />
+                                                                {imageURL && (
+                                                                    <>
+                                                                    <img 
+                                                                        src={imageURL} 
+                                                                        alt={image.id} 
+                                                                        style={{ 
+                                                                            width: `${Math.ceil(image.width/Math.pow(2,Math.ceil(Math.log2(Math.max(image.width,image.height)))-8))}px`, 
+                                                                            height: `${Math.ceil(image.height/Math.pow(2,Math.ceil(Math.log2(Math.max(image.width,image.height)))-8))}px`, 
+                                                                            objectFit: 'none', 
+                                                                            objectPosition: '0 0',
+                                                                            display: 'inline-block'
+                                                                        }} 
+                                                                    /><br /></>
+                                                            )}
+                                                            Associated Filenames: {imageFilenames.length > 0 ? imageFilenames.join('\n').replace(/\n/g, '<br />') : 'Loading...'}
+                                                        </div>
                                                     </Popup>
                                             </CircleMarker>
                                         ))}
