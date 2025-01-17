@@ -298,6 +298,13 @@ const schema = a.schema({
   .secondaryIndexes((index) => [
     index('annotationSetId').queryField('locationSetsByAnnotationSetId'),
   ]),
+  UserTestConfig: a.model({
+    userId: a.id().required(),
+    testType: a.string(),
+    randomVar: a.float(),
+    intervalVar: a.float()
+  }).authorization(allow => [allow.authenticated()])
+  .secondaryIndexes((index) => [index('userId').queryField('testConfigByUserId')]),
   addUserToGroup: a.mutation().arguments({
       userId:a.string().required(), 
       groupName:a.string().required()
