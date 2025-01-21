@@ -69,6 +69,10 @@ export function Project({ children, currentPM }: { children: React.ReactNode, cu
 
 export function User({ user, children }: { user: AuthUser, children: React.ReactNode }) {
   const [jobsCompleted, setJobsCompleted] = useState<number>(0);
+  const [unannotatedJobs, setUnannotatedJobs] = useState<number>(0);
+  const [currentTaskTag, setCurrentTaskTag] = useState<string>('');
+  const [isTesting, setIsTesting] = useState<boolean>(false);
+  const [currentAnnoCount, setCurrentAnnoCount] = useState<number>(0);
   const { client,region } = useContext(GlobalContext)!;
   //const { items: myMemberships } = useObserveQuery('UserProjectMembership', { filter: { userId: { eq: user!.username } } });
   // const { data: myMemberships } = useOptimisticUpdates(
@@ -132,6 +136,14 @@ export function User({ user, children }: { user: AuthUser, children: React.React
         getSqsClient,
         jobsCompleted,
         setJobsCompleted,
+        unannotatedJobs,
+        setUnannotatedJobs,
+        currentTaskTag,
+        setCurrentTaskTag,
+        currentAnnoCount,
+        setCurrentAnnoCount,
+        isTesting,
+        setIsTesting,
         myMembershipHook,
         getDynamoClient
       }}

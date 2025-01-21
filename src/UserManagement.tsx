@@ -1,12 +1,19 @@
 import MyTable from "./Table";
 import Button from "react-bootstrap/Button";
 import { Row,Col } from "react-bootstrap";
-import { UserContext , ProjectContext, ManagementContext} from "./Context";
+import { UserContext , ProjectContext, ManagementContext, GlobalContext} from "./Context";
 import { useContext } from "react";
 import { QueueDropdown } from "./QueueDropDown";
 import OverlayTrigger from "react-bootstrap/OverlayTrigger";
 import Tooltip from "react-bootstrap/Tooltip";
+import UserTestModal from "./UserTestModal";
+import { useState } from "react";
 import "./UserManagement.css"; // Import the CSS file
+const userTestTooltip = (
+  <Tooltip>
+    User needs to be added to project first to enable testing.
+  </Tooltip>
+);
 const adminTooltip = (
   <Tooltip>
     User needs to be added to project first to be able to make them admin.
@@ -26,9 +33,11 @@ const selfAdminTooltip = (
 export default function UserManagement() {
   const {allUsers,projectMembershipHook: {data: projectMemberships, create: createProjectMembership, delete: deleteProjectMembership, update: updateProjectMembership}} = useContext(ManagementContext)!;
   const {project} = useContext(ProjectContext)!
+  const {showModal, modalToShow} = useContext(GlobalContext)!;
   const {
     user: currentUser,
   } = useContext(UserContext)!;
+  const [userId, setUserId] = useState<string>('');
   // const {
   //   projectMemberships,
   //   createProjectMembership,
@@ -111,6 +120,20 @@ export default function UserManagement() {
           <p>To select a backup queue, first add user to this project</p>
         ),
         <span>
+          <OverlayTrigger
+            placement="top"
+            overlay={userTestTooltip}
+            trigger={['hover', 'focus']}
+            show={belongsToCurrentProject ? false : undefined}>
+            <span>
+              <Button  variant="info" className="me-2" disabled={belongsToCurrentProject ? false : true} onClick={() => {
+                setUserId(user.id);
+                showModal("userTestModal");
+              }}>
+                Test
+              </Button>
+            </span>
+          </OverlayTrigger>
         <OverlayTrigger
           placement="top"
           overlay={belongsToCurrentProject ? selfAdminTooltip: adminTooltip }
@@ -206,6 +229,7 @@ export default function UserManagement() {
         </Col>
 
         </div>
+        <UserTestModal show={modalToShow === "userTestModal"} onClose={() => showModal(null)} userId={userId} />
       </Row>
     </>
   );

@@ -78,6 +78,7 @@ export default function useSQS(filterPredicate: (message: any) => Promise<boolea
                     }
                 };
                 if (await filterPredicate(body)) {
+                  console.log('sqs body', body);
                     return body;
                 } else {
                     body.ack();

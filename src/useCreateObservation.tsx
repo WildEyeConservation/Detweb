@@ -22,7 +22,6 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     id
   }, ack } = props;
   const { annoCount, startLoadingTimestamp, visibleTimestamp, fullyLoadedTimestamp } = useContext(ImageContext)!;
-  const { setJobsCompleted } = useContext(UserContext)!;
   const { project } = useContext(ProjectContext)!;
   const { client } = useContext(GlobalContext)!;
   const [acked, setAcked] = useState(false);
@@ -44,7 +43,6 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
       setAcked(true);
     }
     ack();
-    // setJobsCompleted?.((x: number) => x + 1);
   }, [location, project, acked,visibleTimestamp,startLoadingTimestamp,fullyLoadedTimestamp,annoCount]);
 
   return newAck;

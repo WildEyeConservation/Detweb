@@ -16,6 +16,12 @@ export function ImageContextFromHook({ hook, image, children, secondaryQueueUrl,
     const {getSqsClient} = useContext(UserContext);
     const [zoom, setZoom] = useState(1)
     const [transformToPrev, setTransformToPrev] = useState<((c1: [number, number]) => [number, number]) | null>(null);
+    //testing
+    const { setCurrentAnnoCount, setCurrentTaskTag} = useContext(UserContext)!;
+
+    useEffect(() => {
+        setCurrentTaskTag(taskTag);
+    }, []);
 
     useEffect(() => {
         client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: image.id }).then((neighbours) => {
@@ -41,6 +47,7 @@ export function ImageContextFromHook({ hook, image, children, secondaryQueueUrl,
             })));
         }
         setAnnoCount(old=>old + 1)
+        setCurrentAnnoCount(old=>old + 1);
         return hook.create(annotation)
     }, [hook.create,setAnnoCount,secondaryQueueUrl,zoom,taskTag])
 
@@ -66,8 +73,9 @@ export function ImageContextFromHook({ hook, image, children, secondaryQueueUrl,
 
     const _delete = useCallback((annotation) => {
         setAnnoCount(old=>old - 1)
+        setCurrentAnnoCount(old=>old - 1);
         return hook.delete(annotation)
-    }, [hook.delete,setAnnoCount])
+    }, [hook.delete,setAnnoCount,setCurrentAnnoCount])
 
     const scale = Math.pow(
         2,
