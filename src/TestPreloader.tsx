@@ -17,7 +17,7 @@ type ConfigType = {
   
   export default function TestPreloader({visible = true}: {visible: boolean}) {
     const [config, setConfig] = useState<ConfigType | undefined>(undefined);
-    const [index, setIndex] = useState(0);
+    const [index, setIndex] = useState(1);
     const [maxJobsCompleted, setMaxJobsCompleted] = useState(0);
   
     const { modalToShow, showModal, client } = useContext(GlobalContext)!;
@@ -95,7 +95,7 @@ type ConfigType = {
           fetcher={fetcher}
           visible={visible}
           preloadN={2} 
-          historyN={0} 
+          historyN={1} 
         />
         }
         <TestOutcomeModal 

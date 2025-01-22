@@ -2,10 +2,7 @@ import { useContext, useCallback, useState } from "react";
 import { ProjectContext, GlobalContext, UserContext } from "./Context";
 import { fetchAllPaginatedResults } from "./utils";
 
-export default function useTesting() {
-    const [hasLocation, setHasLocation] = useState(false);
-
-    const { currentPM } = useContext(ProjectContext)!;
+export default function useTesting() {const { currentPM } = useContext(ProjectContext)!;
     const { client } = useContext(GlobalContext)!;
     const { unannotatedJobs, currentTaskTag } = useContext(UserContext)!;
     const candidateLocations: Record<string, string> = {};
@@ -65,46 +62,9 @@ export default function useTesting() {
     const fetcher = useCallback(async (): Promise<Identifiable> => {
         const locationId = await getTestLocation();
         
-        if (locationId) {
-            setHasLocation(true);
-        } else {
-            setHasLocation(false);
+        if (!locationId) {
             console.warn('No location found for testing');
         }
-
-        //=============================
-        // unless test locations are unique, we need to create a new annotation set for each test
-
-        const annotationSets = await fetchAllPaginatedResults(
-            client.models.AnnotationSet.annotationSetsByProjectId,
-            {
-                projectId: currentPM.projectId,
-                selectionSet: ['id', 'name'] as const,
-            },
-        );
-
-        let setId: string | undefined = undefined;
-        for (const set of annotationSets) {
-            if (set.name === 'user-test-general-annotation-set') {
-                setId = set.id;
-                break;
-            }
-        }
-
-        if (!setId) {
-            const { data: annotationSet } = await client.models.AnnotationSet.create({
-                projectId: currentPM.projectId,
-                name: `user-test-general-annotation-set`,
-            });
-            
-            if (annotationSet) {
-                setId = annotationSet.id;
-            } else {
-                throw new Error("Failed to create annotation set");
-            }
-        }
-
-        //=============================
 
         const id = crypto.randomUUID();
         const body = {
@@ -112,24 +72,15 @@ export default function useTesting() {
             message_id: id,
             location: {
                 id: locationId,
-                annotationSetId: setId,
+                annotationSetId: crypto.randomUUID(),
             }, 
             allowOutside: false, 
             taskTag: '', 
             secondaryQueueUrl: undefined, 
             skipLocationWithAnnotations: false,
-            ack: async () => {
-                try {
-                    await client.models.AnnotationSet.delete({
-                        id: setId,
-                    });
-                } catch (error) {
-                    console.error(
-                        `Ack failed for test on ${setId}`,
-                        error,
-                    );
-                }
-            }
+            ack: () => {
+                console.log('Ack successful for test');
+             }
         };
         return body;
 
