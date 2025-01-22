@@ -78,8 +78,6 @@ export default function AnnotationImage(props) {
               {visible && (props.taskTag || currentTaskTag) && 
                 <div style={{ 
                   marginTop: '1rem',
-                  position: 'absolute',
-                  bottom: '-2rem'  // Position below the image container
                 }}>
                   Now working on task {props.taskTag || currentTaskTag}
                 </div>

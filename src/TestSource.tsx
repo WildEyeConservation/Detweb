@@ -10,37 +10,11 @@ export default function useTesting() {
     const { unannotatedJobs, currentTaskTag } = useContext(UserContext)!;
     const candidateLocations: Record<string, string> = {};
 
-    //TESTING -> REMOVE
-    const [count, setCount] = useState(0);
-
     async function getTestLocation() {
         //TESTING -> REMOVE
         const tSets = ['bb33b012-4e4b-4ec7-8cc8-d80c27f989af', 'c2ba85ea-26d1-42fb-858a-e8cce0864f41', 'd2e5f5f9-c285-4b88-aa7c-a3b6965ee836']
 
-        const id = tSets[count];
-        setCount(c => c === 2 ? 0 : c + 1);
-        return id;
-
-        // const tLocationSets = await fetchAllPaginatedResults(
-        //     client.models.LocationSet.locationSetsByProjectId, 
-        //     {
-        //         projectId: currentPM.projectId,
-        //         selectionSet: ['id'] as const,
-        //     },
-        // );
-
-        // for (const set of tLocationSets) {
-        //     const { data: tLocations } = await client.models.Location.locationsBySetIdAndConfidence({
-        //         setId: set.id,
-        //         selectionSet: ['id'] as const,
-        //     });
-
-        //     if (tLocations.length > 0) {
-        //         const tId = tLocations[count].id;
-        //         setCount(c => c + 1);
-        //         return tId;
-        //     }
-        // }
+        return tSets[Math.floor(Math.random() * tSets.length)];
 
         //TODO: OPTIMIZE ASAP
         const locationSets = await fetchAllPaginatedResults(
@@ -89,7 +63,6 @@ export default function useTesting() {
     }
 
     const fetcher = useCallback(async (): Promise<Identifiable> => {
-        console.warn('test fetcher called');
         const locationId = await getTestLocation();
         
         if (locationId) {
@@ -98,17 +71,40 @@ export default function useTesting() {
             setHasLocation(false);
             console.warn('No location found for testing');
         }
-        
-        // create temporary annotation set
-        const { data: annotationSet } = await client.models.AnnotationSet.create({
-            projectId: currentPM.projectId,
-            name: `user-test-${crypto.randomUUID()}`,
-            // name: `user-test-general-annotation-set`,
-        });
 
-        if (!annotationSet) {
-            throw new Error("Failed to create annotation set");
+        //=============================
+        // unless test locations are unique, we need to create a new annotation set for each test
+
+        const annotationSets = await fetchAllPaginatedResults(
+            client.models.AnnotationSet.annotationSetsByProjectId,
+            {
+                projectId: currentPM.projectId,
+                selectionSet: ['id', 'name'] as const,
+            },
+        );
+
+        let setId: string | undefined = undefined;
+        for (const set of annotationSets) {
+            if (set.name === 'user-test-general-annotation-set') {
+                setId = set.id;
+                break;
+            }
         }
+
+        if (!setId) {
+            const { data: annotationSet } = await client.models.AnnotationSet.create({
+                projectId: currentPM.projectId,
+                name: `user-test-general-annotation-set`,
+            });
+            
+            if (annotationSet) {
+                setId = annotationSet.id;
+            } else {
+                throw new Error("Failed to create annotation set");
+            }
+        }
+
+        //=============================
 
         const id = crypto.randomUUID();
         const body = {
@@ -116,7 +112,7 @@ export default function useTesting() {
             message_id: id,
             location: {
                 id: locationId,
-                annotationSetId: annotationSet.id,
+                annotationSetId: setId,
             }, 
             allowOutside: false, 
             taskTag: '', 
@@ -125,18 +121,16 @@ export default function useTesting() {
             ack: async () => {
                 try {
                     await client.models.AnnotationSet.delete({
-                        id: annotationSet.id,
+                        id: setId,
                     });
                 } catch (error) {
                     console.error(
-                        `Ack failed for test on ${annotationSet.id}`,
+                        `Ack failed for test on ${setId}`,
                         error,
                     );
                 }
             }
         };
-
-        console.log('test body', body);
         return body;
 
     }, [unannotatedJobs, currentTaskTag]);

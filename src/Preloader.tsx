@@ -66,7 +66,6 @@ export function PreloaderFactory(WrappedComponent: React.ComponentType<any>) {
           <div style={{ 
             position: 'relative',  // Add this container
             width: '100%',
-            minHeight: '820px'     // Adjust this value based on your needs
           }}>
             {subset.map((entry, i) => (
               <div
@@ -86,7 +85,7 @@ export function PreloaderFactory(WrappedComponent: React.ComponentType<any>) {
                   {...rest}
                   {...entry}
                   setIsReady={()=>{}}
-                  visible={i === index - subsetStart}
+                  visible={visible && i === index - subsetStart}
                   next={i<subset.length-1 ? ()=>{
                     setIndex(index=>index+1)
                     setJobsCompleted(x => x + 1);
