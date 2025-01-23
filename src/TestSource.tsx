@@ -1,19 +1,45 @@
-import { useContext, useCallback, useState } from "react";
+import { useContext, useCallback, useState, useEffect, useRef } from "react";
 import { ProjectContext, GlobalContext, UserContext } from "./Context";
 import { fetchAllPaginatedResults } from "./utils";
+import { QueryCommand } from "@aws-sdk/client-dynamodb";
 
-export default function useTesting() {const { currentPM } = useContext(ProjectContext)!;
-    const { client } = useContext(GlobalContext)!;
-    const { unannotatedJobs, currentTaskTag } = useContext(UserContext)!;
-    const candidateLocations: Record<string, string> = {};
+export default function useTesting() {
+    const { currentPM } = useContext(ProjectContext)!;
+    const { client, backend } = useContext(GlobalContext)!;
+    const { getDynamoClient } = useContext(UserContext)!;
+    const [i, setI] = useState(0);
+    const [locationsLoaded, setLocationsLoaded] = useState(false);
+    const primaryCandidates = useRef<string[]>([]);
+    const secondaryCandidates = useRef<string[]>([]);
 
-    async function getTestLocation() {
-        //TESTING -> REMOVE
-        const tSets = ['bb33b012-4e4b-4ec7-8cc8-d80c27f989af', 'c2ba85ea-26d1-42fb-858a-e8cce0864f41', 'd2e5f5f9-c285-4b88-aa7c-a3b6965ee836']
+    useEffect(() => {
+        fetchTestLocations();
+    }, []);
 
-        return tSets[Math.floor(Math.random() * tSets.length)];
+    async function executeQueryAndPushResults(command: QueryCommand): Promise<any[]> {
+        const dynamoClient = await getDynamoClient();
+        let lastEvaluatedKey: any;
+        const resultsArray: any[] = [];
+    
+        do {
+            command.input.ExclusiveStartKey = lastEvaluatedKey;
+    
+            try {
+                const response = await dynamoClient.send(command);
+                if (response.Items) {
+                    resultsArray.push(...response.Items);
+                }
+                lastEvaluatedKey = response.LastEvaluatedKey;
+            } catch (error) {
+                console.error("Error querying DynamoDB:", error);
+                throw error;
+            }
+        } while (lastEvaluatedKey);
 
-        //TODO: OPTIMIZE ASAP
+        return resultsArray;
+    }
+
+    async function fetchTestLocations() {
         const locationSets = await fetchAllPaginatedResults(
             client.models.LocationSet.locationSetsByProjectId, 
             {
@@ -23,44 +49,81 @@ export default function useTesting() {const { currentPM } = useContext(ProjectCo
         );
 
         for (const set of locationSets) {
-            const locations = await fetchAllPaginatedResults(
-                client.models.Location.locationsBySetIdAndConfidence,
-                {
-                    setId: set.id,
-                    selectionSet: ['id'] as const,
+            const locationsQuery = new QueryCommand({
+                TableName: backend.custom.locationTable,
+                IndexName: "locationsBySetIdAndConfidence",
+                KeyConditionExpression: "setId = :locationSetId",
+                ExpressionAttributeValues: {
+                    ":locationSetId": {
+                        S: set.id
+                    },
                 },
-            );
+                ProjectionExpression: "id",
+                Limit: 1000,
+            });
+
+            const locations = await executeQueryAndPushResults(locationsQuery);
 
             for (const location of locations) {
-                // TODO (not in old hook?): need to know whether the location actually has annotations
-
-                const observations = await fetchAllPaginatedResults(
-                    client.models.Observation.observationsByLocationId,
-                    {
-                        locationId: location.id,
-                        selectionSet: ['id', 'createdAt'] as const,
-                        filter: {
-                            owner: {
-                                contains: currentPM.userId,
-                            },
+                const observationsQuery = new QueryCommand({
+                    TableName: backend.custom.observationTable,
+                    IndexName: "observationsByLocationId",
+                    KeyConditionExpression: "locationId = :locationId",
+                    ExpressionAttributeValues: {
+                        ":locationId": {
+                            S: location.id.S!
                         },
                     },
-                );
-                
-                if (observations.length === 0) {
-                    return location.id;
-                }
+                    ProjectionExpression: "id, #owner, createdAt, annotationCount",
+                    ExpressionAttributeNames: {
+                        "#owner": "owner"
+                    },
+                    Limit: 1000,
+                });
 
-                candidateLocations[observations[0].createdAt] = location.id;
+                const observations = await executeQueryAndPushResults(observationsQuery);
+
+                const annotatedObservations = observations.filter(o => o.annotationCount.N! > 0);
+
+                const userObservations = observations.filter(o => o.owner.S!.includes(currentPM.userId));
+
+                if (annotatedObservations.length > 0) {
+                    if (userObservations.length === 0) {
+                        primaryCandidates.current.unshift(location.id.S!);
+                    } else {
+                        primaryCandidates.current.push(location.id.S!);
+                    }
+                } else {
+                    if (userObservations.length === 0) {
+                        secondaryCandidates.current.push(location.id.S!);
+                    } else {
+                        secondaryCandidates.current.push(location.id.S!);
+                    }
+                }
             }
         }
 
-        const sortedKeys = Object.keys(candidateLocations).sort();
-        return candidateLocations[sortedKeys[0]];
+        setLocationsLoaded(true);
+    }
+
+    function getTestLocation() {
+        let candidateEntries: string[] = [];
+        if (primaryCandidates.current.length < 3) {
+            candidateEntries = [
+                ...primaryCandidates.current, 
+                ...secondaryCandidates.current.slice(0, 3 - primaryCandidates.current.length)
+            ];
+        } else {
+            candidateEntries = primaryCandidates.current;
+        }
+
+        const result = candidateEntries[i];
+        setI(prev => prev + 1);
+        return result;
     }
 
     const fetcher = useCallback(async (): Promise<Identifiable> => {
-        const locationId = await getTestLocation();
+        const locationId = getTestLocation();
         
         if (!locationId) {
             console.warn('No location found for testing');
@@ -80,11 +143,11 @@ export default function useTesting() {const { currentPM } = useContext(ProjectCo
             skipLocationWithAnnotations: false,
             ack: () => {
                 console.log('Ack successful for test');
-             }
+            }
         };
         return body;
 
-    }, [unannotatedJobs, currentTaskTag]);
+    }, [i, primaryCandidates, secondaryCandidates]);
 
-  return {fetcher};
+    return {fetcher: locationsLoaded ? fetcher : undefined};
 }

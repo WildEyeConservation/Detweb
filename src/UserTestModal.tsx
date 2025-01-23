@@ -1,6 +1,8 @@
 import { Button, Form, Modal } from "react-bootstrap";
 import { useState, useEffect, useContext } from "react";
 import { GlobalContext } from "./Context";
+import Tooltip from "react-bootstrap/Tooltip";
+import OverlayTrigger from "react-bootstrap/OverlayTrigger";
 
 type TestType = 'random' | 'interval' | 'none';
 
@@ -75,7 +77,7 @@ export default function UserTestModal({show, onClose, userId}: {show: boolean, o
             </Modal.Header>
             <Modal.Body>
                 <Form>
-                    <Form.Group>
+                    <Form.Group className="mb-2">
                         <Form.Switch id="enableTesting" label="Enable testing" checked={enableTesting} onChange={(e) => {
                             setEnableTesting(e.target.checked);
                             setTestType(e.target.checked ? 'interval' : 'none');
@@ -92,13 +94,36 @@ export default function UserTestModal({show, onClose, userId}: {show: boolean, o
                     </Form.Group>
                     {enableTesting && testType === 'interval' && (
                         <Form.Group className="mb-3">
-                            <Form.Label>Test after * unannotated jobs</Form.Label>
+                            <OverlayTrigger
+                                placement="right-end"
+                                overlay={
+                                <Tooltip>
+                                    User will be tested if they haven't consecutively annotated in the amount
+                                    of jobs specified. <br/> Note: Navigating to and annotating a previous job will
+                                    not reset the counter.
+                                </Tooltip>
+                                }
+                                trigger={['hover', 'focus']}
+                            >
+                                <Form.Label>Test after * unannotated jobs</Form.Label>
+                            </OverlayTrigger>
                             <Form.Control type="number" value={testInterval} onChange={(e) => setTestInterval(parseInt(e.target.value || '0'))} min={1} />
                         </Form.Group>
                     )}
                     {enableTesting && testType === 'random' && (
                         <Form.Group className="mb-3">
-                            <Form.Label>Test chance (%)</Form.Label>
+                            <OverlayTrigger
+                                placement="right-end"
+                                overlay={
+                                <Tooltip>
+                                    After the first 10 jobs, each of the following jobs will
+                                    have the specified probability of being a test.
+                                </Tooltip>
+                                }
+                                trigger={['hover', 'focus']}
+                            >
+                                <Form.Label>Test probability (%)</Form.Label>
+                            </OverlayTrigger>
                             <Form.Control type="number" value={testChance} onChange={(e) => setTestChance(parseInt(e.target.value || '0'))} min={0} max={100} />
                         </Form.Group>
                     )}
