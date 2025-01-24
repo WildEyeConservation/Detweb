@@ -301,8 +301,9 @@ const schema = a.schema({
   UserTestConfig: a.model({
     userId: a.id().required(),
     testType: a.string(),
-    randomVar: a.float(),
-    intervalVar: a.float()
+    random: a.float(),
+    interval: a.float(),
+    deadzone: a.float(),
   }).authorization(allow => [allow.authenticated()])
   .secondaryIndexes((index) => [index('userId').queryField('testConfigByUserId')]),
   addUserToGroup: a.mutation().arguments({
