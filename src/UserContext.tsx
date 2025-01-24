@@ -72,6 +72,7 @@ export function User({ user, children }: { user: AuthUser, children: React.React
   const [unannotatedJobs, setUnannotatedJobs] = useState<number>(0);
   const [currentTaskTag, setCurrentTaskTag] = useState<string>('');
   const [isTesting, setIsTesting] = useState<boolean>(false);
+  const [isRegistering, setIsRegistering] = useState<boolean>(false);
   const [currentAnnoCount, setCurrentAnnoCount] = useState<number>(0);
   const { client,region } = useContext(GlobalContext)!;
   //const { items: myMemberships } = useObserveQuery('UserProjectMembership', { filter: { userId: { eq: user!.username } } });
@@ -144,6 +145,8 @@ export function User({ user, children }: { user: AuthUser, children: React.React
         setCurrentAnnoCount,
         isTesting,
         setIsTesting,
+        isRegistering,
+        setIsRegistering,
         myMembershipHook,
         getDynamoClient
       }}

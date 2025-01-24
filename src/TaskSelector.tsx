@@ -1,7 +1,7 @@
 import { useContext, useState, useEffect } from "react";
 import AnnotationImage from "./AnnotationImage";
 import { RegisterPair } from "./RegisterPair";
-import { GlobalContext } from "./Context";
+import { GlobalContext, UserContext } from "./Context";
 import { data } from "../amplify/data/resource";
 import { array2Matrix } from "./utils";
 /* In the current implementation, we can push both registration and annotation tasks to the same queue. The task of the TaskSelector component is to identify based on 
@@ -15,17 +15,24 @@ interface TaskSelectorProps {
 export function TaskSelector(props: TaskSelectorProps) {
   const { client } = useContext(GlobalContext)!;
   const [element, setElement] = useState<JSX.Element | null>(null);
+  const { isRegistering, setIsRegistering } = useContext(UserContext)!;
   
   useEffect(() => {
     if (props.location) {
+      if (isRegistering) {
+        setIsRegistering(false);
+      }
       if (props.location.id) {
         client.models.Location.get({ id: props.location.id }, { selectionSet: ['id', 'x', 'y', 'width', 'height', 'confidence', 'image.id', 'image.width', 'image.height'] }).then(({ data }) => {
           setElement(<AnnotationImage {...props} location={{ ...data, annotationSetId: props.location.annotationSetId }} />);
         });
       } else {
           setElement(<AnnotationImage {...props}/>);
-      };
+      }
     } else {
+      if (!isRegistering) {
+        setIsRegistering(true);
+      }
       client.models.ImageNeighbour.get({ image1Id: props.images[0], image2Id: props.images[1] }, {selectionSet: ['homography', 'image1.*', 'image2.*'] })
         .then(({ data: { homography, image1, image2 } }) => {
           setElement(<RegisterPair {...props}

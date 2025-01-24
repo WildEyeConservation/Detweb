@@ -8,8 +8,9 @@ import TestOutcomeModal from './TestOutcomeModal';
 type ConfigType = {
     userId: string;
     testType: string | null;
-    randomVar: number | null;
-    intervalVar: number | null;
+    random: number | null;
+    deadzone: number | null;
+    interval: number | null;
     readonly id: string;
     readonly createdAt: string;
     readonly updatedAt: string;
@@ -23,7 +24,7 @@ type ConfigType = {
     const { modalToShow, showModal, client } = useContext(GlobalContext)!;
     const { currentPM } = useContext(ProjectContext)!;
     //testing
-    const { jobsCompleted, setJobsCompleted, currentAnnoCount, setCurrentAnnoCount, unannotatedJobs, setUnannotatedJobs, isTesting, setIsTesting } = useContext(UserContext)!;
+    const { jobsCompleted, setJobsCompleted, currentAnnoCount, setCurrentAnnoCount, unannotatedJobs, setUnannotatedJobs, isTesting, setIsTesting, isRegistering } = useContext(UserContext)!;
   
     const { fetcher } = useTesting();
   
@@ -74,11 +75,12 @@ type ConfigType = {
     }, [jobsCompleted]);
   
     useEffect(() => {
-      if (!config ||
+      if (isRegistering ||
+        !config ||
         config.testType === 'none' || 
-        config.testType === 'interval' && unannotatedJobs < config.intervalVar! || 
-        config.testType === 'random' && Math.random() >= (config.randomVar! / 100) || 
-        config.testType === 'random' && jobsCompleted <= 10) {
+        config.testType === 'interval' && unannotatedJobs < config.interval! || 
+        config.testType === 'random' && Math.random() >= (config.random! / 100) || 
+        config.testType === 'random' && jobsCompleted <= config.deadzone!) {
           setIsTesting(false);
           return;
       }

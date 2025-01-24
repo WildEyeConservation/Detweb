@@ -11,6 +11,7 @@ export default function UserTestModal({show, onClose, userId}: {show: boolean, o
     const [enableTesting, setEnableTesting] = useState<boolean>(false);
     const [testType, setTestType] = useState<TestType>('none');
     const [testChance, setTestChance] = useState<number>(0);
+    const [deadzone, setDeadzone] = useState<number>(0);
 
     const { client } = useContext(GlobalContext)!;
 
@@ -28,9 +29,10 @@ export default function UserTestModal({show, onClose, userId}: {show: boolean, o
             setTestType(config.testType as TestType);
 
             if (config.testType === 'interval') {
-                setTestInterval(config.intervalVar!);
+                setTestInterval(config.interval!);
             } else {
-                setTestChance(config.randomVar!);
+                setTestChance(config.random!);
+                setDeadzone(config.deadzone!);
             }
         };
         if (show) {
@@ -44,9 +46,15 @@ export default function UserTestModal({show, onClose, userId}: {show: boolean, o
             return;
         }
 
-        if (testType === 'random' && (testChance < 0 || testChance > 100)) {
-            alert("Test chance must be between 0 and 100");
-            return;
+        if (testType === 'random') {
+            if (testChance < 0 || testChance > 100) {
+                alert("Test chance must be between 0 and 100");
+                return;
+            }
+            if (deadzone <= 0) {
+                alert("Deadzone must be greater than 0");
+                return;
+            }
         }
 
         onClose();
@@ -57,15 +65,17 @@ export default function UserTestModal({show, onClose, userId}: {show: boolean, o
             await client.models.UserTestConfig.update({
                 id: config.id,
                 testType: testType,
-                randomVar: testType === 'random' ? testChance : undefined,
-                intervalVar: testType === 'interval' ? testInterval : undefined
+                random: testType === 'random' ? testChance : undefined,
+                deadzone: testType === 'random' ? deadzone : undefined,
+                interval: testType === 'interval' ? testInterval : undefined
             });
         } else {
             await client.models.UserTestConfig.create({
                 userId: userId,
                 testType: testType,
-                randomVar: testType === 'random' ? testChance : undefined,
-                intervalVar: testType === 'interval' ? testInterval : undefined
+                random: testType === 'random' ? testChance : undefined,
+                deadzone: testType === 'random' ? deadzone : undefined,
+                interval: testType === 'interval' ? testInterval : undefined
             });
         }
     }
@@ -116,14 +126,16 @@ export default function UserTestModal({show, onClose, userId}: {show: boolean, o
                                 placement="right-end"
                                 overlay={
                                 <Tooltip>
-                                    After the first 10 jobs, each of the following jobs will
+                                    After the amount of jobs specified in deadzone, each of the following jobs will
                                     have the specified probability of being a test.
                                 </Tooltip>
                                 }
                                 trigger={['hover', 'focus']}
                             >
-                                <Form.Label>Test probability (%)</Form.Label>
+                                <Form.Label>Deadzone</Form.Label>                         
                             </OverlayTrigger>
+                            <Form.Control type="number" value={deadzone} onChange={(e) => setDeadzone(parseInt(e.target.value || '0'))} min={0} className="mb-2"/>
+                            <Form.Label>Test probability (%)</Form.Label>
                             <Form.Control type="number" value={testChance} onChange={(e) => setTestChance(parseInt(e.target.value || '0'))} min={0} max={100} />
                         </Form.Group>
                     )}

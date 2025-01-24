@@ -130,7 +130,7 @@ export default function UserManagement() {
                 setUserId(user.id);
                 showModal("userTestModal");
               }}>
-                Test
+                Configure testing
               </Button>
             </span>
           </OverlayTrigger>

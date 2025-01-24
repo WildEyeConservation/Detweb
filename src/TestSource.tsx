@@ -8,6 +8,7 @@ export default function useTesting() {
     const { client, backend } = useContext(GlobalContext)!;
     const { getDynamoClient } = useContext(UserContext)!;
     const [i, setI] = useState(0);
+    const [hasPrimaryCandidates, setHasPrimaryCandidates] = useState(false);
     const [locationsLoaded, setLocationsLoaded] = useState(false);
     const primaryCandidates = useRef<string[]>([]);
     const secondaryCandidates = useRef<string[]>([]);
@@ -95,10 +96,15 @@ export default function useTesting() {
                     }
                 } else {
                     if (userObservations.length === 0) {
-                        secondaryCandidates.current.push(location.id.S!);
+                        secondaryCandidates.current.unshift(location.id.S!);
                     } else {
                         secondaryCandidates.current.push(location.id.S!);
                     }
+                }
+
+                // need 4 messages for preloader
+                if (primaryCandidates.current.length > 3) {
+                    setHasPrimaryCandidates(true);
                 }
             }
         }
@@ -108,10 +114,10 @@ export default function useTesting() {
 
     function getTestLocation() {
         let candidateEntries: string[] = [];
-        if (primaryCandidates.current.length < 3) {
+        if (primaryCandidates.current.length < 4) {
             candidateEntries = [
                 ...primaryCandidates.current, 
-                ...secondaryCandidates.current.slice(0, 3 - primaryCandidates.current.length)
+                ...secondaryCandidates.current.slice(0, 4 - primaryCandidates.current.length)
             ];
         } else {
             candidateEntries = primaryCandidates.current;
@@ -149,5 +155,5 @@ export default function useTesting() {
 
     }, [i, primaryCandidates, secondaryCandidates]);
 
-    return {fetcher: locationsLoaded ? fetcher : undefined};
+    return {fetcher: hasPrimaryCandidates || locationsLoaded ? fetcher : undefined};
 }

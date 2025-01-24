@@ -51,6 +51,8 @@ export interface UserContextType {
     setCurrentTaskTag: React.Dispatch<React.SetStateAction<string>>,
     currentAnnoCount: number,
     setCurrentAnnoCount: React.Dispatch<React.SetStateAction<number>>,
+    isRegistering: boolean,
+    setIsRegistering: React.Dispatch<React.SetStateAction<boolean>>,
     } 
 
 export interface ManagementContextType {
