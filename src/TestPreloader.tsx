@@ -76,6 +76,7 @@ type ConfigType = {
   
     useEffect(() => {
       if (isRegistering ||
+        !fetcher ||
         !config ||
         config.testType === 'none' || 
         config.testType === 'interval' && unannotatedJobs < config.interval! || 
