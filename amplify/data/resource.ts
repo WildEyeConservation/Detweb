@@ -33,7 +33,8 @@ const schema = a.schema({
     observations: a.hasMany('Observation', 'projectId'),
     members: a.hasMany('UserProjectMembership', 'projectId'),
     queues: a.hasMany('Queue', 'projectId'),
-    annotationCountsPerCategoryPerSet: a.hasMany('AnnotationCountPerCategoryPerSet', 'projectId')
+    annotationCountsPerCategoryPerSet: a.hasMany('AnnotationCountPerCategoryPerSet', 'projectId'),
+    testLocations: a.hasMany('TestLocation', 'projectId')
   }).authorization(allow => [allow.authenticated()]),
     // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
     // allow.group('orgadmin').to(['create', 'update', 'delete', 'read']),
@@ -162,6 +163,7 @@ const schema = a.schema({
     y: a.integer().required(),
     source: a.string().required(),
     confidence: a.float(),
+    test: a.hasOne('TestLocation', 'locationId'),
     observations: a.hasMany('Observation','locationId'),
     sets: a.hasMany('LocationSetMembership', 'locationId')
   }).authorization(allow => [allow.authenticated()])
@@ -169,6 +171,14 @@ const schema = a.schema({
     .secondaryIndexes((index) => [index('imageId').sortKeys(['confidence']).queryField('locationsByImageKey'), 
     index('setId').sortKeys(['confidence']).queryField('locationsBySetIdAndConfidence')
   ]),
+  TestLocation: a.model({
+    locationId: a.id().required(),
+    projectId: a.id().required(),
+    location: a.belongsTo('Location', 'locationId'),
+    project: a.belongsTo('Project', 'projectId'),
+  }).authorization(allow => [allow.authenticated()])
+  .identifier(['locationId'])
+  .secondaryIndexes((index)=>[index('projectId').queryField('testLocationsByProjectId')]),
   Observation: a.model({
     projectId: a.id().required(),
     owner: a.string(),
