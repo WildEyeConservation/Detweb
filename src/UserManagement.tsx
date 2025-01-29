@@ -6,9 +6,11 @@ import { useContext } from "react";
 import { QueueDropdown } from "./QueueDropDown";
 import OverlayTrigger from "react-bootstrap/OverlayTrigger";
 import Tooltip from "react-bootstrap/Tooltip";
-import UserTestModal from "./UserTestModal";
+import ConfigureUserTestModal from "./ConfigureUserTestModal";
 import { useState } from "react";
 import "./UserManagement.css"; // Import the CSS file
+import TestPresetsModal from "./TestPresetsModal";
+
 const userTestTooltip = (
   <Tooltip>
     User needs to be added to project first to enable testing.
@@ -215,7 +217,7 @@ export default function UserManagement() {
             tableHeadings={tableHeadings}
             tableData={tableData}
           />
-                  <Col className="text-center mt-3">
+        <Col className="text-center mt-3 d-flex justify-content-center gap-2">
           <OverlayTrigger
             placement="top"
             overlay={<Tooltip>Coming soon. For now please invite users manually.</Tooltip>}
@@ -226,10 +228,16 @@ export default function UserManagement() {
               </Button>
             </span>
           </OverlayTrigger>
+            <Button variant="primary" onClick={() => showModal("testPresetsModal")}>
+              Test presets
+            </Button>
+            <Button variant="primary" onClick={() => showModal("reviewTestsModal")}>
+              Review tests
+            </Button>
         </Col>
-
         </div>
-        <UserTestModal show={modalToShow === "userTestModal"} onClose={() => showModal(null)} userId={userId} />
+        <ConfigureUserTestModal show={modalToShow === "userTestModal"} onClose={() => showModal(null)} userId={userId} />
+        <TestPresetsModal show={modalToShow === "testPresetsModal"} onClose={() => showModal(null)} />
       </Row>
     </>
   );
