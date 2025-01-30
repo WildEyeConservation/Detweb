@@ -33,7 +33,8 @@ const schema = a.schema({
     observations: a.hasMany('Observation', 'projectId'),
     members: a.hasMany('UserProjectMembership', 'projectId'),
     queues: a.hasMany('Queue', 'projectId'),
-    annotationCountsPerCategoryPerSet: a.hasMany('AnnotationCountPerCategoryPerSet', 'projectId')
+    testPresets: a.hasMany('TestPreset', 'projectId'),
+    annotationCountsPerCategoryPerSet: a.hasMany('AnnotationCountPerCategoryPerSet', 'projectId'),
   }).authorization(allow => [allow.authenticated()]),
     // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
     // allow.group('orgadmin').to(['create', 'update', 'delete', 'read']),
@@ -47,7 +48,8 @@ const schema = a.schema({
     annotations: a.hasMany('Annotation','categoryId'),
     annotationCount: a.integer().default(0),
     objects: a.hasMany('Object', 'categoryId'),
-    annotationCountPerSet: a.hasMany('AnnotationCountPerCategoryPerSet', 'categoryId')
+    annotationCountPerSet: a.hasMany('AnnotationCountPerCategoryPerSet', 'categoryId'),
+    testPresets: a.hasMany('TestPresetCategory', 'categoryId')
   }).authorization(allow => [allow.authenticated()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
     .secondaryIndexes((index)=>[index('projectId').queryField('categoriesByProjectId')]),
@@ -163,9 +165,12 @@ const schema = a.schema({
     source: a.string().required(),
     confidence: a.float(),
     observations: a.hasMany('Observation','locationId'),
-    sets: a.hasMany('LocationSetMembership', 'locationId')
+    sets: a.hasMany('LocationSetMembership', 'locationId'),
+    testPresets: a.hasMany('TestPresetLocation', 'locationId'),
+    annotationCount: a.integer().default(0)
   }).authorization(allow => [allow.authenticated()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
+
     .secondaryIndexes((index) => [index('imageId').sortKeys(['confidence']).queryField('locationsByImageKey'), 
     index('setId').sortKeys(['confidence']).queryField('locationsBySetIdAndConfidence')
   ]),
@@ -297,6 +302,65 @@ const schema = a.schema({
   }).authorization(allow => [allow.authenticated()])
   .secondaryIndexes((index) => [
     index('annotationSetId').queryField('locationSetsByAnnotationSetId'),
+  ]),
+  UserTestConfig: a.model({
+    userId: a.id().required(),
+    testType: a.string(),
+    random: a.float(),
+    interval: a.float(),
+    deadzone: a.float(),
+    postTestConfirmation: a.boolean(),
+    testPresetUsers: a.hasMany('TestPresetUser', 'userConfigId')
+  }).authorization(allow => [allow.authenticated()])
+  .secondaryIndexes((index) => [index('userId').queryField('testConfigByUserId')]),
+  TestPresetUser: a.model({
+    testPresetId: a.id().required(),
+    testPreset: a.belongsTo('TestPreset', 'testPresetId'),
+    userConfigId: a.id().required(),
+    userConfig: a.belongsTo('UserTestConfig', 'userConfigId')
+  })
+  .authorization(allow => [allow.authenticated()])
+  .identifier(['testPresetId', 'userConfigId'])
+  .secondaryIndexes((index) => [
+    index('testPresetId').queryField('usersByTestPresetId'),
+    index('userConfigId').queryField('testPresetsByUserConfigId')
+  ]),
+  TestPreset: a.model({
+    projectId: a.id().required(),
+    project: a.belongsTo('Project', 'projectId'),
+    name: a.string().required(),
+    accuracy: a.integer().required(),
+    categories: a.hasMany('TestPresetCategory', 'testPresetId'),
+    locations: a.hasMany('TestPresetLocation', 'testPresetId'),
+    users: a.hasMany('TestPresetUser', 'testPresetId')
+  })
+  .authorization(allow => [allow.authenticated()])
+  .secondaryIndexes((index) => [
+    index('projectId').queryField('testPresetsByProjectId')
+  ]),
+  TestPresetCategory: a.model({
+    testPresetId: a.id().required(),
+    testPreset: a.belongsTo('TestPreset', 'testPresetId'),
+    categoryId: a.id().required(),
+    category: a.belongsTo('Category', 'categoryId')
+  })
+  .authorization(allow => [allow.authenticated()])
+  .identifier(['testPresetId', 'categoryId'])
+  .secondaryIndexes((index) => [
+    index('testPresetId').queryField('categoriesByTestPresetId'),
+    index('categoryId').queryField('testPresetsByCategoryId')
+  ]),
+  TestPresetLocation: a.model({
+    testPresetId: a.id().required(),
+    testPreset: a.belongsTo('TestPreset', 'testPresetId'),
+    locationId: a.id().required(),
+    location: a.belongsTo('Location', 'locationId'),
+  })
+  .authorization(allow => [allow.authenticated()])
+  .identifier(['testPresetId', 'locationId'])
+  .secondaryIndexes((index) => [
+    index('testPresetId').queryField('locationsByTestPresetId'),
+    index('locationId').queryField('testPresetsByLocationId')
   ]),
   addUserToGroup: a.mutation().arguments({
       userId:a.string().required(), 

@@ -185,8 +185,22 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
               const newUrl = window.location.href.replace(/\/[^/]+\/?$/, `/image/${nextImage}/${location?.annotationSetId}`)
               window.open(newUrl, '_blank');
             }
-          },
-          {
+          },{
+            text: "Register against previous image",
+            callback: async () => {
+              const prevImage = await client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: image.id }).then(response => response.data[0].image1Id);
+              const newUrl = window.location.href.replace(/^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/, `$1/register/${prevImage}/${image.id}/${location.annotationSetId}`)
+              window.open(newUrl, '_blank');
+            }
+          },{
+            text: "Register against next image",
+            callback: async () => {
+              const nextImage = await client.models.ImageNeighbour.imageNeighboursByImage1key({ image1Id: image.id }).then(response => response.data[0].image2Id);
+              // Keep everything up to and including the workspace UUID (first UUID in path)
+              const newUrl = window.location.href.replace(/^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/, `$1/register/${image.id}/${nextImage}/${location.annotationSetId}`);
+              window.open(newUrl, '_blank');
+            }
+          },{
             text: "Download this image",
             callback: () => {
               getUrl({ path: 'images/' + source, options: {

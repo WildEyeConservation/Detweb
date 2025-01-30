@@ -5,8 +5,8 @@ import { ProgressContext } from "./Context";
 
 interface UseUpdateProgressParams {
   taskId: string;
-  indeterminateTaskName: string;
-  determinateTaskName: string;
+  indeterminateTaskName?: string;
+  determinateTaskName?: string;
   stepFormatter: (steps: number) => string;
 }
 

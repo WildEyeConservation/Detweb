@@ -136,6 +136,7 @@ const layerVersion = new lambda.LayerVersion(Stack.of(lambdaFunction), 'sharpLay
   compatibleArchitectures: [lambda.Architecture.X86_64],
 })
 lambdaFunction.addLayers(layerVersion);
+backend.handleS3Upload.resources.cfnResources.cfnFunction.addPropertyOverride('ReservedConcurrentExecutions', 5);
 
 const customStack = backend.createStack('DetwebCustom')
 const ecsStack = backend.createStack('DetwebECS')
