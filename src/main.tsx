@@ -1,4 +1,3 @@
-import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
@@ -13,6 +12,8 @@ import { LocationLoader } from "./LocationLoader";
 import { ImageLoader } from "./ImageLoader";
 import QuickTest from "./QuickTest";
 import { Review } from "./Review";
+import { PairLoader } from "./PairLoader";
+
 import {
   createBrowserRouter,
   RouterProvider,
@@ -68,6 +69,10 @@ const router = createBrowserRouter([
       {
         path: "image/:imageId/:annotationSetId",
         element: <ImageLoader/>
+      },
+      {
+        path: "register/:image1Id/:image2Id/:selectedSet",
+        element: <PairLoader/>
       },
       {
         path: "review",
