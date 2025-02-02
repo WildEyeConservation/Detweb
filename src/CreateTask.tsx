@@ -11,6 +11,11 @@ import { fetchAllPaginatedResults } from "./utils";
 import LabeledToggleSwitch from './LabeledToggleSwitch';
 import Papa from 'papaparse';
 import { StringMap } from "aws-lambda/trigger/cognito-user-pool-trigger/_common";
+import Tabs from "react-bootstrap/Tabs";
+import Tab from "react-bootstrap/Tab";
+import { CategoriesDropdown } from "./CategoriesDropDown";
+import { makeTransform, array2Matrix } from "./utils";
+import { inv } from "mathjs";
 
 const thresholdRange = {
   ivx: { min: 1, max: 10, step: 1 },
@@ -37,7 +42,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
   const { getSqsClient } = useContext(UserContext)!;
   const { project } = useContext(ProjectContext)!;
   const [name, setName] = useState<string>("");
-  const [modelGuided, setModelGuided] = useState(false);
+  const [taskType, setTaskType] = useState<'tiled' | 'model' | 'annotation'>('tiled');
   const { locationSetsHook: { create: createLocationSet } } = useContext(ManagementContext)!;
   const [minX, setMinX] = useState<number>(0);
   const [maxX, setMaxX] = useState<number>(0);
@@ -63,6 +68,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
   const fileInputRef = useRef<HTMLInputElement>(null);
   const effectiveImageWidth = maxX - minX;
   const effectiveImageHeight = maxY - minY;
+  const [selectedCategories, setSelectedCategories] = useState<MultiValue<CategoryOption> | SingleValue<CategoryOption>>([]);
   
   const getImageId = useMemo(() => {
     const cache: { [path: string]: string } = {};
@@ -167,44 +173,44 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
     }
   }, [minOverlapPercentage, specifyTileDimensions,verticalTiles,effectiveImageHeight,height])
 
-  useEffect(() => {
-    async function getAllImages() {
-      let nextToken: string | undefined = undefined;
-      let acc = { minWidth: Infinity, maxWidth: -Infinity, minHeight: Infinity, maxHeight: -Infinity };
-      setAllImages([]);
-      for (const imageSetId of selectedImageSets) {
-        do {
-          const { data: images, nextToken: nextNextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
-            imageSetId
-          }, { selectionSet: ['image.width', 'image.height', 'image.id', 'image.timestamp', 'image.originalPath'], nextToken });
-          nextToken = nextNextToken ?? undefined;
-          setAllImages(x => x.concat(images.map(({ image }) => image)))
-          acc = images.reduce((acc, x) => {
-            acc.minWidth = Math.min(acc.minWidth, x.image.width);
-            acc.maxWidth = Math.max(acc.maxWidth, x.image.width);
-            acc.minHeight = Math.min(acc.minHeight, x.image.height);
-            acc.maxHeight = Math.max(acc.maxHeight, x.image.height);
-            return acc;
-          }, acc);
-          if (acc.minWidth != acc.maxWidth || acc.minHeight != acc.maxHeight) {
-            console.log(`Inconsistent image sizes in image set ${imageSetId}`)
-            setImageWidth(undefined);
-            setImageHeight(undefined);
-            setMaxX(undefined);
-            setMaxY(undefined);
-          } else {
-            setImageWidth(acc.maxWidth);
-            setImageHeight(acc.maxHeight);
-            setMaxX(acc.maxWidth);
-            setMaxY(acc.maxHeight);
-          }
-        } while (nextToken);
-      }
-    }
-    if (show) { 
-      getAllImages();
-    }
-  }, [show,selectedImageSets, client.models.ImageSetMembership]);
+  // useEffect(() => {
+  //   async function getAllImages() {
+  //     let nextToken: string | undefined = undefined;
+  //     let acc = { minWidth: Infinity, maxWidth: -Infinity, minHeight: Infinity, maxHeight: -Infinity };
+  //     setAllImages([]);
+  //     for (const imageSetId of selectedImageSets) {
+  //       do {
+  //         const { data: images, nextToken: nextNextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
+  //           imageSetId
+  //         }, { selectionSet: ['image.width', 'image.height', 'image.id', 'image.timestamp', 'image.originalPath'], nextToken });
+  //         nextToken = nextNextToken ?? undefined;
+  //         setAllImages(x => x.concat(images.map(({ image }) => image)))
+  //         acc = images.reduce((acc, x) => {
+  //           acc.minWidth = Math.min(acc.minWidth, x.image.width);
+  //           acc.maxWidth = Math.max(acc.maxWidth, x.image.width);
+  //           acc.minHeight = Math.min(acc.minHeight, x.image.height);
+  //           acc.maxHeight = Math.max(acc.maxHeight, x.image.height);
+  //           return acc;
+  //         }, acc);
+  //         if (acc.minWidth != acc.maxWidth || acc.minHeight != acc.maxHeight) {
+  //           console.log(`Inconsistent image sizes in image set ${imageSetId}`)
+  //           setImageWidth(undefined);
+  //           setImageHeight(undefined);
+  //           setMaxX(undefined);
+  //           setMaxY(undefined);
+  //         } else {
+  //           setImageWidth(acc.maxWidth);
+  //           setImageHeight(acc.maxHeight);
+  //           setMaxX(acc.maxWidth);
+  //           setMaxY(acc.maxHeight);
+  //         }
+  //       } while (nextToken);
+  //     }
+  //   }
+  //   if (show) { 
+  //     getAllImages();
+  //   }
+  // }, [show,selectedImageSets, client.models.ImageSetMembership]);
 
   const [setImagesCompleted, setTotalImages] = useUpdateProgress({
     taskId: `Create task (model guided)`,
@@ -227,11 +233,12 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
     const locationSetId = createLocationSet({ 
         name, 
         projectId: project.id,
-        locationCount: !modelGuided ? allImages.length * horizontalTiles * verticalTiles : 0
+        locationCount: !taskType === 'model' ? allImages.length * horizontalTiles * verticalTiles : 0
     });
-    if (modelGuided) {
-      if (modelId === "ivx") {
-        allImages.map(async (image) => {
+    switch (taskType) {
+      case 'model':
+        if (modelId === "ivx") {
+          allImages.map(async (image) => {
           const key = image.originalPath.replace('images', 'heatmaps')
           const sqsClient = await getSqsClient()
           await sqsClient.send(
@@ -317,7 +324,8 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
           }
         });        
       }
-    } else {
+      break;  
+    case 'tiled':
       setTotalLocations(allImages.length * horizontalTiles * verticalTiles);
       const promises : Promise<void>[] = [];
       for (const { id } of allImages) {
@@ -345,101 +353,86 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                 }).then(() => setLocationsCompleted((fc: any) => fc + 1)))
               }
             }
+      }
+      break;
+      case 'annotation':
+        const newLocations=[]
+        //Iterate over the selected categories
+        for (const category of selectedCategories) {
+          //Get all annotations of the selected category
+          const annotations = await fetchAllPaginatedResults(client.models.Annotation.annotationsByCategoryId, {
+            categoryId: category.value
+          });
+          // Now we create a dictionary with the imageId as the key and a list of annotation coordinates as the value
+          let imageAnnotations = {};
+          for (const annotation of annotations) {
+            imageAnnotations[annotation.imageId] = imageAnnotations[annotation.imageId] || [];
+            imageAnnotations[annotation.imageId].push({ x: annotation.x, y: annotation.y });
           }
+          // Now we iterate through the imageAnnotations dictionary
+          for (const imageId in imageAnnotations) {
+            const {data: image} = await client.models.Image.get({
+              id: imageId,
+            });
+            // Now we find all images that have a defined homography between themselves and the current image
+            const {data: nextNeighbors} = await client.models.ImageNeighbour.imageNeighboursByImage1key({
+              image1Id: imageId,
+            });
+            const {data: previousNeighbors} = await client.models.ImageNeighbour.imageNeighboursByImage2key({
+              image2Id: imageId,
+            });
+            const neighbors = [
+              ...nextNeighbors.filter((n) => n.homography).map((n) => ({
+              transform: makeTransform(array2Matrix(n.homography)),
+              imageId: n.image2Id})),
+              ...previousNeighbors.filter((n) => n.homography).map((n) => ({
+              transform: makeTransform(inv(array2Matrix(n.homography))),
+              imageId: n.image1Id}))];
+            //Iterate over the neighbors
+            for (const neighbor of neighbors) {
+              //Iterate over the annotations of the current image
+              for (const annotation of imageAnnotations[imageId]) {
+                const transformedAnnotation = neighbor.transform([annotation.x, annotation.y]);
+                //Check if the transformed annotation is inside the image bounds
+                if (transformedAnnotation[0] >= 0 && transformedAnnotation[0] <= image.width && transformedAnnotation[1] >= 0 && transformedAnnotation[1] <= image.height) {
+                  newLocations.push({
+                    x: Math.round(transformedAnnotation[0]),
+                    y: Math.round(transformedAnnotation[1]),
+                    imageId: neighbor.imageId,
+                    width: 100,
+                    height: 100,
+                    projectId: project.id,
+                    confidence: 1,
+                    source: 'other annotation',
+                    setId: locationSetId,
+                  });
+                }
+              }
+            }
+          }
+        }
+      await Promise.all(newLocations.map((l) => client.models.Location.create(l)));
+      break;
     }
   }
 
-  return (
-    <Modal show={show} onHide={handleClose} size="lg">
+  return <Modal show={show} onHide={handleClose} size="lg">
       <Modal.Header closeButton>
         <Modal.Title>Create Task</Modal.Title>
       </Modal.Header>
       <Modal.Body>
         <Form>
-          <LabeledToggleSwitch
-            leftLabel="Tiled Task"
-            rightLabel="Model guided Task"
-            checked={modelGuided}
-            onChange={(checked) => {
-              console.log(checked);
-              setModelGuided(checked);
-            }}
-          />
-          <Form.Label>Image Sets to process</Form.Label>
-          <ImageSetDropdown
-            selectedSets={selectedImageSets}
-            setImageSets={setSelectedImageSets}
-          />
-          {modelGuided ? (
-            <>
-              {modelId === "ivx" &&
-                <Form.Group>
-                  <Form.Label>Threshold</Form.Label>
-                  <Form.Range
-                    min={thresholdRange[modelId].min}
-                    max={thresholdRange[modelId].max}
-                    step={thresholdRange[modelId].step}
-                    value={threshold}
-                    onChange={(e) => setThreshold(parseFloat(e.target.value))}
-                  />
-                  <Form.Text>
-                    {`Threshold value: ${threshold}`}
-                  </Form.Text>
-                </Form.Group>}
-              <Form.Group>
-                <Form.Label>Model</Form.Label>
-                <Form.Select
-                  aria-label="Select AI model to use to guide annotation"
-                  onChange={(e) => {
-                    setModelId(e.target.value);
-                    if (e.target.value !== "scoutbot") {
-                      setScoutbotFile(null);
-                    }
-                  }}
-                  value={modelId}
-                >
-                  <option>Select AI model to use to guide annotation</option>
-                  <option value="ivx">Elephant detection (nadir)</option>
-                  <option value="scoutbotV3">ScoutBot v3</option>
-                  <option value="scoutbot">ScoutBot export file</option>
-                </Form.Select>
-              </Form.Group>
-              {modelId === "scoutbot" && (
-                <Form.Group>
-                  <Form.Label>ScoutBot Input File</Form.Label>
-                  <div className="d-flex align-items-center">
-                    <Form.Control
-                      type="text"
-                      readOnly
-                      value={scoutbotFile ? scoutbotFile.name : ""}
-                      placeholder="Select a ScoutBot export file"
-                      onClick={() => fileInputRef.current?.click()}
-                    />
-                    <Button
-                      variant="outline-secondary"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="ms-2"
-                    >
-                      Browse
-                    </Button>
-                  </div>
-                  <Form.Control
-                    type="file"
-                    ref={fileInputRef}
-                    className="d-none"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        setScoutbotFile(file);
-                      }
-                    }}
-                    accept=".csv"
-                  />
-                </Form.Group>
-              )}
-            </>
-          ) : (
-              <>
+          <Tabs
+            activeKey={taskType}
+            onSelect={(k) => setTaskType(k as 'tiled' | 'model' | 'annotation')}
+            className="mb-3"
+          >
+            <Tab eventKey="tiled" title="Tiled Task">
+              <Form.Label>Image Sets to process</Form.Label>
+              <ImageSetDropdown
+                selectedSets={selectedImageSets}
+                setImageSets={setSelectedImageSets}
+              />
               <Form.Label className="text-center" style={{ fontSize: 'smaller' }}>
                 Detected image dimensions : {imageWidth}x{imageHeight}
               </Form.Label>
@@ -518,8 +511,79 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
                     </div>
                   </>)}
                 </Form.Group>
-                </>
-          )}
+            </Tab>
+
+            <Tab eventKey="model" title="Model Guided Task">
+              <Form.Label>Image Sets to process</Form.Label>
+              <ImageSetDropdown
+                selectedSets={selectedImageSets}
+                setImageSets={setSelectedImageSets}
+              />
+              <Form.Group>
+                <Form.Label>Model</Form.Label>
+                <Form.Select
+                  aria-label="Select AI model to use to guide annotation"
+                  onChange={(e) => {
+                    setModelId(e.target.value);
+                    if (e.target.value !== "scoutbot") {
+                      setScoutbotFile(null);
+                    }
+                  }}
+                  value={modelId}
+                >
+                  <option>Select AI model to use to guide annotation</option>
+                  <option value="ivx">Elephant detection (nadir)</option>
+                  <option value="scoutbotV3">ScoutBot v3</option>
+                  <option value="scoutbot">ScoutBot export file</option>
+                </Form.Select>
+              </Form.Group>
+              {modelId === "scoutbot" && (
+                <Form.Group>
+                  <Form.Label>ScoutBot Input File</Form.Label>
+                  <div className="d-flex align-items-center">
+                    <Form.Control
+                      type="text"
+                      readOnly
+                      value={scoutbotFile ? scoutbotFile.name : ""}
+                      placeholder="Select a ScoutBot export file"
+                      onClick={() => fileInputRef.current?.click()}
+                    />
+                    <Button
+                      variant="outline-secondary"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="ms-2"
+                    >
+                      Browse
+                    </Button>
+                  </div>
+                  <Form.Control
+                    type="file"
+                    ref={fileInputRef}
+                    className="d-none"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setScoutbotFile(file);
+                      }
+                    }}
+                    accept=".csv"
+                  />
+                </Form.Group>
+              )}
+            </Tab>
+
+          <Tab eventKey="annotation" title="Annotation Guided Task">
+          <Form.Label>Image Sets to process</Form.Label>
+              <ImageSetDropdown
+                selectedSets={selectedImageSets}
+                setImageSets={setSelectedImageSets}
+            />
+            <CategoriesDropdown
+              setSelectedCategories={setSelectedCategories}
+            />
+            </Tab>
+          </Tabs>
+
           <Form.Group>
             <Form.Label>Task Name</Form.Label>
             <Form.Control
@@ -542,8 +606,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
           Cancel
         </Button>
       </Modal.Footer>
-    </Modal>
-  );
+  </Modal>
 }
 
 
