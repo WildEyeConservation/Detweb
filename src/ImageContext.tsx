@@ -31,7 +31,7 @@ export function ImageContextFromHook({ hook, image, children, secondaryQueueUrl,
             const transformedPoint = transformToPrev([annotation.x, annotation.y]);
             if (!(transformedPoint[0] >= 0 && transformedPoint[0] <= image.width && transformedPoint[1] >= 0 && transformedPoint[1] <= image.height)) {
                 annotation.id=crypto.randomUUID()
-                annotation.objectId = annotation.id;
+                //annotation.objectId = annotation.id;
             }
         }
         if (secondaryQueueUrl) {
