@@ -133,7 +133,8 @@ export function RegisterPair({
     images,
   });
 
-  const {next:nextAnnotation, prev:prevAnnotation, activeObjectId,confirmMatch} = useAnnotationNavigation({
+  const { next: nextAnnotation, prev: prevAnnotation, activeObjectId, confirmMatch } = useAnnotationNavigation({
+    images,
     annotationHooks: enhancedAnnotationHooks,
     next,
     prev,
@@ -202,13 +203,13 @@ export function RegisterPair({
       // next={i === 0 ? nextAnnotation : undefined}
       // prev={i === 0 ? prevAnnotation : undefined}
     >
-      {/* {transforms && (
+      {transforms && (
         <GotoAnnotation
           image={image}
           activeAnnotation={activeAnnotation}
           transform={transforms![1 - i]}
         />
-      )} */}
+      )}
       {transforms && (
         <OverlapOutline image={image} transform={transforms![1 - i]} />
       )}
