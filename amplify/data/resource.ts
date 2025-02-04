@@ -49,7 +49,9 @@ const schema = a.schema({
     annotationCount: a.integer().default(0),
     objects: a.hasMany('Object', 'categoryId'),
     annotationCountPerSet: a.hasMany('AnnotationCountPerCategoryPerSet', 'categoryId'),
-    testPresets: a.hasMany('TestPresetCategory', 'categoryId')
+    testPresets: a.hasMany('TestPresetCategory', 'categoryId'),
+    locationAnnotationCounts: a.hasMany('LocationAnnotationCount', 'categoryId'),
+    testResultCategoryCounts: a.hasMany('TestResultCategoryCount', 'categoryId')
   }).authorization(allow => [allow.authenticated()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
     .secondaryIndexes((index)=>[index('projectId').queryField('categoriesByProjectId')]),
@@ -103,7 +105,10 @@ const schema = a.schema({
     annotationCount: a.integer().default(0),
     observations: a.hasMany('Observation', 'annotationSetId'),
     tasks: a.hasMany('TasksOnAnnotationSet', 'annotationSetId'),
-    annotationCountPerCategory: a.hasMany('AnnotationCountPerCategoryPerSet', 'annotationSetId')
+    annotationCountPerCategory: a.hasMany('AnnotationCountPerCategoryPerSet', 'annotationSetId'),
+    testPresetLocations: a.hasMany('TestPresetLocation', 'annotationSetId'),
+    locationAnnotationCounts: a.hasMany('LocationAnnotationCount', 'annotationSetId'),
+    testResults: a.hasMany('TestResult', 'annotationSetId')
   }).authorization(allow => [allow.authenticated()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('projectId').queryField('annotationSetsByProjectId')]),
@@ -142,6 +147,18 @@ const schema = a.schema({
     index('categoryId').queryField('annotationsByCategoryId')
   ])
   ,
+  LocationAnnotationCount: a.model({
+    locationId: a.id().required(),
+    location: a.belongsTo('Location', 'locationId'),
+    categoryId: a.id().required(),
+    category: a.belongsTo('Category', 'categoryId'),
+    annotationSetId: a.id().required(),
+    annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
+    count: a.integer().default(0)
+  })
+  .identifier(['locationId', 'categoryId', 'annotationSetId'])
+  .authorization(allow => [allow.authenticated()])
+  .secondaryIndexes((index) => [index('locationId').sortKeys(['annotationSetId']).queryField('categoryCountsByLocationIdAndAnnotationSetId')]),
   Object: a.model({
     projectId: a.id().required(),
     project: a.belongsTo('Project', 'projectId'),
@@ -167,7 +184,8 @@ const schema = a.schema({
     observations: a.hasMany('Observation','locationId'),
     sets: a.hasMany('LocationSetMembership', 'locationId'),
     testPresets: a.hasMany('TestPresetLocation', 'locationId'),
-    annotationCount: a.integer().default(0)
+    annotationCounts: a.hasMany('LocationAnnotationCount', 'locationId'),
+    testResults: a.hasMany('TestResult', 'locationId')
   }).authorization(allow => [allow.authenticated()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
 
@@ -332,7 +350,8 @@ const schema = a.schema({
     accuracy: a.integer().required(),
     categories: a.hasMany('TestPresetCategory', 'testPresetId'),
     locations: a.hasMany('TestPresetLocation', 'testPresetId'),
-    users: a.hasMany('TestPresetUser', 'testPresetId')
+    users: a.hasMany('TestPresetUser', 'testPresetId'),
+    testResults: a.hasMany('TestResult', 'testPresetId')
   })
   .authorization(allow => [allow.authenticated()])
   .secondaryIndexes((index) => [
@@ -355,12 +374,46 @@ const schema = a.schema({
     testPreset: a.belongsTo('TestPreset', 'testPresetId'),
     locationId: a.id().required(),
     location: a.belongsTo('Location', 'locationId'),
+    annotationSetId: a.id().required(),
+    annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId')
   })
   .authorization(allow => [allow.authenticated()])
-  .identifier(['testPresetId', 'locationId'])
+  .identifier(['testPresetId', 'locationId', 'annotationSetId'])
   .secondaryIndexes((index) => [
     index('testPresetId').queryField('locationsByTestPresetId'),
     index('locationId').queryField('testPresetsByLocationId')
+  ]),
+  TestResult: a.model({
+    userId: a.id().required(),
+    testPresetId: a.id().required(),
+    testPreset: a.belongsTo('TestPreset', 'testPresetId'),
+    locationId: a.id().required(),
+    location: a.belongsTo('Location', 'locationId'),
+    annotationSetId: a.id().required(),
+    annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
+    testAnimals: a.integer().required(),
+    totalMissedAnimals: a.integer().required(),
+    passed: a.boolean().required(),
+    categoryCounts: a.hasMany('TestResultCategoryCount', 'testResultId')
+  })
+  .authorization(allow => [allow.authenticated()])
+  .secondaryIndexes((index) => [
+    index('userId').queryField('testResultsByUserId'),
+    index('testPresetId').queryField('testResultsByTestPresetId'),
+  ]),
+  TestResultCategoryCount: a.model({
+    testResultId: a.id().required(),
+    testResult: a.belongsTo('TestResult', 'testResultId'),
+    categoryId: a.id().required(),
+    category: a.belongsTo('Category', 'categoryId'),
+    userCount: a.integer().required(),
+    testCount: a.integer().required()
+  })
+  .authorization(allow => [allow.authenticated()])
+  .identifier(['testResultId', 'categoryId'])
+  .secondaryIndexes((index) => [
+    index('testResultId').queryField('categoryCountsByTestResultId'),
+    index('categoryId').queryField('testResultsByCategoryId')
   ]),
   addUserToGroup: a.mutation().arguments({
       userId:a.string().required(), 
