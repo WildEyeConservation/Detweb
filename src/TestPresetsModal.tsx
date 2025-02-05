@@ -27,7 +27,6 @@ export default function TestPresetsModal({show, onClose}: {show: boolean, onClos
         setEditName(false);
     }
 
-
     async function handleSubmit() {
         if (selectedCategories.length === 0 || 
 
@@ -121,8 +120,6 @@ export default function TestPresetsModal({show, onClose}: {show: boolean, onClos
         }
     }
 
-
-
     useEffect(() => {
         async function getPresets() {
             resetState();
@@ -154,7 +151,7 @@ export default function TestPresetsModal({show, onClose}: {show: boolean, onClos
             };
 
             setAnnotationAccuracy(annoAccuracy);
-            const allCategories = [{label: "All categories", value: "all"}, ...categories.map((c) => ({label: c.name, value: c.id}))];         
+            const allCategories = categories.map((c) => ({label: c.name, value: c.id}));         
             setSelectedCategories(activeCategories.map((c) => ({label: allCategories.find((cat) => cat.value === c.categoryId)!.label, value: c.categoryId})));
         }
 
@@ -191,8 +188,6 @@ export default function TestPresetsModal({show, onClose}: {show: boolean, onClos
                                     }}
                                     label="Edit name"
                                 />
-
-
                             </span>
                             <Select 
                                 options={presets?.map(q => ({ label: q.name, value: q.id })).sort((a, b) => a.label.localeCompare(b.label))}
@@ -223,7 +218,7 @@ export default function TestPresetsModal({show, onClose}: {show: boolean, onClos
                     <Form.Label>Categories</Form.Label>
                     <Select 
                         value={selectedCategories}
-                        options={[{ label: "All categories", value: "all" }, ...categories?.map(q => ({ label: q.name, value: q.id }))]}
+                        options={categories?.map(q => ({ label: q.name, value: q.id }))}
                         isMulti
                         onChange={setSelectedCategories}
                         styles={{
@@ -246,7 +241,7 @@ export default function TestPresetsModal({show, onClose}: {show: boolean, onClos
                     />
                 </Form.Group>
             </Modal.Body>
-            <Modal.Footer>
+            <Modal.Footer className={`d-flex ${isNewPreset ? "justify-content-end" : "justify-content-between"}`}>
                 {!isNewPreset &&
                     <Button 
                         variant="danger" 
@@ -257,14 +252,19 @@ export default function TestPresetsModal({show, onClose}: {show: boolean, onClos
                         Delete
                     </Button>
                 }
-                <Button 
-                    variant="primary" 
-                    onClick={() => {
-                        handleSubmit();
-                    }}
-                >
-                    {isNewPreset ? "Create" : "Save"}
-                </Button>
+                <span className="d-flex gap-2">
+                    <Button variant="secondary" onClick={onClose}>
+                        Cancel
+                    </Button>
+                    <Button 
+                        variant="primary" 
+                        onClick={() => {
+                            handleSubmit();
+                        }}
+                    >
+                        {isNewPreset ? "Create" : "Save"}
+                    </Button>
+                </span>
             </Modal.Footer>
         </Modal>
     )

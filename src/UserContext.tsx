@@ -73,7 +73,7 @@ export function User({ user, children }: { user: AuthUser, children: React.React
   const [currentTaskTag, setCurrentTaskTag] = useState<string>('');
   const [isTesting, setIsTesting] = useState<boolean>(false);
   const [isRegistering, setIsRegistering] = useState<boolean>(false);
-  const [currentAnnoCount, setCurrentAnnoCount] = useState<number>(0);
+  const [currentAnnoCount, setCurrentAnnoCount] = useState<{ [key: string]: number }>({});
   const { client,region } = useContext(GlobalContext)!;
   //const { items: myMemberships } = useObserveQuery('UserProjectMembership', { filter: { userId: { eq: user!.username } } });
   // const { data: myMemberships } = useOptimisticUpdates(

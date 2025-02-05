@@ -1,28 +1,81 @@
 import Table from "react-bootstrap/Table";
 import type { CSSProperties } from "react";
+import { useState, useEffect } from "react";
+import Button from "react-bootstrap/esm/Button";
 
 interface TableObject {
   tableData: { id: any; rowData: React.ReactNode[] }[];
-  tableHeadings: { content: string; style?: CSSProperties}[];
+  tableHeadings: { content: string; style?: CSSProperties; sort?: boolean }[];
+  pagination?: boolean;
+  itemsPerPage?: number;
 }
 
-export default function MyTable(input:TableObject) {
-  const {tableData,tableHeadings}=input;
+type SortDirection = 'asc' | 'desc';
+
+export default function MyTable(input: TableObject) {
+  const { tableData, tableHeadings, pagination = false, itemsPerPage = 10 } = input;
+  const [sortedData, setSortedData] = useState(tableData);
+  const [sortConfig, setSortConfig] = useState<{ index: number; direction: SortDirection } | null>(null);
+  const [currentPage, setCurrentPage] = useState(0);
+
+  const handleSort = (index: number) => {
+    let direction: SortDirection = 'asc';
+    if (sortConfig && sortConfig.index === index && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+
+    const sorted = [...sortedData].sort((a, b) => {
+      const aValue = a.rowData[index];
+      const bValue = b.rowData[index];
+
+      const aStr = typeof aValue === 'string' ? aValue : JSON.stringify(aValue);
+      const bStr = typeof bValue === 'string' ? bValue : JSON.stringify(bValue);
+
+      if (aStr < bStr) return direction === 'asc' ? -1 : 1;
+      if (aStr > bStr) return direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    setSortedData(sorted);
+    setSortConfig({ index, direction });
+    setCurrentPage(0);
+  };
+
+  const renderSortIndicator = (index: number) => {
+    if (!sortConfig || sortConfig.index !== index) return null;
+    return sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽';
+  };
+
+  const totalPages = pagination ? Math.ceil(sortedData.length / itemsPerPage) : 1;
+  const paginatedData = pagination
+    ? sortedData.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage)
+    : sortedData;
+
+  useEffect(() => {
+    setSortedData(tableData);
+    setCurrentPage(0);
+  }, [tableData]);
+
+
   return (
-    <Table bordered hover>
-      {
+    <div>
+      <Table bordered hover>
         <thead>
           <tr>
-            {tableHeadings.map(({ content, style }, index) => (
-              <th style={style} key={`heading${index}`}>
+            {tableHeadings.map(({ content, style, sort }, index) => (
+              <th
+                key={`heading${index}`}
+                onClick={sort ? () => handleSort(index) : undefined}
+                style={{  cursor: sort ? 'pointer' : 'default', ...style }}
+              >
                 {content}
+                {sort && renderSortIndicator(index)}
               </th>
             ))}
           </tr>
         </thead>
-      }
       <tbody>
-        {tableData?.map((row) => (
+        {paginatedData?.map((row) => (
           <tr key={row.id} className="align-middle">
             {row.rowData.map((content, index) => (
               <td key={`column${index}`}>{content}</td>
@@ -31,5 +84,20 @@ export default function MyTable(input:TableObject) {
         ))}
       </tbody>
     </Table>
+    {pagination && (
+      <div className="text-end d-flex justify-content-between align-items-center">
+          <p className="d-inline mb-0">Page {currentPage + 1} of {totalPages}</p>
+          <div>
+            <Button variant="primary" onClick={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 0}>
+                &lt;
+            </Button>
+            <Button variant="primary" onClick={() => setCurrentPage(currentPage + 1)} disabled={currentPage === Math.ceil(sortedData.length / 10) - 1}>
+                &gt;
+            </Button>
+          </div>
+      </div>
+    )}
+    </div>
   );
+
 }

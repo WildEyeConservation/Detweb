@@ -12,8 +12,8 @@ interface PreloaderProps {
     fetcher: FetcherType;
     historyN: number;
     preloadN: number;
-    visible: boolean;
-    prefetch: number;
+    visible?: boolean;
+    prefetch?: number;
     index: number;
     setIndex: (index: number | ((prevState: number) => number)) => void;
     [key: string]: any;

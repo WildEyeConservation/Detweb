@@ -3,24 +3,40 @@ import { ProjectContext, GlobalContext, UserContext } from "./Context";
 import { fetchAllPaginatedResults } from "./utils";
 import { QueryCommand } from "@aws-sdk/client-dynamodb";
 
-export default function useTesting() {
+export default function useTesting(useSecondaryCandidates: boolean = false) {
     const { currentPM } = useContext(ProjectContext)!;
     const { client, backend } = useContext(GlobalContext)!;
     const { getDynamoClient } = useContext(UserContext)!;
     const [i, setI] = useState(0);
     const [hasPrimaryCandidates, setHasPrimaryCandidates] = useState(false);
-    const [locationsLoaded, setLocationsLoaded] = useState(false);
-    const primaryCandidates = useRef<string[]>([]);
+    const [hasSecondaryCandidates, setHasSecondaryCandidates] = useState(false);
+    const primaryCandidates = useRef<{locationId: string, annotationSetId: string, testPresetId: string}[]>([]);
     const secondaryCandidates = useRef<string[]>([]);
+    const currentLocation = useRef<{locationId: string, annotationSetId: string, testPresetId: string} | null>(null);
 
     useEffect(() => {
-        fetchTestLocations();
+        async function setup() {
+            const {data: [config]} = await client.models.UserTestConfig.testConfigByUserId({ userId: currentPM.userId });
+
+            if (!config) {
+                return;
+            }
+
+            const presets = await fetchAllPaginatedResults(client.models.TestPresetUser.testPresetsByUserConfigId, {
+                userConfigId: config.id,
+                selectionSet: ['testPresetId'],
+            });
+
+            fetchPrimaryLocations(presets);
+        }
+
+        setup();
     }, []);
 
-    async function executeQueryAndPushResults(command: QueryCommand): Promise<any[]> {
+    async function executeQueryAndPushResults<T>(command: QueryCommand): Promise<T[]> {
         const dynamoClient = await getDynamoClient();
         let lastEvaluatedKey: any;
-        const resultsArray: any[] = [];
+        const resultsArray: T[] = [];
     
         do {
             command.input.ExclusiveStartKey = lastEvaluatedKey;
@@ -28,7 +44,7 @@ export default function useTesting() {
             try {
                 const response = await dynamoClient.send(command);
                 if (response.Items) {
-                    resultsArray.push(...response.Items);
+                    resultsArray.push(...response.Items as T[]);
                 }
                 lastEvaluatedKey = response.LastEvaluatedKey;
             } catch (error) {
@@ -40,7 +56,58 @@ export default function useTesting() {
         return resultsArray;
     }
 
-    async function fetchTestLocations() {
+    async function fetchPrimaryLocations(presets: {testPresetId: string}[]) {
+        const testedLocations = await fetchAllPaginatedResults(
+            client.models.TestResult.testResultsByUserId,
+            {
+                userId: currentPM.userId,
+                selectionSet: ['locationId', 'createdAt', 'testPresetId', 'annotationSetId'] as const,
+            },
+        );
+
+        const seenLocations = testedLocations
+        .filter(l => l !== null && presets.some(p => p.testPresetId === l.testPresetId))
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+        .filter((location, index, self) => index === self.findIndex((t) => t.locationId === location.locationId));
+
+        const testLocations = [];
+        for (const preset of presets) {
+            const locations = await fetchAllPaginatedResults(
+                client.models.TestPresetLocation.locationsByTestPresetId,
+                {
+                    testPresetId: preset.testPresetId,
+                    selectionSet: ['locationId', 'createdAt', 'annotationSetId'] as const,
+                },
+            );
+
+            testLocations.push(...locations.map(l => ({locationId: l.locationId, createdAt: l.createdAt, annotationSetId: l.annotationSetId, testPresetId: preset.testPresetId})));
+        }
+
+        // newest test locations, that have not yet been seen, are first up in the array
+        const locations = testLocations
+        .filter(l => l !== null && !seenLocations.some(sl => sl.locationId === l.locationId))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+        // add seen locations to the end of the array
+        for (const seenLocation of seenLocations) {
+            locations.push({locationId: seenLocation.locationId, createdAt: seenLocation.createdAt, annotationSetId: seenLocation.annotationSetId, testPresetId: seenLocation.testPresetId});
+        }
+
+        primaryCandidates.current = locations.map(l => ({locationId: l.locationId, annotationSetId: l.annotationSetId, testPresetId: l.testPresetId}));
+    
+
+        if (primaryCandidates.current.length > 3) {
+            setHasPrimaryCandidates(true);
+        }
+
+        // aim to have at least 100 candidates (not handled by test preloader for now)
+        if (useSecondaryCandidates && primaryCandidates.current.length < 100) {
+            fetchSecondaryLocations(100 - primaryCandidates.current.length);
+        }
+    }
+
+    // Not handled by test preloader for now
+    async function fetchSecondaryLocations(amount: number) {
         const locationSets = await fetchAllPaginatedResults(
             client.models.LocationSet.locationSetsByProjectId, 
             {
@@ -90,37 +157,33 @@ export default function useTesting() {
 
                 if (annotatedObservations.length > 0) {
                     if (userObservations.length === 0) {
-                        primaryCandidates.current.unshift(location.id.S!);
-                    } else {
-                        primaryCandidates.current.push(location.id.S!);
-                    }
-                } else {
-                    if (userObservations.length === 0) {
                         secondaryCandidates.current.unshift(location.id.S!);
                     } else {
                         secondaryCandidates.current.push(location.id.S!);
                     }
                 }
 
-                // need 4 messages for preloader
-                if (primaryCandidates.current.length > 3) {
-                    setHasPrimaryCandidates(true);
+                if (secondaryCandidates.current.length > 3) {
+                    setHasSecondaryCandidates(true);
+                }
+
+                if (secondaryCandidates.current.length >= amount) {
+                    break;
                 }
             }
         }
-
-        setLocationsLoaded(true);
     }
 
     function getTestLocation() {
-        let candidateEntries: string[] = [];
-        if (primaryCandidates.current.length < 4) {
-            candidateEntries = [
-                ...primaryCandidates.current, 
-                ...secondaryCandidates.current.slice(0, 4 - primaryCandidates.current.length)
-            ];
-        } else {
-            candidateEntries = primaryCandidates.current;
+        const candidateEntries = [
+            ...primaryCandidates.current, 
+            // ...secondaryCandidates.current
+        ];
+
+        // determine if there are enough candidates
+        if (i >= candidateEntries.length - 4) {
+            setI(1);
+            console.log("No new tests");
         }
 
         const result = candidateEntries[i];
@@ -129,9 +192,11 @@ export default function useTesting() {
     }
 
     const fetcher = useCallback(async (): Promise<Identifiable> => {
-        const locationId = getTestLocation();
+        const location = getTestLocation();
+
+        currentLocation.current = location;
         
-        if (!locationId) {
+        if (!location) {
             console.warn('No location found for testing');
         }
 
@@ -140,7 +205,7 @@ export default function useTesting() {
             id: id,
             message_id: id,
             location: {
-                id: locationId,
+                id: location.locationId,
                 annotationSetId: crypto.randomUUID(),
             }, 
             allowOutside: false, 
@@ -155,5 +220,5 @@ export default function useTesting() {
 
     }, [i, primaryCandidates, secondaryCandidates]);
 
-    return {fetcher: hasPrimaryCandidates || locationsLoaded ? fetcher : undefined};
+    return {fetcher: hasPrimaryCandidates || hasSecondaryCandidates ? fetcher : undefined, fetchedLocation: currentLocation.current};
 }

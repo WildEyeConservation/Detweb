@@ -49,8 +49,8 @@ export interface UserContextType {
     setUnannotatedJobs: React.Dispatch<React.SetStateAction<number>>,
     currentTaskTag: string,
     setCurrentTaskTag: React.Dispatch<React.SetStateAction<string>>,
-    currentAnnoCount: number,
-    setCurrentAnnoCount: React.Dispatch<React.SetStateAction<number>>,
+    currentAnnoCount: { [key: string]: number },
+    setCurrentAnnoCount: React.Dispatch<React.SetStateAction<{ [key: string]: number }>>,
     isRegistering: boolean,
     setIsRegistering: React.Dispatch<React.SetStateAction<boolean>>,
     } 

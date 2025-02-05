@@ -10,12 +10,10 @@ import ConfigureUserTestModal from "./ConfigureUserTestModal";
 import { useState } from "react";
 import "./UserManagement.css"; // Import the CSS file
 import TestPresetsModal from "./TestPresetsModal";
+import ReviewTestsModal from "./ReviewTestsModal";
+import UserTestResultsModal from "./UserTestResultsModal";
+import ActionsDropdown from './ActionsDropdown';
 
-const userTestTooltip = (
-  <Tooltip>
-    User needs to be added to project first to enable testing.
-  </Tooltip>
-);
 const adminTooltip = (
   <Tooltip>
     User needs to be added to project first to be able to make them admin.
@@ -122,20 +120,16 @@ export default function UserManagement() {
           <p>To select a backup queue, first add user to this project</p>
         ),
         <span>
-          <OverlayTrigger
-            placement="top"
-            overlay={userTestTooltip}
-            trigger={['hover', 'focus']}
-            show={belongsToCurrentProject ? false : undefined}>
-            <span>
-              <Button  variant="info" className="me-2" disabled={belongsToCurrentProject ? false : true} onClick={() => {
-                setUserId(user.id);
-                showModal("userTestModal");
-              }}>
-                Configure testing
-              </Button>
-            </span>
-          </OverlayTrigger>
+          <ActionsDropdown actions={[
+            {label: "Configure testing", onClick: () => {
+              setUserId(user.id);
+              showModal("userTestModal");
+            }},
+            {label: "Test results", onClick: () => {
+              setUserId(user.id);
+              showModal("userTestResultsModal");
+            }},
+        ]} />
         <OverlayTrigger
           placement="top"
           overlay={belongsToCurrentProject ? selfAdminTooltip: adminTooltip }
@@ -144,13 +138,13 @@ export default function UserManagement() {
           <span>
           {belongsToCurrentProject?.isAdmin ?
             <Button variant="danger"
-              className="me-2 fixed-width-button"
+              className="me-2"
               disabled={currentUser?.username === id}
               onClick={() => () => updateProjectMembership({ id: belongsToCurrentProject.id, isAdmin: 0 })}>
               Remove admin
             </Button > :
             <Button variant="info"
-                  className="me-2 fixed-width-button"
+                  className="me-2"
                   onClick={() => updateProjectMembership({ id: belongsToCurrentProject!.id, isAdmin: 1 })}
                   disabled={!belongsToCurrentProject}>
               Make admin
@@ -232,12 +226,14 @@ export default function UserManagement() {
               Test presets
             </Button>
             <Button variant="primary" onClick={() => showModal("reviewTestsModal")}>
-              Review tests
+              Test locations
             </Button>
         </Col>
         </div>
         <ConfigureUserTestModal show={modalToShow === "userTestModal"} onClose={() => showModal(null)} userId={userId} />
         <TestPresetsModal show={modalToShow === "testPresetsModal"} onClose={() => showModal(null)} />
+        <ReviewTestsModal show={modalToShow === "reviewTestsModal"} onClose={() => showModal(null)} />
+        <UserTestResultsModal show={modalToShow === "userTestResultsModal"} onClose={() => showModal(null)} userId={userId}/>
       </Row>
     </>
   );

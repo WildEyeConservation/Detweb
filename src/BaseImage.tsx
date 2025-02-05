@@ -304,6 +304,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
           show={modalToShow === testModalId} 
           onClose={() => showModal(null)} 
           locationId={location?.id || ""}
+          annotationSetId={location?.annotationSetId || ""}
         />
       }
       </div>
