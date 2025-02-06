@@ -44,6 +44,7 @@ export function RegisterPair({
   visible,
   message_id,
   ack }: RegisterPairProps) {
+  console.log("RegisterPair rendering", { selectedSet });
   const [index, setIndex] = useState(-1); // A marker to track which annotation we are currently registering
   const [map1, setMap1] = useState<Map | null>(null); // The map for the first image
   const [map2, setMap2] = useState<Map | null>(null); // The map for the second image
@@ -132,7 +133,8 @@ export function RegisterPair({
     images,
   });
 
-  const {next:nextAnnotation, prev:prevAnnotation, activeObjectId,confirmMatch} = useAnnotationNavigation({
+  const { next: nextAnnotation, prev: prevAnnotation, activeObjectId, confirmMatch } = useAnnotationNavigation({
+    images,
     annotationHooks: enhancedAnnotationHooks,
     next,
     prev,
@@ -180,12 +182,11 @@ export function RegisterPair({
 
 
   return <>{images?.length == 2 && images?.map((image, i) =>
-    <ImageContextFromHook hook={enhancedAnnotationHooks[i]} image={image}>
+    <ImageContextFromHook key={i} hook={enhancedAnnotationHooks[i]} image={image}>
     <BaseImage
-      key={i}
       visible={visible}
       activeAnnotation={activeAnnotation}
-      location={{ image }}
+      location={{ image, annotationSetId: selectedSet }}
       setId={selectedSet}
       fullImage={false}
       boundsxy={[

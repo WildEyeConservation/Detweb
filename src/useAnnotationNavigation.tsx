@@ -93,8 +93,7 @@ export function useAnnotationNavigation(input: UseAnnotationNavigationInput) {
         update(anno)
       }
     })
+    next()
   }
-
- 
   return {next, prev, confirmMatch, activeObjectId}
 }

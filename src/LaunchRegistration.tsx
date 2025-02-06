@@ -3,11 +3,12 @@ import { Stack, Modal, Form, Button } from "react-bootstrap";
 import { UserContext, GlobalContext,ManagementContext } from "./Context";
 import { QueueDropdown } from "./QueueDropDown";
 import { AnnotationSetDropdown } from "./AnnotationSetDropdownMulti";
-import { fetchAllPaginatedResults } from "./utils";
+import { fetchAllPaginatedResults, makeTransform,array2Matrix } from "./utils";
 import { ImageNeighbourType } from "./schemaTypes";
 import { SendMessageCommand } from "@aws-sdk/client-sqs";
 import { ImageSetDropdown } from "./ImageSetDropDown";
 import * as math from 'mathjs';
+import { inv } from 'mathjs';
 
 interface LaunchRegistrationProps {
   show: boolean;
@@ -84,43 +85,64 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({ show, handleClo
             client.models.Annotation.annotationsByAnnotationSetId,
             {
               setId: annotationSetId,
-              selectionSet: ['image.id', 'image.timestamp']
+              selectionSet: ['image.id', 'image.timestamp','x','y']
             })
-      
-        const images: Record<number, string> = {}
-        annotations.forEach(({ image }) => {
-          images[image.timestamp] = image.id
-        })
-
-        const neighboursAllreadyAdded = new Set<string>()
-      
-        //Sort images by timestamp
+        
+        const images: Record<number, string> = annotations.reduce((acc, annotation) => {
+          const current = acc[annotation.image.timestamp]
+          if (current) {
+            current.annotations.push([annotation.x, annotation.y])
+          } else {
+            acc[annotation.image.timestamp] = {id: annotation.image.id, annotations: [[annotation.x, annotation.y]]}
+          }
+          return acc
+        }, {} as Record<number, { id: string, annotations: number[][] }>)
+        
+        for (const timestamp of Object.keys(images)) {
+          const image = images[timestamp]
+          const { data: prevneighbours } = await client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: image.id }, { selectionSet: ['image1Id', 'image1.timestamp', 'homography', 'image1.width', 'image1.height']})
+          for (const neighbour of prevneighbours) {
+            if (images[neighbour.image1.timestamp] || !neighbour.homography) {
+              continue
+            } else {
+              const transform = makeTransform(inv(array2Matrix(neighbour.homography)))
+              const tfAnnotations = image.annotations.map(transform)
+              const tfAnnotationsInside = tfAnnotations.filter(annotation => annotation[0] >= 0 && annotation[0] <= neighbour.image1.width && annotation[1] >= 0 && annotation[1] <= neighbour.image1.height)
+              if (tfAnnotationsInside.length > 0) {
+                images[neighbour.image1.timestamp] = { id: neighbour.image1Id, annotations: [] }
+              }
+            }
+          }
+          const { data: nextneighbours } = await client.models.ImageNeighbour.imageNeighboursByImage1key({ image1Id: image.id }, { selectionSet: ['image2Id', 'image2.timestamp', 'homography', 'image2.width', 'image2.height']})
+          for (const neighbour of nextneighbours) {
+            if (images[neighbour.image2.timestamp] || !neighbour.homography) {
+              continue
+            } else {
+              const transform = makeTransform((array2Matrix(neighbour.homography)))
+              const tfAnnotations = image.annotations.map(transform)
+              const tfAnnotationsInside = tfAnnotations.filter(annotation => annotation[0] >= 0 && annotation[0] <= neighbour.image2.width && annotation[1] >= 0 && annotation[1] <= neighbour.image2.height)
+              if (tfAnnotationsInside.length > 0) {
+                images[neighbour.image2.timestamp] = { id: neighbour.image2Id, annotations: [] }
+              }
+            }
+          }
+        }          
         const sortedTimestamps = Object.keys(images).sort();
-        const neighbours: ImageNeighbourType[] = []
-        for (const timestamp of sortedTimestamps) {
-          const neighbours1 = await client.models.ImageNeighbour.imageNeighboursByImage1key({ image1Id: images[timestamp] })
-          neighbours1.data.forEach(neighbour => {
-            if (!neighboursAllreadyAdded.has(neighbour.image1Id)) {
-              neighboursAllreadyAdded.add(neighbour.image1Id)
-              neighbours.push(neighbour)
-            }
-          })
-          const neighbours2 = await client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: images[timestamp] })
-          neighbours2.data.forEach(neighbour => {
-            if (!neighboursAllreadyAdded.has(neighbour.image2Id)) {
-              neighboursAllreadyAdded.add(neighbour.image2Id)
-              neighbours.push(neighbour)
-            }
-          })
+        for (let i = 0; i < sortedTimestamps.length - 1; i++) {
+          const image1 = images[sortedTimestamps[i]].id
+          const image2 = images[sortedTimestamps[i + 1]].id
+          const { data } = await client.models.ImageNeighbour.get({ image1Id: image1, image2Id: image2 }, { selectionSet: ['homography'] })
+          if (data?.homography) {
+            await getSqsClient().then(sqsClient => sqsClient.send(
+              new SendMessageCommand({
+                QueueUrl: queues.find(queue => queue.id == url)?.url,
+                MessageGroupId: crypto.randomUUID(),
+                MessageDeduplicationId: crypto.randomUUID(),
+                MessageBody: JSON.stringify({ selectedSet: annotationSetId, images: [image1, image2] })
+              }))
+            )
+          }
         }
-        neighbours.forEach(neighbour =>
-          getSqsClient().then(sqsClient => sqsClient.send(
-            new SendMessageCommand({
-              QueueUrl: queues.find(queue => queue.id == url)?.url,
-              MessageBody: JSON.stringify({ selectedSet: annotationSetId, images: [neighbour.image1Id, neighbour.image2Id] })
-            }))
-          )
-        )
       }
     } else {
       

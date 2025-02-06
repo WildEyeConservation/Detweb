@@ -37,7 +37,7 @@ export function ImageContextFromHook({ hook, image, children, secondaryQueueUrl,
             const transformedPoint = transformToPrev([annotation.x, annotation.y]);
             if (!(transformedPoint[0] >= 0 && transformedPoint[0] <= image.width && transformedPoint[1] >= 0 && transformedPoint[1] <= image.height)) {
                 annotation.id=crypto.randomUUID()
-                annotation.objectId = annotation.id;
+                //annotation.objectId = annotation.id;
             }
         }
         if (secondaryQueueUrl) {
@@ -57,13 +57,11 @@ export function ImageContextFromHook({ hook, image, children, secondaryQueueUrl,
 
     const update = useCallback((annotation) => {
         // Create an objectID if this is the primary observation (first time this object was observed)
-        if (transformToPrev) {
+        if (transformToPrev && annotation.x && annotation.y && !annotation.shadow) {
             const transformedPoint = transformToPrev([annotation.x, annotation.y]);
             if (!(transformedPoint[0] >= 0 && transformedPoint[0] <= image.width && transformedPoint[1] >= 0 && transformedPoint[1] <= image.height)) {
                 annotation.objectId = annotation.id;
-            } else {
-                annotation.objectId = null;
-            }
+            } 
         }
         if (secondaryQueueUrl) {
             getSqsClient().then(sqsClient => sqsClient.send(new SendMessageCommand({

@@ -32,13 +32,13 @@ This is used extensively in RegisterPair.tsx to the extent of injecting phantom 
 Whether annotations are editable or read-only is controlled by the presence or absence of the update and delete functions in the annotationsHook.
 */
 
-export function ShowMarkers() {
+export function ShowMarkers(props: ShowMarkersProps) {
   const { user } = useContext(UserContext)!;
   const {categoriesHook:{data:categories}} = useContext(ProjectContext)!;
   const [enabled, setEnabled] = useState(true);
   const {annotationsHook, latLng2xy, xy2latLng} = useContext(ImageContext)!;
   const {data: annotations, delete: deleteAnnotation,update: updateAnnotation, create: createAnnotation}= annotationsHook;
-  const activeAnnotation = undefined;
+  const activeAnnotation = props.activeAnnotation;
   useHotkeys(
     "Tab",
     (event) => {event.preventDefault(); setEnabled(!isHotkeyPressed("Tab"))},

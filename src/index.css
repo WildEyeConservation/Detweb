@@ -32,16 +32,20 @@ code {
     monospace;
 }
 
-.marker>div { width: 1.5rem;
-      height: 1.5rem;
-      display: block;
-      left: -0.75rem;
-      top:  -0.75rem;
-      opacity: 1;
-      position: relative;
-      border-radius: 0.75rem;
-      transform: rotate(0);
-      border: 2px solid;}
+.marker>div {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: block;
+  left: -0.75rem;
+  top: -0.75rem;
+  opacity: 1;
+  position: relative;
+  border-radius: 0.75rem;
+  border: 2px solid;
+  transform-origin: center;
+  perspective: 1000px;
+  transform-style: preserve-3d;
+}
 
 .marker[selected]>div,.marker[candidate]>div {
       opacity: 1;
@@ -49,21 +53,21 @@ code {
 
 .markerLabel { position: absolute;
                 top: 0.2rem;
-                left: -0.55rem;
+                left: -0rem;
                 font-weight: bolder;
                 font-size: 0.5rem;
                 color: #FFFFFF;
                 text-align: center;
-                width: 3rem;}
+                width: 3rem;} 
 
 @keyframes spin {
-  from   {transform: scale(1,1)}
-  to {transform: scale(-1,1)}
+  from   {transform: translateX(-50%) rotateY(0deg) translateX(50%)}
+  to {transform: translateX(-50%) rotateY(180deg) translateX(50%)}
 }
 
 @keyframes spinSmall {
-  from   {transform: scale(0.7,0.7)}
-  to {transform: scale(-0.7,0.7)}
+  from   {transform: translateX(-50%) scale(0.7) rotateY(0deg) translateX(50%)}
+  to {transform: translateX(-50%) scale(0.7) rotateY(180deg) translateX(50%)}
 }
 
 @keyframes throb {
@@ -95,7 +99,9 @@ code {
            animation-duration: 1.5s;
            animation-timing-function: ease-in-out;
            animation-iteration-count: infinite;
-           animation-direction: alternate;}
+           animation-direction: alternate;
+           transform-origin: 50% 50%;
+           transform-style: preserve-3d;}
 
  .marker[shadow][selected] {
           animation-name: spinSmall;
@@ -103,6 +109,8 @@ code {
           animation-timing-function: ease-in-out;
           animation-iteration-count: infinite;
           animation-direction: alternate;
+          transform-origin: 50% 50%;
+          transform-style: preserve-3d;
 }
 
 .legend {

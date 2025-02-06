@@ -36,13 +36,14 @@ function createIcon(
     if (annotation.obscured) attributes += " obscured";
     if (annotation.shadow) attributes += " shadow";
     let html = `<div class="marker" ${attributes}><div style="background-color: ${color}; border-color: ${
-      annotation.objectId   
+      annotation.objectId == annotation.id
         ? "#ffffff"
-        : annotation.proposedObjectId
+        : annotation.objectId
         ? "#888888"
         : "#000000"
+
     }">
-         <span class="markerLabel" style="position: relative; top: -1px; left: 0px;">${id ? jdenticon.toSvg(id, 20) : ""}</svg></span>
+         <span class="markerLabel" opacity="50%" style="position: relative; top: -1px; left: 0px;">${id ? jdenticon.toSvg(id, 20) : ""}</svg></span>
          </div></div>`;
     //let html = `<svg width="80" height="80" data-jdenticon-value="user127"/>`;
     //TODO : Confirm the units implicit in the various anchors defined below. If these are in pixels (or any other
@@ -58,22 +59,40 @@ function createIcon(
       popupAnchor: [0, -30],
       html: html,
     });
-  }
+}
+
+function detectionToAnnotation(det: any): Partial<ExtendedAnnotationType> {
+  const result: Partial<ExtendedAnnotationType> = {};
+  result.id = det.id;
+  result.x = det.x;
+  result.y = det.y;
+  result.imageId = det.imageId;
+  result.setId = det.setId;
+  result.source = det.source;
+  result.projectId = det.projectId;
+  result.shadow = det.shadow;
+  result.obscured = det.obscured;
+  result.categoryId = det.categoryId;
+  result.objectId = det.objectId;
+  result.proposedObjectId = det.proposedObjectId;
+  return result;
+}
 
   function getContextMenuItems(
-    det: AnnotationType,
+    det: ExtendedAnnotationType,
     user: any,
     categories: CategoryType[],
-    deleteAnnotation: (annotation: AnnotationType) => void,
-    updateAnnotation: (annotation: AnnotationType) => void
+    deleteAnnotation: (annotation: Partial<ExtendedAnnotationType>) => void,
+    updateAnnotation: (annotation: Partial<ExtendedAnnotationType>) => void
   ) {
+    const annotation = detectionToAnnotation(det);
     let contextmenuItems = [];
-      if (!det.shadow) {
+      if (!annotation.shadow) {
           contextmenuItems.push({
               text: "Delete",
               index: contextmenuItems.length,
               callback: async () => {
-                  deleteAnnotation(det);
+                  deleteAnnotation(annotation);
               },
           });
       }
@@ -81,7 +100,7 @@ function createIcon(
       text: det.obscured ? "Mark as visible" : "Mark as obscured",
       index: contextmenuItems.length,
       callback: async () => {
-        updateAnnotation({ id:det.id, obscured: !det.obscured });
+        updateAnnotation({...annotation, obscured: !annotation.obscured});
       },
     });
     if (det.objectId) {
@@ -89,7 +108,7 @@ function createIcon(
         text: "Remove assigned name",
         index: contextmenuItems.length,
         callback: async () => {
-          updateAnnotation({ ...det, objectId: null });
+          updateAnnotation({...annotation, objectId:undefined});
         },
       });
     }
@@ -106,12 +125,12 @@ function createIcon(
       });
     }
     for (let category of categories) {
-      if (det.categoryId !== category.id) {
+      if (annotation.categoryId !== category.id) {
         let item = {
           text: `Change to ${category.name}`,
           index: contextmenuItems.length,
           callback: async () => {
-            updateAnnotation({ id:det.id, categoryId: category.id });
+            updateAnnotation({ id:annotation.id, categoryId: category.id });
           },
         };
         contextmenuItems.push(item);
@@ -198,8 +217,7 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
               eventHandlers={{
                 dragend: (e) => {
                   let coords = latLng2xy(e.target.getLatLng());
-                  updateAnnotation({
-                    id: annotation.id,
+                  updateAnnotation({...annotation,
                     y: Math.round(coords.y),
                     x: Math.round(coords.x),
                   });

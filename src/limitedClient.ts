@@ -38,7 +38,7 @@ function checkForErrors(result: any) {
 
 async function executeWithRetry<T>(
   operation: () => Promise<T>,
-  maxRetries: number = 5,
+  maxRetries: number = 1,
   baseDelay: number = 1000,
   maxDelay: number = 30000
 ): Promise<T> {

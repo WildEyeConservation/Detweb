@@ -16,7 +16,7 @@ import OverlapLoader from "./OverlapLoader";
 import { inv } from "mathjs";
 import { makeTransform } from "./utils";
 import TestLocationModal from "./TestLocationModal";
-
+import OverlapsLoader from "./OverlapsLoader";
 
 export interface BaseImageProps {
   image: ImageType;
@@ -278,17 +278,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
               />
             </LayersControl.BaseLayer>
           )}
-          <LayersControl.Overlay name="Overlap Previous" checked={false}>
-            <LayerGroup>
-              <OverlapLoader image={image} loadPrevious={true} />
-            </LayerGroup>
-          </LayersControl.Overlay>
-          <LayersControl.Overlay name="Overlap Next" checked={false}>
-            <LayerGroup>
-              <OverlapLoader image={image} loadPrevious={false} />
-            </LayerGroup>
-          </LayersControl.Overlay>
-
+          <OverlapsLoader image={image} />
         </LayersControl>
         {children}
         {(next || prev) && fullyLoaded &&

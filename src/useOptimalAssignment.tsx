@@ -40,11 +40,22 @@ export function useOptimalAssignment({
   transforms,
   images,
 }: UseOptimalAssignmentProps) {
+  const [dataLoaded, setDataLoaded] = useState(false);
+  // Log when the hook is called
+  console.log("useOptimalAssignment called");
   
-  // The matches that we have proposed.
-  const annotations = useMemo(() => [annotationsHooks[0].data, annotationsHooks[1].data],
-    [annotationsHooks[0].data, annotationsHooks[1].data]);
+  const annotations = useMemo(() => {
+    console.log("annotations memo recalculating", {
+      data0Length: annotationsHooks[0].data.length,
+      data1Length: annotationsHooks[1].data.length
+    });
+    return [annotationsHooks[0].data, annotationsHooks[1].data];
+  }, [dataLoaded, annotationsHooks[0].data, annotationsHooks[1].data]);
   
+  useEffect(() => {
+      setDataLoaded(annotationsHooks[0].meta.status=='success' && annotationsHooks[1].meta.status=='success');
+  }, [annotationsHooks[0].meta.status, annotationsHooks[1].meta.status]);
+
   const [enhancedAnnotations, setEnhancedAnnotations] = useState<[ExtendedAnnotationType[], ExtendedAnnotationType[]]>([[], []]);
   
   /* This function creates a new annotation, which is used when we are proposing new matches. It is used to create new annotations
@@ -54,7 +65,7 @@ export function useOptimalAssignment({
     anno: ExtendedAnnotationType,
     tf: TransformFunction,
     image: ImageType
-  ): ExtendedAnnotationType {
+  ): Partial<ExtendedAnnotationType> {
     let projected = tf([anno.x, anno.y]);
     const obscured =
       projected[0] < 0 ||
@@ -94,7 +105,13 @@ export function useOptimalAssignment({
   // contains all the shadow annotations proposed for image 2.
   // matches contains the list of matches proposed by the munkres algorithm. it is a list of pairs of annotations, 
   useEffect(() => {
-    if (transforms) {
+    console.log("Main effect running", {
+      annotations0Length: annotations[0]?.length,
+      annotations1Length: annotations[1]?.length,
+      transformsPresent: !!transforms
+    });
+
+    if (transforms && dataLoaded) {
       console.log("calcCostMatrix triggered");
       const N = annotations[0]?.length + annotations[1]?.length;
       if (N) {
@@ -166,30 +183,41 @@ export function useOptimalAssignment({
             }
           })
         setEnhancedAnnotations([
-          annotations[0].concat(proposed[0]).map(anno => ({ ...anno, proposedObjectId: proposedObjectIdMap[anno.id] })),
-          annotations[1].concat(proposed[1]).map(anno => ({ ...anno, proposedObjectId: proposedObjectIdMap[anno.id] }))
+          annotations[0].concat(proposed[0]).map(anno => {
+            console.log("Mapping annotation 0", { id: anno.id, proposedId: proposedObjectIdMap[anno.id] });
+            return { ...anno, proposedObjectId: proposedObjectIdMap[anno.id] };
+          }),
+          annotations[1].concat(proposed[1]).map(anno => {
+            console.log("Mapping annotation 1", { id: anno.id, proposedId: proposedObjectIdMap[anno.id] });
+            return { ...anno, proposedObjectId: proposedObjectIdMap[anno.id] };
+          })
         ]);
       }
       else{
         setEnhancedAnnotations([[],[]]);
       }
     }
-  }, [annotations[0].length,annotations[1], transforms]);
+  }, [annotations[0],annotations[1], transforms, dataLoaded]);
 
   return {
-    enhancedAnnotationHooks: [0, 1].map(i => {
-      return {
-        data: enhancedAnnotations[i],
-        create: annotationsHooks[i].create,
-        update: useCallback((anno: ExtendedAnnotationType) => {
-          if (anno.shadow) {
-            annotationsHooks[i].create({...anno, objectId:anno.proposedObjectId, proposedObjectId:undefined, shadow:undefined});
-          } else {
-            annotationsHooks[i].update({id:anno.id,objectId:anno.proposedObjectId});
-          }
-        }, [annotationsHooks[i]]),
-        delete: annotationsHooks[i].delete,
-      }
-    })
+    enhancedAnnotationHooks: [0, 1].map(i => ({
+      data: enhancedAnnotations[i],
+      create: annotationsHooks[i].create,
+      update: useCallback((anno: ExtendedAnnotationType) => {
+        console.log(`Update called for hook ${i}`, { 
+          id: anno.id, 
+          shadow: anno.shadow,
+          proposedObjectId: anno.proposedObjectId,
+          objectId: anno.objectId 
+        });
+        const { shadow, proposedObjectId, image, object, project, set, createdAt, updatedAt,owner,category,id, ...annoStripped } = anno;
+        if (shadow) {
+          annotationsHooks[i].create({...annoStripped, objectId:anno.objectId || anno.proposedObjectId});
+        } else {
+          annotationsHooks[i].update({...annoStripped, id, objectId:anno.objectId || anno.proposedObjectId});
+        }
+      }, [annotationsHooks[i]]),
+      delete: annotationsHooks[i].delete,
+    }))
   }
 }
