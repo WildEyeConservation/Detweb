@@ -189,7 +189,6 @@ type ConfigType = {
           return;
       }
   
-      alert('setting isTesting to true');
       setIsTesting(true);
     }, [unannotatedJobs]);
   
