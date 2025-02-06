@@ -8,15 +8,15 @@ import "leaflet-contextmenu/dist/leaflet.contextmenu.css";
 import "./BaseImage.css"
 import { useHotkeys } from "react-hotkeys-hook";
 import { ImageType, ImageFileType, LocationType, AnnotationSetType } from './schemaTypes';
-import { GlobalContext, ImageContext } from "./Context";
+import { GlobalContext, ImageContext, ManagementContext, UserContext, ProjectContext } from "./Context";
 import { StorageLayer } from "./StorageLayer";
 import { getUrl } from 'aws-amplify/storage';
 import ZoomTracker from "./ZoomTracker";
 import OverlapLoader from "./OverlapLoader";
 import { inv } from "mathjs";
 import { makeTransform } from "./utils";
+import TestLocationModal from "./TestLocationModal";
 import OverlapsLoader from "./OverlapsLoader";
-
 
 export interface BaseImageProps {
   image: ImageType;
@@ -34,8 +34,11 @@ export interface BaseImageProps {
 
 const BaseImage: React.FC<BaseImageProps> = memo((props) =>
 {
-  const { client } = useContext(GlobalContext)!;
+  const { client, showModal, modalToShow } = useContext(GlobalContext)!;
   const { xy2latLng, setVisibleTimestamp, setFullyLoadedTimestamp } = useContext(ImageContext)!;
+  const {projectMembershipHook: {data: projectMemberships}} = useContext(ManagementContext)!;
+  const {project} = useContext(ProjectContext)!
+  const {user} = useContext(UserContext)!;
   const [fullyLoaded, setFullyLoaded] = useState(false);
   const [imageFiles, setImageFiles] = useState<ImageFileType[]>([]);
   const [canAdvance, setCanAdvance] = useState(false);
@@ -43,8 +46,11 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
   const { image } = location;
   const prevPropsRef = useRef(props);
   const source = imageFiles.find(file => file.type == 'image/jpeg')?.key
-  
+  const [isTest, setIsTest] = useState(false);
 
+  const belongsToCurrentProject =  projectMemberships?.find(
+    (pm) => pm.userId == user.userId && pm.projectId == project.id,
+  );
 
   useEffect(() => {
     if (fullyLoaded) {
@@ -97,6 +103,104 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
   useHotkeys("LeftArrow", prev ? prev : () => { }, { enabled: visible }, [
     prev,
   ]);
+  
+  const testModalId = useMemo(() => {
+    return crypto.randomUUID();
+  }, []);
+
+  const contextMenuItems = useMemo(() => {
+    const items = [];
+    if (source) {
+      items.push(...[{
+        text: source,
+        index: 0,
+        callback: () => {
+          navigator.clipboard.writeText(source || '')
+            .catch(err => console.error('Failed to copy to clipboard:', err));
+        }
+      },{
+        text: "Copy permalink to this location",
+        disabled: !location?.id,
+        callback: () => {
+          const url = window.location.href
+          // now replace the last part of the url with the location id
+          const newUrl = url.replace(/\/[^/]+\/?$/, `/location/${location?.id}/${location?.annotationSetId}`)
+          navigator.clipboard.writeText(newUrl)
+            .catch(err => console.error('Failed to copy to clipboard:', err));
+        }
+        },{
+          text: "Copy permalink to this image",
+          callback: () => {
+            const url = window.location.href
+            // now replace the last part of the url with the location id
+            const newUrl = url.replace(/\/[^/]+\/?$/, `/image/${location.image.id}/${location?.annotationSetId}`)
+            navigator.clipboard.writeText(newUrl)
+              .catch(err => console.error('Failed to copy to clipboard:', err));
+          }
+        },{
+          text: "Display Image Statistics",
+          callback: () => {
+            alert(JSON.stringify(stats));
+          }
+        },{
+          text: "Open previous image in new tab",
+          callback: async () => {
+            const prevImage = await client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: image.id }).then(response => response.data[0].image1Id);
+            const newUrl = window.location.href.replace(/\/[^/]+\/?$/, `/image/${prevImage}/${location?.annotationSetId}`)
+            window.open(newUrl, '_blank');
+          }
+        },{
+          text: "Open next image in new tab",
+          callback: async () => {
+            const nextImage = await client.models.ImageNeighbour.imageNeighboursByImage1key({ image1Id: image.id }).then(response => response.data[0].image2Id);
+            const newUrl = window.location.href.replace(/\/[^/]+\/?$/, `/image/${nextImage}/${location?.annotationSetId}`)
+            window.open(newUrl, '_blank');
+          }
+        },
+        {
+          text: "Download this image",
+          callback: () => {
+            getUrl({ path: 'images/' + source, options: {
+              bucket: 'inputs',
+              validateObjectExistence: true,
+              expiresIn: 300
+              }
+            }).then(async (url) => {
+              navigator.clipboard.writeText(url.url.toString());
+              
+              // Fetch the image first
+              const response = await fetch(url.url);
+              const blob = await response.blob();
+              
+              // Create object URL from blob
+              const objectUrl = window.URL.createObjectURL(blob);
+              
+              // Setup download link
+              const a = document.createElement('a');
+              a.href = objectUrl;
+              a.download = source.split('/').pop() || 'image.jpg'; // Get filename from source
+              
+              // Trigger download
+              document.body.appendChild(a);
+              a.click();
+              
+              // Cleanup
+              document.body.removeChild(a);
+              window.URL.revokeObjectURL(objectUrl);
+            })
+          }
+        }, 
+      ])
+      if (belongsToCurrentProject?.isAdmin) {
+        items.push({
+          text: "Configure for testing",
+          callback: () => showModal(testModalId),
+        })
+      }
+    }
+
+    return items;
+  }, [isTest, belongsToCurrentProject, source, location?.id, client.models.ImageNeighbour, image.id, stats, location.annotationSetId, location.image.id]);
 
   // categories?.forEach((cat, idx) => {
   //   keyMap[cat.name] = cat.shortcutKey
@@ -141,100 +245,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
         bounds={zoom ? undefined : viewBounds}
         center={zoom && viewCenter}
         contextmenu={true}
-        contextmenuItems={[{
-          text: source,
-          index: 0,
-          callback: () => {
-            navigator.clipboard.writeText(source || '')
-              .catch(err => console.error('Failed to copy to clipboard:', err));
-          }
-        },{
-          text: "Copy permalink to this location",
-          disabled: !location?.id,
-          callback: () => {
-            const url = window.location.href
-            // now replace the last part of the url with the location id
-            const newUrl = url.replace(/\/[^/]+\/?$/, `/location/${location?.id}/${location?.annotationSetId}`)
-            navigator.clipboard.writeText(newUrl)
-              .catch(err => console.error('Failed to copy to clipboard:', err));
-          }
-          },{
-            text: "Copy permalink to this image",
-            callback: () => {
-              const url = window.location.href
-              // now replace the last part of the url with the location id
-              const newUrl = url.replace(/\/[^/]+\/?$/, `/image/${location.image.id}/${location?.annotationSetId}`)
-              navigator.clipboard.writeText(newUrl)
-                .catch(err => console.error('Failed to copy to clipboard:', err));
-            }
-          },{
-            text: "Display Image Statistics",
-            callback: () => {
-              alert(JSON.stringify(stats));
-            }
-          },{
-            text: "Open previous image in new tab",
-            callback: async () => {
-              const prevImage = await client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: image.id }).then(response => response.data[0].image1Id);
-              const newUrl = window.location.href.replace(/\/[^/]+\/?$/, `/image/${prevImage}/${location?.annotationSetId}`)
-              window.open(newUrl, '_blank');
-            }
-          },{
-            text: "Open next image in new tab",
-            callback: async () => {
-              const nextImage = await client.models.ImageNeighbour.imageNeighboursByImage1key({ image1Id: image.id }).then(response => response.data[0].image2Id);
-              const newUrl = window.location.href.replace(/\/[^/]+\/?$/, `/image/${nextImage}/${location?.annotationSetId}`)
-              window.open(newUrl, '_blank');
-            }
-          },{
-            text: "Register against previous image",
-            callback: async () => {
-              const prevImage = await client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: image.id }).then(response => response.data[0].image1Id);
-              const newUrl = window.location.href.replace(/^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/, `$1/register/${prevImage}/${image.id}/${location.annotationSetId}`)
-              window.open(newUrl, '_blank');
-            }
-          },{
-            text: "Register against next image",
-            callback: async () => {
-              const nextImage = await client.models.ImageNeighbour.imageNeighboursByImage1key({ image1Id: image.id }).then(response => response.data[0].image2Id);
-              // Keep everything up to and including the workspace UUID (first UUID in path)
-              const newUrl = window.location.href.replace(/^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/, `$1/register/${image.id}/${nextImage}/${location.annotationSetId}`);
-              window.open(newUrl, '_blank');
-            }
-          },{
-            text: "Download this image",
-            callback: () => {
-              getUrl({ path: 'images/' + source, options: {
-                bucket: 'inputs',
-                validateObjectExistence: true,
-                expiresIn: 300
-                }
-              }).then(async (url) => {
-                navigator.clipboard.writeText(url.url.toString());
-                
-                // Fetch the image first
-                const response = await fetch(url.url);
-                const blob = await response.blob();
-                
-                // Create object URL from blob
-                const objectUrl = window.URL.createObjectURL(blob);
-                
-                // Setup download link
-                const a = document.createElement('a');
-                a.href = objectUrl;
-                a.download = source.split('/').pop() || 'image.jpg'; // Get filename from source
-                
-                // Trigger download
-                document.body.appendChild(a);
-                a.click();
-                
-                // Cleanup
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(objectUrl);
-              })
-            }
-          }]}
-
+        contextmenuItems={contextMenuItems}
         zoom={zoom}
         zoomSnap={1}
         zoomDelta={1}
@@ -278,8 +289,16 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
           />}
         <ZoomTracker />
       </MapContainer>}
+      {belongsToCurrentProject?.isAdmin && 
+        <TestLocationModal 
+          show={modalToShow === testModalId} 
+          onClose={() => showModal(null)} 
+          locationId={location?.id || ""}
+          annotationSetId={location?.annotationSetId || ""}
+        />
+      }
       </div>
-  ), [visible, fullyLoaded, source, style, zoom, viewBounds, viewCenter, location?.id, location?.annotationSetId, location.image.id, imageFiles, image, children, next, prev, canAdvance, stats, client.models.ImageNeighbour, imageBounds])
+  ), [visible, fullyLoaded, source, style, zoom, viewBounds, viewCenter, location?.id, location?.annotationSetId, location.image.id, imageFiles, image, children, next, prev, canAdvance, stats, client.models.ImageNeighbour, imageBounds, isTest])
 }, (prevProps, nextProps) => {
       //Iterate over all the props except children and compare them for equality
   return prevProps.visible === nextProps.visible &&

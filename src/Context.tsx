@@ -41,6 +41,18 @@ export interface UserContextType {
     myMembershipHook: CRUDhook<'UserProjectMembership'>,
     jobsCompleted: number,
     setJobsCompleted: React.Dispatch<React.SetStateAction<number>>,
+
+    // user testing - maybe move to own context
+    isTesting: boolean,
+    setIsTesting: React.Dispatch<React.SetStateAction<boolean>>,
+    unannotatedJobs: number,
+    setUnannotatedJobs: React.Dispatch<React.SetStateAction<number>>,
+    currentTaskTag: string,
+    setCurrentTaskTag: React.Dispatch<React.SetStateAction<string>>,
+    currentAnnoCount: { [key: string]: number },
+    setCurrentAnnoCount: React.Dispatch<React.SetStateAction<{ [key: string]: number }>>,
+    isRegistering: boolean,
+    setIsRegistering: React.Dispatch<React.SetStateAction<boolean>>,
     } 
 
 export interface ManagementContextType {

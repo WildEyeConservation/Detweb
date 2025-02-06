@@ -72,10 +72,10 @@ export function JobsRemaining() {
           <p style={{marginBottom: "4px"}}>
             Approximate number of jobs remaining{usingBackupQueue ? " on backup queue " : " "}(globally): {jobsRemaining}
           </p>
-          <p>Approximate number of jobs completed in this session: {sessionJobsCompleted}</p>
+          <p style={{marginBottom: "0px"}}>Approximate number of jobs completed in this session: {sessionJobsCompleted}</p>
         </div>
       :
-        <div style={{textAlign: "center", flexDirection: "column", width: "80%"}}>
+        <div style={{textAlign: "center", flexDirection: "column", width: "80%", marginTop: "10px"}}>
           <ProgressBar 
             striped 
             variant="info" 

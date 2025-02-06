@@ -136,7 +136,6 @@ export default function AnnotationSetManagement() {
             size="sm"
             style={{
                 marginLeft: '10px',
-                marginRight: '10px',
               }}
             onClick={() => {
               setSelectedSets([id]);
