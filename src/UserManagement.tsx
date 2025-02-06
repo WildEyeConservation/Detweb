@@ -203,7 +203,7 @@ export default function UserManagement() {
   ];
   return (
     <>
-      <Row className="justify-content-center mt-3">
+      <Row className="justify-content-center mt-3 mb-3">
       <div>
         <h2>User Management</h2>
           <MyTable

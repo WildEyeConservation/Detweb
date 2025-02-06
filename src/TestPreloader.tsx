@@ -25,6 +25,7 @@ type ConfigType = {
     const [maxJobsCompleted, setMaxJobsCompleted] = useState(0);
     const bufferClone = useRef<{locationId: string, annotationSetId: string, testPresetId: string}[]>([]);
     const currentLocation = useRef<{locationId: string, annotationSetId: string, testPresetId: string} | null>(null);
+    const previousLocation = useRef<{locationId: string, annotationSetId: string, testPresetId: string} | null>(null);
   
     const { modalToShow, showModal, client } = useContext(GlobalContext)!;
     const { currentPM } = useContext(ProjectContext)!;
@@ -53,95 +54,92 @@ type ConfigType = {
     }
   }, [fetchedLocation]);
 
+  // Combined useEffect handling both index/fetcher and jobsCompleted
   useEffect(() => {
-    if (fetcher && bufferClone.current.length > 0) {
-      currentLocation.current = bufferClone.current[index];
-      console.log('currentLocation', currentLocation.current);
-    }
-  }, [index, fetcher]);
-  
-    useEffect(() => {
-      async function validateTest() {
-        if (isTesting) {
-          // Reset testing states
-          setIsTesting(false);
-          setUnannotatedJobs(0);
-          setCurrentAnnoCount({});
-          setJobsCompleted((j) => j - 1); // Tests are not counted as jobs
+    // Function to validate the test based on jobsCompleted
+    async function validateTest() {
+      if (isTesting && previousLocation.current) {
+        // Reset testing states
+        setIsTesting(false);
+        setUnannotatedJobs(0);
+        setCurrentAnnoCount({});
+        setJobsCompleted((j) => j - 1); // Tests are not counted as jobs
 
-          // Fetch necessary data
-          const categoryCounts = await fetchAllPaginatedResults(
-            client.models.LocationAnnotationCount.categoryCountsByLocationIdAndAnnotationSetId,
-            {
-              locationId: currentLocation.current!.locationId,
-              annotationSetId: { eq: currentLocation.current!.annotationSetId },
-              selectionSet: ['categoryId', 'count'],
-            }
-          );
+        const loc = previousLocation.current;
 
-          const { data: testPreset } = await client.models.TestPreset.get({
-            id: currentLocation.current!.testPresetId,
-            selectionSet: ['accuracy'],
-          });
-
-          const categories = await fetchAllPaginatedResults(
-            client.models.TestPresetCategory.categoriesByTestPresetId,
-            {
-              testPresetId: currentLocation.current!.testPresetId,
-              selectionSet: ['categoryId'],
-            }
-          );
-
-          // Filter user annotations based on test preset categories
-          const filteredUserAnnotations = Object.entries(currentAnnoCount).filter(
-            ([categoryId]) => categories.some((c) => c.categoryId === categoryId)
-          );
-
-          const totalUserCounts = filteredUserAnnotations.reduce((acc, [_, count]) => acc + count, 0);
-          const totalTestCounts = categoryCounts
-            .filter((count) => categories.some((c) => c.categoryId === count.categoryId))
-            .reduce((acc, count) => acc + (count.count as number), 0);
-
-          const missedAnimals = totalTestCounts - totalUserCounts;
-
-          // Calculate Undercounted and Overcounted Animals
-          const undercountedAnimals = missedAnimals > 0 ? missedAnimals : 0;
-          const overcountedAnimals = missedAnimals < 0 ? Math.abs(missedAnimals) : 0;
-
-          // Adjusted Total Animals for Accuracy Calculation
-          const adjustedTotalAnimals = totalTestCounts + overcountedAnimals;
-
-          // Calculate Annotation Accuracy
-          const annotationAccuracy =
-            adjustedTotalAnimals > 0
-              ? ((totalTestCounts - undercountedAnimals) / adjustedTotalAnimals) * 100
-              : 0;
-
-          // Determine if the user passed based on required accuracy
-          const requiredAccuracy = testPreset?.accuracy ?? 0;
-          const passed = annotationAccuracy >= requiredAccuracy;
-
-          // Record Test Result
-          const { data: testResult } = await client.models.TestResult.create({
-            userId: currentPM.userId,
-            testPresetId: currentLocation.current!.testPresetId,
-            locationId: currentLocation.current!.locationId,
-            annotationSetId: currentLocation.current!.annotationSetId,
-            testAnimals: totalTestCounts,
-            totalMissedAnimals: missedAnimals,
-            passed: passed,
-          });
-
-          // Track count of animals missed vs animals in tests, by category
-          for (const [categoryId, count] of filteredUserAnnotations) {
-            const categoryCount = categoryCounts.find((c) => c.categoryId === categoryId)?.count as number;
-            await client.models.TestResultCategoryCount.create({
-              testResultId: testResult!.id,
-              categoryId: categoryId,
-              userCount: count,
-              testCount: categoryCount,
-            });
+        // Fetch necessary data
+        const categoryCounts = await fetchAllPaginatedResults(
+          client.models.LocationAnnotationCount.categoryCountsByLocationIdAndAnnotationSetId,
+          {
+            locationId: loc.locationId,
+            annotationSetId: { eq: loc.annotationSetId },
+            selectionSet: ['categoryId', 'count'],
           }
+        );
+
+        const { data: testPreset } = await client.models.TestPreset.get({
+          id: loc.testPresetId,
+          selectionSet: ['accuracy'],
+        });
+
+        const categories = await fetchAllPaginatedResults(
+          client.models.TestPresetCategory.categoriesByTestPresetId,
+          {
+            testPresetId: loc.testPresetId,
+            selectionSet: ['categoryId'],
+          }
+        );
+
+        // Filter user annotations based on test preset categories
+        const filteredUserAnnotations = Object.entries(currentAnnoCount).filter(
+          ([categoryId]) => categories.some((c) => c.categoryId === categoryId)
+        );
+
+        const totalUserCounts = filteredUserAnnotations.reduce((acc, [_, count]) => acc + count, 0);
+        const totalTestCounts = categoryCounts
+          .filter((count) => categories.some((c) => c.categoryId === count.categoryId))
+          .reduce((acc, count) => acc + (count.count as number), 0);
+
+        const missedAnimals = totalTestCounts - totalUserCounts;
+
+        // Calculate Undercounted and Overcounted Animals
+        const undercountedAnimals = missedAnimals > 0 ? missedAnimals : 0;
+        const overcountedAnimals = missedAnimals < 0 ? Math.abs(missedAnimals) : 0;
+
+        // Adjusted Total Animals for Accuracy Calculation
+        const adjustedTotalAnimals = totalTestCounts + overcountedAnimals;
+
+        // Calculate Annotation Accuracy
+        const annotationAccuracy =
+          adjustedTotalAnimals > 0
+            ? ((totalTestCounts - undercountedAnimals) / adjustedTotalAnimals) * 100
+            : 0;
+
+        // Determine if the user passed based on required accuracy
+        const requiredAccuracy = testPreset?.accuracy ?? 0;
+        const passed = annotationAccuracy >= requiredAccuracy;
+
+        // Record Test Result
+        const { data: testResult } = await client.models.TestResult.create({
+          userId: currentPM.userId,
+          testPresetId: loc.testPresetId,
+          locationId: loc.locationId,
+          annotationSetId: loc.annotationSetId,
+          testAnimals: totalTestCounts,
+          totalMissedAnimals: missedAnimals,
+          passed: passed,
+        });
+
+        // Track count of animals missed vs animals in tests, by category
+        for (const [categoryId, count] of filteredUserAnnotations) {
+          const categoryCount = categoryCounts.find((c) => c.categoryId === categoryId)?.count as number;
+          await client.models.TestResultCategoryCount.create({
+            testResultId: testResult!.id,
+            categoryId: categoryId,
+            userCount: count,
+            testCount: categoryCount,
+          });
+        }
 
           // Show appropriate modal based on pass/fail
           if (config?.postTestConfirmation) {
@@ -160,18 +158,26 @@ type ConfigType = {
         if (jobsCompleted > maxJobsCompleted) {
           setMaxJobsCompleted(jobsCompleted);
 
-          if (Object.values(currentAnnoCount).reduce((acc, count) => acc + count, 0) > 0) {
-            setUnannotatedJobs(0);
-          } else {
-            setUnannotatedJobs((j) => j + 1);
-          }
+        if (Object.values(currentAnnoCount).reduce((acc, count) => acc + count, 0) > 0) {
+          setUnannotatedJobs(0);
+        } else {
+          setUnannotatedJobs((j) => j + 1);
         }
-
-        setCurrentAnnoCount({});
       }
 
-      validateTest();
-    }, [jobsCompleted]);
+      setCurrentAnnoCount({});
+    }
+
+    validateTest();
+
+    // Handle index and fetcher updates
+    if (fetcher && bufferClone.current.length > 0) {
+      // Store the current location before updating
+      previousLocation.current = currentLocation.current;
+      currentLocation.current = bufferClone.current[index];
+      console.log('currentLocation updated to', currentLocation.current);
+    }
+  }, [index, fetcher, jobsCompleted]);
   
     useEffect(() => {
       if (isRegistering || !fetcher || !config ||
@@ -183,6 +189,7 @@ type ConfigType = {
           return;
       }
   
+      alert('setting isTesting to true');
       setIsTesting(true);
     }, [unannotatedJobs]);
   

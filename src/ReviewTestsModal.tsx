@@ -41,8 +41,8 @@ export default function ReviewTestsModal({show, onClose}: {show: boolean, onClos
             id: id,
             message_id: id,
             location: {
-                id: location.locationId,
-                annotationSetId: location.annotationSetId,
+                id: location.locationId || '',
+                annotationSetId: location.annotationSetId || '',
             }, 
             ack: () => {
                 console.log('Ack successful for test review');
@@ -57,11 +57,10 @@ export default function ReviewTestsModal({show, onClose}: {show: boolean, onClos
 
         // delete all inactive presets that were part of ogActivePresets
         for (const ogPreset of ogActivePresets.current) {
-            if (!filteredPresets.some((sp) => sp.value === ogPreset.id)) {
+            if (!locationPresets.some((sp) => sp.value === ogPreset.id)) {
                 await client.models.TestPresetLocation.delete(
                     {
                         testPresetId: ogPreset.id,
-
                         locationId: cLocation.locationId,
                         annotationSetId: cLocation.annotationSetId
                     }
@@ -70,7 +69,7 @@ export default function ReviewTestsModal({show, onClose}: {show: boolean, onClos
         }
 
         // create new active presets that are not part of ogActivePresets
-        for (const preset of filteredPresets) {
+        for (const preset of locationPresets) {
             if (!ogActivePresets.current.some((p) => p.id === preset.value)) {
                 await client.models.TestPresetLocation.create(
                     {
@@ -153,6 +152,7 @@ export default function ReviewTestsModal({show, onClose}: {show: boolean, onClos
 
             currentLocation.current = l;
 
+            ogActivePresets.current = lPresets.map((p) => ({id: p.testPresetId}));
             setLocationPresets(lPresets.map((p) => ({label: presets.find((pr) => pr.id === p.testPresetId)!.name, value: p.testPresetId}))); 
         }
 
@@ -175,7 +175,6 @@ export default function ReviewTestsModal({show, onClose}: {show: boolean, onClos
                 allLocations.current.push(...locations);
             }
 
-            ogActivePresets.current = allPresets.map((p) => ({id: p.id}));
             setPresets(allPresets.map((p) => ({id: p.id, name: p.name, accuracy: p.accuracy})));
             
             if(allLocations.current.length > 0) {
@@ -209,13 +208,14 @@ export default function ReviewTestsModal({show, onClose}: {show: boolean, onClos
                 <Form>
                     <Form.Group className="d-flex flex-row gap-3">
                         <div className="flex-grow-1">
-                            <Form.Label>Filter by presets</Form.Label>
+                            <Form.Label>Filter locations by presets</Form.Label>
                             <Select
                                 value={filteredPresets}
                                 options={presets.map((p) => ({label: p.name, value: p.id}))}
                                 onChange={(e) => {
                                     setFilteredPresets(e);
                                     filteredLocations.current = allLocations.current.filter((l) => e.some((p) => p.value === l.testPresetId));
+                                    setIndex(0);
                                 }}
                                 isMulti
                                 styles={{

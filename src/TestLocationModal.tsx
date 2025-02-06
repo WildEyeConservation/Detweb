@@ -33,7 +33,11 @@ export default function TestLocationModal({show, onClose, locationId, annotation
             ogActivePresets.current = activePresets.map((p) => ({id: p.testPresetId}));
 
             setPresets(allPresets.map((p) => ({id: p.id, name: p.name, active: activePresets.some((ap) => ap.testPresetId === p.id)})));
+            setSelectedPresets(allPresets
+                .filter((p) => activePresets.some((ap) => ap.testPresetId === p.id))
+                .map((p) => ({label: p.name, value: p.id})));
         }
+
 
         if (show) getPresets();
     }, [show])
@@ -163,6 +167,9 @@ export default function TestLocationModal({show, onClose, locationId, annotation
                 </Form>
             </Modal.Body>
             <Modal.Footer>
+                <Button variant="secondary" onClick={onClose}>
+                    Cancel
+                </Button>
                 <Button variant="primary" onClick={handleSubmit}>
                     Save
                 </Button>

@@ -13,10 +13,10 @@ export default function TestOutcomeModal({show, onClose}: {show: boolean, onClos
             </Modal.Header>
             <Modal.Body>
                 {modalToShow === 'testFailedModal' && 
-                    <p>Seems like you missed some animals. Maybe it's time to take a break?</p>
+                    <p>Oh no! You failed a test. Maybe it's time to take a break?</p>
                 }
                 {modalToShow === 'testPassedModal' && 
-                    <p>Seems like you got all the animals. Good job!</p>
+                    <p>You passed a test! Good job!</p>
                 }
             </Modal.Body>
             <Modal.Footer>

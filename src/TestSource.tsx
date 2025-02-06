@@ -67,8 +67,9 @@ export default function useTesting(useSecondaryCandidates: boolean = false) {
 
         const seenLocations = testedLocations
         .filter(l => l !== null && presets.some(p => p.testPresetId === l.testPresetId))
-        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-        .filter((location, index, self) => index === self.findIndex((t) => t.locationId === location.locationId));
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .filter((location, index, self) => index === self.findIndex((t) => t.locationId === location.locationId))
+        .reverse();
 
         const testLocations = [];
         for (const preset of presets) {
@@ -86,15 +87,14 @@ export default function useTesting(useSecondaryCandidates: boolean = false) {
         // newest test locations, that have not yet been seen, are first up in the array
         const locations = testLocations
         .filter(l => l !== null && !seenLocations.some(sl => sl.locationId === l.locationId))
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-        // add seen locations to the end of the array
+        // add seen locations to the end of the array as backup
         for (const seenLocation of seenLocations) {
             locations.push({locationId: seenLocation.locationId, createdAt: seenLocation.createdAt, annotationSetId: seenLocation.annotationSetId, testPresetId: seenLocation.testPresetId});
         }
 
         primaryCandidates.current = locations.map(l => ({locationId: l.locationId, annotationSetId: l.annotationSetId, testPresetId: l.testPresetId}));
-    
 
         if (primaryCandidates.current.length > 3) {
             setHasPrimaryCandidates(true);
@@ -179,12 +179,6 @@ export default function useTesting(useSecondaryCandidates: boolean = false) {
             ...primaryCandidates.current, 
             // ...secondaryCandidates.current
         ];
-
-        // determine if there are enough candidates
-        if (i >= candidateEntries.length - 4) {
-            setI(1);
-            console.log("No new tests");
-        }
 
         const result = candidateEntries[i];
         setI(prev => prev + 1);

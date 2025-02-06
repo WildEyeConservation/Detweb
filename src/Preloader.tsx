@@ -87,12 +87,12 @@ export function PreloaderFactory(WrappedComponent: React.ComponentType<any>) {
                   setIsReady={()=>{}}
                   visible={visible && i === index - subsetStart}
                   next={i<subset.length-1 ? ()=>{
-                    setIndex(index=>index+1)
                     setJobsCompleted(x => x + 1);
+                    setIndex(index=>index+1)
                   } : undefined}
                   prev={i>0 ? ()=>{
-                    setIndex(index=>index-1)
                     setJobsCompleted(x => x - 1);
+                    setIndex(index=>index-1)
                   } : undefined} 
                 />
                 <div></div>
