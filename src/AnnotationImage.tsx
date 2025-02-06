@@ -53,7 +53,7 @@ export default function AnnotationImage(props) {
     )))
   }, [props.taskTag,location.image.id,annotationSetId]);
 
-  return (<ImageContextFromHook hook={annotationsHook} image={location.image} secondaryQueueUrl={props.secondaryQueueUrl} taskTag={props.taskTag}>
+  return (<ImageContextFromHook hook={annotationsHook} locationId={location.id} image={location.image} secondaryQueueUrl={props.secondaryQueueUrl} taskTag={props.taskTag}>
             <div style={{ 
               display: 'flex', 
               flexDirection: 'column', 

@@ -7,10 +7,11 @@ import { SendMessageCommand } from "@aws-sdk/client-sqs";
 import { inv } from "mathjs";
 import { array2Matrix, makeTransform } from "./utils";
 
-export function ImageContextFromHook({ hook, image, children, secondaryQueueUrl, taskTag }: { hook: AnnotationsHook, image: ImageType, children: React.ReactNode,secondaryQueueUrl?:string,taskTag:string }) {
+export function ImageContextFromHook({ hook, locationId, image, children, secondaryQueueUrl, taskTag }: { hook: AnnotationsHook, locationId: string, image: ImageType, children: React.ReactNode,secondaryQueueUrl?:string,taskTag:string }) {
     const [annoCount, setAnnoCount] = useState(0)
     const {client} = useContext(GlobalContext);
     const [startLoadingTimestamp, _] = useState<number>(Date.now())
+
     const [visibleTimestamp, setVisibleTimestamp] = useState<number | undefined>(undefined)
     const [fullyLoadedTimestamp, setFullyLoadedTimestamp] = useState<number | undefined>(undefined)
     const {getSqsClient} = useContext(UserContext);
@@ -43,10 +44,11 @@ export function ImageContextFromHook({ hook, image, children, secondaryQueueUrl,
         if (secondaryQueueUrl) {
             getSqsClient().then(sqsClient => sqsClient.send(new SendMessageCommand({
                 QueueUrl: secondaryQueueUrl,
-                MessageBody: JSON.stringify({location:{x:annotation.x,y:annotation.y,width:100,height:100,image,annotationSetId:annotation.setId},allowOutside:true,zoom,taskTag:taskTag+'Secondary'})
+                MessageBody: JSON.stringify({location:{id: locationId, x:annotation.x,y:annotation.y,width:100,height:100,image,annotationSetId:annotation.setId},allowOutside:true,zoom,taskTag: taskTag ? taskTag + ' - Secondary' : 'Secondary'})
             })));
         }
         setAnnoCount(old=>old + 1)
+
         setCurrentAnnoCount(old=>{
             const newCount = {...old};
             newCount[annotation.categoryId] = (newCount[annotation.categoryId] || 0) + 1;
@@ -66,7 +68,7 @@ export function ImageContextFromHook({ hook, image, children, secondaryQueueUrl,
         if (secondaryQueueUrl) {
             getSqsClient().then(sqsClient => sqsClient.send(new SendMessageCommand({
                 QueueUrl: secondaryQueueUrl,
-                MessageBody: JSON.stringify({location:{x:annotation.x,y:annotation.y,width:100,height:100,image,annotationSetId:annotation.setId},allowOutside:true,zoom,taskTag:taskTag+'Secondary'})
+                MessageBody: JSON.stringify({location:{id: locationId, x:annotation.x,y:annotation.y,width:100,height:100,image,annotationSetId:annotation.setId},allowOutside:true,zoom,taskTag: taskTag ? taskTag + ' - Secondary' : 'Secondary'})
             })));
         }
 
