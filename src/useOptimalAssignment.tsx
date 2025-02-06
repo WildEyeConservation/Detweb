@@ -210,11 +210,11 @@ export function useOptimalAssignment({
           proposedObjectId: anno.proposedObjectId,
           objectId: anno.objectId 
         });
-        const { shadow, proposedObjectId, ...annoStripped } = anno;
+        const { shadow, proposedObjectId, image, object, project, set, createdAt, updatedAt,owner,category,id, ...annoStripped } = anno;
         if (shadow) {
           annotationsHooks[i].create({...annoStripped, objectId:anno.objectId || anno.proposedObjectId});
         } else {
-          annotationsHooks[i].update({...annoStripped, objectId:anno.objectId || anno.proposedObjectId});
+          annotationsHooks[i].update({...annoStripped, id, objectId:anno.objectId || anno.proposedObjectId});
         }
       }, [annotationsHooks[i]]),
       delete: annotationsHooks[i].delete,
