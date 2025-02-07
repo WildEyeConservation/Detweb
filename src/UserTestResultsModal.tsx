@@ -16,7 +16,8 @@ type Result = {
     };
     testAnimals: number;
     totalMissedAnimals: number;
-    passed: boolean;
+    passedOnCategories: boolean;
+    passedOnTotal: boolean;
     categoryCounts: {
         categoryId: string;
         userCount: number;
@@ -57,7 +58,7 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
             
             const results = await fetchAllPaginatedResults(client.models.TestResult.testResultsByUserId, {
                 userId: userId,
-                selectionSet: ['id', 'testPreset.name', 'testAnimals', 'totalMissedAnimals', 'passed', 'createdAt', 'categoryCounts.categoryId', 'categoryCounts.userCount', 'categoryCounts.testCount', 'categoryCounts.category.name']
+                selectionSet: ['id', 'testPreset.name', 'testAnimals', 'totalMissedAnimals', 'passedOnCategories', 'passedOnTotal', 'createdAt', 'categoryCounts.categoryId', 'categoryCounts.userCount', 'categoryCounts.testCount', 'categoryCounts.category.name']
             });
 
             setResults(results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
@@ -73,20 +74,20 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
         {content: "Preset", style: {width: "20%"}, sort: true},
         {content: "Test Animals", style: {width: "20%"}, sort: true},
         {content: "Missed Animals", style: {width: "20%"}, sort: true},
-        {content: "Passed", style: {width: "20%"}, sort: true},
-
+        {content: "Passed on Categories", style: {width: "20%"}, sort: true},
+        {content: "Passed on Total", style: {width: "20%"}, sort: true},
     ]
 
     const tableData = results.map((result) => {
         const date = new Date(result.createdAt).toISOString().split('T');
         return {
             id: result.id,
-            rowData: [`${date[0].replace(/-/g, '/')} - ${date[1].substring(0, 8)}`, result.testPreset.name, result.testAnimals, result.totalMissedAnimals, result.passed ? "Yes" : "No"]
+            rowData: [`${date[0].replace(/-/g, '/')} - ${date[1].substring(0, 8)}`, result.testPreset.name, result.testAnimals, result.totalMissedAnimals, result.passedOnCategories ? "Yes" : "No", result.passedOnTotal ? "Yes" : "No"]
         }
 
     })
 
-    const passed = results.filter((result) => result.passed).length;
+    const passed = results.filter((result) => result.passedOnCategories).length;
     const failed = results.length - passed;
     const totalAnimals = results.reduce((acc, result) => acc + result.testAnimals, 0);
 
@@ -94,13 +95,10 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
     const undercountedAnimals = results.reduce((acc, result) => acc + (result.totalMissedAnimals > 0 ? result.totalMissedAnimals : 0), 0);
     const overcountedAnimals = results.reduce((acc, result) => acc + (result.totalMissedAnimals < 0 ? Math.abs(result.totalMissedAnimals) : 0), 0);
 
-    // Adjusted Total Animals for Accuracy Calculation
-    const adjustedTotalAnimals = totalAnimals + overcountedAnimals;
-
     // Calculate Annotation Accuracy
-    const annotationAccuracy = adjustedTotalAnimals > 0 
-        ? (((totalAnimals - undercountedAnimals) / adjustedTotalAnimals) * 100).toFixed(2)
-        : "0.00";
+    const annotationAccuracy = totalAnimals > 0 
+        ? (((totalAnimals - undercountedAnimals) / totalAnimals) * 100)
+        : 0;
 
     const countsByCategory = results.flatMap((result) => result.categoryCounts).reduce((acc, category) => {
         if (!acc[category.categoryId]) {
@@ -113,8 +111,6 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
         acc[category.categoryId].userCount += category.userCount;
         acc[category.categoryId].testCount += category.testCount;
         return acc;
-
-
     }, {} as Record<string, {userCount: number, testCount: number, name: string}>);
 
     const accuracyByCategory = Object.entries(countsByCategory).map(([categoryId, counts]) => {
@@ -138,14 +134,17 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
             ]
         },
         {
-            content: [`Tests passed: ${passed}`, `Tests failed: ${failed}`]
+            content: [
+                `Annotation rate: ${annotationAccuracy.toFixed(2)}%`,
+                `${annotationAccuracy > 100 ? "Over" : "Under"} count rate: ${annotationAccuracy > 100 ? (annotationAccuracy - 100).toFixed(2) : (100 - annotationAccuracy).toFixed(2)}%`
+            ]
         },
         {
             content: [
-                `Annotation accuracy: ${annotationAccuracy}%`,
-                `Test success rate: ${((passed / results.length) * 100).toFixed(2)}%`
+                `Test success rate: ${((passed / results.length) * 100).toFixed(2)}%`,
+                `Tests passed and failed: ${passed} - ${failed}`,
             ]
-        }
+        },
     ]
 
     function exportResults() {
@@ -158,7 +157,8 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
                 preset: result.testPreset.name,
                 testAnimals: result.testAnimals,
                 missedAnimals: result.totalMissedAnimals,
-                passed: result.passed
+                passedOnCategories: result.passedOnCategories,
+                passedOnTotal: result.passedOnTotal
             })),
             fileName: `${username}-test-results`,
             exportType: 'csv',
@@ -206,7 +206,6 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
 
     return (
         <Modal show={show} onHide={onClose} size="xl">
-
             <Modal.Header closeButton>
                 <Modal.Title>Test results for {username}</Modal.Title>
             </Modal.Header>
@@ -227,7 +226,6 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
                             <MyTable 
                                 tableHeadings={headings} 
                                 tableData={tableData} 
-
                                 pagination={true}
                             />
                         </Tab>
@@ -238,7 +236,6 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
                             <BarChart
                                 dataset={accuracyByCategory}
                                 margin={{bottom: 80}}
-
                                 sx={
                                     {
                                         "& .MuiChartsAxis-bottom .MuiChartsAxis-line":{

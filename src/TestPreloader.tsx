@@ -100,34 +100,31 @@ type ConfigType = {
           .filter((count) => categories.some((c) => c.categoryId === count.categoryId))
           .reduce((acc, count) => acc + (count.count as number), 0);
 
-        const missedAnimals = totalTestCounts - totalUserCounts;
-
-        // Calculate Undercounted and Overcounted Animals
-        const undercountedAnimals = missedAnimals > 0 ? missedAnimals : 0;
-        const overcountedAnimals = missedAnimals < 0 ? Math.abs(missedAnimals) : 0;
-
-        // Adjusted Total Animals for Accuracy Calculation
-        const adjustedTotalAnimals = totalTestCounts + overcountedAnimals;
-
-        // Calculate Annotation Accuracy
-        const annotationAccuracy =
-          adjustedTotalAnimals > 0
-            ? ((totalTestCounts - undercountedAnimals) / adjustedTotalAnimals) * 100
-            : 0;
-
-        // Determine if the user passed based on required accuracy
         const requiredAccuracy = testPreset?.accuracy ?? 0;
-        const passed = annotationAccuracy >= requiredAccuracy;
 
-        // Record Test Result
+        const minUserCounts = totalTestCounts * (requiredAccuracy / 100);
+        const maxUserCounts = totalTestCounts * (2 - requiredAccuracy / 100);
+
+        const annotationAccuracy =
+          totalUserCounts >= minUserCounts && totalUserCounts <= maxUserCounts
+            ? (totalUserCounts / totalTestCounts) * 100
+            : 0;
+        
+        const passedOnCategories = annotationAccuracy >= requiredAccuracy;
+
+        const allUserCounts = Object.values(currentAnnoCount).reduce((acc, count) => acc + count, 0);
+        const passedOnTotal = allUserCounts >= totalTestCounts * (requiredAccuracy/100) && 
+          allUserCounts <= totalTestCounts * (2 - requiredAccuracy/100);
+
         const { data: testResult } = await client.models.TestResult.create({
           userId: currentPM.userId,
           testPresetId: loc.testPresetId,
           locationId: loc.locationId,
           annotationSetId: loc.annotationSetId,
           testAnimals: totalTestCounts,
-          totalMissedAnimals: missedAnimals,
-          passed: passed,
+          totalMissedAnimals: totalTestCounts - totalUserCounts,
+          passedOnCategories: passedOnCategories,
+          passedOnTotal: passedOnTotal,
         });
 
         if (!testResult) {
@@ -150,7 +147,7 @@ type ConfigType = {
           // User missed all animals; create entries with userCount = 0
           for (const category of categories) {
             const categoryCount = categoryCounts.find((c) => c.categoryId === category.categoryId)?.count || 0;
-            const { data: testResultCategoryCount } = await client.models.TestResultCategoryCount.create({
+            await client.models.TestResultCategoryCount.create({
               testResultId: testResult.id,
               categoryId: category.categoryId,
               userCount: 0,
@@ -162,7 +159,7 @@ type ConfigType = {
 
         // Show appropriate modal based on pass/fail
         if (config?.postTestConfirmation) {
-          if (passed) {
+          if (passedOnCategories || passedOnTotal) {
             showModal('testPassedModal');
           } else {
             showModal('testFailedModal');
