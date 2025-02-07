@@ -36,6 +36,7 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
     const [results, setResults] = useState<Result[]>([]);
     const [username, setUsername] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [isPurging, setIsPurging] = useState(false);
 
     const [setCompilingFiles, setTotalFilesCompiled] = useUpdateProgress({
         taskId: `Compiling files`,
@@ -63,8 +64,9 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
 
             setIsLoading(false);
         }
-        if (show) setup();
-    }, [show]);
+        if (show || !isPurging) setup();
+    }, [show, isPurging]);
+
 
     const headings = [
         {content: "Date", style: {width: "20%"}, sort: true},
@@ -177,8 +179,34 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
         setCompilingFiles(2);
     }
 
+    async function purgeResults() {
+        if (!confirm("Are you sure you want to purge all results for this user?")) {
+            return;
+        }
+
+        setIsPurging(true);
+
+        const results = await fetchAllPaginatedResults(client.models.TestResult.testResultsByUserId, {
+            userId: userId,
+            selectionSet: ['id', 'categoryCounts.categoryId']
+        });
+
+
+        for (const result of results) {
+            await client.models.TestResult.delete({id: result.id});
+            
+            for (const categoryId of result.categoryCounts.map((category) => category.categoryId)) {
+                await client.models.TestResultCategoryCount.delete({testResultId: result.id, categoryId: categoryId});
+            }
+        }
+
+        setIsPurging(false);
+    }
+
+
     return (
         <Modal show={show} onHide={onClose} size="xl">
+
             <Modal.Header closeButton>
                 <Modal.Title>Test results for {username}</Modal.Title>
             </Modal.Header>
@@ -204,7 +232,9 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
                             />
                         </Tab>
                         <Tab eventKey="ca" title="Category Accuracy" className="text-white">
-                            <p className="text-center mb-0" style={{fontSize: "1.5rem"}}>Over/Under Count Percentage By Category</p>
+                            <p className="text-center mb-0" style={{fontSize: "1.5rem"}}>
+                                Over/Under Count Percentage By Category
+                            </p>
                             <BarChart
                                 dataset={accuracyByCategory}
                                 margin={{bottom: 80}}
@@ -264,15 +294,20 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
                     </Tabs>
                 )}
             </Modal.Body>
-            <Modal.Footer>
-                <Button variant="secondary" onClick={onClose}>
-                    Close
-                </Button>
-                { results.length > 0 && (
-                    <Button variant="primary" onClick={exportResults}>
-                        Export Results
-                    </Button>
+            <Modal.Footer className={results.length > 0 ? "justify-content-between" : "justify-content-end"}>
+                {results.length > 0 && (
+                    <Button variant="danger" onClick={purgeResults} disabled={isPurging}>Purge Results</Button>
                 )}
+                <div className="d-flex gap-2">
+                    <Button variant="secondary" onClick={onClose} className="me-1">
+                        Close
+                    </Button>
+                    { results.length > 0 && (
+                        <Button variant="primary" onClick={exportResults}>
+                            Export Results
+                        </Button>
+                    )}
+                </div>
             </Modal.Footer>
         </Modal>
     )
