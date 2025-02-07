@@ -394,7 +394,8 @@ const schema = a.schema({
     annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
     testAnimals: a.integer().required(),
     totalMissedAnimals: a.integer().required(),
-    passed: a.boolean().required(),
+    passedOnCategories: a.boolean().required(),
+    passedOnTotal: a.boolean().required(),
     categoryCounts: a.hasMany('TestResultCategoryCount', 'testResultId')
   })
   .authorization(allow => [allow.authenticated()])
