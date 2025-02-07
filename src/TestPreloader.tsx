@@ -130,33 +130,52 @@ type ConfigType = {
           passed: passed,
         });
 
-        // Track count of animals missed vs animals in tests, by category
-        for (const [categoryId, count] of filteredUserAnnotations) {
-          const categoryCount = categoryCounts.find((c) => c.categoryId === categoryId)?.count as number;
-          await client.models.TestResultCategoryCount.create({
-            testResultId: testResult!.id,
-            categoryId: categoryId,
-            userCount: count,
-            testCount: categoryCount,
-          });
-        }
-
-          // Show appropriate modal based on pass/fail
-          if (config?.postTestConfirmation) {
-            if (passed) {
-              showModal('testPassedModal');
-            } else {
-              showModal('testFailedModal');
-            }
-          }
-          
+        if (!testResult) {
+          console.error('Failed to create TestResult');
           return;
         }
+
+        // Track count of animals missed vs animals in tests, by category
+        if (filteredUserAnnotations.length > 0) {
+          for (const [categoryId, count] of filteredUserAnnotations) {
+            const categoryCount = categoryCounts.find((c) => c.categoryId === categoryId)?.count || 0;
+            await client.models.TestResultCategoryCount.create({
+              testResultId: testResult.id,
+              categoryId: categoryId,
+              userCount: count,
+              testCount: categoryCount,
+            });
+          }
+        } else {
+          // User missed all animals; create entries with userCount = 0
+          for (const category of categories) {
+            const categoryCount = categoryCounts.find((c) => c.categoryId === category.categoryId)?.count || 0;
+            const { data: testResultCategoryCount } = await client.models.TestResultCategoryCount.create({
+              testResultId: testResult.id,
+              categoryId: category.categoryId,
+              userCount: 0,
+              testCount: categoryCount,
+            });
+
+          }
+        }
+
+        // Show appropriate modal based on pass/fail
+        if (config?.postTestConfirmation) {
+          if (passed) {
+            showModal('testPassedModal');
+          } else {
+            showModal('testFailedModal');
+          }
+        }
+
+        return;
+      }
     
-        // This only counts unannotated jobs when continuing to the next job from the 'newest' (maxJobsCompleted) job.
-        // If a user went back to a previous job, and annotated it, it would have no effect on the unannotatedJobs count.
-        if (jobsCompleted > maxJobsCompleted) {
-          setMaxJobsCompleted(jobsCompleted);
+      // This only counts unannotated jobs when continuing to the next job from the 'newest' (maxJobsCompleted) job.
+      // If a user went back to a previous job, and annotated it, it would have no effect on the unannotatedJobs count.
+      if (jobsCompleted > maxJobsCompleted) {
+        setMaxJobsCompleted(jobsCompleted);
 
         if (Object.values(currentAnnoCount).reduce((acc, count) => acc + count, 0) > 0) {
           setUnannotatedJobs(0);
