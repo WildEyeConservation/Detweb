@@ -293,6 +293,7 @@ const schema = a.schema({
     batchSize: a.integer().default(0),
     backupUsers: a.hasMany('UserProjectMembership', 'backupQueueId'),
     url: a.url(),
+    zoom: a.integer(),
   }).authorization(allow => [allow.authenticated()])
     //.authorization(allow => [allow.groupDefinedIn('projectId')])
     .secondaryIndexes((index) => [index('projectId').queryField('queuesByProjectId')]),

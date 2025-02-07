@@ -4,10 +4,10 @@ import { useState } from "react";
 import { ManagementContext } from "./Context";
 import { useContext, useEffect } from "react";
 
-
 export default function EditQueueModal({show, onClose, queueId}: {show: boolean, onClose: () => void, queueId: string}) {
     const [limitedBatchSize, setLimitedBatchSize] = useState<boolean>(false);
     const [batchSize, setBatchSize] = useState<number>(0);
+    const [zoom, setZoom] = useState<number | undefined>(undefined);
     const { queuesHook: { data: queues, update: updateQueue } } = useContext(ManagementContext)!;
 
     useEffect(() => {
@@ -15,11 +15,12 @@ export default function EditQueueModal({show, onClose, queueId}: {show: boolean,
         if (queue) {
             setLimitedBatchSize(queue.batchSize !== 0 && queue.batchSize !== null);
             setBatchSize(queue.batchSize || 100);
+            setZoom(queue.zoom || undefined);
         }
     }, [show, queues]);
 
     function handleSave() {
-        updateQueue({id: queueId, batchSize: limitedBatchSize ? batchSize : 0});
+        updateQueue({id: queueId, batchSize: limitedBatchSize ? batchSize : 0, zoom: zoom});
         onClose();
     }
 
@@ -41,6 +42,18 @@ export default function EditQueueModal({show, onClose, queueId}: {show: boolean,
                             }}
                         /> 
                         {limitedBatchSize && <Form.Control type="number" value={batchSize} onChange={(e) => setBatchSize(e.target.value)} />}
+                    </Form.Group>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Zoom level</Form.Label>
+                        <Form.Select 
+                            value={zoom} 
+                            onChange={(e) => {setZoom(e.target.value=="auto" ? undefined : Number(e.target.value)); console.log(zoom)}}
+                        >
+                            <option value="auto">Auto</option>
+                            {[...Array(13)].map((_, i) => (
+                            <option key={i} value={i}>Level {i}</option>
+                            ))}
+                        </Form.Select>
                     </Form.Group>
                 </Form>
             </Modal.Body>
