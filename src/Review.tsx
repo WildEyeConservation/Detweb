@@ -106,7 +106,7 @@ export function Review() {
             flexDirection: 'column',
             alignItems: 'center',
             width: '100%',
-            gap: '1rem'  // Adds vertical spacing between components
+            // gap: '16px'
         }}>
             <div className="controls" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px' }}>
                 <Select
@@ -138,14 +138,14 @@ export function Review() {
             ) : bufferSource &&
                 <>
                     <Preloader key={selectedAnnotationSet + selectedCategories.join(',')} index={index} setIndex={setIndex} fetcher={()=>bufferSource.fetch()} preloadN={2} historyN={2} />
-                    <div style={{ width: '80%', margin: '1rem 0' }}>
+                    <div style={{ width: '80%', marginTop: '840px' }}>
                         <Form.Range
                             value={index}
                             onChange={(e) => setIndex(parseInt(e.target.value))}
                             min={0}
                             max={annotations.length-1}
                         />
-                        <div style={{ textAlign: 'center', marginTop: '0.5rem' }}>
+                        <div style={{ textAlign: 'center'}}>
                             Done with {index} out of {annotations.length} locations
                         </div>
                     </div>

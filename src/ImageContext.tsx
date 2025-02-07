@@ -7,15 +7,22 @@ import { SendMessageCommand } from "@aws-sdk/client-sqs";
 import { inv } from "mathjs";
 import { array2Matrix, makeTransform } from "./utils";
 
-export function ImageContextFromHook({ hook, image, children, secondaryQueueUrl, taskTag }: { hook: AnnotationsHook, image: ImageType, children: React.ReactNode,secondaryQueueUrl?:string,taskTag:string }) {
+export function ImageContextFromHook({ hook, locationId, image, children, secondaryQueueUrl, taskTag }: { hook: AnnotationsHook, locationId: string, image: ImageType, children: React.ReactNode,secondaryQueueUrl?:string,taskTag:string }) {
     const [annoCount, setAnnoCount] = useState(0)
     const {client} = useContext(GlobalContext);
     const [startLoadingTimestamp, _] = useState<number>(Date.now())
+
     const [visibleTimestamp, setVisibleTimestamp] = useState<number | undefined>(undefined)
     const [fullyLoadedTimestamp, setFullyLoadedTimestamp] = useState<number | undefined>(undefined)
     const {getSqsClient} = useContext(UserContext);
     const [zoom, setZoom] = useState(1)
     const [transformToPrev, setTransformToPrev] = useState<((c1: [number, number]) => [number, number]) | null>(null);
+    //testing
+    const { setCurrentAnnoCount, setCurrentTaskTag} = useContext(UserContext)!;
+
+    useEffect(() => {
+        setCurrentTaskTag(taskTag);
+    }, []);
 
     useEffect(() => {
         client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: image.id }).then((neighbours) => {
@@ -37,10 +44,16 @@ export function ImageContextFromHook({ hook, image, children, secondaryQueueUrl,
         if (secondaryQueueUrl) {
             getSqsClient().then(sqsClient => sqsClient.send(new SendMessageCommand({
                 QueueUrl: secondaryQueueUrl,
-                MessageBody: JSON.stringify({location:{x:annotation.x,y:annotation.y,width:100,height:100,image,annotationSetId:annotation.setId},allowOutside:true,zoom,taskTag:taskTag+'Secondary'})
+                MessageBody: JSON.stringify({location:{id: locationId, x:annotation.x,y:annotation.y,width:100,height:100,image,annotationSetId:annotation.setId},allowOutside:true,zoom,taskTag: taskTag ? taskTag + ' - Secondary' : 'Secondary'})
             })));
         }
         setAnnoCount(old=>old + 1)
+
+        setCurrentAnnoCount(old=>{
+            const newCount = {...old};
+            newCount[annotation.categoryId] = (newCount[annotation.categoryId] || 0) + 1;
+            return newCount;
+        });
         return hook.create(annotation)
     }, [hook.create,setAnnoCount,secondaryQueueUrl,zoom,taskTag])
 
@@ -55,17 +68,31 @@ export function ImageContextFromHook({ hook, image, children, secondaryQueueUrl,
         if (secondaryQueueUrl) {
             getSqsClient().then(sqsClient => sqsClient.send(new SendMessageCommand({
                 QueueUrl: secondaryQueueUrl,
-                MessageBody: JSON.stringify({location:{x:annotation.x,y:annotation.y,width:100,height:100,image,annotationSetId:annotation.setId},allowOutside:true,zoom,taskTag:taskTag+'Secondary'})
+                MessageBody: JSON.stringify({location:{id: locationId, x:annotation.x,y:annotation.y,width:100,height:100,image,annotationSetId:annotation.setId},allowOutside:true,zoom,taskTag: taskTag ? taskTag + ' - Secondary' : 'Secondary'})
             })));
         }
+
+        client.models.Annotation.get({id: annotation.id}).then(({data: oldAnnotation}) => {
+            setCurrentAnnoCount(old=>{
+                const newCount = {...old};
+                newCount[annotation.categoryId] = (newCount[annotation.categoryId] || 0) + 1;
+                newCount[oldAnnotation!.categoryId] = (newCount[oldAnnotation!.categoryId] || 0) - 1;
+                return newCount;
+            });
+        });
         return hook.update(annotation)
     }, [hook.create,setAnnoCount,secondaryQueueUrl,zoom,taskTag])
 
 
     const _delete = useCallback((annotation) => {
         setAnnoCount(old=>old - 1)
+        setCurrentAnnoCount(old=>{
+            const newCount = {...old};
+            newCount[annotation.categoryId] = (newCount[annotation.categoryId] || 0) - 1;
+            return newCount;
+        });
         return hook.delete(annotation)
-    }, [hook.delete,setAnnoCount])
+    }, [hook.delete,setAnnoCount,setCurrentAnnoCount])
 
     const scale = Math.pow(
         2,

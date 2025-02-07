@@ -1,12 +1,19 @@
 import MyTable from "./Table";
 import Button from "react-bootstrap/Button";
 import { Row,Col } from "react-bootstrap";
-import { UserContext , ProjectContext, ManagementContext} from "./Context";
+import { UserContext , ProjectContext, ManagementContext, GlobalContext} from "./Context";
 import { useContext } from "react";
 import { QueueDropdown } from "./QueueDropDown";
 import OverlayTrigger from "react-bootstrap/OverlayTrigger";
 import Tooltip from "react-bootstrap/Tooltip";
+import ConfigureUserTestModal from "./ConfigureUserTestModal";
+import { useState } from "react";
 import "./UserManagement.css"; // Import the CSS file
+import TestPresetsModal from "./TestPresetsModal";
+import ReviewTestsModal from "./ReviewTestsModal";
+import UserTestResultsModal from "./UserTestResultsModal";
+import ActionsDropdown from './ActionsDropdown';
+
 const adminTooltip = (
   <Tooltip>
     User needs to be added to project first to be able to make them admin.
@@ -26,9 +33,11 @@ const selfAdminTooltip = (
 export default function UserManagement() {
   const {allUsers,projectMembershipHook: {data: projectMemberships, create: createProjectMembership, delete: deleteProjectMembership, update: updateProjectMembership}} = useContext(ManagementContext)!;
   const {project} = useContext(ProjectContext)!
+  const {showModal, modalToShow} = useContext(GlobalContext)!;
   const {
     user: currentUser,
   } = useContext(UserContext)!;
+  const [userId, setUserId] = useState<string>('');
   // const {
   //   projectMemberships,
   //   createProjectMembership,
@@ -111,6 +120,16 @@ export default function UserManagement() {
           <p>To select a backup queue, first add user to this project</p>
         ),
         <span>
+          <ActionsDropdown actions={[
+            {label: "Configure testing", onClick: () => {
+              setUserId(user.id);
+              showModal("userTestModal");
+            }},
+            {label: "Test results", onClick: () => {
+              setUserId(user.id);
+              showModal("userTestResultsModal");
+            }},
+        ]} />
         <OverlayTrigger
           placement="top"
           overlay={belongsToCurrentProject ? selfAdminTooltip: adminTooltip }
@@ -119,13 +138,13 @@ export default function UserManagement() {
           <span>
           {belongsToCurrentProject?.isAdmin ?
             <Button variant="danger"
-              className="me-2 fixed-width-button"
+              className="me-2"
               disabled={currentUser?.username === id}
               onClick={() => () => updateProjectMembership({ id: belongsToCurrentProject.id, isAdmin: 0 })}>
               Remove admin
             </Button > :
             <Button variant="info"
-                  className="me-2 fixed-width-button"
+                  className="me-2"
                   onClick={() => updateProjectMembership({ id: belongsToCurrentProject!.id, isAdmin: 1 })}
                   disabled={!belongsToCurrentProject}>
               Make admin
@@ -184,7 +203,7 @@ export default function UserManagement() {
   ];
   return (
     <>
-      <Row className="justify-content-center mt-3">
+      <Row className="justify-content-center mt-3 mb-3">
       <div>
         <h2>User Management</h2>
           <MyTable
@@ -192,7 +211,7 @@ export default function UserManagement() {
             tableHeadings={tableHeadings}
             tableData={tableData}
           />
-                  <Col className="text-center mt-3">
+        <Col className="text-center mt-3 d-flex justify-content-center gap-2">
           <OverlayTrigger
             placement="top"
             overlay={<Tooltip>Coming soon. For now please invite users manually.</Tooltip>}
@@ -203,9 +222,18 @@ export default function UserManagement() {
               </Button>
             </span>
           </OverlayTrigger>
+            <Button variant="primary" onClick={() => showModal("testPresetsModal")}>
+              Test presets
+            </Button>
+            <Button variant="primary" onClick={() => showModal("reviewTestsModal")}>
+              Test locations
+            </Button>
         </Col>
-
         </div>
+        <ConfigureUserTestModal show={modalToShow === "userTestModal"} onClose={() => showModal(null)} userId={userId} />
+        <TestPresetsModal show={modalToShow === "testPresetsModal"} onClose={() => showModal(null)} />
+        <ReviewTestsModal show={modalToShow === "reviewTestsModal"} onClose={() => showModal(null)} />
+        <UserTestResultsModal show={modalToShow === "userTestResultsModal"} onClose={() => showModal(null)} userId={userId}/>
       </Row>
     </>
   );

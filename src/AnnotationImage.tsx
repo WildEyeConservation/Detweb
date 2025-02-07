@@ -1,11 +1,11 @@
-import { useMemo,useContext,useCallback} from 'react';
+import { useMemo,useContext,useCallback, useEffect} from 'react';
 import BaseImage from './BaseImage';
 import { withAckOnTimeout } from './useAckOnTimeout';
 import { Legend } from './Legend';
 import Location from './Location';
 import { withCreateObservation } from './useCreateObservation';
 import CreateAnnotationOnClick from './CreateAnnotationOnClick';
-import { GlobalContext, ProjectContext } from './Context';
+import { GlobalContext, ProjectContext,UserContext } from './Context';
 import { ShowMarkers } from './ShowMarkers';
 import { useOptimisticUpdates } from './useOptimisticUpdates';
 import { ImageContextFromHook } from './ImageContext';
@@ -18,6 +18,8 @@ export default function AnnotationImage(props) {
   const { location, next, prev, containerheight = 800, containerwidth = 1024, visible, id, ack, allowOutside, zoom } = props
   const {annotationSetId} = location;
   const {client} = useContext(GlobalContext)!;
+  //testing
+  const { currentTaskTag } = useContext(UserContext)!;
   const subscriptionFilter = useMemo(() => ({
     filter: { and:[{setId: { eq: location.annotationSetId }}, {imageId: { eq: location.image.id }}]}
   }), [annotationSetId, location.image.id]);
@@ -51,7 +53,7 @@ export default function AnnotationImage(props) {
     )))
   }, [props.taskTag,location.image.id,annotationSetId]);
 
-  return (<ImageContextFromHook hook={annotationsHook} image={location.image} secondaryQueueUrl={props.secondaryQueueUrl} taskTag={props.taskTag}>
+  return (<ImageContextFromHook hook={annotationsHook} locationId={location.id} image={location.image} secondaryQueueUrl={props.secondaryQueueUrl} taskTag={props.taskTag}>
             <div style={{ 
               display: 'flex', 
               flexDirection: 'column', 
@@ -65,6 +67,7 @@ export default function AnnotationImage(props) {
                 containerheight={containerheight}
                 visible={visible}
                 location={location}
+                taskTag={props.taskTag}
                 zoom={zoom}
                 id={id} 
                 prev={prev}
@@ -73,13 +76,11 @@ export default function AnnotationImage(props) {
                 annotationSet={annotationSetId}> 
                 {visible && memoizedChildren}
               </Image>
-              {visible && props.taskTag && 
+              {visible && (props.taskTag || currentTaskTag) && 
                 <div style={{ 
                   marginTop: '1rem',
-                  position: 'absolute',
-                  bottom: '-2rem'  // Position below the image container
                 }}>
-                  Now working on task {props.taskTag}
+                  Now working on task {props.taskTag || currentTaskTag}
                 </div>
               }
             </div>

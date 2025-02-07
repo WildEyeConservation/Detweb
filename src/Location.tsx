@@ -32,25 +32,6 @@ export default function Location({x,y,width,height,confidence}: LocationType) {
     { keyup: true, keydown: true },
   );
 
-  // if (user?.isAdmin) {
-  //   contextMenuItems.push({
-  //     text: isTest
-  //       ? "Stop using this location as a test location"
-  //       : "Use this location as a test location",
-  //     callback: changeTest,
-  //   });
-  // }
-
-  // function changeTest() {
-  //   setKey(crypto.randomUUID());
-  //   setTest(isTest ? null : Math.floor(Date.now() / 1000));
-  //   gqlClient.graphql(
-  //     graphqlOperation(updateLocation, {
-  //       input: { id, isTest: isTest ? null : Math.floor(Date.now() / 1000) },
-  //     })
-  //   );
-  // }
-
   useEffect(() => {
     if (!enabled) return;
     const latLngBounds = xy2latLng(boundsxy) as unknown as L.LatLngBoundsLiteral;
