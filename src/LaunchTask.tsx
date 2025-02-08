@@ -157,6 +157,10 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
       throw new Error("Queue URL not found");
     }
 
+    if (zoom) {
+      await client.models.Queue.update({id: queueId, zoom: zoom});
+    }
+
     const batchSize = 10;
     for (let i = 0; i < allLocations.length; i += batchSize) {
       const locationBatch = allLocations.slice(i, i + batchSize);
@@ -166,7 +170,7 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
         const location = {id: locationId, annotationSetId: annotationSet};
         batchEntries.push({
           Id: `msg-${locationId}`, // Required unique ID for each message in batch
-          MessageBody: JSON.stringify({ location, allowOutside, zoom, taskTag, secondaryQueueUrl, skipLocationWithAnnotations})
+          MessageBody: JSON.stringify({ location, allowOutside, taskTag, secondaryQueueUrl, skipLocationWithAnnotations})
         });
       }
 

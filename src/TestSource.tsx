@@ -7,15 +7,28 @@ export default function useTesting(useSecondaryCandidates: boolean = false) {
     const { currentPM } = useContext(ProjectContext)!;
     const { client, backend } = useContext(GlobalContext)!;
     const { getDynamoClient } = useContext(UserContext)!;
+
     const [i, setI] = useState(0);
+    const [zoom,setZoom] = useState<number | undefined>(undefined);
     const [hasPrimaryCandidates, setHasPrimaryCandidates] = useState(false);
     const [hasSecondaryCandidates, setHasSecondaryCandidates] = useState(false);
+    const [loading, setLoading] = useState(true);
+
     const primaryCandidates = useRef<{locationId: string, annotationSetId: string, testPresetId: string}[]>([]);
     const secondaryCandidates = useRef<string[]>([]);
     const currentLocation = useRef<{locationId: string, annotationSetId: string, testPresetId: string} | null>(null);
 
     useEffect(() => {
         async function setup() {
+            setLoading(true);
+
+            if (currentPM.queueId) {
+                currentPM.queue().then(
+                  ({ data: { zoom } }) => {
+                    setZoom(zoom);
+                  });
+              }
+
             const {data: [config]} = await client.models.UserTestConfig.testConfigByUserId({ userId: currentPM.userId });
 
             if (!config) {
@@ -28,10 +41,13 @@ export default function useTesting(useSecondaryCandidates: boolean = false) {
             });
 
             fetchPrimaryLocations(presets);
+
+            setLoading(false);
         }
 
         setup();
-    }, []);
+
+    }, [currentPM]);
 
     async function executeQueryAndPushResults<T>(command: QueryCommand): Promise<T[]> {
         const dynamoClient = await getDynamoClient();
@@ -206,13 +222,14 @@ export default function useTesting(useSecondaryCandidates: boolean = false) {
             taskTag: '', 
             secondaryQueueUrl: undefined, 
             skipLocationWithAnnotations: false,
+            zoom: zoom,
             ack: () => {
                 console.log('Ack successful for test');
             }
         };
         return body;
 
-    }, [i, primaryCandidates, secondaryCandidates]);
+    }, [i, primaryCandidates, secondaryCandidates, zoom]);
 
-    return {fetcher: hasPrimaryCandidates || hasSecondaryCandidates ? fetcher : undefined, fetchedLocation: currentLocation.current};
+    return {fetcher: !loading && (hasPrimaryCandidates || hasSecondaryCandidates) ? fetcher : undefined, fetchedLocation: currentLocation.current};
 }
