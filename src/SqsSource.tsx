@@ -7,18 +7,23 @@ export default function useSQS(filterPredicate: (message: any) => Promise<boolea
   const {getSqsClient} = useContext(UserContext)!;
   const [url,setUrl] = useState<string | undefined>(undefined);
   const [backupUrl,setBackupUrl] = useState<string | undefined>(undefined);
+  const [zoom,setZoom] = useState<number | undefined>(undefined);
+  const [backupZoom,setBackupZoom] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     if (currentPM.queueId) {
       currentPM.queue().then(
-        ({ data: { url } }) => {
+        ({ data: { url, zoom } }) => {
           setUrl(url);
+          setZoom(zoom);
         });
       if (currentPM.backupQueueId) {
         currentPM.backupQueue().then(
-          ({ data: { url } }) => {
+          ({ data: { url, zoom } }) => {
             setBackupUrl(url);
+            setBackupZoom(zoom);
           });
+
       }
     }
   }, [currentPM]);
@@ -61,6 +66,7 @@ export default function useSQS(filterPredicate: (message: any) => Promise<boolea
                 const entity = response.Messages[0];
                 const body = JSON.parse(entity.Body!);
                 body.message_id = crypto.randomUUID();
+                body.zoom = usingBackup ? backupZoom : zoom;
                 // The messages we receive typically HAVE ids. These correspond to location ids. But there is no guarantee that we won't receive the same ID twice,
                 // the admin may have launched the same task on the same queue twice, or one of our earlier messages may have passed its visibility timeout and
                 // been refetched. So we have to assign our own id upon receipt to guarantee uniqueness.

@@ -293,6 +293,7 @@ const schema = a.schema({
     batchSize: a.integer().default(0),
     backupUsers: a.hasMany('UserProjectMembership', 'backupQueueId'),
     url: a.url(),
+    zoom: a.integer(),
   }).authorization(allow => [allow.authenticated()])
     //.authorization(allow => [allow.groupDefinedIn('projectId')])
     .secondaryIndexes((index) => [index('projectId').queryField('queuesByProjectId')]),
@@ -393,7 +394,8 @@ const schema = a.schema({
     annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
     testAnimals: a.integer().required(),
     totalMissedAnimals: a.integer().required(),
-    passed: a.boolean().required(),
+    passedOnCategories: a.boolean().required(),
+    passedOnTotal: a.boolean().required(),
     categoryCounts: a.hasMany('TestResultCategoryCount', 'testResultId')
   })
   .authorization(allow => [allow.authenticated()])
