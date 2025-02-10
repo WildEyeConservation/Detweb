@@ -28,6 +28,17 @@ export default function MyTable(input: TableObject) {
       const aValue = a.rowData[index];
       const bValue = b.rowData[index];
 
+      const isNumeric = (value: string) => /^-?\d+(\.\d+)?$/.test(value);
+      
+      if (isNumeric(aValue as string) && isNumeric(bValue as string)) {
+        const aNum = parseFloat(aValue as string);
+        const bNum = parseFloat(bValue as string);
+        if (aNum < bNum) return direction === 'asc' ? -1 : 1;
+        if (aNum > bNum) return direction === 'asc' ? 1 : -1;
+        return 0;
+      }
+
+      // Fallback to string comparison
       const aStr = typeof aValue === 'string' ? aValue : JSON.stringify(aValue);
       const bStr = typeof bValue === 'string' ? bValue : JSON.stringify(bValue);
 
