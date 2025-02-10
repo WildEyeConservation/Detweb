@@ -65,17 +65,17 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
 
             setIsLoading(false);
         }
-        if (show || !isPurging) setup();
+        if (show && !isPurging) setup();
     }, [show, isPurging]);
 
 
     const headings = [
-        {content: "Date", style: {width: "20%"}, sort: true},
-        {content: "Preset", style: {width: "20%"}, sort: true},
-        {content: "Test Animals", style: {width: "20%"}, sort: true},
-        {content: "Missed Animals", style: {width: "20%"}, sort: true},
-        {content: "Passed on Categories", style: {width: "20%"}, sort: true},
-        {content: "Passed on Total", style: {width: "20%"}, sort: true},
+        {content: "Date", sort: true},
+        {content: "Preset", sort: true},
+        {content: "Test Animals", sort: true},
+        {content: "Missed Animals", sort: true},
+        {content: "Passed on Categories", sort: true},
+        {content: "Passed on Total", sort: true},
     ]
 
     const tableData = results.map((result) => {
@@ -84,7 +84,6 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
             id: result.id,
             rowData: [`${date[0].replace(/-/g, '/')} - ${date[1].substring(0, 8)}`, result.testPreset.name, result.testAnimals, result.totalMissedAnimals, result.passedOnCategories ? "Yes" : "No", result.passedOnTotal ? "Yes" : "No"]
         }
-
     })
 
     const passed = results.filter((result) => result.passedOnCategories).length;
@@ -94,11 +93,6 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
     // Calculate Undercounted and Overcounted Animals
     const undercountedAnimals = results.reduce((acc, result) => acc + (result.totalMissedAnimals > 0 ? result.totalMissedAnimals : 0), 0);
     const overcountedAnimals = results.reduce((acc, result) => acc + (result.totalMissedAnimals < 0 ? Math.abs(result.totalMissedAnimals) : 0), 0);
-
-    // Calculate Annotation Accuracy
-    const annotationAccuracy = totalAnimals > 0 
-        ? (((totalAnimals - undercountedAnimals) / totalAnimals) * 100)
-        : 0;
 
     const countsByCategory = results.flatMap((result) => result.categoryCounts).reduce((acc, category) => {
         if (!acc[category.categoryId]) {
@@ -135,8 +129,8 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
         },
         {
             content: [
-                `Annotation rate: ${annotationAccuracy.toFixed(2)}%`,
-                `${annotationAccuracy > 100 ? "Over" : "Under"} count rate: ${annotationAccuracy > 100 ? (annotationAccuracy - 100).toFixed(2) : (100 - annotationAccuracy).toFixed(2)}%`
+                `Undercounted rate: ${((undercountedAnimals / totalAnimals) * 100).toFixed(2)}%`,
+                `Overcounted rate: ${((overcountedAnimals / totalAnimals) * 100).toFixed(2)}%`,
             ]
         },
         {

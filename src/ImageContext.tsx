@@ -51,8 +51,9 @@ export function ImageContextFromHook({ hook, locationId, image, children, second
 
         setCurrentAnnoCount(old=>{
             const newCount = {...old};
-            newCount[annotation.categoryId] = (newCount[annotation.categoryId] || 0) + 1;
+            newCount[annotation.categoryId] = (newCount[annotation.categoryId] || []).concat([{x:annotation.x,y:annotation.y}]);
             return newCount;
+
         });
         return hook.create(annotation)
     }, [hook.create,setAnnoCount,secondaryQueueUrl,zoom,taskTag])
@@ -75,8 +76,8 @@ export function ImageContextFromHook({ hook, locationId, image, children, second
         client.models.Annotation.get({id: annotation.id}).then(({data: oldAnnotation}) => {
             setCurrentAnnoCount(old=>{
                 const newCount = {...old};
-                newCount[annotation.categoryId] = (newCount[annotation.categoryId] || 0) + 1;
-                newCount[oldAnnotation!.categoryId] = (newCount[oldAnnotation!.categoryId] || 0) - 1;
+                newCount[oldAnnotation!.categoryId] = (newCount[oldAnnotation!.categoryId] || []).filter((a) => a.x !== annotation.x && a.y !== annotation.y);
+                newCount[annotation.categoryId] = (newCount[annotation.categoryId] || []).concat([{x:annotation.x,y:annotation.y}]);
                 return newCount;
             });
         });
@@ -88,7 +89,7 @@ export function ImageContextFromHook({ hook, locationId, image, children, second
         setAnnoCount(old=>old - 1)
         setCurrentAnnoCount(old=>{
             const newCount = {...old};
-            newCount[annotation.categoryId] = (newCount[annotation.categoryId] || 0) - 1;
+            newCount[annotation.categoryId] = (newCount[annotation.categoryId] || []).filter((a) => a.x !== annotation.x && a.y !== annotation.y);
             return newCount;
         });
         return hook.delete(annotation)
