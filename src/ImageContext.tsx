@@ -81,7 +81,8 @@ export function ImageContextFromHook({ hook, locationId, image, children, second
                 return newCount;
             });
         });
-        return hook.update(annotation)
+        const { shadow, proposedObjectId, image, object, project, set, createdAt, updatedAt,owner,category,id, ...annoStripped } = annotation;
+        return hook.update({...annoStripped, id})
     }, [hook.create,setAnnoCount,secondaryQueueUrl,zoom,taskTag])
 
 
