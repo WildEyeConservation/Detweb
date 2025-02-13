@@ -13,6 +13,7 @@ import { useUpdateProgress } from "./useUpdateProgress";
 type Result = {
     testPreset: {
         name: string;
+        projectId: string;
     };
     testAnimals: number;
     totalMissedAnimals: number;
@@ -34,6 +35,7 @@ type Result = {
 export default function UserTestResultsModal({show, onClose, userId}: {show: boolean, onClose: () => void, userId: string}) {
     const { client } = useContext(GlobalContext)!;
     const { allUsers } = useContext(ManagementContext)!;
+    const { project } = useContext(ProjectContext)!;
     const [results, setResults] = useState<Result[]>([]);
     const [username, setUsername] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -58,10 +60,10 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
             
             const results = await fetchAllPaginatedResults(client.models.TestResult.testResultsByUserId, {
                 userId: userId,
-                selectionSet: ['id', 'testPreset.name', 'testAnimals', 'totalMissedAnimals', 'passedOnCategories', 'passedOnTotal', 'createdAt', 'categoryCounts.categoryId', 'categoryCounts.userCount', 'categoryCounts.testCount', 'categoryCounts.category.name']
+                selectionSet: ['id', 'testPreset.name', 'testPreset.projectId', 'testAnimals', 'totalMissedAnimals', 'passedOnCategories', 'passedOnTotal', 'createdAt', 'categoryCounts.categoryId', 'categoryCounts.userCount', 'categoryCounts.testCount', 'categoryCounts.category.name']
             });
 
-            setResults(results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+            setResults(results.filter((result) => result.testPreset.projectId === project.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
 
             setIsLoading(false);
         }
