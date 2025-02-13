@@ -58,8 +58,8 @@ type ConfigType = {
   useEffect(() => {
     // Function to validate the test based on jobsCompleted
     async function validateTest() {
-      const userAnnotations = Object.entries(currentAnnoCount);
-
+      const userAnnotations = Object.entries(currentAnnoCount).filter(([_, annotations]) => annotations.length > 0);
+      
       if (isTesting && previousLocation.current) {
          // Reset testing states
         setIsTesting(false);

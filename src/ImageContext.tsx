@@ -73,13 +73,13 @@ export function ImageContextFromHook({ hook, locationId, image, children, second
             })));
         }
 
-        client.models.Annotation.get({id: annotation.id}).then(({data: oldAnnotation}) => {
-            setCurrentAnnoCount(old=>{
-                const newCount = {...old};
-                newCount[oldAnnotation!.categoryId] = (newCount[oldAnnotation!.categoryId] || []).filter((a) => a.x !== annotation.x && a.y !== annotation.y);
-                newCount[annotation.categoryId] = (newCount[annotation.categoryId] || []).concat([{x:annotation.x,y:annotation.y}]);
-                return newCount;
-            });
+        const oldAnnotation = hook.data.find((a) => a.id === annotation.id);
+
+        setCurrentAnnoCount(old=>{
+            const newCount = {...old};
+            newCount[oldAnnotation!.categoryId] = (newCount[oldAnnotation!.categoryId] || []).filter((a) => a.x !== oldAnnotation!.x && a.y !== oldAnnotation!.y);
+            newCount[annotation.categoryId] = (newCount[annotation.categoryId] || []).concat([{x:annotation.x || oldAnnotation!.x,y:annotation.y || oldAnnotation!.y}]);
+            return newCount;
         });
         const { shadow, proposedObjectId, image, object, project, set, createdAt, updatedAt,owner,category,id, ...annoStripped } = annotation;
         return hook.update({...annoStripped, id})
