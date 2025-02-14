@@ -16,8 +16,12 @@ const OverlapsLoader: React.FC<OverlapsLoaderProps> = ({ image}) => {
 
     useEffect(() => {
         async function loadOverlaps() {
-            const prevNeighbours = (await client.models.ImageNeighbour.imageNeighboursByImage1key({ image1Id: image.id })).data.map(async n => { return { transform: makeTransform(inv(array2Matrix(n.homography))), image: (await n.image2()).data } });
-            const nextNeighbours = (await client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: image.id })).data.map(async n => { return { transform: makeTransform(array2Matrix(n.homography)), image: (await n.image1()).data } });
+            const prevNeighbours = (await client.models.ImageNeighbour.imageNeighboursByImage1key({ image1Id: image.id })).data
+                .filter(n => n.homography)
+                .map(async n => { return { transform: makeTransform(inv(array2Matrix(n.homography))), image: (await n.image2()).data } });
+            const nextNeighbours = (await client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: image.id })).data
+                .filter(n => n.homography)
+                .map(async n => { return { transform: makeTransform(array2Matrix(n.homography)), image: (await n.image1()).data } });
             const neighbours = [...prevNeighbours, ...nextNeighbours];
             const result = await Promise.all(neighbours);
             result.sort((a, b) => a.image.originalPath.localeCompare(b.image.originalPath));
