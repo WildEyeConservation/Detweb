@@ -1,5 +1,4 @@
 import { Amplify } from 'aws-amplify'
-Amplify.configure(outputs)
 import { createContext, useState } from "react";
 import { Schema } from '../amplify/data/resource'; // Path to your backend resource definition
 import outputs from '../amplify_outputs.json'
