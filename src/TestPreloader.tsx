@@ -58,8 +58,10 @@ type ConfigType = {
   useEffect(() => {
     // Function to validate the test based on jobsCompleted
     async function validateTest() {
+      const userAnnotations = Object.entries(currentAnnoCount).filter(([_, annotations]) => annotations.length > 0);
+      
       if (isTesting && previousLocation.current) {
-        // Reset testing states
+         // Reset testing states
         setIsTesting(false);
         setUnannotatedJobs(0);
         setCurrentAnnoCount({});
@@ -67,7 +69,12 @@ type ConfigType = {
 
         const loc = previousLocation.current;
 
-        // Fetch necessary data
+        const { data: location } = await client.models.Location.get({
+          id: loc.locationId,
+          selectionSet: ['x', 'y', 'width', 'height'],
+        });
+
+        // Fetch counts per category for the test location
         const categoryCounts = await fetchAllPaginatedResults(
           client.models.LocationAnnotationCount.categoryCountsByLocationIdAndAnnotationSetId,
           {
@@ -82,6 +89,7 @@ type ConfigType = {
           selectionSet: ['accuracy'],
         });
 
+        // Fetch all categories to be tested on
         const categories = await fetchAllPaginatedResults(
           client.models.TestPresetCategory.categoriesByTestPresetId,
           {
@@ -90,11 +98,33 @@ type ConfigType = {
           }
         );
 
-        // Filter user annotations based on test preset categories
-        const filteredUserAnnotations = Object.entries(currentAnnoCount).filter(
+        const boundsxy: [number, number][] = [
+          [location!.x - location!.width / 2, location!.y - location!.height / 2],
+          [location!.x + location!.width / 2, location!.y + location!.height / 2],
+        ];
+
+        // Filter annotations to those within the test location and count them per category
+        const annotationCounts: {[key: string]: number} = {};
+        for (const [categoryId, annotations] of userAnnotations) {
+            for (const annotation of annotations) {
+                const isWithin = 
+                    annotation.x >= boundsxy[0][0] && 
+                    annotation.y >= boundsxy[0][1] && 
+                    annotation.x <= boundsxy[1][0] && 
+                    annotation.y <= boundsxy[1][1];
+
+                if (isWithin) {
+                    annotationCounts[categoryId] = (annotationCounts[categoryId] || 0) + 1;
+                }
+            }
+        }
+
+        // Further filter user annotations based on test preset categories
+        const filteredUserAnnotations = Object.entries(annotationCounts).filter(
           ([categoryId]) => categories.some((c) => c.categoryId === categoryId)
         );
 
+        // Total count of annotations that were part of the defined categories
         const totalUserCounts = filteredUserAnnotations.reduce((acc, [_, count]) => acc + count, 0);
         const totalTestCounts = categoryCounts
           .filter((count) => categories.some((c) => c.categoryId === count.categoryId))
@@ -112,7 +142,8 @@ type ConfigType = {
         
         const passedOnCategories = annotationAccuracy >= requiredAccuracy;
 
-        const allUserCounts = Object.values(currentAnnoCount).reduce((acc, count) => acc + count, 0);
+        // Total count of annotations regardless of category
+        const allUserCounts = Object.values(annotationCounts).reduce((acc, count) => acc + count, 0);
         const passedOnTotal = allUserCounts >= totalTestCounts * (requiredAccuracy/100) && 
           allUserCounts <= totalTestCounts * (2 - requiredAccuracy/100);
 
@@ -174,7 +205,7 @@ type ConfigType = {
       if (jobsCompleted > maxJobsCompleted) {
         setMaxJobsCompleted(jobsCompleted);
 
-        if (Object.values(currentAnnoCount).reduce((acc, count) => acc + count, 0) > 0) {
+        if (userAnnotations.reduce((acc, annotations) => acc + annotations[1].length, 0) > 0) {
           setUnannotatedJobs(0);
         } else {
           setUnannotatedJobs((j) => j + 1);

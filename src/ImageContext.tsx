@@ -51,8 +51,9 @@ export function ImageContextFromHook({ hook, locationId, image, children, second
 
         setCurrentAnnoCount(old=>{
             const newCount = {...old};
-            newCount[annotation.categoryId] = (newCount[annotation.categoryId] || 0) + 1;
+            newCount[annotation.categoryId] = (newCount[annotation.categoryId] || []).concat([{x:annotation.x,y:annotation.y}]);
             return newCount;
+
         });
         return hook.create(annotation)
     }, [hook.create,setAnnoCount,secondaryQueueUrl,zoom,taskTag])
@@ -72,15 +73,16 @@ export function ImageContextFromHook({ hook, locationId, image, children, second
             })));
         }
 
-        client.models.Annotation.get({id: annotation.id}).then(({data: oldAnnotation}) => {
-            setCurrentAnnoCount(old=>{
-                const newCount = {...old};
-                newCount[annotation.categoryId] = (newCount[annotation.categoryId] || 0) + 1;
-                newCount[oldAnnotation!.categoryId] = (newCount[oldAnnotation!.categoryId] || 0) - 1;
-                return newCount;
-            });
+        const oldAnnotation = hook.data.find((a) => a.id === annotation.id);
+
+        setCurrentAnnoCount(old=>{
+            const newCount = {...old};
+            newCount[oldAnnotation!.categoryId] = (newCount[oldAnnotation!.categoryId] || []).filter((a) => a.x !== oldAnnotation!.x && a.y !== oldAnnotation!.y);
+            newCount[annotation.categoryId] = (newCount[annotation.categoryId] || []).concat([{x:annotation.x || oldAnnotation!.x,y:annotation.y || oldAnnotation!.y}]);
+            return newCount;
         });
-        return hook.update(annotation)
+        const { shadow, proposedObjectId, image, object, project, set, createdAt, updatedAt,owner,category,id, ...annoStripped } = annotation;
+        return hook.update({...annoStripped, id})
     }, [hook.create,setAnnoCount,secondaryQueueUrl,zoom,taskTag])
 
 
@@ -88,7 +90,7 @@ export function ImageContextFromHook({ hook, locationId, image, children, second
         setAnnoCount(old=>old - 1)
         setCurrentAnnoCount(old=>{
             const newCount = {...old};
-            newCount[annotation.categoryId] = (newCount[annotation.categoryId] || 0) - 1;
+            newCount[annotation.categoryId] = (newCount[annotation.categoryId] || []).filter((a) => a.x !== annotation.x && a.y !== annotation.y);
             return newCount;
         });
         return hook.delete(annotation)
