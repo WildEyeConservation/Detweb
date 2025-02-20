@@ -13,6 +13,7 @@ type ConfigType = {
     random: number | null;
     deadzone: number | null;
     interval: number | null;
+    projectId: string;
     postTestConfirmation: boolean | null,
     readonly id: string;
     readonly createdAt: string;
@@ -28,7 +29,7 @@ type ConfigType = {
     const previousLocation = useRef<{locationId: string, annotationSetId: string, testPresetId: string} | null>(null);
   
     const { modalToShow, showModal, client } = useContext(GlobalContext)!;
-    const { currentPM } = useContext(ProjectContext)!;
+    const { currentPM, project } = useContext(ProjectContext)!;
     //testing
     const { jobsCompleted, setJobsCompleted, currentAnnoCount, setCurrentAnnoCount, unannotatedJobs, setUnannotatedJobs, isTesting, setIsTesting, isRegistering } = useContext(UserContext)!;
 
@@ -38,8 +39,8 @@ type ConfigType = {
   
     useEffect(() => {
       async function setup() {
-          const {data: [config]} = await client.models.UserTestConfig.testConfigByUserId({ userId: currentPM.userId });
-          
+          const {data: configs} = await client.models.UserTestConfig.testConfigByUserId({ userId: currentPM.userId });
+          const config = configs.find((c) => c.projectId === project.id);
           if (config?.id) {
               setConfig(config);
           }
