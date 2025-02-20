@@ -111,16 +111,22 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
 
     const accuracyByCategory = Object.entries(countsByCategory).map(([categoryId, counts]) => {
         const accuracy = counts.userCount / counts.testCount;
-        const countPercentage = accuracy > 1
+        let countPercentage = accuracy > 1
             ? parseFloat(((accuracy - 1) * 100).toFixed(2))
             : parseFloat(((1 - accuracy) * 100).toFixed(2)) * -1;
+
+        if (Object.is(countPercentage, -0)) {
+            countPercentage = 0;
+        }
+
         return {
             categoryId,
             name: counts.name,
             countPercentage: countPercentage / 100
         }
-
-    }).sort((a, b) => a.name.localeCompare(b.name));
+    })
+    .filter(entry => !isNaN(entry.countPercentage))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
     const summaryCards = [
         {
@@ -199,7 +205,6 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
         setIsPurging(false);
     }
 
-
     return (
         <Modal show={show} onHide={onClose} size="xl">
             <Modal.Header closeButton>
@@ -211,7 +216,6 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
                 ) : (
                     <Tabs defaultActiveKey="results" id="uncontrolled-tab-example" className="mb-3">
                         <Tab eventKey="results" title="All Results">
-
                             <p className="mb-2">Summary</p>
                             <div className="d-flex gap-3 mb-3">
                                 {summaryCards.map((card, index) => (
@@ -223,6 +227,7 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
                                 tableHeadings={headings} 
                                 tableData={tableData} 
                                 pagination={true}
+                                itemsPerPage={5}
                             />
                         </Tab>
                         <Tab eventKey="ca" title="Category Accuracy" className="text-white">

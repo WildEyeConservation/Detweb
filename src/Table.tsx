@@ -102,7 +102,7 @@ export default function MyTable(input: TableObject) {
             <Button variant="primary" onClick={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 0}>
                 &lt;
             </Button>
-            <Button variant="primary" onClick={() => setCurrentPage(currentPage + 1)} disabled={currentPage === Math.ceil(sortedData.length / 10) - 1}>
+            <Button variant="primary" onClick={() => setCurrentPage(currentPage + 1)} disabled={currentPage === Math.ceil(sortedData.length / itemsPerPage) - 1}>
                 &gt;
             </Button>
           </div>
