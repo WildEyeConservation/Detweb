@@ -303,6 +303,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
     }}>
       {queriesComplete && <MapContainer
         // id={id}
+        key={JSON.stringify(contextMenuItems)}
         style={style}
         crs={L.CRS.Simple}
         bounds={zoom ? undefined : viewBounds}
