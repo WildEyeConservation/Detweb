@@ -41,6 +41,7 @@
     "leaflet-contextmenu": "^1.4.0",
     "leaflet-draw": "^1.0.4",
     "leaflet.markercluster": "^1.5.3",
+    "lucide-react": "^0.475.0",
     "luxon": "^3.5.0",
     "mathjs": "^13.0.3",
     "mdb-react-ui-kit": "^8.0.0",

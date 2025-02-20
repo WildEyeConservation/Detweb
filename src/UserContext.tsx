@@ -8,7 +8,8 @@ import { AuthUser, fetchAuthSession } from "aws-amplify/auth";
 import { Schema } from '../amplify/data/resource'; // Path to your backend resource definition
 import {useUsers} from './apiInterface.tsx'
 import {
-  GlobalContext, ProjectContext, UserContext, ManagementContext, ProgressContext, ProgressType
+  GlobalContext, ProjectContext, UserContext, ManagementContext, ProgressContext, ProgressType,
+  OrganizationContext
 } from "./Context.tsx";
 import { generateClient } from "aws-amplify/api";
 import outputs from "../amplify_outputs.json";
@@ -67,31 +68,68 @@ export function Project({ children, currentPM }: { children: React.ReactNode, cu
 }
 
 
-export function User({ user, children }: { user: AuthUser, children: React.ReactNode }) {
+export function User({
+  user,
+  cognitoGroups,
+  children,
+}: {
+  user: AuthUser;
+  cognitoGroups: string[];
+  children: React.ReactNode;
+}) {
   const [jobsCompleted, setJobsCompleted] = useState<number>(0);
   const [unannotatedJobs, setUnannotatedJobs] = useState<number>(0);
   const [currentTaskTag, setCurrentTaskTag] = useState<string>('');
   const [isTesting, setIsTesting] = useState<boolean>(false);
   const [isRegistering, setIsRegistering] = useState<boolean>(false);
-  const [currentAnnoCount, setCurrentAnnoCount] = useState<{ [key: string]: number }>({});
-  const { client,region } = useContext(GlobalContext)!;
+  const [currentAnnoCount, setCurrentAnnoCount] = useState<{
+    [key: string]: number;
+  }>({});
+  const { client, region } = useContext(GlobalContext)!;
   //const { items: myMemberships } = useObserveQuery('UserProjectMembership', { filter: { userId: { eq: user!.username } } });
   // const { data: myMemberships } = useOptimisticUpdates(
   //   'UserProjectMembership',
   //   async () => client.models.UserProjectMembership.list({ filter: { userId: { eq: user!.username } } }),
   //   { filter: { userId: { eq: user!.username } } })
-  const subscriptionFilter = useMemo(() => ({
-    filter: { userId: { eq: user.username } }
-  }), [user.username]);
+  const subscriptionFilter = useMemo(
+    () => ({
+      filter: { userId: { eq: user.username } },
+    }),
+    [user.username]
+  );
 
   // const myMembershipHook = useOptimisticMembership(
   //   async (nextToken) => client.models.UserProjectMembership.list({ filter: { userId: { eq: user!.username } },nextToken}),
   //   subscriptionFilter)
 
-  const myMembershipHook = useOptimisticUpdates<Schema['UserProjectMembership']['type'], 'UserProjectMembership'>(
+  const myMembershipHook = useOptimisticUpdates<
+    Schema['UserProjectMembership']['type'],
+    'UserProjectMembership'
+  >(
     'UserProjectMembership',
-    async (nextToken) => client.models.UserProjectMembership.list({ filter: { userId: { eq: user!.username } }, nextToken }),
+    async (nextToken) =>
+      client.models.UserProjectMembership.list({
+        filter: { userId: { eq: user!.username } },
+        nextToken,
+      }),
     subscriptionFilter
+  );
+
+  const myOrganizationHook = useOptimisticUpdates<
+    Schema['OrganizationMembership']['type'],
+    'OrganizationMembership'
+  >(
+    'OrganizationMembership',
+    async (nextToken) =>
+      client.models.OrganizationMembership.list({
+        filter: { userId: { eq: user!.username } },
+        nextToken,
+      }),
+    subscriptionFilter
+  );
+
+  const isOrganizationAdmin = myOrganizationHook.data?.some(
+    (membership) => membership.isAdmin
   );
 
   // useEffect(() => {
@@ -104,9 +142,9 @@ export function User({ user, children }: { user: AuthUser, children: React.React
   // }, [user.username]);
   //const [credentials, setCredentials] = useState<any>(undefined);
   // useEffect(() => {
-  //   const { region } = useContext(GlobalContext)!; 
+  //   const { region } = useContext(GlobalContext)!;
   //   const setup = async () => {
-      
+
   //     const credentials = Auth.essentialCredentials(await Auth.currentCredentials())
   //     setCredentials(credentials);
   //     setLambdaClient(new LambdaClient({ region, credentials }));
@@ -119,21 +157,22 @@ export function User({ user, children }: { user: AuthUser, children: React.React
 
   const getSqsClient = useCallback(async () => {
     const { credentials } = await fetchAuthSession();
-    return new SQSClient({ region, credentials })
-  }, [])
-  
-  const getDynamoClient = useCallback(async () => {
-  const { credentials } = await fetchAuthSession();
-  return new DynamoDBClient({
-      region, credentials
-    });
-  }, [])
+    return new SQSClient({ region, credentials });
+  }, []);
 
+  const getDynamoClient = useCallback(async () => {
+    const { credentials } = await fetchAuthSession();
+    return new DynamoDBClient({
+      region,
+      credentials,
+    });
+  }, []);
 
   return (
     <UserContext.Provider
       value={{
         user,
+        cognitoGroups,
         getSqsClient,
         jobsCompleted,
         setJobsCompleted,
@@ -148,65 +187,104 @@ export function User({ user, children }: { user: AuthUser, children: React.React
         isRegistering,
         setIsRegistering,
         myMembershipHook,
-        getDynamoClient
+        myOrganizationHook,
+        isOrganizationAdmin,
+        getDynamoClient,
       }}
-      >
-            {children}
+    >
+      {children}
     </UserContext.Provider>
   );
 }
 
-
 export function Management({ children }: { children: React.ReactNode }) {
   const { client } = useContext(GlobalContext)!;
-  const {project} = useContext(ProjectContext)!;
+  const { project } = useContext(ProjectContext)!;
   const { users: allUsers } = useUsers();
   // const subscriptionFilter = useMemo(() => (
   //   { projectId: { eq: project.id } }), [project.id]);
-  const subscriptionFilter = useMemo(() => ({ filter: { projectId: { eq: project.id } } }), [project.id]);
+  const subscriptionFilter = useMemo(
+    () => ({ filter: { projectId: { eq: project.id } } }),
+    [project.id]
+  );
   //const {items: projectMemberships} = useObserveQuery('UserProjectMembership',{ filter: { projectId: { eq: project.id } } });
   // const projectMembershipHook = useOptimisticMembership(
   //   async (nextToken) => client.models.UserProjectMembership.list({ filter: subscriptionFilter,nextToken }),
-  //   subscriptionFilter) 
-  const projectMembershipHook = useOptimisticUpdates<Schema['UserProjectMembership']['type'], 'UserProjectMembership'>(
+  //   subscriptionFilter)
+  const projectMembershipHook = useOptimisticUpdates<
+    Schema['UserProjectMembership']['type'],
+    'UserProjectMembership'
+  >(
     'UserProjectMembership',
-    async (nextToken) => client.models.UserProjectMembership.list({ filter: subscriptionFilter.filter, nextToken }),
-    subscriptionFilter
-  ); 
-  const imageSetsHook = useOptimisticUpdates<Schema['ImageSet']['type'], 'ImageSet'>(
-    'ImageSet',
-    async (nextToken) => client.models.ImageSet.list({ filter: subscriptionFilter.filter, nextToken }),
+    async (nextToken) =>
+      client.models.UserProjectMembership.list({
+        filter: subscriptionFilter.filter,
+        nextToken,
+      }),
     subscriptionFilter
   );
-  const locationSetsHook = useOptimisticUpdates<Schema['LocationSet']['type'], 'LocationSet'>(
+  const imageSetsHook = useOptimisticUpdates<
+    Schema['ImageSet']['type'],
+    'ImageSet'
+  >(
+    'ImageSet',
+    async (nextToken) =>
+      client.models.ImageSet.list({
+        filter: subscriptionFilter.filter,
+        nextToken,
+      }),
+    subscriptionFilter
+  );
+  const locationSetsHook = useOptimisticUpdates<
+    Schema['LocationSet']['type'],
+    'LocationSet'
+  >(
     'LocationSet',
-    async (nextToken) => client.models.LocationSet.list({ filter: subscriptionFilter.filter, nextToken }),
+    async (nextToken) =>
+      client.models.LocationSet.list({
+        filter: subscriptionFilter.filter,
+        nextToken,
+      }),
     subscriptionFilter
-  )
-  const annotationSetsHook = useOptimisticUpdates<Schema['AnnotationSet']['type'], 'AnnotationSet'>(
+  );
+  const annotationSetsHook = useOptimisticUpdates<
+    Schema['AnnotationSet']['type'],
+    'AnnotationSet'
+  >(
     'AnnotationSet',
-    async (nextToken) => client.models.AnnotationSet.list({ filter: subscriptionFilter.filter, nextToken }),
+    async (nextToken) =>
+      client.models.AnnotationSet.list({
+        filter: subscriptionFilter.filter,
+        nextToken,
+      }),
     subscriptionFilter
-  )
-  const queuesHook = useQueues()
-  
-  return ( 
-    <ManagementContext.Provider value={{
-      allUsers,
-      projectMembershipHook,
-      imageSetsHook,
-      locationSetsHook,
-      annotationSetsHook,
-      queuesHook
-    }} >
-      {allUsers && projectMembershipHook && imageSetsHook && locationSetsHook && annotationSetsHook && queuesHook && children}
-    </ManagementContext.Provider>)
+  );
+  const queuesHook = useQueues();
 
+  return (
+    <ManagementContext.Provider
+      value={{
+        allUsers,
+        projectMembershipHook,
+        imageSetsHook,
+        locationSetsHook,
+        annotationSetsHook,
+        queuesHook,
+      }}
+    >
+      {allUsers &&
+        projectMembershipHook &&
+        imageSetsHook &&
+        locationSetsHook &&
+        annotationSetsHook &&
+        queuesHook &&
+        children}
+    </ManagementContext.Provider>
+  );
 }
 
 // export function Global({ children }: { children: React.ReactNode }) {
 //   const [modalToShow, showModal] = useState<string | null>(null)
-  
 
 //   return (
 //     <GlobalContext.Provider value={{
@@ -222,13 +300,47 @@ export function Management({ children }: { children: React.ReactNode }) {
 // }
 
 export function Progress({ children }: { children: React.ReactNode }) {
-  const [progress, setProgress] = useState<ProgressType>({})
+  const [progress, setProgress] = useState<ProgressType>({});
   return (
-    <ProgressContext.Provider value={{
-      progress,
-      setProgress,
-    }}>
+    <ProgressContext.Provider
+      value={{
+        progress,
+        setProgress,
+      }}
+    >
       {children}
     </ProgressContext.Provider>
   );
 }
+
+// export function Organization({ children }: { children: React.ReactNode }) {
+//   const { client } = useContext(GlobalContext)!;
+//   const subscriptionFilter = useMemo(
+//     () => ({ filter: { organizationId: { eq: project.organizationId } } }),
+//     [project.organizationId]
+//   );
+//   const membershipHook = useOptimisticUpdates<
+//     Schema['OrganizationMembership']['type'],
+//     'OrganizationMembership'
+//   >(
+//     'OrganizationMembership',
+//     async (nextToken) =>
+//       client.models.OrganizationMembership.membershipsByOrganizationId({
+//         organizationId: project.organizationId,
+//         nextToken,
+//       }),
+//     subscriptionFilter
+//   );
+
+//   return (
+//     <OrganizationContext.Provider
+//       value={{
+//         membershipHook,
+//       }}
+//     >
+//       {children}
+//     </OrganizationContext.Provider>
+//   );
+// }
+  
+
