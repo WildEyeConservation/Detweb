@@ -23,7 +23,9 @@ export default function ConfigureUserTestModal({show, onClose, userId}: {show: b
 
     useEffect(() => {
         const fetchTestConfig = async () => {
-            const {data: [config]} = await client.models.UserTestConfig.testConfigByUserId({ userId: userId });
+            const {data: configs} = await client.models.UserTestConfig.testConfigByUserId({ userId: userId });
+
+            const config = configs.find((c) => c.projectId === project.id);
 
             if (!config) {
                 setEnableTesting(false);
@@ -163,6 +165,7 @@ export default function ConfigureUserTestModal({show, onClose, userId}: {show: b
         } else {
             const {data: utc} = await client.models.UserTestConfig.create({
                 userId: userId,
+                projectId: project.id,
                 testType: testType,
                 random: testType === 'random' ? testChance : undefined,
                 deadzone: testType === 'random' ? deadzone : undefined,
