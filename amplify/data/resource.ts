@@ -35,6 +35,7 @@ const schema = a.schema({
     queues: a.hasMany('Queue', 'projectId'),
     testPresets: a.hasMany('TestPreset', 'projectId'),
     annotationCountsPerCategoryPerSet: a.hasMany('AnnotationCountPerCategoryPerSet', 'projectId'),
+    userTestConfigs: a.hasMany('UserTestConfig', 'projectId'),
   }).authorization(allow => [allow.authenticated()]),
     // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
     // allow.group('orgadmin').to(['create', 'update', 'delete', 'read']),
@@ -329,6 +330,8 @@ const schema = a.schema({
     interval: a.float(),
     deadzone: a.float(),
     postTestConfirmation: a.boolean(),
+    projectId: a.id(),
+    project: a.belongsTo('Project', 'projectId'),
     testPresetUsers: a.hasMany('TestPresetUser', 'userConfigId')
   }).authorization(allow => [allow.authenticated()])
   .secondaryIndexes((index) => [index('userId').queryField('testConfigByUserId')]),
