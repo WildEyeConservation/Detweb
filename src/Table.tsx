@@ -44,7 +44,7 @@ export default function MyTable(input: TableObject) {
       const bValue = b.rowData[index];
 
       const isNumeric = (value: string) => /^-?\d+(\.\d+)?$/.test(value);
-      
+
       if (isNumeric(aValue as string) && isNumeric(bValue as string)) {
         const aNum = parseFloat(aValue as string);
         const bNum = parseFloat(bValue as string);
@@ -69,7 +69,11 @@ export default function MyTable(input: TableObject) {
 
   const renderSortIndicator = (index: number) => {
     if (!sortConfig || sortConfig.index !== index) return null;
-    return sortConfig.direction === 'asc' ? <MoveUp size={16}/> : <MoveDown size={16}/>;
+    return sortConfig.direction === 'asc' ? (
+      <MoveUp size={16} />
+    ) : (
+      <MoveDown size={16} />
+    );
   };
 
   const totalPages = pagination
@@ -86,8 +90,7 @@ export default function MyTable(input: TableObject) {
     setSortedData(tableData);
   }, [tableData]);
 
-  return (
-    tableData.length > 0 ? (
+  return tableData.length > 0 ? (
     <div>
       <Table bordered hover>
         {tableHeadings && (
@@ -126,26 +129,29 @@ export default function MyTable(input: TableObject) {
           <div>
             <Button
               variant="primary"
-              onClick={() => {setCurrentPage((c) => c - 1)}}
+              onClick={() => {
+                setCurrentPage((c) => c - 1);
+              }}
               disabled={currentPage === 0}
             >
               &lt;
             </Button>
             <Button
               variant="primary"
-              onClick={() => setCurrentPage((c) => c + 1)}
-              disabled={currentPage === Math.ceil(sortedData.length / itemsPerPage) - 1}
+              onClick={() => setCurrentPage(currentPage + 1)}
+              disabled={
+                currentPage === Math.ceil(sortedData.length / itemsPerPage) - 1
+              }
             >
               &gt;
             </Button>
           </div>
         </div>
-        )}
-      </div>
-    ) : (
-      <div className="text-center">
-        <h5>{emptyMessage}</h5>
-      </div>
-    )
+      )}
+    </div>
+  ) : (
+    <div className="text-center">
+      <h5>{emptyMessage}</h5>
+    </div>
   );
 }
