@@ -1,10 +1,23 @@
 import { useContext, useEffect, useState } from 'react';
 import { GlobalContext, UserContext } from './Context';
 import { Schema } from '../amplify/data/resource';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import NavDropdown from 'react-bootstrap/NavDropdown';
+import Dropdown from 'react-bootstrap/Dropdown';
+import DropdownButton from 'react-bootstrap/DropdownButton';
+import ButtonGroup from 'react-bootstrap/ButtonGroup';
 
-function OrganizationSelector() {
+function OrganizationSelector({
+  organization,
+  setOrganization,
+}: {
+  organization: {
+    id: string;
+    name: string;
+  };
+  setOrganization: (organization: {
+    id: string;
+    name: string;
+  }) => void;
+}) {
   const { client } = useContext(GlobalContext)!;
   const {
     myOrganizationHook: { data: myOrganizations },
@@ -12,9 +25,6 @@ function OrganizationSelector() {
   const [organizations, setOrganizations] = useState<
     Schema['Organization']['type'][]
   >([]);
-  const { organizationId } = useParams();
-  const location = useLocation();
-  const navigate = useNavigate();
 
   useEffect(() => {
     Promise.all(
@@ -33,50 +43,40 @@ function OrganizationSelector() {
         allOrganizations.filter((organization) => organization !== null)
       );
 
-      if (
-        allOrganizations.length === 1 &&
-        (location.pathname === `/manage-organization` ||
-          location.pathname === `/manage-organization/`) &&
-        allOrganizations[0]?.id
-      ) {
-        navigate(`/manage-organization/${allOrganizations[0].id}/users`);
+      if (allOrganizations.length === 1 && allOrganizations[0]?.id) {
+        setOrganization({
+          id: allOrganizations[0].id,
+          name: allOrganizations[0].name,
+        });
       }
     });
   }, [myOrganizations]);
 
   return (
-    <>
-      {
-        <NavDropdown
-          title={
-            organizationId
-              ? organizations.find((org) => org.id === organizationId)?.name
-              : 'Select an Organization'
-          }
-          id="organization-nav-dropdown"
-          onSelect={(orgId) => {
-            if (orgId) {
-              navigate(`/manage-organization/${orgId}/users`);
-            }
+    <DropdownButton
+      as={ButtonGroup}
+      key={'Primary'}
+      id={`dropdown-variants-Primary`}
+      variant={'primary'}
+      title={organization.id
+        ? organizations.find((org) => org.id === organization.id)?.name
+        : 'Select an Organization'}
+    >
+      {organizations?.map((organization) => (
+        <Dropdown.Item
+          key={organization.id}
+          eventKey={organization.id}
+          onClick={() => {
+            setOrganization({
+              id: organization.id,
+              name: organization.name,
+            });
           }}
         >
-          {!organizationId && (
-            <NavDropdown.Item key="none" disabled>
-              Select an Organization
-            </NavDropdown.Item>
-          )}
-          {organizations?.map((organization) => (
-            <NavDropdown.Item
-              key={organization.id}
-              eventKey={organization.id}
-              active={organizationId === organization.id}
-            >
-              {organization.name}
-            </NavDropdown.Item>
-          ))}
-        </NavDropdown>
-      }
-    </>
+          {organization.name}
+        </Dropdown.Item>
+      ))}
+    </DropdownButton>
   );
 }
 

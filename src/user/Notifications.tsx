@@ -44,7 +44,7 @@ export default function Notifications() {
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'center',
-              fontSize: '14px',
+              fontSize: '16px',
             }}
           >
             {totalNotifications}

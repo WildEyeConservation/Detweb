@@ -17,12 +17,10 @@ import RegisterOrganization from './RegisterOrganization';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import ErrorPage from './error-page';
 import ProjectView from './ProjectView';
-import OrganizationView from './OrganizationView';
-import Users from './organization/Users';
 import Jobs from './user/Jobs.tsx';
-import Info from './organization/Info';
 import CreateOrganization from './organization/CreateOrganization';
 import Surveys from './Surveys';
+import Permissions from './Permissions.tsx';
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -63,23 +61,12 @@ const router = createBrowserRouter([
         element: <RegisterOrganization />,
       },
       {
-        path: 'create-organization',
-        element: <CreateOrganization />,
+        path: 'permissions',
+        element: <Permissions />,
       },
       {
-        path: 'manage-organization/:organizationId?',
-        element: <OrganizationView />,
-        errorElement: <ErrorPage />,
-        children: [
-          {
-            path: 'users',
-            element: <Users />,
-          },
-          {
-            path: 'info',
-            element: <Info />,
-          },
-        ],
+        path: 'onboarding',
+        element: <CreateOrganization />,
       },
       {
         path: ':organizationId?/:projectId?',

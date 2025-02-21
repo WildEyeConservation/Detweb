@@ -7,15 +7,15 @@ import NewSurvey from './NewSurvey.tsx';
 
 export default function Surveys() {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
-  const { myMembershipHook: myProjectsHook } = useContext(UserContext)!;
+  const { myMembershipHook: myProjectsHook, isOrganizationAdmin } = useContext(UserContext)!;
   const [projects, setProjects] = useState<Schema['Project']['type'][]>([]);
-
-  const myAdminProjects = myProjectsHook.data?.filter(
-    (project) => project.isAdmin
-  );
 
   useEffect(() => {
     async function getProjects() {
+      const myAdminProjects = myProjectsHook.data?.filter(
+        (project) => project.isAdmin
+      );
+
       Promise.all(
         myAdminProjects?.map(
           async (project) =>
@@ -39,7 +39,7 @@ export default function Surveys() {
     }
 
     getProjects();
-  }, [myAdminProjects]);
+  }, [myProjectsHook.data]);
 
   const tableData = projects.map((project) => ({
     id: project.id,
@@ -50,6 +50,10 @@ export default function Surveys() {
       </div>,
     ],
   }));
+
+  if (!isOrganizationAdmin) {
+    return <div>You are not authorized to access this page.</div>;
+  }
 
   return (
     <>
@@ -64,14 +68,19 @@ export default function Surveys() {
         <Card>
           <Card.Body>
             <div className="d-flex justify-content-between align-items-center mb-2">
-              <Card.Title className="mb-0" style={{ fontSize: '24px' }}>
+              <Card.Title className="mb-0">
                 <h4 className="mb-0">Your Surveys</h4>
               </Card.Title>
               <Button variant="primary" onClick={() => showModal('newSurvey')}>
                 New Survey
               </Button>
             </div>
-            <MyTable tableData={tableData} pagination={true} itemsPerPage={5} />
+            <MyTable
+              tableData={tableData}
+              pagination={true}
+              itemsPerPage={5}
+              emptyMessage="You are not an admin of any surveys."
+            />
           </Card.Body>
         </Card>
       </div>

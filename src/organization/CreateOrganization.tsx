@@ -2,10 +2,11 @@ import Card from 'react-bootstrap/Card';
 import Form from 'react-bootstrap/Form';
 import Button from 'react-bootstrap/Button';
 import { useState, useContext } from 'react';
-import { GlobalContext } from '../Context';
+import { GlobalContext, UserContext } from '../Context';
 import { useUsers } from '../apiInterface';
 
 export default function CreateOrganization() {
+  const { isOrganizationAdmin } = useContext(UserContext)!;
   const { client } = useContext(GlobalContext);
   const { users } = useUsers();
 
@@ -59,6 +60,10 @@ export default function CreateOrganization() {
     setAdminEmail('');
   };
 
+  if (!isOrganizationAdmin) {
+    return <div>You are not authorized to access this page.</div>;
+  }
+
   return (
     <div
       className="d-flex flex-column gap-3 align-items-center mt-3"
@@ -69,7 +74,9 @@ export default function CreateOrganization() {
     >
       <Card className="w-100">
         <Card.Body>
-          <Card.Title>Create Organization</Card.Title>
+          <Card.Title>
+            <h4>Create Organization</h4>
+          </Card.Title>
           <Form onSubmit={handleSubmit}>
             <Form.Group className="mb-3">
               <Form.Label>Name</Form.Label>

@@ -1,0 +1,113 @@
+import Button from 'react-bootstrap/Button';
+import Form from 'react-bootstrap/Form';
+import { Modal } from 'react-bootstrap';
+import { useContext } from 'react';
+import { GlobalContext, UserContext } from '../Context';
+import { useUsers } from '../apiInterface';
+import { Schema } from '../../amplify/data/resource';
+
+export default function InviteUserModal({
+  memberships,
+  organization,
+  show,
+  onClose,
+}: {
+  memberships: Schema['OrganizationMembership']['type'][];
+  organization: {
+    id: string;
+    name: string;
+  };
+  show: boolean;
+  onClose: () => void;
+}) {
+  const { client } = useContext(GlobalContext)!;
+  const { user: authUser } = useContext(UserContext)!;
+  const { users } = useUsers();
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.target as HTMLFormElement);
+    const username = formData.get('username') as string;
+
+    if (!username) {
+      alert('Please enter a username');
+      return;
+    }
+
+    const userId = users?.find((user) => user.name === username)?.id;
+
+    if (
+      memberships?.some((membership) => membership.userId === userId)
+    ) {
+      alert('User is already a member of the organization');
+      return;
+    }
+
+    const { data: old } =
+      await client.models.OrganizationInvite.organizationInvitesByUsername({
+        username: username,
+      });
+
+    if (
+      old.length > 0 &&
+      old.some(
+        (invite) =>
+          invite.status === 'pending' &&
+          invite.organizationId === organization.id
+      )
+    ) {
+      alert('User already has a pending invitation');
+      return;
+    }
+
+    const invite = await client.models.OrganizationInvite.create({
+      organizationId: organization.id,
+      username: username,
+      invitedBy: authUser.username,
+    });
+
+    if (invite) {
+      alert('Invite sent!');
+    } else {
+      alert('Failed to send invite');
+    }
+  };
+
+  return (
+    <Modal show={show} onHide={onClose}>
+      <Modal.Header closeButton>
+        <Modal.Title>Invite a user to {organization.name}</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <Form onSubmit={handleSubmit}>
+          <Form.Group className="mb-3" controlId="formBasicEmail">
+            <Form.Label>Username</Form.Label>
+            <Form.Control
+              type="text"
+              placeholder="Enter username"
+              name="username"
+            />
+          </Form.Group>
+          <Button variant="primary" type="submit">
+            Send Invite
+          </Button>
+          <Form.Text className="d-block mt-2">
+            *This will send an invite to the user's ESS inbox. Don't worry, the
+            invite will be stored until they sign up{' '}
+            <span
+              className="text-muted"
+              style={{ textDecoration: 'underline', cursor: 'pointer' }}
+              onClick={() => {
+                const inviteLink = `https://prod.d2akirfrcp5tqu.amplifyapp.com/`;
+                navigator.clipboard.writeText(inviteLink);
+                alert('Signup link copied to clipboard!');
+              }}
+            >
+              (Copy link to signup page)
+            </span>
+          </Form.Text>
+        </Form>
+      </Modal.Body>
+    </Modal>
+  );
+}

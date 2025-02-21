@@ -8,6 +8,7 @@ interface TableObject {
   tableHeadings?: { content: string; style?: CSSProperties; sort?: boolean }[];
   pagination?: boolean;
   itemsPerPage?: number;
+  emptyMessage?: string;
 }
 
 type SortDirection = 'asc' | 'desc';
@@ -18,6 +19,7 @@ export default function MyTable(input: TableObject) {
     tableHeadings,
     pagination = false,
     itemsPerPage = 10,
+    emptyMessage = 'No data',
   } = input;
   const [sortedData, setSortedData] = useState(tableData);
   const [sortConfig, setSortConfig] = useState<{
@@ -84,6 +86,7 @@ export default function MyTable(input: TableObject) {
   }, [tableData]);
 
   return (
+    tableData.length > 0 ? (
     <div>
       <Table bordered hover>
         {tableHeadings && (
@@ -134,7 +137,12 @@ export default function MyTable(input: TableObject) {
             </Button>
           </div>
         </div>
-      )}
-    </div>
+        )}
+      </div>
+    ) : (
+      <div className="text-center">
+        <h5>{emptyMessage}</h5>
+      </div>
+    )
   );
 }
