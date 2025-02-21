@@ -1,10 +1,10 @@
 import { Button, Form, Modal } from 'react-bootstrap';
 import { useState } from 'react';
-import { GlobalContext, UserContext } from './Context';
+import { GlobalContext, UserContext } from '../Context';
 import { useContext, useEffect } from 'react';
 import Select from 'react-select';
 
-export default function NewSurvey({
+export default function NewSurveyModal({
   show,
   onClose,
 }: {

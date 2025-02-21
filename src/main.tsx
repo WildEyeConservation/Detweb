@@ -19,7 +19,7 @@ import ErrorPage from './error-page';
 import ProjectView from './ProjectView';
 import Jobs from './user/Jobs.tsx';
 import CreateOrganization from './organization/CreateOrganization';
-import Surveys from './Surveys';
+import Surveys from './survey/Surveys.tsx';
 import Permissions from './Permissions.tsx';
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,37 +53,24 @@ const router = createBrowserRouter([
         element: <Jobs />,
       },
       {
-        path: 'surveys',
-        element: <Surveys />,
-      },
-      {
-        path: 'ESSRegisterAdmin',
-        element: <RegisterOrganization />,
-      },
-      {
-        path: 'permissions',
-        element: <Permissions />,
-      },
-      {
-        path: 'onboarding',
-        element: <CreateOrganization />,
-      },
-      {
-        path: ':organizationId?/:projectId?',
+        path: 'surveys/:surveyId',
         element: <ProjectView />,
-        errorElement: <ErrorPage />,
         children: [
           {
             path: 'annotate',
             element: <Annotate />,
           },
           {
-            path: 'projectManagement',
-            element: <ProjectManagement />,
-          },
-          {
             path: 'leaderboard',
             element: <UserStats />,
+          },    
+          {
+            path: 'review',
+            element: <Review />,
+          },
+          {
+            path: 'manage',
+            element: <ProjectManagement />,
           },
           {
             path: 'quickTest',
@@ -101,11 +88,23 @@ const router = createBrowserRouter([
             path: 'register/:image1Id/:image2Id/:selectedSet',
             element: <PairLoader />,
           },
-          {
-            path: 'review',
-            element: <Review />,
-          },
         ],
+      },
+      {
+        path: 'surveys',
+        element: <Surveys />,
+      },
+      {
+        path: 'ESSRegisterAdmin',
+        element: <RegisterOrganization />,
+      },
+      {
+        path: 'permissions',
+        element: <Permissions />,
+      },
+      {
+        path: 'onboarding',
+        element: <CreateOrganization />,
       },
     ],
   },

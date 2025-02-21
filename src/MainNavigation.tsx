@@ -66,35 +66,21 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                   Jobs
                 </Nav.Link>
                 {/* <Nav.Link
+                  as={NavLink}
+                  eventKey={`${projectPath}annotate`}
+                  to={`${projectPath}annotate`}
+                >
+                  Annotate
+                </Nav.Link>
+                <IfProjectAdmin currentPM={currentPM}>
+                  <Nav.Link
                     as={NavLink}
-                    eventKey={`${projectPath}annotate`}
-                    to={`${projectPath}annotate`}
+                    eventKey={`${projectPath}projectManagement`}
+                    to={`${projectPath}projectManagement`}
                   >
-                    Annotate
-                  </Nav.Link> */}
-                {/* <IfProjectAdmin currentPM={currentPM}>
-                            <Nav.Link
-                              as={NavLink}
-                              eventKey={`${projectPath}projectManagement`}
-                              to={`${projectPath}projectManagement`}
-                            >
-                              Project Management
-                            </Nav.Link>
-                          </IfProjectAdmin> */}
-                <Nav.Link
-                  as={NavLink}
-                  eventKey={`${projectPath}leaderboard`}
-                  to={`${projectPath}leaderboard`}
-                >
-                  Leaderboard
-                </Nav.Link>
-                <Nav.Link
-                  as={NavLink}
-                  eventKey={`${projectPath}review`}
-                  to={`${projectPath}review`}
-                >
-                  Review
-                </Nav.Link>
+                    Project Management
+                  </Nav.Link>
+                </IfProjectAdmin> */}
                 {isOrganizationAdmin && (
                   <Nav.Link
                     as={NavLink}
@@ -128,7 +114,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
         className="d-flex justify-content-center h-100"
         style={{ marginTop: '56px', overflowY: 'auto' }}
       >
-        <Outlet context={{ currentPM }} />
+        <Outlet />
       </Container>
     </div>
   );

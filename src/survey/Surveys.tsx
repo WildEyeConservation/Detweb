@@ -1,13 +1,16 @@
 import { useContext, useEffect, useState } from 'react';
-import { UserContext, GlobalContext } from './Context.tsx';
-import { Schema } from '../amplify/data/resource';
+import { UserContext, GlobalContext } from '../Context.tsx';
+import { Schema } from '../../amplify/data/resource.ts';
 import { Card, Button } from 'react-bootstrap';
-import MyTable from './Table.tsx';
-import NewSurvey from './NewSurvey.tsx';
+import MyTable from '../Table.tsx';
+import NewSurveyModal from './NewSurveyModal.tsx';
+import { useNavigate } from 'react-router-dom';
 
 export default function Surveys() {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
-  const { myMembershipHook: myProjectsHook, isOrganizationAdmin } = useContext(UserContext)!;
+  const navigate = useNavigate();
+  const { myMembershipHook: myProjectsHook, isOrganizationAdmin } =
+    useContext(UserContext)!;
   const [projects, setProjects] = useState<Schema['Project']['type'][]>([]);
 
   useEffect(() => {
@@ -44,9 +47,31 @@ export default function Surveys() {
   const tableData = projects.map((project) => ({
     id: project.id,
     rowData: [
-      <div>
-        <h5>{project.name}</h5>
-        <i style={{ fontSize: '16px' }}>{project.organization.name}</i>
+      <div className="d-flex justify-content-between align-items-center">
+        <div>
+          <h5>{project.name}</h5>
+          <i style={{ fontSize: '16px' }}>{project.organization.name}</i>
+        </div>
+        <div className="d-flex gap-2">
+          <Button
+            variant="primary"
+            onClick={() => navigate(`/surveys/${project.id}/leaderboard`)}
+          >
+            Leaderboard
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => navigate(`/surveys/${project.id}/review`)}
+          >
+            Review
+          </Button>
+          <Button
+            variant="link"
+            onClick={() => navigate(`/surveys/${project.id}/manage`)}
+          >
+            Manage
+          </Button>
+        </div>
       </div>,
     ],
   }));
@@ -69,11 +94,8 @@ export default function Surveys() {
           <Card.Body>
             <div className="d-flex justify-content-between align-items-center mb-2">
               <Card.Title className="mb-0">
-                <h4 className="mb-0">Your Surveys</h4>
+                <h4>Your Surveys</h4>
               </Card.Title>
-              <Button variant="primary" onClick={() => showModal('newSurvey')}>
-                New Survey
-              </Button>
             </div>
             <MyTable
               tableData={tableData}
@@ -81,10 +103,15 @@ export default function Surveys() {
               itemsPerPage={5}
               emptyMessage="You are not an admin of any surveys."
             />
+            <div className="d-flex justify-content-center mt-3 border-top pt-3 border-secondary">
+              <Button variant="primary" onClick={() => showModal('newSurvey')}>
+                New Survey
+              </Button>
+            </div>
           </Card.Body>
         </Card>
       </div>
-      <NewSurvey
+      <NewSurveyModal
         show={modalToShow === 'newSurvey'}
         onClose={() => showModal(null)}
       />

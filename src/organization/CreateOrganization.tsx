@@ -105,7 +105,7 @@ export default function CreateOrganization() {
                 onChange={(e) => setAdminEmail(e.target.value)}
               />
             </Form.Group>
-            <div className="d-flex gap-2">
+            <div className="d-flex gap-2 justify-content-end">
               <Button variant="primary" type="submit" disabled={isSubmitting}>
                 Submit
               </Button>

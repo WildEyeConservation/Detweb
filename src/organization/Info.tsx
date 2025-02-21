@@ -85,7 +85,7 @@ export default function Info({ organizationId }: { organizationId: string }) {
             disabled={loading}
           />
         </Form.Group>
-        <div className="d-flex gap-2">
+        <div className="d-flex gap-2 justify-content-end">
           <Button variant="primary" type="submit" disabled={isSaving}>
             Save
           </Button>
