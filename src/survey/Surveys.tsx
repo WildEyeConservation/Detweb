@@ -49,8 +49,8 @@ export default function Surveys() {
     rowData: [
       <div className="d-flex justify-content-between align-items-center">
         <div>
-          <h5>{project.name}</h5>
-          <i style={{ fontSize: '16px' }}>{project.organization.name}</i>
+          <h5 className="mb-0">{project.name}</h5>
+          <i style={{ fontSize: '14px' }}>{project.organization.name}</i>
         </div>
         <div className="d-flex gap-2">
           <Button

@@ -78,7 +78,8 @@ export default function Info({ organizationId }: { organizationId: string }) {
         <Form.Group className="mb-3" controlId="formBasicEmail">
           <Form.Label>Description</Form.Label>
           <Form.Control
-            type="text"
+            as="textarea"
+            rows={3}
             placeholder="Enter organization description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}

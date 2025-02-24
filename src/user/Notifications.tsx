@@ -52,24 +52,37 @@ export default function Notifications() {
           <Bell fill="currentColor" />
         </div>
       </button>
+      {show && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            zIndex: 1,
+          }}
+          onClick={() => setShow(false)}
+        />
+      )}
       {username && (
         <div
           style={{
             position: 'absolute',
             top: 56,
-            right: 56,
+            right: 83,
             width: '400px',
             opacity: show ? 1 : 0,
             pointerEvents: show ? 'auto' : 'none',
             transition: 'opacity 0.15s ease-in-out',
             overflow: 'auto',
+            zIndex: 2,
           }}
           className="bg-primary border border-secondary shadow-sm rounded-3"
         >
           <div className="d-flex justify-content-end pt-2 pe-2">
             <X onClick={() => setShow(false)} style={{ cursor: 'pointer' }} />
           </div>
-
           <Inbox
             username={username}
             setTotalNotifications={setTotalNotifications}

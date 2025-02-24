@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useEffect, useState, useMemo, useContext } from 'react';
 import { PreloaderFactory } from './Preloader';
 import { client } from './optimisticExperiment';
@@ -11,6 +11,7 @@ import { Form } from 'react-bootstrap';
 import LabeledToggleSwitch from './LabeledToggleSwitch';
 import './Review.css';
 import { Card } from 'react-bootstrap';
+import Button from 'react-bootstrap/Button';
 
 export function Review() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -27,6 +28,7 @@ export function Review() {
   const [locationsLoaded, setLocationsLoaded] = useState(0);
   const [index, setIndex] = useState(0);
   const [bufferSource, setBufferSource] = useState<BufferSource | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     async function fetchAnnotations() {
@@ -172,8 +174,11 @@ export function Review() {
     >
       <Card className="h-100">
         <Card.Body>
-          <Card.Title>
-            <h4>Review  {project.name}</h4>
+          <Card.Title className="d-flex justify-content-between align-items-center">
+            <h4>Review {project.name}</h4>
+            <Button variant="primary" onClick={() => navigate('/surveys')}>
+              Back to Surveys
+            </Button>
           </Card.Title>
           <div
             style={{

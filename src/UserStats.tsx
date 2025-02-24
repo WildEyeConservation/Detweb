@@ -15,12 +15,15 @@ import exportFromJSON from 'export-from-json';
 import { QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { Card } from 'react-bootstrap';
+import Button from 'react-bootstrap/Button';
+import { useNavigate } from 'react-router-dom';
 
 export default function UserStats() {
   const { project } = useContext(ProjectContext)!;
   const { getDynamoClient } = useContext(UserContext)!;
   const { client, backend } = useContext(GlobalContext)!;
   const { allUsers } = useContext(ManagementContext)!;
+  const navigate = useNavigate();
   const [stats, setStats] = useState<
     Record<
       string,
@@ -264,8 +267,11 @@ export default function UserStats() {
     >
       <Card>
         <Card.Body className="mt-2">
-          <Card.Title className="mb-3">
+          <Card.Title className="mb-3 d-flex justify-content-between align-items-center">
             <h4>User Stats for {project.name}</h4>
+            <Button variant="primary" onClick={() => navigate('/surveys')}>
+              Back to Surveys
+            </Button>
           </Card.Title>
           <div className="d-flex justify-content-between align-items-center">
             <div className="d-flex align-items-center gap-2">

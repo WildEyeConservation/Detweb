@@ -2,6 +2,7 @@ import Table from 'react-bootstrap/Table';
 import type { CSSProperties } from 'react';
 import { useState, useEffect } from 'react';
 import Button from 'react-bootstrap/esm/Button';
+import { MoveUp, MoveDown } from 'lucide-react';
 
 interface TableObject {
   tableData: { id: any; rowData: React.ReactNode[] }[];
@@ -68,7 +69,7 @@ export default function MyTable(input: TableObject) {
 
   const renderSortIndicator = (index: number) => {
     if (!sortConfig || sortConfig.index !== index) return null;
-    return sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽';
+    return sortConfig.direction === 'asc' ? <MoveUp size={16}/> : <MoveDown size={16}/>;
   };
 
   const totalPages = pagination
@@ -98,8 +99,10 @@ export default function MyTable(input: TableObject) {
                   onClick={sort ? () => handleSort(index) : undefined}
                   style={{ cursor: sort ? 'pointer' : 'default', ...style }}
                 >
-                  {content}
-                  {sort && renderSortIndicator(index)}
+                  <div className="d-flex align-items-center justify-content-between">
+                    {content}
+                    {sort && renderSortIndicator(index)}
+                  </div>
                 </th>
               ))}
             </tr>
