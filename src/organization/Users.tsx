@@ -2,15 +2,25 @@ import Button from 'react-bootstrap/Button';
 import MyTable from '../Table';
 import { useOptimisticUpdates } from '../useOptimisticUpdates';
 import { Schema } from '../../amplify/data/resource';
-import { useContext } from 'react';
+import { useContext, useState } from 'react';
 import { GlobalContext, UserContext } from '../Context';
 import { useUsers } from '../apiInterface';
 import InviteUserModal from './InviteUserModal';
+import ExceptionsModal from './ExceptionsModal';
 
-export default function Users({ organization }: { organization: { id: string, name: string } }) {
+export default function Users({
+  organization,
+}: {
+  organization: { id: string; name: string };
+}) {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
   const { user: authUser } = useContext(UserContext)!;
   const { users } = useUsers();
+  const [userToEdit, setUserToEdit] = useState<{
+    id: string;
+    name: string;
+    organizationName: string;
+  } | null>(null);
 
   const membershipHook = useOptimisticUpdates<
     Schema['OrganizationMembership']['type'],
@@ -24,8 +34,10 @@ export default function Users({ organization }: { organization: { id: string, na
 
   const tableHeadings = [
     { content: 'Username' },
-    { content: 'Administrator' },
-    { content: 'Actions' },
+    { content: 'Email' },
+    { content: 'Organization Admin' },
+    { content: 'Permission Exceptions' },
+    { content: 'Remove' },
   ];
 
   const tableData = membershipHook.data?.map((membership) => {
@@ -34,43 +46,55 @@ export default function Users({ organization }: { organization: { id: string, na
       id: user?.id,
       rowData: [
         user?.name,
-        membership.isAdmin ? 'Yes' : 'No',
-        user?.id !== authUser.userId ? (
-          <div className="d-flex gap-2">
-            <Button
-              variant="danger"
-              onClick={() => {
-                if (
-                  !window.confirm(
-                    `Are you sure you want to remove ${user?.name} from the organization?`
-                  )
-                ) {
-                  return;
-                }
-                client.models.OrganizationMembership.delete({
-                  organizationId: organization.id,
-                  userId: membership.userId,
-                });
-              }}
-            >
-              Remove user
-            </Button>
-            <Button
-              variant={membership.isAdmin ? 'danger' : 'info'}
-              onClick={() => {
-                client.models.OrganizationMembership.update({
-                  organizationId: organization.id,
-                  userId: membership.userId,
-                  isAdmin: !membership.isAdmin,
-                });
-              }}
-            >
-              {membership.isAdmin ? 'Remove Admin' : 'Make Admin'}
-            </Button>
-          </div>
-        ) : (
-          <p className="mb-0">Can't change your own admin status</p>
-        ),
+        user?.email,
+        <Button
+          className="fixed-width-button"
+          disabled={user?.id === authUser.userId}
+          variant={membership.isAdmin ? 'danger' : 'info'}
+          onClick={() => {
+            client.models.OrganizationMembership.update({
+              organizationId: organization.id,
+              userId: membership.userId,
+              isAdmin: !membership.isAdmin,
+            });
+          }}
+        >
+          {membership.isAdmin ? 'Remove Admin' : 'Make Admin'}
+        </Button>,
+        <Button
+          className="fixed-width-button"
+          disabled={membership.isAdmin ? true : false}
+          variant={'info'}
+          onClick={() => {
+            setUserToEdit({
+              id: user?.id || '',
+              name: user?.name || '',
+            });
+            showModal('exceptions');
+          }}
+        >
+          Edit
+        </Button>,
+        <Button
+          className="fixed-width-button"
+          variant="danger"
+          disabled={user?.id === authUser.userId}
+          onClick={() => {
+            if (
+              !window.confirm(
+                `Are you sure you want to remove ${user?.name} from the organization?`
+              )
+            ) {
+              return;
+            }
+            client.models.OrganizationMembership.delete({
+              organizationId: organization.id,
+              userId: membership.userId,
+            });
+          }}
+        >
+          Remove user
+        </Button>,
       ],
     };
   });
@@ -97,6 +121,17 @@ export default function Users({ organization }: { organization: { id: string, na
         show={modalToShow === 'inviteUser'}
         onClose={() => showModal(null)}
       />
+      {userToEdit && (
+        <ExceptionsModal
+          show={modalToShow === 'exceptions'}
+          onClose={() => {
+            showModal(null);
+            setUserToEdit(null);
+          }}
+          user={userToEdit}
+          organization={organization}
+        />
+      )}
     </>
   );
 }
