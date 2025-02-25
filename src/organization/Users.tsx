@@ -7,6 +7,7 @@ import { GlobalContext, UserContext } from '../Context';
 import { useUsers } from '../apiInterface';
 import InviteUserModal from './InviteUserModal';
 import ExceptionsModal from './ExceptionsModal';
+import LabeledToggleSwitch from '../LabeledToggleSwitch';
 
 export default function Users({
   organization,
@@ -47,20 +48,19 @@ export default function Users({
       rowData: [
         user?.name,
         user?.email,
-        <Button
-          className="fixed-width-button"
-          disabled={user?.id === authUser.userId}
-          variant={membership.isAdmin ? 'danger' : 'info'}
-          onClick={() => {
+        <LabeledToggleSwitch
+          className="mb-0"
+          leftLabel="No"
+          rightLabel="Yes"
+          checked={membership.isAdmin ?? false}
+          onChange={(checked) => {
             client.models.OrganizationMembership.update({
               organizationId: organization.id,
               userId: membership.userId,
-              isAdmin: !membership.isAdmin,
+              isAdmin: checked,
             });
           }}
-        >
-          {membership.isAdmin ? 'Remove Admin' : 'Make Admin'}
-        </Button>,
+        />,
         <Button
           className="fixed-width-button"
           disabled={membership.isAdmin ? true : false}

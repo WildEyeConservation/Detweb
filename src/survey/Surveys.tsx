@@ -76,7 +76,7 @@ export default function Surveys() {
     ],
   }));
 
-  if (!isOrganizationAdmin) {
+  if (projects.length === 0 && !isOrganizationAdmin) {
     return <div>You are not authorized to access this page.</div>;
   }
 
@@ -103,11 +103,16 @@ export default function Surveys() {
               itemsPerPage={5}
               emptyMessage="You are not an admin of any surveys."
             />
-            <div className="d-flex justify-content-center mt-3 border-top pt-3 border-secondary">
-              <Button variant="primary" onClick={() => showModal('newSurvey')}>
-                New Survey
-              </Button>
-            </div>
+            {isOrganizationAdmin && (
+              <div className="d-flex justify-content-center mt-3 border-top pt-3 border-secondary">
+                <Button
+                  variant="primary"
+                  onClick={() => showModal('newSurvey')}
+                >
+                  New Survey
+                </Button>
+              </div>
+            )}
           </Card.Body>
         </Card>
       </div>

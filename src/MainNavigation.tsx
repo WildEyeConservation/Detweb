@@ -1,34 +1,41 @@
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect } from 'react';
 import Navbar from 'react-bootstrap/Navbar';
 import Nav from 'react-bootstrap/Nav';
-import { NavLink, useLocation, useParams, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ProgressIndicators } from './ProgressIndicators.jsx';
-import { Schema } from '../amplify/data/resource';
 import { Outlet } from 'react-router-dom';
 import Container from 'react-bootstrap/Container';
 import Notifications from './user/Notifications.tsx';
 import { UserContext } from './Context.tsx';
 
 export default function MainNavigation({ signOut }: { signOut: () => void }) {
-  const { cognitoGroups, isOrganizationAdmin } = useContext(UserContext)!;
-
-  const [currentPM, setCurrentPM] = useState<
-    Schema['UserProjectMembership']['type'] | undefined
-  >(undefined);
+  const {
+    cognitoGroups,
+    isOrganizationAdmin,
+    myMembershipHook: myProjectsHook,
+  } = useContext(UserContext)!;
 
   const location = useLocation();
   const navigate = useNavigate();
-  const { organizationId, projectId } = useParams();
 
-  const projectPath = `${organizationId ? `${organizationId}/` : ''}${
-    organizationId && projectId ? `${projectId}/` : ''
-  }`;
+  const myAdminProjects = myProjectsHook.data?.filter(
+    (project) => project.isAdmin
+  );
 
   useEffect(() => {
-    if (location.pathname === '' || location.pathname === '/') {
-      navigate(isOrganizationAdmin ? '/surveys' : '/jobs');
+    if (
+      location.pathname === '' ||
+      location.pathname === '/' ||
+      location.pathname === '/surveys' ||
+      location.pathname === '/jobs'
+    ) {
+      navigate(
+        myAdminProjects?.length > 0 || isOrganizationAdmin
+          ? '/surveys'
+          : '/jobs'
+      );
     }
-  }, [location.pathname, isOrganizationAdmin]);
+  }, [isOrganizationAdmin, myAdminProjects.length]);
 
   useEffect(() => {
     if (isOrganizationAdmin && location.pathname === '/jobs') {
@@ -57,7 +64,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
               className="d-flex flex-row me-2"
             >
               <>
-                {isOrganizationAdmin && (
+                {(myAdminProjects?.length > 0 || isOrganizationAdmin) && (
                   <Nav.Link as={NavLink} eventKey={`surveys`} to={`surveys`}>
                     Surveys
                   </Nav.Link>
