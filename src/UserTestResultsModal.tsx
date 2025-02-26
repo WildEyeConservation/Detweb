@@ -110,6 +110,10 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
     }, {} as Record<string, {userCount: number, testCount: number, name: string}>);
 
     const accuracyByCategory = Object.entries(countsByCategory).map(([categoryId, counts]) => {
+        if (counts.testCount === 0) {
+            return null;
+        }
+        
         const accuracy = counts.userCount / counts.testCount;
         let countPercentage = accuracy > 1
             ? parseFloat(((accuracy - 1) * 100).toFixed(2))
@@ -125,7 +129,7 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
             countPercentage: countPercentage / 100
         }
     })
-    .filter(entry => !isNaN(entry.countPercentage))
+    .filter((entry): entry is { categoryId: string; name: string; countPercentage: number } => entry !== null)
     .sort((a, b) => a.name.localeCompare(b.name));
 
     const summaryCards = [
