@@ -379,6 +379,7 @@ const schema = a
         backupUsers: a.hasMany('UserProjectMembership', 'backupQueueId'),
         url: a.url(),
         zoom: a.integer(),
+        hidden: a.boolean().default(false),
       })
       .authorization((allow) => [allow.authenticated()])
       //.authorization(allow => [allow.groupDefinedIn('projectId')])
