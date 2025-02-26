@@ -12,9 +12,6 @@ import { useUsers } from './apiInterface';
 import Select from 'react-select';
 import { Card } from 'react-bootstrap';
 
-// If we're an admin of the organization, display all the surveys for that organization
-// otherwise just display the surveys that we're a member of (UserProjectMembership)
-
 export default function UserStats() {
   const { getDynamoClient, myOrganizationHook, myMembershipHook } =
     useContext(UserContext)!;
@@ -25,6 +22,7 @@ export default function UserStats() {
       id: string;
       name: string;
       annotationSets: { id: string; name: string }[];
+      organization: { name: string };
     }[]
   >([]);
   const [project, setProject] = useState<{
@@ -62,22 +60,27 @@ export default function UserStats() {
         ...new Set(myMembershipHook.data?.map((m) => m.projectId) || []),
       ];
 
-      for (const projectId of userProjects) {
-        const { data: project } = await client.models.Project.get(
+      const projectPromises = userProjects.map(projectId =>
+        client.models.Project.get(
           { id: projectId },
           {
             selectionSet: [
               'id',
-              'name',
+              'name', 
               'annotationSets.id',
               'annotationSets.name',
+              'organization.name',
             ],
           }
-        );
-        if (project) {
-          setProjects((prev) => [...prev, project]);
-        }
-      }
+        )
+      );
+
+      const projectResults = await Promise.all(projectPromises);
+      const validProjects = projectResults
+        .map(result => result.data)
+        .filter((project): project is NonNullable<typeof project> => project !== null);
+
+      setProjects(validProjects);
     }
 
     loadProjects();
@@ -296,7 +299,7 @@ export default function UserStats() {
             <Select
               value={project}
               options={projects.map((p) => ({
-                label: p.name,
+                label: `${p.name} (${p.organization.name})`,
                 value: p.id,
               }))}
               onChange={(e) => {

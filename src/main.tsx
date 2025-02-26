@@ -21,7 +21,6 @@ import Jobs from './user/Jobs.tsx';
 import CreateOrganization from './organization/CreateOrganization';
 import Surveys from './survey/Surveys.tsx';
 import Permissions from './Permissions.tsx';
-import ProjectUserStats from './ProjectUserStats';
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -60,11 +59,7 @@ const router = createBrowserRouter([
           {
             path: 'annotate',
             element: <Annotate />,
-          },
-          {
-            path: 'leaderboard',
-            element: <ProjectUserStats />,
-          },    
+          }, 
           {
             path: 'review',
             element: <Review />,

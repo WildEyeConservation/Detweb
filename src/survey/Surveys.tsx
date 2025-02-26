@@ -55,18 +55,6 @@ export default function Surveys() {
         <div className="d-flex gap-2">
           <Button
             variant="primary"
-            onClick={() => navigate(`/surveys/${project.id}/annotate`)}
-          >
-            Annotate
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => navigate(`/surveys/${project.id}/leaderboard`)}
-          >
-            Leaderboard
-          </Button>
-          <Button
-            variant="primary"
             onClick={() => navigate(`/surveys/${project.id}/review`)}
           >
             Review
