@@ -29,16 +29,16 @@ export default function Permissions() {
     >
       <Card>
         <Card.Body>
-          <div className="d-flex justify-content-between align-items-center mb-2">
+          <div className="d-flex justify-content-between mb-0">
             <Card.Title className="mb-0">
-              <h4 className="mb-0">Permissions</h4>
+              <h4 className="mb-3">Permissions</h4>
             </Card.Title>
             <OrganizationSelector
               organization={organization}
               setOrganization={setOrganization}
             />
           </div>
-          {organization.id ? (
+          {organization.id && (
             <Tabs>
               <Tab eventKey="users" title="Users">
                 <Users key={organization.id} organization={organization} />
@@ -47,12 +47,6 @@ export default function Permissions() {
                 <Info organizationId={organization.id} />
               </Tab>
             </Tabs>
-          ) : (
-            <div className="d-flex justify-content-center align-items-center">
-              <p className="mb-2 border-top w-100 border-top border-secondary pt-3">
-                Please select an organization to manage permissions.
-              </p>
-            </div>
           )}
         </Card.Body>
       </Card>

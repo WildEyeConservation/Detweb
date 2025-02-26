@@ -47,7 +47,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
   return (
     <div
       className="App d-flex flex-column"
-      style={{ height: '100vh', overflow: 'hidden' }} // Changed overflow to hidden
+      style={{ height: '100vh', overflow: 'hidden' }}
     >
       <Navbar
         bg="primary"
@@ -72,22 +72,6 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                 <Nav.Link as={NavLink} eventKey={`jobs`} to={`jobs`}>
                   Jobs
                 </Nav.Link>
-                {/* <Nav.Link
-                  as={NavLink}
-                  eventKey={`${projectPath}annotate`}
-                  to={`${projectPath}annotate`}
-                >
-                  Annotate
-                </Nav.Link>
-                <IfProjectAdmin currentPM={currentPM}>
-                  <Nav.Link
-                    as={NavLink}
-                    eventKey={`${projectPath}projectManagement`}
-                    to={`${projectPath}projectManagement`}
-                  >
-                    Project Management
-                  </Nav.Link>
-                </IfProjectAdmin> */}
                 {isOrganizationAdmin && (
                   <Nav.Link
                     as={NavLink}
@@ -97,6 +81,13 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                     Permissions
                   </Nav.Link>
                 )}
+                <Nav.Link
+                  as={NavLink}
+                  eventKey={`annotation-statistics`}
+                  to={`annotation-statistics`}
+                >
+                  Annotation Statistics
+                </Nav.Link>
                 {cognitoGroups.includes('sysadmin') && (
                   <Nav.Link
                     as={NavLink}

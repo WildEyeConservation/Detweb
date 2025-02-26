@@ -14,6 +14,7 @@ import './UserManagement.css'; // Import the CSS file
 import TestPresetsModal from './TestPresetsModal';
 import ReviewTestsModal from './ReviewTestsModal';
 import UserTestResultsModal from './UserTestResultsModal';
+import ActionsDropdown from './ActionsDropdown';
 
 export default function UserManagement() {
   const {
@@ -25,7 +26,7 @@ export default function UserManagement() {
   } = useContext(ManagementContext)!;
   const { project } = useContext(ProjectContext)!;
   const { showModal, modalToShow } = useContext(GlobalContext)!;
-  const [userId] = useState<string>('');
+  const [userId, setUserId] = useState<string>('');
 
   const tableData = allUsers
     ?.filter((user) =>
@@ -88,6 +89,16 @@ export default function UserManagement() {
           ) : (
             <p>To select a backup queue, first add user to this project</p>
           ),
+          <ActionsDropdown actions={[
+            {label: "Configure testing", onClick: () => {
+              setUserId(user.id);
+              showModal("userTestModal");
+            }},
+            {label: "Test results", onClick: () => {
+              setUserId(user.id);
+              showModal("userTestResultsModal");
+            }},
+        ]} />
         ],
       };
     });
@@ -95,8 +106,9 @@ export default function UserManagement() {
   const tableHeadings = [
     { content: "Name" },
     { content: "Email" },
-    { content: "Queue", style: { width: "500px" } },
-    { content: "Backup Queue", style: { width: "500px" } },
+    { content: "Queue", style: { width: "400px" } },
+    { content: "Backup Queue", style: { width: "400px" } },
+    { content: "Actions" },
   ];
   return (
     <>

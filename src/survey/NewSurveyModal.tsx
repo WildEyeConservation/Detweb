@@ -6,6 +6,7 @@ import Select from 'react-select';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
 import MyTable from '../Table';
 import { useUsers } from '../apiInterface';
+import { fetchAllPaginatedResults } from '../utils';
 
 export default function NewSurveyModal({
   show,
@@ -67,15 +68,26 @@ export default function NewSurveyModal({
     });
 
     if (project) {
-      await client.models.UserProjectMembership.create({
-        userId: user.userId,
-        projectId: project.id,
-        isAdmin: true,
-      });
-
-      const exceptions = permissionExceptions.filter(
-        (pe) => !pe.temp
+      const admins = await fetchAllPaginatedResults(
+        client.models.OrganizationMembership.membershipsByOrganizationId,
+        {
+          organizationId: organization.value,
+          filter: { isAdmin: { eq: true } },
+          selectionSet: ['userId'],
+        }
       );
+
+      await Promise.all(
+        admins.map(async (a) => {
+          await client.models.UserProjectMembership.create({
+            userId: a.userId,
+            projectId: project.id,
+            isAdmin: true,
+          });
+        })
+      );
+
+      const exceptions = permissionExceptions.filter((pe) => !pe.temp);
 
       await Promise.all(
         exceptions.map(async (e) => {
@@ -94,15 +106,18 @@ export default function NewSurveyModal({
         (u) => !exceptions.some((e) => e.user.id === u.id)
       );
 
-      if (globalAnnotationAccess === null || globalAnnotationAccess?.value === 'Yes') {
-      await Promise.all(
-        other.map(async (u) => {
-          await client.models.UserProjectMembership.create({
-            userId: u.id,
-            projectId: project.id,
-            isAdmin: false,
-          });
-        })
+      if (
+        globalAnnotationAccess === null ||
+        globalAnnotationAccess?.value === 'Yes'
+      ) {
+        await Promise.all(
+          other.map(async (u) => {
+            await client.models.UserProjectMembership.create({
+              userId: u.id,
+              projectId: project.id,
+              isAdmin: false,
+            });
+          })
         );
       }
     }
@@ -148,7 +163,7 @@ export default function NewSurveyModal({
               (acc, o) => ({
                 ...acc,
                 [o.id]: o.memberships
-                  .filter((m) => m.userId !== user.userId && !o.isAdmin)
+                  .filter((m) => !m.isAdmin)
                   .map((m) => ({
                     id: m.userId,
                     name: allUsers.find((u) => u.id === m.userId)?.name || '',
@@ -266,7 +281,7 @@ export default function NewSurveyModal({
                         }}
                         options={users[organization?.value || '']
                           ?.filter(
-                            (u) => 
+                            (u) =>
                               !permissionExceptions.some(
                                 (pe) => pe.user.id === u.id
                               )

@@ -90,7 +90,8 @@ export default function CreateOrganization() {
             <Form.Group className="mb-3">
               <Form.Label>Description</Form.Label>
               <Form.Control
-                type="text"
+                as="textarea"
+                rows={3}
                 placeholder="Enter organization description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -106,11 +107,11 @@ export default function CreateOrganization() {
               />
             </Form.Group>
             <div className="d-flex gap-2 justify-content-end">
-              <Button variant="primary" type="submit" disabled={isSubmitting}>
-                Submit
-              </Button>
               <Button variant="secondary" type="button" onClick={handleClear}>
                 Clear
+              </Button>{' '}
+              <Button variant="primary" type="submit" disabled={isSubmitting}>
+                Submit
               </Button>
             </div>
           </Form>

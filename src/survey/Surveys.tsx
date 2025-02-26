@@ -47,12 +47,18 @@ export default function Surveys() {
   const tableData = projects.map((project) => ({
     id: project.id,
     rowData: [
-      <div className="d-flex justify-content-between align-items-center">
+      <div className="d-flex justify-content-between align-items-center p-2">
         <div>
           <h5 className="mb-0">{project.name}</h5>
           <i style={{ fontSize: '14px' }}>{project.organization.name}</i>
         </div>
         <div className="d-flex gap-2">
+          <Button
+            variant="primary"
+            onClick={() => navigate(`/surveys/${project.id}/annotate`)}
+          >
+            Annotate
+          </Button>
           <Button
             variant="primary"
             onClick={() => navigate(`/surveys/${project.id}/leaderboard`)}
@@ -92,11 +98,9 @@ export default function Surveys() {
       >
         <Card>
           <Card.Body>
-            <div className="d-flex justify-content-between align-items-center mb-2">
-              <Card.Title className="mb-0">
-                <h4>Your Surveys</h4>
-              </Card.Title>
-            </div>
+            <Card.Title>
+              <h4 className="mb-3">Your Surveys</h4>
+            </Card.Title>
             <MyTable
               tableData={tableData}
               pagination={true}

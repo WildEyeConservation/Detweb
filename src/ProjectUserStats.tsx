@@ -1,36 +1,29 @@
 import MyTable from './Table';
 import { useContext, useEffect, useState } from 'react';
 import humanizeDuration from 'humanize-duration';
-import { GlobalContext, UserContext } from './Context';
+import {
+  GlobalContext,
+  ManagementContext,
+  ProjectContext,
+  UserContext,
+} from './Context';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import type { UserStatsType } from './schemaTypes';
+import { AnnotationSetDropdown } from './AnnotationSetDropdownMulti';
 import exportFromJSON from 'export-from-json';
 import { QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
-import { useUsers } from './apiInterface';
-import Select from 'react-select';
 import { Card } from 'react-bootstrap';
-
-// If we're an admin of the organization, display all the surveys for that organization
-// otherwise just display the surveys that we're a member of (UserProjectMembership)
+import Button from 'react-bootstrap/Button';
+import { useNavigate } from 'react-router-dom';
 
 export default function UserStats() {
-  const { getDynamoClient, myOrganizationHook, myMembershipHook } =
-    useContext(UserContext)!;
+  const { project } = useContext(ProjectContext)!;
+  const { getDynamoClient } = useContext(UserContext)!;
   const { client, backend } = useContext(GlobalContext)!;
-  const { users: allUsers } = useUsers();
-  const [projects, setProjects] = useState<
-    {
-      id: string;
-      name: string;
-      annotationSets: { id: string; name: string }[];
-    }[]
-  >([]);
-  const [project, setProject] = useState<{
-    label: string;
-    value: string;
-  } | null>(null);
+  const { allUsers } = useContext(ManagementContext)!;
+  const navigate = useNavigate();
   const [stats, setStats] = useState<
     Record<
       string,
@@ -40,9 +33,7 @@ export default function UserStats() {
   const [startDate, setStartDate] = useState<Date | null>(new Date());
   const [endDate, setEndDate] = useState<Date | null>(new Date());
   const [userStats, setUserStats] = useState<UserStatsType[]>([]);
-
   const [selectedSets, setSelectedSets] = useState<string[] | undefined>([]);
-
   const startString = startDate
     ? `${startDate?.getFullYear()}-${String(startDate?.getMonth() + 1).padStart(
         2,
@@ -55,33 +46,6 @@ export default function UserStats() {
         '0'
       )}-${String(endDate?.getDate()).padStart(2, '0')}`
     : null;
-
-  useEffect(() => {
-    async function loadProjects() {
-      const userProjects = [
-        ...new Set(myMembershipHook.data?.map((m) => m.projectId) || []),
-      ];
-
-      for (const projectId of userProjects) {
-        const { data: project } = await client.models.Project.get(
-          { id: projectId },
-          {
-            selectionSet: [
-              'id',
-              'name',
-              'annotationSets.id',
-              'annotationSets.name',
-            ],
-          }
-        );
-        if (project) {
-          setProjects((prev) => [...prev, project]);
-        }
-      }
-    }
-
-    loadProjects();
-  }, [myOrganizationHook.data]);
 
   useEffect(() => {
     const sub = client.models.UserStats.observeQuery().subscribe({
@@ -221,6 +185,39 @@ export default function UserStats() {
     return locationIds;
   }
 
+  async function queryAnnotations(annotationSetId: string): Promise<string[]> {
+    const dynamoClient = await getDynamoClient();
+    const locationIds: string[] = [];
+    let lastEvaluatedKey: Record<string, any> | undefined = undefined;
+    do {
+      const command = new QueryCommand({
+        TableName: backend.custom.annotationTable,
+        IndexName: 'annotationsBySetId',
+        KeyConditionExpression: 'setId  = :annotationSetId',
+        ExpressionAttributeValues: {
+          ':annotationSetId': {
+            S: annotationSetId,
+          },
+        },
+        ProjectionExpression: 'categoryId,createdAt, #o',
+        ExpressionAttributeNames: { '#o': 'owner' },
+        ExclusiveStartKey: lastEvaluatedKey,
+        // Increase page size for better throughput
+        Limit: 1000,
+      });
+      try {
+        const response = await dynamoClient.send(command);
+        // Extract imageIds from the response
+        locationIds.push(...response.Items.map((item) => unmarshall(item)));
+        lastEvaluatedKey = response.LastEvaluatedKey;
+      } catch (error) {
+        console.error('Error querying DynamoDB:', error);
+        throw error;
+      }
+    } while (lastEvaluatedKey);
+    return locationIds;
+  }
+
   const handleExportData = async () => {
     //Create a lookup table for user names
     const userLookup = new Map<string, string>();
@@ -240,6 +237,25 @@ export default function UserStats() {
     }
   };
 
+  const handleExportAnnotations = async () => {
+    //Create a lookup table for user names
+    const userLookup = new Map<string, string>();
+    allUsers.forEach((u) => userLookup.set(u.id + '::' + u.id, u.name));
+    for (const annotationSetId of selectedSets) {
+      const annotations = await queryAnnotations(annotationSetId);
+      const fileName = `DetWebAnnotations-${annotationSetId}`;
+      const exportType = exportFromJSON.types.csv;
+      exportFromJSON({
+        data: annotations.map((o) => ({
+          ...o,
+          owner: userLookup.get(o.owner),
+        })),
+        fileName,
+        exportType,
+      });
+    }
+  };
+
   return (
     <div
       style={{
@@ -250,9 +266,12 @@ export default function UserStats() {
       }}
     >
       <Card>
-        <Card.Body>
-          <Card.Title>
-            <h4 className="mb-3">Annotation Statistics</h4>
+        <Card.Body className="mt-2">
+          <Card.Title className="mb-3 d-flex justify-content-between align-items-center">
+            <h4>User Stats for {project.name}</h4>
+            <Button variant="primary" onClick={() => navigate('/surveys')}>
+              Back to Surveys
+            </Button>
           </Card.Title>
           <div className="d-flex justify-content-between align-items-center">
             <div className="d-flex align-items-center gap-2">
@@ -291,53 +310,12 @@ export default function UserStats() {
             </div>
           </div>
 
-          <div className="mt-3">
-            <label className="mb-2">Select Survey</label>
-            <Select
-              value={project}
-              options={projects.map((p) => ({
-                label: p.name,
-                value: p.id,
-              }))}
-              onChange={(e) => {
-                setProject(e);
-                setSelectedSets([]);
-              }}
-              styles={{
-                valueContainer: (base) => ({
-                  ...base,
-                  minHeight: '48px',
-                  overflowY: 'auto',
-                }),
-              }}
-            />
-          </div>
-
-          <div className="mt-3">
+          <div className="mt-4">
             <label className="mb-2">Select Annotation Sets</label>
-            <Select
-              value={selectedSets}
-              onChange={(e) => setSelectedSets(e)}
-              isMulti
-              name="Annotation sets"
-              options={
-                projects
-                  .find((p) => p.id == project?.value)
-                  ?.annotationSets.map((s) => ({
-                    label: s.name,
-                    value: s.id,
-                  })) || []
-              }
-              className="basic-multi-select"
-              classNamePrefix="select"
-              closeMenuOnSelect={false}
-              styles={{
-                valueContainer: (base) => ({
-                  ...base,
-                  minHeight: '48px',
-                  overflowY: 'auto',
-                }),
-              }}
+            <AnnotationSetDropdown
+              selectedSets={selectedSets}
+              setSelectedSets={setSelectedSets}
+              canCreate={false}
             />
           </div>
 
@@ -349,6 +327,11 @@ export default function UserStats() {
               Export raw observation data
             </button>
           </div>
+          {/* <div className="mt-3">
+          <button onClick={handleExportAnnotations} className="btn btn-primary">
+            Export raw annotation data
+          </button>
+        </div> */}
         </Card.Body>
       </Card>
     </div>
