@@ -12,6 +12,7 @@ type Project = {
   id: string;
   name: string;
   organization: {
+    id: string;
     name: string;
   };
   queues: Schema['Queue']['type'][];
@@ -20,6 +21,7 @@ type Project = {
 export default function Jobs() {
   const {
     myMembershipHook: userProjectMembershipHook,
+    myOrganizationHook,
     user,
     getSqsClient,
   } = useContext(UserContext)!;
@@ -35,38 +37,105 @@ export default function Jobs() {
   const [takingJob, setTakingJob] = useState(false);
 
   useEffect(() => {
-    async function getProjects() {
-      if (userProjectMembershipHook.data) {
-        setProjects([]);
+    let interval: ReturnType<typeof setInterval>;
+    let cancelled = false; // cancellation flag
 
-        setIsLoading(true);
-        const projectPromises = userProjectMembershipHook.data.map(
-          (membership) =>
-            client.models.Project.get(
-              {
-                id: membership.projectId,
-              },
-              {
-                selectionSet: ['id', 'name', 'organization.name', 'queues.*'],
-              }
-            )
+    async function fetchProjectsAndJobs() {
+      if (!userProjectMembershipHook.data) return;
+      setIsLoading(true);
+
+      const projectPromises = userProjectMembershipHook.data.map((membership) =>
+        client.models.Project.get(
+          { id: membership.projectId },
+          {
+            selectionSet: [
+              'id',
+              'name',
+              'organization.id',
+              'organization.name',
+              'queues.*',
+            ],
+          }
+        )
+      );
+
+      const projectResults = await Promise.all(projectPromises);
+      const validProjects = projectResults
+        .map((result) => (result as { data: Project | null }).data)
+        .filter(
+          (project): project is Project =>
+            project !== null && project.queues.length > 0
+        )
+        .map((project) => ({
+          ...project,
+          queues: project.queues.filter(
+            (queue) =>
+              myOrganizationHook.data?.find(
+                (membership) =>
+                  membership.organizationId === project.organization.id
+              )?.isAdmin || !queue.hidden
+          ),
+        }));
+
+      if (cancelled) return; // stop if unmounted
+
+      setProjects(validProjects);
+      setDisplayProjects(validProjects);
+      setIsLoading(false);
+
+      async function getJobsRemaining() {
+        if (cancelled) return;
+
+        const queueUrls = validProjects.flatMap((project) =>
+          project.queues.map((queue) => queue.url || '')
         );
 
-        const projectResults = await Promise.all(projectPromises);
-        const validProjects = projectResults
-          .map((result) => (result as { data: Project | null }).data)
-          .filter(
-            (project): project is Project =>
-              project !== null && project.queues.length > 0
-          );
+        const jobsRemaining = (
+          await Promise.all(
+            queueUrls.map(async (queueUrl) => {
+              const params: GetQueueAttributesCommandInput = {
+                QueueUrl: queueUrl,
+                AttributeNames: ['ApproximateNumberOfMessages'],
+              };
+              const sqsClient = await getSqsClient();
+              const result = await sqsClient.send(
+                new GetQueueAttributesCommand(params)
+              );
+              return { [queueUrl]: result.Attributes?.ApproximateNumberOfMessages || 'Unknown' };
+            })
+          )
+        ).reduce((acc, curr) => ({ ...acc, ...curr }), {});
 
-        setProjects(validProjects);
-        setDisplayProjects(validProjects);
-        setIsLoading(false);
+        if (cancelled) return;
+
+        setJobsRemaining(jobsRemaining);
+
+        const filteredProjects = validProjects
+          .map((project) => ({
+            ...project,
+            queues: project.queues.filter(
+              (queue) => jobsRemaining[queue.url || ''] !== '0'
+            ),
+          }))
+          .filter((project) => project.queues.length > 0);
+        setDisplayProjects(filteredProjects);
+      }
+
+      // Kick off the first polling call immediately
+      getJobsRemaining();
+
+      // Immediately set up the interval (if still mounted)
+      if (!cancelled) {
+        interval = setInterval(getJobsRemaining, 10000);
       }
     }
 
-    getProjects();
+    fetchProjectsAndJobs();
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [userProjectMembershipHook.data]);
 
   async function handleTakeJob(job: { queueId: string; projectId: string }) {
@@ -107,51 +176,6 @@ export default function Jobs() {
     setTakingJob(false);
   }
 
-  useEffect(() => {
-    const getNumberofMessages = async (url: string) => {
-      const params: GetQueueAttributesCommandInput = {
-        QueueUrl: url,
-        AttributeNames: ['ApproximateNumberOfMessages'],
-      };
-      const sqsClient = await getSqsClient();
-      const result = await sqsClient.send(
-        new GetQueueAttributesCommand(params)
-      );
-      return result.Attributes?.ApproximateNumberOfMessages || 'Unknown';
-    };
-
-    const getJobsRemaining = async () => {
-      const queueUrls = projects.flatMap((project) =>
-        project.queues.map((queue) => queue.url || '')
-      );
-
-      const jobsRemaining = (
-        await Promise.all(
-          queueUrls.map(async (queueUrl) => {
-            return {
-              [queueUrl]: await getNumberofMessages(queueUrl),
-            };
-          })
-        )
-      ).reduce((acc, curr) => ({ ...acc, ...curr }), {});
-      setJobsRemaining(jobsRemaining);
-
-      // filter out queues that are hidden or have no jobs remaining
-      const filteredProjects = projects.map(project => ({
-        ...project,
-        queues: project.queues.filter(queue => jobsRemaining[queue.url || ''] !== '0' && !queue.hidden)
-      })).filter(project => project.queues.length > 0);
-      setDisplayProjects(filteredProjects);
-    };
-
-    getJobsRemaining();
-
-    const interval = setInterval(getJobsRemaining, 10000);
-    return () => {
-      clearInterval(interval);
-    };
-  }, [projects]);
-
   const tableData = displayProjects.flatMap((project) =>
     project.queues.map((queue) => ({
       id: queue.id,
@@ -160,14 +184,31 @@ export default function Jobs() {
           className="d-flex justify-content-between align-items-center p-2"
           key={queue.id}
         >
-          <div>
-            <h5 className="mb-0">{project.name}</h5>
-            <i style={{ fontSize: '14px', display: 'block' }}>
-              {project.organization.name}
-            </i>
-            <p style={{ fontSize: '14px', display: 'block', marginBottom: '0px' }}>
-              Job: {queue.name}
-            </p>
+          <div className="d-flex flex-row gap-3 align-items-center">
+            <div>
+              <h5 className="mb-0">{project.name}</h5>
+              <i style={{ fontSize: '14px', display: 'block' }}>
+                {project.organization.name}
+              </i>
+              <p
+                style={{
+                  fontSize: '14px',
+                  display: 'block',
+                  marginBottom: '0px',
+                }}
+              >
+                Job: {queue.name}
+              </p>
+            </div>
+            {myOrganizationHook.data?.find(
+              (membership) =>
+                membership.organizationId === project.organization.id
+            )?.isAdmin &&
+              queue.hidden && (
+                <span className="badge bg-secondary" style={{ fontSize: '14px' }}>
+                  Hidden
+                </span>
+              )}
           </div>
           <div className="d-flex flex-row gap-3 align-items-center">
             {queue.batchSize && queue.batchSize > 0 ? (
@@ -226,9 +267,3 @@ export default function Jobs() {
     </div>
   );
 }
-
-
-// export default function Jobs() {
-//   return <div>Jobs</div>;
-// }
-

@@ -27,6 +27,7 @@ export default function EditQueueModal({
       setLimitedBatchSize(queue.batchSize !== 0 && queue.batchSize !== null);
       setBatchSize(queue.batchSize || 100);
       setZoom(queue.zoom || undefined);
+      setHidden(queue.hidden);
     }
   }, [show, queues]);
 
@@ -35,6 +36,7 @@ export default function EditQueueModal({
       id: queueId,
       batchSize: limitedBatchSize ? batchSize : 0,
       zoom: zoom,
+      hidden: hidden,
     });
     onClose();
   }
