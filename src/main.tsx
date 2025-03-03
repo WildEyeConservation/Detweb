@@ -21,6 +21,7 @@ import Jobs from './user/Jobs.tsx';
 import CreateOrganization from './organization/CreateOrganization';
 import Surveys from './survey/Surveys.tsx';
 import Permissions from './Permissions.tsx';
+import Testing from './Testing/Testing';
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -105,6 +106,10 @@ const router = createBrowserRouter([
       {
         path: 'onboarding',
         element: <CreateOrganization />,
+      },
+      {
+        path: 'testing',
+        element: <Testing />,
       },
     ],
   },

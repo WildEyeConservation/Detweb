@@ -38,7 +38,6 @@ const schema = a
         observations: a.hasMany('Observation', 'projectId'),
         members: a.hasMany('UserProjectMembership', 'projectId'),
         queues: a.hasMany('Queue', 'projectId'),
-        testPresets: a.hasMany('TestPreset', 'projectId'),
         annotationCountsPerCategoryPerSet: a.hasMany(
           'AnnotationCountPerCategoryPerSet',
           'projectId'
@@ -443,8 +442,8 @@ const schema = a
       ]),
     TestPreset: a
       .model({
-        projectId: a.id().required(),
-        project: a.belongsTo('Project', 'projectId'),
+        organizationId: a.id().required(),
+        organization: a.belongsTo('Organization', 'organizationId'),
         name: a.string().required(),
         accuracy: a.integer().required(),
         categories: a.hasMany('TestPresetCategory', 'testPresetId'),
@@ -454,7 +453,7 @@ const schema = a
       })
       .authorization((allow) => [allow.authenticated()])
       .secondaryIndexes((index) => [
-        index('projectId').queryField('testPresetsByProjectId'),
+        index('organizationId').queryField('testPresetsByOrganizationId'),
       ]),
     TestPresetCategory: a
       .model({
@@ -657,6 +656,7 @@ const schema = a
         memberships: a.hasMany('OrganizationMembership', 'organizationId'),
         projects: a.hasMany('Project', 'organizationId'),
         invites: a.hasMany('OrganizationInvite', 'organizationId'),
+        testPresets: a.hasMany('TestPreset', 'organizationId'),
       })
       .authorization((allow) => [allow.authenticated()]),
     OrganizationMembership: a

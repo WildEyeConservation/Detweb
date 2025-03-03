@@ -12,7 +12,7 @@ import ConfigureUserTestModal from './ConfigureUserTestModal';
 import { useState } from 'react';
 import './UserManagement.css'; // Import the CSS file
 import TestPresetsModal from './TestPresetsModal';
-import ReviewTestsModal from './ReviewTestsModal';
+import ReviewTestsModal from './ReviewTests';
 import UserTestResultsModal from './UserTestResultsModal';
 import ActionsDropdown from './ActionsDropdown';
 
