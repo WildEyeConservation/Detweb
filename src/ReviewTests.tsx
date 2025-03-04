@@ -172,6 +172,8 @@ export default function ReviewTests({
         });
       }
     }
+
+    ogActivePresets.current = locationPresets.map((p) => ({ id: p.value }));
   }
 
   useEffect(() => {

@@ -1,12 +1,12 @@
-import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
-import { addUserToGroup } from '../functions/add-user-to-group/resource'
-import { createGroup } from '../data/create-group/resource'
-import { listUsers } from '../data/list-users/resource'
-import { listGroupsForUser } from '../data/list-groups-for-user/resource'
-import {processImages} from '../functions/processImages/resource'
-import { getAnnotationCounts } from '../functions/getAnnotationCounts/resource'
-import { updateUserStats } from '../functions/updateUserStats/resource'
-import { updateAnnotationCounts } from "../functions/updateAnnotationCounts/resource";
+import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
+import { addUserToGroup } from '../functions/add-user-to-group/resource';
+import { createGroup } from '../data/create-group/resource';
+import { listUsers } from '../data/list-users/resource';
+import { listGroupsForUser } from '../data/list-groups-for-user/resource';
+import { processImages } from '../functions/processImages/resource';
+import { getAnnotationCounts } from '../functions/getAnnotationCounts/resource';
+import { updateUserStats } from '../functions/updateUserStats/resource';
+import { updateAnnotationCounts } from '../functions/updateAnnotationCounts/resource';
 /*== STEP 1 ===============================================================
 The section below creates a Todo database table with a "content" field. Try
 adding a new "isDone" field as a boolean. The authorization rule below
@@ -42,6 +42,7 @@ const schema = a
           'AnnotationCountPerCategoryPerSet',
           'projectId'
         ),
+        testConfig: a.hasOne('ProjectTestConfig', 'projectId'),
         createdBy: a.string().required(),
       })
       .authorization((allow) => [allow.authenticated()]),
@@ -413,32 +414,30 @@ const schema = a
       .secondaryIndexes((index) => [
         index('annotationSetId').queryField('locationSetsByAnnotationSetId'),
       ]),
-    UserTestConfig: a
+    ProjectTestConfig: a
       .model({
-        userId: a.id().required(),
+        projectId: a.id().required(),
+        project: a.belongsTo('Project', 'projectId'),
         testType: a.string(),
         random: a.float(),
         interval: a.float(),
         deadzone: a.float(),
         postTestConfirmation: a.boolean(),
-        testPresetUsers: a.hasMany('TestPresetUser', 'userConfigId'),
+        testPresetProjects: a.hasMany('TestPresetProject', 'projectId'),
       })
       .authorization((allow) => [allow.authenticated()])
-      .secondaryIndexes((index) => [
-        index('userId').queryField('testConfigByUserId'),
-      ]),
-    TestPresetUser: a
+      .identifier(['projectId']),
+    TestPresetProject: a
       .model({
         testPresetId: a.id().required(),
         testPreset: a.belongsTo('TestPreset', 'testPresetId'),
-        userConfigId: a.id().required(),
-        userConfig: a.belongsTo('UserTestConfig', 'userConfigId'),
+        projectId: a.id().required(),
+        projectConfig: a.belongsTo('ProjectTestConfig', 'projectId'),
       })
       .authorization((allow) => [allow.authenticated()])
-      .identifier(['testPresetId', 'userConfigId'])
+      .identifier(['testPresetId', 'projectId'])
       .secondaryIndexes((index) => [
-        index('testPresetId').queryField('usersByTestPresetId'),
-        index('userConfigId').queryField('testPresetsByUserConfigId'),
+        index('projectId').queryField('testPresetsByProjectId'),
       ]),
     TestPreset: a
       .model({
@@ -448,7 +447,7 @@ const schema = a
         accuracy: a.integer().required(),
         categories: a.hasMany('TestPresetCategory', 'testPresetId'),
         locations: a.hasMany('TestPresetLocation', 'testPresetId'),
-        users: a.hasMany('TestPresetUser', 'testPresetId'),
+        projects: a.hasMany('TestPresetProject', 'testPresetId'),
         testResults: a.hasMany('TestResult', 'testPresetId'),
       })
       .authorization((allow) => [allow.authenticated()])
@@ -696,11 +695,10 @@ export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
   schema,
   authorizationModes: {
-    defaultAuthorizationMode: "apiKey",
+    defaultAuthorizationMode: 'apiKey',
     // API Key is used for a.allow.public() rules
     apiKeyAuthorizationMode: {
       expiresInDays: 30,
     },
   },
 });
-

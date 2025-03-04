@@ -63,7 +63,7 @@ const ProjectManagement = () => {
             <Nav.Link onClick={() => scrollToSection(queuesRef)}>
               Queues
             </Nav.Link>
-            <Nav.Link onClick={() => scrollToSection(usersRef)}>Users</Nav.Link>
+            {/* <Nav.Link onClick={() => scrollToSection(usersRef)}>Users</Nav.Link> */}
           </Nav>
         </Col>
 
@@ -83,9 +83,9 @@ const ProjectManagement = () => {
           <div ref={queuesRef}>
             <QueueManagement key={'queues' + project.id} />
           </div>
-          <div ref={usersRef}>
+          {/* <div ref={usersRef}>
             <UserManagement key={'users' + project.id} />
-          </div>
+          </div> */}
 
           {/* <Rescan show={modalToShow=="rescan"} handleClose={()=>setModalToShow(null)}/> */}
           <DeleteImageSet

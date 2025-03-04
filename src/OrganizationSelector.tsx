@@ -13,10 +13,7 @@ function OrganizationSelector({
     id: string;
     name: string;
   };
-  setOrganization: (organization: {
-    id: string;
-    name: string;
-  }) => void;
+  setOrganization: (organization: { id: string; name: string }) => void;
 }) {
   const { client } = useContext(GlobalContext)!;
   const {
@@ -52,15 +49,21 @@ function OrganizationSelector({
     });
   }, [myOrganizations]);
 
+  if (organizations.length <= 1) {
+    return null;
+  }
+
   return (
     <DropdownButton
       as={ButtonGroup}
       key={'Primary'}
       id={`dropdown-variants-Primary`}
       variant={'primary'}
-      title={organization.id
-        ? organizations.find((org) => org.id === organization.id)?.name
-        : 'Select an Organization'}
+      title={
+        organization.id
+          ? organizations.find((org) => org.id === organization.id)?.name
+          : 'Select an Organization'
+      }
     >
       {organizations?.map((organization) => (
         <Dropdown.Item

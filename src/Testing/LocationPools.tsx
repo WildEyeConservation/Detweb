@@ -5,12 +5,10 @@ import TestPresetsModal from '../TestPresetsModal';
 import ReviewTests from '../ReviewTests';
 import { useOptimisticUpdates } from '../useOptimisticUpdates';
 import { Schema } from '../../amplify/data/resource';
+import { TestingContext } from '../Context';
 
-export default function LocationPools({
-  organizationId,
-}: {
-  organizationId: string;
-}) {
+export default function LocationPools() {
+  const { organizationId } = useContext(TestingContext)!;
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
 
   const allPresets = useOptimisticUpdates<

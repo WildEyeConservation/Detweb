@@ -6,7 +6,7 @@ import { GlobalContext, UserContext } from '../Context';
 import { useUsers } from '../apiInterface';
 
 export default function CreateOrganization() {
-  const { isOrganizationAdmin } = useContext(UserContext)!;
+  const { cognitoGroups } = useContext(UserContext)!;
   const { client } = useContext(GlobalContext);
   const { users } = useUsers();
 
@@ -60,7 +60,7 @@ export default function CreateOrganization() {
     setAdminEmail('');
   };
 
-  if (!isOrganizationAdmin) {
+  if (!cognitoGroups.includes('sysadmin')) {
     return <div>You are not authorized to access this page.</div>;
   }
 

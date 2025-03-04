@@ -89,11 +89,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                   Annotation Statistics
                 </Nav.Link>
                 {isOrganizationAdmin && (
-                  <Nav.Link
-                    as={NavLink}
-                    eventKey={`testing`}
-                  to={`testing`}
-                >
+                  <Nav.Link as={NavLink} eventKey={`testing`} to={`testing`}>
                     User Testing
                   </Nav.Link>
                 )}

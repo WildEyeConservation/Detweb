@@ -94,6 +94,13 @@ export interface ProgressContextType {
   setProgress: React.Dispatch<React.SetStateAction<ProgressType>>;
 }
 
+// context used for setting up testing as an organization admin (this is not used for actual testing)
+export interface TestingContextType {
+  organizationId: string;
+  organizationProjects: Schema['Project']['type'][];
+  organizationTestPresets: Schema['TestPreset']['type'][];
+}
+
 interface ImageContextType {
   latLng2xy: (
     input: L.LatLng | [number, number] | Array<L.LatLng | [number, number]>
@@ -115,6 +122,7 @@ export const ProgressContext = createContext<ProgressContextType | null>(null);
 export const ImageContext = createContext<ImageContextType | undefined>(
   undefined
 );
+export const TestingContext = createContext<TestingContextType | null>(null);
 // export const OrganizationContext =
 //   createContext<OrganizationContextType | null>(null);
 
