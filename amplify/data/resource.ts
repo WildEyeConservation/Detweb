@@ -664,6 +664,7 @@ const schema = a
         organization: a.belongsTo('Organization', 'organizationId'),
         userId: a.string().required(),
         isAdmin: a.boolean().default(false),
+        isTested: a.boolean().default(false),
       })
       .identifier(['organizationId', 'userId'])
       .authorization((allow) => [allow.authenticated()])

@@ -6,7 +6,7 @@ import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
 
 type TestType = 'random' | 'interval';
 
-export default function ConsfigModal({
+export default function ConfigModal({
   show,
   onClose,
   survey,

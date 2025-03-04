@@ -8,6 +8,7 @@ import Surveys from './Surveys';
 import { TestingContext, GlobalContext } from '../Context';
 import { Schema } from '../../amplify/data/resource';
 import { useOptimisticUpdates } from '../useOptimisticUpdates';
+import Users from './Users';
 
 export default function Testing() {
   const { client } = useContext(GlobalContext)!;
@@ -42,12 +43,29 @@ export default function Testing() {
     })
   );
 
+  const membershipsHook = useOptimisticUpdates<
+    Schema['OrganizationMembership']['type'],
+    'OrganizationMembership'
+  >(
+    'OrganizationMembership',
+    async (nextToken) =>
+      client.models.OrganizationMembership.membershipsByOrganizationId({
+        nextToken,
+        organizationId: organization.id,
+      }),
+    undefined,
+    {
+      compositeKey: (membership) =>
+        `${membership.organizationId}:${membership.userId}`,
+    }
+  );
   return (
     <TestingContext.Provider
       value={{
         organizationId: organization.id,
         organizationProjects: projects,
         organizationTestPresets: testPresets,
+        organizationMembershipsHook: membershipsHook,
       }}
     >
       <div
@@ -78,7 +96,7 @@ export default function Testing() {
                   <Surveys />
                 </Tab>
                 <Tab eventKey="users" title="Users">
-                  {/* <Users /> */}
+                  <Users />
                 </Tab>
                 <Tab eventKey="results" title="Results">
                   {/* <Results /> */}

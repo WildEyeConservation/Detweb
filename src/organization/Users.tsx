@@ -11,10 +11,17 @@ import LabeledToggleSwitch from '../LabeledToggleSwitch';
 
 export default function Users({
   organization,
+  hook,
 }: {
   organization: { id: string; name: string };
+  hook: ReturnType<
+    typeof useOptimisticUpdates<
+      Schema['OrganizationMembership']['type'],
+      'OrganizationMembership'
+    >
+  >;
 }) {
-  const { client, showModal, modalToShow } = useContext(GlobalContext)!;
+  const { showModal, modalToShow } = useContext(GlobalContext)!;
   const { user: authUser } = useContext(UserContext)!;
   const { users } = useUsers();
   const [userToEdit, setUserToEdit] = useState<{
@@ -22,16 +29,6 @@ export default function Users({
     name: string;
     organizationName: string;
   } | null>(null);
-
-  const membershipHook = useOptimisticUpdates<
-    Schema['OrganizationMembership']['type'],
-    'OrganizationMembership'
-  >('OrganizationMembership', async (nextToken) =>
-    client.models.OrganizationMembership.membershipsByOrganizationId({
-      organizationId: organization.id,
-      nextToken,
-    })
-  );
 
   const tableHeadings = [
     { content: 'Username' },
@@ -41,7 +38,7 @@ export default function Users({
     { content: 'Remove' },
   ];
 
-  const tableData = membershipHook.data?.map((membership) => {
+  const tableData = hook.data?.map((membership) => {
     const user = users?.find((user) => user.id === membership.userId);
     return {
       id: user?.id,
@@ -54,7 +51,11 @@ export default function Users({
           rightLabel="Yes"
           checked={membership.isAdmin ?? false}
           onChange={(checked) => {
-            client.models.OrganizationMembership.update({
+            if (user?.id === authUser.userId) {
+              alert('You cannot change your own admin status');
+              return;
+            }
+            hook.update({
               organizationId: organization.id,
               userId: membership.userId,
               isAdmin: checked,
@@ -69,6 +70,7 @@ export default function Users({
             setUserToEdit({
               id: user?.id || '',
               name: user?.name || '',
+              organizationName: organization.name,
             });
             showModal('exceptions');
           }}
@@ -87,7 +89,7 @@ export default function Users({
             ) {
               return;
             }
-            client.models.OrganizationMembership.delete({
+            hook.delete({
               organizationId: organization.id,
               userId: membership.userId,
             });
@@ -116,7 +118,7 @@ export default function Users({
         </div>
       </div>
       <InviteUserModal
-        memberships={membershipHook.data}
+        memberships={hook.data}
         organization={organization}
         show={modalToShow === 'inviteUser'}
         onClose={() => showModal(null)}

@@ -99,6 +99,7 @@ export interface TestingContextType {
   organizationId: string;
   organizationProjects: Schema['Project']['type'][];
   organizationTestPresets: Schema['TestPreset']['type'][];
+  organizationMembershipsHook: CRUDhook<'OrganizationMembership'>;
 }
 
 interface ImageContextType {

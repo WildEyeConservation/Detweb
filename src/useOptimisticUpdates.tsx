@@ -9,7 +9,12 @@ The hook sets up:
 The optimistic updates allow the UI to update immediately in response to user actions, while still handling the actual API calls in the background. 
 If an error occurs, the changes are rolled back to maintain data consistency. We implicitly assume that every table has a unique identifier field called 'id'.
 
-Example usage of the hook is as follows:
+This updated version adds an optional `options` parameter that accepts a compositeKey function. When provided, the compositeKey function is used to
+derive a unique key for each item (e.g. combining multiple fields into a string) instead of assuming each item has a unique 'id' property.
+
+Example usage:
+
+// Without composite keys
 const { data, create, update, delete } = useOptimisticUpdates('Todo'); 
 // 'Where Todo' is the name of one of the models in the schema, If we select a nonexistent model, typescript will generate an error.
 
@@ -30,26 +35,49 @@ delete({
   id: '2',
 }); // This will delete the todo item with id '2' and update the data immediately, while the actual API call is made in the background.
 
+// With composite keys:
+const compositeKey = (item: OrganizationMembership) => 
+    `${item.organizationId}:${item.userId}`;
+const { data, create, update, delete } = useOptimisticUpdates(
+    'OrganizationMembership', listMemberships, subscriptionFilter, { compositeKey }
+);
 */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useContext, useMemo, useCallback} from 'react';
-import type { Schema } from "../amplify/data/resource";
-import { V6Client } from '@aws-amplify/api-graphql'
+import { useEffect, useContext, useMemo, useCallback } from 'react';
+import type { Schema } from '../amplify/data/resource';
+import { V6Client } from '@aws-amplify/api-graphql';
 import { CreateQueueCommand, DeleteQueueCommand } from '@aws-sdk/client-sqs';
 import { makeSafeQueueName } from './utils';
 import { GlobalContext, UserContext, ProjectContext } from './Context';
 
 type ClientType = V6Client<Schema>;
 
-export function useOptimisticUpdates<T, ModelKey extends keyof ClientType['models']>(
+// Options interface to optionally pass a composite key resolver
+export interface OptimisticOptions<T> {
+  compositeKey?: (item: T) => string;
+}
+
+export function useOptimisticUpdates<
+  T,
+  ModelKey extends keyof ClientType['models']
+>(
   modelKey: ModelKey,
-  listFunction: (nextToken?: string) => Promise<{ data: T[] }>,
-  subscriptionFilter?: Parameters<ClientType['models'][ModelKey]['onCreate']>[0]
+  listFunction: (
+    nextToken?: string
+  ) => Promise<{ data: T[]; nextToken?: string }>,
+  subscriptionFilter?: Parameters<
+    ClientType['models'][ModelKey]['onCreate']
+  >[0],
+  options?: OptimisticOptions<T>
 ) {
   const { client } = useContext(GlobalContext);
   const queryClient = useQueryClient();
   const queryKey = [modelKey, subscriptionFilter];
   const model = client.models[modelKey];
+
+  // Use the compositeKey function from options if provided, otherwise use id
+  const getKey = (item: any) =>
+    options && options.compositeKey ? options.compositeKey(item) : item.id;
 
   const effectiveListFunction = useCallback(
     (nextToken?: string) => {
@@ -75,13 +103,17 @@ export function useOptimisticUpdates<T, ModelKey extends keyof ClientType['model
   });
 
   useEffect(() => {
-    console.log(`creating subscriptions ${queryClient} ${JSON.stringify(subscriptionFilter)}`);
+    console.log(
+      `creating subscriptions ${queryClient} ${JSON.stringify(
+        subscriptionFilter
+      )}`
+    );
 
     const createSub = model.onCreate(subscriptionFilter).subscribe({
       next: (data: T) => {
         console.log(data);
         queryClient.setQueryData<T[]>(queryKey, (old = []) => [
-          ...old.filter((item) => item.id !== data.id),
+          ...old.filter((item) => getKey(item) !== getKey(data)),
           data,
         ]);
       },
@@ -92,7 +124,9 @@ export function useOptimisticUpdates<T, ModelKey extends keyof ClientType['model
       next: (data: T) => {
         console.log(data);
         queryClient.setQueryData<T[]>(queryKey, (old = []) =>
-          old.map((item) => (item.id === data.id ? { ...item, ...data } : item))
+          old.map((item) =>
+            getKey(item) === getKey(data) ? { ...item, ...data } : item
+          )
         );
       },
       error: (error: unknown) => console.warn(error),
@@ -102,7 +136,7 @@ export function useOptimisticUpdates<T, ModelKey extends keyof ClientType['model
       next: (data: T) => {
         console.log(data);
         queryClient.setQueryData<T[]>(queryKey, (old = []) =>
-          old.filter((item) => item.id !== data.id)
+          old.filter((item) => getKey(item) !== getKey(data))
         );
       },
       error: (error: unknown) => console.warn(error),
@@ -123,7 +157,10 @@ export function useOptimisticUpdates<T, ModelKey extends keyof ClientType['model
       newItem.id ||= crypto.randomUUID(); // If the item does not have an id, generate a random UUID for it.
       await queryClient.cancelQueries({ queryKey });
       const previousItems = queryClient.getQueryData<T[]>(queryKey);
-      queryClient.setQueryData<T[]>(queryKey, (old = []) => [...old, newItem as T]);
+      queryClient.setQueryData<T[]>(queryKey, (old = []) => [
+        ...old,
+        newItem as T,
+      ]);
       return { previousItems };
     },
     onError: (err, newItem, context) => {
@@ -138,7 +175,11 @@ export function useOptimisticUpdates<T, ModelKey extends keyof ClientType['model
       await queryClient.cancelQueries({ queryKey });
       const previousItems = queryClient.getQueryData<T[]>(queryKey);
       queryClient.setQueryData<T[]>(queryKey, (old = []) =>
-        old.map(item => (item.id === updatedItem.id ? { ...item, ...updatedItem } : item))
+        old.map((item) =>
+          getKey(item) === getKey(updatedItem)
+            ? { ...item, ...updatedItem }
+            : item
+        )
       );
       return { previousItems };
     },
@@ -154,7 +195,7 @@ export function useOptimisticUpdates<T, ModelKey extends keyof ClientType['model
       await queryClient.cancelQueries({ queryKey });
       const previousItems = queryClient.getQueryData<T[]>(queryKey);
       queryClient.setQueryData<T[]>(queryKey, (old = []) =>
-        old.filter((item) => item.id !== deletedItem.id)
+        old.filter((item) => getKey(item) !== getKey(deletedItem))
       );
       return { previousItems };
     },
@@ -181,38 +222,52 @@ export const useQueues = () => {
   const { client } = useContext(GlobalContext)!;
   const { getSqsClient } = useContext(UserContext)!;
   const { project } = useContext(ProjectContext)!;
-  const subscriptionFilter = useMemo(() => ({
-    filter: { projectId: { eq: project.id } }
-  }), [project.id]);
-  
+  const subscriptionFilter = useMemo(
+    () => ({
+      filter: { projectId: { eq: project.id } },
+    }),
+    [project.id]
+  );
+
   const originalHook = useOptimisticUpdates<Schema['Queue']['type'], 'Queue'>(
     'Queue',
-    async (nextToken) => client.models.Queue.list({ filter: subscriptionFilter.filter, nextToken }),
+    async (nextToken) =>
+      client.models.Queue.list({
+        filter: subscriptionFilter.filter,
+        nextToken,
+      }),
     subscriptionFilter
   );
   const create = (name: string) => {
-    const safeName = makeSafeQueueName(name+crypto.randomUUID());
-    const id = originalHook.create({ name, projectId: project.id});
-    getSqsClient().then(sqsClient => sqsClient.send(new CreateQueueCommand({
-      QueueName: safeName,
-      Attributes: {
-        MessageRetentionPeriod: '1209600', //This value is in seconds. 1209600 corresponds to 14 days and is the maximum AWS supports      //FifoQueue: "false",
-      },
-    }))
-    ).then(({ QueueUrl: url }) => {
-      originalHook.update({ id, url });
-      return id;
-    })
-  }
+    const safeName = makeSafeQueueName(name + crypto.randomUUID());
+    const id = originalHook.create({ name, projectId: project.id });
+    getSqsClient()
+      .then((sqsClient) =>
+        sqsClient.send(
+          new CreateQueueCommand({
+            QueueName: safeName,
+            Attributes: {
+              MessageRetentionPeriod: '1209600', //This value is in seconds. 1209600 corresponds to 14 days and is the maximum AWS supports      //FifoQueue: "false",
+            },
+          })
+        )
+      )
+      .then(({ QueueUrl: url }) => {
+        originalHook.update({ id, url });
+        return id;
+      });
+  };
   const remove = ({ id }: { id: string }) => {
     const url = originalHook.data.find((x) => x.id == id)?.url;
     if (url) {
-      getSqsClient().then(sqsClient => sqsClient.send(new DeleteQueueCommand({ QueueUrl: url }))); 
+      getSqsClient().then((sqsClient) =>
+        sqsClient.send(new DeleteQueueCommand({ QueueUrl: url }))
+      );
     }
     originalHook.delete({ id });
-  }
-  return { ...originalHook, create, delete:remove };
-}
+  };
+  return { ...originalHook, create, delete: remove };
+};
 
 // // The byProject versions of the useOptimisticUpdates hook work on all classes except project itself
 // type ModelTypeByProject = Exclude<keyof typeof client.models, 'Project'>;
@@ -228,4 +283,3 @@ export const useQueues = () => {
 //     );
 //   };
 // }
-  

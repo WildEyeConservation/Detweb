@@ -114,7 +114,10 @@ export default function Surveys() {
           variant="outline-info"
           className="w-100"
           onClick={() => {
-            setSelectedSurvey({ id: survey.id, name: survey.name });
+            setSelectedSurvey({
+              label: survey.name,
+              value: survey.id,
+            });
             showModal('configModal');
           }}
         >
@@ -142,7 +145,7 @@ export default function Surveys() {
         <ConfigModal
           show={modalToShow === 'configModal'}
           onClose={() => showModal(null)}
-          survey={selectedSurvey}
+          survey={{ id: selectedSurvey.value, name: selectedSurvey.label }}
         />
       )}
     </div>

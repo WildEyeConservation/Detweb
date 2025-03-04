@@ -120,6 +120,13 @@ export default function NewSurveyModal({
           })
         );
       }
+
+      await client.models.ProjectTestConfig.create({
+        projectId: project.id,
+        testType: 'interval',
+        interval: 100,
+        postTestConfirmation: false,
+      });
     }
 
     setLoading(false);
