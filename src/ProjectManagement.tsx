@@ -47,7 +47,7 @@ const ProjectManagement = () => {
             <Tab eventKey="annotationSets" title="Annotation Sets">
               <AnnotationSetManagement key={'asets' + project.id} />
             </Tab>
-            <Tab eventKey="queues" title="Queues">
+            <Tab eventKey="jobs" title="Jobs">
               <QueueManagement key={'queues' + project.id} />
             </Tab>
             {process.env.NODE_ENV == 'development' && (

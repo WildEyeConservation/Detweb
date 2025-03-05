@@ -44,7 +44,7 @@ export default function EditQueueModal({
   return (
     <Modal show={show} onHide={onClose}>
       <Modal.Header closeButton>
-        <Modal.Title>Edit Queue</Modal.Title>
+        <Modal.Title>Edit Job</Modal.Title>
       </Modal.Header>
       <Modal.Body>
         <Form>

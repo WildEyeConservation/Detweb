@@ -159,7 +159,7 @@ export default function QueueManagement() {
                   onClick: () => unsubscribeAllUsers(queue.id),
                 },
                 {
-                  label: 'Purge Queue',
+                  label: 'Purge Job',
                   onClick: () => purgeQueueHandler(queue.url!),
                 },
               ]}
@@ -188,14 +188,14 @@ export default function QueueManagement() {
     .sort((a, b) => a.name.localeCompare(b.name)); // Sort the tableData array by name
 
   const tableHeadings = [
-    { content: 'Queue Name', style: { width: '300px' } },
+    { content: 'Name', style: { width: '300px' } },
     { content: 'Subscribed Users' },
-    { content: 'Messages in Queue' },
+    { content: 'Messages in Job' },
     { content: 'Actions' },
   ];
 
   const addQueue = () => {
-    const queueName = prompt('Please enter the name for the new queue:');
+    const queueName = prompt('Please enter the name for the new job:');
     if (queueName) {
       console.log('Adding new queue:', queueName);
       createQueue(queueName);
@@ -206,11 +206,11 @@ export default function QueueManagement() {
   return (
     <Row className="justify-content-center mt-3">
       <div>
-        <h5>Queue Management</h5>
+        <h5>Job Management</h5>
         <MyTable tableHeadings={tableHeadings} tableData={tableData || []} />
         <Col className="d-flex justify-content-center mt-3 border-top pt-3 border-secondary">
           <Button variant="primary" onClick={addQueue}>
-            Add New Queue
+            Add New Job
           </Button>
         </Col>
       </div>
