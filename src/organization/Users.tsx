@@ -8,6 +8,7 @@ import { useUsers } from '../apiInterface';
 import InviteUserModal from './InviteUserModal';
 import ExceptionsModal from './ExceptionsModal';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
+import { fetchAllPaginatedResults } from '../utils';
 
 export default function Users({
   organization,
@@ -21,7 +22,7 @@ export default function Users({
     >
   >;
 }) {
-  const { showModal, modalToShow } = useContext(GlobalContext)!;
+  const { client, showModal, modalToShow } = useContext(GlobalContext)!;
   const { user: authUser } = useContext(UserContext)!;
   const { users } = useUsers();
   const [userToEdit, setUserToEdit] = useState<{
@@ -29,6 +30,76 @@ export default function Users({
     name: string;
     organizationName: string;
   } | null>(null);
+
+  async function updateUser(userId: string, isAdmin: boolean) {
+    hook.update({
+      organizationId: organization.id,
+      userId: userId,
+      isAdmin: isAdmin,
+    });
+
+    const organizationProjects = await fetchAllPaginatedResults(
+      client.models.Project.list,
+      {
+        selectionSet: ['id'],
+        filter: {
+          organizationId: {
+            eq: organization.id,
+          },
+        },
+      }
+    );
+
+    const userProjectMemberships = await fetchAllPaginatedResults(
+      client.models.UserProjectMembership.userProjectMembershipsByUserId,
+      {
+        userId: userId,
+        selectionSet: ['id', 'projectId', 'isAdmin'],
+      }
+    );
+
+    const userOrganizationProjectMemberships = userProjectMemberships.filter(
+      (membership) =>
+        organizationProjects.some(
+          (project) => project.id === membership.projectId
+        )
+    );
+
+    if (isAdmin) {
+      await Promise.all(
+        organizationProjects.map(async (project) => {
+          const userProjectMembership = userOrganizationProjectMemberships.find(
+            (membership) => membership.projectId === project.id
+          );
+          if (userProjectMembership) {
+            if (!userProjectMembership.isAdmin) {
+              await client.models.UserProjectMembership.update({
+                id: userProjectMembership.id,
+                isAdmin: true,
+              });
+            }
+          } else {
+            await client.models.UserProjectMembership.create({
+              userId: userId,
+              projectId: project.id,
+              isAdmin: true,
+            });
+          }
+        })
+      );
+    } else {
+      await Promise.all(
+        userOrganizationProjectMemberships.map(async (membership) => {
+          if (membership.isAdmin) {
+            await client.models.UserProjectMembership.update({
+              id: membership.id,
+              isAdmin: false,
+            });
+          }
+        })
+      );
+    }
+  }
 
   const tableHeadings = [
     { content: 'Username' },
@@ -55,11 +126,7 @@ export default function Users({
               alert('You cannot change your own admin status');
               return;
             }
-            hook.update({
-              organizationId: organization.id,
-              userId: membership.userId,
-              isAdmin: checked,
-            });
+            updateUser(membership.userId, checked);
           }}
         />,
         <Button
