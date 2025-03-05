@@ -1,31 +1,38 @@
-import { useContext, useEffect, useState } from "react";
-import MyTable from "./Table";
-import Button from "react-bootstrap/Button";
-import Modal from "react-bootstrap/Modal";
-import Form from "react-bootstrap/Form";
-import Col from "react-bootstrap/Col";
-import Row from "react-bootstrap/Row";
-import Popover from "react-bootstrap/Popover";
-import OverlayTrigger from "react-bootstrap/OverlayTrigger";
-import { GlobalContext, ProjectContext } from "./Context.tsx";
-import { Schema } from "../amplify/data/resource.ts";
-import { useRecordHotkeys } from "react-hotkeys-hook";
-
+import { useContext, useEffect, useState } from 'react';
+import MyTable from './Table';
+import Button from 'react-bootstrap/Button';
+import Modal from 'react-bootstrap/Modal';
+import Form from 'react-bootstrap/Form';
+import Col from 'react-bootstrap/Col';
+import Row from 'react-bootstrap/Row';
+import Popover from 'react-bootstrap/Popover';
+import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
+import { GlobalContext, ProjectContext } from './Context.tsx';
+import { Schema } from '../amplify/data/resource.ts';
+import { useRecordHotkeys } from 'react-hotkeys-hook';
 
 export default function DefineCategories() {
   const { client } = useContext(GlobalContext)!;
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState("create");
-  const {project,categoriesHook: {data: categories, create: createCategory, delete: deleteCategory, update: updateCategory }} = useContext(ProjectContext)!;
-  const [keys, { start, stop, isRecording }] = useRecordHotkeys()
+  const [modalType, setModalType] = useState('create');
+  const {
+    project,
+    categoriesHook: {
+      data: categories,
+      create: createCategory,
+      delete: deleteCategory,
+      update: updateCategory,
+    },
+  } = useContext(ProjectContext)!;
+  const [keys, { start, stop, isRecording }] = useRecordHotkeys();
 
   const initialCategoryState = {
-    name: "Object",
-    color: "#563d7c",
-    shortcutKey: "o",
+    name: 'Object',
+    color: '#563d7c',
+    shortcutKey: 'o',
     projectId: project.id,
-    id: ""
-  }
+    id: '',
+  };
 
   const [category, setCategory] = useState<any>(initialCategoryState);
 
@@ -56,14 +63,14 @@ export default function DefineCategories() {
     }
   };
 
-  const editCategory = (category : any) => {
+  const editCategory = (category: any) => {
     setCategory(category);
-    setModalType("edit");
+    setModalType('edit');
     setShowModal(true);
   };
 
   const tableData = categories
-    ?.sort((a, b) => ((a.createdAt|| 0) > (b.createdAt || 0) ? 1 : -1))
+    ?.sort((a, b) => ((a.createdAt || 0) > (b.createdAt || 0) ? 1 : -1))
     ?.map((item) => {
       const { id, name, color, shortcutKey, annotationCount } = item;
       return {
@@ -77,7 +84,7 @@ export default function DefineCategories() {
             type="color"
             id="exampleColorInput"
             size="lg"
-            value={color || "red"}
+            value={color || 'red'}
             title="Category color"
           />,
           Math.max(annotationCount || 0, 0),
@@ -91,20 +98,22 @@ export default function DefineCategories() {
             >
               Edit
             </Button>
-              <span>
-                <Button
-                  variant="danger"
-                  className="me-2 fixed-width-button"
-                  onClick={() => {
-                    if (confirm(`Are you sure you want to delete category ${name}?`)) {
-                      deleteCategory(item);
-                    }
-                  }}
-                >
-                  Delete
-                </Button>
-              </span>
-          </>
+            <span>
+              <Button
+                variant="danger"
+                className="me-2 fixed-width-button"
+                onClick={() => {
+                  if (
+                    confirm(`Are you sure you want to delete label ${name}?`)
+                  ) {
+                    deleteCategory(item);
+                  }
+                }}
+              >
+                Delete
+              </Button>
+            </span>
+          </>,
         ],
       };
     });
@@ -113,12 +122,14 @@ export default function DefineCategories() {
     <>
       <Modal show={showModal} onHide={() => setShowModal(false)}>
         <Modal.Header closeButton>
-          <Modal.Title>{`${modalType === "create" ? "Create New" : "Edit"} Category`}</Modal.Title>
+          <Modal.Title>{`${
+            modalType === 'create' ? 'Create New' : 'Edit'
+          } Label`}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form>
             <Form.Group>
-              <Form.Label>Category Name</Form.Label>
+              <Form.Label>Label Name</Form.Label>
               <Form.Control
                 type="text"
                 value={category.name}
@@ -130,23 +141,27 @@ export default function DefineCategories() {
               <Form.Control
                 type="text"
                 disabled={false}
-                value={isRecording ? Array.from(keys).join("+") : category.shortcutKey}
+                value={
+                  isRecording
+                    ? Array.from(keys).join('+')
+                    : category.shortcutKey
+                }
                 onFocus={start}
                 onBlur={() => {
                   stop();
-                  setShortcutKey(Array.from(keys).join("+"));
+                  setShortcutKey(Array.from(keys).join('+'));
                 }}
                 onChange={() => {}} //suppress React warning
-              />             
+              />
             </Form.Group>
             <Form.Group>
-              <Form.Label>Category color</Form.Label>
+              <Form.Label>Label color</Form.Label>
               <Form.Control
                 type="color"
                 id="exampleColorInput"
                 size="sm"
                 value={category.color}
-                title="Category color"
+                title="Label color"
                 onChange={(event) => {
                   setColor(event.currentTarget.value);
                 }}
@@ -164,24 +179,33 @@ export default function DefineCategories() {
         </Modal.Footer>
       </Modal>
       <Row className="justify-content-center mt-3">
-      <div>
-        <h2>Categories</h2>
-        {tableData && (
-          <MyTable
-            tableHeadings={[{content:"Name", style: { width: "500px" } }, {content:"Shortcut"}, {content:"Color"}, {content:"Raw annotations"}, {content:"Actions"}]}
-            tableData={tableData}
-          />
+        <div>
+          <h5>Label Management</h5>
+          {tableData && (
+            <MyTable
+              tableHeadings={[
+                { content: 'Name', style: { width: '500px' } },
+                { content: 'Shortcut' },
+                { content: 'Color' },
+                { content: 'Raw annotations' },
+                { content: 'Actions' },
+              ]}
+              tableData={tableData}
+            />
           )}
-          </div>
+        </div>
       </Row>
-      <Col className="text-center mt-3">
-          <Button variant="primary"         onClick={() => {
-          setCategory(initialCategoryState);
-          setModalType("create");
-          setShowModal(true);
-        }}>
-            Add new category
-          </Button>
+      <Col className="d-flex justify-content-center mt-3 border-top pt-3 border-secondary">
+        <Button
+          variant="primary"
+          onClick={() => {
+            setCategory(initialCategoryState);
+            setModalType('create');
+            setShowModal(true);
+          }}
+        >
+          Add new label
+        </Button>
       </Col>
     </>
   );

@@ -60,7 +60,7 @@ export default function Surveys() {
             Review
           </Button>
           <Button
-            variant="link"
+            variant="primary"
             onClick={() => navigate(`/surveys/${project.id}/manage`)}
           >
             Manage

@@ -140,6 +140,7 @@ export default function Surveys() {
           },
         ]}
         tableData={tableData}
+        emptyMessage="No surveys found"
       />
       {selectedSurvey && (
         <ConfigModal

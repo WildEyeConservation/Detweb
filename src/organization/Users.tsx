@@ -177,6 +177,7 @@ export default function Users({
           tableHeadings={tableHeadings}
           pagination={true}
           itemsPerPage={5}
+          emptyMessage="Loading users..."
         />
         <div className="d-flex justify-content-center mt-2 border-top pt-3 border-secondary">
           <Button variant="primary" onClick={() => showModal('inviteUser')}>

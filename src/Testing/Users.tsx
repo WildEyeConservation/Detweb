@@ -41,6 +41,7 @@ export default function Users() {
           { content: 'Test User' },
         ]}
         tableData={tableData}
+        emptyMessage="Loading users..."
       />
     </div>
   );

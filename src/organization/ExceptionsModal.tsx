@@ -32,9 +32,12 @@ export default function ExceptionsModal({
     []
   );
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     async function fetchProjects() {
+      setIsLoading(true);
+
       const projects = await fetchAllPaginatedResults(
         client.models.Project.list,
         {
@@ -72,6 +75,8 @@ export default function ExceptionsModal({
         setOriginalPermissions(projectPermissions);
         setPermissions(projectPermissions);
       }
+
+      setIsLoading(false);
     }
 
     if (show) {
@@ -187,6 +192,7 @@ export default function ExceptionsModal({
           ]}
           tableData={tableData}
           pagination={true}
+          emptyMessage={isLoading ? 'Loading...' : 'No surveys found'}
         />
       </Modal.Body>
       <Modal.Footer>

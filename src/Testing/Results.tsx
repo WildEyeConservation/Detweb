@@ -122,7 +122,7 @@ export default function Results() {
     { content: 'Preset', sort: true },
     { content: 'Test Animals', sort: true },
     { content: 'Missed Animals', sort: true },
-    { content: 'Passed on Categories', sort: true },
+    { content: 'Passed on Labels', sort: true },
     { content: 'Passed on Total', sort: true },
   ];
 
@@ -234,7 +234,7 @@ export default function Results() {
         preset: result.testPreset.name,
         testAnimals: result.testAnimals,
         missedAnimals: result.totalMissedAnimals,
-        passedOnCategories: result.passedOnCategories,
+        passedOnLabels: result.passedOnCategories,
         passedOnTotal: result.passedOnTotal,
       })),
       fileName: `${selectedUser?.label}-test-results`,
@@ -245,10 +245,10 @@ export default function Results() {
 
     exportFromJSON({
       data: accuracyByCategory.map((category) => ({
-        category: category.name,
+        label: category.name,
         overUnderPercentage: category.countPercentage.toFixed(4),
       })),
-      fileName: `${selectedUser?.label}-category-accuracy`,
+      fileName: `${selectedUser?.label}-label-accuracy`,
       exportType: 'csv',
     });
 
@@ -364,14 +364,14 @@ export default function Results() {
                 </Tab>
                 <Tab
                   eventKey="ca"
-                  title="Category Accuracy"
+                  title="Label Accuracy"
                   className="text-white"
                 >
                   <p
                     className="text-center mb-0"
                     style={{ fontSize: '1.5rem' }}
                   >
-                    Over/Under Count Percentage By Category
+                    Over/Under Count Percentage By Label
                   </p>
                   <BarChart
                     dataset={accuracyByCategory}

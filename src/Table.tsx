@@ -20,7 +20,7 @@ export default function MyTable(input: TableObject) {
     tableHeadings,
     pagination = false,
     itemsPerPage = 10,
-    emptyMessage = 'No data',
+    emptyMessage = null,
   } = input;
   const [sortedData, setSortedData] = useState(tableData);
   const [sortConfig, setSortConfig] = useState<{
@@ -90,7 +90,15 @@ export default function MyTable(input: TableObject) {
     setSortedData(tableData);
   }, [tableData]);
 
-  return tableData.length > 0 ? (
+  if (tableData.length <= 0 && emptyMessage) {
+    return (
+      <div className="text-center">
+        <h5>{emptyMessage}</h5>
+      </div>
+    );
+  }
+
+  return (
     <div>
       <Table bordered hover>
         {tableHeadings && (
@@ -148,10 +156,6 @@ export default function MyTable(input: TableObject) {
           </div>
         </div>
       )}
-    </div>
-  ) : (
-    <div className="text-center">
-      <h5>{emptyMessage}</h5>
     </div>
   );
 }

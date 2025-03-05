@@ -60,13 +60,13 @@ export default function UserStats() {
         ...new Set(myMembershipHook.data?.map((m) => m.projectId) || []),
       ];
 
-      const projectPromises = userProjects.map(projectId =>
+      const projectPromises = userProjects.map((projectId) =>
         client.models.Project.get(
           { id: projectId },
           {
             selectionSet: [
               'id',
-              'name', 
+              'name',
               'annotationSets.id',
               'annotationSets.name',
               'organization.name',
@@ -77,8 +77,10 @@ export default function UserStats() {
 
       const projectResults = await Promise.all(projectPromises);
       const validProjects = projectResults
-        .map(result => result.data)
-        .filter((project): project is NonNullable<typeof project> => project !== null);
+        .map((result) => result.data)
+        .filter(
+          (project): project is NonNullable<typeof project> => project !== null
+        );
 
       setProjects(validProjects);
     }
@@ -345,9 +347,17 @@ export default function UserStats() {
           </div>
 
           <div className="mt-3">
-            <MyTable tableHeadings={tableHeadings} tableData={tableData} />
+            <MyTable
+              tableHeadings={tableHeadings}
+              tableData={tableData}
+              emptyMessage={
+                project && selectedSets && selectedSets.length > 0
+                  ? 'No stats found'
+                  : 'Select a survey and annotation sets to view stats'
+              }
+            />
           </div>
-          <div className="mt-3">
+          <div className="d-flex justify-content-end mt-3">
             <button onClick={handleExportData} className="btn btn-primary">
               Export raw observation data
             </button>
