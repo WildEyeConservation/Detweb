@@ -36,9 +36,7 @@ export default function InviteUserModal({
 
     const userId = users?.find((user) => user.name === username)?.id;
 
-    if (
-      memberships?.some((membership) => membership.userId === userId)
-    ) {
+    if (memberships?.some((membership) => membership.userId === userId)) {
       alert('User is already a member of the organization');
       return;
     }
@@ -98,8 +96,7 @@ export default function InviteUserModal({
               className="text-muted"
               style={{ textDecoration: 'underline', cursor: 'pointer' }}
               onClick={() => {
-                const inviteLink = `https://prod.d2akirfrcp5tqu.amplifyapp.com/`;
-                navigator.clipboard.writeText(inviteLink);
+                navigator.clipboard.writeText(window.location.origin);
                 alert('Signup link copied to clipboard!');
               }}
             >

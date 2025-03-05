@@ -43,6 +43,7 @@ const schema = a
           'projectId'
         ),
         testConfig: a.hasOne('ProjectTestConfig', 'projectId'),
+        testResults: a.hasMany('TestResult', 'projectId'),
         createdBy: a.string().required(),
       })
       .authorization((allow) => [allow.authenticated()]),
@@ -485,6 +486,8 @@ const schema = a
     TestResult: a
       .model({
         userId: a.id().required(),
+        projectId: a.id().required(),
+        project: a.belongsTo('Project', 'projectId'),
         testPresetId: a.id().required(),
         testPreset: a.belongsTo('TestPreset', 'testPresetId'),
         locationId: a.id().required(),

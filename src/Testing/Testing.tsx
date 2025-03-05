@@ -9,6 +9,7 @@ import { TestingContext, GlobalContext } from '../Context';
 import { Schema } from '../../amplify/data/resource';
 import { useOptimisticUpdates } from '../useOptimisticUpdates';
 import Users from './Users';
+import Results from './Results';
 
 export default function Testing() {
   const { client } = useContext(GlobalContext)!;
@@ -99,7 +100,7 @@ export default function Testing() {
                   <Users />
                 </Tab>
                 <Tab eventKey="results" title="Results">
-                  {/* <Results /> */}
+                  <Results />
                 </Tab>
               </Tabs>
             )}
