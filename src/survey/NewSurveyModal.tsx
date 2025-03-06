@@ -212,6 +212,7 @@ export default function NewSurveyModal({
           <Form.Group>
             <Form.Label>Organization</Form.Label>
             <Select
+              className="text-black"
               value={organization}
               options={organizations}
               onChange={(e) => setOrganization(e)}
@@ -238,6 +239,7 @@ export default function NewSurveyModal({
                 Annotation Access:
               </Form.Label>
               <Select
+                className="text-black"
                 value={globalAnnotationAccess}
                 placeholder="Default"
                 options={[
@@ -282,6 +284,7 @@ export default function NewSurveyModal({
                     id: exception.user.id,
                     rowData: [
                       <Select
+                        className="text-black"
                         value={{
                           label: exception.user.name,
                           value: exception.user.id,
@@ -377,11 +380,11 @@ export default function NewSurveyModal({
         </Form>
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={onClose}>
-          Cancel
-        </Button>
         <Button variant="primary" onClick={handleSave} disabled={loading}>
           {loading ? 'Creating...' : 'Create'}
+        </Button>
+        <Button variant="dark" onClick={onClose}>
+          Cancel
         </Button>
       </Modal.Footer>
     </Modal>

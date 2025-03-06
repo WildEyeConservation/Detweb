@@ -144,6 +144,9 @@ export default function QueueManagement() {
           queue.name,
           subscribedUsersCount,
           <span key={`${queue.url}-count`}>{messageCount}</span>,
+          <span key={`${queue.url}-hidden`}>
+            {queue.hidden ? 'Yes' : 'No'}
+          </span>,
           <div key={`${queue.url}-actions`}>
             <ActionsDropdown
               actions={[
@@ -191,6 +194,7 @@ export default function QueueManagement() {
     { content: 'Name', style: { width: '300px' } },
     { content: 'Subscribed Users' },
     { content: 'Messages in Job' },
+    { content: 'Hidden' },
     { content: 'Actions' },
   ];
 
@@ -208,7 +212,7 @@ export default function QueueManagement() {
       <div>
         <h5>Job Management</h5>
         <MyTable tableHeadings={tableHeadings} tableData={tableData || []} />
-        <Col className="d-flex justify-content-center mt-3 border-top pt-3 border-secondary">
+        <Col className="d-flex justify-content-center mt-3 border-top pt-3 border-dark">
           <Button variant="primary" onClick={addQueue}>
             Add New Job
           </Button>

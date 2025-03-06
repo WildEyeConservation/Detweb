@@ -1,5 +1,6 @@
 import { useContext } from 'react';
-import { Button, Card, Tabs, Tab } from 'react-bootstrap';
+import { Button, Card } from 'react-bootstrap';
+import { Tabs, Tab } from './Tabs';
 import QueueManagement from './QueueManagement.tsx';
 import ImageSetManagement from './ImageSetManagement.tsx';
 import DefineCategories from './DefineCategories.tsx';
@@ -21,7 +22,7 @@ const ProjectManagement = () => {
     <div
       style={{
         width: '100%',
-        maxWidth: '1280px',
+        maxWidth: '1555px',
         marginTop: '16px',
         marginBottom: '16px',
       }}
@@ -30,28 +31,28 @@ const ProjectManagement = () => {
         <Card.Body>
           <Card.Title className="d-flex justify-content-between align-items-center">
             <h4 className="mb-3">{project.name}</h4>
-            <Button variant="secondary" onClick={() => navigate(`/surveys`)}>
+            <Button variant="dark" onClick={() => navigate(`/surveys`)}>
               Back to Surveys
             </Button>
           </Card.Title>
-          <Tabs>
-            <Tab eventKey="imageSets" title="Image Sets">
+          <Tabs defaultTab={0}>
+            <Tab label="Image Sets">
               <ImageSetManagement key={'imsets' + project.id} />
             </Tab>
-            <Tab eventKey="labels" title="Labels">
+            <Tab label="Labels">
               <DefineCategories key={'cats' + project.id} />
             </Tab>
-            <Tab eventKey="tasks" title="Tasks">
+            <Tab label="Tasks">
               <TaskManagement key={'tasks' + project.id} />
             </Tab>
-            <Tab eventKey="annotationSets" title="Annotation Sets">
+            <Tab label="Annotation Sets">
               <AnnotationSetManagement key={'asets' + project.id} />
             </Tab>
-            <Tab eventKey="jobs" title="Jobs">
+            <Tab label="Jobs">
               <QueueManagement key={'queues' + project.id} />
             </Tab>
             {process.env.NODE_ENV == 'development' && (
-              <Tab eventKey="devActions" title="Dev Actions">
+              <Tab label="Dev Actions">
                 <DevActions />
               </Tab>
             )}

@@ -16,7 +16,7 @@ export default function TestPresetsModal({
   onClose: () => void;
   isNewPreset: boolean;
   organizationId: string;
-  preset?: { name: string; id: string; };
+  preset?: { name: string; id: string };
 }) {
   const [editName, setEditName] = useState(false);
   const [presetName, setPresetName] = useState<string | null>(null);
@@ -124,7 +124,10 @@ export default function TestPresetsModal({
       const allProjectCategories = await Promise.all(projectCategoriesPromises);
 
       const flattenedCategories = allProjectCategories.flat();
-      const categories = flattenedCategories.map((c) => ({ id: c.id, name: c.name }));
+      const categories = flattenedCategories.map((c) => ({
+        id: c.id,
+        name: c.name,
+      }));
       setCategories(categories);
 
       const allPresets = await fetchAllPaginatedResults(
@@ -143,31 +146,32 @@ export default function TestPresetsModal({
 
       if (preset) {
         const activeCategories = await fetchAllPaginatedResults(
-            client.models.TestPresetCategory.categoriesByTestPresetId,
-            {
-              testPresetId: preset!.id,
-              selectionSet: ['categoryId'],
-            }
-          );
-    
-          const annoAccuracy = presetDetails.find(
-            (p) => p.id === preset!.id
-          )!.accuracy;
-    
-          ogDetails.current = {
-            accuracy: annoAccuracy,
-            categories: activeCategories.map((c) => c.categoryId),
-          };
-    
-          setAnnotationAccuracy(annoAccuracy);
-          const allCategories = categories.map((c) => ({
-            label: c.name,
-            value: c.id,
-          }));
-          setSelectedCategories(
-            activeCategories.map((c) => ({
-              label: allCategories.find((cat) => cat.value === c.categoryId)!.label,
-              value: c.categoryId,
+          client.models.TestPresetCategory.categoriesByTestPresetId,
+          {
+            testPresetId: preset!.id,
+            selectionSet: ['categoryId'],
+          }
+        );
+
+        const annoAccuracy = presetDetails.find(
+          (p) => p.id === preset!.id
+        )!.accuracy;
+
+        ogDetails.current = {
+          accuracy: annoAccuracy,
+          categories: activeCategories.map((c) => c.categoryId),
+        };
+
+        setAnnotationAccuracy(annoAccuracy);
+        const allCategories = categories.map((c) => ({
+          label: c.name,
+          value: c.id,
+        }));
+        setSelectedCategories(
+          activeCategories.map((c) => ({
+            label: allCategories.find((cat) => cat.value === c.categoryId)!
+              .label,
+            value: c.categoryId,
           }))
         );
       }
@@ -198,6 +202,7 @@ export default function TestPresetsModal({
         <Form.Group className="mt-2">
           <Form.Label>Labels</Form.Label>
           <Select
+            className="text-black"
             value={selectedCategories}
             options={categories?.map((q) => ({ label: q.name, value: q.id }))}
             isMulti
@@ -222,13 +227,8 @@ export default function TestPresetsModal({
           />
         </Form.Group>
       </Modal.Body>
-      <Modal.Footer
-        className="d-flex justify-content-end"
-      >
+      <Modal.Footer className="d-flex justify-content-end">
         <span className="d-flex gap-2">
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
           <Button
             variant="primary"
             onClick={() => {
@@ -236,6 +236,9 @@ export default function TestPresetsModal({
             }}
           >
             {isNewPreset ? 'Create' : 'Save'}
+          </Button>
+          <Button variant="dark" onClick={onClose}>
+            Cancel
           </Button>
         </span>
       </Modal.Footer>

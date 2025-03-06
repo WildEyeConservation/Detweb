@@ -101,7 +101,10 @@ export default function Jobs() {
               const result = await sqsClient.send(
                 new GetQueueAttributesCommand(params)
               );
-              return { [queueUrl]: result.Attributes?.ApproximateNumberOfMessages || 'Unknown' };
+              return {
+                [queueUrl]:
+                  result.Attributes?.ApproximateNumberOfMessages || 'Unknown',
+              };
             })
           )
         ).reduce((acc, curr) => ({ ...acc, ...curr }), {});
@@ -205,7 +208,10 @@ export default function Jobs() {
                 membership.organizationId === project.organization.id
             )?.isAdmin &&
               queue.hidden && (
-                <span className="badge bg-secondary" style={{ fontSize: '14px' }}>
+                <span
+                  className="badge bg-secondary"
+                  style={{ fontSize: '14px' }}
+                >
                   Hidden
                 </span>
               )}
@@ -222,7 +228,7 @@ export default function Jobs() {
               </p>
             )}
             <Button
-              variant="info"
+              variant="primary"
               disabled={takingJob}
               onClick={() =>
                 handleTakeJob({ queueId: queue.id, projectId: project.id })
@@ -240,7 +246,7 @@ export default function Jobs() {
     <div
       style={{
         width: '100%',
-        maxWidth: '1280px',
+        maxWidth: '1555px',
         marginTop: '16px',
         marginBottom: '16px',
       }}

@@ -1,7 +1,7 @@
-import { Form } from "react-bootstrap";
-import { useContext } from "react";
-import { ManagementContext } from "./Context";
-import Select, { MultiValue, Options } from "react-select";
+import { Form } from 'react-bootstrap';
+import { useContext } from 'react';
+import { ManagementContext } from './Context';
+import Select, { MultiValue, Options } from 'react-select';
 
 interface MultiAnnotationSetDropdownProps {
   setAnnotationSets: (selected: string[]) => void;
@@ -46,7 +46,7 @@ export function MultiAnnotationSetDropdown({
         isMulti
         name="Annotation Sets"
         options={options}
-        className="basic-multi-select"
+        className="basic-multi-select text-black"
         classNamePrefix="select"
         closeMenuOnSelect={false}
         placeholder="Select annotation sets..."

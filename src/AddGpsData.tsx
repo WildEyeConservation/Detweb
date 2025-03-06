@@ -1,16 +1,15 @@
-import { useContext, useState, useEffect } from "react";
-import Modal from "react-bootstrap/Modal";
-import Button from "react-bootstrap/Button";
-import Form from "react-bootstrap/Form";
-import Papa from "papaparse";
-import { useUpdateProgress } from "./useUpdateProgress";
-import { ImageSetDropdown } from "./ImageSetDropDown";
-import PropTypes from "prop-types";
-import { GlobalContext } from "./Context";
-import { DateTime } from 'luxon'
-import {fetchAllPaginatedResults} from "./utils";
-import LabeledToggleSwitch from "./LabeledToggleSwitch";
-
+import { useContext, useState, useEffect } from 'react';
+import Modal from 'react-bootstrap/Modal';
+import Button from 'react-bootstrap/Button';
+import Form from 'react-bootstrap/Form';
+import Papa from 'papaparse';
+import { useUpdateProgress } from './useUpdateProgress';
+import { ImageSetDropdown } from './ImageSetDropDown';
+import PropTypes from 'prop-types';
+import { GlobalContext } from './Context';
+import { DateTime } from 'luxon';
+import { fetchAllPaginatedResults } from './utils';
+import LabeledToggleSwitch from './LabeledToggleSwitch';
 
 interface AddGpsDataProps {
   show: boolean;
@@ -19,19 +18,22 @@ interface AddGpsDataProps {
   setSelectedImageSets: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
-
-function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets }: AddGpsDataProps) {
-  const {client} = useContext(GlobalContext)!;
+function AddGpsData({
+  show,
+  handleClose,
+  selectedImageSets,
+  setSelectedImageSets,
+}: AddGpsDataProps) {
+  const { client } = useContext(GlobalContext)!;
   const [file, setFile] = useState<File | undefined>();
   const [csvData, setCsvData] = useState<any>(undefined);
   const [associateByTimestamp, setAssociateByTimestamp] = useState(false);
   const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
     taskId: `Add GPS data`,
     indeterminateTaskName: `Loading images`,
-    determinateTaskName: "Updating images",
-    stepFormatter: (step: number) => `${step} images`
+    determinateTaskName: 'Updating images',
+    stepFormatter: (step: number) => `${step} images`,
   });
-
 
   useEffect(() => {
     if (file) {
@@ -39,43 +41,48 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
         Papa.parse(file, {
           complete: function (results) {
             setCsvData({
-              ...results, data:
-                results.data.map((row: any) => {
+              ...results,
+              data: results.data
+                .map((row: any) => {
                   return {
                     timestamp: Number(row[1]),
                     lat: Number(row[3]),
                     lon: Number(row[5]),
-                    alt: Number(row[7])
-                  }
-                }).filter((row) => row.timestamp)
+                    alt: Number(row[7]),
+                  };
+                })
+                .filter((row) => row.timestamp),
             });
-          }
-        })
+          },
+        });
       } else {
         Papa.parse(file, {
           header: true,
-          skipEmptyLines:true,
+          skipEmptyLines: true,
           complete: function (results) {
             setCsvData({
-              ...results, data:
-                results.data.map((row: any) => {
-                  return {
-                    filepath: row['FilePath'],
-                    lat: Number(row['Lat']),
-                    lon: Number(row['Lon']),
-                    alt: Number(row['Elev'])
-                  }
-                })
+              ...results,
+              data: results.data.map((row: any) => {
+                return {
+                  filepath: row['FilePath'],
+                  lat: Number(row['Lat']),
+                  lon: Number(row['Lon']),
+                  alt: Number(row['Elev']),
+                };
+              }),
             });
-          }
-        })
-      }  
+          },
+        });
+      }
     }
   }, [file, associateByTimestamp]);
-    
-  const interpolateGpsData = (csvData: { timestamp: number; lat: number; lon: number; alt: number }[], queryTimestamp: number,) => {
+
+  const interpolateGpsData = (
+    csvData: { timestamp: number; lat: number; lon: number; alt: number }[],
+    queryTimestamp: number
+  ) => {
     if (csvData.length === 0) {
-      throw new Error("No GPS data available for interpolation.");
+      throw new Error('No GPS data available for interpolation.');
     }
 
     let low = 0;
@@ -95,7 +102,11 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
     }
 
     // If we exit the loop without finding an exact match, interpolate
-    if (low > 0 && csvData[low - 1].timestamp < queryTimestamp && csvData[low].timestamp > queryTimestamp) {
+    if (
+      low > 0 &&
+      csvData[low - 1].timestamp < queryTimestamp &&
+      csvData[low].timestamp > queryTimestamp
+    ) {
       const prevData = csvData[low - 1];
       const nextData = csvData[low];
       const gap = nextData.timestamp - prevData.timestamp;
@@ -110,7 +121,7 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
         alt: altitude,
       };
     } else {
-      throw new Error("Extrapolation required for GPS data interpolation.");
+      throw new Error('Extrapolation required for GPS data interpolation.');
     }
   };
 
@@ -118,48 +129,69 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
     handleClose();
     if (associateByTimestamp) {
       if (!selectedImageSets) return;
-      const allImages: { image: { timestamp: number, id: string } }[] = await fetchAllPaginatedResults(
-        client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
-        {
-          imageSetId: selectedImageSets[0],
-          selectionSet: ['image.timestamp', 'image.id'] as const
-        }
-      );
+      const allImages: { image: { timestamp: number; id: string } }[] =
+        await fetchAllPaginatedResults(
+          client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
+          {
+            imageSetId: selectedImageSets[0],
+            selectionSet: ['image.timestamp', 'image.id'] as const,
+          }
+        );
       setTotalSteps(allImages.length);
-      let count = 0
-      await Promise.all(allImages.map(async ({ image: { timestamp, id } }) => {
-        if (timestamp > csvData.data[0].timestamp && timestamp < csvData.data[csvData.data.length - 1].timestamp) {
-          const gpsData = interpolateGpsData(csvData.data, timestamp);
-          await client.models.Image.update({ id, latitude: gpsData.lat, longitude: gpsData.lon, altitude_agl: gpsData.alt });
-        } else {
-          count++;
-        }
-        setStepsCompleted(s => s + 1);
-        return
-      }));
+      let count = 0;
+      await Promise.all(
+        allImages.map(async ({ image: { timestamp, id } }) => {
+          if (
+            timestamp > csvData.data[0].timestamp &&
+            timestamp < csvData.data[csvData.data.length - 1].timestamp
+          ) {
+            const gpsData = interpolateGpsData(csvData.data, timestamp);
+            await client.models.Image.update({
+              id,
+              latitude: gpsData.lat,
+              longitude: gpsData.lon,
+              altitude_agl: gpsData.alt,
+            });
+          } else {
+            count++;
+          }
+          setStepsCompleted((s) => s + 1);
+          return;
+        })
+      );
       if (count > 0) {
         if (count == 1) {
-          alert(`One image was not updated because it's timestamp was outside the range of the GPS data.`)
+          alert(
+            `One image was not updated because it's timestamp was outside the range of the GPS data.`
+          );
         } else {
-          alert(`${count} images were not updated because their timestamps were outside the range of the GPS data.`)
+          alert(
+            `${count} images were not updated because their timestamps were outside the range of the GPS data.`
+          );
         }
       }
     } else {
       for (const row of csvData.data) {
-        client.models.ImageFile.imagesByPath({ path: row.filepath }, { selectionSet: ['image.id'] as const })
+        client.models.ImageFile.imagesByPath(
+          { path: row.filepath },
+          { selectionSet: ['image.id'] as const }
+        )
           .then(({ data }) => data?.[0]?.image?.id)
           .then(async (id) => {
             if (id) {
-              await client.models.Image.update({ id, latitude: row.lat, longitude: row.lon, altitude_agl: row.alt });
+              await client.models.Image.update({
+                id,
+                latitude: row.lat,
+                longitude: row.lon,
+                altitude_agl: row.alt,
+              });
             } else {
               console.log(`No image found for filepath: ${row.filepath}`);
             }
-          })
+          });
       }
     }
   }
-
-
 
   function handleChange(event: any) {
     setFile(event.target.files[0]);
@@ -172,7 +204,12 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
       </Modal.Header>
       <Modal.Body>
         <Form>
-          <LabeledToggleSwitch  leftLabel="Associate by filepath" rightLabel="Associate by timestamp" checked={associateByTimestamp} onChange={setAssociateByTimestamp} />
+          <LabeledToggleSwitch
+            leftLabel="Associate by filepath"
+            rightLabel="Associate by timestamp"
+            checked={associateByTimestamp}
+            onChange={setAssociateByTimestamp}
+          />
           <Form.Group className="mb-3">
             <div className="d-grid">
               <Button as="label" htmlFor="file-upload">
@@ -186,7 +223,11 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
                 />
               </Button>
             </div>
-            {file && <Form.Text className="text-muted">Selected file: {file.name}</Form.Text>}
+            {file && (
+              <Form.Text className="text-muted">
+                Selected file: {file.name}
+              </Form.Text>
+            )}
           </Form.Group>
           <Form.Group>
             <Form.Label>Apply to Imageset</Form.Label>
@@ -200,20 +241,32 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
        {imageSets?.map( q => <option key={q.name} value={q.name}>{q.name}</option>)} 
        </Form.Select>   */}
           </Form.Group>
-        <Form.Group>
-        {csvData && (
-          <div className="text-center">
-            <p>Number of rows parsed: {csvData.data.length}<br/>
-                  {csvData.data.length && csvData.data[0].timestamp && <span>
-                  Starting at : {DateTime.fromSeconds(csvData.data[0].timestamp).toFormat("yyyy-MM-dd HH:mm:ss")}<br/>
-                  Ending at : {DateTime.fromSeconds(csvData.data[csvData.data.length - 1].timestamp).toFormat("yyyy-MM-dd HH:mm:ss")}<br/>
-                  </span>}
-            Number of errors encountered: {csvData.errors.length}</p> 
-          </div>
+          <Form.Group>
+            {csvData && (
+              <div className="text-center">
+                <p>
+                  Number of rows parsed: {csvData.data.length}
+                  <br />
+                  {csvData.data.length && csvData.data[0].timestamp && (
+                    <span>
+                      Starting at :{' '}
+                      {DateTime.fromSeconds(csvData.data[0].timestamp).toFormat(
+                        'yyyy-MM-dd HH:mm:ss'
+                      )}
+                      <br />
+                      Ending at :{' '}
+                      {DateTime.fromSeconds(
+                        csvData.data[csvData.data.length - 1].timestamp
+                      ).toFormat('yyyy-MM-dd HH:mm:ss')}
+                      <br />
+                    </span>
+                  )}
+                  Number of errors encountered: {csvData.errors.length}
+                </p>
+              </div>
             )}
-        </Form.Group>
-</Form>
-        
+          </Form.Group>
+        </Form>
       </Modal.Body>
       <Modal.Footer>
         <Button
@@ -223,7 +276,7 @@ function AddGpsData({ show, handleClose, selectedImageSets, setSelectedImageSets
         >
           Submit
         </Button>
-        <Button variant="primary" onClick={handleClose}>
+        <Button variant="dark" onClick={handleClose}>
           Cancel
         </Button>
       </Modal.Footer>

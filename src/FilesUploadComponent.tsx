@@ -1,19 +1,17 @@
-import { useEffect, useState, useRef, useContext, useCallback } from "react";
-import Spinner from "react-bootstrap/Spinner"; // Add this import
+import { useEffect, useState, useRef, useContext, useCallback } from 'react';
+import Spinner from 'react-bootstrap/Spinner'; // Add this import
 // import moment from 'moment'
 // import {MD5,enc} from 'crypto-js'
-import Modal from "react-bootstrap/Modal";
-import Button from "react-bootstrap/Button";
-import Form from "react-bootstrap/Form";
-import { useUpdateProgress } from "./useUpdateProgress";
-import { list, uploadData } from "aws-amplify/storage";
-import { ProjectContext, UserContext, GlobalContext } from "./Context.tsx";
-import pLimit from 'p-limit'
-import ExifReader from 'exifreader'
-import { ManagementContext } from "./Context.tsx";
-import { DateTime } from 'luxon'
-
-
+import Modal from 'react-bootstrap/Modal';
+import Button from 'react-bootstrap/Button';
+import Form from 'react-bootstrap/Form';
+import { useUpdateProgress } from './useUpdateProgress';
+import { list, uploadData } from 'aws-amplify/storage';
+import { ProjectContext, UserContext, GlobalContext } from './Context.tsx';
+import pLimit from 'p-limit';
+import ExifReader from 'exifreader';
+import { ManagementContext } from './Context.tsx';
+import { DateTime } from 'luxon';
 
 /* I don't understand why I need to tell Typescript that webkitdirectory is one of the fields of the input element.
   Without this, Typescript complains that webkitdirectory is not a valid attribute for an input element.
@@ -31,11 +29,14 @@ interface FilesUploadComponentProps {
   handleClose: () => void;
 }
 
-export default function FilesUploadComponent({ show, handleClose }: FilesUploadComponentProps) {
+export default function FilesUploadComponent({
+  show,
+  handleClose,
+}: FilesUploadComponentProps) {
   const limitConnections = pLimit(6);
   const [upload, setUpload] = useState(true);
-  const [name, setName] = useState("");
-  const {client} = useContext(GlobalContext)!;
+  const [name, setName] = useState('');
+  const { client } = useContext(GlobalContext)!;
   const { project } = useContext(ProjectContext)!;
   const [integrityCheck, setIntegrityCheck] = useState(true);
   const [scannedFiles, setScannedFiles] = useState<File[]>([]);
@@ -48,7 +49,9 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
   const [totalImageSize, setTotalImageSize] = useState(0);
   const [filteredImageSize, setFilteredImageSize] = useState(0);
   const manContext = useContext(ManagementContext)!;
-  const {imageSetsHook:{data:imageSets,create:createImageSet} } = manContext!;
+  const {
+    imageSetsHook: { data: imageSets, create: createImageSet },
+  } = manContext!;
 
   if (!userContext) {
     return null;
@@ -62,43 +65,49 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
   }, [show]);
 
   useEffect(() => {
-    setFilteredImageSize(0)
-    setFilteredImageFiles([])
+    setFilteredImageSize(0);
+    setFilteredImageFiles([]);
   }, [name]);
 
   useEffect(() => {
-    setImageFiles(scannedFiles.filter(file => file.type.startsWith('image/')));
+    setImageFiles(
+      scannedFiles.filter((file) => file.type.startsWith('image/'))
+    );
   }, [scannedFiles]);
 
   useEffect(() => {
     setTotalImageSize(imageFiles.reduce((acc, file) => acc + file.size, 0));
   }, [imageFiles]);
 
-
   useEffect(() => {
-    setFilteredImageSize(filteredImageFiles.reduce((acc, file) => acc + file.size, 0));
+    setFilteredImageSize(
+      filteredImageFiles.reduce((acc, file) => acc + file.size, 0)
+    );
   }, [filteredImageFiles]);
 
   useEffect(() => {
     async function getExistingFiles() {
-      
-      const {items} = await list({
+      const { items } = await list({
         path: `images/${name}`,
-        options:{bucket:'inputs',listAll:true}
+        options: { bucket: 'inputs', listAll: true },
       });
       console.log(items);
       const existingFiles = items.reduce<Set<string>>((set, x) => {
-        set.add(x.path.substring("images/".length));
+        set.add(x.path.substring('images/'.length));
         return set;
       }, new Set());
-      setFilteredImageFiles(imageFiles.filter(file => !existingFiles.has(file.webkitRelativePath)));
+      setFilteredImageFiles(
+        imageFiles.filter((file) => !existingFiles.has(file.webkitRelativePath))
+      );
     }
     if (imageFiles.length > 0) {
       getExistingFiles();
     }
   }, [imageFiles]);
 
-  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInputChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const files = event.target.files;
     if (files) {
       setScannedFiles(Array.from(files));
@@ -120,35 +129,43 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
     return `${size.toFixed(2)} ${units[unitIndex]}`;
   }, []);
 
-  async function getExifmeta(file:File){
-      const tags = await ExifReader.load(file)
-      /* I am saving all of the exifdata to make it easier to answer questions about eg. lens used/ISO/shutterTime/aperture distributions later on. However, some
+  async function getExifmeta(file: File) {
+    const tags = await ExifReader.load(file);
+    /* I am saving all of the exifdata to make it easier to answer questions about eg. lens used/ISO/shutterTime/aperture distributions later on. However, some
       EXIF fields are absolutely huge and make writing to my database impossibly slow. I explicitly drop those here*/
-      delete tags['Thumbnail']
-      delete tags['Images']
-      delete tags['MakerNote']
-      for (const tag of Object.keys(tags)) {
-        if (tags[tag]?.description?.length > 100) {
-          console.log(`Tag ${tag} has a description longer than 100 characters. Dropping it.`)
-          console.log(tags[tag].description)
-          delete tags[tag];
-        }
+    delete tags['Thumbnail'];
+    delete tags['Images'];
+    delete tags['MakerNote'];
+    for (const tag of Object.keys(tags)) {
+      if (tags[tag]?.description?.length > 100) {
+        console.log(
+          `Tag ${tag} has a description longer than 100 characters. Dropping it.`
+        );
+        console.log(tags[tag].description);
+        delete tags[tag];
       }
-    const rotated = (tags['Orientation']?.value as number >4)
-      return ({ key:file.webkitRelativePath,
-                width: rotated ? tags['Image Height']?.value : tags['Image Width']?.value,
-                height: rotated ? tags['Image Width']?.value :tags['Image Height']?.value,
-                timestamp: DateTime.fromFormat(tags.DateTimeOriginal?.description as string, 'yyyy:MM:dd HH:mm:ss').toSeconds(),
-                cameraSerial:tags['Internal Serial Number']?.value,
-                //exifData: JSON.stringify({ ...tags, 'ImageHeight':undefined, 'ImageWidth':undefined})
-      })
+    }
+    const rotated = (tags['Orientation']?.value as number) > 4;
+    return {
+      key: file.webkitRelativePath,
+      width: rotated ? tags['Image Height']?.value : tags['Image Width']?.value,
+      height: rotated
+        ? tags['Image Width']?.value
+        : tags['Image Height']?.value,
+      timestamp: DateTime.fromFormat(
+        tags.DateTimeOriginal?.description as string,
+        'yyyy:MM:dd HH:mm:ss'
+      ).toSeconds(),
+      cameraSerial: tags['Internal Serial Number']?.value,
+      //exifData: JSON.stringify({ ...tags, 'ImageHeight':undefined, 'ImageWidth':undefined})
+    };
   }
-  
+
   const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
     taskId: `Upload files ${name}`,
     determinateTaskName: `Uploading files for imageSet ${name}`,
-    indeterminateTaskName: `Preparing files for imageSet ${name}`, 
-    stepFormatter: formatFileSize
+    indeterminateTaskName: `Preparing files for imageSet ${name}`,
+    stepFormatter: formatFileSize,
   });
 
   const handleSubmit = async () => {
@@ -156,30 +173,43 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
     handleClose();
     setTotalSteps(filteredImageSize);
     setStepsCompleted(0);
-    const imageSetId = imageSets.find(x => x.name === name)?.id || createImageSet({name, projectId:project.id});
-    filteredImageFiles.map(
-      (file) => limitConnections(async () => {
+    const imageSetId =
+      imageSets.find((x) => x.name === name)?.id ||
+      createImageSet({ name, projectId: project.id });
+    filteredImageFiles.map((file) =>
+      limitConnections(async () => {
         let lastTransferred = 0;
-        const tasks = [upload ? uploadData({
-          path: "images/" + file.webkitRelativePath,
-          data: file,
-          options: {
-            bucket:'inputs',
-            contentType: file.type,
-            onProgress: ({ transferredBytes }) => {
-              {
-                const additionalTransferred = transferredBytes - lastTransferred;
-                setStepsCompleted(fc => fc + additionalTransferred);  
-              }
-              lastTransferred = transferredBytes;
-            },
-            onError: (error) => {
-              console.error(error);
+        const tasks = [
+          upload
+            ? uploadData({
+                path: 'images/' + file.webkitRelativePath,
+                data: file,
+                options: {
+                  bucket: 'inputs',
+                  contentType: file.type,
+                  onProgress: ({ transferredBytes }) => {
+                    {
+                      const additionalTransferred =
+                        transferredBytes - lastTransferred;
+                      setStepsCompleted((fc) => fc + additionalTransferred);
+                    }
+                    lastTransferred = transferredBytes;
+                  },
+                  onError: (error) => {
+                    console.error(error);
+                  },
+                },
+              }).result
+            : Promise.resolve(),
+          getExifmeta(file).then((exifmeta) => {
+            if (!upload) {
+              setStepsCompleted((fc) => fc + file.size);
             }
-          }
-        }).result : Promise.resolve(), getExifmeta(file).then(exifmeta => { if (!upload) { setStepsCompleted(fc => fc + file.size) } return exifmeta})] as const
-        const results=await Promise.all(tasks)
-        const exifmeta = results[1]
+            return exifmeta;
+          }),
+        ] as const;
+        const results = await Promise.all(tasks);
+        const exifmeta = results[1];
         // Get the exif metadata from the second task
         client.models.Image.create({
           projectId: project.id,
@@ -191,26 +221,26 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
           originalPath: file.webkitRelativePath,
         }).then(async ({ data: image }) => {
           if (!image) {
-            throw new Error("Image not created");
+            throw new Error('Image not created');
           }
           await client.models.ImageSetMembership.create({
             imageId: image.id,
-            imageSetId: imageSetId
+            imageSetId: imageSetId,
           });
           await client.models.ImageFile.create({
             projectId: project.id,
             imageId: image.id,
             key: file.webkitRelativePath,
             path: file.webkitRelativePath,
-            type: file.type
-          })
-        })
+            type: file.type,
+          });
+        });
       })
     );
 
     await client.models.ImageSet.update({
       id: imageSetId,
-      imageCount: filteredImageFiles.length
+      imageCount: filteredImageFiles.length,
     });
   };
 
@@ -230,7 +260,8 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
 
   return (
     <Modal show={show} onHide={handleClose}>
-      <input type="file"
+      <input
+        type="file"
         id="filepicker"
         name="fileList"
         multiple
@@ -244,7 +275,13 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
       </Modal.Header>
       <Modal.Body>
         <Form>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
             <div>
               <Form.Group>
                 <Form.Check
@@ -270,7 +307,10 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
               </Form.Group>
             </div>
             <Form.Group>
-              <Button variant="primary" onClick={() => fileInputRef.current?.click()}>
+              <Button
+                variant="primary"
+                onClick={() => fileInputRef.current?.click()}
+              >
                 Change source folder
               </Button>
             </Form.Group>
@@ -291,11 +331,16 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
           ) : (
             <div className="text-center mt-3">
               <p>
-                Total files: {scannedFiles.length}<br />
-                Image files: {imageFiles.length}<br />
-                Image files size: {formatFileSize(totalImageSize)}<br />
-                Image files not allready uploaded: {filteredImageFiles.length}<br />
-                Image files size not allready uploaded: {formatFileSize(filteredImageSize)}
+                Total files: {scannedFiles.length}
+                <br />
+                Image files: {imageFiles.length}
+                <br />
+                Image files size: {formatFileSize(totalImageSize)}
+                <br />
+                Image files not allready uploaded: {filteredImageFiles.length}
+                <br />
+                Image files size not allready uploaded:{' '}
+                {formatFileSize(filteredImageSize)}
               </p>
             </div>
           )}
@@ -305,7 +350,7 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
         <Button variant="primary" onClick={handleSubmit} ref={submitButtonRef}>
           Submit
         </Button>
-        <Button variant="primary" onClick={handleClose}>
+        <Button variant="dark" onClick={handleClose}>
           Cancel
         </Button>
       </Modal.Footer>

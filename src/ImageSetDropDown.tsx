@@ -17,10 +17,10 @@
 //             </Form.Select>
 // }
 
-import { Form } from "react-bootstrap";
-import { useContext } from "react";
-import { ManagementContext } from "./Context";
-import Select, { MultiValue, Options  } from "react-select";
+import { Form } from 'react-bootstrap';
+import { useContext } from 'react';
+import { ManagementContext } from './Context';
+import Select, { MultiValue, Options } from 'react-select';
 
 interface OptionType {
   label: string;
@@ -32,22 +32,28 @@ interface ImageSetDropdownProps {
   setImageSets: (selected: string[]) => void;
 }
 
-export function ImageSetDropdown({ selectedSets, setImageSets }: ImageSetDropdownProps) {
-  const {imageSetsHook:{data:imageSets}} = useContext(ManagementContext)!;
+export function ImageSetDropdown({
+  selectedSets,
+  setImageSets,
+}: ImageSetDropdownProps) {
+  const {
+    imageSetsHook: { data: imageSets },
+  } = useContext(ManagementContext)!;
   const options: Options<OptionType> | undefined = imageSets
     ?.map((x) => ({
       label: x.name,
       value: x.id,
     }))
     .sort((a, b) => (a.label > b.label ? 1 : -1));
-  const selectedOptions=options?.filter(o=>selectedSets?.includes(o.value))
+  const selectedOptions = options?.filter((o) =>
+    selectedSets?.includes(o.value)
+  );
 
-    function handleChange(selectedOptions: MultiValue<OptionType>) {
-      setImageSets(selectedOptions.map(o => o.value));
-    }
-  
+  function handleChange(selectedOptions: MultiValue<OptionType>) {
+    setImageSets(selectedOptions.map((o) => o.value));
+  }
 
-  console.log("imageSets");
+  console.log('imageSets');
   console.log(options);
 
   return (
@@ -58,7 +64,7 @@ export function ImageSetDropdown({ selectedSets, setImageSets }: ImageSetDropdow
         isMulti
         name="Image sets"
         options={options}
-        className="basic-multi-select"
+        className="basic-multi-select text-black"
         classNamePrefix="select"
         closeMenuOnSelect={false}
       />

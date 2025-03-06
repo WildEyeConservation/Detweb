@@ -6,6 +6,7 @@ import Button from 'react-bootstrap/Button';
 import { useUsers } from '../apiInterface';
 import { fetchAllPaginatedResults } from '../utils';
 import { Bell, Check, X } from 'lucide-react';
+import { Card } from 'react-bootstrap';
 
 export default function Notifications() {
   const [show, setShow] = useState(false);
@@ -18,26 +19,22 @@ export default function Notifications() {
   return (
     <div>
       <button
-        className="text-muted h-100"
+        className="text-muted px-2"
         style={{
           position: 'relative',
           backgroundColor: 'transparent',
           border: 'none',
           cursor: 'pointer',
-          width: '56px',
         }}
         onClick={() => setShow(!show)}
       >
-        <div
-          className="d-flex justify-content-center align-items-center"
-          style={{ position: 'relative', height: '100%' }}
-        >
+        <div style={{ position: 'relative', height: '100%' }}>
           <div
-            className="text-white bg-info"
+            className="text-white bg-primary"
             style={{
               position: 'absolute',
-              top: 5,
-              right: 5,
+              top: -5,
+              right: -5,
               borderRadius: '50%',
               minWidth: '16px',
               height: '16px',
@@ -66,11 +63,11 @@ export default function Notifications() {
         />
       )}
       {username && (
-        <div
+        <Card
           style={{
             position: 'absolute',
             top: 56,
-            right: 83,
+            right: 24,
             width: '400px',
             opacity: show ? 1 : 0,
             pointerEvents: show ? 'auto' : 'none',
@@ -78,16 +75,18 @@ export default function Notifications() {
             overflow: 'auto',
             zIndex: 2,
           }}
-          className="bg-primary border border-secondary shadow-sm rounded-3"
         >
-          <div className="d-flex justify-content-end pt-2 pe-2">
-            <X onClick={() => setShow(false)} style={{ cursor: 'pointer' }} />
-          </div>
-          <Inbox
-            username={username}
-            setTotalNotifications={setTotalNotifications}
-          />
-        </div>
+          <Card.Body>
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <Card.Title className="mb-0">Notifications</Card.Title>
+              <X onClick={() => setShow(false)} style={{ cursor: 'pointer' }} />
+            </div>
+            <Inbox
+              username={username}
+              setTotalNotifications={setTotalNotifications}
+            />
+          </Card.Body>
+        </Card>
       )}
     </div>
   );
@@ -147,7 +146,7 @@ function Inbox({
   }, [organizationInvites]);
 
   return organizationInvites?.length === 0 ? (
-    <h5 className="text-center mb-0 p-2">No notifications</h5>
+    <h5 className="text-center mb-0 p-2">Empty</h5>
   ) : (
     organizationInvites?.map((invite, i) => (
       <Invite

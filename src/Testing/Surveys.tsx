@@ -94,7 +94,7 @@ export default function Surveys() {
       rowData: [
         survey.name,
         <Select
-          className="text-secondary"
+          className="text-black"
           isMulti
           value={selectedLocationPools[survey.id]}
           options={locationPools.map((pool) => ({

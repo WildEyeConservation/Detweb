@@ -196,11 +196,11 @@ export default function ExceptionsModal({
         />
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={onClose}>
-          Cancel
-        </Button>
         <Button variant="primary" onClick={handleSave} disabled={isSaving}>
           {isSaving ? 'Saving...' : 'Save'}
+        </Button>
+        <Button variant="dark" onClick={onClose}>
+          Cancel
         </Button>
       </Modal.Footer>
     </Modal>

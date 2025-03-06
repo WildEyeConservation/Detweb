@@ -152,7 +152,7 @@ export default function ImageSetManagement() {
             tableHeadings={tableHeadings}
             tableData={tableData}
           />
-          <Col className="d-flex justify-content-center mt-3 border-top pt-3 border-secondary">
+          <Col className="d-flex justify-content-center mt-3 border-top pt-3 border-dark">
             <span>
               <Button
                 variant="primary"

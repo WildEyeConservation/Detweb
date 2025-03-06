@@ -392,7 +392,7 @@ function LaunchTask({
         >
           Submit
         </Button>
-        <Button variant="primary" onClick={handleClose}>
+        <Button variant="dark" onClick={handleClose}>
           Cancel
         </Button>
       </Modal.Footer>

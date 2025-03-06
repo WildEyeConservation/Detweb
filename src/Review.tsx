@@ -167,7 +167,7 @@ export function Review() {
     <div
       style={{
         width: '100%',
-        maxWidth: '1280px',
+        maxWidth: '1555px',
         marginTop: '16px',
         marginBottom: '16px',
       }}
@@ -176,7 +176,7 @@ export function Review() {
         <Card.Body>
           <Card.Title className="d-flex justify-content-between align-items-center">
             <h4>Review {project.name}</h4>
-            <Button variant="primary" onClick={() => navigate('/surveys')}>
+            <Button variant="dark" onClick={() => navigate('/surveys')}>
               Back to Surveys
             </Button>
           </Card.Title>
@@ -206,7 +206,7 @@ export function Review() {
                   label: q.name,
                   value: q.id,
                 }))}
-                className="basic-multi-select category-select"
+                className="basic-multi-select category-select text-black"
                 classNamePrefix="select"
                 closeMenuOnSelect={false}
                 styles={{

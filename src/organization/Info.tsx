@@ -90,7 +90,7 @@ export default function Info({ organizationId }: { organizationId: string }) {
           <Button variant="primary" type="submit" disabled={isSaving}>
             Save
           </Button>
-          <Button variant="secondary" type="button" onClick={handleCancel}>
+          <Button variant="dark" type="button" onClick={handleCancel}>
             Cancel
           </Button>
         </div>

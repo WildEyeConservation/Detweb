@@ -9,7 +9,7 @@ import { configure } from 'react-hotkeys';
 import { withAuthenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
 import { User } from './UserContext.js';
-import 'bootswatch/dist/slate/bootstrap.min.css';
+import 'bootswatch/dist/superhero/bootstrap.min.css';
 import { fetchAuthSession, AuthUser } from 'aws-amplify/auth';
 import { BrowserView, MobileView } from 'react-device-detect';
 import MainNavigation from './MainNavigation.tsx';

@@ -179,7 +179,7 @@ export default function Users({
           itemsPerPage={5}
           emptyMessage="Loading users..."
         />
-        <div className="d-flex justify-content-center mt-2 border-top pt-3 border-secondary">
+        <div className="d-flex justify-content-center mt-2 border-top pt-3 border-dark">
           <Button variant="primary" onClick={() => showModal('inviteUser')}>
             Invite User
           </Button>

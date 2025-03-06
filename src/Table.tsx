@@ -100,13 +100,14 @@ export default function MyTable(input: TableObject) {
 
   return (
     <div>
-      <Table bordered hover>
+      <Table striped bordered hover className="border border-dark">
         {tableHeadings && (
           <thead>
             <tr>
               {tableHeadings.map(({ content, style, sort }, index) => (
                 <th
                   key={`heading${index}`}
+                  className="bg-dark"
                   onClick={sort ? () => handleSort(index) : undefined}
                   style={{ cursor: sort ? 'pointer' : 'default', ...style }}
                 >
@@ -123,7 +124,12 @@ export default function MyTable(input: TableObject) {
           {paginatedData?.map((row) => (
             <tr key={row.id} className="align-middle">
               {row.rowData.map((content, index) => (
-                <td key={`column${index}`}>{content}</td>
+                <td
+                  key={`column${index}`}
+                  style={{ backgroundColor: '#6F7B89' }}
+                >
+                  {content}
+                </td>
               ))}
             </tr>
           ))}
@@ -134,9 +140,9 @@ export default function MyTable(input: TableObject) {
           <p className="d-inline mb-0">
             Page {currentPage + 1} of {totalPages}
           </p>
-          <div>
+          <div className="d-flex gap-1">
             <Button
-              variant="primary"
+              variant="info"
               onClick={() => {
                 setCurrentPage((c) => c - 1);
               }}
@@ -145,7 +151,7 @@ export default function MyTable(input: TableObject) {
               &lt;
             </Button>
             <Button
-              variant="primary"
+              variant="info"
               onClick={() => setCurrentPage(currentPage + 1)}
               disabled={
                 currentPage === Math.ceil(sortedData.length / itemsPerPage) - 1

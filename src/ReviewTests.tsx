@@ -297,7 +297,7 @@ export default function ReviewTests({
           <Form.Label>Filter locations by pool</Form.Label>
           <div className="d-flex gap-2">
             <Select
-              className="flex-grow-1"
+              className="flex-grow-1 text-black"
               isDisabled={deleting}
               value={filteredPreset || null}
               options={presets.map((p) => ({ label: p.name, value: p.id }))}

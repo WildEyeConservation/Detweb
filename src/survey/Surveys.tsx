@@ -65,6 +65,9 @@ export default function Surveys() {
           >
             Manage
           </Button>
+          <Button variant="danger" onClick={() => alert('Not implemented')}>
+            Delete
+          </Button>
         </div>
       </div>,
     ],
@@ -79,7 +82,7 @@ export default function Surveys() {
       <div
         style={{
           width: '100%',
-          maxWidth: '1280px',
+          maxWidth: '1555px',
           marginTop: '16px',
           marginBottom: '16px',
         }}
@@ -96,7 +99,7 @@ export default function Surveys() {
               emptyMessage="You are not an admin of any surveys."
             />
             {isOrganizationAdmin && (
-              <div className="d-flex justify-content-center mt-3 border-top pt-3 border-secondary">
+              <div className="d-flex justify-content-center mt-3 border-top pt-3 border-dark">
                 <Button
                   variant="primary"
                   onClick={() => showModal('newSurvey')}

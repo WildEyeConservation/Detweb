@@ -1,7 +1,7 @@
-import { Form } from "react-bootstrap";
-import { useContext } from "react";
-import { ProjectContext } from "./Context";
-import Select, { MultiValue, SingleValue, OptionsOrGroups } from "react-select";
+import { Form } from 'react-bootstrap';
+import { useContext } from 'react';
+import { ProjectContext } from './Context';
+import Select, { MultiValue, SingleValue, OptionsOrGroups } from 'react-select';
 
 interface CategoryOption {
   label: string;
@@ -9,17 +9,26 @@ interface CategoryOption {
 }
 
 interface CategoriesDropdownProps {
-  setSelectedCategories: (categories: MultiValue<CategoryOption> | SingleValue<CategoryOption>) => void;
+  setSelectedCategories: (
+    categories: MultiValue<CategoryOption> | SingleValue<CategoryOption>
+  ) => void;
 }
 
-export function CategoriesDropdown({ setSelectedCategories }: CategoriesDropdownProps) {
-  const {categoriesHook:{data:categories}} = useContext(ProjectContext)!;
+export function CategoriesDropdown({
+  setSelectedCategories,
+}: CategoriesDropdownProps) {
+  const {
+    categoriesHook: { data: categories },
+  } = useContext(ProjectContext)!;
 
-  const options: OptionsOrGroups<CategoryOption, any> = categories?.map((x) => {
-    return { label: x.name, value: x.id };
-  }) || [];
+  const options: OptionsOrGroups<CategoryOption, any> =
+    categories?.map((x) => {
+      return { label: x.name, value: x.id };
+    }) || [];
 
-  function handleChange(selectedOptions: MultiValue<CategoryOption> | SingleValue<CategoryOption>) {
+  function handleChange(
+    selectedOptions: MultiValue<CategoryOption> | SingleValue<CategoryOption>
+  ) {
     setSelectedCategories(selectedOptions);
   }
 
@@ -32,7 +41,7 @@ export function CategoriesDropdown({ setSelectedCategories }: CategoriesDropdown
         isMulti
         name="Categories"
         options={options}
-        className="basic-multi-select"
+        className="basic-multi-select text-black"
         classNamePrefix="select"
         closeMenuOnSelect={false}
       />

@@ -4,8 +4,7 @@ import { GlobalContext, TestingContext, UserContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
 import MyTable from '../Table';
 import { BarChart } from '@mui/x-charts/BarChart';
-import Tabs from 'react-bootstrap/Tabs';
-import Tab from 'react-bootstrap/Tab';
+import { Tab, Tabs } from '../Tabs';
 import exportFromJSON from 'export-from-json';
 import { useUpdateProgress } from '../useUpdateProgress';
 import { Schema } from '../../amplify/data/resource';
@@ -295,6 +294,7 @@ export default function Results() {
       <div>
         <label className="mb-2">Select Survey</label>
         <Select
+          className="text-black"
           value={selectedProject}
           options={projects.map((p) => ({
             label: `${p.name} (${p.organization.name})`,
@@ -317,6 +317,7 @@ export default function Results() {
       <div>
         <label className="mb-2">Select user</label>
         <Select
+          className="mb-3 text-black"
           value={selectedUser}
           options={organizationMembershipsHook.data?.map((m) => ({
             label: allUsers.find((user) => user.id === m.userId)?.name || '',
@@ -342,13 +343,9 @@ export default function Results() {
                 {isLoading ? 'Loading...' : 'No test results'}
               </p>
             ) : (
-              <Tabs
-                defaultActiveKey="results"
-                id="uncontrolled-tab-example"
-                className="my-3"
-              >
-                <Tab eventKey="results" title="All Results">
-                  <p className="mb-2">Summary</p>
+              <Tabs defaultTab={0}>
+                <Tab label="All Results">
+                  <p className="my-2">Summary</p>
                   <div className="d-flex gap-3 mb-3">
                     {summaryCards.map((card, index) => (
                       <SummaryCard key={index} content={card.content} />
@@ -362,13 +359,9 @@ export default function Results() {
                     itemsPerPage={5}
                   />
                 </Tab>
-                <Tab
-                  eventKey="ca"
-                  title="Label Accuracy"
-                  className="text-white"
-                >
+                <Tab label="Label Accuracy">
                   <p
-                    className="text-center mb-0"
+                    className="text-center mb-0 mt-3"
                     style={{ fontSize: '1.5rem' }}
                   >
                     Over/Under Count Percentage By Label
@@ -406,7 +399,7 @@ export default function Results() {
                         colorMap: {
                           type: 'piecewise',
                           thresholds: [0],
-                          colors: ['red', 'cyan'],
+                          colors: ['#DF691A', '#5bc0de'],
                         },
                       },
                     ]}
@@ -430,7 +423,7 @@ export default function Results() {
             )}
           </div>
           {results.length > 0 && (
-            <div className="d-flex gap-2 justify-content-end">
+            <div className="d-flex gap-2 justify-content-end mt-2">
               <Button
                 variant="danger"
                 onClick={purgeResults}
@@ -451,7 +444,7 @@ export default function Results() {
 
 function SummaryCard({ content }: { content: (string | JSX.Element)[] }) {
   return (
-    <div className="rounded-3 p-3 bg-dark text-white d-flex flex-column gap-1 shadow-sm border border-primary">
+    <div className="rounded-3 p-3 bg-dark text-white d-flex flex-column gap-1">
       {content.map((item, index) => (
         <p key={index} className="mb-0">
           {item}

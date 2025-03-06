@@ -1,6 +1,5 @@
 import { Card } from 'react-bootstrap';
-import Tabs from 'react-bootstrap/Tabs';
-import Tab from 'react-bootstrap/Tab';
+import { Tabs, Tab } from './Tabs';
 import Users from './organization/Users';
 import OrganizationSelector from './OrganizationSelector';
 import { useState, useContext } from 'react';
@@ -42,7 +41,7 @@ export default function Permissions() {
     <div
       style={{
         width: '100%',
-        maxWidth: '1280px',
+        maxWidth: '1555px',
         marginTop: '16px',
         marginBottom: '16px',
       }}
@@ -59,15 +58,15 @@ export default function Permissions() {
             />
           </div>
           {organization.id && (
-            <Tabs>
-              <Tab eventKey="users" title="Users">
+            <Tabs defaultTab={0}>
+              <Tab label="Users">
                 <Users
                   key={organization.id}
                   organization={organization}
                   hook={membershipHook}
                 />
               </Tab>
-              <Tab eventKey="info" title="Organization Info">
+              <Tab label="Organization Info">
                 <Info organizationId={organization.id} />
               </Tab>
             </Tabs>

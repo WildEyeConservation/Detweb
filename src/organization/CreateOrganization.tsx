@@ -107,11 +107,11 @@ export default function CreateOrganization() {
               />
             </Form.Group>
             <div className="d-flex gap-2 justify-content-end">
-              <Button variant="secondary" type="button" onClick={handleClear}>
-                Clear
-              </Button>{' '}
               <Button variant="primary" type="submit" disabled={isSubmitting}>
                 Submit
+              </Button>
+              <Button variant="dark" type="button" onClick={handleClear}>
+                Clear
               </Button>
             </div>
           </Form>

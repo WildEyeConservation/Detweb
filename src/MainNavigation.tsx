@@ -50,13 +50,19 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
       style={{ height: '100vh', overflow: 'hidden' }}
     >
       <Navbar
-        bg="primary"
+        bg="secondary"
         variant="dark"
         fixed="top"
         key={expand}
         expand={expand}
       >
-        <div className="w-100 d-flex flex-row">
+        <div className="w-100 d-flex flex-row align-items-center px-3">
+          <img
+            src="/Wildeye-logo-03-01.svg"
+            alt="Logo"
+            style={{ height: '32px', marginRight: '4px', cursor: 'pointer' }}
+            onClick={() => navigate(isOrganizationAdmin ? '/surveys' : '/jobs')}
+          />
           <div className="d-flex flex-row">
             <Nav
               fill
@@ -65,11 +71,21 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
             >
               <>
                 {(myAdminProjects?.length > 0 || isOrganizationAdmin) && (
-                  <Nav.Link as={NavLink} eventKey={`surveys`} to={`surveys`}>
+                  <Nav.Link
+                    as={NavLink}
+                    eventKey={`surveys`}
+                    to={`surveys`}
+                    className="px-2"
+                  >
                     Surveys
                   </Nav.Link>
                 )}
-                <Nav.Link as={NavLink} eventKey={`jobs`} to={`jobs`}>
+                <Nav.Link
+                  as={NavLink}
+                  eventKey={`jobs`}
+                  to={`jobs`}
+                  className="px-2"
+                >
                   Jobs
                 </Nav.Link>
                 {isOrganizationAdmin && (
@@ -77,6 +93,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                     as={NavLink}
                     eventKey={`permissions`}
                     to={`permissions`}
+                    className="px-2"
                   >
                     Permissions
                   </Nav.Link>
@@ -85,11 +102,17 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                   as={NavLink}
                   eventKey={`annotation-statistics`}
                   to={`annotation-statistics`}
+                  className="px-2"
                 >
                   Annotation Statistics
                 </Nav.Link>
                 {isOrganizationAdmin && (
-                  <Nav.Link as={NavLink} eventKey={`testing`} to={`testing`}>
+                  <Nav.Link
+                    as={NavLink}
+                    eventKey={`testing`}
+                    to={`testing`}
+                    className="px-2"
+                  >
                     User Testing
                   </Nav.Link>
                 )}
@@ -98,6 +121,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                     as={NavLink}
                     eventKey={`onboarding`}
                     to={`onboarding`}
+                    className="px-2"
                   >
                     Onboarding
                   </Nav.Link>
@@ -105,17 +129,23 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
               </>
             </Nav>
           </div>
-          <div className="d-flex flex-row flex-grow-1 justify-content-end">
+          <div className="d-flex flex-row flex-grow-1 justify-content-end align-items-center">
             <ProgressIndicators />
+            <Nav.Link className="mx-2" onClick={signOut}>
+              Logout
+            </Nav.Link>
             <Notifications />
-            <Nav.Link onClick={signOut}>Logout</Nav.Link>
           </div>
         </div>
       </Navbar>
       <Container
         fluid
         className="d-flex justify-content-center h-100"
-        style={{ marginTop: '56px', overflowY: 'auto' }}
+        style={{
+          marginTop: '56px',
+          overflowY: 'auto',
+          backgroundColor: '#2B3E50',
+        }}
       >
         <Outlet />
       </Container>

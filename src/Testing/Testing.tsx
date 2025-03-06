@@ -1,8 +1,7 @@
 import { Card } from 'react-bootstrap';
 import OrganizationSelector from '../OrganizationSelector';
 import { useState, useContext } from 'react';
-import Tab from 'react-bootstrap/Tab';
-import Tabs from 'react-bootstrap/Tabs';
+import { Tab, Tabs } from '../Tabs';
 import LocationPools from './LocationPools';
 import Surveys from './Surveys';
 import { TestingContext, GlobalContext } from '../Context';
@@ -72,7 +71,7 @@ export default function Testing() {
       <div
         style={{
           width: '100%',
-          maxWidth: '1280px',
+          maxWidth: '1555px',
           marginTop: '16px',
           marginBottom: '16px',
         }}
@@ -89,17 +88,17 @@ export default function Testing() {
               />
             </div>
             {organization.id && (
-              <Tabs>
-                <Tab eventKey="pools" title="Pools">
+              <Tabs defaultTab={0}>
+                <Tab label="Pools">
                   <LocationPools />
                 </Tab>
-                <Tab eventKey="surveys" title="Surveys">
+                <Tab label="Surveys">
                   <Surveys />
                 </Tab>
-                <Tab eventKey="users" title="Users">
+                <Tab label="Users">
                   <Users />
                 </Tab>
-                <Tab eventKey="results" title="Results">
+                <Tab label="Results">
                   <Results />
                 </Tab>
               </Tabs>

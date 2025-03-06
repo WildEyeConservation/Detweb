@@ -173,7 +173,7 @@ export default function DefineCategories() {
           <Button variant="primary" onClick={handleSubmit}>
             Submit
           </Button>
-          <Button variant="primary" onClick={() => setShowModal(false)}>
+          <Button variant="dark" onClick={() => setShowModal(false)}>
             Cancel
           </Button>
         </Modal.Footer>
@@ -195,7 +195,7 @@ export default function DefineCategories() {
           )}
         </div>
       </Row>
-      <Col className="d-flex justify-content-center mt-3 border-top pt-3 border-secondary">
+      <Col className="d-flex justify-content-center border-top pt-3 border-dark">
         <Button
           variant="primary"
           onClick={() => {

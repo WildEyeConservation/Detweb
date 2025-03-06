@@ -249,7 +249,7 @@ export default function UserStats() {
     <div
       style={{
         width: '100%',
-        maxWidth: '1280px',
+        maxWidth: '1555px',
         marginTop: '16px',
         marginBottom: '16px',
       }}
@@ -299,6 +299,7 @@ export default function UserStats() {
           <div className="mt-3">
             <label className="mb-2">Select Survey</label>
             <Select
+              className="text-black"
               value={project}
               options={projects.map((p) => ({
                 label: `${p.name} (${p.organization.name})`,
@@ -321,6 +322,7 @@ export default function UserStats() {
           <div className="mt-3">
             <label className="mb-2">Select Annotation Sets</label>
             <Select
+              className="text-black basic-multi-select"
               value={selectedSets}
               onChange={(e) => setSelectedSets(e)}
               isMulti
@@ -333,7 +335,6 @@ export default function UserStats() {
                     value: s.id,
                   })) || []
               }
-              className="basic-multi-select"
               classNamePrefix="select"
               closeMenuOnSelect={false}
               styles={{

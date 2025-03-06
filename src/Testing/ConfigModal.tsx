@@ -165,11 +165,11 @@ export default function ConfigModal({
         </Form>
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={onClose}>
-          Cancel
-        </Button>
         <Button variant="primary" onClick={handleSave} disabled={saving}>
           Save
+        </Button>
+        <Button variant="dark" onClick={onClose}>
+          Cancel
         </Button>
       </Modal.Footer>
     </Modal>

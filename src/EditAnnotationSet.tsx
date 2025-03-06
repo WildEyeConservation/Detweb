@@ -1,11 +1,11 @@
-import React, { useContext, useEffect, useState } from "react";
-import { Modal, Button, Form } from "react-bootstrap";
-import { GlobalContext } from "./Context";
+import React, { useContext, useEffect, useState } from 'react';
+import { Modal, Button, Form } from 'react-bootstrap';
+import { GlobalContext } from './Context';
 
 interface EditAnnotationSetModalProps {
   show: boolean;
   handleClose: () => void;
-  annotationSet: {id: string, name: string}; 
+  annotationSet: { id: string; name: string };
   setSelectedSets: (sets: string[]) => void;
 }
 
@@ -15,15 +15,18 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
   annotationSet,
   setSelectedSets,
 }) => {
-  const { client } = useContext(GlobalContext)!
-  const [newName, setNewName] = useState<string>("");
+  const { client } = useContext(GlobalContext)!;
+  const [newName, setNewName] = useState<string>('');
   const [busy, setBusy] = useState<boolean>(false);
 
   const handleSave = async () => {
-    if (annotationSet && newName.trim() !== "") {
+    if (annotationSet && newName.trim() !== '') {
       setBusy(true);
 
-      await client.models.AnnotationSet.update({ id: annotationSet.id, name: newName });
+      await client.models.AnnotationSet.update({
+        id: annotationSet.id,
+        name: newName,
+      });
       handleClose();
       setSelectedSets([]);
 
@@ -42,7 +45,7 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
       </Modal.Header>
       <Modal.Body>
         <Form>
-          <Form.Group controlId="annotationSetName"> 
+          <Form.Group controlId="annotationSetName">
             <Form.Label>Name</Form.Label>
             <Form.Control
               type="text"
@@ -52,14 +55,26 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
             />
           </Form.Group>
         </Form>
-        <small className="text-muted">{busy && "Saving..."}</small>
+        <small className="text-muted">{busy && 'Saving...'}</small>
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={() => {handleClose(); setSelectedSets([]); }}>
-          Cancel
-        </Button>
-        <Button variant="primary" onClick={handleSave} disabled={newName.trim() === "" || busy || annotationSet.name === newName}>
+        <Button
+          variant="primary"
+          onClick={handleSave}
+          disabled={
+            newName.trim() === '' || busy || annotationSet.name === newName
+          }
+        >
           Save Changes
+        </Button>
+        <Button
+          variant="dark"
+          onClick={() => {
+            handleClose();
+            setSelectedSets([]);
+          }}
+        >
+          Cancel
         </Button>
       </Modal.Footer>
     </Modal>
