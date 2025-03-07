@@ -17,6 +17,7 @@ import { inv } from "mathjs";
 import { makeTransform } from "./utils";
 import TestLocationModal from "./TestLocationModal";
 import OverlapsLoader from "./OverlapsLoader";
+import { useQueries, useQuery } from "@tanstack/react-query";
 
 export interface BaseImageProps {
   image: ImageType;
@@ -47,6 +48,58 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
   const prevPropsRef = useRef(props);
   const source = imageFiles.find(file => file.type == 'image/jpeg')?.key
   const [isTest, setIsTest] = useState(false);
+      // imageNeighboursQueries contains a list of queries that fetch the neighbours of each image.
+
+  const prevNeighboursQuery = useQuery({
+    queryKey: ['prevNeighbours', image.id],
+    queryFn: () => {
+      return client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: image.id })
+    },
+    staleTime: Infinity, // Data will never become stale automatically
+    cacheTime: 1000 * 60 * 60, // Cache for 1 hour
+  })
+
+  const prevNeighbours = useMemo(() => {
+    return prevNeighboursQuery.data?.data?.map(n => n.image1Id) || [];
+  }, [prevNeighboursQuery.data])
+
+  const nextNeighboursQuery = useQuery({
+    queryKey: ['nextNeighbours', image.id],
+    queryFn: () => {
+       return client.models.ImageNeighbour.imageNeighboursByImage1key({image1Id:image.id});
+    },
+    staleTime: Infinity, // Data will never become stale automatically
+    cacheTime: 1000 * 60 * 60, // Cache for 1 hour
+  })  
+
+  const nextNeighbours = useMemo(() => {
+    return nextNeighboursQuery.data?.data?.map(n => n.image2Id) || [];
+  }, [nextNeighboursQuery.data])
+
+  const imageMetaDataQueries = useQueries({
+    queries: [...prevNeighbours, ...nextNeighbours].map((n) => ({
+        queryKey: ['imageMetaData', n],
+        queryFn: () => {
+            return client.models.Image.get({id: n});
+        },
+        staleTime: Infinity, // Data will never become stale automatically
+        cacheTime: 1000 * 60 * 60, // Cache for 1 hour
+    }))
+  });
+
+  const imageMetaData = useMemo(() => {
+    return imageMetaDataQueries.filter(q => q.isSuccess).map(q => q.data.data);
+  }, [imageMetaDataQueries])
+
+  const prevImage = useMemo(() => {
+    return imageMetaData?.filter(i => prevNeighbours?.includes(i.id)).sort((a, b) => b.timestamp - a.timestamp)[0];
+  }, [imageMetaData, prevNeighbours])
+
+  const nextImage = useMemo(() => {
+    return imageMetaData?.filter(i => nextNeighbours?.includes(i.id)).sort((a, b) => a.timestamp - b.timestamp)[0];
+  }, [imageMetaData, nextNeighbours])
+
+  const queriesComplete = imageMetaDataQueries.every(q => q.isSuccess) && prevNeighboursQuery.isSuccess && nextNeighboursQuery.isSuccess && true;
 
   const belongsToCurrentProject =  projectMemberships?.find(
     (pm) => pm.userId == user.userId && pm.projectId == project.id,
@@ -143,17 +196,27 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
             alert(JSON.stringify(stats));
           }
         },{
-          text: "Open previous image in new tab",
-          callback: async () => {
-            const prevImage = await client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: image.id }).then(response => response.data[0].image1Id);
-            const newUrl = window.location.href.replace(/\/[^/]+\/?$/, `/image/${prevImage}/${location?.annotationSetId}`)
+          text: `Open previous image`,
+        callback: async () => {
+          const newUrl = window.location.href.replace(/^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/, `$1/image/${prevImage?.id}/${location?.annotationSetId}`)
             window.open(newUrl, '_blank');
           }
         },{
-          text: "Open next image in new tab",
+          text: `Open next image`,
           callback: async () => {
-            const nextImage = await client.models.ImageNeighbour.imageNeighboursByImage1key({ image1Id: image.id }).then(response => response.data[0].image2Id);
-            const newUrl = window.location.href.replace(/\/[^/]+\/?$/, `/image/${nextImage}/${location?.annotationSetId}`)
+            const newUrl = window.location.href.replace(/^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/, `$1/image/${nextImage?.id}/${location?.annotationSetId}`);
+            window.open(newUrl, '_blank');
+          }
+        },{
+          text: `Register against previous image`,
+        callback: async () => {
+          const newUrl = window.location.href.replace(/^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/, `$1/register/${prevImage?.id}/${image.id}/${location?.annotationSetId}`)
+            window.open(newUrl, '_blank');
+          }
+        },{
+          text: `Register against next image`,
+          callback: async () => {
+            const newUrl = window.location.href.replace(/^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/, `$1/register/${image.id}/${nextImage?.id}/${location?.annotationSetId}`);
             window.open(newUrl, '_blank');
           }
         },
@@ -200,7 +263,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
     }
 
     return items;
-  }, [isTest, belongsToCurrentProject, source, location?.id, client.models.ImageNeighbour, image.id, stats, location.annotationSetId, location.image.id]);
+  }, [isTest, belongsToCurrentProject, source, location?.id, client.models.ImageNeighbour, image.id, stats, location.annotationSetId, location.image.id, prevImage, nextImage]);
 
   // categories?.forEach((cat, idx) => {
   //   keyMap[cat.name] = cat.shortcutKey
@@ -238,8 +301,9 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
       width: '100%',
       height: '100%'
     }}>
-      {source && <MapContainer
+      {queriesComplete && <MapContainer
         // id={id}
+        key={JSON.stringify(contextMenuItems)}
         style={style}
         crs={L.CRS.Simple}
         bounds={zoom ? undefined : viewBounds}
@@ -298,7 +362,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
         />
       }
       </div>
-  ), [visible, fullyLoaded, source, style, zoom, viewBounds, viewCenter, location?.id, location?.annotationSetId, location.image.id, imageFiles, image, children, next, prev, canAdvance, stats, client.models.ImageNeighbour, imageBounds, isTest])
+  ), [visible, fullyLoaded, source, style, zoom, viewBounds, viewCenter, location?.id, location?.annotationSetId, location.image.id, imageFiles, image, children, next, prev, canAdvance, stats, client.models.ImageNeighbour, imageBounds, isTest, queriesComplete])
 }, (prevProps, nextProps) => {
       //Iterate over all the props except children and compare them for equality
   return prevProps.visible === nextProps.visible &&

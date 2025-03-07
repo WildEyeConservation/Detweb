@@ -4,7 +4,8 @@ import { uniqueNamesGenerator, adjectives, names } from "unique-names-generator"
 import * as L from "leaflet";
 import * as jdenticon from "jdenticon";
 import type { AnnotationType, CategoryType, ExtendedAnnotationType } from "./schemaTypes";
-import { ManagementContext } from './Context';
+import { ManagementContext, GlobalContext } from './Context';
+
 
 
 interface DetwebMarkerProps {
@@ -43,7 +44,7 @@ function createIcon(
         : "#000000"
 
     }">
-         <span class="markerLabel" opacity="50%" style="position: relative; top: -1px; left: 0px;">${id ? jdenticon.toSvg(id, 20) : ""}</svg></span>
+         <span class="markerLabel" style="position: relative; top: -1px; left: 0px;">${id ? jdenticon.toSvg(id, 20) : ""}</svg></span>
          </div></div>`;
     //let html = `<svg width="80" height="80" data-jdenticon-value="user127"/>`;
     //TODO : Confirm the units implicit in the various anchors defined below. If these are in pixels (or any other
@@ -78,14 +79,22 @@ function detectionToAnnotation(det: any): Partial<ExtendedAnnotationType> {
   return result;
 }
 
-  function getContextMenuItems(
-    det: ExtendedAnnotationType,
-    user: any,
-    categories: CategoryType[],
-    deleteAnnotation: (annotation: Partial<ExtendedAnnotationType>) => void,
-    updateAnnotation: (annotation: Partial<ExtendedAnnotationType>) => void
-  ) {
-    const annotation = detectionToAnnotation(det);
+const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
+    const {
+        annotation,
+        categories,
+        activeAnnotation,
+        user,
+        updateAnnotation,
+        deleteAnnotation,
+        getType,
+        latLng2xy,
+        xy2latLng
+  } = props;
+  const { allUsers } = useContext(ManagementContext)!;
+  const { client } = useContext(GlobalContext)!;
+  
+  function getContextMenuItems() {
     let contextmenuItems = [];
       if (!annotation.shadow) {
           contextmenuItems.push({
@@ -97,13 +106,13 @@ function detectionToAnnotation(det: any): Partial<ExtendedAnnotationType> {
           });
       }
     contextmenuItems.push({
-      text: det.obscured ? "Mark as visible" : "Mark as obscured",
+      text: annotation.obscured ? "Mark as visible" : "Mark as obscured",
       index: contextmenuItems.length,
       callback: async () => {
         updateAnnotation({...annotation, obscured: !annotation.obscured});
       },
     });
-    if (det.objectId) {
+    if (annotation.objectId) {
       contextmenuItems.push({
         text: "Remove assigned name",
         index: contextmenuItems.length,
@@ -111,6 +120,23 @@ function detectionToAnnotation(det: any): Partial<ExtendedAnnotationType> {
           updateAnnotation({...annotation, objectId:undefined});
         },
       });
+      if (activeAnnotation) {
+        contextmenuItems.push({
+          text: `Rename to ${uniqueNamesGenerator({ dictionaries: [adjectives, names], seed: activeAnnotation.objectId, style: "capital", separator: " " })}`,
+          index: contextmenuItems.length,
+          callback: async () => {
+            if (annotation.objectId) {
+              client.models.Annotation.annotationsByObjectId({ objectId: annotation.objectId }).then((annotations) => {
+                console.log(`Found ${annotations.data.length} annotations with name ${uniqueNamesGenerator({ dictionaries: [adjectives, names], seed: annotation.objectId, style: "capital", separator: " " })}`);
+                console.log(`Renaming them to ${uniqueNamesGenerator({ dictionaries: [adjectives, names], seed: activeAnnotation.objectId, style: "capital", separator: " " })}`)
+                annotations.data.forEach((a) => {
+                  client.models.Annotation.update({id: a.id, objectId: activeAnnotation.objectId});
+                });
+              });
+            }
+          }
+        });
+      }
     }
     // contextmenuItems.push({text: det.note ? 'Edit Note' : 'Add Note',
     //                         index: contextmenuItems.length,
@@ -126,32 +152,31 @@ function detectionToAnnotation(det: any): Partial<ExtendedAnnotationType> {
     }
     for (let category of categories) {
       if (annotation.categoryId !== category.id) {
-        let item = {
+        contextmenuItems.push({
           text: `Change to ${category.name}`,
           index: contextmenuItems.length,
           callback: async () => {
             updateAnnotation({ id:annotation.id, categoryId: category.id });
           },
-        };
-        contextmenuItems.push(item);
+        });
       }
     }
     if (user.isAdmin) {
       const item = {
-        text: "Send message to " + det.owner,
+        text: "Send message to " + annotation.owner,
         index: contextmenuItems.length,
         callback: async () => {
           let msg = prompt("Type the message here", "This is not an elephant");
           /* I do not know if a suitable message queue exists. But it seems that if it does allready exist, createQueue will simply return the URL for
             the existing queue. So no need to check.*/
           const { QueueUrl: url } = await createQueue({
-            QueueName: `${det.owner}_${currentProject}`, // required
+            QueueName: `${annotation.owner}_${currentProject}`, // required
             Attributes: {
               MessageRetentionPeriod: "1209600", //This value is in seconds. 1209600 corresponds to 14 days and is the maximum AWS supports
             },
           });
-          det.message = msg;
-          sendToQueue({ QueueUrl: url, MessageBody: JSON.stringify(det) });
+          annotation.message = msg;
+          sendToQueue({ QueueUrl: url, MessageBody: JSON.stringify(annotation) });
           console.log(msg);
         },
       };
@@ -160,19 +185,7 @@ function detectionToAnnotation(det: any): Partial<ExtendedAnnotationType> {
     return contextmenuItems;
   }
 
-const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
-    const {
-        annotation,
-        categories,
-        activeAnnotation,
-        user,
-        updateAnnotation,
-        deleteAnnotation,
-        getType,
-        latLng2xy,
-        xy2latLng
-  } = props;
-  const { allUsers } = useContext(ManagementContext)!;
+  
     // const prevPropsRef = useRef<DetWebMarkerProps>();
     // const prevContextRef = useRef<typeof imageContext>();
 
@@ -243,13 +256,7 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
               icon={createIcon(categories, annotation, activeAnnotation)}
               contextmenu={true}
               contextmenuInheritItems={false}
-              contextmenuItems={getContextMenuItems(
-                annotation,
-                user,
-                categories,
-                deleteAnnotation,
-                updateAnnotation,
-              )}
+              contextmenuItems={getContextMenuItems(annotation)}
             >
               <Tooltip>
                 Category: {getType(annotation)} <br />
