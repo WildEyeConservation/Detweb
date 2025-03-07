@@ -24,10 +24,10 @@ export default function Testing() {
   >(
     'Project',
     async (nextToken) =>
-      client.models.Project.list(
-        { nextToken },
-        { filter: { organizationId: { eq: organization.id } } }
-      ),
+      client.models.Project.list({
+        nextToken,
+        filter: { organizationId: { eq: organization.id } },
+      }),
     {
       filter: { organizationId: { eq: organization.id } },
     }
@@ -36,11 +36,16 @@ export default function Testing() {
   const { data: testPresets } = useOptimisticUpdates<
     Schema['TestPreset']['type'],
     'TestPreset'
-  >('TestPreset', async (nextToken) =>
-    client.models.TestPreset.testPresetsByOrganizationId({
-      nextToken,
-      organizationId: organization.id,
-    })
+  >(
+    'TestPreset',
+    async (nextToken) =>
+      client.models.TestPreset.list({
+        nextToken,
+        filter: { organizationId: { eq: organization.id } },
+      }),
+    {
+      filter: { organizationId: { eq: organization.id } },
+    }
   );
 
   const membershipsHook = useOptimisticUpdates<
@@ -49,11 +54,13 @@ export default function Testing() {
   >(
     'OrganizationMembership',
     async (nextToken) =>
-      client.models.OrganizationMembership.membershipsByOrganizationId({
+      client.models.OrganizationMembership.list({
         nextToken,
-        organizationId: organization.id,
+        filter: { organizationId: { eq: organization.id } },
       }),
-    undefined,
+    {
+      filter: { organizationId: { eq: organization.id } },
+    },
     {
       compositeKey: (membership) =>
         `${membership.organizationId}:${membership.userId}`,

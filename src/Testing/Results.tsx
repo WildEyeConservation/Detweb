@@ -1,6 +1,6 @@
 import { Button } from 'react-bootstrap';
 import { useContext, useState, useEffect } from 'react';
-import { GlobalContext, TestingContext, UserContext } from '../Context';
+import { GlobalContext, TestingContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
 import MyTable from '../Table';
 import { BarChart } from '@mui/x-charts/BarChart';
@@ -13,20 +13,12 @@ import Select from 'react-select';
 
 export default function Results() {
   const { client } = useContext(GlobalContext)!;
-  const { organizationMembershipsHook } = useContext(TestingContext)!;
-  const { myMembershipHook, myOrganizationHook } = useContext(UserContext)!;
+  const { organizationMembershipsHook, organizationProjects } =
+    useContext(TestingContext)!;
   const { users: allUsers } = useUsers();
   const [results, setResults] = useState<Schema['TestResult']['type'][]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isPurging, setIsPurging] = useState(false);
-  const [projects, setProjects] = useState<
-    {
-      id: string;
-      name: string;
-      annotationSets: { id: string; name: string }[];
-      organization: { name: string };
-    }[]
-  >([]);
   const [selectedProject, setSelectedProject] = useState<{
     label: string;
     value: string;
@@ -81,40 +73,6 @@ export default function Results() {
     }
     if (!isPurging && selectedUser) setup();
   }, [isPurging, selectedUser]);
-
-  useEffect(() => {
-    async function loadProjects() {
-      const userProjects = [
-        ...new Set(myMembershipHook.data?.map((m) => m.projectId) || []),
-      ];
-
-      const projectPromises = userProjects.map((projectId) =>
-        client.models.Project.get(
-          { id: projectId },
-          {
-            selectionSet: [
-              'id',
-              'name',
-              'annotationSets.id',
-              'annotationSets.name',
-              'organization.name',
-            ],
-          }
-        )
-      );
-
-      const projectResults = await Promise.all(projectPromises);
-      const validProjects = projectResults
-        .map((result) => result.data)
-        .filter(
-          (project): project is NonNullable<typeof project> => project !== null
-        );
-
-      setProjects(validProjects);
-    }
-
-    loadProjects();
-  }, [myOrganizationHook.data]);
 
   const headings = [
     { content: 'Date', sort: true },
@@ -296,8 +254,8 @@ export default function Results() {
         <Select
           className="text-black"
           value={selectedProject}
-          options={projects.map((p) => ({
-            label: `${p.name} (${p.organization.name})`,
+          options={organizationProjects.map((p) => ({
+            label: `${p.name}`,
             value: p.id,
           }))}
           onChange={(e) => {
