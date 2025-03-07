@@ -58,7 +58,7 @@ export function useAnnotationNavigation(input: UseAnnotationNavigationInput) {
     // Find the nearest unvisited annotation to the target location in each of the images.
     const nearest = annotations.map(
       (annotations, i) => annotations.reduce((result, anno) => {
-        if (history.includes(anno.proposedObjectId)) {
+        if (history.includes(anno.proposedObjectId) || anno.objectId) {
           return result
         } else {
           const thisDist = dist(anno, target[i])

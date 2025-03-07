@@ -61,10 +61,10 @@ export const makeTransform = (H: Matrix) => (c1: [number, number]): [number, num
 
 export const array2Matrix = (hc: number[] | null): number[][] | null => {
   if (hc && hc.length == 9) {
+      const hcCopy = [...hc];  // Create a shallow copy of the input array
       const matrix = [];
-      while (hc.length) matrix.push(hc.splice(0, 3));
-      const result = matrix;
-      return result;
+      while (hcCopy.length) matrix.push(hcCopy.splice(0, 3));
+      return matrix;  // Removed unnecessary intermediate variable
   } else {
       return null;
   }

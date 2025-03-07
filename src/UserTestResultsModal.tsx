@@ -27,6 +27,12 @@ type Result = {
             name: string;
         };
     }[];
+    annotationSet: {
+        id: string;
+    };
+    location: {
+        id: string;
+    };
     readonly id: string;
     readonly createdAt: string;
     readonly updatedAt: string;
@@ -60,7 +66,7 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
             
             const results = await fetchAllPaginatedResults(client.models.TestResult.testResultsByUserId, {
                 userId: userId,
-                selectionSet: ['id', 'testPreset.name', 'testPreset.projectId', 'testAnimals', 'totalMissedAnimals', 'passedOnCategories', 'passedOnTotal', 'createdAt', 'categoryCounts.categoryId', 'categoryCounts.userCount', 'categoryCounts.testCount', 'categoryCounts.category.name']
+                selectionSet: ['id', 'testPreset.name', 'testPreset.projectId', 'testAnimals', 'totalMissedAnimals', 'passedOnCategories', 'passedOnTotal', 'createdAt', 'categoryCounts.categoryId', 'categoryCounts.userCount', 'categoryCounts.testCount', 'categoryCounts.category.name', 'annotationSet.id', 'location.id']
             });
 
             setResults(results.filter((result) => result.testPreset.projectId === project.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
@@ -78,13 +84,14 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
         {content: "Missed Animals", sort: true},
         {content: "Passed on Categories", sort: true},
         {content: "Passed on Total", sort: true},
+        {content: "Permalink", sort: false}
     ]
 
     const tableData = results.map((result) => {
         const date = new Date(result.createdAt).toISOString().split('T');
         return {
             id: result.id,
-            rowData: [`${date[0].replace(/-/g, '/')} - ${date[1].substring(0, 8)}`, result.testPreset.name, result.testAnimals, result.totalMissedAnimals, result.passedOnCategories ? "Yes" : "No", result.passedOnTotal ? "Yes" : "No"]
+            rowData: [`${date[0].replace(/-/g, '/')} - ${date[1].substring(0, 8)}`, result.testPreset.name, result.testAnimals, result.totalMissedAnimals, result.passedOnCategories ? "Yes" : "No", result.passedOnTotal ? "Yes" : "No", <a href={`/${project.id}/location/${result.location.id}/${result.annotationSet.id}`} target="_blank">Link</a>]
         }
     })
 
@@ -110,6 +117,10 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
     }, {} as Record<string, {userCount: number, testCount: number, name: string}>);
 
     const accuracyByCategory = Object.entries(countsByCategory).map(([categoryId, counts]) => {
+        if (counts.testCount === 0) {
+            return null;
+        }
+        
         const accuracy = counts.userCount / counts.testCount;
         let countPercentage = accuracy > 1
             ? parseFloat(((accuracy - 1) * 100).toFixed(2))
@@ -125,7 +136,7 @@ export default function UserTestResultsModal({show, onClose, userId}: {show: boo
             countPercentage: countPercentage / 100
         }
     })
-    .filter(entry => !isNaN(entry.countPercentage))
+    .filter((entry): entry is { categoryId: string; name: string; countPercentage: number } => entry !== null)
     .sort((a, b) => a.name.localeCompare(b.name));
 
     const summaryCards = [
