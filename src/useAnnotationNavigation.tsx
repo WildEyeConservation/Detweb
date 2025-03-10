@@ -14,6 +14,7 @@ interface UseAnnotationNavigationInput {
   update: (anno: AnnotationType) => void;
   next: () => void;
   prev: () => void;
+  selectedCategoryIDs: string[];
 }
 
 /* This is a custom hook that aids in navigating between annotations in a RegisterPair component or similar. It is used to move the active 
@@ -29,7 +30,11 @@ export function useAnnotationNavigation(input: UseAnnotationNavigationInput) {
     annotationHooks
   } = input
   
-  const annotations = annotationHooks.map(hook => hook.data)
+  const annotations = annotationHooks.map(hook => hook.data).map(annos => annos.filter(anno => input.selectedCategoryIDs.includes(anno.categoryId)))
+  //Calculate the seto of objectIds that appear in both images.
+  const objectIds = annotations.map(annos => annos.map(anno => anno.objectId || anno.proposedObjectId))
+  const pairedObjectIds = objectIds[0].filter(id => objectIds[1].includes(id))
+  const pairedAnnotations = annotations.map(annos => annos.filter(anno => pairedObjectIds.includes(anno.objectId || anno.proposedObjectId)))
   
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
@@ -56,7 +61,7 @@ export function useAnnotationNavigation(input: UseAnnotationNavigationInput) {
     // Determine a target location in each of the images. This is the location of the currently active annotation or the top left corner of the image if no annotation is active.
     const target = currentLocation()
     // Find the nearest unvisited annotation to the target location in each of the images.
-    const nearest = annotations.map(
+    const nearest = pairedAnnotations.map(
       (annotations, i) => annotations.reduce((result, anno) => {
         if (history.includes(anno.proposedObjectId) || anno.objectId) {
           return result

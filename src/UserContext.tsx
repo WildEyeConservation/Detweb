@@ -17,6 +17,7 @@ import {
   useQueues,
 } from "./useOptimisticUpdates.tsx";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { useQuery } from "@tanstack/react-query";
 
 
 
@@ -26,7 +27,7 @@ export function Project({ children, currentPM }: { children: React.ReactNode, cu
   const subscriptionFilter = useMemo(() => ({
     filter: { projectId: { eq: currentPM?.projectId } }
   }), [currentPM?.projectId]);
-  const [currentProject, setCurrentProject] = useState<Schema['Project']['type'] | undefined>(undefined)
+  //const [currentProject, setCurrentProject] = useState<Schema['Project']['type'] | undefined>(undefined)
     const categoriesHook = useOptimisticUpdates<Schema['Category']['type'], 'Category'>('Category',
       async (nextToken) => client.models.Category.list({
         filter: { projectId: { eq: currentPM?.projectId } },
@@ -34,15 +35,22 @@ export function Project({ children, currentPM }: { children: React.ReactNode, cu
       }),
       subscriptionFilter)
   const [currentCategory, setCurrentCategory] = useState<Schema['Category']['type']|undefined>(categoriesHook.data?.[0])
-    useEffect(() => {
-    if (currentPM) {
-      client.models.Project.get({ id: currentPM.projectId }).then(p =>
-        setCurrentProject(p['data']!));
-    } else {
-      setCurrentProject(undefined);
-    }
-  }, [currentPM])
+    // useEffect(() => {
+    // if (currentPM) {
+    //   client.models.Project.get({ id: currentPM.projectId }).then(p =>
+    //     setCurrentProject(p['data']!));
+    // } else {
+    //   setCurrentProject(undefined);
+    // }
+    // }, [currentPM])
   
+  const projectQuery = useQuery({
+    queryKey: ["project", currentPM?.projectId],
+    queryFn: () => client.models.Project.get({ id: currentPM?.projectId })
+  })
+  
+  const currentProject = projectQuery.data?.data
+
   useEffect(() => {
     if (!currentCategory) {
       setCurrentCategory(categoriesHook.data?.[0])

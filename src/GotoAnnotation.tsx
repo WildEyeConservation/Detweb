@@ -29,9 +29,9 @@ export function GotoAnnotation({ activeAnnotation, image, transform }: GotoAnnot
         activeAnnotation.selected = false;
       };
     }
-    else {
-      map.fitBounds([xy2latLng([0, 0]), xy2latLng([image.width, image.height])]);
-    }
+    //else {
+      //map.fitBounds([xy2latLng([0, 0]), xy2latLng([image.width, image.height])]);
+    //}
   }, [activeAnnotation, transform, map, image]);
 
   return null;

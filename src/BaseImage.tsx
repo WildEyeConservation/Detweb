@@ -12,12 +12,8 @@ import { GlobalContext, ImageContext, ManagementContext, UserContext, ProjectCon
 import { StorageLayer } from "./StorageLayer";
 import { getUrl } from 'aws-amplify/storage';
 import ZoomTracker from "./ZoomTracker";
-import OverlapLoader from "./OverlapLoader";
-import { inv } from "mathjs";
-import { makeTransform } from "./utils";
 import TestLocationModal from "./TestLocationModal";
-import OverlapsLoader from "./OverlapsLoader";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import OverlapOutline from "./OverlapOutline";
 
 export interface BaseImageProps {
   image: ImageType;
@@ -31,76 +27,24 @@ export interface BaseImageProps {
   containerwidth?: number;
   visible: boolean;
   annotationSet: AnnotationSetType;
+  otherImageId?: string;
 }
 
 const BaseImage: React.FC<BaseImageProps> = memo((props) =>
 {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
-  const { xy2latLng, setVisibleTimestamp, setFullyLoadedTimestamp } = useContext(ImageContext)!;
+  const { xy2latLng, setVisibleTimestamp, setFullyLoadedTimestamp, prevImages, nextImages, queriesComplete } = useContext(ImageContext)!;
   const {projectMembershipHook: {data: projectMemberships}} = useContext(ManagementContext)!;
   const {project} = useContext(ProjectContext)!
   const {user} = useContext(UserContext)!;
   const [fullyLoaded, setFullyLoaded] = useState(false);
   const [imageFiles, setImageFiles] = useState<ImageFileType[]>([]);
   const [canAdvance, setCanAdvance] = useState(false);
-  const { next, prev, visible, containerheight, containerwidth, children, location, zoom, stats } = props;
+  const { next, prev, visible, containerheight, containerwidth, children, location, zoom, stats, otherImageId } = props;
   const { image } = location;
   const prevPropsRef = useRef(props);
   const source = imageFiles.find(file => file.type == 'image/jpeg')?.key
   const [isTest, setIsTest] = useState(false);
-      // imageNeighboursQueries contains a list of queries that fetch the neighbours of each image.
-
-  const prevNeighboursQuery = useQuery({
-    queryKey: ['prevNeighbours', image.id],
-    queryFn: () => {
-      return client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: image.id })
-    },
-    staleTime: Infinity, // Data will never become stale automatically
-    cacheTime: 1000 * 60 * 60, // Cache for 1 hour
-  })
-
-  const prevNeighbours = useMemo(() => {
-    return prevNeighboursQuery.data?.data?.map(n => n.image1Id) || [];
-  }, [prevNeighboursQuery.data])
-
-  const nextNeighboursQuery = useQuery({
-    queryKey: ['nextNeighbours', image.id],
-    queryFn: () => {
-       return client.models.ImageNeighbour.imageNeighboursByImage1key({image1Id:image.id});
-    },
-    staleTime: Infinity, // Data will never become stale automatically
-    cacheTime: 1000 * 60 * 60, // Cache for 1 hour
-  })  
-
-  const nextNeighbours = useMemo(() => {
-    return nextNeighboursQuery.data?.data?.map(n => n.image2Id) || [];
-  }, [nextNeighboursQuery.data])
-
-  const imageMetaDataQueries = useQueries({
-    queries: [...prevNeighbours, ...nextNeighbours].map((n) => ({
-        queryKey: ['imageMetaData', n],
-        queryFn: () => {
-            return client.models.Image.get({id: n});
-        },
-        staleTime: Infinity, // Data will never become stale automatically
-        cacheTime: 1000 * 60 * 60, // Cache for 1 hour
-    }))
-  });
-
-  const imageMetaData = useMemo(() => {
-    return imageMetaDataQueries.filter(q => q.isSuccess).map(q => q.data.data);
-  }, [imageMetaDataQueries])
-
-  const prevImage = useMemo(() => {
-    return imageMetaData?.filter(i => prevNeighbours?.includes(i.id)).sort((a, b) => b.timestamp - a.timestamp)[0];
-  }, [imageMetaData, prevNeighbours])
-
-  const nextImage = useMemo(() => {
-    return imageMetaData?.filter(i => nextNeighbours?.includes(i.id)).sort((a, b) => a.timestamp - b.timestamp)[0];
-  }, [imageMetaData, nextNeighbours])
-
-  const queriesComplete = imageMetaDataQueries.every(q => q.isSuccess) && prevNeighboursQuery.isSuccess && nextNeighboursQuery.isSuccess && true;
-
   const belongsToCurrentProject =  projectMemberships?.find(
     (pm) => pm.userId == user.userId && pm.projectId == project.id,
   );
@@ -198,25 +142,25 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
         },{
           text: `Open previous image`,
         callback: async () => {
-          const newUrl = window.location.href.replace(/^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/, `$1/image/${prevImage?.id}/${location?.annotationSetId}`)
+          const newUrl = window.location.href.replace(/^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/, `$1/image/${prevImages?.[0]?.image?.id}/${location?.annotationSetId}`)
             window.open(newUrl, '_blank');
           }
         },{
           text: `Open next image`,
           callback: async () => {
-            const newUrl = window.location.href.replace(/^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/, `$1/image/${nextImage?.id}/${location?.annotationSetId}`);
+            const newUrl = window.location.href.replace(/^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/, `$1/image/${nextImages?.[0]?.image?.id}/${location?.annotationSetId}`);
             window.open(newUrl, '_blank');
           }
         },{
           text: `Register against previous image`,
         callback: async () => {
-          const newUrl = window.location.href.replace(/^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/, `$1/register/${prevImage?.id}/${image.id}/${location?.annotationSetId}`)
+          const newUrl = window.location.href.replace(/^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/, `$1/register/${prevImages?.[0]?.image?.id}/${image.id}/${location?.annotationSetId}`)
             window.open(newUrl, '_blank');
           }
         },{
           text: `Register against next image`,
           callback: async () => {
-            const newUrl = window.location.href.replace(/^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/, `$1/register/${image.id}/${nextImage?.id}/${location?.annotationSetId}`);
+            const newUrl = window.location.href.replace(/^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/, `$1/register/${image.id}/${nextImages?.[0]?.image?.id}/${location?.annotationSetId}`);
             window.open(newUrl, '_blank');
           }
         },
@@ -263,7 +207,7 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
     }
 
     return items;
-  }, [isTest, belongsToCurrentProject, source, location?.id, client.models.ImageNeighbour, image.id, stats, location.annotationSetId, location.image.id, prevImage, nextImage]);
+  }, [isTest, belongsToCurrentProject, source, location?.id, client.models.ImageNeighbour, image.id, stats, location.annotationSetId, location.image.id, prevImages, nextImages]);
 
   // categories?.forEach((cat, idx) => {
   //   keyMap[cat.name] = cat.shortcutKey
@@ -342,7 +286,16 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
               />
             </LayersControl.BaseLayer>
           )}
-          <OverlapsLoader image={image} />
+          {prevImages?.toReversed()?.map((im, idx) => <LayersControl.Overlay name={`Overlap ${im.image.originalPath}`} key={idx} checked={im.image.id == otherImageId}>
+        <LayerGroup>
+        <OverlapOutline transform={im.transform.bwd} image={im.image} />
+        </LayerGroup>
+        </LayersControl.Overlay>)}
+          {nextImages?.map((im, idx) => <LayersControl.Overlay name={`Overlap ${im.image.originalPath}`} key={idx} checked={im.image.id == otherImageId}>
+        <LayerGroup>
+        <OverlapOutline transform={im.transform.bwd} image={im.image} />
+        </LayerGroup>
+        </LayersControl.Overlay>)}
         </LayersControl>
         {children}
         {(next || prev) && fullyLoaded &&

@@ -130,9 +130,14 @@ function App({ signOut = () => {}, user }: AppProps) {
             >
               Leaderboard
             </Nav.Link>
-            <Nav.Link as={NavLink} eventKey="/review" to="review">
+            <IfProjectAdmin currentPM={currentPM}>
+                      <Nav.Link as={NavLink} eventKey="/review" to="review">
               Review
             </Nav.Link>
+            <Nav.Link as={NavLink} eventKey="/registration" to="registration">
+              Registration
+                        </Nav.Link>
+            </IfProjectAdmin>
         </Nav>
         </Navbar.Collapse>
         <Nav className="navbar-right">
