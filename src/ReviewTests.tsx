@@ -7,7 +7,7 @@ import {
   useMemo,
   useCallback,
 } from 'react';
-import { GlobalContext, UserContext } from './Context';
+import { GlobalContext, UserContext, TestingContext } from './Context';
 import { fetchAllPaginatedResults } from './utils';
 import { Form } from 'react-bootstrap';
 import Select from 'react-select';
@@ -33,6 +33,7 @@ export default function ReviewTests({
 }) {
   const { client, modalToShow, showModal } = useContext(GlobalContext)!;
   const { currentAnnoCount, setCurrentAnnoCount } = useContext(UserContext)!;
+  const { organizationProjects: surveys } = useContext(TestingContext)!;
   const [presets, setPresets] = useState<Preset[]>([]);
   const [filteredPreset, setFilteredPreset] = useState<
     { label: string; value: string } | undefined
@@ -284,6 +285,18 @@ export default function ReviewTests({
             categoryId: category.categoryId,
           })
         ),
+        ...surveys.map((survey) =>
+          client.models.TestPresetProject.testPresetsByProjectId({
+            projectId: survey.id,
+          }).then(({ data }) =>
+            data.map((preset) =>
+              client.models.TestPresetProject.delete({
+                testPresetId: preset.testPresetId,
+                projectId: preset.projectId,
+              })
+            )
+          )
+        ),
       ]);
     }
 
@@ -311,7 +324,6 @@ export default function ReviewTests({
               styles={{
                 valueContainer: (base) => ({
                   ...base,
-                  minHeight: '48px',
                   overflowY: 'auto',
                 }),
               }}
@@ -384,7 +396,6 @@ export default function ReviewTests({
                   styles={{
                     valueContainer: (base) => ({
                       ...base,
-                      minHeight: '48px',
                       overflowY: 'auto',
                     }),
                   }}

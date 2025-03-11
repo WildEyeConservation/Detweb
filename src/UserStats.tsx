@@ -312,7 +312,6 @@ export default function UserStats() {
               styles={{
                 valueContainer: (base) => ({
                   ...base,
-                  minHeight: '48px',
                   overflowY: 'auto',
                 }),
               }}
@@ -340,7 +339,6 @@ export default function UserStats() {
               styles={{
                 valueContainer: (base) => ({
                   ...base,
-                  minHeight: '48px',
                   overflowY: 'auto',
                 }),
               }}

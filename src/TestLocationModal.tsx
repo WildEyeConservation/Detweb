@@ -33,9 +33,9 @@ export default function TestLocationModal({
   useEffect(() => {
     async function getPresets() {
       const allPresets = await fetchAllPaginatedResults(
-        client.models.TestPreset.testPresetsByProjectId,
+        client.models.TestPreset.testPresetsByOrganizationId,
         {
-          projectId: project.id,
+          organizationId: project.organizationId,
           selectionSet: ['id', 'name'],
         }
       );
@@ -189,7 +189,6 @@ export default function TestLocationModal({
               styles={{
                 valueContainer: (base) => ({
                   ...base,
-                  minHeight: '48px',
                   overflowY: 'auto',
                 }),
               }}

@@ -1,72 +1,91 @@
-import {useState, useEffect, useContext,useMemo, useCallback} from "react";
-import {
-  SQSClient,
-} from "@aws-sdk/client-sqs";
-import { LambdaClient} from "@aws-sdk/client-lambda";
-import { S3Client } from "@aws-sdk/client-s3";
-import { AuthUser, fetchAuthSession } from "aws-amplify/auth";
+import { useState, useEffect, useContext, useMemo, useCallback } from 'react';
+import { SQSClient } from '@aws-sdk/client-sqs';
+import { LambdaClient } from '@aws-sdk/client-lambda';
+import { S3Client } from '@aws-sdk/client-s3';
+import { AuthUser, fetchAuthSession } from 'aws-amplify/auth';
 import { Schema } from '../amplify/data/resource'; // Path to your backend resource definition
-import {useUsers} from './apiInterface.tsx'
+import { useUsers } from './apiInterface.tsx';
 import {
-  GlobalContext, ProjectContext, UserContext, ManagementContext, ProgressContext, ProgressType,
-  OrganizationContext
-} from "./Context.tsx";
-import { generateClient } from "aws-amplify/api";
-import outputs from "../amplify_outputs.json";
-import {
-  useOptimisticUpdates,
-  useQueues,
-} from "./useOptimisticUpdates.tsx";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+  GlobalContext,
+  ProjectContext,
+  UserContext,
+  ManagementContext,
+  ProgressContext,
+  ProgressType,
+  OrganizationContext,
+} from './Context.tsx';
+import { generateClient } from 'aws-amplify/api';
+import outputs from '../amplify_outputs.json';
+import { useOptimisticUpdates, useQueues } from './useOptimisticUpdates.tsx';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 
-
-
-export function Project({ children, currentPM }: { children: React.ReactNode, currentPM: Schema['UserProjectMembership']['type']   }) {
+export function Project({
+  children,
+  currentPM,
+}: {
+  children: React.ReactNode;
+  currentPM: Schema['UserProjectMembership']['type'];
+}) {
   const { client } = useContext(GlobalContext)!;
-  const {myMembershipHook} = useContext(UserContext)!;
-  const subscriptionFilter = useMemo(() => ({
-    filter: { projectId: { eq: currentPM?.projectId } }
-  }), [currentPM?.projectId]);
-  const [currentProject, setCurrentProject] = useState<Schema['Project']['type'] | undefined>(undefined)
-    const categoriesHook = useOptimisticUpdates<Schema['Category']['type'], 'Category'>('Category',
-      async (nextToken) => client.models.Category.list({
+  const { myMembershipHook } = useContext(UserContext)!;
+  const subscriptionFilter = useMemo(
+    () => ({
+      filter: { projectId: { eq: currentPM?.projectId } },
+    }),
+    [currentPM?.projectId]
+  );
+  const [currentProject, setCurrentProject] = useState<
+    Schema['Project']['type'] | undefined
+  >(undefined);
+  const categoriesHook = useOptimisticUpdates<
+    Schema['Category']['type'],
+    'Category'
+  >(
+    'Category',
+    async (nextToken) =>
+      client.models.Category.list({
         filter: { projectId: { eq: currentPM?.projectId } },
-        nextToken
+        nextToken,
       }),
-      subscriptionFilter)
-  const [currentCategory, setCurrentCategory] = useState<Schema['Category']['type']|undefined>(categoriesHook.data?.[0])
-    useEffect(() => {
+    subscriptionFilter
+  );
+  const [currentCategory, setCurrentCategory] = useState<
+    Schema['Category']['type'] | undefined
+  >(categoriesHook.data?.[0]);
+  useEffect(() => {
     if (currentPM) {
-      client.models.Project.get({ id: currentPM.projectId }).then(p =>
-        setCurrentProject(p['data']!));
+      client.models.Project.get({ id: currentPM.projectId }).then((p) =>
+        setCurrentProject(p['data']!)
+      );
     } else {
       setCurrentProject(undefined);
     }
-  }, [currentPM])
-  
+  }, [currentPM]);
+
   useEffect(() => {
     if (!currentCategory) {
-      setCurrentCategory(categoriesHook.data?.[0])
+      setCurrentCategory(categoriesHook.data?.[0]);
     }
-  }, [categoriesHook.data])
-  
-  
-
+  }, [categoriesHook.data]);
 
   return (
-    currentProject && 
-    <ProjectContext.Provider value={{
-        project: currentProject,
-        categoriesHook,
-        currentPM : myMembershipHook.data.find(m=>m.projectId==currentProject.id),
-        currentCategory,
-        setCurrentCategory
-    }}>
-      {currentProject && children}
-    </ProjectContext.Provider>
-  )
+    currentProject && (
+      <ProjectContext.Provider
+        value={{
+          project: currentProject,
+          categoriesHook,
+          currentPM: myMembershipHook.data.find(
+            (m) => m.projectId == currentProject.id
+          ),
+          currentCategory,
+          setCurrentCategory,
+        }}
+      >
+        {currentProject && children}
+      </ProjectContext.Provider>
+    )
+  );
 }
-
 
 export function User({
   user,
@@ -125,7 +144,11 @@ export function User({
         filter: { userId: { eq: user!.username } },
         nextToken,
       }),
-    subscriptionFilter
+    subscriptionFilter,
+    {
+      compositeKey: (membership) =>
+        `${membership.organizationId}:${membership.userId}`,
+    }
   );
 
   const isOrganizationAdmin = myOrganizationHook.data?.some(
@@ -342,5 +365,3 @@ export function Progress({ children }: { children: React.ReactNode }) {
 //     </OrganizationContext.Provider>
 //   );
 // }
-  
-

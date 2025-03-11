@@ -219,7 +219,6 @@ export default function NewSurveyModal({
               styles={{
                 valueContainer: (base) => ({
                   ...base,
-                  minHeight: '48px',
                   overflowY: 'auto',
                 }),
               }}
@@ -250,7 +249,6 @@ export default function NewSurveyModal({
                 styles={{
                   valueContainer: (base) => ({
                     ...base,
-                    minHeight: '48px',
                     overflowY: 'auto',
                   }),
                 }}

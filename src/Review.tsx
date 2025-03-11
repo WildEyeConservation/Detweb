@@ -212,7 +212,6 @@ export function Review() {
                 styles={{
                   valueContainer: (base) => ({
                     ...base,
-                    maxHeight: '100px',
                     overflowY: 'auto',
                   }),
                 }}

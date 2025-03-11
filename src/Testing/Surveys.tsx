@@ -105,7 +105,6 @@ export default function Surveys() {
           styles={{
             valueContainer: (base) => ({
               ...base,
-              minHeight: '48px',
               overflowY: 'auto',
             }),
           }}

@@ -210,7 +210,6 @@ export default function TestPresetsModal({
             styles={{
               valueContainer: (base) => ({
                 ...base,
-                minHeight: '48px',
                 overflowY: 'auto',
               }),
             }}

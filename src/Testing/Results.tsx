@@ -45,9 +45,9 @@ export default function Results() {
           userId: selectedUser?.value,
           selectionSet: [
             'id',
-            'projectId',
             'testPreset.name',
             'testAnimals',
+            'projectId',
             'totalMissedAnimals',
             'passedOnCategories',
             'passedOnTotal',
@@ -56,6 +56,8 @@ export default function Results() {
             'categoryCounts.userCount',
             'categoryCounts.testCount',
             'categoryCounts.category.name',
+            'annotationSetId',
+            'locationId',
           ],
         }
       );
@@ -81,6 +83,7 @@ export default function Results() {
     { content: 'Missed Animals', sort: true },
     { content: 'Passed on Labels', sort: true },
     { content: 'Passed on Total', sort: true },
+    { content: 'Permalink', sort: false },
   ];
 
   const tableData = results.map((result) => {
@@ -94,6 +97,12 @@ export default function Results() {
         result.totalMissedAnimals,
         result.passedOnCategories ? 'Yes' : 'No',
         result.passedOnTotal ? 'Yes' : 'No',
+        <a
+          href={`/surveys/${selectedProject?.value}/location/${result.locationId}/${result.annotationSetId}`}
+          target="_blank"
+        >
+          Link
+        </a>,
       ],
     };
   });
@@ -135,6 +144,10 @@ export default function Results() {
 
   const accuracyByCategory = Object.entries(countsByCategory)
     .map(([categoryId, counts]) => {
+      if (counts.testCount === 0) {
+        return null;
+      }
+
       const accuracy = counts.userCount / counts.testCount;
       let countPercentage =
         accuracy > 1
@@ -151,7 +164,15 @@ export default function Results() {
         countPercentage: countPercentage / 100,
       };
     })
-    .filter((entry) => !isNaN(entry.countPercentage))
+    .filter(
+      (
+        entry
+      ): entry is {
+        categoryId: string;
+        name: string;
+        countPercentage: number;
+      } => entry !== null
+    )
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const summaryCards = [
@@ -266,7 +287,6 @@ export default function Results() {
           styles={{
             valueContainer: (base) => ({
               ...base,
-              minHeight: '48px',
               overflowY: 'auto',
             }),
           }}
@@ -287,7 +307,6 @@ export default function Results() {
           styles={{
             valueContainer: (base) => ({
               ...base,
-              minHeight: '48px',
               overflowY: 'auto',
             }),
           }}
