@@ -61,6 +61,12 @@ export default function Surveys() {
           </Button>
           <Button
             variant="primary"
+            onClick={() => navigate(`/surveys/${project.id}/registration`)}
+          >
+            Register
+          </Button>
+          <Button
+            variant="primary"
             onClick={() => navigate(`/surveys/${project.id}/manage`)}
           >
             Manage
