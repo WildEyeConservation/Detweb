@@ -2,7 +2,6 @@ import { Card } from 'react-bootstrap';
 import OrganizationSelector from '../OrganizationSelector';
 import { useState, useContext } from 'react';
 import { Tab, Tabs } from '../Tabs';
-import LocationPools from './LocationPools';
 import Surveys from './Surveys';
 import { TestingContext, GlobalContext } from '../Context';
 import { Schema } from '../../amplify/data/resource';
@@ -96,9 +95,6 @@ export default function Testing() {
             </div>
             {organization.id && (
               <Tabs defaultTab={0}>
-                <Tab label="Pools">
-                  <LocationPools />
-                </Tab>
                 <Tab label="Surveys">
                   <Surveys />
                 </Tab>

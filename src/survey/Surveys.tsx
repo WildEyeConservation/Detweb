@@ -57,7 +57,7 @@ export default function Surveys() {
             variant="primary"
             onClick={() => navigate(`/surveys/${project.id}/review`)}
           >
-            Review
+            Explore
           </Button>
           <Button
             variant="primary"
@@ -113,6 +113,7 @@ export default function Surveys() {
       </div>
       <NewSurveyModal
         show={modalToShow === 'newSurvey'}
+        projects={projects.map((project) => project.name.toLowerCase())}
         onClose={() => showModal(null)}
       />
     </>

@@ -11,9 +11,11 @@ import { fetchAllPaginatedResults } from '../utils';
 export default function NewSurveyModal({
   show,
   onClose,
+  projects,
 }: {
   show: boolean;
   onClose: () => void;
+  projects: string[];
 }) {
   const { myOrganizationHook, user } = useContext(UserContext)!;
   const { client } = useContext(GlobalContext)!;
@@ -56,6 +58,11 @@ export default function NewSurveyModal({
   async function handleSave() {
     if (!name || !organization) {
       alert('Please fill in all fields');
+      return;
+    }
+
+    if (projects.includes(name.toLowerCase())) {
+      alert('A project with this name already exists');
       return;
     }
 
@@ -125,7 +132,18 @@ export default function NewSurveyModal({
         projectId: project.id,
         testType: 'interval',
         interval: 100,
+        accuracy: 50,
         postTestConfirmation: false,
+      });
+
+      const { data: testPreset } = await client.models.TestPreset.create({
+        name: name,
+        organizationId: organization.value,
+      });
+
+      await client.models.TestPresetProject.create({
+        testPresetId: testPreset.id,
+        projectId: project.id,
       });
     }
 
@@ -163,6 +181,13 @@ export default function NewSurveyModal({
             }))
         );
 
+        if (organizations.length === 1) {
+          setOrganization({
+            label: organizations[0].name,
+            value: organizations[0].id,
+          });
+        }
+
         setUsers(
           organizations
             .filter((o) => o !== null)
@@ -186,7 +211,6 @@ export default function NewSurveyModal({
   useEffect(() => {
     if (!show) {
       setName('');
-      setOrganization(null);
       setGlobalAnnotationAccess(null);
       setAddPermissionExceptions(false);
       setPermissionExceptions([]);

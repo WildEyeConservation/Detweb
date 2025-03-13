@@ -175,7 +175,7 @@ export function Review() {
       <Card className="h-100">
         <Card.Body>
           <Card.Title className="d-flex justify-content-between align-items-center">
-            <h4>Review {project.name}</h4>
+            <h4>Explore {project.name}</h4>
             <Button variant="dark" onClick={() => navigate('/surveys')}>
               Back to Surveys
             </Button>

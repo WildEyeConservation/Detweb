@@ -49,13 +49,11 @@ export default function Results() {
             'testAnimals',
             'projectId',
             'totalMissedAnimals',
-            'passedOnCategories',
             'passedOnTotal',
             'createdAt',
-            'categoryCounts.categoryId',
+            'categoryCounts.categoryName',
             'categoryCounts.userCount',
             'categoryCounts.testCount',
-            'categoryCounts.category.name',
             'annotationSetId',
             'locationId',
           ],
@@ -81,7 +79,6 @@ export default function Results() {
     { content: 'Preset', sort: true },
     { content: 'Test Animals', sort: true },
     { content: 'Missed Animals', sort: true },
-    { content: 'Passed on Labels', sort: true },
     { content: 'Passed on Total', sort: true },
     { content: 'Permalink', sort: false },
   ];
@@ -95,7 +92,6 @@ export default function Results() {
         result.testPreset.name,
         result.testAnimals,
         result.totalMissedAnimals,
-        result.passedOnCategories ? 'Yes' : 'No',
         result.passedOnTotal ? 'Yes' : 'No',
         <a
           href={`/surveys/${selectedProject?.value}/location/${result.locationId}/${result.annotationSetId}`}
@@ -107,7 +103,7 @@ export default function Results() {
     };
   });
 
-  const passed = results.filter((result) => result.passedOnCategories).length;
+  const passed = results.filter((result) => result.passedOnTotal).length;
   const failed = results.length - passed;
   const totalAnimals = results.reduce(
     (acc, result) => acc + result.testAnimals,
@@ -130,15 +126,15 @@ export default function Results() {
   const countsByCategory = results
     .flatMap((result) => result.categoryCounts)
     .reduce((acc, category) => {
-      if (!acc[category.categoryId]) {
-        acc[category.categoryId] = {
+      if (!acc[category.categoryName]) {
+        acc[category.categoryName] = {
           userCount: 0,
           testCount: 0,
-          name: category.category.name,
+          name: category.categoryName,
         };
       }
-      acc[category.categoryId].userCount += category.userCount;
-      acc[category.categoryId].testCount += category.testCount;
+      acc[category.categoryName].userCount += category.userCount;
+      acc[category.categoryName].testCount += category.testCount;
       return acc;
     }, {} as Record<string, { userCount: number; testCount: number; name: string }>);
 
@@ -212,7 +208,6 @@ export default function Results() {
         preset: result.testPreset.name,
         testAnimals: result.testAnimals,
         missedAnimals: result.totalMissedAnimals,
-        passedOnLabels: result.passedOnCategories,
         passedOnTotal: result.passedOnTotal,
       })),
       fileName: `${selectedUser?.label}-test-results`,
@@ -244,7 +239,7 @@ export default function Results() {
       client.models.TestResult.testResultsByUserId,
       {
         userId: selectedUser?.value,
-        selectionSet: ['id', 'projectId', 'categoryCounts.categoryId'],
+        selectionSet: ['id', 'projectId', 'categoryCounts.categoryName'],
       }
     );
 
@@ -255,12 +250,12 @@ export default function Results() {
     for (const result of filteredResults) {
       await client.models.TestResult.delete({ id: result.id });
 
-      for (const categoryId of result.categoryCounts.map(
-        (category) => category.categoryId
+      for (const categoryName of result.categoryCounts.map(
+        (category) => category.categoryName
       )) {
         await client.models.TestResultCategoryCount.delete({
           testResultId: result.id,
-          categoryId: categoryId,
+          categoryName: categoryName,
         });
       }
     }

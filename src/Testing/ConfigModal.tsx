@@ -1,10 +1,10 @@
-import { Button, Form, Modal } from 'react-bootstrap';
-import { useState, useEffect, useContext } from 'react';
-import { GlobalContext } from '../Context';
-import Tooltip from 'react-bootstrap/Tooltip';
-import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
+import { Button, Form, Modal } from "react-bootstrap";
+import { useState, useEffect, useContext } from "react";
+import { GlobalContext } from "../Context";
+import Tooltip from "react-bootstrap/Tooltip";
+import OverlayTrigger from "react-bootstrap/OverlayTrigger";
 
-type TestType = 'random' | 'interval';
+type TestType = "random" | "interval";
 
 export default function ConfigModal({
   show,
@@ -16,8 +16,9 @@ export default function ConfigModal({
   survey: { id: string; name: string };
 }) {
   const [testInterval, setTestInterval] = useState<number>(0);
-  const [testType, setTestType] = useState<TestType>('interval');
+  const [testType, setTestType] = useState<TestType>("interval");
   const [testChance, setTestChance] = useState<number>(0);
+  const [testAccuracy, setTestAccuracy] = useState<number>(0);
   const [deadzone, setDeadzone] = useState<number>(0);
   const [confirmation, setConfirmation] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
@@ -35,7 +36,7 @@ export default function ConfigModal({
 
       setTestType(config.testType as TestType);
 
-      if (config.testType === 'interval') {
+      if (config.testType === "interval") {
         setTestInterval(config.interval!);
       } else {
         setTestChance(config.random!);
@@ -43,6 +44,7 @@ export default function ConfigModal({
       }
 
       setConfirmation(config.postTestConfirmation!);
+      setTestAccuracy(config.accuracy!);
     };
     if (show) {
       fetchTestConfig();
@@ -55,18 +57,23 @@ export default function ConfigModal({
   }, [show]);
 
   async function handleSave() {
-    if (testType === 'interval' && testInterval <= 0) {
-      alert('Test interval must be greater than 0');
+    if (testType === "interval" && testInterval <= 0) {
+      alert("Test interval must be greater than 0");
       return;
     }
 
-    if (testType === 'random') {
+    if (testAccuracy < 1 || testAccuracy > 100) {
+      alert("Test accuracy must be between 1 and 100");
+      return;
+    }
+
+    if (testType === "random") {
       if (testChance < 0 || testChance > 100) {
-        alert('Test chance must be between 0 and 100');
+        alert("Test chance must be between 0 and 100");
         return;
       }
       if (deadzone <= 0) {
-        alert('Deadzone must be greater than 0');
+        alert("Deadzone must be greater than 0");
         return;
       }
     }
@@ -76,9 +83,10 @@ export default function ConfigModal({
     await client.models.ProjectTestConfig.update({
       projectId: survey.id,
       testType: testType,
-      random: testType === 'random' ? testChance : undefined,
-      deadzone: testType === 'random' ? deadzone : undefined,
-      interval: testType === 'interval' ? testInterval : undefined,
+      random: testType === "random" ? testChance : undefined,
+      deadzone: testType === "random" ? deadzone : undefined,
+      interval: testType === "interval" ? testInterval : undefined,
+      accuracy: testAccuracy,
       postTestConfirmation: confirmation,
     });
 
@@ -98,14 +106,14 @@ export default function ConfigModal({
             <Form.Select
               value={testType}
               onChange={(e) =>
-                setTestType(e.target.value as 'random' | 'interval')
+                setTestType(e.target.value as "random" | "interval")
               }
             >
               <option value="random">Random</option>
               <option value="interval">Interval</option>
             </Form.Select>
           </Form.Group>
-          {testType === 'interval' && (
+          {testType === "interval" && (
             <Form.Group className="mb-2">
               <OverlayTrigger
                 placement="right-end"
@@ -116,7 +124,7 @@ export default function ConfigModal({
                     and annotating a previous job will not reset the counter.
                   </Tooltip>
                 }
-                trigger={['hover', 'focus']}
+                trigger={["hover", "focus"]}
               >
                 <Form.Label>Test after * unannotated jobs</Form.Label>
               </OverlayTrigger>
@@ -124,13 +132,13 @@ export default function ConfigModal({
                 type="number"
                 value={testInterval}
                 onChange={(e) =>
-                  setTestInterval(parseInt(e.target.value || '0'))
+                  setTestInterval(parseInt(e.target.value || "0"))
                 }
                 min={1}
               />
             </Form.Group>
           )}
-          {testType === 'random' && (
+          {testType === "random" && (
             <Form.Group className="mb-2">
               <OverlayTrigger
                 placement="right-end"
@@ -141,14 +149,14 @@ export default function ConfigModal({
                     a test.
                   </Tooltip>
                 }
-                trigger={['hover', 'focus']}
+                trigger={["hover", "focus"]}
               >
                 <Form.Label>Deadzone</Form.Label>
               </OverlayTrigger>
               <Form.Control
                 type="number"
                 value={deadzone}
-                onChange={(e) => setDeadzone(parseInt(e.target.value || '0'))}
+                onChange={(e) => setDeadzone(parseInt(e.target.value || "0"))}
                 min={0}
                 className="mb-2"
               />
@@ -156,12 +164,22 @@ export default function ConfigModal({
               <Form.Control
                 type="number"
                 value={testChance}
-                onChange={(e) => setTestChance(parseInt(e.target.value || '0'))}
+                onChange={(e) => setTestChance(parseInt(e.target.value || "0"))}
                 min={0}
                 max={100}
               />
             </Form.Group>
           )}
+          <Form.Group className="mb-2">
+            <Form.Label>User accuracy (%)</Form.Label>
+            <Form.Control
+              type="number"
+              value={testAccuracy}
+              onChange={(e) => setTestAccuracy(parseInt(e.target.value || "0"))}
+              min={1}
+              max={100}
+            />
+          </Form.Group>
         </Form>
       </Modal.Body>
       <Modal.Footer>

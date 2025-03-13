@@ -14,8 +14,7 @@ import { getUrl } from 'aws-amplify/storage';
 import ZoomTracker from "./ZoomTracker";
 import OverlapLoader from "./OverlapLoader";
 import { inv } from "mathjs";
-import { makeTransform } from "./utils";
-import TestLocationModal from "./TestLocationModal";
+import { fetchAllPaginatedResults, makeTransform } from "./utils";
 import OverlapsLoader from "./OverlapsLoader";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
@@ -35,7 +34,7 @@ export interface BaseImageProps {
 
 const BaseImage: React.FC<BaseImageProps> = memo((props) =>
 {
-  const { client, showModal, modalToShow } = useContext(GlobalContext)!;
+  const { client } = useContext(GlobalContext)!;
   const { xy2latLng, setVisibleTimestamp, setFullyLoadedTimestamp } = useContext(ImageContext)!;
   const {projectMembershipHook: {data: projectMemberships}} = useContext(ManagementContext)!;
   const {project} = useContext(ProjectContext)!
@@ -161,6 +160,75 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
     return crypto.randomUUID();
   }, []);
 
+  async function useForTestPreset() {
+    const { data: [testPreset] } = await client.models.TestPreset.testPresetsByName({
+      name: project.name,
+    })
+
+    const { data: testPresetLocation } = await client.models.TestPresetLocation.get({
+      testPresetId: testPreset.id,
+      locationId: location?.id,
+      annotationSetId: location?.annotationSetId,
+    });
+
+
+    if (!testPresetLocation) {
+      await client.models.TestPresetLocation.create({
+        testPresetId: testPreset.id,
+        locationId: location?.id,
+        annotationSetId: location?.annotationSetId,
+      });
+    }
+
+    const annotations = await fetchAllPaginatedResults(
+      client.models.Annotation.annotationsByImageIdAndSetId,
+      {
+        imageId: location!.image.id,
+        setId: { eq: location.annotationSetId },
+        selectionSet: ['categoryId', 'x', 'y'],
+      }
+    );
+
+    const annotationCounts: { [key: string]: number } = {};
+    for (const annotation of annotations) {
+      const isWithin =
+        annotation.x >= boundsxy[0][0] &&
+        annotation.y >= boundsxy[0][1] &&
+        annotation.x <= boundsxy[1][0] &&
+        annotation.y <= boundsxy[1][1];
+
+      if (isWithin) {
+        annotationCounts[annotation.categoryId] =
+          (annotationCounts[annotation.categoryId] || 0) + 1;
+      }
+    }
+
+    for (const [categoryId, count] of Object.entries(annotationCounts)) {
+      const { data: locationAnnotationCount } =
+        await client.models.LocationAnnotationCount.get({
+          locationId: location?.id,
+          categoryId: categoryId,
+          annotationSetId: location?.annotationSetId,
+        });
+
+      if (locationAnnotationCount) {
+        await client.models.LocationAnnotationCount.update({
+          locationId: location?.id,
+          categoryId: categoryId,
+          annotationSetId: location?.annotationSetId,
+          count: count,
+        });
+      } else {
+        await client.models.LocationAnnotationCount.create({
+          locationId: location?.id,
+          categoryId: categoryId,
+          annotationSetId: location?.annotationSetId,
+          count: count,
+        });
+      }
+    }
+  }
+
   const contextMenuItems = useMemo(() => {
     const items = [];
     if (source) {
@@ -256,8 +324,8 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
       ])
       if (belongsToCurrentProject?.isAdmin) {
         items.push({
-          text: "Configure for testing",
-          callback: () => showModal(testModalId),
+          text: "Use as test location",
+          callback: () => useForTestPreset(),
         })
       }
     }
@@ -353,14 +421,6 @@ const BaseImage: React.FC<BaseImageProps> = memo((props) =>
           />}
         <ZoomTracker />
       </MapContainer>}
-      {belongsToCurrentProject?.isAdmin && 
-        <TestLocationModal 
-          show={modalToShow === testModalId} 
-          onClose={() => showModal(null)} 
-          locationId={location?.id || ""}
-          annotationSetId={location?.annotationSetId || ""}
-        />
-      }
       </div>
   ), [visible, fullyLoaded, source, style, zoom, viewBounds, viewCenter, location?.id, location?.annotationSetId, location.image.id, imageFiles, image, children, next, prev, canAdvance, stats, client.models.ImageNeighbour, imageBounds, isTest, queriesComplete])
 }, (prevProps, nextProps) => {
