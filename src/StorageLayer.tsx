@@ -5,6 +5,7 @@ import {
 } from '@react-leaflet/core'
 import { getUrl } from 'aws-amplify/storage';
 import L from 'leaflet'
+import localforage from 'localforage'; // You'll need to install this
 /* This is a custom Leaflet layer that uses a slippy map stored on S3 storage, accessed via the aws-sdk/aws-s3
 library. Because the URLs that we use to access files stored there need to be individually signed, we cannot 
 use a URL template in the way that the normal Leaflet TileLayer does. 
@@ -12,24 +13,36 @@ use a URL template in the way that the normal Leaflet TileLayer does.
 The amplify Storage library gives a slightly more convenient interface, but it can only support a single S3 bucket.
 Having now placed our inputs and outputs in separate buckets, we find that we need to access at least one of these via raw S3.*/
 
-let cachedUrlPromises: { [key: string]: Promise<{url:URL,expiresAt:Date}> } = {};
+// Configure a dedicated storage instance for tile URLs
+const tileCache = localforage.createInstance({
+  name: 'tileCache',
+  storeName: 'tiles'
+});
 
-interface leafletS3LayerOptions extends L.GridLayerOptions {
-  getObject: (params: { Bucket: string; Key: string }) => Promise<any>;
-  source: string;
-}
 
-async function getValidUrl(path: string):Promise<URL> {
-  if (!(path in cachedUrlPromises)) {
-    cachedUrlPromises[path] = getUrl({ path })
-  }
-  const result = await cachedUrlPromises[path]
-  const thirtySecondsFromNow = Date.now() + 30000; // 30 seconds in milliseconds
-  if (result.expiresAt.getTime() < thirtySecondsFromNow) {
-    delete cachedUrlPromises[path];
-    return getValidUrl(path);
-  }
-  return result.url;
+async function getTileBlob(path: string): Promise<Blob> {
+    // Try to get from persistent cache first
+    const cached: Blob | null = await tileCache.getItem(path);
+
+    if (cached) {
+      return cached;
+    }
+
+    // If not in cache or expired, fetch the image
+    const signedUrl = await getUrl({ path });
+    const response = await fetch(signedUrl.url.toString(), {
+      cache: 'no-store' // Prevent browser from caching the response
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch tile: ${response.statusText}`);
+    }
+
+    const blob = await response.blob();
+    
+    // Store in persistent cache
+    await tileCache.setItem(path, blob);
+    return blob;
 }
 
 // Add this type declaration before the extension
@@ -52,8 +65,15 @@ L.GridLayer.Storage = L.GridLayer.extend({
         done(new Error(`Failed to load tile at ${path}`), tile);
       };
 
-      getValidUrl(path).then(url => {
-        tile.src = url.toString();
+      getTileBlob(path).then(blob => {
+        tile.src = URL.createObjectURL(blob);
+        // Clean up the object URL when the image loads
+        tile.onload = () => {
+          done(undefined, tile);
+          URL.revokeObjectURL(tile.src);
+        };
+      }).catch(error => {
+        done(error, tile);
       });
 
       return tile;

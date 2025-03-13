@@ -13,12 +13,19 @@ import { ImageLoader } from "./ImageLoader";
 import QuickTest from "./QuickTest";
 import { Review } from "./Review";
 import { PairLoader } from "./PairLoader";
+import { Registration } from "./Registration";
+import { persistQueryClient } from '@tanstack/react-query-persist-client'
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 
 import {
   createBrowserRouter,
   RouterProvider,
 } from "react-router-dom";
 import ErrorPage from "./error-page";
+
+const persister = createSyncStoragePersister({
+  storage: window.localStorage,
+})
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,6 +34,11 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+persistQueryClient({
+  queryClient,
+  persister,
+})
 
 // Define global for browser environment
 window.global = window;
@@ -77,6 +89,10 @@ const router = createBrowserRouter([
       {
         path: "review",
         element: <Review/>
+      },
+      {
+        path: "registration",
+        element: <Registration/>
       }
     ]
   },

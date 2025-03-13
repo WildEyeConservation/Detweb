@@ -1,7 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { useEffect, useState, useMemo, useContext } from 'react';
 import { PreloaderFactory } from './Preloader';
-import { client } from './optimisticExperiment';
 import BufferSource from './BufferSource';
 import AnnotationImage from './AnnotationImage';
 import { AnnotationSetDropdown } from './AnnotationSetDropDown';

@@ -150,7 +150,7 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
         index: contextmenuItems.length,
       });
     }
-    for (let category of categories) {
+    for (let category of categories.sort((a, b) => a.name.localeCompare(b.name))) {
       if (annotation.categoryId !== category.id) {
         contextmenuItems.push({
           text: `Change to ${category.name}`,

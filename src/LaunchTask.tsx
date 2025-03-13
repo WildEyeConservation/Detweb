@@ -1,15 +1,12 @@
 import { useContext, useState } from "react";
 import { Stack, Modal, Form, Button } from "react-bootstrap";
-import { getLocationsInSet } from "./gqlQueries";
 import { QueueDropdown } from "./QueueDropDown";
 import { useUpdateProgress } from "./useUpdateProgress";
 import { AnnotationSetDropdown } from "./AnnotationSetDropDown";
 import { LocationSetDropdown } from "./LocationSetDropDown";
-import { GlobalContext, ManagementContext, UserContext, ProjectContext } from "./Context";
-import { SendMessageCommand, SendMessageBatchCommand } from "@aws-sdk/client-sqs";
-import { aws_elasticloadbalancingv2_targets } from "aws-cdk-lib";
+import { GlobalContext, ManagementContext, UserContext } from "./Context";
+import { SendMessageBatchCommand } from "@aws-sdk/client-sqs";
 import { QueryCommand } from "@aws-sdk/client-dynamodb";
-import { retryOperation } from './utils/retryOperation';
 import pLimit from 'p-limit';
 
 interface LaunchTaskProps {
@@ -140,7 +137,6 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
   async function handleSubmit() {
     // try {
     handleClose();
-    let promises = []
     setStepsCompleted(0);
     setTotalSteps(0);
 

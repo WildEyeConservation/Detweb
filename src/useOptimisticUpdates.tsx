@@ -44,7 +44,8 @@ type ClientType = V6Client<Schema>;
 export function useOptimisticUpdates<T, ModelKey extends keyof ClientType['models']>(
   modelKey: ModelKey,
   listFunction: (nextToken?: string) => Promise<{ data: T[] }>,
-  subscriptionFilter?: Parameters<ClientType['models'][ModelKey]['onCreate']>[0]
+  subscriptionFilter?: Parameters<ClientType['models'][ModelKey]['onCreate']>[0],
+  updateFunction?: (item: T) => Promise<void>
 ) {
   const { client } = useContext(GlobalContext);
   const queryClient = useQueryClient();
@@ -68,6 +69,9 @@ export function useOptimisticUpdates<T, ModelKey extends keyof ClientType['model
       do {
         const result = await effectiveListFunction(nextToken);
         allResults.push(...result.data);
+        if (updateFunction) {
+          updateFunction(allResults.length);
+        }
         nextToken = result.nextToken;
       } while (nextToken);
       return allResults;
@@ -194,9 +198,10 @@ export const useQueues = () => {
     const safeName = makeSafeQueueName(name+crypto.randomUUID());
     const id = originalHook.create({ name, projectId: project.id});
     getSqsClient().then(sqsClient => sqsClient.send(new CreateQueueCommand({
-      QueueName: safeName,
+      QueueName: safeName+'.fifo',
       Attributes: {
-        MessageRetentionPeriod: '1209600', //This value is in seconds. 1209600 corresponds to 14 days and is the maximum AWS supports      //FifoQueue: "false",
+        MessageRetentionPeriod: '1209600', //This value is in seconds. 1209600 corresponds to 14 days and is the maximum AWS supports      
+        FifoQueue: "true",
       },
     }))
     ).then(({ QueueUrl: url }) => {

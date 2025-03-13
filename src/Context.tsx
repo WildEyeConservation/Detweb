@@ -4,11 +4,10 @@ import { Schema } from '../amplify/data/resource'; // Path to your backend resou
 import outputs from '../amplify_outputs.json'
 import { AuthUser } from "@aws-amplify/auth";
 import { SQSClient } from "@aws-sdk/client-sqs";
-import { S3Client } from "@aws-sdk/client-s3";
-import { LambdaClient } from "@aws-sdk/client-lambda";
 import { V6Client } from '@aws-amplify/api-graphql'
-import { generateClient } from "aws-amplify/api";
-import { client,limitedClient } from "./limitedClient";
+import { limitedClient } from "./limitedClient";
+import { DynamoDBDocumentClient} from "@aws-sdk/lib-dynamodb";
+
 
 
 export interface ProgressType {
@@ -90,6 +89,9 @@ interface ImageContextType {
     annotationsHook: AnnotationsHook;
     zoom: number;
     setZoom: React.Dispatch<React.SetStateAction<number>>;
+    prevImages: { image: Schema['ImageType']['type'], transform: ((c1: [number, number]) => [number, number]) }[] | undefined;
+    nextImages: { image: Schema['ImageType']['type'], transform: ((c1: [number, number]) => [number, number]) }[] | undefined;
+    queriesComplete: boolean;
 }
 
 
