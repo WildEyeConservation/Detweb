@@ -173,44 +173,44 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
     }
   }, [minOverlapPercentage, specifyTileDimensions,verticalTiles,effectiveImageHeight,height])
 
-  // useEffect(() => {
-  //   async function getAllImages() {
-  //     let nextToken: string | undefined = undefined;
-  //     let acc = { minWidth: Infinity, maxWidth: -Infinity, minHeight: Infinity, maxHeight: -Infinity };
-  //     setAllImages([]);
-  //     for (const imageSetId of selectedImageSets) {
-  //       do {
-  //         const { data: images, nextToken: nextNextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
-  //           imageSetId
-  //         }, { selectionSet: ['image.width', 'image.height', 'image.id', 'image.timestamp', 'image.originalPath'], nextToken });
-  //         nextToken = nextNextToken ?? undefined;
-  //         setAllImages(x => x.concat(images.map(({ image }) => image)))
-  //         acc = images.reduce((acc, x) => {
-  //           acc.minWidth = Math.min(acc.minWidth, x.image.width);
-  //           acc.maxWidth = Math.max(acc.maxWidth, x.image.width);
-  //           acc.minHeight = Math.min(acc.minHeight, x.image.height);
-  //           acc.maxHeight = Math.max(acc.maxHeight, x.image.height);
-  //           return acc;
-  //         }, acc);
-  //         if (acc.minWidth != acc.maxWidth || acc.minHeight != acc.maxHeight) {
-  //           console.log(`Inconsistent image sizes in image set ${imageSetId}`)
-  //           setImageWidth(undefined);
-  //           setImageHeight(undefined);
-  //           setMaxX(undefined);
-  //           setMaxY(undefined);
-  //         } else {
-  //           setImageWidth(acc.maxWidth);
-  //           setImageHeight(acc.maxHeight);
-  //           setMaxX(acc.maxWidth);
-  //           setMaxY(acc.maxHeight);
-  //         }
-  //       } while (nextToken);
-  //     }
-  //   }
-  //   if (show) { 
-  //     getAllImages();
-  //   }
-  // }, [show,selectedImageSets, client.models.ImageSetMembership]);
+  useEffect(() => {
+    async function getAllImages() {
+      let nextToken: string | undefined = undefined;
+      let acc = { minWidth: Infinity, maxWidth: -Infinity, minHeight: Infinity, maxHeight: -Infinity };
+      setAllImages([]);
+      for (const imageSetId of selectedImageSets) {
+        do {
+          const { data: images, nextToken: nextNextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
+            imageSetId
+          }, { selectionSet: ['image.width', 'image.height', 'image.id', 'image.timestamp', 'image.originalPath'], nextToken });
+          nextToken = nextNextToken ?? undefined;
+          setAllImages(x => x.concat(images.map(({ image }) => image)))
+          acc = images.reduce((acc, x) => {
+            acc.minWidth = Math.min(acc.minWidth, x.image.width);
+            acc.maxWidth = Math.max(acc.maxWidth, x.image.width);
+            acc.minHeight = Math.min(acc.minHeight, x.image.height);
+            acc.maxHeight = Math.max(acc.maxHeight, x.image.height);
+            return acc;
+          }, acc);
+          if (acc.minWidth != acc.maxWidth || acc.minHeight != acc.maxHeight) {
+            console.log(`Inconsistent image sizes in image set ${imageSetId}`)
+            setImageWidth(undefined);
+            setImageHeight(undefined);
+            setMaxX(undefined);
+            setMaxY(undefined);
+          } else {
+            setImageWidth(acc.maxWidth);
+            setImageHeight(acc.maxHeight);
+            setMaxX(acc.maxWidth);
+            setMaxY(acc.maxHeight);
+          }
+        } while (nextToken);
+      }
+    }
+    if (show) { 
+      getAllImages();
+    }
+  }, [show,selectedImageSets, client.models.ImageSetMembership]);
 
   const [setImagesCompleted, setTotalImages] = useUpdateProgress({
     taskId: `Create task (model guided)`,
@@ -233,7 +233,7 @@ function CreateTask({ show, handleClose, selectedImageSets, setSelectedImageSets
     const locationSetId = createLocationSet({ 
         name, 
         projectId: project.id,
-        locationCount: !taskType === 'model' ? allImages.length * horizontalTiles * verticalTiles : 0
+        locationCount: taskType !== 'model' ? allImages.length * horizontalTiles * verticalTiles : 0
     });
     switch (taskType) {
       case 'model':
