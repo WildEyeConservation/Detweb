@@ -73,7 +73,7 @@ export function useOptimalAssignment({
       projected[0] > image.width ||
       projected[1] > image.height;
     return {
-      id: 'shadow'+anno.id, // Generate a unique id for the new annotation
+      id: crypto.randomUUID(),
       projectId: anno.projectId,
       shadow: true, /* Indicates that this is a shadow annotation, in other words, it corresponds to an annotation that we think 
       should exist, but it doesn't (yet), either because an animal was missed by annotators/algorithms or because the animal in 
@@ -163,32 +163,32 @@ export function useOptimalAssignment({
               proposedObjectIdMap[b.id] = id;
               return
             }
-            if (a && !a.obscured) {
-              // If the first annotation exists and is visible, but the second does not, 
+            if (a) {
+              // If the first annotation exists, but the second does not, 
               //we create a new shadow annotation for the second image.
-              const shadowAnnotation = createNewAnnotation(a, transforms[0], images[1]);
+              const shadowAnnotation = createNewAnnotation(a, transforms[0], images[1]);  
+              if (shadowAnnotation.obscured) {return}
               proposed[1].push(shadowAnnotation);
               proposedObjectIdMap[a.id] = id;
               proposedObjectIdMap[shadowAnnotation.id] = id;
               return
             }
-            if (b && !b.obscured) {
-              // If the second annotation exists and is visible, but the first does not, 
+            if (b) {
+              // If the second annotation exists, but the first does not, 
               //we create a new shadow annotation for the first image.
               const shadowAnnotation = createNewAnnotation(b, transforms[1], images[0]);
+              if (shadowAnnotation.obscured) { return }
               proposed[0].push(shadowAnnotation);
-              proposedObjectIdMap[b.id] = id;
-              proposedObjectIdMap[shadowAnnotation.id] = id;
+              proposedObjectIdMap[b.id] = shadowAnnotation.id;
+              proposedObjectIdMap[shadowAnnotation.id] = shadowAnnotation.id;
               return
             }
           })
         setEnhancedAnnotations([
           annotations[0].concat(proposed[0]).map(anno => {
-            console.log("Mapping annotation 0", { id: anno.id, proposedId: proposedObjectIdMap[anno.id] });
             return { ...anno, proposedObjectId: proposedObjectIdMap[anno.id] };
           }),
           annotations[1].concat(proposed[1]).map(anno => {
-            console.log("Mapping annotation 1", { id: anno.id, proposedId: proposedObjectIdMap[anno.id] });
             return { ...anno, proposedObjectId: proposedObjectIdMap[anno.id] };
           })
         ]);

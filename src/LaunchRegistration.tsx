@@ -9,6 +9,7 @@ import { SendMessageCommand } from '@aws-sdk/client-sqs';
 import { ImageSetDropdown } from './ImageSetDropDown';
 import * as math from 'mathjs';
 import { inv } from 'mathjs';
+import { useUpdateProgress } from "./useUpdateProgress";
 
 interface LaunchRegistrationProps {
   show: boolean;
@@ -31,6 +32,12 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
   } = useContext(ManagementContext)!;
   const [selectedImageSets, setSelectedImageSets] = useState<string[]>([]);
   const [selectedType, setSelectedType] = useState<boolean>(false);
+  const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
+    taskId: `Launch registration task`,
+    indeterminateTaskName: `Finding images with annotations`,
+    determinateTaskName: "Enqueueing pairs",
+    stepFormatter: (step: number) => `${step} images`
+  });
   // const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
   //   taskId: `Launch registration task`,
   //   indeterminateTaskName: `Finding images with annotations`,
@@ -90,53 +97,38 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
   }
 
   async function handleSubmit() {
+    handleClose()
     /* What we want to do is get a list of images that have annotations in them in the designated 
     annotationSets and then get all the imageneighbours entries for each image. we deduplicate this list 
     and push the imageNeighbourIds into the queue sorted by the timestamp of the first image in the pair.
     Pushing to the queue in sorted order is not strictly required, but it makes the registration process 
     a little easier if pairs are processed in order.*/
     if (!selectedType) {
+      setTotalSteps(0)
       for (const annotationSetId of selectedSets) {
         const annotations: { image: { id: string; timestamp: number } }[] =
           await fetchAllPaginatedResults(
             client.models.Annotation.annotationsByAnnotationSetId,
             {
               setId: annotationSetId,
-              selectionSet: ['image.id', 'image.timestamp', 'x', 'y'],
-            }
-          );
-
-        const images: Record<number, string> = annotations.reduce(
-          (acc, annotation) => {
-            const current = acc[annotation.image.timestamp];
-            if (current) {
-              current.annotations.push([annotation.x, annotation.y]);
-            } else {
-              acc[annotation.image.timestamp] = {
-                id: annotation.image.id,
-                annotations: [[annotation.x, annotation.y]],
-              };
-            }
-            return acc;
-          },
-          {} as Record<number, { id: string; annotations: number[][] }>
-        );
-
+              selectionSet: ['image.id', 'image.timestamp','x','y']
+            },()=>setStepsCompleted(x=>x+1))
+        
+        const images: Record<number, string> = annotations.reduce((acc, annotation) => {
+          const current = acc[annotation.image.timestamp]
+          if (current) {
+            current.annotations.push([annotation.x, annotation.y])
+          } else {
+            acc[annotation.image.timestamp] = {id: annotation.image.id, annotations: [[annotation.x, annotation.y]]}
+          }
+          return acc
+        }, {} as Record<number, { id: string, annotations: number[][] }>)
+        setTotalSteps(Object.keys(images).length)
+        setStepsCompleted(0)
         for (const timestamp of Object.keys(images)) {
-          const image = images[timestamp];
-          const { data: prevneighbours } =
-            await client.models.ImageNeighbour.imageNeighboursByImage2key(
-              { image2Id: image.id },
-              {
-                selectionSet: [
-                  'image1Id',
-                  'image1.timestamp',
-                  'homography',
-                  'image1.width',
-                  'image1.height',
-                ],
-              }
-            );
+          const image = images[timestamp]
+          setStepsCompleted(x=>x+1)
+          const { data: prevneighbours } = await client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: image.id }, { selectionSet: ['image1Id', 'image1.timestamp', 'homography', 'image1.width', 'image1.height']})
           for (const neighbour of prevneighbours) {
             if (images[neighbour.image1.timestamp] || !neighbour.homography) {
               continue;
@@ -291,7 +283,6 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
         console.log(imageSetMemberships);
       }
     }
-    handleClose();
   }
 
   return (

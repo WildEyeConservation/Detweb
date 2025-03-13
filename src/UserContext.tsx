@@ -18,6 +18,7 @@ import { generateClient } from 'aws-amplify/api';
 import outputs from '../amplify_outputs.json';
 import { useOptimisticUpdates, useQueues } from './useOptimisticUpdates.tsx';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { useQuery } from "@tanstack/react-query";
 
 export function Project({
   children,
@@ -27,40 +28,33 @@ export function Project({
   currentPM: Schema['UserProjectMembership']['type'];
 }) {
   const { client } = useContext(GlobalContext)!;
-  const { myMembershipHook } = useContext(UserContext)!;
-  const subscriptionFilter = useMemo(
-    () => ({
-      filter: { projectId: { eq: currentPM?.projectId } },
-    }),
-    [currentPM?.projectId]
-  );
-  const [currentProject, setCurrentProject] = useState<
-    Schema['Project']['type'] | undefined
-  >(undefined);
-  const categoriesHook = useOptimisticUpdates<
-    Schema['Category']['type'],
-    'Category'
-  >(
-    'Category',
-    async (nextToken) =>
-      client.models.Category.list({
+  const {myMembershipHook} = useContext(UserContext)!;
+  const subscriptionFilter = useMemo(() => ({
+    filter: { projectId: { eq: currentPM?.projectId } }
+  }), [currentPM?.projectId]);
+  //const [currentProject, setCurrentProject] = useState<Schema['Project']['type'] | undefined>(undefined)
+    const categoriesHook = useOptimisticUpdates<Schema['Category']['type'], 'Category'>('Category',
+      async (nextToken) => client.models.Category.list({
         filter: { projectId: { eq: currentPM?.projectId } },
         nextToken,
       }),
-    subscriptionFilter
-  );
-  const [currentCategory, setCurrentCategory] = useState<
-    Schema['Category']['type'] | undefined
-  >(categoriesHook.data?.[0]);
-  useEffect(() => {
-    if (currentPM) {
-      client.models.Project.get({ id: currentPM.projectId }).then((p) =>
-        setCurrentProject(p['data']!)
-      );
-    } else {
-      setCurrentProject(undefined);
-    }
-  }, [currentPM]);
+      subscriptionFilter)
+  const [currentCategory, setCurrentCategory] = useState<Schema['Category']['type']|undefined>(categoriesHook.data?.[0])
+    // useEffect(() => {
+    // if (currentPM) {
+    //   client.models.Project.get({ id: currentPM.projectId }).then(p =>
+    //     setCurrentProject(p['data']!));
+    // } else {
+    //   setCurrentProject(undefined);
+    // }
+    // }, [currentPM])
+  
+  const projectQuery = useQuery({
+    queryKey: ["project", currentPM?.projectId],
+    queryFn: () => client.models.Project.get({ id: currentPM?.projectId })
+  })
+  
+  const currentProject = projectQuery.data?.data
 
   useEffect(() => {
     if (!currentCategory) {

@@ -22,6 +22,14 @@ import CreateOrganization from './organization/CreateOrganization';
 import Surveys from './survey/Surveys.tsx';
 import Permissions from './Permissions.tsx';
 import Testing from './Testing/Testing';
+import { Registration } from "./Registration";
+import { persistQueryClient } from '@tanstack/react-query-persist-client'
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
+
+const persister = createSyncStoragePersister({
+  storage: window.localStorage,
+})
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -29,6 +37,11 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+persistQueryClient({
+  queryClient,
+  persister,
+})
 
 // Define global for browser environment
 window.global = window;
@@ -64,6 +77,10 @@ const router = createBrowserRouter([
           {
             path: 'review',
             element: <Review />,
+          },
+          {
+            path: "registration",
+            element: <Registration/>
           },
           {
             path: 'manage',

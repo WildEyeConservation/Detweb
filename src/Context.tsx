@@ -1,14 +1,11 @@
-import { Amplify } from 'aws-amplify';
 import { createContext, useState } from 'react';
 import { Schema } from '../amplify/data/resource'; // Path to your backend resource definition
 import outputs from '../amplify_outputs.json';
 import { AuthUser } from '@aws-amplify/auth';
 import { SQSClient } from '@aws-sdk/client-sqs';
-import { S3Client } from '@aws-sdk/client-s3';
-import { LambdaClient } from '@aws-sdk/client-lambda';
 import { V6Client } from '@aws-amplify/api-graphql';
-import { generateClient } from 'aws-amplify/api';
-import { client, limitedClient } from './limitedClient';
+import { limitedClient } from './limitedClient';
+import { DynamoDBDocumentClient} from "@aws-sdk/lib-dynamodb";
 
 export interface ProgressType {
   [key: string]: { value?: number; detail: JSX.Element };
@@ -103,15 +100,14 @@ export interface TestingContextType {
 }
 
 interface ImageContextType {
-  latLng2xy: (
-    input: L.LatLng | [number, number] | Array<L.LatLng | [number, number]>
-  ) => L.Point | L.Point[];
-  xy2latLng: (
-    input: L.Point | [number, number] | Array<L.Point | [number, number]>
-  ) => L.LatLng | L.LatLng[];
-  annotationsHook: AnnotationsHook;
-  zoom: number;
-  setZoom: React.Dispatch<React.SetStateAction<number>>;
+    latLng2xy: (input: L.LatLng | [number, number] | Array<L.LatLng | [number, number]>) => L.Point | L.Point[];
+    xy2latLng: (input: L.Point | [number, number] | Array<L.Point | [number, number]>) => L.LatLng | L.LatLng[];
+    annotationsHook: AnnotationsHook;
+    zoom: number;
+    setZoom: React.Dispatch<React.SetStateAction<number>>;
+    prevImages: { image: Schema['ImageType']['type'], transform: ((c1: [number, number]) => [number, number]) }[] | undefined;
+    nextImages: { image: Schema['ImageType']['type'], transform: ((c1: [number, number]) => [number, number]) }[] | undefined;
+    queriesComplete: boolean;
 }
 
 export const UserContext = createContext<UserContextType | null>(null);

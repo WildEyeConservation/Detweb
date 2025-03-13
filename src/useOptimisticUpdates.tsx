@@ -68,7 +68,8 @@ export function useOptimisticUpdates<
   subscriptionFilter?: Parameters<
     ClientType['models'][ModelKey]['onCreate']
   >[0],
-  options?: OptimisticOptions<T>
+  options?: OptimisticOptions<T>,
+  updateFunction?: (item: T) => Promise<void>
 ) {
   const { client } = useContext(GlobalContext);
   const queryClient = useQueryClient();
@@ -96,6 +97,9 @@ export function useOptimisticUpdates<
       do {
         const result = await effectiveListFunction(nextToken);
         allResults.push(...result.data);
+        if (updateFunction) {
+          updateFunction(allResults.length);
+        }
         nextToken = result.nextToken;
       } while (nextToken);
       return allResults;
@@ -239,24 +243,20 @@ export const useQueues = () => {
     subscriptionFilter
   );
   const create = (name: string) => {
-    const safeName = makeSafeQueueName(name + crypto.randomUUID());
-    const id = originalHook.create({ name, projectId: project.id });
-    getSqsClient()
-      .then((sqsClient) =>
-        sqsClient.send(
-          new CreateQueueCommand({
-            QueueName: safeName,
-            Attributes: {
-              MessageRetentionPeriod: '1209600', //This value is in seconds. 1209600 corresponds to 14 days and is the maximum AWS supports      //FifoQueue: "false",
-            },
-          })
-        )
-      )
-      .then(({ QueueUrl: url }) => {
-        originalHook.update({ id, url });
-        return id;
-      });
-  };
+    const safeName = makeSafeQueueName(name+crypto.randomUUID());
+    const id = originalHook.create({ name, projectId: project.id});
+    getSqsClient().then(sqsClient => sqsClient.send(new CreateQueueCommand({
+      QueueName: safeName+'.fifo',
+      Attributes: {
+        MessageRetentionPeriod: '1209600', //This value is in seconds. 1209600 corresponds to 14 days and is the maximum AWS supports      
+        FifoQueue: "true",
+      },
+    }))
+    ).then(({ QueueUrl: url }) => {
+      originalHook.update({ id, url });
+      return id;
+    })
+  }
   const remove = ({ id }: { id: string }) => {
     const url = originalHook.data.find((x) => x.id == id)?.url;
     if (url) {

@@ -1,12 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState, useMemo, useContext } from 'react';
 import { PreloaderFactory } from './Preloader';
-import { client } from './optimisticExperiment';
 import BufferSource from './BufferSource';
 import AnnotationImage from './AnnotationImage';
 import { AnnotationSetDropdown } from './AnnotationSetDropDown';
-import Select, { MultiValue, Options } from 'react-select';
-import { ProjectContext } from './Context';
+import Select, { MultiValue, Options  } from "react-select";
+import { ProjectContext, GlobalContext } from './Context';
 import { Form } from 'react-bootstrap';
 import LabeledToggleSwitch from './LabeledToggleSwitch';
 import './Review.css';
@@ -29,6 +28,7 @@ export function Review() {
   const [index, setIndex] = useState(0);
   const [bufferSource, setBufferSource] = useState<BufferSource | null>(null);
   const navigate = useNavigate();
+  const { client } = useContext(GlobalContext)!;
 
   useEffect(() => {
     async function fetchAnnotations() {
