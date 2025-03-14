@@ -70,6 +70,7 @@ export default function UserStats() {
               'annotationSets.id',
               'annotationSets.name',
               'organization.name',
+              'hidden',
             ],
           }
         )
@@ -79,7 +80,8 @@ export default function UserStats() {
       const validProjects = projectResults
         .map((result) => result.data)
         .filter(
-          (project): project is NonNullable<typeof project> => project !== null
+          (project): project is NonNullable<typeof project> =>
+            project !== null && !project.hidden
         );
 
       setProjects(validProjects);

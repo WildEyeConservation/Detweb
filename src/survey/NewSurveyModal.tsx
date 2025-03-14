@@ -148,13 +148,16 @@ export default function NewSurveyModal({
         projectId: project.id,
       });
 
+      onClose();
+
       if (uploadSubmitFn) {
         await uploadSubmitFn(project.id);
       }
+    } else {
+      alert('Failed to create project');
     }
 
     setLoading(false);
-    onClose(); // maybe close earlier so the ui isn't perceived as unresponsive
   }
 
   useEffect(() => {

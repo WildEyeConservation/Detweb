@@ -9,6 +9,7 @@ import InviteUserModal from './InviteUserModal';
 import ExceptionsModal from './ExceptionsModal';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
 import { fetchAllPaginatedResults } from '../utils';
+import ConfirmationModal from '../ConfirmationModal';
 
 export default function Users({
   organization,
@@ -149,17 +150,12 @@ export default function Users({
           variant="danger"
           disabled={user?.id === authUser.userId}
           onClick={() => {
-            if (
-              !window.confirm(
-                `Are you sure you want to remove ${user?.name} from the organization?`
-              )
-            ) {
-              return;
-            }
-            hook.delete({
-              organizationId: organization.id,
-              userId: membership.userId,
+            setUserToEdit({
+              id: user?.id || '',
+              name: user?.name || '',
+              organizationName: organization.name,
             });
+            showModal('removeUser');
           }}
         >
           Remove user
@@ -202,6 +198,21 @@ export default function Users({
           organization={organization}
         />
       )}
+      <ConfirmationModal
+        show={modalToShow === 'removeUser'}
+        onClose={() => {
+          showModal(null);
+          setUserToEdit(null);
+        }}
+        onConfirm={() => {
+          hook.delete({
+            organizationId: organization.id,
+            userId: userToEdit!.id,
+          });
+        }}
+        title="Remove User"
+        body="Are you sure you want to remove this user?"
+      />
     </>
   );
 }

@@ -270,10 +270,12 @@ export default function Results() {
         <Select
           className="text-black"
           value={selectedProject}
-          options={organizationProjects.map((p) => ({
-            label: `${p.name}`,
-            value: p.id,
-          }))}
+          options={organizationProjects
+            .filter((p) => !p.hidden)
+            .map((p) => ({
+              label: `${p.name}`,
+              value: p.id,
+            }))}
           onChange={(e) => {
             setSelectedProject(e);
             setSelectedUser(null);

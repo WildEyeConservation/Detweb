@@ -45,6 +45,7 @@ const schema = a
         testConfig: a.hasOne('ProjectTestConfig', 'projectId'),
         testResults: a.hasMany('TestResult', 'projectId'),
         createdBy: a.string().required(),
+        hidden: a.boolean().default(false),
       })
       .authorization((allow) => [allow.authenticated()]),
     // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),

@@ -41,7 +41,7 @@ export default function ExceptionsModal({
       const projects = await fetchAllPaginatedResults(
         client.models.Project.list,
         {
-          selectionSet: ['id', 'name'],
+          selectionSet: ['id', 'name', 'hidden'],
           filter: {
             organizationId: {
               eq: organization.id,
@@ -50,7 +50,11 @@ export default function ExceptionsModal({
         }
       );
 
-      if (projects.length > 0) {
+      const validProjects = projects.filter(
+        (project) => !project.hidden
+      );
+
+      if (validProjects.length > 0) {
         const userProjectMemberships = await fetchAllPaginatedResults(
           client.models.UserProjectMembership.userProjectMembershipsByUserId,
           {
@@ -59,7 +63,7 @@ export default function ExceptionsModal({
           }
         );
 
-        const projectPermissions = projects.map((project) => {
+        const projectPermissions = validProjects.map((project) => {
           const membership = userProjectMemberships.find(
             (m) => m.projectId === project.id
           );

@@ -16,6 +16,7 @@ type Project = {
     name: string;
   };
   queues: Schema['Queue']['type'][];
+  hidden: boolean;
 };
 
 export default function Jobs() {
@@ -54,6 +55,7 @@ export default function Jobs() {
               'organization.id',
               'organization.name',
               'queues.*',
+              'hidden',
             ],
           }
         )
@@ -64,7 +66,7 @@ export default function Jobs() {
         .map((result) => (result as { data: Project | null }).data)
         .filter(
           (project): project is Project =>
-            project !== null && project.queues.length > 0
+            project !== null && project.queues.length > 0 && !project.hidden
         )
         .map((project) => ({
           ...project,

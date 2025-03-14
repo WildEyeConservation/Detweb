@@ -6,6 +6,7 @@ import MyTable from "../Table.tsx";
 import NewSurveyModal from "./NewSurveyModal.tsx";
 import { useNavigate } from "react-router-dom";
 import FilesUploadComponent from "../FilesUploadComponent.tsx";
+import ConfirmationModal from "../ConfirmationModal.tsx";
 
 export default function Surveys() {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
@@ -35,6 +36,7 @@ export default function Surveys() {
                     "id",
                     "organizationId",
                     "organization.name",
+                    "hidden",
                   ],
                 }
               )
@@ -42,12 +44,19 @@ export default function Surveys() {
         )
       ).then((projects) => {
         console.log("projects", projects);
-        setProjects(projects.filter((project) => project !== null));
+        setProjects(
+          projects.filter((project) => project !== null && !project.hidden)
+        );
       });
     }
 
     getProjects();
   }, [myProjectsHook.data]);
+
+  async function deleteProject(projectId: string) {
+    await client.models.Project.update({ id: projectId, hidden: true });
+    setProjects(projects.filter((project) => project.id !== projectId));
+  }
 
   const tableData = projects.map((project) => ({
     id: project.id,
@@ -85,7 +94,13 @@ export default function Surveys() {
           >
             Manage
           </Button>
-          <Button variant="danger" onClick={() => alert("Not implemented")}>
+          <Button
+            variant="danger"
+            onClick={() => {
+              setSelectedProject(project);
+              showModal("deleteSurvey");
+            }}
+          >
             Delete
           </Button>
         </div>
@@ -135,6 +150,16 @@ export default function Surveys() {
         show={modalToShow === "newSurvey"}
         projects={projects.map((project) => project.name.toLowerCase())}
         onClose={() => showModal(null)}
+      />
+      <ConfirmationModal
+        show={modalToShow === "deleteSurvey"}
+        onClose={() => {
+          showModal(null);
+          setSelectedProject(null);
+        }}
+        onConfirm={() => deleteProject(selectedProject!.id)}
+        title="Delete Survey"
+        body="Are you sure you want to delete this survey?"
       />
       {selectedProject && (
         <FilesUploadComponent

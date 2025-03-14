@@ -65,6 +65,7 @@ export default function Surveys() {
 
       await Promise.all(
         surveys.map(async (survey) => {
+          if (survey.hidden) return;
           const { data: selectedLocationPools } =
             await client.models.TestPresetProject.testPresetsByProjectId({
               projectId: survey.id,
@@ -88,10 +89,12 @@ export default function Surveys() {
     getSelectedLocationPools();
   }, [surveys, locationPools]);
 
-  const tableData = surveys.map((survey) => {
-    return {
-      id: survey.id,
-      rowData: [
+  const tableData = surveys
+    .filter((survey) => !survey.hidden)
+    .map((survey) => {
+      return {
+        id: survey.id,
+        rowData: [
         survey.name,
         <Select
           className="text-black"
