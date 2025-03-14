@@ -7,6 +7,7 @@ import LabeledToggleSwitch from '../LabeledToggleSwitch';
 import MyTable from '../Table';
 import { useUsers } from '../apiInterface';
 import { fetchAllPaginatedResults } from '../utils';
+import { FilesUploadForm } from '../FilesUploadComponent';
 
 export default function NewSurveyModal({
   show,
@@ -54,6 +55,7 @@ export default function NewSurveyModal({
     >
   >({});
   const [loading, setLoading] = useState(false);
+  const [uploadSubmitFn, setUploadSubmitFn] = useState<((projectId: string) => Promise<void>) | null>(null);
 
   async function handleSave() {
     if (!name || !organization) {
@@ -145,10 +147,14 @@ export default function NewSurveyModal({
         testPresetId: testPreset.id,
         projectId: project.id,
       });
+
+      if (uploadSubmitFn) {
+        await uploadSubmitFn(project.id);
+      }
     }
 
     setLoading(false);
-    onClose();
+    onClose(); // maybe close earlier so the ui isn't perceived as unresponsive
   }
 
   useEffect(() => {
@@ -398,6 +404,15 @@ export default function NewSurveyModal({
                 </Button>
               </>
             )}
+          </Form.Group>
+          <Form.Group>
+            <Form.Label className="mb-0">Files to Upload</Form.Label>
+            <p className="text-muted mb-1" style={{ fontSize: 12 }}>
+              Upload the survey files by selecting the entire folder you wish to upload.
+            </p>
+            <FilesUploadForm
+              setOnSubmit={setUploadSubmitFn}
+            />
           </Form.Group>
         </Form>
       </Modal.Body>

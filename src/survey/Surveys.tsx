@@ -1,17 +1,21 @@
-import { useContext, useEffect, useState } from 'react';
-import { UserContext, GlobalContext } from '../Context.tsx';
-import { Schema } from '../../amplify/data/resource.ts';
-import { Card, Button } from 'react-bootstrap';
-import MyTable from '../Table.tsx';
-import NewSurveyModal from './NewSurveyModal.tsx';
-import { useNavigate } from 'react-router-dom';
+import { useContext, useEffect, useState } from "react";
+import { UserContext, GlobalContext } from "../Context.tsx";
+import { Schema } from "../../amplify/data/resource.ts";
+import { Card, Button } from "react-bootstrap";
+import MyTable from "../Table.tsx";
+import NewSurveyModal from "./NewSurveyModal.tsx";
+import { useNavigate } from "react-router-dom";
+import FilesUploadComponent from "../FilesUploadComponent.tsx";
 
 export default function Surveys() {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
   const navigate = useNavigate();
   const { myMembershipHook: myProjectsHook, isOrganizationAdmin } =
     useContext(UserContext)!;
-  const [projects, setProjects] = useState<Schema['Project']['type'][]>([]);
+  const [projects, setProjects] = useState<Schema["Project"]["type"][]>([]);
+  const [selectedProject, setSelectedProject] = useState<
+    Schema["Project"]["type"] | null
+  >(null);
 
   useEffect(() => {
     async function getProjects() {
@@ -27,16 +31,17 @@ export default function Surveys() {
                 { id: project.projectId },
                 {
                   selectionSet: [
-                    'name',
-                    'id',
-                    'organizationId',
-                    'organization.name',
+                    "name",
+                    "id",
+                    "organizationId",
+                    "organization.name",
                   ],
                 }
               )
             ).data
         )
       ).then((projects) => {
+        console.log("projects", projects);
         setProjects(projects.filter((project) => project !== null));
       });
     }
@@ -50,9 +55,18 @@ export default function Surveys() {
       <div className="d-flex justify-content-between align-items-center p-2">
         <div>
           <h5 className="mb-0">{project.name}</h5>
-          <i style={{ fontSize: '14px' }}>{project.organization.name}</i>
+          <i style={{ fontSize: "14px" }}>{project.organization.name}</i>
         </div>
         <div className="d-flex gap-2">
+          <Button
+            variant="primary"
+            onClick={() => {
+              setSelectedProject(project);
+              showModal("addFiles");
+            }}
+          >
+            Add files
+          </Button>
           <Button
             variant="primary"
             onClick={() => navigate(`/surveys/${project.id}/review`)}
@@ -71,7 +85,7 @@ export default function Surveys() {
           >
             Manage
           </Button>
-          <Button variant="danger" onClick={() => alert('Not implemented')}>
+          <Button variant="danger" onClick={() => alert("Not implemented")}>
             Delete
           </Button>
         </div>
@@ -87,10 +101,10 @@ export default function Surveys() {
     <>
       <div
         style={{
-          width: '100%',
-          maxWidth: '1555px',
-          marginTop: '16px',
-          marginBottom: '16px',
+          width: "100%",
+          maxWidth: "1555px",
+          marginTop: "16px",
+          marginBottom: "16px",
         }}
       >
         <Card>
@@ -108,7 +122,7 @@ export default function Surveys() {
               <div className="d-flex justify-content-center mt-3 border-top pt-3 border-dark">
                 <Button
                   variant="primary"
-                  onClick={() => showModal('newSurvey')}
+                  onClick={() => showModal("newSurvey")}
                 >
                   New Survey
                 </Button>
@@ -118,10 +132,20 @@ export default function Surveys() {
         </Card>
       </div>
       <NewSurveyModal
-        show={modalToShow === 'newSurvey'}
+        show={modalToShow === "newSurvey"}
         projects={projects.map((project) => project.name.toLowerCase())}
         onClose={() => showModal(null)}
       />
+      {selectedProject && (
+        <FilesUploadComponent
+          show={modalToShow === "addFiles"}
+          handleClose={() => {
+            showModal(null);
+            setSelectedProject(null);
+          }}
+          project={{ id: selectedProject.id, name: selectedProject.name }}
+        />
+      )}
     </>
   );
 }
