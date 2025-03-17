@@ -1,12 +1,17 @@
-import React, { useContext, useEffect, useState } from 'react';
-import { Modal, Button, Form } from 'react-bootstrap';
-import { GlobalContext } from './Context';
+import React, { useContext, useEffect, useState } from "react";
+import { Modal, Button, Form } from "react-bootstrap";
+import { GlobalContext } from "./Context";
+import { Tab, Tabs } from "./Tabs";
+import MoveObservations from "./MoveObservations";
+import { Schema } from "../amplify/data/resource";
 
 interface EditAnnotationSetModalProps {
   show: boolean;
   handleClose: () => void;
   annotationSet: { id: string; name: string };
-  setSelectedSets: (sets: string[]) => void;
+  setAnnotationSet?: (annotationSet: { id: string; name: string }) => void;
+  setSelectedSets?: (sets: string[]) => void;
+  project: Schema["Project"]["type"];
 }
 
 const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
@@ -14,21 +19,35 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
   handleClose,
   annotationSet,
   setSelectedSets,
+  setAnnotationSet,
+  project,
 }) => {
   const { client } = useContext(GlobalContext)!;
-  const [newName, setNewName] = useState<string>('');
+  const [newName, setNewName] = useState<string>("");
   const [busy, setBusy] = useState<boolean>(false);
+  const [tab, setTab] = useState<number>(0);
+  const [handleMove, setHandleMove] = useState<() => Promise<void>>(() =>
+    Promise.resolve()
+  );
 
   const handleSave = async () => {
-    if (annotationSet && newName.trim() !== '') {
+    if (annotationSet && newName.trim() !== "") {
       setBusy(true);
 
-      await client.models.AnnotationSet.update({
+      const { data: result } = await client.models.AnnotationSet.update({
         id: annotationSet.id,
         name: newName,
       });
+
+      if (setAnnotationSet && result) {
+        setAnnotationSet({ id: result.id, name: result.name });
+      }
+
       handleClose();
-      setSelectedSets([]);
+
+      if (setSelectedSets) {
+        setSelectedSets([]);
+      }
 
       setBusy(false);
     }
@@ -44,34 +63,63 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
         <Modal.Title>Edit Annotation Set</Modal.Title>
       </Modal.Header>
       <Modal.Body>
-        <Form>
-          <Form.Group controlId="annotationSetName">
-            <Form.Label>Name</Form.Label>
-            <Form.Control
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="Enter new name"
-            />
-          </Form.Group>
-        </Form>
-        <small className="text-muted">{busy && 'Saving...'}</small>
+        <Tabs
+          onTabChange={(tab) => {
+            setTab(tab);
+          }}
+        >
+          <Tab label="Basic">
+            <Form className="mt-1">
+              <Form.Group controlId="annotationSetName">
+                <Form.Label>Name</Form.Label>
+                <Form.Control
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Enter new name"
+                />
+              </Form.Group>
+            </Form>
+          </Tab>
+          <Tab label="Advanced">
+            <Form className="mt-1">
+              <Form.Group controlId="moveObservations">
+                <Form.Label style={{ fontSize: "16px", marginTop: "8px" }}>
+                  Move Observations
+                </Form.Label>
+                <MoveObservations
+                  annotationSetId={annotationSet.id}
+                  project={project}
+                  setHandleMove={setHandleMove}
+                />
+              </Form.Group>
+            </Form>
+          </Tab>
+        </Tabs>
       </Modal.Body>
       <Modal.Footer>
         <Button
           variant="primary"
-          onClick={handleSave}
-          disabled={
-            newName.trim() === '' || busy || annotationSet.name === newName
-          }
+          onClick={() => {
+            switch (tab) {
+              case 0:
+                handleSave();
+                break;
+              case 1:
+                handleMove();
+                break;
+            }
+          }}
         >
-          Save Changes
+          {busy ? "Saving..." : tab === 1 ? "Move Observations" : "Save Changes"}
         </Button>
         <Button
           variant="dark"
           onClick={() => {
             handleClose();
-            setSelectedSets([]);
+            if (setSelectedSets) {
+              setSelectedSets([]);
+            }
           }}
         >
           Cancel

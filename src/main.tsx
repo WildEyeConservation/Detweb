@@ -80,7 +80,7 @@ const router = createBrowserRouter([
           },
           {
             path: "registration",
-            element: <Registration/>
+            element: <Registration />
           },
           {
             path: 'manage',
@@ -101,6 +101,20 @@ const router = createBrowserRouter([
           {
             path: 'register/:image1Id/:image2Id/:selectedSet',
             element: <PairLoader />,
+          },
+        ],
+      },
+      {
+        path: 'surveys/:surveyId/set/:annotationSetId',
+        element: <ProjectView />,
+        children: [
+          {
+            path: 'review',
+            element: <Review showAnnotationSetDropdown={false} />,
+          },
+          {
+            path: "registration",
+            element: <Registration showAnnotationSetDropdown={false}/>
           },
         ],
       },

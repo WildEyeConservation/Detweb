@@ -186,8 +186,10 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
         return imageSet?.id;
       }
 
+      
       const imageSetId =
-        imageSets.find((x) => x.name === name)?.id || createImageSet();
+        imageSets.find((x) => x.name === name)?.id || await createImageSet();
+
       filteredImageFiles.map((file) =>
         limitConnections(async () => {
           let lastTransferred = 0;
@@ -263,7 +265,7 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
     if (setOnSubmit) {
       setOnSubmit(() => handleSubmit);
     }
-  }, [setOnSubmit]);
+  }, [setOnSubmit, handleSubmit]);
 
   // Common UI elements shared between modal and form versions
   return (

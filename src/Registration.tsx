@@ -1,4 +1,4 @@
-import { useState, useMemo, useContext } from "react";
+import { useState, useMemo, useContext, useEffect } from "react";
 import BufferSource from "./BufferSource";
 import { AnnotationSetDropdown } from "./AnnotationSetDropDown";
 import Select from "react-select";
@@ -8,14 +8,15 @@ import { Schema } from "../amplify/data/resource";
 import { useQueries } from "@tanstack/react-query";
 import { makeTransform, array2Matrix } from "./utils";
 import { inv } from "mathjs";
-import { GlobalContext } from "./Context";
+import { GlobalContext, ManagementContext } from "./Context";
 import { RegisterPair } from "./RegisterPair";
 import { Card, Button } from "react-bootstrap";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
-export function Registration() {
+export function Registration({ showAnnotationSetDropdown = true }) {
   const { client } = useContext(GlobalContext)!;
   const navigate = useNavigate();
+  const { annotationSetId } = useParams();
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedAnnotationSet, setSelectedAnnotationSet] =
     useState<string>("");
@@ -23,6 +24,9 @@ export function Registration() {
     categoriesHook: { data: categories },
     project,
   } = useContext(ProjectContext)!;
+  const {
+    annotationSetsHook: { data: annotationSets },
+  } = useContext(ManagementContext)!;
   const [numLoaded, setNumLoaded] = useState(0);
   const subscriptionFilter = useMemo(
     () => ({ filter: { setId: { eq: selectedAnnotationSet } } }),
@@ -201,6 +205,12 @@ export function Registration() {
   const [totalImages, setTotalImages] = useState(0);
   const [loadedMetadata, setLoadedMetadata] = useState(0);
 
+  useEffect(() => {
+    if (annotationSetId && !showAnnotationSetDropdown) {
+      setSelectedAnnotationSet(annotationSetId);
+    }
+  }, [annotationSetId]);
+
   return (
     <div
       style={{
@@ -213,7 +223,14 @@ export function Registration() {
       <Card className="h-100">
         <Card.Body>
           <Card.Title className="d-flex justify-content-between align-items-center">
-            <h4>Register {project.name}</h4>
+            <h4>
+              Register{" "}
+              {
+                annotationSets?.find((set) => set.id === selectedAnnotationSet)
+                  ?.name
+              }{" "}
+              ({project.name})
+            </h4>
             <Button variant="dark" onClick={() => navigate("/surveys")}>
               Back to Surveys
             </Button>
@@ -236,11 +253,6 @@ export function Registration() {
                 padding: "10px",
               }}
             >
-              <AnnotationSetDropdown
-                selectedSet={selectedAnnotationSet}
-                setAnnotationSet={setSelectedAnnotationSet}
-                canCreate={false}
-              />
               <Select
                 value={selectedCategories}
                 onChange={setSelectedCategories}
@@ -260,6 +272,13 @@ export function Registration() {
                   }),
                 }}
               />
+              {showAnnotationSetDropdown && (
+                <AnnotationSetDropdown
+                  selectedSet={selectedAnnotationSet}
+                  setAnnotationSet={setSelectedAnnotationSet}
+                  canCreate={false}
+                />
+              )}
             </div>
 
             {annotationHook.meta?.isLoading ? (

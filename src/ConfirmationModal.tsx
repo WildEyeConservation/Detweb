@@ -5,7 +5,7 @@ interface ConfirmationModalProps {
   onClose: () => void;
   onConfirm: () => void;
   title: string;
-  body: string;
+  body: JSX.Element | string;
 }
 
 export default function ConfirmationModal({

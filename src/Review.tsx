@@ -1,21 +1,21 @@
-import { useNavigate } from 'react-router-dom';
-import { useEffect, useState, useMemo, useContext } from 'react';
-import { PreloaderFactory } from './Preloader';
-import BufferSource from './BufferSource';
-import AnnotationImage from './AnnotationImage';
-import { AnnotationSetDropdown } from './AnnotationSetDropDown';
-import Select, { MultiValue, Options  } from "react-select";
-import { ProjectContext, GlobalContext } from './Context';
-import { Form } from 'react-bootstrap';
-import LabeledToggleSwitch from './LabeledToggleSwitch';
-import './Review.css';
-import { Card } from 'react-bootstrap';
-import Button from 'react-bootstrap/Button';
+import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState, useMemo, useContext } from "react";
+import { PreloaderFactory } from "./Preloader";
+import BufferSource from "./BufferSource";
+import AnnotationImage from "./AnnotationImage";
+import { AnnotationSetDropdown } from "./AnnotationSetDropDown";
+import Select, { MultiValue, Options } from "react-select";
+import { ProjectContext, GlobalContext, ManagementContext } from "./Context";
+import { Form } from "react-bootstrap";
+import LabeledToggleSwitch from "./LabeledToggleSwitch";
+import "./Review.css";
+import { Card } from "react-bootstrap";
+import Button from "react-bootstrap/Button";
 
-export function Review() {
+export function Review({ showAnnotationSetDropdown = true }) {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedAnnotationSet, setSelectedAnnotationSet] =
-    useState<string>('');
+    useState<string>("");
   const [imageBased, setImageBased] = useState(true);
   const [chronological, setChronological] = useState(false);
   const [annotations, setAnnotations] = useState<any[]>([]);
@@ -28,22 +28,32 @@ export function Review() {
   const [index, setIndex] = useState(0);
   const [bufferSource, setBufferSource] = useState<BufferSource | null>(null);
   const navigate = useNavigate();
+  const { annotationSetId } = useParams();
   const { client } = useContext(GlobalContext)!;
+  const {
+    annotationSetsHook: { data: annotationSets },
+  } = useContext(ManagementContext)!;
+
+  useEffect(() => {
+    if (annotationSetId && !showAnnotationSetDropdown) {
+      setSelectedAnnotationSet(annotationSetId);
+    }
+  }, [annotationSetId]);
 
   useEffect(() => {
     async function fetchAnnotations() {
       let nextNextToken: string | null | undefined = undefined;
       do {
         const result = await client.models.Annotation.annotationsByCategoryId(
-          { categoryId: categoryId ?? '' },
+          { categoryId: categoryId ?? "" },
           {
             selectionSet: [
-              'x',
-              'y',
-              'image.id',
-              'image.width',
-              'image.height',
-              'image.timestamp',
+              "x",
+              "y",
+              "image.id",
+              "image.width",
+              "image.height",
+              "image.timestamp",
             ],
             filter: { setId: { eq: annotationSetId } },
             nextToken: nextNextToken,
@@ -85,13 +95,13 @@ export function Review() {
           do {
             const result =
               await client.models.Annotation.annotationsByCategoryId(
-                { categoryId: categoryId ?? '' },
+                { categoryId: categoryId ?? "" },
                 {
                   selectionSet: [
-                    'image.id',
-                    'image.width',
-                    'image.height',
-                    'image.timestamp',
+                    "image.id",
+                    "image.width",
+                    "image.height",
+                    "image.timestamp",
                   ],
                   filter: { setId: { eq: selectedAnnotationSet } },
                   nextToken: nextNextToken,
@@ -123,7 +133,7 @@ export function Review() {
                       },
                       annotationSetId: selectedAnnotationSet,
                     },
-                    taskTag: 'review',
+                    taskTag: "review",
                     id: crypto.randomUUID(),
                   });
                   setLocationsLoaded((prev) => prev + 1);
@@ -166,35 +176,42 @@ export function Review() {
   return (
     <div
       style={{
-        width: '100%',
-        maxWidth: '1555px',
-        marginTop: '16px',
-        marginBottom: '16px',
+        width: "100%",
+        maxWidth: "1555px",
+        marginTop: "16px",
+        marginBottom: "16px",
       }}
     >
       <Card className="h-100">
         <Card.Body>
           <Card.Title className="d-flex justify-content-between align-items-center">
-            <h4>Explore {project.name}</h4>
-            <Button variant="dark" onClick={() => navigate('/surveys')}>
+            <h4>
+              Explore{" "}
+              {
+                annotationSets?.find((set) => set.id === selectedAnnotationSet)
+                  ?.name
+              }{" "}
+              ({project.name})
+            </h4>
+            <Button variant="dark" onClick={() => navigate("/surveys")}>
               Back to Surveys
             </Button>
           </Card.Title>
           <div
             style={{
-              display: 'flex',
-              marginTop: '1rem',
-              flexDirection: 'column',
-              alignItems: 'center',
-              width: '100%',
+              display: "flex",
+              marginTop: "1rem",
+              flexDirection: "column",
+              alignItems: "center",
+              width: "100%",
             }}
           >
             <div
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '10px',
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                padding: "10px",
               }}
             >
               <Select
@@ -212,15 +229,17 @@ export function Review() {
                 styles={{
                   valueContainer: (base) => ({
                     ...base,
-                    overflowY: 'auto',
+                    overflowY: "auto",
                   }),
                 }}
               />
-              <AnnotationSetDropdown
-                selectedSet={selectedAnnotationSet}
-                setAnnotationSet={setSelectedAnnotationSet}
-                canCreate={false}
-              />
+              {showAnnotationSetDropdown && (
+                <AnnotationSetDropdown
+                  selectedSet={selectedAnnotationSet}
+                  setAnnotationSet={setSelectedAnnotationSet}
+                  canCreate={false}
+                />
+              )}
             </div>
 
             {!annotations.length && isLoading ? (
@@ -232,21 +251,21 @@ export function Review() {
               bufferSource && (
                 <>
                   <Preloader
-                    key={selectedAnnotationSet + selectedCategories.join(',')}
+                    key={selectedAnnotationSet + selectedCategories.join(",")}
                     index={index}
                     setIndex={setIndex}
                     fetcher={() => bufferSource.fetch()}
                     preloadN={2}
                     historyN={2}
                   />
-                  <div style={{ width: '80%', marginTop: '840px' }}>
+                  <div style={{ width: "80%", marginTop: "840px" }}>
                     <Form.Range
                       value={index}
                       onChange={(e) => setIndex(parseInt(e.target.value))}
                       min={0}
                       max={annotations.length - 1}
                     />
-                    <div style={{ textAlign: 'center' }}>
+                    <div style={{ textAlign: "center" }}>
                       Done with {index} out of {annotations.length} locations
                     </div>
                   </div>
