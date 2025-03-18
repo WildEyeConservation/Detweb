@@ -71,7 +71,7 @@ export default function AnnotationSetManagement() {
     { content: 'Name' },
     { content: 'Raw annotations', style: { width: '300px' } },
     { content: 'Tasks launched on set', style: { width: '300px' } },
-    { content: 'Actions' },
+    // { content: 'Actions' },
   ];
 
   async function exportData(annotationSets: { id: string; name: string }[]) {
@@ -198,47 +198,47 @@ export default function AnnotationSetManagement() {
                 )
                 .join(', ')
             : 'None',
-          <span>
-            <ActionsDropdown
-              actions={[
-                {
-                  label: 'Edit',
-                  onClick: () => {
-                    setSelectedSets([id]);
-                    setEditSetName(name);
-                    showModal('editAnnotationSet');
-                  },
-                },
-                {
-                  label: 'Export',
-                  onClick: () => {
-                    exportData([{ id, name }]);
-                  },
-                },
-                {
-                  label: 'Move Observations',
-                  onClick: () => {
-                    setSelectedSets([id]);
-                    showModal('moveObservations');
-                  },
-                },
-              ]}
-            />
-            <Button
-              variant="danger"
-              className="me-2 fixed-width-button"
-              onClick={() => {
-                if (
-                  confirm(
-                    `Are you sure you want to delete annotation set ${name}?`
-                  )
-                )
-                  deleteAnnotationSet({ id: id });
-              }}
-            >
-              Delete
-            </Button>
-          </span>,
+          // <span>
+          //   <ActionsDropdown
+          //     actions={[
+          //       {
+          //         label: 'Edit',
+          //         onClick: () => {
+          //           setSelectedSets([id]);
+          //           setEditSetName(name);
+          //           showModal('editAnnotationSet');
+          //         },
+          //       },
+          //       {
+          //         label: 'Export',
+          //         onClick: () => {
+          //           exportData([{ id, name }]);
+          //         },
+          //       },
+          //       {
+          //         label: 'Move Observations',
+          //         onClick: () => {
+          //           setSelectedSets([id]);
+          //           showModal('moveObservations');
+          //         },
+          //       },
+          //     ]}
+          //   />
+          //   <Button
+          //     variant="danger"
+          //     className="me-2 fixed-width-button"
+          //     onClick={() => {
+          //       if (
+          //         confirm(
+          //           `Are you sure you want to delete annotation set ${name}?`
+          //         )
+          //       )
+          //         deleteAnnotationSet({ id: id });
+          //     }}
+          //   >
+          //     Delete
+          //   </Button>
+          // </span>,
           // <Form.Check
           //   id="custom-switch"
           //   disabled={currentUser?.id === id}
@@ -259,7 +259,7 @@ export default function AnnotationSetManagement() {
 
   return (
     <>
-      <MoveObservations
+      {/* <MoveObservations
         show={modalToShow == 'moveObservations'}
         handleClose={() => showModal(null)}
         selectedAnnotationSets={selectedSets}
@@ -275,7 +275,7 @@ export default function AnnotationSetManagement() {
         handleClose={() => showModal(null)}
         selectedSets={selectedSets}
         setSelectedSets={setSelectedSets}
-      />
+      /> */}
 
       <LaunchRegistration
         show={modalToShow == 'launchRegistration'}
@@ -284,12 +284,12 @@ export default function AnnotationSetManagement() {
         setSelectedSets={setSelectedSets}
       />
 
-      <EditAnnotationSet
+      {/* <EditAnnotationSet
         show={modalToShow == 'editAnnotationSet'}
         handleClose={() => showModal(null)}
         annotationSet={{ id: selectedSets[0], name: editSetName }}
         setSelectedSets={setSelectedSets}
-      />
+      /> */}
 
       <AnnotationCountModal
         setId={selectedSets[0]}

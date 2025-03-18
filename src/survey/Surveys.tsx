@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState } from "react";
 import { UserContext, GlobalContext } from "../Context.tsx";
 import { Schema } from "../../amplify/data/resource.ts";
-import { Card, Button } from "react-bootstrap";
+import { Card, Button, Form } from "react-bootstrap";
 import MyTable from "../Table.tsx";
 import NewSurveyModal from "./NewSurveyModal.tsx";
 import { useNavigate } from "react-router-dom";
@@ -10,6 +10,7 @@ import ConfirmationModal from "../ConfirmationModal.tsx";
 import AnnotationSetResults from "../AnnotationSetResults.tsx";
 import AnnotationCountModal from "../AnnotationCountModal.tsx";
 import EditAnnotationSetModal from "../EditAnnotationSet.tsx";
+import AddAnnotationSetModal from "./AddAnnotationSetModal.tsx";
 
 export default function Surveys() {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
@@ -24,6 +25,7 @@ export default function Surveys() {
     id: string;
     name: string;
   } | null>(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     async function getProjects() {
@@ -48,6 +50,7 @@ export default function Surveys() {
                     "annotationSets.name",
                     "locationSets.id",
                     "locationSets.name",
+                    "categories.name",
                   ],
                 }
               )
@@ -89,101 +92,125 @@ export default function Surveys() {
     );
   }
 
-  const tableData = projects.map((project) => ({
-    id: project.id,
-    rowData: [
-      <div className="d-flex justify-content-between align-items-center">
-        <div>
-          <h5 className="mb-0">{project.name}</h5>
-          <i style={{ fontSize: "14px" }}>{project.organization.name}</i>
-        </div>
-        <div className="d-flex gap-2">
-          <Button
-            variant="primary"
-            onClick={() => navigate(`/surveys/${project.id}/manage`)}
-          >
-            Edit
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => {
-              setSelectedProject(project);
-              showModal("addFiles");
-            }}
-          >
-            Add files
-          </Button>
-          <Button
-            variant="danger"
-            onClick={() => {
-              setSelectedProject(project);
-              showModal("deleteSurvey");
-            }}
-          >
-            Delete
-          </Button>
-        </div>
-      </div>,
-      <div className="d-flex flex-column gap-2">
-        {project.annotationSets
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .map((annotationSet, i) => (
-            <div
-              className={`d-flex justify-content-between align-items-center ${
-                i % 2 === 0 ? "" : "border-top border-light pt-2"
-              }`}
-              key={annotationSet.id}
+  const tableData = projects
+    .filter(
+      (project) =>
+        project.name.toLowerCase().includes(search.toLowerCase()) ||
+        project.organization.name.toLowerCase().includes(search.toLowerCase())
+    )
+    .map((project) => ({
+      id: project.id,
+      rowData: [
+        <div className="d-flex justify-content-between align-items-center">
+          <div>
+            <h5 className="mb-0">{project.name}</h5>
+            <i style={{ fontSize: "14px" }}>{project.organization.name}</i>
+          </div>
+          <div className="d-flex gap-2">
+            <Button
+              variant="primary"
+              onClick={() => navigate(`/surveys/${project.id}/manage`)}
             >
-              <div style={{ fontSize: "16px" }}>{annotationSet.name}</div>
-              <div className="d-flex gap-2">
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    setSelectedAnnotationSet(annotationSet);
-                    showModal("annotationCount");
-                  }}
-                >
-                  Details
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    setSelectedProject(project);
-                    setSelectedAnnotationSet(annotationSet);
-                    showModal("editAnnotationSet");
-                  }}
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    setSelectedProject(project);
-                    setSelectedAnnotationSet({
-                      id: annotationSet.id,
-                      name: annotationSet.name,
-                    });
-                    showModal("annotationSetResults");
-                  }}
-                >
-                  Results
-                </Button>
-                <Button
-                  variant="danger"
-                  onClick={() => {
-                    setSelectedProject(project);
-                    setSelectedAnnotationSet(annotationSet);
-                    showModal("deleteAnnotationSet");
-                  }}
-                >
-                  Delete
-                </Button>
+              Edit
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setSelectedProject(project);
+                showModal("addFiles");
+              }}
+            >
+              Add files
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setSelectedProject(project);
+                showModal("addAnnotationSet");
+              }}
+            >
+              Add Annotation Set
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                setSelectedProject(project);
+                showModal("deleteSurvey");
+              }}
+            >
+              Delete
+            </Button>
+          </div>
+        </div>,
+        <div className="d-flex flex-column gap-2">
+          {project.annotationSets
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map((annotationSet, i) => (
+              <div
+                className={`d-flex justify-content-between align-items-center ${
+                  i % 2 === 0 ? "" : "border-top border-light pt-2"
+                }`}
+                key={annotationSet.id}
+              >
+                <div style={{ fontSize: "16px" }}>{annotationSet.name}</div>
+                <div className="d-flex gap-2">
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setSelectedAnnotationSet(annotationSet);
+                      showModal("annotationCount");
+                    }}
+                  >
+                    Details
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      // showModal("launchAnnotationSet");
+                      alert("Not implemented");
+                    }}
+                  >
+                    Launch
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setSelectedProject(project);
+                      setSelectedAnnotationSet(annotationSet);
+                      showModal("editAnnotationSet");
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setSelectedProject(project);
+                      setSelectedAnnotationSet({
+                        id: annotationSet.id,
+                        name: annotationSet.name,
+                      });
+                      showModal("annotationSetResults");
+                    }}
+                  >
+                    Results
+                  </Button>
+                  <Button
+                    variant="danger"
+                    onClick={() => {
+                      setSelectedProject(project);
+                      setSelectedAnnotationSet(annotationSet);
+                      showModal("deleteAnnotationSet");
+                    }}
+                  >
+                    Delete
+                  </Button>
+                </div>
               </div>
-            </div>
-          ))}
-      </div>,
-    ],
-  }));
+            ))}
+        </div>,
+      ],
+    }));
 
   if (projects.length === 0 && !isOrganizationAdmin) {
     return <div>You are not authorized to access this page.</div>;
@@ -201,8 +228,15 @@ export default function Surveys() {
       >
         <Card>
           <Card.Body>
-            <Card.Title>
+            <Card.Title className="d-flex justify-content-between align-items-center">
               <h4 className="mb-3">Your Surveys</h4>
+              <Form.Control
+                type="text"
+                className="w-25"
+                placeholder="Search by survey or organization"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </Card.Title>
             <MyTable
               tableHeadings={[
@@ -299,7 +333,7 @@ export default function Surveys() {
           }}
         />
       )}
-      {selectedAnnotationSet && (
+      {selectedAnnotationSet && selectedProject && (
         <EditAnnotationSetModal
           show={modalToShow === "editAnnotationSet"}
           handleClose={() => {
@@ -308,6 +342,7 @@ export default function Surveys() {
             setSelectedAnnotationSet(null);
           }}
           project={selectedProject}
+          categories={selectedProject.categories}
           annotationSet={selectedAnnotationSet}
           setAnnotationSet={(annotationSet) => {
             setProjects(
@@ -324,6 +359,35 @@ export default function Surveys() {
               })
             );
           }}
+        />
+      )}
+      {selectedProject && (
+        <AddAnnotationSetModal
+          show={modalToShow === "addAnnotationSet"}
+          onClose={() => {
+            showModal(null);
+            setSelectedProject(null);
+          }}
+          project={selectedProject}
+          addAnnotationSet={(annotationSet) => {
+            setProjects(
+              projects.map((project) =>
+                project.id === selectedProject?.id
+                  ? {
+                      ...project,
+                      annotationSets: [
+                        ...project.annotationSets,
+                        {
+                          id: annotationSet.id,
+                          name: annotationSet.name,
+                        },
+                      ],
+                    }
+                  : project
+              )
+            );
+          }}
+          categories={selectedProject.categories}
         />
       )}
     </>

@@ -307,9 +307,9 @@ export default function NewSurveyModal({
               <>
                 <MyTable
                   tableHeadings={[
-                    { content: 'Username' },
-                    { content: 'Annotation Access' },
-                    { content: 'Remove Exception' },
+                    { content: 'Username', style: { width: '33%' } },
+                    { content: 'Annotation Access', style: { width: '33%' } },
+                    { content: 'Remove Exception', style: { width: '33%' } },
                   ]}
                   tableData={permissionExceptions.map((exception) => ({
                     id: exception.user.id,

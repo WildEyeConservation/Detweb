@@ -67,7 +67,7 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
 
   useEffect(() => {
     setImageFiles(
-      scannedFiles.filter((file) => file.type.startsWith("image/"))
+      scannedFiles.filter((file) => file.type.startsWith("image/jpeg"))
     );
   }, [scannedFiles]);
 

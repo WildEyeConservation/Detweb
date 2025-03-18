@@ -167,6 +167,7 @@ export default function ExceptionsModal({
     }
 
     setIsSaving(false);
+    onClose();
   };
 
   return (

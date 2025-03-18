@@ -12,6 +12,7 @@ interface EditAnnotationSetModalProps {
   setAnnotationSet?: (annotationSet: { id: string; name: string }) => void;
   setSelectedSets?: (sets: string[]) => void;
   project: Schema["Project"]["type"];
+  categories: { name: string }[];
 }
 
 const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
@@ -21,6 +22,7 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
   setSelectedSets,
   setAnnotationSet,
   project,
+  categories,
 }) => {
   const { client } = useContext(GlobalContext)!;
   const [newName, setNewName] = useState<string>("");
@@ -79,6 +81,37 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
                   placeholder="Enter new name"
                 />
               </Form.Group>
+              <Form.Group>
+            <Form.Label className="mt-3 mb-0">Labels</Form.Label>
+            <span className="text-muted d-block" style={{ fontSize: "12px" }}>
+              Labels are survey wide and may not be edited here.
+            </span>
+            <div
+              className="d-flex flex-column gap-2 border p-2 mb-2 mt-1"
+              style={{ fontSize: "14px" }}
+            >
+              {categories.length === 0 ? (
+                <p className="mb-0">No labels found</p>
+              ) : (
+                categories
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((category) => (
+                    <p key={category.id} className="mb-0">
+                      {category.name}
+                    </p>
+                  ))
+              )}
+            </div>
+            <Button
+              variant="info"
+              onClick={() => {
+                //TODO: Open label tab in edit modal
+                alert("Not implemented");
+              }}
+            >
+              Edit Labels
+            </Button>
+          </Form.Group>
             </Form>
           </Tab>
           <Tab label="Advanced">
