@@ -3,6 +3,7 @@ import { Schema } from "../../amplify/data/resource";
 import { Tabs, Tab } from "../Tabs";
 import LabelEditor from "./LabelEditor";
 import { useState } from "react";
+import AddGpsData from "../AddGpsData";
 
 export default function EditSurveyModal({
   show,
@@ -18,8 +19,13 @@ export default function EditSurveyModal({
   const [saveLabels, setSaveLabels] = useState<
     ((projectId: string) => Promise<void>) | null
   >(null);
+  const [addGpsData, setAddGpsData] = useState<(() => Promise<void>) | null>(
+    null
+  );
   const [tab, setTab] = useState(openTab || 0);
   const [loading, setLoading] = useState(false);
+  const [prevButtonLabel, setPrevButtonLabel] = useState("Save");
+  const [buttonLabel, setButtonLabel] = useState("Save");
 
   return (
     <Modal show={show} onHide={onClose} size="xl">
@@ -27,7 +33,23 @@ export default function EditSurveyModal({
         <Modal.Title>Edit Survey: {project.name}</Modal.Title>
       </Modal.Header>
       <Modal.Body>
-        <Tabs defaultTab={openTab || 0} onTabChange={(tab) => setTab(tab)}>
+        <Tabs
+          defaultTab={openTab || 0}
+          onTabChange={(tab) => {
+            setTab(tab);
+            let label = "";
+            switch (tab) {
+              case 0:
+                label = "Save";
+                break;
+              case 1:
+                label = "Submit";
+                break;
+            }
+            setButtonLabel(label);
+            setPrevButtonLabel(label);
+          }}
+        >
           <Tab label="Labels" className="mt-1">
             <LabelEditor
               defaultLabels={project.categories.map((category) => ({
@@ -39,9 +61,18 @@ export default function EditSurveyModal({
               setHandleSave={setSaveLabels}
             />
           </Tab>
-          <Tab label="Add GPS Data">Yes</Tab>
-          <Tab label="Process Images">Yes</Tab>
-          <Tab label="Create Subsets">Yes</Tab>
+          <Tab label="Add GPS Data" className="mt-1">
+            <AddGpsData
+              imageSets={project.imageSets}
+              setHandleSubmit={setAddGpsData}
+            />
+          </Tab>
+          <Tab label="Process Images" className="mt-1">
+            Yes
+          </Tab>
+          <Tab label="Create Subsets" className="mt-1">
+            Yes
+          </Tab>
         </Tabs>
       </Modal.Body>
       <Modal.Footer>
@@ -53,14 +84,22 @@ export default function EditSurveyModal({
             switch (tab) {
               case 0:
                 if (saveLabels) {
+                  setButtonLabel("Saving...");
                   await saveLabels(project.id);
                 }
                 break;
+              case 1:
+                if (addGpsData) {
+                  setButtonLabel("Submitting...");
+                  await addGpsData();
+                }
+                break;
             }
+            setButtonLabel(prevButtonLabel);
             setLoading(false);
           }}
         >
-          {loading ? "Saving..." : "Save"}
+          {buttonLabel}
         </Button>
         <Button variant="dark" onClick={onClose}>
           Close
