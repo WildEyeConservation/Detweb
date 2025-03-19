@@ -1,4 +1,4 @@
-import { useContext, useState, useEffect } from "react";
+import { useContext, useState, useEffect, useCallback } from "react";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import Papa from "papaparse";
@@ -30,10 +30,6 @@ function AddGpsData({ imageSets, setHandleSubmit }: AddGpsDataProps) {
     determinateTaskName: "Updating images",
     stepFormatter: (step: number) => `${step} images`,
   });
-
-  useEffect(() => {
-    setHandleSubmit(() => handleSubmit);
-  }, [handleSubmit]);
 
   useEffect(() => {
     if (file) {
@@ -125,9 +121,9 @@ function AddGpsData({ imageSets, setHandleSubmit }: AddGpsDataProps) {
     }
   };
 
-  async function handleSubmit() {
+  const handleSubmit = useCallback(async () => {
     if (!file || !selectedImageSets) return;
-    
+
     if (associateByTimestamp) {
       if (!selectedImageSets) return;
       const allImages: { image: { timestamp: number; id: string } }[] =
@@ -192,11 +188,15 @@ function AddGpsData({ imageSets, setHandleSubmit }: AddGpsDataProps) {
           });
       }
     }
-  }
+  }, [file, selectedImageSets, associateByTimestamp]);
 
   function handleChange(event: any) {
     setFile(event.target.files[0]);
   }
+
+  useEffect(() => {
+    setHandleSubmit(() => handleSubmit);
+  }, [handleSubmit]);
 
   return (
     <Form>

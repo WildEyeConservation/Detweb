@@ -13,6 +13,9 @@ import EditAnnotationSetModal from "../EditAnnotationSet.tsx";
 import AddAnnotationSetModal from "./AddAnnotationSetModal.tsx";
 import LaunchAnnotationSetModal from "./LaunchAnnotationSetModal.tsx";
 import EditSurveyModal from "./editSurveyModal.tsx";
+import SpatioTemporalSubset from "../SpatioTemporalSubset.tsx";
+import SubsampleModal from "../Subsample.tsx";
+import FileStructureSubset from "../filestructuresubset.tsx";
 
 export default function Surveys() {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
@@ -29,6 +32,7 @@ export default function Surveys() {
     name: string;
   } | null>(null);
   const [search, setSearch] = useState("");
+  const [selectedSets, setSelectedSets] = useState<string[]>([]);
 
   useEffect(() => {
     async function getProjects() {
@@ -430,10 +434,36 @@ export default function Surveys() {
           onClose={() => {
             showModal(null);
             setSelectedProject(null);
+            setSelectedSets([]);
           }}
           project={selectedProject}
           openTab={tab}
+          setSelectedSets={setSelectedSets}
         />
+      )}
+      {selectedProject && (
+        <>
+          <SpatioTemporalSubset
+            show={modalToShow == "SpatiotemporalSubset"}
+            handleClose={() => showModal(null)}
+            selectedImageSets={selectedSets}
+            project={selectedProject}
+          />
+          <SubsampleModal
+            show={modalToShow == "Subsample"}
+            handleClose={() => showModal(null)}
+            selectedImageSets={selectedSets}
+            setSelectedImageSets={setSelectedSets}
+            project={selectedProject}
+          />
+          <FileStructureSubset
+            show={modalToShow == "FileStructureSubset"}
+            handleClose={() => showModal(null)}
+            selectedImageSets={selectedSets}
+            imageSets={selectedProject.imageSets}
+            project={selectedProject}
+          />
+        </>
       )}
     </>
   );

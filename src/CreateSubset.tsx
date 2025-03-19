@@ -1,40 +1,64 @@
-import React,{useContext} from 'react';
-import Modal from 'react-bootstrap/Modal';
-import Button from 'react-bootstrap/Button';
-import { ManagementContext,GlobalContext } from './Context';
+import React, { useContext, useState } from "react";
+import { Form, Button } from "react-bootstrap";
+import { GlobalContext } from "./Context";
+import ImageSetDropdown from "./survey/ImageSetDropdown";
+import { Schema } from "../amplify/data/resource";
 
 interface CreateSubsetModalProps {
-  show: boolean;
-  handleClose: () => void;
-  selectedImageSets: string[];
+  imageSets: Schema["ImageSet"]["type"][];
+  setSelectedSets: (sets: string[]) => void;
 }
 
-const CreateSubsetModal: React.FC<CreateSubsetModalProps> = ({ show, handleClose, selectedImageSets }) => {
-    const { imageSetsHook: { data: imageSets } } = useContext(ManagementContext)!;
-    const {showModal} = useContext(GlobalContext)!;
+const CreateSubset: React.FC<CreateSubsetModalProps> = ({
+  imageSets,
+  setSelectedSets,
+}) => {
+  const { showModal } = useContext(GlobalContext)!;
+  const [selectedImageSets, setSelectedImageSets] = useState<string[]>([]);
 
   return (
-    <Modal show={show} onHide={handleClose}>
-      <Modal.Header closeButton>
-        <Modal.Title>Create Subset</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        <p className="text-center">Choose the type of subset you want to create for imagesets<br/> 
-            {imageSets.filter(({id}) => selectedImageSets.includes(id)).map(({name}) => name).join(", ")}</p>
-        <div className="d-flex flex-column align-items-center">
-          <Button variant="primary" className="mb-2 w-75" onClick={() => showModal('SpatiotemporalSubset')}>
-            Spatiotemporal subset
-          </Button>
-          <Button variant="primary" className="mb-2 w-75" onClick={() => showModal('Subsample')}>
-            Subsampled subset
-          </Button>
-          <Button variant="primary" className="mb-2 w-75" onClick={() => showModal('FileStructureSubset')}>
-            File structure subset
-          </Button>
-        </div>
-      </Modal.Body>
-    </Modal>
+    <Form>
+      <ImageSetDropdown
+        imageSets={imageSets}
+        selectedSets={selectedImageSets}
+        setImageSets={(sets: string[]) => {
+          setSelectedImageSets(sets);
+          setSelectedSets(sets);
+        }}
+      />
+      <p className="text-center mt-3">
+        Choose the type of subset you want to create
+        <br />
+        {imageSets
+          .filter(({ id }) => selectedImageSets.includes(id))
+          .map(({ name }) => name)
+          .join(", ")}
+      </p>
+      <div className="d-flex flex-column align-items-center">
+        <Button
+          variant="primary"
+          className="mb-2 w-75"
+          onClick={() => showModal("SpatiotemporalSubset")}
+        >
+          Spatiotemporal subset
+        </Button>
+        <Button
+          variant="primary"
+          className="mb-2 w-75"
+          onClick={() => showModal("Subsample")}
+        >
+          Subsampled subset
+        </Button>
+        <Button
+          variant="primary"
+          className="mb-2 w-75"
+          onClick={() => showModal("FileStructureSubset")}
+        >
+          File structure subset
+        </Button>
+      </div>
+    </Form>
   );
 };
 
-export default CreateSubsetModal;
+export default CreateSubset;

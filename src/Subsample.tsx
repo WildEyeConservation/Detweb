@@ -2,25 +2,26 @@ import React, { useState,useContext } from 'react';
 import Modal from 'react-bootstrap/Modal';
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
-import { ImageSetDropdown } from './ImageSetDropDown';
-import { GlobalContext, ProjectContext } from './Context';
-
+import ImageSetDropdown from './survey/ImageSetDropdown';
+import { GlobalContext } from './Context';
+import { Schema } from '../amplify/data/resource';
 interface SubsampleModalProps {
     show: boolean;
     handleClose: () => void;
     selectedImageSets: string[];
     setSelectedImageSets: React.Dispatch<React.SetStateAction<string[]>>;
+    project: Schema["Project"]["type"];
 }
 
 const SubsampleModal: React.FC<SubsampleModalProps> = ({ 
     show, 
     handleClose, 
     selectedImageSets, 
-    setSelectedImageSets 
+    setSelectedImageSets,
+    project
 }) => {
     const [subsampleInterval, setSubsampleInterval] = useState<number>(2);
     const { client } = useContext(GlobalContext)!;
-    const { project } = useContext(ProjectContext)!;
 
     const  handleSubmit = async () => {
         // Implement the subsampling logic here
@@ -65,13 +66,11 @@ const SubsampleModal: React.FC<SubsampleModalProps> = ({
             </Modal.Header>
             <Modal.Body>
                 <Form>
-                    <Form.Group className="mb-3">
-                        <Form.Label>Select Image Sets</Form.Label>
-                        <ImageSetDropdown
-                            selectedSets={selectedImageSets}
-                            setImageSets={setSelectedImageSets}
-                        />
-                    </Form.Group>
+                    <ImageSetDropdown
+                        imageSets={project.imageSets}
+                        selectedImageSets={selectedImageSets}
+                        setSelectedImageSets={setSelectedImageSets}
+                    />
                     <Form.Group className="mb-3">
                         <Form.Label>Subsample Interval</Form.Label>
                         <Form.Control
@@ -87,15 +86,15 @@ const SubsampleModal: React.FC<SubsampleModalProps> = ({
                 </Form>
             </Modal.Body>
             <Modal.Footer>
-                <Button variant="secondary" onClick={handleClose}>
-                    Cancel
-                </Button>
-                <Button 
+            <Button 
                     variant="primary" 
                     onClick={handleSubmit}
                     disabled={selectedImageSets.length === 0 || subsampleInterval < 2}
                 >
                     Submit
+                </Button>
+                <Button variant="dark" onClick={handleClose}>
+                    Cancel
                 </Button>
             </Modal.Footer>
         </Modal>

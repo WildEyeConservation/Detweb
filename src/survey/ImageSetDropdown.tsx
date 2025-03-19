@@ -1,5 +1,6 @@
 import { Form } from "react-bootstrap";
 import Select from "react-select";
+import { useEffect } from "react";
 
 export default function ImageSetDropdown({
     imageSets,
@@ -10,6 +11,16 @@ export default function ImageSetDropdown({
     selectedImageSets: string[];
     setSelectedImageSets: (imageSets: string[]) => void;
   }) {
+
+    useEffect(() => {
+        if (imageSets.length === 1 && selectedImageSets) {
+          const singleId = imageSets[0].id;
+          if (!selectedImageSets.includes(singleId)) {
+            setSelectedImageSets([singleId]);
+          }
+        }
+      }, [imageSets, selectedImageSets, setSelectedImageSets]);
+
     return (
       <Form.Group>
         <Form.Label className="mb-0">Image Sets</Form.Label>

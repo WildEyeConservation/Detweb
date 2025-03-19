@@ -21,11 +21,12 @@ import * as turf from '@turf/turf';
 import L from 'leaflet';
 import { getUrl } from 'aws-amplify/storage';
 import Spinner from 'react-bootstrap/Spinner';
-
+import { Schema } from '../amplify/data/resource';
 interface CreateSubsetModalProps {
     show: boolean;
     handleClose: () => void;
     selectedImageSets: string[];
+    project: Schema["Project"]["type"];
 }
 
 interface ImageData {
@@ -62,9 +63,8 @@ const FitBoundsToImages: React.FC<{ imageSetsData: ImageSetData[] }> = ({ imageS
     return null;
 };
 
-const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClose, selectedImageSets }) => {
+const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClose, selectedImageSets, project }) => {
     const { client } = useContext(GlobalContext)!;
-    const {project} = useContext(ProjectContext)!;
     const [imageSetsData, setImageSetsData] = useState<ImageSetData[]>([]);
     const [showNamePrompt, setShowNamePrompt] = useState(false);
     const [newSubsetName, setNewSubsetName] = useState('');

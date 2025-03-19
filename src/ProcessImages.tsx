@@ -1,18 +1,17 @@
-import { useContext, useState } from 'react';
-import Button from 'react-bootstrap/Button';
-import Form from 'react-bootstrap/Form';
-import Modal from 'react-bootstrap/Modal';
-import { UserContext } from './Context';
-import { useUpdateProgress } from './useUpdateProgress';
-import { ImageSetDropdown } from './ImageSetDropDown';
-import { GlobalContext } from './Context';
+import { useContext, useState, useEffect, useCallback } from "react";
+import Form from "react-bootstrap/Form";
+import { UserContext } from "./Context";
+import { useUpdateProgress } from "./useUpdateProgress";
+import { GlobalContext } from "./Context";
 import {
   SendMessageCommand,
   SendMessageBatchCommand,
-} from '@aws-sdk/client-sqs';
-import { fetchAllPaginatedResults } from './utils';
-import { ImageType } from './schemaTypes';
-import pLimit from 'p-limit';
+} from "@aws-sdk/client-sqs";
+import { fetchAllPaginatedResults } from "./utils";
+import { ImageType } from "./schemaTypes";
+import pLimit from "p-limit";
+import { Schema } from "../amplify/data/resource";
+import ImageSetDropdown from "./survey/ImageSetDropdown";
 // const createPair = `mutation MyMutation($image1Key: String!, $image2Key: String!) {
 //   createImageNeighbour(input: {image1key: $image1Key, image2key: $image2Key}) {
 //     id
@@ -20,17 +19,15 @@ import pLimit from 'p-limit';
 // }`;
 
 interface ProcessImagesProps {
-  show: boolean;
-  handleClose: () => void;
-  selectedImageSets: string[];
-  setSelectedImageSets: React.Dispatch<React.SetStateAction<string[]>>;
+  imageSets: Schema["ImageSet"]["type"][];
+  setHandleSubmit: React.Dispatch<
+    React.SetStateAction<(() => Promise<void>) | null>
+  >;
 }
 
 export default function ProcessImages({
-  show,
-  handleClose,
-  selectedImageSets,
-  setSelectedImageSets,
+  imageSets,
+  setHandleSubmit,
 }: ProcessImagesProps) {
   const { client, backend } = useContext(GlobalContext)!;
   const { getSqsClient } = useContext(UserContext)!;
@@ -38,18 +35,19 @@ export default function ProcessImages({
     undefined
   );
   const [recomputeExisting, setRecomputeExisting] = useState(false);
+  const [selectedImageSets, setSelectedImageSets] = useState<string[]>([]);
   const limit = pLimit(10);
 
   const processingOptions = [
-    'Run heatmap generation',
-    'Compute image registrations',
+    "Run heatmap generation",
+    "Compute image registrations",
   ];
 
   const [setMetaDataLoadingStepsCompleted, setMetaDataLoadingTotalSteps] =
     useUpdateProgress({
       taskId: `Load image metadata`,
       indeterminateTaskName: `Loading metadata`,
-      determinateTaskName: 'Loading metadata',
+      determinateTaskName: "Loading metadata",
       stepFormatter: (steps: number) => `images ${steps}`,
     });
 
@@ -57,7 +55,7 @@ export default function ProcessImages({
     useUpdateProgress({
       taskId: `Prep messages for task queue`,
       indeterminateTaskName: `Querying existing neighbour data`,
-      determinateTaskName: 'Querying existing neighbour data',
+      determinateTaskName: "Querying existing neighbour data",
       stepFormatter: (steps: number) => `pairs ${steps}`,
     });
 
@@ -65,14 +63,14 @@ export default function ProcessImages({
     useUpdateProgress({
       taskId: `Pushing image registration jobs to GPU task queue`,
       indeterminateTaskName: `Loading pairs`,
-      determinateTaskName: 'Pushing pairs to taskqueue',
+      determinateTaskName: "Pushing pairs to taskqueue",
       stepFormatter: (steps: number) => `pairs ${steps}`,
     });
 
   const [setHeatmapStepsCompleted, setTotalHeatmapSteps] = useUpdateProgress({
     taskId: `Load heatmap generation jobs to GPU task queue`,
     indeterminateTaskName: `Loading images`,
-    determinateTaskName: 'Pushing images to taskqueue',
+    determinateTaskName: "Pushing images to taskqueue",
     stepFormatter: (pairs: number) => `steps ${pairs}`,
   });
 
@@ -83,7 +81,7 @@ export default function ProcessImages({
         image1Id: image1.id,
         image2Id: image2.id,
       },
-      { selectionSet: ['homography'] }
+      { selectionSet: ["homography"] }
     );
 
     if (existingNeighbour?.homography && !recomputeExisting) {
@@ -109,20 +107,21 @@ export default function ProcessImages({
         image1Id: image1.id,
         image2Id: image2.id,
         keys: [image1.originalPath, image2.originalPath],
-        action: 'register',
+        action: "register",
       }),
     };
   }
 
-  async function handleSubmit() {
-    handleClose();
+  const handleSubmit = useCallback(async () => {
+    if (!selectedImageSets?.length || !selectedProcess) return;
+
     setRegistrationStepsCompleted(0);
     setRegistrationTotalSteps(0);
     setHeatmapStepsCompleted(0);
     setTotalHeatmapSteps(0);
     // try {
     switch (selectedProcess) {
-      case 'Run heatmap generation':
+      case "Run heatmap generation":
         {
           const allImages = await Promise.all(
             selectedImageSets.map(
@@ -130,7 +129,7 @@ export default function ProcessImages({
                 await fetchAllPaginatedResults(
                   client.models.ImageSetMembership
                     .imageSetMembershipsByImageSetId,
-                  { imageSetId: selectedSet, selectionSet: ['imageId'] }
+                  { imageSetId: selectedSet, selectionSet: ["imageId"] }
                 )
             )
           ).then((arrays) => arrays.flatMap((im) => im.map((i) => i.imageId)));
@@ -149,12 +148,12 @@ export default function ProcessImages({
             const { data: imageFiles } =
               await client.models.ImageFile.imagesByimageId({ imageId: id });
             const path = imageFiles.find(
-              (imageFile) => imageFile.type == 'image/jpeg'
+              (imageFile) => imageFile.type == "image/jpeg"
             )?.path;
             if (path) {
               await client.mutations.processImages({
                 s3key: path!,
-                model: 'heatmap',
+                model: "heatmap",
               });
             } else {
               console.log(`No image file found for image ${id}. Skipping`);
@@ -163,14 +162,14 @@ export default function ProcessImages({
           });
         }
         break;
-      case 'Compute image registrations': {
+      case "Compute image registrations": {
         setMetaDataLoadingStepsCompleted(0);
         if (selectedImageSets.length > 1) {
           // Even though much (but not all) of the following code can hhandel multiple sets, I chose to disable this for now, becuase there are real questions
           // about how to handle multiple sets with overlapping membership. What is the user expecting? Does he want to link images within each set only or should
           // we create links between images in different sets? There is a potential use case for either.
           alert(
-            'Computing registrations for multiple image sets in a single pass is not currently supported. Please run this task for each image set separately.'
+            "Computing registrations for multiple image sets in a single pass is not currently supported. Please run this task for each image set separately."
           );
           return;
         }
@@ -179,7 +178,7 @@ export default function ProcessImages({
           (
             await client.models.ImageSet.get(
               { id: selectedImageSets[0] },
-              { selectionSet: ['imageCount'] }
+              { selectionSet: ["imageCount"] }
             )
           )?.data?.imageCount ?? 0;
         setMetaDataLoadingTotalSteps(imageCount);
@@ -193,9 +192,9 @@ export default function ProcessImages({
                 {
                   imageSetId: selectedSet,
                   selectionSet: [
-                    'image.id',
-                    'image.timestamp',
-                    'image.originalPath',
+                    "image.id",
+                    "image.timestamp",
+                    "image.originalPath",
                   ],
                 },
                 setMetaDataLoadingStepsCompleted
@@ -250,62 +249,45 @@ export default function ProcessImages({
     //   };
     //   await publishError('taskProgress/processImages', `Error in handleSubmit: ${error instanceof Error ? error.message : String(error)}`, errorDetails);
     // }
-  }
+  }, [selectedImageSets, selectedProcess, recomputeExisting]);
+
+  useEffect(() => {
+    setHandleSubmit(() => handleSubmit);
+  }, [handleSubmit]);
 
   return (
-    <Modal show={show} onHide={handleClose}>
-      <Modal.Header closeButton>
-        <Modal.Title>Process Imagery</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        <Form>
-          <Form.Group>
-            <Form.Label>Image Set to process</Form.Label>
-            <ImageSetDropdown
-              selectedSets={selectedImageSets}
-              setImageSets={setSelectedImageSets}
-            />
-          </Form.Group>
-          <Form.Group>
-            <Form.Label>Processing Task</Form.Label>
-            <Form.Select
-              onChange={(e) => selectProcess(e.target.value)}
-              value={selectedProcess}
-            >
-              {!selectedProcess && (
-                <option value="none">Select processing task:</option>
-              )}
-              {processingOptions.map((q) => (
-                <option key={q} value={q}>
-                  {q}
-                </option>
-              ))}
-            </Form.Select>
-          </Form.Group>
-          {selectedProcess === 'Compute image registrations' && (
-            <Form.Group className="mt-3">
-              <Form.Check
-                type="checkbox"
-                label="Recompute existing homographies"
-                checked={recomputeExisting}
-                onChange={(e) => setRecomputeExisting(e.target.checked)}
-              />
-            </Form.Group>
-          )}
-        </Form>
-      </Modal.Body>
-      <Modal.Footer>
-        <Button
-          variant="primary"
-          onClick={handleSubmit}
-          disabled={!selectedImageSets?.length || !selectedProcess}
+    <Form>
+      <ImageSetDropdown
+        imageSets={imageSets}
+        selectedSets={selectedImageSets}
+        setImageSets={setSelectedImageSets}
+      />
+      <Form.Group>
+        <Form.Label>Processing Task</Form.Label>
+        <Form.Select
+          onChange={(e) => selectProcess(e.target.value)}
+          value={selectedProcess}
         >
-          Submit
-        </Button>
-        <Button variant="dark" onClick={handleClose}>
-          Cancel
-        </Button>
-      </Modal.Footer>
-    </Modal>
+          {!selectedProcess && (
+            <option value="none">Select processing task:</option>
+          )}
+          {processingOptions.map((q) => (
+            <option key={q} value={q}>
+              {q}
+            </option>
+          ))}
+        </Form.Select>
+      </Form.Group>
+      {selectedProcess === "Compute image registrations" && (
+        <Form.Group className="mt-3">
+          <Form.Check
+            type="checkbox"
+            label="Recompute existing homographies"
+            checked={recomputeExisting}
+            onChange={(e) => setRecomputeExisting(e.target.checked)}
+          />
+        </Form.Group>
+      )}
+    </Form>
   );
 }

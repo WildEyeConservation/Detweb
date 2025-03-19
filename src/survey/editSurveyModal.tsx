@@ -4,17 +4,21 @@ import { Tabs, Tab } from "../Tabs";
 import LabelEditor from "./LabelEditor";
 import { useState } from "react";
 import AddGpsData from "../AddGpsData";
+import ProcessImages from "../ProcessImages";
+import CreateSubset from "../CreateSubset";
 
 export default function EditSurveyModal({
   show,
   onClose,
   project,
   openTab,
+  setSelectedSets,
 }: {
   show: boolean;
   onClose: () => void;
   project: Schema["Project"]["type"];
   openTab?: number;
+  setSelectedSets: (sets: string[]) => void;
 }) {
   const [saveLabels, setSaveLabels] = useState<
     ((projectId: string) => Promise<void>) | null
@@ -26,6 +30,9 @@ export default function EditSurveyModal({
   const [loading, setLoading] = useState(false);
   const [prevButtonLabel, setPrevButtonLabel] = useState("Save");
   const [buttonLabel, setButtonLabel] = useState("Save");
+  const [processImages, setProcessImages] = useState<
+    (() => Promise<void>) | null
+  >(null);
 
   return (
     <Modal show={show} onHide={onClose} size="xl">
@@ -44,6 +51,9 @@ export default function EditSurveyModal({
                 break;
               case 1:
                 label = "Submit";
+                break;
+              case 2:
+                label = "Process";
                 break;
             }
             setButtonLabel(label);
@@ -68,39 +78,53 @@ export default function EditSurveyModal({
             />
           </Tab>
           <Tab label="Process Images" className="mt-1">
-            Yes
+            <ProcessImages
+              imageSets={project.imageSets}
+              setHandleSubmit={setProcessImages}
+            />
           </Tab>
           <Tab label="Create Subsets" className="mt-1">
-            Yes
+            <CreateSubset
+              imageSets={project.imageSets}
+              setSelectedSets={setSelectedSets}
+            />
           </Tab>
         </Tabs>
       </Modal.Body>
       <Modal.Footer>
-        <Button
-          variant="primary"
-          disabled={loading}
-          onClick={async () => {
-            setLoading(true);
-            switch (tab) {
-              case 0:
-                if (saveLabels) {
-                  setButtonLabel("Saving...");
-                  await saveLabels(project.id);
-                }
-                break;
-              case 1:
-                if (addGpsData) {
-                  setButtonLabel("Submitting...");
-                  await addGpsData();
-                }
-                break;
-            }
-            setButtonLabel(prevButtonLabel);
-            setLoading(false);
-          }}
-        >
-          {buttonLabel}
-        </Button>
+        {tab !== 3 && (
+          <Button
+            variant="primary"
+            disabled={loading}
+            onClick={async () => {
+              setLoading(true);
+              switch (tab) {
+                case 0:
+                  if (saveLabels) {
+                    setButtonLabel("Saving...");
+                    await saveLabels(project.id);
+                  }
+                  break;
+                case 1:
+                  if (addGpsData) {
+                    setButtonLabel("Submitting...");
+                    await addGpsData();
+                  }
+                  break;
+                case 2:
+                  if (processImages) {
+                    setButtonLabel("Processing...");
+                    await processImages();
+                  }
+                  break;
+              }
+              setButtonLabel(prevButtonLabel);
+              setLoading(false);
+            }}
+          >
+            {buttonLabel}
+          </Button>
+        )}
         <Button variant="dark" onClick={onClose}>
           Close
         </Button>

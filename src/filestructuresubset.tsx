@@ -3,12 +3,15 @@ import Modal from 'react-bootstrap/Modal';
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import Spinner from 'react-bootstrap/Spinner';
-import { ManagementContext, GlobalContext, ProjectContext } from './Context';
+import { GlobalContext } from './Context';
+import { Schema } from '../amplify/data/resource';
 
 interface CreateSubsetModalProps {
     show: boolean;
     handleClose: () => void;
     selectedImageSets: string[];
+    project: Schema["Project"]["type"];
+    imageSets: Schema["ImageSet"]["type"][];
 }
 
 interface FileNode {
@@ -30,10 +33,8 @@ interface Subset {
 const INITIAL_ITEMS_PER_PAGE = 10;
 const LOAD_MORE_ITEMS = 20;
 
-const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClose, selectedImageSets }) => {
-    const { client } = useContext(GlobalContext)!;
-    const { project } = useContext(ProjectContext)!;
-    const { imageSetsHook: { data: imageSets } } = useContext(ManagementContext)!;
+const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({ show, handleClose, selectedImageSets, project, imageSets }) => {
+    const { client } = useContext(GlobalContext)!;;
 
     const [fileStructure, setFileStructure] = useState<FileNode[]>([]);
     const [selectedImageIds, setselectedImageIds] = useState<string[]>([]);

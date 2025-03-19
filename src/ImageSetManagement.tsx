@@ -104,11 +104,11 @@ export default function ImageSetManagement() {
 
   return (
     <>
-      <CreateSubsetModal
+      {/* <CreateSubsetModal
         show={modalToShow == 'createSubset'}
         handleClose={() => showModal(null)}
         selectedImageSets={selectedSets}
-      />
+      /> */}
       <SpatiotemporalSubset
         show={modalToShow == 'SpatiotemporalSubset'}
         handleClose={() => showModal(null)}
@@ -120,24 +120,24 @@ export default function ImageSetManagement() {
         selectedImageSets={selectedSets}
         setSelectedImageSets={setSelectedSets}
       />
-      <AddGpsData
+      {/* <AddGpsData
         show={modalToShow == 'addGps'}
         handleClose={() => showModal(null)}
         selectedImageSets={selectedSets}
         setSelectedImageSets={setSelectedSets}
-      />
-      <CreateTask
+      /> */}
+      {/* <CreateTask
         show={modalToShow == 'createTask'}
         handleClose={() => showModal(null)}
         selectedImageSets={selectedSets}
         setSelectedImageSets={setSelectedSets}
-      />
-      <ProcessImages
+      /> */}
+      {/* <ProcessImages
         show={modalToShow == 'processImages'}
         handleClose={() => showModal(null)}
         selectedImageSets={selectedSets}
         setSelectedImageSets={setSelectedSets}
-      />
+      /> */}
       <FileStructureSubset
         show={modalToShow == 'FileStructureSubset'}
         handleClose={() => showModal(null)}
@@ -152,7 +152,7 @@ export default function ImageSetManagement() {
             tableHeadings={tableHeadings}
             tableData={tableData}
           />
-          <Col className="d-flex justify-content-center mt-3 border-top pt-3 border-dark">
+          {/* <Col className="d-flex justify-content-center mt-3 border-top pt-3 border-dark">
             <span>
               <Button
                 variant="primary"
@@ -193,7 +193,7 @@ export default function ImageSetManagement() {
                 Create Subsets
               </Button>
             </span>
-          </Col>
+          </Col> */}
         </div>
       </Row>
     </>
