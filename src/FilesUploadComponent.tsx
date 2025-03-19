@@ -11,6 +11,7 @@ import pLimit from "p-limit";
 import ExifReader from "exifreader";
 import { DateTime } from "luxon";
 import { fetchAllPaginatedResults } from "./utils";
+import { useQueryClient } from "@tanstack/react-query";
 
 /* I don't understand why I need to tell Typescript that webkitdirectory is one of the fields of the input element.
   Without this, Typescript complains that webkitdirectory is not a valid attribute for an input element.
@@ -55,6 +56,7 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
   const [totalImageSize, setTotalImageSize] = useState(0);
   const [filteredImageSize, setFilteredImageSize] = useState(0);
   const [advancedImageOptions, setAdvancedImageOptions] = useState(false);
+  const queryClient = useQueryClient();
 
   if (!userContext) {
     return null;
@@ -255,6 +257,10 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
       await client.models.ImageSet.update({
         id: imageSetId,
         imageCount: filteredImageFiles.length,
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["UserProjectMembership"],
       });
     },
     [upload, filteredImageFiles, name, client]

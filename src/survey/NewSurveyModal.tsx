@@ -8,8 +8,8 @@ import MyTable from "../Table";
 import { useUsers } from "../apiInterface";
 import { fetchAllPaginatedResults } from "../utils";
 import { FilesUploadForm } from "../FilesUploadComponent";
-import { useRecordHotkeys } from "react-hotkeys-hook";
 import { useQueryClient } from "@tanstack/react-query";
+import LabelEditor from "./LabelEditor";
 
 export default function NewSurveyModal({
   show,
@@ -23,7 +23,6 @@ export default function NewSurveyModal({
   const { myOrganizationHook, user } = useContext(UserContext)!;
   const { client } = useContext(GlobalContext)!;
   const { users: allUsers } = useUsers();
-  const [keys, { start, stop, isRecording }] = useRecordHotkeys();
   const queryClient = useQueryClient();
 
   const [name, setName] = useState("");
@@ -49,14 +48,9 @@ export default function NewSurveyModal({
       temp: boolean;
     }[]
   >([]);
-  const [labels, setLabels] = useState<
-    {
-      id: string;
-      name: string;
-      shortcutKey: string;
-      color: string;
-    }[]
-  >([]);
+  const [saveLabels, setSaveLabels] = useState<
+    ((projectId: string) => Promise<void>) | null
+  >(null);
   const [users, setUsers] = useState<
     Record<
       string,
@@ -70,7 +64,6 @@ export default function NewSurveyModal({
   const [uploadSubmitFn, setUploadSubmitFn] = useState<
     ((projectId: string) => Promise<void>) | null
   >(null);
-  const [activeRowId, setActiveRowId] = useState<string | null>(null);
 
   async function handleSave() {
     if (!name || !organization) {
@@ -145,20 +138,9 @@ export default function NewSurveyModal({
         );
       }
 
-      const filteredLabels = labels.filter(
-        (l) => l.name !== "" && l.shortcutKey !== ""
-      );
-
-      await Promise.all(
-        filteredLabels.map(async (l) => {
-          await client.models.Category.create({
-            name: l.name,
-            shortcutKey: l.shortcutKey,
-            color: l.color,
-            projectId: project.id,
-          });
-        })
-      );
+      if (saveLabels) {
+        await saveLabels(project.id);
+      }
 
       await client.models.ProjectTestConfig.create({
         projectId: project.id,
@@ -257,7 +239,6 @@ export default function NewSurveyModal({
       setGlobalAnnotationAccess(null);
       setAddPermissionExceptions(false);
       setPermissionExceptions([]);
-      setLabels([]);
     }
   }, [show]);
 
@@ -443,122 +424,7 @@ export default function NewSurveyModal({
               </>
             )}
           </Form.Group>
-          <Form.Group>
-            <Form.Label className="mb-0">Labels</Form.Label>
-            <span
-              className="text-muted d-block mb-1"
-              style={{ fontSize: 12, lineHeight: 1.2 }}
-            >
-              Set up the labels based on the species you expect to encounter.
-            </span>
-            <MyTable
-              tableHeadings={[
-                { content: "Name", style: { width: "25%" } },
-                { content: "Shortcut Key", style: { width: "25%" } },
-                { content: "Color", style: { width: "25%" } },
-                { content: "Remove Label", style: { width: "25%" } },
-              ]}
-              tableData={labels.map((label) => ({
-                id: label.id,
-                rowData: [
-                  <Form.Control
-                    type="text"
-                    placeholder="Enter label name"
-                    value={label.name}
-                    onChange={(e) =>
-                      setLabels(
-                        labels.map((l) =>
-                          l.id === label.id ? { ...l, name: e.target.value } : l
-                        )
-                      )
-                    }
-                  />,
-                  <Form.Control
-                    type="text"
-                    placeholder="Record shortcut key"
-                    value={
-                      isRecording && activeRowId === label.id
-                        ? Array.from(keys).join("+")
-                        : label.shortcutKey
-                    }
-                    onFocus={start}
-                    onBlur={() => {
-                      stop();
-                      setLabels(
-                        labels.map((l) =>
-                          l.id === label.id
-                            ? {
-                                ...l,
-                                shortcutKey: Array.from(keys).join("+"),
-                              }
-                            : l
-                        )
-                      );
-                    }}
-                    onFocusCapture={() => setActiveRowId(label.id)}
-                    onBlurCapture={() => {
-                      if (activeRowId === label.id) {
-                        setActiveRowId(null);
-                      }
-                    }}
-                    onChange={() => {}}
-                  />,
-                  <Form.Control
-                    type="color"
-                    id="exampleColorInput"
-                    size="sm"
-                    value={label.color}
-                    title="Label color"
-                    onChange={(event) => {
-                      setLabels(
-                        labels.map((l) =>
-                          l.id === label.id
-                            ? { ...l, color: event.target.value }
-                            : l
-                        )
-                      );
-                    }}
-                  />,
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => {
-                      setLabels(labels.filter((l) => l.id !== label.id));
-                    }}
-                  >
-                    Remove
-                  </Button>,
-                ],
-              }))}
-            />
-            <Button
-              variant="info"
-              size="sm"
-              onClick={() => {
-                if (
-                  labels.some(
-                    (l) => l.name === "" || l.shortcutKey === ""
-                    )
-                ) {
-                  alert(
-                    "Please complete the current label before adding another"
-                  );
-                  return;
-                }
-                setLabels([
-                  ...labels,
-                  {
-                    id: crypto.randomUUID(),
-                    name: "",
-                    shortcutKey: "",
-                    color: "#000000",
-                  },
-                ]);
-              }}
-            >
-              +
-            </Button>
-          </Form.Group>
+          <LabelEditor setHandleSave={setSaveLabels} />
           <Form.Group>
             <Form.Label className="mb-0">Files to Upload</Form.Label>
             <p className="text-muted mb-1" style={{ fontSize: 12 }}>

@@ -117,7 +117,7 @@ export default function AnnotationSetResults({
           </Button>
         </div>
         <div>
-          <h5 className="mb-0">Register</h5>
+          <h5 className="mb-0">Registration</h5>
           <span className="text-muted" style={{ fontSize: "14px" }}>
             Register images from your annotation set.
           </span>

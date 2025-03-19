@@ -9,14 +9,16 @@ export default function AddAnnotationSetModal({
   project,
   addAnnotationSet,
   categories,
+  setTab,
 }: {
   show: boolean;
   onClose: () => void;
   project: Schema["Project"]["type"];
   addAnnotationSet: (annotationSet: Schema["AnnotationSet"]["type"]) => void;
   categories: { name: string }[];
+  setTab: (tab: number) => void;
 }) {
-  const { client } = useContext(GlobalContext)!;
+  const { client, showModal } = useContext(GlobalContext)!;
   const [name, setName] = useState("");
 
   async function handleSave() {
@@ -69,7 +71,7 @@ export default function AddAnnotationSetModal({
                 categories
                   .sort((a, b) => a.name.localeCompare(b.name))
                   .map((category) => (
-                    <p key={category.id} className="mb-0">
+                    <p key={crypto.randomUUID()} className="mb-0">
                       {category.name}
                     </p>
                   ))
@@ -78,8 +80,8 @@ export default function AddAnnotationSetModal({
             <Button
               variant="info"
               onClick={() => {
-                //TODO: Open label tab in edit modal
-                alert("Not implemented");
+                setTab(0); // Labels tab in edit modal
+                showModal("editSurvey");
               }}
             >
               Edit Labels

@@ -11,12 +11,15 @@ import AnnotationSetResults from "../AnnotationSetResults.tsx";
 import AnnotationCountModal from "../AnnotationCountModal.tsx";
 import EditAnnotationSetModal from "../EditAnnotationSet.tsx";
 import AddAnnotationSetModal from "./AddAnnotationSetModal.tsx";
+import LaunchAnnotationSetModal from "./LaunchAnnotationSetModal.tsx";
+import EditSurveyModal from "./editSurveyModal.tsx";
 
 export default function Surveys() {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
-  const navigate = useNavigate();
   const { myMembershipHook: myProjectsHook, isOrganizationAdmin } =
     useContext(UserContext)!;
+  const navigate = useNavigate();
+  const [tab, setTab] = useState(0);
   const [projects, setProjects] = useState<Schema["Project"]["type"][]>([]);
   const [selectedProject, setSelectedProject] = useState<
     Schema["Project"]["type"] | null
@@ -50,7 +53,12 @@ export default function Surveys() {
                     "annotationSets.name",
                     "locationSets.id",
                     "locationSets.name",
+                    "categories.id",
                     "categories.name",
+                    "categories.shortcutKey",
+                    "categories.color",
+                    "imageSets.id",
+                    "imageSets.name",
                   ],
                 }
               )
@@ -103,13 +111,25 @@ export default function Surveys() {
       rowData: [
         <div className="d-flex justify-content-between align-items-center">
           <div>
-            <h5 className="mb-0">{project.name}</h5>
+            {/* <h5 className="mb-0">{project.name}</h5> */}
+            {/* Hidden shortcut to legacy project management page */}
+            <h5
+              className="mb-0"
+              onClick={() => {
+                navigate(`/surveys/${project.id}/manage`);
+              }}
+            >
+              {project.name}
+            </h5>
             <i style={{ fontSize: "14px" }}>{project.organization.name}</i>
           </div>
           <div className="d-flex gap-2">
             <Button
               variant="primary"
-              onClick={() => navigate(`/surveys/${project.id}/manage`)}
+              onClick={() => {
+                setSelectedProject(project);
+                showModal("editSurvey");
+              }}
             >
               Edit
             </Button>
@@ -166,8 +186,9 @@ export default function Surveys() {
                   <Button
                     variant="primary"
                     onClick={() => {
-                      // showModal("launchAnnotationSet");
-                      alert("Not implemented");
+                      setSelectedProject(project);
+                      setSelectedAnnotationSet(annotationSet);
+                      showModal("launchAnnotationSet");
                     }}
                   >
                     Launch
@@ -359,6 +380,7 @@ export default function Surveys() {
               })
             );
           }}
+          setEditSurveyTab={setTab}
         />
       )}
       {selectedProject && (
@@ -388,6 +410,29 @@ export default function Surveys() {
             );
           }}
           categories={selectedProject.categories}
+          setTab={setTab}
+        />
+      )}
+      {selectedProject && selectedAnnotationSet && (
+        <LaunchAnnotationSetModal
+          show={modalToShow === "launchAnnotationSet"}
+          onClose={() => {
+            showModal(null);
+            setSelectedProject(null);
+            setSelectedAnnotationSet(null);
+          }}
+          imageSets={selectedProject.imageSets}
+        />
+      )}
+      {selectedProject && (
+        <EditSurveyModal
+          show={modalToShow === "editSurvey"}
+          onClose={() => {
+            showModal(null);
+            setSelectedProject(null);
+          }}
+          project={selectedProject}
+          openTab={tab}
         />
       )}
     </>

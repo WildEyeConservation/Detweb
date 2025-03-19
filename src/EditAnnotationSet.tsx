@@ -13,6 +13,7 @@ interface EditAnnotationSetModalProps {
   setSelectedSets?: (sets: string[]) => void;
   project: Schema["Project"]["type"];
   categories: { name: string }[];
+  setEditSurveyTab: (tab: number) => void;
 }
 
 const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
@@ -23,8 +24,9 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
   setAnnotationSet,
   project,
   categories,
+  setEditSurveyTab,
 }) => {
-  const { client } = useContext(GlobalContext)!;
+  const { client, showModal } = useContext(GlobalContext)!;
   const [newName, setNewName] = useState<string>("");
   const [busy, setBusy] = useState<boolean>(false);
   const [tab, setTab] = useState<number>(0);
@@ -96,7 +98,7 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
                 categories
                   .sort((a, b) => a.name.localeCompare(b.name))
                   .map((category) => (
-                    <p key={category.id} className="mb-0">
+                    <p key={crypto.randomUUID()} className="mb-0">
                       {category.name}
                     </p>
                   ))
@@ -105,8 +107,8 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
             <Button
               variant="info"
               onClick={() => {
-                //TODO: Open label tab in edit modal
-                alert("Not implemented");
+                setEditSurveyTab(0);
+                showModal("editSurvey");
               }}
             >
               Edit Labels
