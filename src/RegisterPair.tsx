@@ -31,11 +31,6 @@ type RegisterPairProps = {
 };
 
 // Function to transform a point using a homography matrix
-const transform = (H: Matrix) => (c1: [number, number]): [number, number] => {
-  const result = multiply(H, [c1[0], c1[1], 1]).valueOf() as number[];
-  return [result[0] / result[2], result[1] / result[2]]; 
-};
-
 export function RegisterPair({
   images,
   selectedSet,
@@ -50,7 +45,7 @@ export function RegisterPair({
   const [map1, setMap1] = useState<Map | null>(null);
   const [map2, setMap2] = useState<Map | null>(null);
   const [blocked, setBlocked] = useState(false);
-  const [linkImages, setLinkImages] = useState(true);
+  const [linkImages, setLinkImages] = useState(transforms ? true : false);
   const [leniency, setLeniency] = useState(400);
   
   const subscriptionFilter1 = useMemo(() => ({
@@ -107,7 +102,7 @@ export function RegisterPair({
 
   const { enhancedAnnotationHooks } = useOptimalAssignment({
     annotationsHooks,
-    transforms: transforms ? transforms.map(transform) : [],
+    transforms: transforms,
     getMatchStatus,
     images,
     leniency,
@@ -224,6 +219,7 @@ export function RegisterPair({
             <input
               type="checkbox"
               checked={linkImages}
+              disabled={!transforms}
               onChange={(e) => setLinkImages(e.target.checked)}
             />
             Link Images according to linking transform
