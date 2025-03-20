@@ -62,7 +62,7 @@ export default function AddAnnotationSetModal({
               Labels are survey wide and may not be edited here.
             </span>
             <div
-              className="d-flex flex-column gap-2 border p-2 mb-2 mt-1"
+              className="d-flex flex-column gap-2 border border-dark p-2 mb-2 mt-1"
               style={{ fontSize: "14px" }}
             >
               {categories.length === 0 ? (

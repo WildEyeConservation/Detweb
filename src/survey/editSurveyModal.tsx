@@ -6,6 +6,7 @@ import { useState } from "react";
 import AddGpsData from "../AddGpsData";
 import ProcessImages from "../ProcessImages";
 import CreateSubset from "../CreateSubset";
+import LaunchRegistration from "../LaunchRegistration";
 
 export default function EditSurveyModal({
   show,
@@ -33,6 +34,9 @@ export default function EditSurveyModal({
   const [processImages, setProcessImages] = useState<
     (() => Promise<void>) | null
   >(null);
+  const [launchRegistration, setLaunchRegistration] = useState<
+    (() => Promise<void>) | null
+  >(null);
 
   return (
     <Modal show={show} onHide={onClose} size="xl">
@@ -54,6 +58,9 @@ export default function EditSurveyModal({
                 break;
               case 2:
                 label = "Process";
+                break;
+              case 4:
+                label = "Launch";
                 break;
             }
             setButtonLabel(label);
@@ -89,6 +96,12 @@ export default function EditSurveyModal({
               setSelectedSets={setSelectedSets}
             />
           </Tab>
+          <Tab label="Launch Registration" className="mt-1">
+            <LaunchRegistration
+              project={project}
+              setHandleSubmit={setLaunchRegistration}
+            />
+          </Tab>
         </Tabs>
       </Modal.Body>
       <Modal.Footer>
@@ -115,6 +128,12 @@ export default function EditSurveyModal({
                   if (processImages) {
                     setButtonLabel("Processing...");
                     await processImages();
+                  }
+                  break;
+                case 4:
+                  if (launchRegistration) {
+                    setButtonLabel("Launching...");
+                    await launchRegistration();
                   }
                   break;
               }

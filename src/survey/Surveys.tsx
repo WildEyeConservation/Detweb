@@ -115,24 +115,19 @@ export default function Surveys() {
       rowData: [
         <div className="d-flex justify-content-between align-items-center">
           <div>
-            {/* <h5 className="mb-0">{project.name}</h5> */}
-            {/* Hidden shortcut to legacy project management page */}
-            <h5
-              className="mb-0"
-              onClick={() => {
-                navigate(`/surveys/${project.id}/manage`);
-              }}
-            >
-              {project.name}
-            </h5>
+            <h5 className="mb-0">{project.name}</h5>
             <i style={{ fontSize: "14px" }}>{project.organization.name}</i>
           </div>
           <div className="d-flex gap-2">
             <Button
               variant="primary"
-              onClick={() => {
-                setSelectedProject(project);
-                showModal("editSurvey");
+              onClick={(e) => {
+                if (e.ctrlKey) {
+                  navigate(`/surveys/${project.id}/manage`);
+                } else {
+                  setSelectedProject(project);
+                  showModal("editSurvey");
+                }
               }}
             >
               Edit

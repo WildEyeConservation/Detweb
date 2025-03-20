@@ -1,42 +1,41 @@
-import React, { useContext, useState } from 'react';
-import { Stack, Modal, Form, Button } from 'react-bootstrap';
-import { UserContext, GlobalContext, ManagementContext } from './Context';
-import { QueueDropdown } from './QueueDropDown';
-import { AnnotationSetDropdown } from './AnnotationSetDropdownMulti';
-import { fetchAllPaginatedResults, makeTransform, array2Matrix } from './utils';
-import { ImageNeighbourType } from './schemaTypes';
-import { SendMessageCommand } from '@aws-sdk/client-sqs';
-import { ImageSetDropdown } from './ImageSetDropDown';
-import * as math from 'mathjs';
-import { inv } from 'mathjs';
+import React, { useContext, useState, useEffect, useCallback } from "react";
+import { Stack, Modal, Form, Button } from "react-bootstrap";
+import { UserContext, GlobalContext, ManagementContext } from "./Context";
+import { QueueDropdown } from "./QueueDropDown";
+import { AnnotationSetDropdown } from "./AnnotationSetDropdownMulti";
+import { fetchAllPaginatedResults, makeTransform, array2Matrix } from "./utils";
+import { ImageNeighbourType } from "./schemaTypes";
+import { SendMessageCommand } from "@aws-sdk/client-sqs";
+// import { ImageSetDropdown } from './ImageSetDropDown';
+import ImageSetDropdown from "./survey/ImageSetDropdown";
+import * as math from "mathjs";
+import { inv } from "mathjs";
 import { useUpdateProgress } from "./useUpdateProgress";
+import { Schema } from "../amplify/data/resource";
+import Select from "react-select";
+import { CreateQueueCommand } from "@aws-sdk/client-sqs";
 
 interface LaunchRegistrationProps {
-  show: boolean;
-  handleClose: () => void;
-  selectedSets: string[];
-  setSelectedSets: React.Dispatch<React.SetStateAction<string[]>>;
+  project: Schema["Project"]["type"];
+  setHandleSubmit: React.Dispatch<
+    React.SetStateAction<(() => Promise<void>) | null>
+  >;
 }
 
 const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
-  show,
-  handleClose,
-  selectedSets,
-  setSelectedSets,
+  project,
+  setHandleSubmit,
 }) => {
-  const [url, setUrl] = useState<string | null>(null);
   const { client } = useContext(GlobalContext)!;
   const { getSqsClient } = useContext(UserContext)!;
-  const {
-    queuesHook: { data: queues },
-  } = useContext(ManagementContext)!;
   const [selectedImageSets, setSelectedImageSets] = useState<string[]>([]);
+  const [selectedSets, setSelectedSets] = useState<string[]>([]);
   const [selectedType, setSelectedType] = useState<boolean>(false);
   const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
     taskId: `Launch registration task`,
     indeterminateTaskName: `Finding images with annotations`,
     determinateTaskName: "Enqueueing pairs",
-    stepFormatter: (step: number) => `${step} images`
+    stepFormatter: (step: number) => `${step} images`,
   });
   // const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
   //   taskId: `Launch registration task`,
@@ -55,7 +54,7 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
       const { data: neighbour } =
         await client.models.ImageNeighbour.imageNeighboursByImage1key(
           { image1Id: currentId },
-          { selectionSet: ['image2.id', 'image2.timestamp', 'homography'] }
+          { selectionSet: ["image2.id", "image2.timestamp", "homography"] }
         );
       homographies.push(neighbour[0].homography);
       if (neighbour[0].image2.id == image2.id) break;
@@ -87,7 +86,7 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
     // If scale is zero or very close to zero, return the original matrix to avoid division by zero
     if (Math.abs(scale) < 1e-10) {
       console.warn(
-        'Warning: Homography scale is very close to zero. Normalization skipped.'
+        "Warning: Homography scale is very close to zero. Normalization skipped."
       );
       return homography;
     }
@@ -96,39 +95,80 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
     return math.divide(homography, scale) as math.Matrix;
   }
 
-  async function handleSubmit() {
-    handleClose()
+  const handleSubmit = useCallback(async () => {
+    let url = "";
+    const queueName = `${project.name}_${crypto.randomUUID()}.fifo`;
+    getSqsClient().then(sqsClient => sqsClient.send(new CreateQueueCommand({
+      QueueName: queueName,
+      Attributes: {
+        MessageRetentionPeriod: '1209600',   
+        FifoQueue: "true",
+      },
+    }))
+    ).then(async ({ QueueUrl: url }) => {
+      const { data: queue } = await client.models.Queue.create({
+        name: selectedSets.join("_") + "_" + "registration",
+        projectId: project.id,
+        url,
+      });
+      if (queue?.url) {
+        url = queue.url;
+      }
+    })
+
+    if (!(selectedSets.length && url)) return;
+
     /* What we want to do is get a list of images that have annotations in them in the designated 
     annotationSets and then get all the imageneighbours entries for each image. we deduplicate this list 
     and push the imageNeighbourIds into the queue sorted by the timestamp of the first image in the pair.
     Pushing to the queue in sorted order is not strictly required, but it makes the registration process 
     a little easier if pairs are processed in order.*/
     if (!selectedType) {
-      setTotalSteps(0)
+      setTotalSteps(0);
       for (const annotationSetId of selectedSets) {
         const annotations: { image: { id: string; timestamp: number } }[] =
           await fetchAllPaginatedResults(
             client.models.Annotation.annotationsByAnnotationSetId,
             {
               setId: annotationSetId,
-              selectionSet: ['image.id', 'image.timestamp','x','y']
-            },()=>setStepsCompleted(x=>x+1))
-        
-        const images: Record<number, string> = annotations.reduce((acc, annotation) => {
-          const current = acc[annotation.image.timestamp]
-          if (current) {
-            current.annotations.push([annotation.x, annotation.y])
-          } else {
-            acc[annotation.image.timestamp] = {id: annotation.image.id, annotations: [[annotation.x, annotation.y]]}
-          }
-          return acc
-        }, {} as Record<number, { id: string, annotations: number[][] }>)
-        setTotalSteps(Object.keys(images).length)
-        setStepsCompleted(0)
+              selectionSet: ["image.id", "image.timestamp", "x", "y"],
+            },
+            () => setStepsCompleted((x) => x + 1)
+          );
+
+        const images: Record<number, string> = annotations.reduce(
+          (acc, annotation) => {
+            const current = acc[annotation.image.timestamp];
+            if (current) {
+              current.annotations.push([annotation.x, annotation.y]);
+            } else {
+              acc[annotation.image.timestamp] = {
+                id: annotation.image.id,
+                annotations: [[annotation.x, annotation.y]],
+              };
+            }
+            return acc;
+          },
+          {} as Record<number, { id: string; annotations: number[][] }>
+        );
+        setTotalSteps(Object.keys(images).length);
+        setStepsCompleted(0);
         for (const timestamp of Object.keys(images)) {
-          const image = images[timestamp]
-          setStepsCompleted(x=>x+1)
-          const { data: prevneighbours } = await client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: image.id }, { selectionSet: ['image1Id', 'image1.timestamp', 'homography', 'image1.width', 'image1.height']})
+          const image = images[timestamp];
+          setStepsCompleted((x) => x + 1);
+          const { data: prevneighbours } =
+            await client.models.ImageNeighbour.imageNeighboursByImage2key(
+              { image2Id: image.id },
+              {
+                selectionSet: [
+                  "image1Id",
+                  "image1.timestamp",
+                  "homography",
+                  "image1.width",
+                  "image1.height",
+                ],
+              }
+            );
           for (const neighbour of prevneighbours) {
             if (images[neighbour.image1.timestamp] || !neighbour.homography) {
               continue;
@@ -157,11 +197,11 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
               { image1Id: image.id },
               {
                 selectionSet: [
-                  'image2Id',
-                  'image2.timestamp',
-                  'homography',
-                  'image2.width',
-                  'image2.height',
+                  "image2Id",
+                  "image2.timestamp",
+                  "homography",
+                  "image2.width",
+                  "image2.height",
                 ],
               }
             );
@@ -195,13 +235,13 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
           const image2 = images[sortedTimestamps[i + 1]].id;
           const { data } = await client.models.ImageNeighbour.get(
             { image1Id: image1, image2Id: image2 },
-            { selectionSet: ['homography'] }
+            { selectionSet: ["homography"] }
           );
           if (data?.homography) {
             await getSqsClient().then((sqsClient) =>
               sqsClient.send(
                 new SendMessageCommand({
-                  QueueUrl: queues.find((queue) => queue.id == url)?.url,
+                  QueueUrl: url,
                   MessageGroupId: crypto.randomUUID(),
                   MessageDeduplicationId: crypto.randomUUID(),
                   MessageBody: JSON.stringify({
@@ -231,9 +271,9 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
               { imageSetId },
               {
                 selectionSet: [
-                  'image.id',
-                  'image.timestamp',
-                  'image.annotations.setId',
+                  "image.id",
+                  "image.timestamp",
+                  "image.annotations.setId",
                 ],
                 nextToken,
               }
@@ -269,7 +309,7 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
             await getSqsClient().then((sqsClient) =>
               sqsClient.send(
                 new SendMessageCommand({
-                  QueueUrl: queues.find((queue) => queue.id == url)?.url,
+                  QueueUrl: url,
                   MessageBody: JSON.stringify({
                     selectedSet: selectedSets[0],
                     images: [previousImage.image.id, image.image.id],
@@ -283,66 +323,46 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
         console.log(imageSetMemberships);
       }
     }
-  }
+  }, [selectedSets, selectedType, selectedImageSets, client]);
+
+  useEffect(() => {
+    setHandleSubmit(() => handleSubmit);
+  }, [handleSubmit]);
 
   return (
-    <Modal show={show} onHide={handleClose}>
-      <Modal.Header closeButton>
-        <Modal.Title>Launch Registration Task</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        <Form>
-          <Stack gap={4}>
-            <Form.Group>
-              <Form.Check
-                type="switch"
-                label="Filter by ImageSet"
-                checked={selectedType}
-                onChange={(e) => setSelectedType(e.target.checked)}
-              />
-            </Form.Group>
-            <Form.Group>
-              <AnnotationSetDropdown
-                selectedSets={selectedSets}
-                setSelectedSets={setSelectedSets}
-                canCreate={false}
-              />
-            </Form.Group>
-            {selectedType && (
-              <Form.Group>
-                <Form.Label>Image Set</Form.Label>
-                <ImageSetDropdown
-                  selectedSets={selectedImageSets}
-                  setImageSets={setSelectedImageSets}
-                  canCreate={false}
-                />
-              </Form.Group>
-            )}{' '}
-            {/* <AnnotationSetDropdown
-                setAnnotationSet={handleSetAnnotationSet}
-                selectedSet={annotationSet}
-                canCreate={false}
-              /> */}
-            <Form.Group>
-              <Form.Label>Target Queue</Form.Label>
-              <QueueDropdown setQueue={setUrl} currentQueue={url} />
-            </Form.Group>
-          </Stack>
-        </Form>
-      </Modal.Body>
-      <Modal.Footer>
-        <Button
-          variant="primary"
-          onClick={handleSubmit}
-          disabled={!(selectedSets.length && url)}
-        >
-          Submit
-        </Button>
-        <Button variant="dark" onClick={handleClose}>
-          Cancel
-        </Button>
-      </Modal.Footer>
-    </Modal>
+    <Form>
+      <Stack gap={2}>
+        <Form.Group>
+          <Form.Check
+            type="switch"
+            label="Filter by Image Sets"
+            checked={selectedType}
+            onChange={(e) => setSelectedType(e.target.checked)}
+          />
+          {selectedType && (
+          <ImageSetDropdown
+            imageSets={project.imageSets}
+            selectedImageSets={selectedImageSets}
+            setSelectedImageSets={setSelectedImageSets}
+          />
+        )}
+        </Form.Group>
+        <Form.Group>
+          <Form.Label>Annotation Sets</Form.Label>
+          <Select
+            isMulti
+            placeholder="Select Annotation Sets"
+            className="text-black"
+            options={project.annotationSets.map((set) => ({
+              label: set.name,
+              value: set.id,
+            }))}
+            value={selectedSets}
+            onChange={(e) => setSelectedSets(e)}
+          />
+        </Form.Group>
+      </Stack>
+    </Form>
   );
 };
 

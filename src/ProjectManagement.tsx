@@ -30,7 +30,7 @@ const ProjectManagement = () => {
       <Card>
         <Card.Body>
           <Card.Title className="d-flex justify-content-between align-items-center">
-            <h4 className="mb-3">{project.name}</h4>
+            <h4 className="mb-3">Advanced Management for {project.name}</h4>
             <Button variant="dark" onClick={() => navigate(`/surveys`)}>
               Back to Surveys
             </Button>
@@ -39,18 +39,18 @@ const ProjectManagement = () => {
             <Tab label="Image Sets">
               <ImageSetManagement key={'imsets' + project.id} />
             </Tab>
-            <Tab label="Labels">
+            {/* <Tab label="Labels">
               <DefineCategories key={'cats' + project.id} />
-            </Tab>
-            <Tab label="Tasks">
+            </Tab> */}
+            {/* <Tab label="Tasks">
               <TaskManagement key={'tasks' + project.id} />
-            </Tab>
+            </Tab> */}
             <Tab label="Annotation Sets">
               <AnnotationSetManagement key={'asets' + project.id} />
             </Tab>
-            <Tab label="Jobs">
+            {/* <Tab label="Jobs">
               <QueueManagement key={'queues' + project.id} />
-            </Tab>
+            </Tab> */}
             {process.env.NODE_ENV == 'development' && (
               <Tab label="Dev Actions">
                 <DevActions />

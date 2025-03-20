@@ -89,7 +89,7 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
               Labels are survey wide and may not be edited here.
             </span>
             <div
-              className="d-flex flex-column gap-2 border p-2 mb-2 mt-1"
+              className="d-flex flex-column gap-2 border border-dark p-2 mb-2 mt-1"
               style={{ fontSize: "14px" }}
             >
               {categories.length === 0 ? (
@@ -97,8 +97,8 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
               ) : (
                 categories
                   .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((category) => (
-                    <p key={crypto.randomUUID()} className="mb-0">
+                  .map((category, index) => (
+                    <p key={index} className="mb-0">
                       {category.name}
                     </p>
                   ))

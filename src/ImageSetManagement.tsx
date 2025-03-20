@@ -109,7 +109,7 @@ export default function ImageSetManagement() {
         handleClose={() => showModal(null)}
         selectedImageSets={selectedSets}
       /> */}
-      <SpatiotemporalSubset
+      {/* <SpatiotemporalSubset
         show={modalToShow == 'SpatiotemporalSubset'}
         handleClose={() => showModal(null)}
         selectedImageSets={selectedSets}
@@ -119,7 +119,7 @@ export default function ImageSetManagement() {
         handleClose={() => showModal(null)}
         selectedImageSets={selectedSets}
         setSelectedImageSets={setSelectedSets}
-      />
+      /> */}
       {/* <AddGpsData
         show={modalToShow == 'addGps'}
         handleClose={() => showModal(null)}
@@ -138,11 +138,11 @@ export default function ImageSetManagement() {
         selectedImageSets={selectedSets}
         setSelectedImageSets={setSelectedSets}
       /> */}
-      <FileStructureSubset
+      {/* <FileStructureSubset
         show={modalToShow == 'FileStructureSubset'}
         handleClose={() => showModal(null)}
         selectedImageSets={selectedSets}
-      />
+      /> */}
 
       <Row className="justify-content-center mt-3">
         <div>

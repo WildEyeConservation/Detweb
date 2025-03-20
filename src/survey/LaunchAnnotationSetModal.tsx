@@ -1,6 +1,7 @@
 import { Modal, Button, Form } from "react-bootstrap";
 import Select from "react-select";
 import { useState } from "react";
+import ImageSetDropdown from "./ImageSetDropdown";
 
 export default function LaunchAnnotationSetModal({
   show,
@@ -29,6 +30,7 @@ export default function LaunchAnnotationSetModal({
   const [zoom, setZoom] = useState<number | undefined>(undefined);
   const [lowerLimit, setLowerLimit] = useState<number>(0);
   const [upperLimit, setUpperLimit] = useState<number>(1);
+  const [hidden, setHidden] = useState<boolean>(false);
 
   return (
     <Modal show={show} onHide={onClose} size="lg">
@@ -37,36 +39,11 @@ export default function LaunchAnnotationSetModal({
       </Modal.Header>
       <Modal.Body>
         <Form className="d-flex flex-column gap-3">
-          <Form.Group>
-            <Form.Label className="mb-0">Image Sets</Form.Label>
-            <span
-              className="text-muted d-block mb-1"
-              style={{ fontSize: "12px" }}
-            >
-              Select the image sets you want to use.
-            </span>
-            <Select
-              className="text-black"
-              options={imageSets.map((imageSet) => ({
-                label: imageSet.name,
-                value: imageSet.id,
-              }))}
-              onChange={(selectedOptions) => {
-                setSelectedImageSets(
-                  selectedOptions.map((option) => option.value)
-                );
-              }}
-              value={imageSets.length === 1 ? {
-                label: imageSets[0].name,
-                value: imageSets[0].id,
-              } : selectedImageSets.map((id) => ({
-                label:
-                  imageSets.find((imageSet) => imageSet.id === id)?.name || "",
-                value: id,
-              }))}
-              isMulti
-            />
-          </Form.Group>
+          <ImageSetDropdown 
+            imageSets={imageSets}
+            selectedImageSets={selectedImageSets}
+            setSelectedImageSets={setSelectedImageSets}
+          />
           <Form.Group>
             <Form.Label className="mb-0">Batch Size</Form.Label>
             <span
@@ -177,6 +154,15 @@ export default function LaunchAnnotationSetModal({
                   checked={viewUnobservedLocationsOnly}
                   onChange={() =>
                     setViewUnobservedLocationsOnly(!viewUnobservedLocationsOnly)
+                  }
+                />
+              </Form.Group>
+              <Form.Group>
+                <Form.Switch
+                  label="Hide Job From Non-Admin Workers"
+                  checked={hidden}
+                  onChange={() =>
+                    setHidden(!hidden)
                   }
                 />
               </Form.Group>

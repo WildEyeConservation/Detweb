@@ -181,7 +181,7 @@ export default function MoveObservations({
   }, [handleMove]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+    <div className="d-flex flex-column gap-3">
       <Form.Group controlId="formLocationSets">
         <Form.Label>Select Location Sets (Tasks)</Form.Label>
         <Select
@@ -196,10 +196,10 @@ export default function MoveObservations({
         />
       </Form.Group>
       <Form.Group>
-        <Form.Label>Filter by</Form.Label>
         <LabeledToggleSwitch
-          leftLabel="User"
-          rightLabel="Time"
+          className="m-0"
+          leftLabel="Filter by User"
+          rightLabel="Filter by Time"
           checked={!filterByUser}
           onChange={(checked) => {
             setFilterByUser(!checked);
@@ -248,10 +248,10 @@ export default function MoveObservations({
       )}
 
       <Form.Group>
-        <Form.Label>Move to * annotation set</Form.Label>
         <LabeledToggleSwitch
-          leftLabel="Existing"
-          rightLabel="New"
+          className="m-0"
+          leftLabel="Existing Annotation Set"
+          rightLabel="New Annotation Set"
           checked={moveToNewAnnotationSet}
           onChange={(checked) => {
             setMoveToNewAnnotationSet(checked);
