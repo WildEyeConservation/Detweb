@@ -12,6 +12,7 @@ interface UseOptimalAssignmentProps {
   getMatchStatus: (annotations: [AnnotationType, AnnotationType]) => number;
   transforms: TransformFunction[];
   images: ImageType[];
+  leniency: number;
 }
 
 const MISMATCH_TOLERANCE = 400;
@@ -39,6 +40,7 @@ export function useOptimalAssignment({
   getMatchStatus,
   transforms,
   images,
+  leniency
 }: UseOptimalAssignmentProps) {
   const [dataLoaded, setDataLoaded] = useState(false);
   // Log when the hook is called
@@ -118,7 +120,7 @@ export function useOptimalAssignment({
         const proposedObjectIdMap: Record<string, string> = {}; // maps annotation ids to proposed object ids.
         let distMatrix = Array(N)
           .fill(0)
-          .map(() => Array(N).fill(MISMATCH_TOLERANCE));
+          .map(() => Array(N).fill(leniency));
         for (const [i, annoI] of annotations[0].entries()) {
           let projected = transforms[0]([annoI.x, annoI.y]);
           for (const [j, annoJ] of annotations[1].entries()) {
@@ -197,7 +199,7 @@ export function useOptimalAssignment({
         setEnhancedAnnotations([[],[]]);
       }
     }
-  }, [annotations[0],annotations[1], transforms, dataLoaded]);
+  }, [annotations[0],annotations[1], transforms, dataLoaded,leniency]);
 
   return {
     enhancedAnnotationHooks: [0, 1].map(i => ({
