@@ -169,10 +169,7 @@ export function Registration() {
         }
     }, [activePair,pairToRegister]);
 
-    // Add these tracking states near your other useState declarations
-    const [totalImages, setTotalImages] = useState(0);
-    const [loadedMetadata, setLoadedMetadata] = useState(0);
-
+    
     return (
         <div style={{
             display: 'flex',

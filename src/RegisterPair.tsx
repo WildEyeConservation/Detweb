@@ -63,7 +63,7 @@ export function RegisterPair({
 
   const {client} = useContext(GlobalContext)!;
 
-  const annotationsHooks = useMemo(() => [
+  const annotationsHooks =[
     useOptimisticUpdates<Schema['Annotation']['type'], 'Annotation'>(
       'Annotation',
       async (nextToken) => client.models.Annotation.annotationsByImageIdAndSetId(
@@ -80,7 +80,7 @@ export function RegisterPair({
       ),
       subscriptionFilter2
     )
-  ], [client, images, selectedSet, subscriptionFilter1, subscriptionFilter2]);
+  ] as [CRUDHook<AnnotationType>, CRUDHook<AnnotationType>];
 
   const [matchStatus, setMatchStatus] = useState<Record<string, number>>({});
 
