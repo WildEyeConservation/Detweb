@@ -219,10 +219,12 @@ export function Review({ showAnnotationSetDropdown = true }) {
                 onChange={setSelectedCategories}
                 isMulti
                 name="Categories to review"
-                options={categories?.map((q) => ({
-                  label: q.name,
-                  value: q.id,
-                }))}
+                options={categories
+                  ?.filter((c) => c.annotationSetId === selectedAnnotationSet)
+                  .map((q) => ({
+                    label: q.name,
+                    value: q.id,
+                  }))}
                 className="basic-multi-select category-select text-black"
                 classNamePrefix="select"
                 closeMenuOnSelect={false}

@@ -20,6 +20,7 @@ import DummyMarkers from "./DummyMarkers";
 interface ShowMarkersProps {
   activeAnnotation?: AnnotationType;
   annotationsHook: AnnotationsHook;
+  annotationSetId: string;
 }
 
 
@@ -56,7 +57,7 @@ export function ShowMarkers(props: ShowMarkersProps) {
           <DetwebMarker
             key={annotation.id}
             annotation={{...annotation}}
-            categories={categories}
+            categories={categories?.filter((c) => c.annotationSetId === props.annotationSetId)}
             activeAnnotation={activeAnnotation}
             user={user}
             updateAnnotation={updateAnnotation}

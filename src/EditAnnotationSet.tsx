@@ -4,6 +4,7 @@ import { GlobalContext } from "./Context";
 import { Tab, Tabs } from "./Tabs";
 import MoveObservations from "./MoveObservations";
 import { Schema } from "../amplify/data/resource";
+import LabelEditor from "./survey/LabelEditor";
 
 interface EditAnnotationSetModalProps {
   show: boolean;
@@ -23,16 +24,17 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
   setSelectedSets,
   setAnnotationSet,
   project,
-  categories,
-  setEditSurveyTab,
 }) => {
-  const { client, showModal } = useContext(GlobalContext)!;
+  const { client } = useContext(GlobalContext)!;
   const [newName, setNewName] = useState<string>("");
   const [busy, setBusy] = useState<boolean>(false);
   const [tab, setTab] = useState<number>(0);
   const [handleMove, setHandleMove] = useState<() => Promise<void>>(() =>
     Promise.resolve()
   );
+  const [saveLabels, setSaveLabels] = useState<
+    ((annotationSetId: string, projectId: string) => Promise<void>) | null
+  >(null);
 
   const handleSave = async () => {
     if (annotationSet && newName.trim() !== "") {
@@ -45,6 +47,9 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
 
       if (setAnnotationSet && result) {
         setAnnotationSet({ id: result.id, name: result.name });
+        if (saveLabels) {
+          await saveLabels(annotationSet.id, project.id);
+        }
       }
 
       handleClose();
@@ -62,7 +67,7 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
   }, [annotationSet.name]);
 
   return (
-    <Modal show={show} onHide={handleClose}>
+    <Modal show={show} onHide={handleClose} size="xl">
       <Modal.Header closeButton>
         <Modal.Title>Edit Annotation Set</Modal.Title>
       </Modal.Header>
@@ -73,7 +78,7 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
           }}
         >
           <Tab label="Basic">
-            <Form className="mt-1">
+            <Form className="mt-1 d-flex flex-column gap-2">
               <Form.Group controlId="annotationSetName">
                 <Form.Label>Name</Form.Label>
                 <Form.Control
@@ -83,37 +88,17 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
                   placeholder="Enter new name"
                 />
               </Form.Group>
-              <Form.Group>
-            <Form.Label className="mt-3 mb-0">Labels</Form.Label>
-            <span className="text-muted d-block" style={{ fontSize: "12px" }}>
-              Labels are survey wide and may not be edited here.
-            </span>
-            <div
-              className="d-flex flex-column gap-2 border border-dark p-2 mb-2 mt-1"
-              style={{ fontSize: "14px" }}
-            >
-              {categories.length === 0 ? (
-                <p className="mb-0">No labels found</p>
-              ) : (
-                categories
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((category, index) => (
-                    <p key={index} className="mb-0">
-                      {category.name}
-                    </p>
-                  ))
-              )}
-            </div>
-            <Button
-              variant="info"
-              onClick={() => {
-                setEditSurveyTab(0);
-                showModal("editSurvey");
-              }}
-            >
-              Edit Labels
-            </Button>
-          </Form.Group>
+              <LabelEditor
+                defaultLabels={project.annotationSets.find(
+                  (set) => set.id === annotationSet.id
+                )?.categories.map((category) => ({
+                  id: category.id,
+                  name: category.name,
+                  shortcutKey: category.shortcutKey,
+                  color: category.color,
+                }))}
+                setHandleSave={setSaveLabels}
+              />
             </Form>
           </Tab>
           <Tab label="Advanced">
@@ -146,7 +131,11 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
             }
           }}
         >
-          {busy ? "Saving..." : tab === 1 ? "Move Observations" : "Save Changes"}
+          {busy
+            ? "Saving..."
+            : tab === 1
+            ? "Move Observations"
+            : "Save Changes"}
         </Button>
         <Button
           variant="dark"

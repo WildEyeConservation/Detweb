@@ -48,9 +48,6 @@ export default function NewSurveyModal({
       temp: boolean;
     }[]
   >([]);
-  const [saveLabels, setSaveLabels] = useState<
-    ((projectId: string) => Promise<void>) | null
-  >(null);
   const [users, setUsers] = useState<
     Record<
       string,
@@ -136,10 +133,6 @@ export default function NewSurveyModal({
             });
           })
         );
-      }
-
-      if (saveLabels) {
-        await saveLabels(project.id);
       }
 
       await client.models.ProjectTestConfig.create({
@@ -424,7 +417,6 @@ export default function NewSurveyModal({
               </>
             )}
           </Form.Group>
-          <LabelEditor setHandleSave={setSaveLabels} />
           <Form.Group>
             <Form.Label className="mb-0">Files to Upload</Form.Label>
             <p className="text-muted mb-1" style={{ fontSize: 12 }}>

@@ -19,7 +19,7 @@ export default function LabelEditor({
 }: {
   defaultLabels?: Label[];
   setHandleSave: React.Dispatch<
-    React.SetStateAction<((projectId: string) => Promise<void>) | null>
+    React.SetStateAction<((annotationSetId: string, projectId: string) => Promise<void>) | null>
   >;
 }) {
   const [keys, { start, stop, isRecording }] = useRecordHotkeys();
@@ -29,7 +29,7 @@ export default function LabelEditor({
   const queryClient = useQueryClient();
 
   const handleSave = useCallback(
-    async (projectId: string) => {
+    async (annotationSetId: string, projectId: string) => {
       const filteredLabels = labels.filter(
         (l) => l.name !== "" && l.shortcutKey !== ""
       );
@@ -50,10 +50,11 @@ export default function LabelEditor({
             .filter((l) => !defaultLabels.some((dl) => dl.id === l.id))
             .map(async (l) => {
               await client.models.Category.create({
+                projectId: projectId,
                 name: l.name,
                 shortcutKey: l.shortcutKey,
                 color: l.color,
-                projectId: projectId,
+                annotationSetId: annotationSetId,
               });
             })
         );
@@ -78,6 +79,7 @@ export default function LabelEditor({
               name: l.name,
               shortcutKey: l.shortcutKey,
               color: l.color,
+              annotationSetId: annotationSetId,
               projectId: projectId,
             });
           })

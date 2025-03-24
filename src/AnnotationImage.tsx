@@ -23,7 +23,7 @@ export default function AnnotationImage(props) {
   const subscriptionFilter = useMemo(() => ({
     filter: { and:[{setId: { eq: location.annotationSetId }}, {imageId: { eq: location.image.id }}]}
   }), [annotationSetId, location.image.id]);
-  const {categoriesHook:{data:categories},currentCategory,setCurrentCategory} = useContext(ProjectContext)!;
+  const {categoriesHook:{data:categories}} = useContext(ProjectContext)!;
   const annotationsHook = useOptimisticUpdates<Schema['Annotation']['type'], 'Annotation'>(
     'Annotation',
     async (nextToken) => client.models.Annotation.annotationsByImageIdAndSetId(
@@ -38,10 +38,10 @@ export default function AnnotationImage(props) {
     const source = props.taskTag ? `manual-${props.taskTag}` : 'manual';
     return [
       <CreateAnnotationOnClick key="caok" allowOutside={allowOutside} location={location} annotationSet={annotationSetId} source={source} />,
-      <ShowMarkers key="showMarkers" />,
+      <ShowMarkers key="showMarkers" annotationSetId={annotationSetId}/>,
       <Location key="location"{...location} />,
-      <Legend key="legend" position="bottomright" />
-    ].concat(categories?.map(category => (
+      <Legend key="legend" position="bottomright" annotationSetId={annotationSetId} />
+    ].concat(categories?.filter(c => c.annotationSetId === annotationSetId).map(category => (
       <CreateAnnotationOnHotKey
         key={category.id}
         hotkey={category.shortcutKey}

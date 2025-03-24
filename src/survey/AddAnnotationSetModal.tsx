@@ -2,26 +2,34 @@ import { Modal, Form, Button } from "react-bootstrap";
 import { Schema } from "../../amplify/data/resource";
 import { useState, useContext } from "react";
 import { GlobalContext } from "../Context";
+import LabelEditor from "./LabelEditor";
 
 export default function AddAnnotationSetModal({
   show,
   onClose,
   project,
   addAnnotationSet,
-  categories,
-  setTab,
 }: {
   show: boolean;
   onClose: () => void;
   project: Schema["Project"]["type"];
   addAnnotationSet: (annotationSet: Schema["AnnotationSet"]["type"]) => void;
-  categories: { name: string }[];
-  setTab: (tab: number) => void;
 }) {
-  const { client, showModal } = useContext(GlobalContext)!;
+  const { client } = useContext(GlobalContext)!;
   const [name, setName] = useState("");
+  const [saveLabels, setSaveLabels] = useState<
+    ((annotationSetId: string, projectId: string) => Promise<void>) | null
+  >(null);
+  const [busy, setBusy] = useState(false);
 
   async function handleSave() {
+    if (!name) {
+      alert("Please enter a name for the annotation set");
+      return;
+    }
+
+    setBusy(true);
+
     const { data: annotationSet } = await client.models.AnnotationSet.create({
       name,
       projectId: project.id,
@@ -29,18 +37,23 @@ export default function AddAnnotationSetModal({
 
     if (annotationSet) {
       addAnnotationSet(annotationSet);
+
+      if (saveLabels) {
+        await saveLabels(annotationSet.id, project.id);
+      }
     }
 
     onClose();
+    setBusy(false);
   }
 
   return (
-    <Modal show={show} onHide={onClose}>
+    <Modal show={show} onHide={onClose} size="xl">
       <Modal.Header>
         <Modal.Title>Add Annotation Set</Modal.Title>
       </Modal.Header>
       <Modal.Body>
-        <Form>
+        <Form className="d-flex flex-column gap-2">
           <Form.Group>
             <Form.Label className="mb-0">Name</Form.Label>
             <span
@@ -53,45 +66,16 @@ export default function AddAnnotationSetModal({
             <Form.Control
               type="text"
               value={name}
+              placeholder="Enter a name"
               onChange={(e) => setName(e.target.value)}
             />
           </Form.Group>
-          <Form.Group>
-            <Form.Label className="mt-3 mb-0">Labels</Form.Label>
-            <span className="text-muted d-block" style={{ fontSize: "12px" }}>
-              Labels are survey wide and may not be edited here.
-            </span>
-            <div
-              className="d-flex flex-column gap-2 border border-dark p-2 mb-2 mt-1"
-              style={{ fontSize: "14px" }}
-            >
-              {categories.length === 0 ? (
-                <p className="mb-0">No labels found</p>
-              ) : (
-                categories
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((category) => (
-                    <p key={crypto.randomUUID()} className="mb-0">
-                      {category.name}
-                    </p>
-                  ))
-              )}
-            </div>
-            <Button
-              variant="info"
-              onClick={() => {
-                setTab(0); // Labels tab in edit modal
-                showModal("editSurvey");
-              }}
-            >
-              Edit Labels
-            </Button>
-          </Form.Group>
+          <LabelEditor setHandleSave={setSaveLabels} />
         </Form>
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="primary" onClick={handleSave}>
-          Save
+        <Button variant="primary" onClick={handleSave} disabled={busy}>
+          {busy ? "Saving..." : "Save"}
         </Button>
         <Button variant="dark" onClick={onClose}>
           Cancel

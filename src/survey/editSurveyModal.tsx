@@ -21,9 +21,6 @@ export default function EditSurveyModal({
   openTab?: number;
   setSelectedSets: (sets: string[]) => void;
 }) {
-  const [saveLabels, setSaveLabels] = useState<
-    ((projectId: string) => Promise<void>) | null
-  >(null);
   const [addGpsData, setAddGpsData] = useState<(() => Promise<void>) | null>(
     null
   );
@@ -51,15 +48,12 @@ export default function EditSurveyModal({
             let label = "";
             switch (tab) {
               case 0:
-                label = "Save";
-                break;
-              case 1:
                 label = "Submit";
                 break;
-              case 2:
+              case 1:
                 label = "Process";
                 break;
-              case 4:
+              case 3:
                 label = "Launch";
                 break;
             }
@@ -67,17 +61,6 @@ export default function EditSurveyModal({
             setPrevButtonLabel(label);
           }}
         >
-          <Tab label="Labels" className="mt-1">
-            <LabelEditor
-              defaultLabels={project.categories.map((category) => ({
-                id: category.id,
-                name: category.name,
-                shortcutKey: category.shortcutKey,
-                color: category.color,
-              }))}
-              setHandleSave={setSaveLabels}
-            />
-          </Tab>
           <Tab label="Add GPS Data" className="mt-1">
             <AddGpsData
               imageSets={project.imageSets}
@@ -105,7 +88,7 @@ export default function EditSurveyModal({
         </Tabs>
       </Modal.Body>
       <Modal.Footer>
-        {tab !== 3 && (
+        {tab !== 2 && (
           <Button
             variant="primary"
             disabled={loading}
@@ -113,24 +96,18 @@ export default function EditSurveyModal({
               setLoading(true);
               switch (tab) {
                 case 0:
-                  if (saveLabels) {
-                    setButtonLabel("Saving...");
-                    await saveLabels(project.id);
-                  }
-                  break;
-                case 1:
                   if (addGpsData) {
                     setButtonLabel("Submitting...");
                     await addGpsData();
                   }
                   break;
-                case 2:
+                case 1:
                   if (processImages) {
                     setButtonLabel("Processing...");
                     await processImages();
                   }
                   break;
-                case 4:
+                case 3:
                   if (launchRegistration) {
                     setButtonLabel("Launching...");
                     await launchRegistration();

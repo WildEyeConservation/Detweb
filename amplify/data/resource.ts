@@ -26,7 +26,6 @@ const schema = a
         organizationId: a.id().required(),
         organization: a.belongsTo('Organization', 'organizationId'),
         name: a.string().required(),
-        categories: a.hasMany('Category', 'projectId'),
         images: a.hasMany('Image', 'projectId'),
         imageFiles: a.hasMany('ImageFile', 'projectId'),
         annotations: a.hasMany('Annotation', 'projectId'),
@@ -54,7 +53,8 @@ const schema = a
     Category: a
       .model({
         projectId: a.id().required(),
-        project: a.belongsTo('Project', 'projectId'),
+        annotationSetId: a.id().required(),
+        annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
         name: a.string().required(),
         color: a.string(),
         shortcutKey: a.string(),
@@ -73,6 +73,7 @@ const schema = a
       .authorization((allow) => [allow.authenticated()])
       // .authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
+        index('annotationSetId').queryField('categoriesByAnnotationSetId'),
         index('projectId').queryField('categoriesByProjectId'),
       ]),
     Image: a
@@ -141,6 +142,7 @@ const schema = a
           'annotationSetId'
         ),
         testResults: a.hasMany('TestResult', 'annotationSetId'),
+        categories: a.hasMany('Category', 'annotationSetId'),
       })
       .authorization((allow) => [allow.authenticated()])
       // .authorization(allow => [allow.groupDefinedIn('projectId')])

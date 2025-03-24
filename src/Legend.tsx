@@ -3,7 +3,6 @@ import { useState, useEffect, useRef, useContext } from "react";
 import L from "leaflet";
 import { ProjectContext, UserContext } from "./Context";
 
-
 /**
  *
  * Legend is a custom child component for react-leaflet. Like all child components it must be a descendant of a
@@ -20,11 +19,14 @@ import { ProjectContext, UserContext } from "./Context";
 
 interface LegendProps {
   position: keyof typeof POSITION_CLASSES;
+  annotationSetId: string;
 }
 
-
-export function Legend({ position }: LegendProps) {
-  const {categoriesHook:{data:categories},currentCategory,setCurrentCategory} = useContext(ProjectContext)!;
+export function Legend({ position, annotationSetId }: LegendProps) {
+  const {
+    categoriesHook: { data: categories },
+    setCurrentCategory,
+  } = useContext(ProjectContext)!;
   const divRef = useRef<HTMLDivElement | null>(null);
   const positionClass =
     (position && POSITION_CLASSES[position]) || POSITION_CLASSES.bottomright;
@@ -46,29 +48,32 @@ export function Legend({ position }: LegendProps) {
         >
           <div>
             {expanded
-              ? categories?.sort((a, b) => a.name.localeCompare(b.name)).map((item, index) => {
-                  return (
-                    <div
-                      key={index}
-                      onClick={() => setCurrentCategory(item)}
-                      style={{ display: "flex", flexDirection: "row" }}
-                    >
-                      <i style={{ background: item.color || "#000" }}></i>
+              ? categories
+                  ?.filter((c) => c.annotationSetId === annotationSetId)
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((item, index) => {
+                    return (
                       <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "row",
-                          width: "100%",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                        }}
+                        key={index}
+                        onClick={() => setCurrentCategory(item)}
+                        style={{ display: "flex", flexDirection: "row" }}
                       >
-                        <div>{item.name}</div>
-                        <div>({item.shortcutKey})</div>
+                        <i style={{ background: item.color || "#000" }}></i>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "row",
+                            width: "100%",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <div>{item.name}</div>
+                          <div>({item.shortcutKey})</div>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })
+                    );
+                  })
               : "Legend"}
           </div>
         </div>

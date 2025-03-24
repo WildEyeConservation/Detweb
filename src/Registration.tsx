@@ -259,6 +259,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
                 isMulti
                 name="Categories to register"
                 options={categories
+                  ?.filter((c) => c.annotationSetId === selectedAnnotationSet)
                   ?.sort((a, b) => a.name.localeCompare(b.name))
                   ?.map((q) => ({ label: q.name, value: q.id }))}
                 className="basic-multi-select category-select"
