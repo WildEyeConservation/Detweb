@@ -164,9 +164,14 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
       
       for (const locationId of locationBatch) {
         const location = {id: locationId, annotationSetId: annotationSet};
+
+        const body = JSON.stringify({ location, allowOutside, taskTag, secondaryQueueUrl, skipLocationWithAnnotations});
+
         batchEntries.push({
           Id: `msg-${locationId}`, // Required unique ID for each message in batch
-          MessageBody: JSON.stringify({ location, allowOutside, taskTag, secondaryQueueUrl, skipLocationWithAnnotations})
+          MessageBody: body,
+          MessageGroupId: crypto.randomUUID(),
+          MessageDeduplicationId: body.replace(/[^a-zA-Z0-9\-_\.]/g, '').substring(0, 128)
         });
       }
 
@@ -175,7 +180,7 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
           getSqsClient().then(sqsClient => sqsClient.send(
             new SendMessageBatchCommand({
               QueueUrl: queueUrl,
-              Entries: batchEntries
+              Entries: batchEntries,
             })
           ))
         ).then(() => setStepsCompleted((s: number) => s + batchEntries.length));
