@@ -5,7 +5,7 @@ import BufferSource from './BufferSource';
 import AnnotationImage from './AnnotationImage';
 import { AnnotationSetDropdown } from './AnnotationSetDropDown';
 import Select, { MultiValue, Options  } from "react-select";
-import { ProjectContext } from './Context';
+import { ProjectContext, GlobalContext } from './Context';
 import { Form } from 'react-bootstrap';
 import LabeledToggleSwitch from './LabeledToggleSwitch';
 import './Review.css';
@@ -21,6 +21,7 @@ export function Review() {
     const [locationsLoaded, setLocationsLoaded] = useState(0);
     const [index, setIndex] = useState(0);
     const [bufferSource, setBufferSource] = useState<BufferSource | null>(null);
+    const { client } = useContext(GlobalContext)!;
 
     useEffect(() => {
         async function fetchAnnotations() {
