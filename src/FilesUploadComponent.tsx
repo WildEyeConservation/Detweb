@@ -62,12 +62,14 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
   }, [show]);
 
   useEffect(() => {
-    setFilteredImageSize(0)
-    setFilteredImageFiles([])
-  }, [name]);
+    if (show) {
+      setFilteredImageSize(0)
+      setFilteredImageFiles([])
+    }
+  }, [show]);
 
   useEffect(() => {
-    setImageFiles(scannedFiles.filter(file => file.type.startsWith('image/')));
+    setImageFiles(scannedFiles.filter(file => file.type.startsWith('image/jpeg')));
   }, [scannedFiles]);
 
   useEffect(() => {
