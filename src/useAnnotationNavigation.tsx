@@ -30,7 +30,7 @@ export function useAnnotationNavigation(input: UseAnnotationNavigationInput) {
     annotationHooks
   } = input
   
-  const annotations = annotationHooks.map(hook => hook.data).map(annos => annos.filter(anno => input.selectedCategoryIDs.includes(anno.categoryId)))
+  const annotations = annotationHooks.map(hook => hook.data).map(annos => input.selectedCategoryIDs ? annos.filter(anno => input.selectedCategoryIDs.includes(anno.categoryId)) : annos)
   //Calculate the seto of objectIds that appear in both images.
   const objectIds = annotations.map(annos => annos.map(anno => anno.objectId || anno.proposedObjectId))
   const pairedObjectIds = objectIds[0].filter(id => objectIds[1].includes(id))

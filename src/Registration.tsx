@@ -1,4 +1,4 @@
-import { useState, useMemo, useContext } from 'react';
+import { useState, useMemo, useContext, useCallback, useEffect } from 'react';
 import BufferSource from './BufferSource';
 import { AnnotationSetDropdown } from './AnnotationSetDropDown';
 import Select from "react-select";
@@ -15,6 +15,7 @@ export function Registration() {
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [selectedAnnotationSet, setSelectedAnnotationSet] = useState<string>('');
     const { categoriesHook: { data: categories } } = useContext(ProjectContext)!;
+    const [activePair, setActivePair] = useState<{primary: string, secondary: string, annotations: Schema['Annotation']['type'][]} | null>(null);
     const [numLoaded, setNumLoaded] = useState(0);
     const subscriptionFilter = useMemo(() => ({ filter: { setId: { eq: selectedAnnotationSet }} }), [selectedAnnotationSet]);
     // annotations contains an array of annotations in the selected annotation set, that is kept updated.
@@ -155,11 +156,20 @@ export function Registration() {
             }
         }
     }, [targetData, annotationsByImage, imageNeighbours, imageMetaData]);
-    
-    // Add these tracking states near your other useState declarations
-    const [totalImages, setTotalImages] = useState(0);
-    const [loadedMetadata, setLoadedMetadata] = useState(0);
 
+    const nextPair = useCallback(() => {
+        if (pairToRegister) {
+            setActivePair(pairToRegister);
+        }
+    }, [pairToRegister]);
+
+    useEffect(() => {
+        if (!activePair && pairToRegister) {
+            setActivePair(pairToRegister);
+        }
+    }, [activePair,pairToRegister]);
+
+    
     return (
         <div style={{
             display: 'flex',
@@ -207,12 +217,12 @@ export function Registration() {
                     of {imageMetaDataQueries.length} images loaded
                 </div>
             ) : <div>
-                            {pairToRegister && <RegisterPair key={pairToRegister.primary + pairToRegister.secondary}
-                                images={[imageMetaData[pairToRegister?.primary], imageMetaData[pairToRegister?.secondary]]}
+                            {activePair && <RegisterPair key={activePair.primary + activePair.secondary}
+                                images={[imageMetaData[activePair?.primary], imageMetaData[activePair?.secondary]]}
                                     selectedCategoryIDs={selectedCategoryIDs}
                     selectedSet={selectedAnnotationSet}
-                    transforms={[imageNeighbours[pairToRegister?.primary][pairToRegister?.secondary].tf, imageNeighbours[pairToRegister?.secondary][pairToRegister?.primary].tf]}
-                    next={() => { }}
+                    transforms={[imageNeighbours[activePair?.primary][activePair?.secondary].tf, imageNeighbours[activePair?.secondary][activePair?.primary].tf]}
+                    next={nextPair}
                     prev={() => { }}
                     visible={true}
                     ack={() => { }} />}

@@ -48,7 +48,7 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
   const [totalImageSize, setTotalImageSize] = useState(0);
   const [filteredImageSize, setFilteredImageSize] = useState(0);
   const manContext = useContext(ManagementContext)!;
-  const {imageSetsHook:{data:imageSets,create:createImageSet} } = manContext!;
+  const {imageSetsHook:{data:imageSets} } = manContext!;
 
   if (!userContext) {
     return null;
@@ -62,12 +62,14 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
   }, [show]);
 
   useEffect(() => {
-    setFilteredImageSize(0)
-    setFilteredImageFiles([])
-  }, [name]);
+    if (show) {
+      setFilteredImageSize(0)
+      setFilteredImageFiles([])
+    }
+  }, [show]);
 
   useEffect(() => {
-    setImageFiles(scannedFiles.filter(file => file.type.startsWith('image/')));
+    setImageFiles(scannedFiles.filter(file => file.type.startsWith('image/jpeg')));
   }, [scannedFiles]);
 
   useEffect(() => {
@@ -156,7 +158,15 @@ export default function FilesUploadComponent({ show, handleClose }: FilesUploadC
     handleClose();
     setTotalSteps(filteredImageSize);
     setStepsCompleted(0);
-    const imageSetId = imageSets.find(x => x.name === name)?.id || createImageSet({name, projectId:project.id});
+    async function createImageSet() {
+      const { data: imageSet } = await client.models.ImageSet.create({
+        name,
+        projectId: project.id,
+      });
+      return imageSet?.id;
+    }
+
+    const imageSetId = imageSets.find(x => x.name === name)?.id || await createImageSet();
     filteredImageFiles.map(
       (file) => limitConnections(async () => {
         let lastTransferred = 0;

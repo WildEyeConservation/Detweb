@@ -54,7 +54,11 @@ export function ImageContextFromHook({ hook, locationId, image, children, second
     const nextNeighbours = useMemo(() => {
         //return a dictionary using the image2Id as the key and the transform as the value
         return nextNeighboursQuery.data?.data?.reduce((acc, n) => {
-            acc[n.image2Id] = {fwd: makeTransform(array2Matrix(n.homography)), bwd: makeTransform(inv(array2Matrix(n.homography)))};
+            if (n.homography) {
+                acc[n.image2Id] = {fwd: makeTransform(array2Matrix(n.homography)), bwd: makeTransform(inv(array2Matrix(n.homography)))};
+            }else{
+                acc[n.image2Id] = {fwd: undefined, bwd: undefined};
+            }
             return acc;
         }, {} as Record<string, {fwd: ((c1: [number, number]) => [number, number]), bwd: ((c1: [number, number]) => [number, number])}>);
     }, [nextNeighboursQuery.data])
