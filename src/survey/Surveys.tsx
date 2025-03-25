@@ -390,6 +390,7 @@ export default function Surveys() {
             setSelectedProject(null);
           }}
           project={selectedProject}
+          allProjects={projects}
           addAnnotationSet={(annotationSet) => {
             setProjects(
               projects.map((project) =>

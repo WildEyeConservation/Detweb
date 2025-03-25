@@ -15,11 +15,15 @@ interface Label {
 
 export default function LabelEditor({
   defaultLabels = [],
+  importLabels = [],
   setHandleSave,
 }: {
   defaultLabels?: Label[];
+  importLabels?: Label[];
   setHandleSave: React.Dispatch<
-    React.SetStateAction<((annotationSetId: string, projectId: string) => Promise<void>) | null>
+    React.SetStateAction<
+      ((annotationSetId: string, projectId: string) => Promise<void>) | null
+    >
   >;
 }) {
   const [keys, { start, stop, isRecording }] = useRecordHotkeys();
@@ -96,6 +100,22 @@ export default function LabelEditor({
   useEffect(() => {
     setHandleSave(() => handleSave);
   }, [handleSave]);
+
+  useEffect(() => {
+    if (importLabels.length > 0) {
+      setLabels((labels) => {
+        const newLabels = importLabels.filter(
+          (l) =>
+            !labels.some(
+              (label) =>
+                label.id === l.id ||
+                label.name.toLowerCase() === l.name.toLowerCase()
+            )
+        );
+        return [...labels, ...newLabels];
+      });
+    }
+  }, [importLabels]);
 
   return (
     <Form.Group>
