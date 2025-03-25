@@ -204,6 +204,7 @@ function AddGpsData({ imageSets, setHandleSubmit }: AddGpsDataProps) {
           imageSets={imageSets}
           selectedImageSets={selectedImageSets}
           setSelectedImageSets={setSelectedImageSets}
+          hideIfOneImageSet
         />
       <LabeledToggleSwitch
         className="my-3"

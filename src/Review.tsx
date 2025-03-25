@@ -198,21 +198,11 @@ export function Review({ showAnnotationSetDropdown = true }) {
             </Button>
           </Card.Title>
           <div
-            style={{
-              display: "flex",
-              marginTop: "1rem",
-              flexDirection: "column",
-              alignItems: "center",
-              width: "100%",
-            }}
+            className="w-100 d-flex flex-column align-items-center mt-3"      
           >
             <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                padding: "10px",
-              }}
+              className="w-100 d-flex align-items-center justify-content-center gap-2"
+              style={{ maxWidth: "600px" }}
             >
               <Select
                 value={selectedCategories}
@@ -225,15 +215,8 @@ export function Review({ showAnnotationSetDropdown = true }) {
                     label: q.name,
                     value: q.id,
                   }))}
-                className="basic-multi-select category-select text-black"
-                classNamePrefix="select"
+                className="text-black w-100"
                 closeMenuOnSelect={false}
-                styles={{
-                  valueContainer: (base) => ({
-                    ...base,
-                    overflowY: "auto",
-                  }),
-                }}
               />
               {showAnnotationSetDropdown && (
                 <AnnotationSetDropdown

@@ -25,6 +25,7 @@ const CreateSubset: React.FC<CreateSubsetModalProps> = ({
           setSelectedImageSets(sets);
           setSelectedSets(sets);
         }}
+        hideIfOneImageSet
       />
       <p className="text-center mt-3">
         Choose the type of subset you want to create

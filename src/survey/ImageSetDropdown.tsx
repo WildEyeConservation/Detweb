@@ -6,10 +6,12 @@ export default function ImageSetDropdown({
     imageSets,
     selectedImageSets,
     setSelectedImageSets,
+    hideIfOneImageSet = false,
   }: {
     imageSets: { id: string; name: string }[];
     selectedImageSets: string[];
     setSelectedImageSets: (imageSets: string[]) => void;
+    hideIfOneImageSet?: boolean;
   }) {
 
     useEffect(() => {
@@ -20,6 +22,10 @@ export default function ImageSetDropdown({
           }
         }
       }, [imageSets, selectedImageSets, setSelectedImageSets]);
+
+    if (hideIfOneImageSet && imageSets.length === 1) {
+      return null;
+    }
 
     return (
       <Form.Group>

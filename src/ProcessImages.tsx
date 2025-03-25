@@ -261,6 +261,7 @@ export default function ProcessImages({
         imageSets={imageSets}
         selectedSets={selectedImageSets}
         setImageSets={setSelectedImageSets}
+        hideIfOneImageSet
       />
       <Form.Group>
         <Form.Label>Processing Task</Form.Label>

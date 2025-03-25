@@ -1,5 +1,4 @@
 import { Modal, Button, Form } from "react-bootstrap";
-import Select from "react-select";
 import { useState } from "react";
 import ImageSetDropdown from "./ImageSetDropdown";
 
@@ -39,10 +38,11 @@ export default function LaunchAnnotationSetModal({
       </Modal.Header>
       <Modal.Body>
         <Form className="d-flex flex-column gap-3">
-          <ImageSetDropdown 
+          <ImageSetDropdown
             imageSets={imageSets}
             selectedImageSets={selectedImageSets}
             setSelectedImageSets={setSelectedImageSets}
+            hideIfOneImageSet
           />
           <Form.Group>
             <Form.Label className="mb-0">Batch Size</Form.Label>
@@ -69,7 +69,10 @@ export default function LaunchAnnotationSetModal({
             <div className="d-flex flex-column gap-3">
               <Form.Group>
                 <Form.Label className="mb-0">Task Tag</Form.Label>
-                <span className="text-muted d-block mb-1" style={{ fontSize: "12px" }}>
+                <span
+                  className="text-muted d-block mb-1"
+                  style={{ fontSize: "12px" }}
+                >
                   This tag will be added to all locations in the task.
                 </span>
                 <Form.Control
@@ -80,7 +83,10 @@ export default function LaunchAnnotationSetModal({
               </Form.Group>
               <Form.Group>
                 <Form.Label className="mb-0">Zoom Level</Form.Label>
-                <span className="text-muted d-block mb-1" style={{ fontSize: "12px" }}>
+                <span
+                  className="text-muted d-block mb-1"
+                  style={{ fontSize: "12px" }}
+                >
                   Select the default zoom level for images.
                 </span>
                 <Form.Select
@@ -100,32 +106,37 @@ export default function LaunchAnnotationSetModal({
                 </Form.Select>
               </Form.Group>
               <Form.Group>
-                <Form.Label className="mb-0">Filter by confidence value:</Form.Label>
-                <span className="text-muted d-block mb-1" style={{ fontSize: "12px" }}>
+                <Form.Label className="mb-0">
+                  Filter by confidence value:
+                </Form.Label>
+                <span
+                  className="text-muted d-block mb-1"
+                  style={{ fontSize: "12px" }}
+                >
                   Filter images by confidence value.
                 </span>
                 <div className="d-flex align-items-center gap-2">
                   <Form.Control
                     type="number"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={lowerLimit}
-                  onChange={(e) => setLowerLimit(Number(e.target.value))}
-                  style={{ width: '80px' }}
-                />
-                <span>to</span>
-                <Form.Control
-                  type="number"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={upperLimit}
-                  onChange={(e) => setUpperLimit(Number(e.target.value))}
-                  style={{ width: '80px' }}
-                />
-              </div>
-            </Form.Group>
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={lowerLimit}
+                    onChange={(e) => setLowerLimit(Number(e.target.value))}
+                    style={{ width: "80px" }}
+                  />
+                  <span>to</span>
+                  <Form.Control
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={upperLimit}
+                    onChange={(e) => setUpperLimit(Number(e.target.value))}
+                    style={{ width: "80px" }}
+                  />
+                </div>
+              </Form.Group>
               <Form.Group>
                 <Form.Switch
                   label="Skip Locations With Annotations"
@@ -161,9 +172,7 @@ export default function LaunchAnnotationSetModal({
                 <Form.Switch
                   label="Hide Job From Non-Admin Workers"
                   checked={hidden}
-                  onChange={() =>
-                    setHidden(!hidden)
-                  }
+                  onChange={() => setHidden(!hidden)}
                 />
               </Form.Group>
               <Form.Group>
