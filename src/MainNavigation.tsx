@@ -7,6 +7,7 @@ import { Outlet } from 'react-router-dom';
 import Container from 'react-bootstrap/Container';
 import Notifications from './user/Notifications.tsx';
 import { UserContext } from './Context.tsx';
+import Settings from './user/Settings.tsx';
 
 export default function MainNavigation({ signOut }: { signOut: () => void }) {
   const {
@@ -134,6 +135,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
             <Nav.Link className="mx-2" onClick={signOut}>
               Logout
             </Nav.Link>
+            <Settings />
             <Notifications />
           </div>
         </div>

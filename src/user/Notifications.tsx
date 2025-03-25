@@ -46,7 +46,7 @@ export default function Notifications() {
           >
             {totalNotifications}
           </div>
-          <Bell fill="currentColor" />
+          <Bell  />
         </div>
       </button>
       {show && (
