@@ -69,14 +69,14 @@ export function JobsRemaining() {
 
   return (
       jobsRemaining === "0" || batchSize === 0 ?
-        <div style={{textAlign: "center", flexDirection: "column", width: "100%"}}>
-          <p style={{marginBottom: "4px"}}>
+        <div className="d-flex flex-column align-items-center gap-1 w-100">
+          <p className="mb-0">
             Approximate number of jobs remaining{usingBackupQueue ? " on backup queue " : " "}(globally): {jobsRemaining}
           </p>
-          <p style={{marginBottom: "0px"}}>Approximate number of jobs completed in this session: {sessionJobsCompleted}</p>
+          <p className="mb-0">Approximate number of jobs completed in this session: {sessionJobsCompleted}</p>
         </div>
       :
-        <div style={{textAlign: "center", flexDirection: "column", width: "80%", marginTop: "10px"}}>
+        <div className="d-flex flex-column align-items-center gap-2 w-100">
           <ProgressBar 
             striped 
             variant="info" 
@@ -84,7 +84,7 @@ export function JobsRemaining() {
             now={sessionJobsCompleted % batchSize} 
             label={`${sessionJobsCompleted % batchSize} / ${batchSize}`} 
           />
-          <p style={{marginTop: "10px"}}>Batches completed: {Math.floor(sessionJobsCompleted / batchSize)}</p>
+          <p className="mt-0">Batches completed: {Math.floor(sessionJobsCompleted / batchSize)}</p>
         </div>
   );
 }

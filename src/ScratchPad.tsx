@@ -56,32 +56,23 @@ export function ScratchPad() {
 
     return (
       <div
-        style={{
-          display: "flex",
-          marginTop: "1rem",
-          flexDirection: "column",
-          alignItems: "center",
-          width: "100%",
-          gap: "4px",
-        }}
+        className="d-flex flex-column align-items-center gap-1 w-100 h-100"
+        style={{ paddingTop: "12px", paddingBottom: "12px" }}
       >
-        <div style={{ position: "relative", width: "100%", height: "840px" }}>
-          {preloaders.map((Preloader, index) => (
-            <div
-              key={index}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                zIndex: currentPreloader === Preloader.id ? 20 : 10,
-                opacity: currentPreloader === Preloader.id ? 1 : 0,
-              }}
-            >
-              {Preloader.component}
-            </div>
-          ))}
-        </div>
+        {preloaders.map((Preloader, index) => (
+          <div
+            key={index}
+            className={`${
+              currentPreloader === Preloader.id ? "w-100 h-100" : "d-none"
+            }`}
+            style={{
+              zIndex: currentPreloader === Preloader.id ? 20 : 10,
+              opacity: currentPreloader === Preloader.id ? 1 : 0,
+            }}
+          >
+            {Preloader.component}
+          </div>
+        ))}
         <JobsRemaining />
       </div>
     );

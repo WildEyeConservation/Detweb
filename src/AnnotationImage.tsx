@@ -19,8 +19,6 @@ export default function AnnotationImage(props) {
     location,
     next,
     prev,
-    containerheight = 800,
-    containerwidth = 1024,
     visible,
     id,
     ack,
@@ -44,8 +42,6 @@ export default function AnnotationImage(props) {
   );
   const {
     categoriesHook: { data: categories },
-    currentCategory,
-    setCurrentCategory,
   } = useContext(ProjectContext)!;
   const annotationsHook = useOptimisticUpdates<
     Schema["Annotation"]["type"],
@@ -97,18 +93,11 @@ export default function AnnotationImage(props) {
       taskTag={props.taskTag}
     >
       <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          width: "80%", // Match the parent container width from withPriorityQueue
-          position: "relative",
-        }}
+        className={`d-flex flex-column align-items-center w-100 h-100 gap-3 
+          ${props.taskTag || currentTaskTag ? "" : "pb-2"}`}
       >
         <Image
           stats={stats}
-          containerwidth={containerwidth}
-          containerheight={containerheight}
           visible={visible}
           location={location}
           taskTag={props.taskTag}
@@ -122,13 +111,9 @@ export default function AnnotationImage(props) {
           {visible && memoizedChildren}
         </Image>
         {visible && (props.taskTag || currentTaskTag) && (
-          <div
-            style={{
-              marginTop: "1rem",
-            }}
-          >
+          <p className="mb-0">
             Now working on task {props.taskTag || currentTaskTag}
-          </div>
+          </p>
         )}
       </div>
     </ImageContextFromHook>

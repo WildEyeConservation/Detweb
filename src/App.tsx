@@ -10,17 +10,12 @@ import Container from "react-bootstrap/Container";
 import Nav from "react-bootstrap/Nav";
 import UserStats from "./UserStats";
 import NavDropdown from "react-bootstrap/NavDropdown";
-import ProjectManagement from "./ProjectManagement.tsx";  
+import ProjectManagement from "./ProjectManagement.tsx";
 import DefineCategories from "./DefineCategories.js";
 import QuickTest from "./QuickTest";
 import { Management } from "./UserContext.tsx";
-import {
-  Routes,
-  Route,
-  NavLink,
-  useLocation,
-} from "react-router-dom";
-import SubscriptionComponent from './SubscriptionComponent';
+import { Routes, Route, NavLink, useLocation } from "react-router-dom";
+import SubscriptionComponent from "./SubscriptionComponent";
 import { configure } from "react-hotkeys";
 import ScratchPad from "./ScratchPad.jsx";
 import { withAuthenticator } from "@aws-amplify/ui-react";
@@ -36,8 +31,8 @@ import { BrowserView, MobileView } from "react-device-detect";
 import { GlobalContext } from "./Context";
 import { Schema } from "../amplify/data/resource";
 import Test from "./Test";
-import {Outlet} from "react-router-dom";
-import { StorageImage } from '@aws-amplify/ui-react-storage';
+import { Outlet } from "react-router-dom";
+import { StorageImage } from "@aws-amplify/ui-react-storage";
 //import { ErrorHandler } from './ErrorHandler';
 //import {TaskProgressHandler} from './TaskProgressHandler';
 
@@ -57,23 +52,24 @@ interface AppProps {
 
 function App({ signOut = () => {}, user }: AppProps) {
   const [session, setSession] = useState<any>();
-  const [currentPM, setCurrentPM] = useState<Schema['UserProjectMembership']['type'] | undefined>(undefined);
-  const { showModal } = useContext(GlobalContext)!
+  const [currentPM, setCurrentPM] = useState<
+    Schema["UserProjectMembership"]["type"] | undefined
+  >(undefined);
+  const { showModal } = useContext(GlobalContext)!;
   const [userAttributes, setUserAttributes] = useState<any>(null);
   const location = useLocation();
   useEffect(() => {
     //fetchAuthSession().then((sess) => setSession(sess));
-    fetchUserAttributes().then(attributes => setUserAttributes(attributes));
+    fetchUserAttributes().then((attributes) => setUserAttributes(attributes));
   }, [user]);
 
-  
   // let handleSelect = async function (key: string | null) {
   //   if (key == "addFiles") {
   //     setDirHandle(await (window as any).showDirectoryPicker());
   //   }
   //   setModalToShow(key);
   // };
-  
+
   useEffect(() => {
     window.addEventListener("beforeunload", alertUser);
     return () => {
@@ -82,7 +78,7 @@ function App({ signOut = () => {}, user }: AppProps) {
   }, []);
   const alertUser = (e: BeforeUnloadEvent) => {
     alert(
-      "If you use refresh to load new data it may result in some of your work being lost.",
+      "If you use refresh to load new data it may result in some of your work being lost."
     );
     e.preventDefault();
     e.returnValue = "";
@@ -90,76 +86,81 @@ function App({ signOut = () => {}, user }: AppProps) {
   useEffect(() => {
     fetchAuthSession().then((sess) => setSession(sess));
   }, [user]);
-  
+
   return (
     session && (
       <>
         <BrowserView>
-            <User user={user}>
-                  <div
-                    className="App d-flex flex-column"
-                    style={{ height: "100vh", overflow: "hidden" }} // Changed overflow to hidden
-                  >
-                    
-              <Navbar bg="primary" variant="dark" fixed="top">
-                
-      <Container fluid>
-        <Navbar.Toggle aria-controls="basic-navbar-nav" />
-        <Navbar.Collapse id="basic-navbar-nav">
-          <Nav fill activeKey={location.pathname}>
-            <Nav.Link
-              as={NavLink}
-              eventKey="/annotate"
-              to="annotate"
+          <User user={user}>
+            <div
+              className="d-flex flex-column"
+              style={{ height: "100vh", overflow: "hidden" }} // Changed overflow to hidden
             >
-              Annotate
-            </Nav.Link>
-            <IfProjectAdmin currentPM={currentPM}>
-              <Nav.Link
-                as={NavLink}
-                eventKey="/projectManagement"
-                to="projectManagement"
-              >
-                Project Management
-              </Nav.Link>
-            </IfProjectAdmin>
-            <Nav.Link
-              as={NavLink}
-              eventKey="/userStats"
-              to="leaderboard"
-            >
-              Leaderboard
-            </Nav.Link>
-            <IfProjectAdmin currentPM={currentPM}>
-                      <Nav.Link as={NavLink} eventKey="/review" to="review">
-              Review
-            </Nav.Link>
-            <Nav.Link as={NavLink} eventKey="/registration" to="registration">
-              Registration
+              <Navbar bg="primary" variant="dark" sticky="top">
+                <Container fluid>
+                  <Navbar.Toggle aria-controls="basic-navbar-nav" />
+                  <Navbar.Collapse id="basic-navbar-nav">
+                    <Nav fill activeKey={location.pathname}>
+                      <Nav.Link as={NavLink} eventKey="/annotate" to="annotate">
+                        Annotate
+                      </Nav.Link>
+                      <IfProjectAdmin currentPM={currentPM}>
+                        <Nav.Link
+                          as={NavLink}
+                          eventKey="/projectManagement"
+                          to="projectManagement"
+                        >
+                          Project Management
                         </Nav.Link>
-            </IfProjectAdmin>
-        </Nav>
-        </Navbar.Collapse>
-        <Nav className="navbar-right">
-          <ProgressIndicators />
-          <ProjectSelector currentPM={currentPM} setCurrentPM={setCurrentPM}/>
-          <Nav.Link onClick={signOut}>Log out {userAttributes?.preferred_username}</Nav.Link>
-        </Nav>
-      </Container>
-              </Navbar>
-              
-              {currentPM && <Project currentPM={currentPM}><Management>
-                <Container
-                  fluid
-                  className="d-flex justify-content-center h-100"
-                  style={{ marginTop: "56px", overflowY: "auto" }} // Added marginTop and overflowY
-                >
-                  <Outlet />
+                      </IfProjectAdmin>
+                      <Nav.Link
+                        as={NavLink}
+                        eventKey="/userStats"
+                        to="leaderboard"
+                      >
+                        Leaderboard
+                      </Nav.Link>
+                      <IfProjectAdmin currentPM={currentPM}>
+                        <Nav.Link as={NavLink} eventKey="/review" to="review">
+                          Review
+                        </Nav.Link>
+                        <Nav.Link
+                          as={NavLink}
+                          eventKey="/registration"
+                          to="registration"
+                        >
+                          Registration
+                        </Nav.Link>
+                      </IfProjectAdmin>
+                    </Nav>
+                  </Navbar.Collapse>
+                  <Nav className="navbar-right">
+                    <ProgressIndicators />
+                    <ProjectSelector
+                      currentPM={currentPM}
+                      setCurrentPM={setCurrentPM}
+                    />
+                    <Nav.Link onClick={signOut}>
+                      Log out {userAttributes?.preferred_username}
+                    </Nav.Link>
+                  </Nav>
                 </Container>
-                </Management>
-                </Project>}
-                  </div>
-            </User>
+              </Navbar>
+
+              {currentPM && (
+                <Project currentPM={currentPM}>
+                  <Management>
+                    <Container
+                      fluid
+                      className="d-flex justify-content-center h-100 overflow-y-auto"
+                    >
+                      <Outlet />
+                    </Container>
+                  </Management>
+                </Project>
+              )}
+            </div>
+          </User>
         </BrowserView>
         <MobileView>
           <p>

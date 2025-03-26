@@ -63,22 +63,13 @@ export function PreloaderFactory(WrappedComponent: React.ComponentType<any>) {
       const subset = buffer.slice(subsetStart, index + preloadN);
       if (subset?.length) {
         return (
-          <div style={{ 
-            position: 'relative',  // Add this container
-            width: '100%',
-          }}>
+          <>
             {subset.map((entry, i) => (
               <div
                 key={entry.id}
+                className={`${i === index - subsetStart ? "d-flex justify-content-center w-100 h-100" : "d-none"}`}
                 style={{
                   visibility: i === index - subsetStart ? "visible" : "hidden",
-                  position: "absolute",
-                  justifyContent: "center",
-                  display: "flex",
-                  width: "80%",
-                  left: '50%',                    // Add these positioning properties
-                  transform: 'translateX(-50%)',   // to maintain horizontal centering
-                  top: 0
                 }}
               >
                 <WrappedComponent
@@ -95,10 +86,9 @@ export function PreloaderFactory(WrappedComponent: React.ComponentType<any>) {
                     setIndex(index=>index-1)
                   } : undefined} 
                 />
-                <div></div>
               </div>
             ))}
-          </div>
+          </>
         );
       } else {
         return <></>;

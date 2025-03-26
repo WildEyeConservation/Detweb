@@ -363,10 +363,10 @@ const BaseImage: React.FC<BaseImageProps> = memo(
     return useMemo(
       () => (
         <div
+          className="d-flex flex-column align-items-center w-100 h-100"
           style={{
             visibility: visible && fullyLoaded ? "visible" : "hidden",
-            width: "100%",
-            height: "100%",
+            position: "relative",
           }}
         >
           {queriesComplete && (
