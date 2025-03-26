@@ -1,10 +1,11 @@
 import { useEffect, useState, useContext, useCallback } from "react";
-import { UserContext,ProjectContext } from "./Context";
+import { UserContext,ProjectContext, GlobalContext } from "./Context";
 import { ReceiveMessageCommand, DeleteMessageCommand } from "@aws-sdk/client-sqs";
 
 export default function useSQS(filterPredicate: (message: any) => Promise<boolean> = async () => { return true }) {
   const { currentPM } = useContext(ProjectContext)!;
   const {getSqsClient} = useContext(UserContext)!;
+  const { client } = useContext(GlobalContext)!;
   const [url,setUrl] = useState<string | undefined>(undefined);
   const [backupUrl,setBackupUrl] = useState<string | undefined>(undefined);
   const [zoom,setZoom] = useState<number | undefined>(undefined);
@@ -12,18 +13,17 @@ export default function useSQS(filterPredicate: (message: any) => Promise<boolea
 
   useEffect(() => {
     if (currentPM.queueId) {
-      currentPM.queue().then(
+      client.models.Queue.get({ id: currentPM.queueId }).then(
         ({ data: { url, zoom } }) => {
           setUrl(url);
           setZoom(zoom);
         });
       if (currentPM.backupQueueId) {
-        currentPM.backupQueue().then(
+        client.models.Queue.get({ id: currentPM.backupQueueId }).then(
           ({ data: { url, zoom } }) => {
             setBackupUrl(url);
             setBackupZoom(zoom);
           });
-
       }
     }
   }, [currentPM]);
