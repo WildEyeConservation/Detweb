@@ -1,7 +1,7 @@
-import { useMemo, useContext, useCallback, useEffect } from "react";
+import { useMemo, useContext, useCallback, useEffect, useState } from "react";
 import BaseImage from "./BaseImage";
 import { withAckOnTimeout } from "./useAckOnTimeout";
-import { Legend } from "./Legend";
+import { MapLegend, SideLegend } from "./Legend";
 import Location from "./Location";
 import { withCreateObservation } from "./useCreateObservation";
 import CreateAnnotationOnClick from "./CreateAnnotationOnClick";
@@ -12,23 +12,16 @@ import { ImageContextFromHook } from "./ImageContext";
 import CreateAnnotationOnHotKey from "./CreateAnnotationOnHotKey";
 import { Schema } from "../amplify/data/resource";
 import useImageStats from "./useImageStats";
+import { Badge } from "react-bootstrap";
 const Image = withCreateObservation(withAckOnTimeout(BaseImage));
 
-export default function AnnotationImage(props) {
-  const {
-    location,
-    next,
-    prev,
-    visible,
-    id,
-    ack,
-    allowOutside,
-    zoom,
-  } = props;
+export default function AnnotationImage(props: any) {
+  const { location, next, prev, visible, id, ack, allowOutside, zoom } = props;
   const { annotationSetId } = location;
   const { client } = useContext(GlobalContext)!;
   //testing
   const { currentTaskTag } = useContext(UserContext)!;
+  const [expanded, setExpanded] = useState(true);
   const subscriptionFilter = useMemo(
     () => ({
       filter: {
@@ -69,7 +62,12 @@ export default function AnnotationImage(props) {
       />,
       <ShowMarkers key="showMarkers" />,
       <Location key="location" {...location} />,
-      <Legend key="legend" position="bottomright" />,
+      <MapLegend
+        key="legend"
+        position="bottomright"
+        hideLegend={expanded}
+        setHideLegend={() => setExpanded((e) => !e)}
+      />,
     ].concat(
       categories?.map((category) => (
         <CreateAnnotationOnHotKey
@@ -82,7 +80,7 @@ export default function AnnotationImage(props) {
         />
       ))
     );
-  }, [props.taskTag, location.image.id, annotationSetId]);
+  }, [props.taskTag, location.image.id, annotationSetId, expanded]);
 
   return (
     <ImageContextFromHook
@@ -92,29 +90,37 @@ export default function AnnotationImage(props) {
       secondaryQueueUrl={props.secondaryQueueUrl}
       taskTag={props.taskTag}
     >
-      <div
-        className={`d-flex flex-column align-items-center w-100 h-100 gap-3 
-          ${props.taskTag || currentTaskTag ? "" : "pb-2"}`}
-      >
-        <Image
-          stats={stats}
-          visible={visible}
-          location={location}
-          taskTag={props.taskTag}
-          zoom={zoom}
-          id={id}
-          prev={prev}
-          next={next}
-          ack={ack}
-          annotationSet={annotationSetId}
+      <div className="d-flex flex-row justify-content-center w-100 h-100 gap-3 overflow-auto">
+        <div
+          className={`d-flex flex-column align-items-center w-100 h-100 gap-3`}
+          style={{
+            maxWidth: "1024px",
+          }}
         >
-          {visible && memoizedChildren}
-        </Image>
-        {visible && (props.taskTag || currentTaskTag) && (
-          <p className="mb-0">
-            Now working on task {props.taskTag || currentTaskTag}
-          </p>
-        )}
+          {visible && (props.taskTag || currentTaskTag) && (
+            <Badge bg="primary">
+              Working on: {props.taskTag || currentTaskTag}
+            </Badge>
+          )}
+          <Image
+            stats={stats}
+            visible={visible}
+            location={location}
+            taskTag={props.taskTag}
+            zoom={zoom}
+            id={id}
+            prev={prev}
+            next={next}
+            ack={ack}
+            annotationSet={annotationSetId}
+          >
+            {visible && memoizedChildren}
+          </Image>
+        </div>
+        <SideLegend
+          hideLegend={!expanded}
+          setHideLegend={() => setExpanded((e) => !e)}
+        />
       </div>
     </ImageContextFromHook>
   );

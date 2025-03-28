@@ -362,101 +362,102 @@ const BaseImage: React.FC<BaseImageProps> = memo(
     );
     return useMemo(
       () => (
-        <div
-          className="d-flex flex-column align-items-center w-100 h-100"
-          style={{
-            visibility: visible && fullyLoaded ? "visible" : "hidden",
-            position: "relative",
-          }}
-        >
-          {queriesComplete && (
-            <MapContainer
-              // id={id}
-              key={JSON.stringify(contextMenuItems)}
-              style={style}
-              crs={L.CRS.Simple}
-              bounds={zoom ? undefined : viewBounds}
-              center={zoom && viewCenter}
-              contextmenu={true}
-              contextmenuItems={contextMenuItems}
-              zoom={zoom}
-              zoomSnap={1}
-              zoomDelta={1}
-              keyboardPanDelta={0}
-            >
-              <LayersControl position="topright">
-                {imageFiles.map((image) => (
-                  <LayersControl.BaseLayer
-                    key={image.id}
-                    name={image.type}
-                    checked={true}
-                  >
-                    {/* {fullImageTypes.includes(image.type) ? 
+        <div className="d-flex flex-column align-items-center w-100 h-100 gap-3">
+          <div
+            className="d-flex flex-column align-items-center w-100 h-100"
+            style={{
+              visibility: visible && fullyLoaded ? "visible" : "hidden",
+              position: "relative",
+            }}
+          >
+            {queriesComplete && (
+              <MapContainer
+                // id={id}
+                key={JSON.stringify(contextMenuItems)}
+                style={style}
+                crs={L.CRS.Simple}
+                bounds={zoom ? undefined : viewBounds}
+                center={zoom && viewCenter}
+                contextmenu={true}
+                contextmenuItems={contextMenuItems}
+                zoom={zoom}
+                zoomSnap={1}
+                zoomDelta={1}
+                keyboardPanDelta={0}
+              >
+                <LayersControl position="topright">
+                  {imageFiles.map((image) => (
+                    <LayersControl.BaseLayer
+                      key={image.id}
+                      name={image.type}
+                      checked={true}
+                    >
+                      {/* {fullImageTypes.includes(image.type) ? 
               <S3ImageOverlay
               bounds={imageBounds}
               source={image.s3key} 
               url={""} />: */}
-                    <StorageLayer
-                      eventHandlers={{
-                        load: () => {
-                          console.log("All visible tiles have loaded");
-                          setFullyLoaded(true);
-                        },
-                      }}
-                      source={source}
-                      bounds={imageBounds}
-                      maxNativeZoom={5}
-                      noWrap={true}
-                      //getObject={getObject}
-                    />
-                  </LayersControl.BaseLayer>
-                ))}
-                {prevImages?.toReversed()?.map((im, idx) => (
-                  <LayersControl.Overlay
-                    name={`Overlap ${im.image.originalPath}`}
-                    key={idx}
-                    checked={im.image.id == otherImageId}
-                  >
-                    <LayerGroup>
-                      <OverlapOutline
-                        transform={im.transform.bwd}
-                        image={im.image}
+                      <StorageLayer
+                        eventHandlers={{
+                          load: () => {
+                            console.log("All visible tiles have loaded");
+                            setFullyLoaded(true);
+                          },
+                        }}
+                        source={source}
+                        bounds={imageBounds}
+                        maxNativeZoom={5}
+                        noWrap={true}
+                        //getObject={getObject}
                       />
-                    </LayerGroup>
-                  </LayersControl.Overlay>
-                ))}
-                {nextImages?.map((im, idx) => (
-                  <LayersControl.Overlay
-                    name={`Overlap ${im.image.originalPath}`}
-                    key={idx}
-                    checked={im.image.id == otherImageId}
-                  >
-                    <LayerGroup>
-                      <OverlapOutline
-                        transform={im.transform.bwd}
-                        image={im.image}
-                      />
-                    </LayerGroup>
-                  </LayersControl.Overlay>
-                ))}
-              </LayersControl>
-              {children}
-              {(next || prev) && fullyLoaded && (
-                <NavButtons
-                  position="bottomleft"
-                  prev={prev}
-                  next={canAdvance ? next : undefined}
-                />
-              )}
-              <ZoomTracker />
-            </MapContainer>
-          )}
-          {belongsToCurrentProject?.isAdmin && (
-            <TestLocationModal
-              show={modalToShow === testModalId}
-              onClose={() => showModal(null)}
-              locationId={location?.id || ""}
-              annotationSetId={location?.annotationSetId || ""}
+                    </LayersControl.BaseLayer>
+                  ))}
+                  {prevImages?.toReversed()?.map((im, idx) => (
+                    <LayersControl.Overlay
+                      name={`Overlap ${im.image.originalPath}`}
+                      key={idx}
+                      checked={im.image.id == otherImageId}
+                    >
+                      <LayerGroup>
+                        <OverlapOutline
+                          transform={im.transform.bwd}
+                          image={im.image}
+                        />
+                      </LayerGroup>
+                    </LayersControl.Overlay>
+                  ))}
+                  {nextImages?.map((im, idx) => (
+                    <LayersControl.Overlay
+                      name={`Overlap ${im.image.originalPath}`}
+                      key={idx}
+                      checked={im.image.id == otherImageId}
+                    >
+                      <LayerGroup>
+                        <OverlapOutline
+                          transform={im.transform.bwd}
+                          image={im.image}
+                        />
+                      </LayerGroup>
+                    </LayersControl.Overlay>
+                  ))}
+                </LayersControl>
+                {children}
+                <ZoomTracker />
+              </MapContainer>
+            )}
+            {belongsToCurrentProject?.isAdmin && (
+              <TestLocationModal
+                show={modalToShow === testModalId}
+                onClose={() => showModal(null)}
+                locationId={location?.id || ""}
+                annotationSetId={location?.annotationSetId || ""}
+              />
+            )}
+          </div>
+          {(next || prev) && fullyLoaded && (
+            <NavButtons
+              prev={prev}
+              next={canAdvance ? next : undefined}
             />
           )}
         </div>

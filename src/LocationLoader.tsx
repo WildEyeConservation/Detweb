@@ -36,8 +36,8 @@ export function LocationLoader() {
 
   return (
     <div
-      className="d-flex flex-column align-items-center w-100 h-100 pb-1"
-      style={{ paddingTop: "12px" }}
+      className="d-flex flex-column align-items-center w-100 h-100"
+      style={{ paddingTop: "12px", paddingBottom: "12px" }}
     >
       {element}
     </div>

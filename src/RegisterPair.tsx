@@ -6,7 +6,7 @@ import OverlapOutline from "./OverlapOutline";
 import { useHotkeys } from "react-hotkeys-hook";
 import { GotoAnnotation } from "./GotoAnnotation";
 import { useOptimalAssignment } from "./useOptimalAssignment";
-import { Legend } from "./Legend";
+import { MapLegend } from "./Legend";
 import { multiply, inv, Matrix } from "mathjs";
 import useAckOnTimeout from "./useAckOnTimeout";
 import { ShowMarkers } from "./ShowMarkers";
@@ -203,7 +203,7 @@ export function RegisterPair({
                 setBlocked={setBlocked}
               />
             )}
-            {i == 1 && <Legend position="bottomright" />}
+            {i == 1 && <MapLegend position="bottomright" />}
             </BaseImage>
           </ImageContextFromHook>
         )}

@@ -1,8 +1,7 @@
-import { POSITION_CLASSES } from "./NavButtons";
 import { useState, useEffect, useRef, useContext } from "react";
 import L from "leaflet";
 import { ProjectContext, UserContext } from "./Context";
-
+import { Card, Button } from "react-bootstrap";
 
 /**
  *
@@ -18,13 +17,81 @@ import { ProjectContext, UserContext } from "./Context";
  * of the category is supplied as a parameter to the function call. Typically used to select the clicked category.
  */
 
+const POSITION_CLASSES = {
+  bottomleft: "leaflet-bottom leaflet-left",
+  bottomright: "leaflet-bottom leaflet-right",
+  topleft: "leaflet-top leaflet-left",
+  topright: "leaflet-top leaflet-right",
+};
+
 interface LegendProps {
-  position: keyof typeof POSITION_CLASSES;
+  position?: keyof typeof POSITION_CLASSES;
+  hideLegend?: boolean;
+  setHideLegend?: VoidFunction;
 }
 
+export function SideLegend({ hideLegend, setHideLegend }: LegendProps) {
+  const {
+    categoriesHook: { data: categories },
+    currentCategory,
+    setCurrentCategory,
+  } = useContext(ProjectContext)!;
 
-export function Legend({ position }: LegendProps) {
-  const {categoriesHook:{data:categories},currentCategory,setCurrentCategory} = useContext(ProjectContext)!;
+  if (hideLegend) {
+    return null;
+  }
+
+  return (
+    <Card className="d-flex flex-column h-100">
+      <Card.Header>
+        <Card.Title className="d-flex flex-row justify-content-between align-items-center gap-2 mb-0">
+          <span>Legend</span>
+          <Button
+            variant="primary"
+            className="d-flex align-items-center justify-content-center"
+            style={{ width: "30px", height: "30px" }}
+            onClick={setHideLegend}
+          >
+            &lt;
+          </Button>
+        </Card.Title>
+        <span className="text-muted" style={{ fontSize: "14px" }}>
+          Select a label to annotate with or use the shortcut key
+        </span>
+      </Card.Header>
+      <Card.Body className="d-flex flex-column gap-2 overflow-auto">
+        {categories?.map((category) => (
+          <Button
+            variant={currentCategory?.id === category.id ? "info" : "primary"}
+            key={category.id}
+            className="d-flex flex-row align-items-center justify-content-between gap-2"
+            onClick={() => setCurrentCategory(category)}
+          >
+            <div className="d-flex flex-row align-items-center gap-2">
+              <div
+                style={{ backgroundColor: category.color || "#000" }}
+                className="rounded-circle p-2"
+              ></div>
+              <div>{category.name}</div>
+            </div>
+            <div>({category.shortcutKey})</div>
+          </Button>
+        ))}
+      </Card.Body>
+    </Card>
+  );
+}
+
+export function MapLegend({
+  position,
+  hideLegend = false,
+  setHideLegend,
+}: LegendProps) {
+  const {
+    categoriesHook: { data: categories },
+    setCurrentCategory,
+  } = useContext(ProjectContext)!;
+
   const divRef = useRef<HTMLDivElement | null>(null);
   const positionClass =
     (position && POSITION_CLASSES[position]) || POSITION_CLASSES.bottomright;
@@ -36,6 +103,10 @@ export function Legend({ position }: LegendProps) {
     }
   });
 
+  if (hideLegend) {
+    return null;
+  }
+
   return (
     <div ref={divRef} className={positionClass}>
       <div className="leaflet-control leaflet-bar">
@@ -46,30 +117,47 @@ export function Legend({ position }: LegendProps) {
         >
           <div>
             {expanded
-              ? categories?.sort((a, b) => a.name.localeCompare(b.name)).map((item, index) => {
-                  return (
-                    <div
-                      key={index}
-                      onClick={() => setCurrentCategory(item)}
-                      style={{ display: "flex", flexDirection: "row" }}
-                    >
-                      <i style={{ background: item.color || "#000" }}></i>
+              ? categories
+                  ?.sort((a, b) => a.name.localeCompare(b.name))
+                  .map((item, index) => {
+                    return (
                       <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "row",
-                          width: "100%",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                        }}
+                        key={index}
+                        onClick={() => setCurrentCategory(item)}
+                        style={{ display: "flex", flexDirection: "row" }}
                       >
-                        <div>{item.name}</div>
-                        <div>({item.shortcutKey})</div>
+                        <i style={{ background: item.color || "#000" }}></i>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "row",
+                            width: "100%",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <div>{item.name}</div>
+                          <div>({item.shortcutKey})</div>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })
+                    );
+                  })
               : "Legend"}
+            {expanded && setHideLegend && (
+              <div className="d-flex flex-row align-items-center gap-2">
+                <Button
+                  variant="primary"
+                  className="mt-2"
+                  size="sm"
+                  onClick={() => {
+                    setHideLegend();
+                    setExpanded(false);
+                  }}
+                >
+                  Pop out legend
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
