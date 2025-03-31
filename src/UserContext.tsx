@@ -23,6 +23,7 @@ import { useQuery } from "@tanstack/react-query";
 
 export function Project({ children, currentPM }: { children: React.ReactNode, currentPM: Schema['UserProjectMembership']['type']   }) {
   const { client } = useContext(GlobalContext)!;
+  const [ expandLegend, setExpandLegend] = useState<boolean>(true);
   const {myMembershipHook} = useContext(UserContext)!;
   const subscriptionFilter = useMemo(() => ({
     filter: { projectId: { eq: currentPM?.projectId } }
@@ -67,7 +68,9 @@ export function Project({ children, currentPM }: { children: React.ReactNode, cu
         categoriesHook,
         currentPM : myMembershipHook.data.find(m=>m.projectId==currentProject.id),
         currentCategory,
-        setCurrentCategory
+        setCurrentCategory,
+        expandLegend,
+        setExpandLegend
     }}>
       {currentProject && children}
     </ProjectContext.Provider>

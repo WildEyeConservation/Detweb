@@ -76,6 +76,8 @@ export interface ProjectContextType {
     categoriesHook: CRUDhook<'Category'>; 
     currentCategory: Schema['Category']['type'],
     setCurrentCategory: React.Dispatch<React.SetStateAction<Schema['Category']['type']>>
+    expandLegend: boolean,
+    setExpandLegend: React.Dispatch<React.SetStateAction<boolean>>
 }
 
 export interface ProgressContextType {

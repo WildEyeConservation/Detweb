@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useContext } from "react";
 import L from "leaflet";
 import { ProjectContext, UserContext } from "./Context";
 import { Card, Button } from "react-bootstrap";
+import OverlayTrigger from "react-bootstrap/OverlayTrigger";
+import Tooltip from "react-bootstrap/Tooltip";
 
 /**
  *
@@ -42,18 +44,23 @@ export function SideLegend({ hideLegend, setHideLegend }: LegendProps) {
   }
 
   return (
-    <Card className="d-flex flex-column h-100">
+    <Card className="d-flex flex-column h-100 overflow-hidden">
       <Card.Header>
         <Card.Title className="d-flex flex-row justify-content-between align-items-center gap-2 mb-0">
           <span>Legend</span>
-          <Button
-            variant="primary"
-            className="d-flex align-items-center justify-content-center"
+          <OverlayTrigger
+            placement="top"
+            overlay={<Tooltip>Collapse legend</Tooltip>}
+          >
+            <Button
+              variant="primary"
+              className="d-flex align-items-center justify-content-center"
             style={{ width: "30px", height: "30px" }}
             onClick={setHideLegend}
           >
-            &lt;
-          </Button>
+              &lt;
+            </Button>
+          </OverlayTrigger>
         </Card.Title>
         <span className="text-muted" style={{ fontSize: "14px" }}>
           Select a label to annotate with or use the shortcut key

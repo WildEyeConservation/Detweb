@@ -210,7 +210,7 @@ export function Review() {
               preloadN={2}
               historyN={2}
             />
-            <div style={{ width: "80%" }}>
+            <div className="mt-2" style={{ width: "80%"}}>
               <Form.Range
                 value={index}
                 onChange={(e) => setIndex(parseInt(e.target.value))}

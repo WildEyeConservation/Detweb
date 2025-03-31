@@ -21,7 +21,6 @@ export default function AnnotationImage(props: any) {
   const { client } = useContext(GlobalContext)!;
   //testing
   const { currentTaskTag } = useContext(UserContext)!;
-  const [expanded, setExpanded] = useState(true);
   const subscriptionFilter = useMemo(
     () => ({
       filter: {
@@ -35,6 +34,8 @@ export default function AnnotationImage(props: any) {
   );
   const {
     categoriesHook: { data: categories },
+    expandLegend,
+    setExpandLegend
   } = useContext(ProjectContext)!;
   const annotationsHook = useOptimisticUpdates<
     Schema["Annotation"]["type"],
@@ -65,8 +66,8 @@ export default function AnnotationImage(props: any) {
       <MapLegend
         key="legend"
         position="bottomright"
-        hideLegend={expanded}
-        setHideLegend={() => setExpanded((e) => !e)}
+        hideLegend={expandLegend}
+        setHideLegend={() => setExpandLegend((e) => !e)}
       />,
     ].concat(
       categories?.map((category) => (
@@ -80,7 +81,7 @@ export default function AnnotationImage(props: any) {
         />
       ))
     );
-  }, [props.taskTag, location.image.id, annotationSetId, expanded]);
+  }, [props.taskTag, location.image.id, annotationSetId, expandLegend]);
 
   return (
     <ImageContextFromHook
@@ -118,8 +119,8 @@ export default function AnnotationImage(props: any) {
           </Image>
         </div>
         <SideLegend
-          hideLegend={!expanded}
-          setHideLegend={() => setExpanded((e) => !e)}
+          hideLegend={!expandLegend}
+          setHideLegend={() => setExpandLegend((e) => !e)}
         />
       </div>
     </ImageContextFromHook>
