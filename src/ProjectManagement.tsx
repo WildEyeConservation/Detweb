@@ -45,9 +45,9 @@ const ProjectManagement = () => {
             {/* <Tab label="Tasks">
               <TaskManagement key={'tasks' + project.id} />
             </Tab> */}
-            <Tab label="Annotation Sets">
+            {/* <Tab label="Annotation Sets">
               <AnnotationSetManagement key={'asets' + project.id} />
-            </Tab>
+            </Tab> */}
             {/* <Tab label="Jobs">
               <QueueManagement key={'queues' + project.id} />
             </Tab> */}

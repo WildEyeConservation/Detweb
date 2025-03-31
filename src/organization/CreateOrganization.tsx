@@ -1,32 +1,32 @@
-import Card from 'react-bootstrap/Card';
-import Form from 'react-bootstrap/Form';
-import Button from 'react-bootstrap/Button';
-import { useState, useContext } from 'react';
-import { GlobalContext, UserContext } from '../Context';
-import { useUsers } from '../apiInterface';
+import Card from "react-bootstrap/Card";
+import Form from "react-bootstrap/Form";
+import Button from "react-bootstrap/Button";
+import { useState, useContext } from "react";
+import { GlobalContext, UserContext } from "../Context";
+import { useUsers } from "../apiInterface";
 
 export default function CreateOrganization() {
   const { cognitoGroups } = useContext(UserContext)!;
   const { client } = useContext(GlobalContext);
   const { users } = useUsers();
 
-  const [name, setName] = useState<string>('');
-  const [description, setDescription] = useState<string>('');
-  const [adminEmail, setAdminEmail] = useState<string>('');
+  const [name, setName] = useState<string>("");
+  const [description, setDescription] = useState<string>("");
+  const [adminEmail, setAdminEmail] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!name) {
-      alert('Name is required');
+      alert("Name is required");
       return;
     }
 
     const user = users.find((user) => user.email === adminEmail);
 
     if (!user) {
-      alert('A user with this email does not exist');
+      alert("A user with this email does not exist");
       return;
     }
 
@@ -46,7 +46,7 @@ export default function CreateOrganization() {
         });
 
       if (membership) {
-        alert('Organization ' + name + ' created for ' + adminEmail);
+        alert("Organization " + name + " created for " + adminEmail);
       }
     }
 
@@ -55,12 +55,12 @@ export default function CreateOrganization() {
   };
 
   const handleClear = () => {
-    setName('');
-    setDescription('');
-    setAdminEmail('');
+    setName("");
+    setDescription("");
+    setAdminEmail("");
   };
 
-  if (!cognitoGroups.includes('sysadmin')) {
+  if (!cognitoGroups.includes("sysadmin")) {
     return <div>You are not authorized to access this page.</div>;
   }
 
@@ -68,15 +68,17 @@ export default function CreateOrganization() {
     <div
       className="d-flex flex-column gap-3 align-items-center mt-3"
       style={{
-        maxWidth: '960px',
-        width: '100%',
+        maxWidth: "960px",
+        width: "100%",
       }}
     >
       <Card className="w-100">
-        <Card.Body>
-          <Card.Title>
-            <h4>Create Organization</h4>
+        <Card.Header>
+          <Card.Title className="mb-0">
+            <h4 className="mb-0">Create Organization</h4>
           </Card.Title>
+        </Card.Header>
+        <Card.Body>
           <Form onSubmit={handleSubmit}>
             <Form.Group className="mb-3">
               <Form.Label>Name</Form.Label>

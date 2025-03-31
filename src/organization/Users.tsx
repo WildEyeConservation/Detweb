@@ -2,7 +2,7 @@ import Button from 'react-bootstrap/Button';
 import MyTable from '../Table';
 import { useOptimisticUpdates } from '../useOptimisticUpdates';
 import { Schema } from '../../amplify/data/resource';
-import { useContext, useState } from 'react';
+import { useContext, useState, useEffect } from 'react';
 import { GlobalContext, UserContext } from '../Context';
 import { useUsers } from '../apiInterface';
 import InviteUserModal from './InviteUserModal';
@@ -14,6 +14,7 @@ import ConfirmationModal from '../ConfirmationModal';
 export default function Users({
   organization,
   hook,
+  setOnClick,
 }: {
   organization: { id: string; name: string };
   hook: ReturnType<
@@ -22,6 +23,7 @@ export default function Users({
       'OrganizationMembership'
     >
   >;
+  setOnClick: (onClick: { name: string; function: () => void }) => void;
 }) {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
   const { user: authUser } = useContext(UserContext)!;
@@ -164,6 +166,13 @@ export default function Users({
     };
   });
 
+  useEffect(() => {
+    setOnClick({
+      name: 'Invite User',
+      function: () => showModal('inviteUser'),
+    });
+  }, []);
+
   return (
     <>
       <div className="d-flex flex-column gap-2 mt-3 w-100">
@@ -175,11 +184,6 @@ export default function Users({
           itemsPerPage={5}
           emptyMessage="Loading users..."
         />
-        <div className="d-flex justify-content-center mt-2 border-top pt-3 border-dark">
-          <Button variant="primary" onClick={() => showModal('inviteUser')}>
-            Invite User
-          </Button>
-        </div>
       </div>
       <InviteUserModal
         memberships={hook.data}

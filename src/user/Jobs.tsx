@@ -1,12 +1,12 @@
-import { Card } from 'react-bootstrap';
-import { useContext, useEffect, useState } from 'react';
-import { UserContext, GlobalContext } from '../Context';
-import { Schema } from '../../amplify/data/resource';
-import { Spinner, Button } from 'react-bootstrap';
-import MyTable from '../Table';
-import { useNavigate } from 'react-router-dom';
-import { type GetQueueAttributesCommandInput } from '@aws-sdk/client-sqs';
-import { GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
+import { Card } from "react-bootstrap";
+import { useContext, useEffect, useState } from "react";
+import { UserContext, GlobalContext } from "../Context";
+import { Schema } from "../../amplify/data/resource";
+import { Spinner, Button } from "react-bootstrap";
+import MyTable from "../Table";
+import { useNavigate } from "react-router-dom";
+import { type GetQueueAttributesCommandInput } from "@aws-sdk/client-sqs";
+import { GetQueueAttributesCommand } from "@aws-sdk/client-sqs";
 
 type Project = {
   id: string;
@@ -15,7 +15,7 @@ type Project = {
     id: string;
     name: string;
   };
-  queues: Schema['Queue']['type'][];
+  queues: Schema["Queue"]["type"][];
   hidden: boolean;
 };
 
@@ -50,12 +50,12 @@ export default function Jobs() {
           { id: membership.projectId },
           {
             selectionSet: [
-              'id',
-              'name',
-              'organization.id',
-              'organization.name',
-              'queues.*',
-              'hidden',
+              "id",
+              "name",
+              "organization.id",
+              "organization.name",
+              "queues.*",
+              "hidden",
             ],
           }
         )
@@ -89,7 +89,7 @@ export default function Jobs() {
         if (cancelled) return;
 
         const queueUrls = validProjects.flatMap((project) =>
-          project.queues.map((queue) => queue.url || '')
+          project.queues.map((queue) => queue.url || "")
         );
 
         const jobsRemaining = (
@@ -97,7 +97,7 @@ export default function Jobs() {
             queueUrls.map(async (queueUrl) => {
               const params: GetQueueAttributesCommandInput = {
                 QueueUrl: queueUrl,
-                AttributeNames: ['ApproximateNumberOfMessages'],
+                AttributeNames: ["ApproximateNumberOfMessages"],
               };
               const sqsClient = await getSqsClient();
               const result = await sqsClient.send(
@@ -105,7 +105,7 @@ export default function Jobs() {
               );
               return {
                 [queueUrl]:
-                  result.Attributes?.ApproximateNumberOfMessages || 'Unknown',
+                  result.Attributes?.ApproximateNumberOfMessages || "Unknown",
               };
             })
           )
@@ -119,7 +119,7 @@ export default function Jobs() {
           .map((project) => ({
             ...project,
             queues: project.queues.filter(
-              (queue) => jobsRemaining[queue.url || ''] !== '0'
+              (queue) => jobsRemaining[queue.url || ""] !== "0"
             ),
           }))
           .filter((project) => project.queues.length > 0);
@@ -158,7 +158,7 @@ export default function Jobs() {
             navigate(`/surveys/${job.projectId}/annotate`);
           },
           onError: (error) => {
-            alert('Failed to take job');
+            alert("Failed to take job");
             console.error(error);
           },
         }
@@ -171,7 +171,7 @@ export default function Jobs() {
             navigate(`/surveys/${job.projectId}/annotate`);
           },
           onError: (error) => {
-            alert('Failed to take job');
+            alert("Failed to take job");
             console.error(error);
           },
         }
@@ -192,14 +192,14 @@ export default function Jobs() {
           <div className="d-flex flex-row gap-3 align-items-center">
             <div>
               <h5 className="mb-0">{project.name}</h5>
-              <i style={{ fontSize: '14px', display: 'block' }}>
+              <i style={{ fontSize: "14px", display: "block" }}>
                 {project.organization.name}
               </i>
               <p
                 style={{
-                  fontSize: '14px',
-                  display: 'block',
-                  marginBottom: '0px',
+                  fontSize: "14px",
+                  display: "block",
+                  marginBottom: "0px",
                 }}
               >
                 Job: {queue.name}
@@ -212,7 +212,7 @@ export default function Jobs() {
               queue.hidden && (
                 <span
                   className="badge bg-secondary"
-                  style={{ fontSize: '14px' }}
+                  style={{ fontSize: "14px" }}
                 >
                   Hidden
                 </span>
@@ -221,12 +221,12 @@ export default function Jobs() {
           <div className="d-flex flex-row gap-3 align-items-center">
             {queue.batchSize && queue.batchSize > 0 ? (
               <p className="mb-0">
-                Batches remaining:{' '}
-                {Number(jobsRemaining[queue.url || ''] || 0) / queue.batchSize}
+                Batches remaining:{" "}
+                {Number(jobsRemaining[queue.url || ""] || 0) / queue.batchSize}
               </p>
             ) : (
               <p className="mb-0">
-                Jobs remaining: {jobsRemaining[queue.url || ''] || 'Unknown'}
+                Jobs remaining: {jobsRemaining[queue.url || ""] || "Unknown"}
               </p>
             )}
             <Button
@@ -247,28 +247,28 @@ export default function Jobs() {
   return (
     <div
       style={{
-        width: '100%',
-        maxWidth: '1555px',
-        marginTop: '16px',
-        marginBottom: '16px',
+        width: "100%",
+        maxWidth: "1555px",
+        marginTop: "16px",
+        marginBottom: "16px",
       }}
     >
       <Card>
-        <Card.Body>
-          <Card.Title>
-            <h4 className="mb-3">Jobs Available</h4>
+        <Card.Header>
+          <Card.Title className="mb-0">
+            <h4 className="mb-0">Jobs Available</h4>
           </Card.Title>
+        </Card.Header>
+        <Card.Body>
           {isLoading ? (
             <Spinner />
-          ) : projects.length > 0 ? (
+          ) : (
             <MyTable
               tableData={tableData}
               pagination={true}
               itemsPerPage={5}
               emptyMessage="No jobs available"
             />
-          ) : (
-            <p>No jobs available</p>
           )}
         </Card.Body>
       </Card>

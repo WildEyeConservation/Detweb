@@ -113,7 +113,7 @@ export default function Surveys() {
     .map((project) => ({
       id: project.id,
       rowData: [
-        <div className="d-flex justify-content-between align-items-center">
+        <div className="d-flex justify-content-between align-items-center gap-2">
           <div>
             <h5 className="mb-0">{project.name}</h5>
             <i style={{ fontSize: "14px" }}>{project.organization.name}</i>
@@ -247,17 +247,19 @@ export default function Surveys() {
         }}
       >
         <Card>
-          <Card.Body>
-            <Card.Title className="d-flex justify-content-between align-items-center">
-              <h4 className="mb-3">Your Surveys</h4>
-              <Form.Control
-                type="text"
-                className="w-25"
-                placeholder="Search by survey or organization"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+          <Card.Header className="d-flex justify-content-between align-items-center">
+            <Card.Title className="mb-0">
+              <h4 className="mb-0">Your Surveys</h4>
             </Card.Title>
+            <Form.Control
+              type="text"
+              className="w-25"
+              placeholder="Search by survey or organization"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </Card.Header>
+          <Card.Body>
             <MyTable
               tableHeadings={[
                 { content: "Survey", style: { width: "50%" } },
@@ -268,17 +270,14 @@ export default function Surveys() {
               itemsPerPage={5}
               emptyMessage="You are not an admin of any surveys."
             />
-            {isOrganizationAdmin && (
-              <div className="d-flex justify-content-center mt-3 border-top pt-3 border-dark">
-                <Button
-                  variant="primary"
-                  onClick={() => showModal("newSurvey")}
-                >
-                  New Survey
-                </Button>
-              </div>
-            )}
           </Card.Body>
+          {isOrganizationAdmin && (
+            <Card.Footer className="d-flex justify-content-center">
+              <Button variant="primary" onClick={() => showModal("newSurvey")}>
+                New Survey
+              </Button>
+            </Card.Footer>
+          )}
         </Card>
       </div>
       <NewSurveyModal

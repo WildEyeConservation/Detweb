@@ -1,16 +1,16 @@
-import MyTable from './Table';
-import { useContext, useEffect, useState } from 'react';
-import humanizeDuration from 'humanize-duration';
-import { GlobalContext, UserContext } from './Context';
-import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
-import type { UserStatsType } from './schemaTypes';
-import exportFromJSON from 'export-from-json';
-import { QueryCommand } from '@aws-sdk/client-dynamodb';
-import { unmarshall } from '@aws-sdk/util-dynamodb';
-import { useUsers } from './apiInterface';
-import Select from 'react-select';
-import { Card } from 'react-bootstrap';
+import MyTable from "./Table";
+import { useContext, useEffect, useState } from "react";
+import humanizeDuration from "humanize-duration";
+import { GlobalContext, UserContext } from "./Context";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import type { UserStatsType } from "./schemaTypes";
+import exportFromJSON from "export-from-json";
+import { QueryCommand } from "@aws-sdk/client-dynamodb";
+import { unmarshall } from "@aws-sdk/util-dynamodb";
+import { useUsers } from "./apiInterface";
+import Select from "react-select";
+import { Card } from "react-bootstrap";
 
 export default function UserStats() {
   const { getDynamoClient, myOrganizationHook, myMembershipHook } =
@@ -44,14 +44,14 @@ export default function UserStats() {
   const startString = startDate
     ? `${startDate?.getFullYear()}-${String(startDate?.getMonth() + 1).padStart(
         2,
-        '0'
-      )}-${String(startDate?.getDate()).padStart(2, '0')}`
+        "0"
+      )}-${String(startDate?.getDate()).padStart(2, "0")}`
     : null;
   const endString = endDate
     ? `${endDate?.getFullYear()}-${String(endDate?.getMonth() + 1).padStart(
         2,
-        '0'
-      )}-${String(endDate?.getDate()).padStart(2, '0')}`
+        "0"
+      )}-${String(endDate?.getDate()).padStart(2, "0")}`
     : null;
 
   useEffect(() => {
@@ -65,12 +65,12 @@ export default function UserStats() {
           { id: projectId },
           {
             selectionSet: [
-              'id',
-              'name',
-              'annotationSets.id',
-              'annotationSets.name',
-              'organization.name',
-              'hidden',
+              "id",
+              "name",
+              "annotationSets.id",
+              "annotationSets.name",
+              "organization.name",
+              "hidden",
             ],
           }
         )
@@ -143,7 +143,7 @@ export default function UserStats() {
     rowData: [
       allUsers.find((u) => u.id == userId)?.name,
       humanizeDuration(stats[userId].activeTime, {
-        units: ['h', 'm', 's'],
+        units: ["h", "m", "s"],
         round: true,
         largest: 2,
       }),
@@ -154,12 +154,12 @@ export default function UserStats() {
       stats[userId].annotationCount,
       stats[userId].sightingCount,
       humanizeDuration(stats[userId].searchTime, {
-        units: ['h', 'm', 's'],
+        units: ["h", "m", "s"],
         round: true,
         largest: 2,
       }),
       humanizeDuration(stats[userId].annotationTime, {
-        units: ['h', 'm', 's'],
+        units: ["h", "m", "s"],
         round: true,
         largest: 2,
       }),
@@ -167,7 +167,7 @@ export default function UserStats() {
         stats[userId].observationCount / stats[userId].sightingCount || 0
       ).toFixed(1),
       humanizeDuration(stats[userId].waitingTime, {
-        units: ['h', 'm', 's'],
+        units: ["h", "m", "s"],
         round: true,
         largest: 2,
       }),
@@ -175,16 +175,16 @@ export default function UserStats() {
   }));
 
   const tableHeadings = [
-    { content: 'Username', style: undefined },
-    { content: 'Time spent', style: undefined },
+    { content: "Username", style: undefined },
+    { content: "Time spent", style: undefined },
     { content: `Jobs completed`, style: undefined },
-    { content: 'Average search time (s/job)', style: undefined },
-    { content: 'Total Annotations', style: undefined },
-    { content: 'Total Sightings', style: undefined },
-    { content: 'Total Search Time', style: undefined },
-    { content: 'Total Annotation Time', style: undefined },
-    { content: 'Locations/Sighting', style: undefined },
-    { content: 'Waiting time', style: undefined },
+    { content: "Average search time (s/job)", style: undefined },
+    { content: "Total Annotations", style: undefined },
+    { content: "Total Sightings", style: undefined },
+    { content: "Total Search Time", style: undefined },
+    { content: "Total Annotation Time", style: undefined },
+    { content: "Locations/Sighting", style: undefined },
+    { content: "Waiting time", style: undefined },
   ];
 
   async function queryObservations(annotationSetId: string): Promise<string[]> {
@@ -194,23 +194,23 @@ export default function UserStats() {
     do {
       const command = new QueryCommand({
         TableName: backend.custom.observationTable,
-        IndexName: 'observationsByAnnotationSetIdAndCreatedAt',
+        IndexName: "observationsByAnnotationSetIdAndCreatedAt",
         KeyConditionExpression:
-          'annotationSetId  = :annotationSetId and createdAt BETWEEN :lowerLimit and :upperLimit',
+          "annotationSetId  = :annotationSetId and createdAt BETWEEN :lowerLimit and :upperLimit",
         ExpressionAttributeValues: {
-          ':annotationSetId': {
+          ":annotationSetId": {
             S: annotationSetId,
           },
-          ':lowerLimit': {
-            S: startString + 'T00:00:00Z',
+          ":lowerLimit": {
+            S: startString + "T00:00:00Z",
           },
-          ':upperLimit': {
-            S: endString + 'T23:59:59Z',
+          ":upperLimit": {
+            S: endString + "T23:59:59Z",
           },
         },
         ProjectionExpression:
-          'createdAt,annotationCount, timeTaken, waitingTime, #o',
-        ExpressionAttributeNames: { '#o': 'owner' },
+          "createdAt,annotationCount, timeTaken, waitingTime, #o",
+        ExpressionAttributeNames: { "#o": "owner" },
         ExclusiveStartKey: lastEvaluatedKey,
         // Increase page size for better throughput
         Limit: 1000,
@@ -221,7 +221,7 @@ export default function UserStats() {
         locationIds.push(...response.Items.map((item) => unmarshall(item)));
         lastEvaluatedKey = response.LastEvaluatedKey;
       } catch (error) {
-        console.error('Error querying DynamoDB:', error);
+        console.error("Error querying DynamoDB:", error);
         throw error;
       }
     } while (lastEvaluatedKey);
@@ -231,7 +231,7 @@ export default function UserStats() {
   const handleExportData = async () => {
     //Create a lookup table for user names
     const userLookup = new Map<string, string>();
-    allUsers.forEach((u) => userLookup.set(u.id + '::' + u.id, u.name));
+    allUsers.forEach((u) => userLookup.set(u.id + "::" + u.id, u.name));
     for (const annotationSetId of selectedSets) {
       const observations = await queryObservations(annotationSetId);
       const fileName = `DetWebObservations-${annotationSetId}`;
@@ -250,17 +250,19 @@ export default function UserStats() {
   return (
     <div
       style={{
-        width: '100%',
-        maxWidth: '1555px',
-        marginTop: '16px',
-        marginBottom: '16px',
+        width: "100%",
+        maxWidth: "1555px",
+        marginTop: "16px",
+        marginBottom: "16px",
       }}
     >
       <Card>
-        <Card.Body>
-          <Card.Title>
-            <h4 className="mb-3">Annotation Statistics</h4>
+        <Card.Header>
+          <Card.Title className="mb-0">
+            <h4 className="mb-0">Annotation Statistics</h4>
           </Card.Title>
+        </Card.Header>
+        <Card.Body>
           <div className="d-flex justify-content-between align-items-center">
             <div className="d-flex align-items-center gap-2">
               <label htmlFor="start-date" className="mb-0">
@@ -314,7 +316,7 @@ export default function UserStats() {
               styles={{
                 valueContainer: (base) => ({
                   ...base,
-                  overflowY: 'auto',
+                  overflowY: "auto",
                 }),
               }}
             />
@@ -341,7 +343,7 @@ export default function UserStats() {
               styles={{
                 valueContainer: (base) => ({
                   ...base,
-                  overflowY: 'auto',
+                  overflowY: "auto",
                 }),
               }}
             />
@@ -353,17 +355,17 @@ export default function UserStats() {
               tableData={tableData}
               emptyMessage={
                 project && selectedSets && selectedSets.length > 0
-                  ? 'No stats found'
-                  : 'Select a survey and annotation sets to view stats'
+                  ? "No stats found"
+                  : "Select a survey and annotation sets to view stats"
               }
             />
           </div>
-          <div className="d-flex justify-content-end mt-3">
-            <button onClick={handleExportData} className="btn btn-primary">
-              Export raw observation data
-            </button>
-          </div>
         </Card.Body>
+        <Card.Footer className="d-flex justify-content-center">
+          <button onClick={handleExportData} className="btn btn-primary">
+            Export Raw Observation Data
+          </button>
+        </Card.Footer>
       </Card>
     </div>
   );

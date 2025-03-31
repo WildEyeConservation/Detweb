@@ -1,4 +1,4 @@
-import { Card } from "react-bootstrap";
+import { Card, Button } from "react-bootstrap";
 import { Tabs, Tab } from "./Tabs";
 import Users from "./organization/Users";
 import OrganizationSelector from "./OrganizationSelector";
@@ -15,6 +15,10 @@ export default function Permissions() {
     id: string;
     name: string;
   }>({ id: "", name: "" });
+  const [onClick, setOnClick] = useState<{
+    name: string;
+    function: () => void;
+  } | null>(null);
   const queryClient = useQueryClient();
 
   if (!isOrganizationAdmin) {
@@ -39,23 +43,31 @@ export default function Permissions() {
       }}
     >
       <Card>
+        <Card.Header className="d-flex justify-content-between mb-0">
+          <Card.Title className="mb-0">
+            <h4 className="mb-0">Permissions</h4>
+          </Card.Title>
+          <OrganizationSelector
+            organization={organization}
+            setOrganization={setOrganization}
+          />
+        </Card.Header>
         <Card.Body>
-          <div className="d-flex justify-content-between mb-0">
-            <Card.Title className="mb-0">
-              <h4 className="mb-3">Permissions</h4>
-            </Card.Title>
-            <OrganizationSelector
-              organization={organization}
-              setOrganization={setOrganization}
-            />
-          </div>
           {organization.id && (
             <PermissionsBody
               key={organization.id}
               organization={organization}
+              setOnClick={setOnClick}
             />
           )}
         </Card.Body>
+        {onClick && (
+          <Card.Footer className="d-flex justify-content-center">
+            <Button variant="primary" onClick={onClick.function}>
+              {onClick.name}
+            </Button>
+          </Card.Footer>
+        )}
       </Card>
     </div>
   );
@@ -63,8 +75,10 @@ export default function Permissions() {
 
 function PermissionsBody({
   organization,
+  setOnClick,
 }: {
   organization: { id: string; name: string };
+  setOnClick: (onClick: { name: string; function: () => void } | null) => void;
 }) {
   const { client } = useContext(GlobalContext)!;
 
@@ -86,16 +100,18 @@ function PermissionsBody({
   );
 
   return (
-    <Tabs defaultTab={0}>
+    <Tabs defaultTab={0} onTabChange={() => setOnClick(null)}
+    >
       <Tab label="Users">
         <Users
           key={organization.id}
           organization={organization}
           hook={membershipHook}
+          setOnClick={setOnClick}
         />
       </Tab>
       <Tab label="Organization Info">
-        <Info organizationId={organization.id} />
+        <Info organizationId={organization.id}/>
       </Tab>
     </Tabs>
   );

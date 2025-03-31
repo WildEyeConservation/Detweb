@@ -25,7 +25,7 @@ export default function Settings() {
   return (
     <div>
       <button
-        className="text-muted px-2"
+        className="text-muted px-2 d-flex align-items-center justify-content-center"
         style={{
           position: "relative",
           backgroundColor: "transparent",
@@ -63,11 +63,11 @@ export default function Settings() {
             zIndex: 2,
           }}
         >
+          <Card.Header className="d-flex justify-content-between align-items-center">
+            <Card.Title className="mb-0">Settings</Card.Title>
+            <X onClick={() => setShow(false)} style={{ cursor: "pointer" }} />
+          </Card.Header>
           <Card.Body>
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <Card.Title className="mb-0">Settings</Card.Title>
-              <X onClick={() => setShow(false)} style={{ cursor: "pointer" }} />
-            </div>
             <div className="d-flex flex-column gap-2">
               <p className="mb-0">{username}</p>
               <p className="mb-0">{email}</p>
