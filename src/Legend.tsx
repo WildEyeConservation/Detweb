@@ -1,7 +1,9 @@
-import { POSITION_CLASSES } from "./NavButtons";
 import { useState, useEffect, useRef, useContext } from "react";
 import L from "leaflet";
 import { ProjectContext, UserContext } from "./Context";
+import { Card, Button } from "react-bootstrap";
+import OverlayTrigger from "react-bootstrap/OverlayTrigger";
+import Tooltip from "react-bootstrap/Tooltip";
 
 /**
  *
@@ -17,12 +19,90 @@ import { ProjectContext, UserContext } from "./Context";
  * of the category is supplied as a parameter to the function call. Typically used to select the clicked category.
  */
 
+const POSITION_CLASSES = {
+  bottomleft: "leaflet-bottom leaflet-left",
+  bottomright: "leaflet-bottom leaflet-right",
+  topleft: "leaflet-top leaflet-left",
+  topright: "leaflet-top leaflet-right",
+};
+
 interface LegendProps {
-  position: keyof typeof POSITION_CLASSES;
-  annotationSetId: string;
+  position?: keyof typeof POSITION_CLASSES;
+  hideLegend?: boolean;
+  setHideLegend?: VoidFunction;
+  annotationSetId?: string;
 }
 
-export function Legend({ position, annotationSetId }: LegendProps) {
+export function SideLegend({
+  hideLegend,
+  setHideLegend,
+  annotationSetId,
+}: LegendProps) {
+  const {
+    categoriesHook: { data: categories },
+    currentCategory,
+    setCurrentCategory,
+  } = useContext(ProjectContext)!;
+
+  if (hideLegend) {
+    return null;
+  }
+
+  return (
+    <Card className="d-flex flex-column h-100 overflow-hidden">
+      <Card.Header>
+        <Card.Title className="d-flex flex-row justify-content-between align-items-center gap-2 mb-0">
+          <span>Legend</span>
+          <OverlayTrigger
+            placement="top"
+            overlay={<Tooltip>Collapse legend</Tooltip>}
+          >
+            <Button
+              variant="primary"
+              className="d-flex align-items-center justify-content-center"
+              style={{ width: "30px", height: "30px" }}
+              onClick={setHideLegend}
+            >
+              &lt;
+            </Button>
+          </OverlayTrigger>
+        </Card.Title>
+        <span className="text-muted" style={{ fontSize: "14px" }}>
+          Select a label to annotate with or use the shortcut key
+        </span>
+      </Card.Header>
+      <Card.Body className="d-flex flex-column gap-2 overflow-auto">
+        {categories
+          ?.filter((c) => c.annotationSetId === annotationSetId)
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((category) => (
+            <Button
+              variant={currentCategory?.id === category.id ? "info" : "primary"}
+              key={category.id}
+              className="d-flex flex-row align-items-center justify-content-between gap-2"
+              onClick={() => setCurrentCategory(category)}
+            >
+              <div className="d-flex flex-row align-items-center gap-2">
+                <div
+                  style={{ backgroundColor: category.color || "#000" }}
+                  className="rounded-circle p-2"
+                ></div>
+                <div>{category.name}</div>
+              </div>
+              <div>({category.shortcutKey})</div>
+            </Button>
+          ))}
+      </Card.Body>
+    </Card>
+  );
+}
+
+export function MapLegend({
+  position,
+  hideLegend = false,
+  setHideLegend,
+  annotationSetId,
+}: LegendProps) {
   const {
     categoriesHook: { data: categories },
     setCurrentCategory,
@@ -37,6 +117,10 @@ export function Legend({ position, annotationSetId }: LegendProps) {
       L.DomEvent.disableClickPropagation(divRef.current);
     }
   });
+
+  if (hideLegend) {
+    return null;
+  }
 
   return (
     <div ref={divRef} className={positionClass}>
@@ -75,6 +159,21 @@ export function Legend({ position, annotationSetId }: LegendProps) {
                     );
                   })
               : "Legend"}
+            {expanded && setHideLegend && (
+              <div className="d-flex flex-row align-items-center gap-2">
+                <Button
+                  variant="primary"
+                  className="mt-2"
+                  size="sm"
+                  onClick={() => {
+                    setHideLegend();
+                    setExpanded(false);
+                  }}
+                >
+                  Pop out legend
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>

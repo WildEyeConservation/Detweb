@@ -29,9 +29,11 @@ export default function useTesting(useSecondaryCandidates: boolean = false) {
       setLoading(true);
 
       if (currentPM.queueId) {
-        currentPM.queue().then(({ data: { zoom } }) => {
-          setZoom(zoom);
-        });
+        client.models.Queue.get({ id: currentPM.queueId }).then(
+          ({ data: { zoom } }) => {
+            setZoom(zoom);
+          }
+        );
       }
 
       const { data: config } = await client.models.ProjectTestConfig.get({

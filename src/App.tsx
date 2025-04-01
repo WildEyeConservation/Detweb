@@ -46,6 +46,7 @@ function App({ signOut = () => {}, user }: AppProps) {
   //   setModalToShow(key);
   // };
 
+
   useEffect(() => {
     window.addEventListener('beforeunload', alertUser);
     return () => {
@@ -69,6 +70,7 @@ function App({ signOut = () => {}, user }: AppProps) {
       }
     });
   }, [user]);
+
 
   return (
     session && (

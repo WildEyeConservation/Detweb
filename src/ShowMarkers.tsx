@@ -19,7 +19,7 @@ import { random } from "mathjs";
 import DummyMarkers from "./DummyMarkers";
 interface ShowMarkersProps {
   activeAnnotation?: AnnotationType;
-  annotationsHook: AnnotationsHook;
+  // annotationsHook: AnnotationsHook;
   annotationSetId: string;
 }
 

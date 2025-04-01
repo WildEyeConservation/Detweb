@@ -28,6 +28,7 @@ export function Project({
   currentPM: Schema['UserProjectMembership']['type'];
 }) {
   const { client } = useContext(GlobalContext)!;
+  const [ expandLegend, setExpandLegend] = useState<boolean>(true);
   const {myMembershipHook} = useContext(UserContext)!;
   const subscriptionFilter = useMemo(() => ({
     filter: { projectId: { eq: currentPM?.projectId } }
@@ -63,22 +64,19 @@ export function Project({
   }, [categoriesHook.data]);
 
   return (
-    currentProject && (
-      <ProjectContext.Provider
-        value={{
-          project: currentProject,
-          categoriesHook,
-          currentPM: myMembershipHook.data.find(
-            (m) => m.projectId == currentProject.id
-          ),
-          currentCategory,
-          setCurrentCategory,
-        }}
-      >
-        {currentProject && children}
-      </ProjectContext.Provider>
-    )
-  );
+    currentProject && 
+    <ProjectContext.Provider value={{
+        project: currentProject,
+        categoriesHook,
+        currentPM : myMembershipHook.data.find(m=>m.projectId==currentProject.id),
+        currentCategory,
+        setCurrentCategory,
+        expandLegend,
+        setExpandLegend
+    }}>
+      {currentProject && children}
+    </ProjectContext.Provider>
+  )
 }
 
 export function User({
