@@ -1,6 +1,7 @@
 import Button from "react-bootstrap/Button";
 import { useEffect, useRef } from "react";
 import L from "leaflet";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 /**
  *
@@ -18,10 +19,7 @@ interface NavButtonsProps {
   next?: () => void;
 }
 
-export function NavButtons({
-  prev,
-  next,
-}: NavButtonsProps) {
+export function NavButtons({ prev, next }: NavButtonsProps) {
   const divRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -32,11 +30,23 @@ export function NavButtons({
 
   return (
     <div ref={divRef} className="d-flex flex-row align-items-center gap-1">
-      <Button variant="primary" onClick={prev} disabled={!prev} style={{width: '180px'}}>
-        &lt; Previous Location
+      <Button
+        className="d-flex flex-row align-items-center justify-content-center"
+        variant="primary"
+        onClick={prev}
+        disabled={!prev}
+        style={{ width: "200px" }}
+      >
+        <ChevronLeft /> Previous Location
       </Button>
-      <Button variant="primary" onClick={next} disabled={!next} style={{width: '180px'}}>
-        Next Location &gt;
+      <Button
+        className="d-flex flex-row align-items-center justify-content-center"
+        variant="primary"
+        onClick={next}
+        disabled={!next}
+        style={{ width: "200px" }}
+      >
+        Next Location <ChevronRight />
       </Button>
     </div>
   );

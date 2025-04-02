@@ -182,42 +182,50 @@ export function Review({ showAnnotationSetDropdown = true }) {
         marginBottom: "16px",
       }}
     >
-      <Card className="h-100">
-        <Card.Body>
-          <Card.Title className="d-flex justify-content-between align-items-center">
-            <h4>
-              Explore{" "}
-              {
-                annotationSets?.find((set) => set.id === selectedAnnotationSet)
-                  ?.name
-              }{" "}
-              ({project.name})
-            </h4>
-            <Button variant="dark" onClick={() => navigate("/surveys")}>
-              Back to Surveys
-            </Button>
-          </Card.Title>
-          <div
-            className="w-100 d-flex flex-column align-items-center mt-3"      
-          >
-            <div
-              className="w-100 d-flex align-items-center justify-content-center gap-2"
-              style={{ maxWidth: "600px" }}
-            >
-              <Select
-                value={selectedCategories}
-                onChange={setSelectedCategories}
-                isMulti
-                name="Categories to review"
-                options={categories
-                  ?.filter((c) => c.annotationSetId === selectedAnnotationSet)
-                  .map((q) => ({
-                    label: q.name,
-                    value: q.id,
-                  }))}
-                className="text-black w-100"
-                closeMenuOnSelect={false}
+      <div className="w-100 h-100 d-flex flex-row gap-3">
+        <div
+          className="d-flex flex-column gap-3 w-100"
+          style={{ maxWidth: "300px" }}
+        >
+          <Card className="w-100">
+            <Card.Header>
+              <Card.Title className="mb-0">Information</Card.Title>
+            </Card.Header>
+            <Card.Body className="d-flex flex-column gap-2">
+              <InfoTag label="Survey" value={project.name} />
+              <InfoTag
+                label="Annotation Set"
+                value={
+                  annotationSets?.find(
+                    (set) => set.id === selectedAnnotationSet
+                  )?.name ?? "Unknown"
+                }
               />
+            </Card.Body>
+          </Card>
+          <Card className="w-100 flex-grow-1">
+            <Card.Header>
+              <Card.Title className="mb-0">Filters</Card.Title>
+            </Card.Header>
+            <Card.Body className="d-flex flex-column gap-2 overflow-auto">
+              <div className="w-100">
+                <Form.Label>Labels</Form.Label>
+                <Select
+                  value={selectedCategories}
+                  onChange={setSelectedCategories}
+                  isMulti
+                  name="Labels to review"
+                  options={categories
+                    ?.filter((c) => c.annotationSetId === selectedAnnotationSet)
+                    .map((q) => ({
+                      label: q.name,
+                      value: q.id,
+                    }))}
+                  className="text-black w-100"
+                  closeMenuOnSelect={false}
+                />
+              </div>
+
               {showAnnotationSetDropdown && (
                 <AnnotationSetDropdown
                   selectedSet={selectedAnnotationSet}
@@ -225,41 +233,49 @@ export function Review({ showAnnotationSetDropdown = true }) {
                   canCreate={false}
                 />
               )}
-            </div>
-
-            {!annotations.length && isLoading ? (
-              <div>
-                Loading... Please be patient. {locationsLoaded} locations loaded
-                so far...
-              </div>
-            ) : (
-              bufferSource && (
-                <>
-                  <Preloader
-                    key={selectedAnnotationSet + selectedCategories.join(",")}
-                    index={index}
-                    setIndex={setIndex}
-                    fetcher={() => bufferSource.fetch()}
-                    preloadN={2}
-                    historyN={2}
-                  />
-                  <div style={{ width: "80%", marginTop: "840px" }}>
-                    <Form.Range
-                      value={index}
-                      onChange={(e) => setIndex(parseInt(e.target.value))}
-                      min={0}
-                      max={annotations.length - 1}
-                    />
-                    <div style={{ textAlign: "center" }}>
-                      Done with {index} out of {annotations.length} locations
-                    </div>
-                  </div>
-                </>
-              )
-            )}
+            </Card.Body>
+          </Card>
+        </div>
+        {!annotations.length && isLoading ? (
+          <div className="d-flex flex-column align-items-center justify-content-center h-100 w-100">
+            Loading... Please be patient. {locationsLoaded} locations loaded so
+            far...
           </div>
-        </Card.Body>
-      </Card>
+        ) : (
+          bufferSource && (
+            <div className="d-flex flex-column align-items-center h-100 w-100">
+              <Preloader
+                key={selectedAnnotationSet + selectedCategories.join(",")}
+                index={index}
+                setIndex={setIndex}
+                fetcher={() => bufferSource.fetch()}
+                preloadN={2}
+                historyN={2}
+              />
+              <div className="mt-2 w-100">
+                <Form.Range
+                  value={index}
+                  onChange={(e) => setIndex(parseInt(e.target.value))}
+                  min={0}
+                  max={annotations.length - 1}
+                />
+                <div style={{ textAlign: "center" }}>
+                  Done with {index} out of {annotations.length} locations
+                </div>
+              </div>
+            </div>
+          )
+        )}
+      </div>
     </div>
+  );
+}
+
+function InfoTag({ label, value }: { label: string; value: string }) {
+  return (
+    <p className="mb-0 d-flex flex-row gap-2 justify-content-between">
+      <span>{label}:</span>
+      <span>{value}</span>
+    </p>
   );
 }
