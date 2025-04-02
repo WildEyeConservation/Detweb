@@ -53,7 +53,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
       <Navbar
         bg="secondary"
         variant="dark"
-        fixed="top"
+        sticky="top"
         key={expand}
         expand={expand}
       >
@@ -142,10 +142,8 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
       </Navbar>
       <Container
         fluid
-        className="d-flex justify-content-center h-100"
+        className="d-flex justify-content-center h-100 overflow-y-auto"
         style={{
-          marginTop: "56px",
-          overflowY: "auto",
           backgroundColor: "#2B3E50",
         }}
       >

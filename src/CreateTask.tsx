@@ -5,29 +5,25 @@ import {
   useCallback,
   useRef,
   useMemo,
-} from 'react';
-import Button from 'react-bootstrap/Button';
-import Form from 'react-bootstrap/Form';
-import Modal from 'react-bootstrap/Modal';
-import {
-  UserContext,
-  GlobalContext,
-  ManagementContext,
-  ProjectContext,
-} from './Context';
-import { useUpdateProgress } from './useUpdateProgress';
-import { ImageSetDropdown } from './ImageSetDropDown';
+} from "react";
+import Button from "react-bootstrap/Button";
+import Form from "react-bootstrap/Form";
+import Modal from "react-bootstrap/Modal";
+import { UserContext, GlobalContext } from "./Context";
+import { useUpdateProgress } from "./useUpdateProgress";
+import { ImageSetDropdown } from "./ImageSetDropDown";
 //import { subset } from "mathjs";
-import { SendMessageCommand } from '@aws-sdk/client-sqs';
-import { fetchAllPaginatedResults } from './utils';
-import LabeledToggleSwitch from './LabeledToggleSwitch';
-import Papa from 'papaparse';
-import { StringMap } from 'aws-lambda/trigger/cognito-user-pool-trigger/_common';
-import { Tabs, Tab } from './Tabs';
-import { CategoriesDropdown } from './CategoriesDropDown';
-import { makeTransform, array2Matrix } from './utils';
-import { inv } from 'mathjs';
-
+import { SendMessageCommand } from "@aws-sdk/client-sqs";
+import { fetchAllPaginatedResults } from "./utils";
+import LabeledToggleSwitch from "./LabeledToggleSwitch";
+import Papa from "papaparse";
+import { StringMap } from "aws-lambda/trigger/cognito-user-pool-trigger/_common";
+import { Tabs, Tab } from "./Tabs";
+import { CategoriesDropdown } from "./CategoriesDropDown";
+import { makeTransform, array2Matrix } from "./utils";
+import { inv } from "mathjs";
+import { MultiValue } from "react-select";
+import { Schema } from "../amplify/data/resource";
 const thresholdRange = {
   ivx: { min: 1, max: 10, step: 1 },
   scoutbot: { min: 0, max: 1, step: 0.01 },
@@ -35,11 +31,19 @@ const thresholdRange = {
 };
 
 type Nullable<T> = T | null;
+
+type TaskType = "tiled" | "model" | "annotation";
+
 interface CreateTaskProps {
-  show: boolean;
-  handleClose: () => void;
-  selectedImageSets: string[];
-  setSelectedImageSets: React.Dispatch<React.SetStateAction<string[]>>;
+  imageSets: string[];
+  taskType: TaskType;
+  name: string;
+  projectId: string;
+  labels: Schema["Category"]["type"][];
+  hideUI?: boolean;
+  setHandleCreateTask?: React.Dispatch<
+    React.SetStateAction<(() => Promise<string>) | null>
+  >;
 }
 
 interface ImageDimensions {
@@ -48,21 +52,16 @@ interface ImageDimensions {
 }
 
 function CreateTask({
-  show,
-  handleClose,
-  selectedImageSets,
-  setSelectedImageSets,
+  imageSets,
+  name,
+  taskType,
+  projectId,
+  labels,
+  hideUI = false,
+  setHandleCreateTask,
 }: CreateTaskProps) {
   const { client, backend } = useContext(GlobalContext)!;
   const { getSqsClient } = useContext(UserContext)!;
-  const { project } = useContext(ProjectContext)!;
-  const [name, setName] = useState<string>('');
-  const [taskType, setTaskType] = useState<'tiled' | 'model' | 'annotation'>(
-    'tiled'
-  );
-  const {
-    locationSetsHook: { create: createLocationSet },
-  } = useContext(ManagementContext)!;
   const [minX, setMinX] = useState<number>(0);
   const [maxX, setMaxX] = useState<number>(0);
   const [minY, setMinY] = useState<number>(0);
@@ -93,7 +92,7 @@ function CreateTask({
   const [height, setHeight] = useState<number>(1024);
   const [horizontalTiles, setHorizontalTiles] = useState<number>(3);
   const [verticalTiles, setVerticalTiles] = useState<number>(5);
-  const [modelId, setModelId] = useState<string>('ivx');
+  const [modelId, setModelId] = useState<string>("ivx");
   const [scoutbotFile, setScoutbotFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const effectiveImageWidth = maxX - minX;
@@ -112,7 +111,7 @@ function CreateTask({
 
       const { data } = await client.models.ImageFile.imagesByPath(
         { path },
-        { selectionSet: ['imageId'] }
+        { selectionSet: ["imageId"] }
       );
 
       if (data && data.length > 0 && data[0].imageId) {
@@ -304,15 +303,33 @@ function CreateTask({
   useEffect(() => {
     async function getAllImages() {
       let nextToken: string | undefined = undefined;
-      let acc = { minWidth: Infinity, maxWidth: -Infinity, minHeight: Infinity, maxHeight: -Infinity };
+      let acc = {
+        minWidth: Infinity,
+        maxWidth: -Infinity,
+        minHeight: Infinity,
+        maxHeight: -Infinity,
+      };
       setAllImages([]);
-      for (const imageSetId of selectedImageSets) {
+      for (const imageSetId of imageSets) {
         do {
-          const { data: images, nextToken: nextNextToken } = await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
-            imageSetId
-          }, { selectionSet: ['image.width', 'image.height', 'image.id', 'image.timestamp', 'image.originalPath'], nextToken });
+          const { data: images, nextToken: nextNextToken } =
+            await client.models.ImageSetMembership.imageSetMembershipsByImageSetId(
+              {
+                imageSetId,
+              },
+              {
+                selectionSet: [
+                  "image.width",
+                  "image.height",
+                  "image.id",
+                  "image.timestamp",
+                  "image.originalPath",
+                ],
+                nextToken,
+              }
+            );
           nextToken = nextNextToken ?? undefined;
-          setAllImages(x => x.concat(images.map(({ image }) => image)))
+          setAllImages((x) => x.concat(images.map(({ image }) => image)));
           acc = images.reduce((acc, x) => {
             acc.minWidth = Math.min(acc.minWidth, x.image.width);
             acc.maxWidth = Math.max(acc.maxWidth, x.image.width);
@@ -321,7 +338,7 @@ function CreateTask({
             return acc;
           }, acc);
           if (acc.minWidth != acc.maxWidth || acc.minHeight != acc.maxHeight) {
-            console.log(`Inconsistent image sizes in image set ${imageSetId}`)
+            console.log(`Inconsistent image sizes in image set ${imageSetId}`);
             setImageWidth(undefined);
             setImageHeight(undefined);
             setMaxX(undefined);
@@ -335,47 +352,53 @@ function CreateTask({
         } while (nextToken);
       }
     }
-    if (show) { 
+
+    if (imageSets && imageSets.length > 0) {
       getAllImages();
     }
-  }, [show,selectedImageSets, client.models.ImageSetMembership]);
+  }, [imageSets, client.models.ImageSetMembership]);
 
   const [setImagesCompleted, setTotalImages] = useUpdateProgress({
     taskId: `Create task (model guided)`,
     indeterminateTaskName: `Loading images`,
-    determinateTaskName: 'Processing images',
+    determinateTaskName: "Processing images",
     stepFormatter: (x: number) => `${x} images`,
   });
 
   const [setLocationsCompleted, setTotalLocations] = useUpdateProgress({
     taskId: `Create task`,
     indeterminateTaskName: `Loading locations`,
-    determinateTaskName: 'Processing locations',
+    determinateTaskName: "Processing locations",
     stepFormatter: (x: number) => `${x} locations`,
   });
 
   const [threshold, setThreshold] = useState(5); // New state variable for threshold
 
-  async function handleSubmit() {
-    handleClose();
-    const locationSetId = createLocationSet({ 
-        name, 
-        projectId: project.id,
-        locationCount: taskType !== 'model' ? allImages.length * horizontalTiles * verticalTiles : 0
+  const handleSubmit = useCallback(async () => {
+    const {
+      data: { id: locationSetId },
+    } = await client.models.LocationSet.create({
+      name,
+      projectId: projectId,
+      locationCount:
+        taskType !== "model"
+          ? allImages.length * horizontalTiles * verticalTiles
+          : 0,
     });
+
     switch (taskType) {
-      case 'model':
-        if (modelId === 'ivx') {
+      case "model":
+        if (modelId === "ivx") {
           allImages.map(async (image) => {
-            const key = image.originalPath.replace('images', 'heatmaps');
+            const key = image.originalPath.replace("images", "heatmaps");
             const sqsClient = await getSqsClient();
             await sqsClient.send(
               new SendMessageCommand({
                 QueueUrl: backend.custom.pointFinderTaskQueueUrl,
                 MessageBody: JSON.stringify({
                   imageId: id,
-                  projectId: project.id,
-                  key: 'heatmaps/' + key + '.h5',
+                  projectId: projectId,
+                  key: "heatmaps/" + key + ".h5",
                   width: 1024,
                   height: 1024,
                   threshold: 1 - Math.pow(10, -threshold),
@@ -387,7 +410,7 @@ function CreateTask({
             setImagesCompleted((s: number) => s + 1);
           });
         }
-        if (modelId === 'scoutbotV3') {
+        if (modelId === "scoutbotV3") {
           // Chunk allImages into groups of 4
           const chunkSize = 4;
           for (let i = 0; i < allImages.length; i += chunkSize) {
@@ -400,9 +423,9 @@ function CreateTask({
                 MessageBody: JSON.stringify({
                   images: chunk.map((image) => ({
                     imageId: image.id,
-                    key: 'images/' + image.originalPath,
+                    key: "images/" + image.originalPath,
                   })),
-                  projectId: project.id,
+                  projectId: projectId,
                   bucket: backend.storage.buckets[1].bucket_name,
                   setId: locationSetId,
                 }),
@@ -413,37 +436,37 @@ function CreateTask({
             setImagesCompleted((s: number) => s + chunk.length);
           }
         }
-        if (modelId === 'scoutbot') {
+        if (modelId === "scoutbot") {
           Papa.parse(scoutbotFile!, {
             complete: (result: {
               data: {
-                'Label Confidence': string;
-                'Image Filename': string;
-                'Box X': string;
-                'Box Y': string;
-                'Box W': string;
-                'Box H': string;
+                "Label Confidence": string;
+                "Image Filename": string;
+                "Box X": string;
+                "Box Y": string;
+                "Box W": string;
+                "Box H": string;
               }[];
             }) => {
               // Handle the parsed data here
-              console.log('Parsed CSV data:', result.data);
+              console.log("Parsed CSV data:", result.data);
               for (const row of result.data) {
-                if (Number(row['Label Confidence']) > threshold) {
-                  getImageId(row['Image Filename'])
+                if (Number(row["Label Confidence"]) > threshold) {
+                  getImageId(row["Image Filename"])
                     .then(async (id) => {
                       await client.models.Location.create({
                         x:
-                          Math.round(Number(row['Box X'])) +
-                          Math.round(Number(row['Box W']) / 2),
+                          Math.round(Number(row["Box X"])) +
+                          Math.round(Number(row["Box W"]) / 2),
                         y:
-                          Math.round(Number(row['Box Y'])) +
-                          Math.round(Number(row['Box H']) / 2),
-                        width: Math.round(Number(row['Box W'])),
-                        height: Math.round(Number(row['Box H'])),
+                          Math.round(Number(row["Box Y"])) +
+                          Math.round(Number(row["Box H"]) / 2),
+                        width: Math.round(Number(row["Box W"])),
+                        height: Math.round(Number(row["Box H"])),
                         confidence: 1,
                         imageId: id,
-                        projectId: project.id,
-                        source: 'manual',
+                        projectId: projectId,
+                        source: "manual",
                         setId: locationSetId,
                       });
                     })
@@ -454,12 +477,12 @@ function CreateTask({
             header: true, // Assumes the first row of the CSV is headers
             skipEmptyLines: true,
             error: (error) => {
-              console.error('Error parsing CSV:', error);
+              console.error("Error parsing CSV:", error);
             },
           });
         }
         break;
-      case 'tiled':
+      case "tiled":
         setTotalLocations(allImages.length * horizontalTiles * verticalTiles);
         const promises: Promise<void>[] = [];
         for (const { id } of allImages) {
@@ -482,17 +505,18 @@ function CreateTask({
                   width,
                   height,
                   imageId: id,
-                  projectId: project.id,
+                  projectId: projectId,
                   confidence: 1,
-                  source: 'manual',
+                  source: "manual",
                   setId: locationSetId,
                 }).then(() => setLocationsCompleted((fc: any) => fc + 1))
               );
             }
           }
         }
+        await Promise.all(promises);
         break;
-      case 'annotation':
+      case "annotation":
         const newLocations = [];
         //Iterate over the selected categories
         for (const category of selectedCategories) {
@@ -562,9 +586,9 @@ function CreateTask({
                     imageId: neighbor.imageId,
                     width: 100,
                     height: 100,
-                    projectId: project.id,
+                    projectId: projectId,
                     confidence: 1,
-                    source: 'other annotation',
+                    source: "other annotation",
                     setId: locationSetId,
                   });
                 }
@@ -577,322 +601,314 @@ function CreateTask({
         );
         break;
     }
+
+    return locationSetId;
+  }, [
+    // There should be a beter way to do this, but while prototyping, here is an endless list of dependencies
+    allImages,
+    backend.custom.pointFinderTaskQueueUrl,
+    backend.custom.scoutbotTaskQueueUrl,
+    backend.storage.buckets,
+    client.models.Annotation.annotationsByCategoryId,
+    client.models.Image.get,
+    client.models.ImageNeighbour.imageNeighboursByImage1key,
+    client.models.ImageNeighbour.imageNeighboursByImage2key,
+    client.models.Location.create,
+    client.models.LocationSet.create,
+    effectiveImageHeight,
+    effectiveImageWidth,
+    getImageId,
+    getSqsClient,
+    height,
+    horizontalTiles,
+    minX,
+    minY,
+    modelId,
+    name,
+    projectId,
+    scoutbotFile,
+    selectedCategories,
+    setImagesCompleted,
+    setLocationsCompleted,
+    setTotalLocations,
+    taskType,
+    threshold,
+    verticalTiles,
+    width
+  ]);
+  
+  useEffect(() => {
+    if (setHandleCreateTask) {
+      setHandleCreateTask(() => handleSubmit);
+    }
+  }, [setHandleCreateTask, handleSubmit]);
+  
+  if (hideUI) {
+    return null;
   }
 
-  return (
-    <Modal show={show} onHide={handleClose} size="lg">
-      <Modal.Header closeButton>
-        <Modal.Title>Create Task</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        <Form>
-          <Tabs
-            defaultTab={0}
-            onTabChange={(k) => {
-              switch (k) {
-                case 0:
-                  setTaskType('tiled');
-                  break;
-                case 1:
-                  setTaskType('model');
-                  break;
-                case 2:
-                  setTaskType('annotation');
-                  break;
-              }
-            }}
-            className="mb-3"
-          >
-            <Tab label="Tiled Task">
-              <Form.Label>Image Sets to process</Form.Label>
-              <ImageSetDropdown
-                selectedSets={selectedImageSets}
-                setImageSets={setSelectedImageSets}
-              />
-              <Form.Label
-                className="text-center"
-                style={{ fontSize: 'smaller' }}
-              >
-                Detected image dimensions : {imageWidth}x{imageHeight}
-              </Form.Label>
-              <Form.Group className="mb-3 mt-3">
-                <LabeledToggleSwitch
-                  leftLabel="Specify number of tiles"
-                  rightLabel="Specify tile dimensions"
-                  checked={specifyTileDimensions}
-                  onChange={(checked) => {
-                    setSpecifyTileDimensions(checked);
-                  }}
-                />
-
-                <div className="row">
-                  <InputBox
-                    label="Horizontal Tiles"
-                    enabled={!specifyTileDimensions}
-                    getter={() => horizontalTiles}
-                    setter={(x) => setHorizontalTiles(x)}
-                  />
-                  <InputBox
-                    label="Vertical Tiles"
-                    enabled={!specifyTileDimensions}
-                    getter={() => verticalTiles}
-                    setter={(x) => setVerticalTiles(x)}
-                  />
-                  <InputBox
-                    label="Width"
-                    enabled={specifyTileDimensions}
-                    getter={() => width}
-                    setter={(x) => setWidth(x)}
-                  />
-                  <InputBox
-                    label="Height"
-                    enabled={specifyTileDimensions}
-                    getter={() => height}
-                    setter={(x) => setHeight(x)}
-                  />
-                </div>
-              </Form.Group>
-              <Form.Group className="mb-3 mt-3">
-                <LabeledToggleSwitch
-                  leftLabel="Specify overlap (px)"
-                  rightLabel="Specify overlap (%)"
-                  checked={specifyOverlapInPercentage}
-                  onChange={(checked) => {
-                    setSpecifyOverlapInPercentage(checked);
-                  }}
-                />
-                <div className="row">
-                  <InputBox
-                    label="Minimum sidelap (px)"
-                    enabled={!specifyOverlapInPercentage}
-                    getter={() => minSidelap}
-                    setter={(x) => setMinSidelap(x)}
-                  />
-                  <InputBox
-                    label="Minimum overlap (px)"
-                    enabled={!specifyOverlapInPercentage}
-                    getter={() => minOverlap}
-                    setter={(x) => setMinOverlap(x)}
-                  />
-                  <InputBox
-                    label="Minimum sidelap (%)"
-                    enabled={specifyOverlapInPercentage}
-                    getter={() => minSidelapPercentage}
-                    setter={(x) => setMinSidelapPercentage(x)}
-                  />
-                  <InputBox
-                    label="Minimum overlap (%)"
-                    enabled={specifyOverlapInPercentage}
-                    getter={() => minOverlapPercentage}
-                    setter={(x) => setMinOverlapPercentage(x)}
-                  />
-                </div>
-                <div className="row">
-                  <InputBox
-                    label="Actual sidelap (px)"
-                    enabled={false}
-                    getter={() => getSidelapPixels()}
-                  />
-                  <InputBox
-                    label="Actual overlap (px)"
-                    enabled={false}
-                    getter={() => getOverlapPixels()}
-                  />
-                  <InputBox
-                    label="Actual sidelap (%)"
-                    enabled={false}
-                    getter={() => getSidelapPercent().toFixed(2)}
-                  />
-                  <InputBox
-                    label="Actual overlap (%)"
-                    enabled={false}
-                    getter={() => getOverlapPercent().toFixed(2)}
-                  />
-                </div>
-              </Form.Group>
-              <Form.Group className="mb-3 mt-3">
-                <LabeledToggleSwitch
-                  leftLabel="Process Entire Image"
-                  rightLabel="Specify Processing Borders"
-                  checked={specifyBorders}
-                  onChange={(checked) => {
-                    setSpecifyBorders(checked);
-                    setMinX(0);
-                    setMaxX(imageWidth!);
-                    setMinY(0);
-                    setMaxY(imageHeight!);
-                  }}
-                />
-                {specifyBorders && (
-                  <>
-                    <LabeledToggleSwitch
-                      leftLabel="Specify Borders (px)"
-                      rightLabel="Specify Borders (%)"
-                      checked={specifyBorderPercentage}
-                      onChange={(checked) => {
-                        setSpecifyBorderPercentage(checked);
-                      }}
-                    />
-                    <div className="row">
-                      <InputBox
-                        label="Minimum X (px)"
-                        enabled={!specifyBorderPercentage}
-                        getter={() => minX}
-                        setter={(x) => setMinX(x)}
-                      />
-                      <InputBox
-                        label="Minimum Y (px)"
-                        enabled={!specifyBorderPercentage}
-                        getter={() => minY}
-                        setter={(x) => setMinY(x)}
-                      />
-                      <InputBox
-                        label="Minimum X (%)"
-                        enabled={specifyBorderPercentage}
-                        getter={() => Math.round((minX / imageWidth!) * 100)}
-                        setter={(x) =>
-                          setMinX(Math.round((imageWidth! * x) / 100))
-                        }
-                      />
-                      <InputBox
-                        label="Minimum Y (%)"
-                        enabled={specifyBorderPercentage}
-                        getter={() => Math.round((minY / imageHeight!) * 100)}
-                        setter={(x) =>
-                          setMinY(Math.round((imageHeight! * x) / 100))
-                        }
-                      />
-                    </div>
-                    <div className="row">
-                      <InputBox
-                        label="Maximum X (px)"
-                        enabled={!specifyBorderPercentage}
-                        getter={() => maxX}
-                        setter={(x) => setMaxX(x)}
-                      />
-                      <InputBox
-                        label="Maximum Y (px)"
-                        enabled={!specifyBorderPercentage}
-                        getter={() => maxY}
-                        setter={(x) => setMaxY(x)}
-                      />
-                      <InputBox
-                        label="Maximum X (%)"
-                        enabled={specifyBorderPercentage}
-                        getter={() => Math.round((maxX / imageWidth!) * 100)}
-                        setter={(x) =>
-                          setMaxX(Math.round((imageWidth! * x) / 100))
-                        }
-                      />
-                      <InputBox
-                        label="Maximum Y (%)"
-                        enabled={specifyBorderPercentage}
-                        getter={() => Math.round((maxY / imageHeight!) * 100)}
-                        setter={(x) =>
-                          setMaxY(Math.round((imageHeight! * x) / 100))
-                        }
-                      />
-                    </div>
-                  </>
-                )}
-              </Form.Group>
-            </Tab>
-
-            <Tab label="Model Guided Task">
-              <Form.Label>Image Sets to process</Form.Label>
-              <ImageSetDropdown
-                selectedSets={selectedImageSets}
-                setImageSets={setSelectedImageSets}
-              />
-              <Form.Group>
-                <Form.Label>Model</Form.Label>
-                <Form.Select
-                  aria-label="Select AI model to use to guide annotation"
-                  onChange={(e) => {
-                    setModelId(e.target.value);
-                    if (e.target.value !== 'scoutbot') {
-                      setScoutbotFile(null);
-                    }
-                  }}
-                  value={modelId}
-                >
-                  <option>Select AI model to use to guide annotation</option>
-                  <option value="ivx">Elephant detection (nadir)</option>
-                  <option value="scoutbotV3">ScoutBot v3</option>
-                  <option value="scoutbot">ScoutBot export file</option>
-                </Form.Select>
-              </Form.Group>
-              {modelId === 'scoutbot' && (
-                <Form.Group>
-                  <Form.Label>ScoutBot Input File</Form.Label>
-                  <div className="d-flex align-items-center">
-                    <Form.Control
-                      type="text"
-                      readOnly
-                      value={scoutbotFile ? scoutbotFile.name : ''}
-                      placeholder="Select a ScoutBot export file"
-                      onClick={() => fileInputRef.current?.click()}
-                    />
-                    <Button
-                      variant="outline-secondary"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="ms-2"
-                    >
-                      Browse
-                    </Button>
-                  </div>
-                  <Form.Control
-                    type="file"
-                    ref={fileInputRef}
-                    className="d-none"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        setScoutbotFile(file);
-                      }
-                    }}
-                    accept=".csv"
-                  />
-                </Form.Group>
-              )}
-            </Tab>
-
-            <Tab label="Annotation Guided Task">
-              <Form.Label>Image Sets to process</Form.Label>
-              <ImageSetDropdown
-                selectedSets={selectedImageSets}
-                setImageSets={setSelectedImageSets}
-              />
-              <CategoriesDropdown
-                setSelectedCategories={setSelectedCategories}
-              />
-            </Tab>
-          </Tabs>
-
-          <Form.Group>
-            <Form.Label>Task Name</Form.Label>
-            <Form.Control
-              type="string"
-              value={name}
-              onChange={(x) => setName(x.target.value)}
+  switch (taskType) {
+    case "tiled":
+      return (
+        <div className="border border-dark shadow-sm p-2">
+          <Form.Label className="text-center" style={{ fontSize: "smaller" }}>
+            Detected image dimensions : {imageWidth}x{imageHeight}
+          </Form.Label>
+          <Form.Group className="mb-3 mt-3">
+            <LabeledToggleSwitch
+              leftLabel="Specify number of tiles"
+              rightLabel="Specify tile dimensions"
+              checked={specifyTileDimensions}
+              onChange={(checked) => {
+                setSpecifyTileDimensions(checked);
+              }}
             />
+
+            <div className="row">
+              <InputBox
+                label="Horizontal Tiles"
+                enabled={!specifyTileDimensions}
+                getter={() => horizontalTiles}
+                setter={(x) => setHorizontalTiles(x)}
+              />
+              <InputBox
+                label="Vertical Tiles"
+                enabled={!specifyTileDimensions}
+                getter={() => verticalTiles}
+                setter={(x) => setVerticalTiles(x)}
+              />
+              <InputBox
+                label="Width"
+                enabled={specifyTileDimensions}
+                getter={() => width}
+                setter={(x) => setWidth(x)}
+              />
+              <InputBox
+                label="Height"
+                enabled={specifyTileDimensions}
+                getter={() => height}
+                setter={(x) => setHeight(x)}
+              />
+            </div>
           </Form.Group>
-        </Form>
-      </Modal.Body>
-      <Modal.Footer>
-        <Button
-          variant="primary"
-          onClick={handleSubmit}
-          disabled={name.length == 0}
-        >
-          Submit
-        </Button>
-        <Button variant="dark" onClick={handleClose}>
-          Cancel
-        </Button>
-      </Modal.Footer>
-    </Modal>
-  );
+          <Form.Group className="mb-3 mt-3">
+            <LabeledToggleSwitch
+              leftLabel="Specify overlap (px)"
+              rightLabel="Specify overlap (%)"
+              checked={specifyOverlapInPercentage}
+              onChange={(checked) => {
+                setSpecifyOverlapInPercentage(checked);
+              }}
+            />
+            <div className="row">
+              <InputBox
+                label="Minimum sidelap (px)"
+                enabled={!specifyOverlapInPercentage}
+                getter={() => minSidelap}
+                setter={(x) => setMinSidelap(x)}
+              />
+              <InputBox
+                label="Minimum overlap (px)"
+                enabled={!specifyOverlapInPercentage}
+                getter={() => minOverlap}
+                setter={(x) => setMinOverlap(x)}
+              />
+              <InputBox
+                label="Minimum sidelap (%)"
+                enabled={specifyOverlapInPercentage}
+                getter={() => minSidelapPercentage}
+                setter={(x) => setMinSidelapPercentage(x)}
+              />
+              <InputBox
+                label="Minimum overlap (%)"
+                enabled={specifyOverlapInPercentage}
+                getter={() => minOverlapPercentage}
+                setter={(x) => setMinOverlapPercentage(x)}
+              />
+            </div>
+            <div className="row">
+              <InputBox
+                label="Actual sidelap (px)"
+                enabled={false}
+                getter={() => getSidelapPixels()}
+              />
+              <InputBox
+                label="Actual overlap (px)"
+                enabled={false}
+                getter={() => getOverlapPixels()}
+              />
+              <InputBox
+                label="Actual sidelap (%)"
+                enabled={false}
+                getter={() => getSidelapPercent().toFixed(2)}
+              />
+              <InputBox
+                label="Actual overlap (%)"
+                enabled={false}
+                getter={() => getOverlapPercent().toFixed(2)}
+              />
+            </div>
+          </Form.Group>
+          <Form.Group className="mb-3 mt-3">
+            <LabeledToggleSwitch
+              leftLabel="Process Entire Image"
+              rightLabel="Specify Processing Borders"
+              checked={specifyBorders}
+              onChange={(checked) => {
+                setSpecifyBorders(checked);
+                setMinX(0);
+                setMaxX(imageWidth!);
+                setMinY(0);
+                setMaxY(imageHeight!);
+              }}
+            />
+            {specifyBorders && (
+              <>
+                <LabeledToggleSwitch
+                  leftLabel="Specify Borders (px)"
+                  rightLabel="Specify Borders (%)"
+                  checked={specifyBorderPercentage}
+                  onChange={(checked) => {
+                    setSpecifyBorderPercentage(checked);
+                  }}
+                />
+                <div className="row">
+                  <InputBox
+                    label="Minimum X (px)"
+                    enabled={!specifyBorderPercentage}
+                    getter={() => minX}
+                    setter={(x) => setMinX(x)}
+                  />
+                  <InputBox
+                    label="Minimum Y (px)"
+                    enabled={!specifyBorderPercentage}
+                    getter={() => minY}
+                    setter={(x) => setMinY(x)}
+                  />
+                  <InputBox
+                    label="Minimum X (%)"
+                    enabled={specifyBorderPercentage}
+                    getter={() => Math.round((minX / imageWidth!) * 100)}
+                    setter={(x) => setMinX(Math.round((imageWidth! * x) / 100))}
+                  />
+                  <InputBox
+                    label="Minimum Y (%)"
+                    enabled={specifyBorderPercentage}
+                    getter={() => Math.round((minY / imageHeight!) * 100)}
+                    setter={(x) =>
+                      setMinY(Math.round((imageHeight! * x) / 100))
+                    }
+                  />
+                </div>
+                <div className="row">
+                  <InputBox
+                    label="Maximum X (px)"
+                    enabled={!specifyBorderPercentage}
+                    getter={() => maxX}
+                    setter={(x) => setMaxX(x)}
+                  />
+                  <InputBox
+                    label="Maximum Y (px)"
+                    enabled={!specifyBorderPercentage}
+                    getter={() => maxY}
+                    setter={(x) => setMaxY(x)}
+                  />
+                  <InputBox
+                    label="Maximum X (%)"
+                    enabled={specifyBorderPercentage}
+                    getter={() => Math.round((maxX / imageWidth!) * 100)}
+                    setter={(x) => setMaxX(Math.round((imageWidth! * x) / 100))}
+                  />
+                  <InputBox
+                    label="Maximum Y (%)"
+                    enabled={specifyBorderPercentage}
+                    getter={() => Math.round((maxY / imageHeight!) * 100)}
+                    setter={(x) =>
+                      setMaxY(Math.round((imageHeight! * x) / 100))
+                    }
+                  />
+                </div>
+              </>
+            )}
+          </Form.Group>
+        </div>
+      );
+    case "model":
+      return (
+        <div className="border border-dark shadow-sm p-2">
+          <Form.Group>
+            <Form.Label>Model</Form.Label>
+            <Form.Select
+              aria-label="Select AI model to use to guide annotation"
+              onChange={(e) => {
+                setModelId(e.target.value);
+                if (e.target.value !== "scoutbot") {
+                  setScoutbotFile(null);
+                }
+              }}
+              value={modelId}
+            >
+              <option>Select AI model to use to guide annotation</option>
+              <option value="ivx">Elephant detection (nadir)</option>
+              <option value="scoutbotV3">ScoutBot v3</option>
+              <option value="scoutbot">ScoutBot export file</option>
+            </Form.Select>
+          </Form.Group>
+          {modelId === "scoutbot" && (
+            <Form.Group>
+              <Form.Label>ScoutBot Input File</Form.Label>
+              <div className="d-flex align-items-center">
+                <Form.Control
+                  type="text"
+                  readOnly
+                  value={scoutbotFile ? scoutbotFile.name : ""}
+                  placeholder="Select a ScoutBot export file"
+                  onClick={() => fileInputRef.current?.click()}
+                />
+                <Button
+                  variant="outline-secondary"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="ms-2"
+                >
+                  Browse
+                </Button>
+              </div>
+              <Form.Control
+                type="file"
+                ref={fileInputRef}
+                className="d-none"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setScoutbotFile(file);
+                  }
+                }}
+                accept=".csv"
+              />
+            </Form.Group>
+          )}
+        </div>
+      );
+    case "annotation":
+      return (
+        <div className="border border-dark shadow-sm p-2">
+          <Form.Group>
+            <Form.Label>Categories</Form.Label>
+            <Form.Select
+              onChange={(e) => {
+                setSelectedCategories(e.target.value);
+              }}
+            >
+              {labels.map((label) => (
+                <option key={label.id} value={label.id}>
+                  {label.name}
+                </option>
+              ))}
+            </Form.Select>
+          </Form.Group>
+        </div>
+      );
+  }
 }
 
 export default CreateTask;

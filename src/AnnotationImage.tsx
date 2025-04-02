@@ -68,6 +68,7 @@ export default function AnnotationImage(props: any) {
         position="bottomright"
         hideLegend={expandLegend}
         setHideLegend={() => setExpandLegend((e) => !e)}
+        annotationSetId={annotationSetId}
       />,
     ].concat(
       categories?.map((category) => (
@@ -121,6 +122,7 @@ export default function AnnotationImage(props: any) {
         <SideLegend
           hideLegend={!expandLegend}
           setHideLegend={() => setExpandLegend((e) => !e)}
+          annotationSetId={annotationSetId}
         />
       </div>
     </ImageContextFromHook>

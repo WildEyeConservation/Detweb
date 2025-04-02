@@ -27,10 +27,9 @@ export default function Surveys() {
   const [selectedProject, setSelectedProject] = useState<
     Schema["Project"]["type"] | null
   >(null);
-  const [selectedAnnotationSet, setSelectedAnnotationSet] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
+  const [selectedAnnotationSet, setSelectedAnnotationSet] = useState<
+    Schema["AnnotationSet"]["type"] | null
+  >(null);
   const [search, setSearch] = useState("");
   const [selectedSets, setSelectedSets] = useState<string[]>([]);
 
@@ -421,6 +420,8 @@ export default function Surveys() {
             setSelectedAnnotationSet(null);
           }}
           imageSets={selectedProject.imageSets}
+          annotationSet={selectedAnnotationSet}
+          projectId={selectedProject.id}
         />
       )}
       {selectedProject && (

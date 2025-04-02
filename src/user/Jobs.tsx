@@ -202,7 +202,7 @@ export default function Jobs() {
                   marginBottom: "0px",
                 }}
               >
-                Job: {queue.name}
+                Type: {queue.name}
               </p>
             </div>
             {myOrganizationHook.data?.find(
@@ -222,7 +222,7 @@ export default function Jobs() {
             {queue.batchSize && queue.batchSize > 0 ? (
               <p className="mb-0">
                 Batches remaining:{" "}
-                {Number(jobsRemaining[queue.url || ""] || 0) / queue.batchSize}
+                {Math.ceil(Number(jobsRemaining[queue.url || ""] || 0) / queue.batchSize)}
               </p>
             ) : (
               <p className="mb-0">
