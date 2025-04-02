@@ -182,66 +182,70 @@ export default function Jobs() {
   }
 
   const tableData = displayProjects.flatMap((project) =>
-    project.queues.map((queue) => ({
-      id: queue.id,
-      rowData: [
-        <div
-          className="d-flex justify-content-between align-items-center p-2"
-          key={queue.id}
-        >
-          <div className="d-flex flex-row gap-3 align-items-center">
-            <div>
-              <h5 className="mb-0">{project.name}</h5>
-              <i style={{ fontSize: "14px", display: "block" }}>
-                {project.organization.name}
-              </i>
-              <p
-                style={{
-                  fontSize: "14px",
-                  display: "block",
-                  marginBottom: "0px",
-                }}
-              >
-                Type: {queue.name}
-              </p>
-            </div>
-            {myOrganizationHook.data?.find(
-              (membership) =>
-                membership.organizationId === project.organization.id
-            )?.isAdmin &&
-              queue.hidden && (
-                <span
-                  className="badge bg-secondary"
-                  style={{ fontSize: "14px" }}
-                >
-                  Hidden
-                </span>
-              )}
-          </div>
-          <div className="d-flex flex-row gap-3 align-items-center">
-            {queue.batchSize && queue.batchSize > 0 ? (
-              <p className="mb-0">
-                Batches remaining:{" "}
-                {Math.ceil(Number(jobsRemaining[queue.url || ""] || 0) / queue.batchSize)}
-              </p>
-            ) : (
-              <p className="mb-0">
-                Jobs remaining: {jobsRemaining[queue.url || ""] || "Unknown"}
-              </p>
-            )}
-            <Button
-              variant="primary"
-              disabled={takingJob}
-              onClick={() =>
-                handleTakeJob({ queueId: queue.id, projectId: project.id })
-              }
+    project.queues
+      .map((queue) => {
+        const numJobsRemaining = Number(jobsRemaining[queue.url || ""] || 0);
+        const batchesRemaining = Math.ceil(numJobsRemaining / queue.batchSize);
+
+        if (numJobsRemaining === 0) return null;
+
+        return {
+          id: queue.id,
+          rowData: [
+            <div
+              className="d-flex justify-content-between align-items-center p-2"
+              key={queue.id}
             >
-              Take Job
-            </Button>
-          </div>
-        </div>,
-      ],
-    }))
+              <div className="d-flex flex-row gap-3 align-items-center">
+                <div>
+                  <h5 className="mb-0">{project.name}</h5>
+                  <i style={{ fontSize: "14px", display: "block" }}>
+                    {project.organization.name}
+                  </i>
+                  <p
+                    style={{
+                      fontSize: "14px",
+                      display: "block",
+                      marginBottom: "0px",
+                    }}
+                  >
+                    Type: {queue.name}
+                  </p>
+                </div>
+                {myOrganizationHook.data?.find(
+                  (membership) =>
+                    membership.organizationId === project.organization.id
+                )?.isAdmin &&
+                  queue.hidden && (
+                    <span
+                      className="badge bg-secondary"
+                      style={{ fontSize: "14px" }}
+                    >
+                      Hidden
+                    </span>
+                  )}
+              </div>
+              <div className="d-flex flex-row gap-3 align-items-center">
+                {queue.batchSize && queue.batchSize > 0 ? (
+                  <p className="mb-0">Batches remaining: {batchesRemaining}</p>
+                ) : (
+                  <p className="mb-0">Jobs remaining: {numJobsRemaining}</p>
+                )}
+                <Button
+                  variant="primary"
+                  disabled={takingJob}
+                  onClick={() =>
+                    handleTakeJob({ queueId: queue.id, projectId: project.id })
+                  }
+                >
+                  Take Job
+                </Button>
+              </div>
+            </div>,
+          ],
+        };
+      })
+      .filter((item) => item !== null)
   );
 
   return (

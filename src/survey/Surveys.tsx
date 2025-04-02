@@ -165,7 +165,7 @@ export default function Surveys() {
             .sort((a, b) => a.name.localeCompare(b.name))
             .map((annotationSet, i) => (
               <div
-                className={`d-flex justify-content-between align-items-center ${
+                className={`d-flex justify-content-between align-items-center gap-2 ${
                   i % 2 === 0 ? "" : "border-top border-light pt-2"
                 }`}
                 key={annotationSet.id}
