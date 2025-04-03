@@ -1,12 +1,10 @@
 import { Modal, Button } from "react-bootstrap";
 import { Schema } from "../../amplify/data/resource";
 import { Tabs, Tab } from "../Tabs";
-import LabelEditor from "./LabelEditor";
 import { useState } from "react";
 import AddGpsData from "../AddGpsData";
 import ProcessImages from "../ProcessImages";
 import CreateSubset from "../CreateSubset";
-import LaunchRegistration from "../LaunchRegistration";
 
 export default function EditSurveyModal({
   show,
@@ -29,9 +27,6 @@ export default function EditSurveyModal({
   const [prevButtonLabel, setPrevButtonLabel] = useState("Save");
   const [buttonLabel, setButtonLabel] = useState("Save");
   const [processImages, setProcessImages] = useState<
-    (() => Promise<void>) | null
-  >(null);
-  const [launchRegistration, setLaunchRegistration] = useState<
     (() => Promise<void>) | null
   >(null);
 
@@ -79,12 +74,6 @@ export default function EditSurveyModal({
               setSelectedSets={setSelectedSets}
             />
           </Tab>
-          <Tab label="Launch Registration" className="mt-1">
-            <LaunchRegistration
-              project={project}
-              setHandleSubmit={setLaunchRegistration}
-            />
-          </Tab>
         </Tabs>
       </Modal.Body>
       <Modal.Footer>
@@ -105,12 +94,6 @@ export default function EditSurveyModal({
                   if (processImages) {
                     setButtonLabel("Processing...");
                     await processImages();
-                  }
-                  break;
-                case 3:
-                  if (launchRegistration) {
-                    setButtonLabel("Launching...");
-                    await launchRegistration();
                   }
                   break;
               }

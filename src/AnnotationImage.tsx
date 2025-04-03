@@ -100,7 +100,7 @@ export default function AnnotationImage(props: any) {
           }}
         >
           {visible && (props.taskTag || currentTaskTag) && (
-            <Badge bg="primary">
+            <Badge bg="secondary">
               Working on: {props.taskTag || currentTaskTag}
             </Badge>
           )}

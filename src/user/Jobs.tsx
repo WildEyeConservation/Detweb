@@ -273,7 +273,7 @@ export default function Jobs() {
                 <Button
                   className="ms-1"
                   variant="primary"
-                  disabled={takingJob}
+                  disabled={takingJob || deletingJob}
                   onClick={() =>
                     handleTakeJob({
                       queueId: queue.id,

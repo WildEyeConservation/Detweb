@@ -421,7 +421,7 @@ export default function Surveys() {
           }}
           imageSets={selectedProject.imageSets}
           annotationSet={selectedAnnotationSet}
-          projectId={selectedProject.id}
+          project={selectedProject}
         />
       )}
       {selectedProject && (

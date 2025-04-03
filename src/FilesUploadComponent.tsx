@@ -181,16 +181,20 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
       );
 
       async function createImageSet() {
+        const { data: project } = await client.models.Project.get(
+          { id: projectId },
+          { selectionSet: ["name"] }
+        );
+
         const { data: imageSet } = await client.models.ImageSet.create({
-          name,
+          name: project?.name || name,
           projectId: projectId,
         });
         return imageSet?.id;
       }
 
-      
       const imageSetId =
-        imageSets.find((x) => x.name === name)?.id || await createImageSet();
+        imageSets.length > 0 ? imageSets[0].id : await createImageSet();
 
       filteredImageFiles.map((file) =>
         limitConnections(async () => {
@@ -288,11 +292,11 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
       />
       <div
         className="p-2 mb-2 bg-white text-black"
-        style={{ minHeight: "160px", overflow: "auto" }}
+        style={{ minHeight: "136px", overflow: "auto" }}
       >
         {scannedFiles.length > 0 && (
           <p className="m-0">
-            Imageset name: {name}
+            Folder name: {name}
             <br />
             Total files: {scannedFiles.length}
             <br />
@@ -300,10 +304,13 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
             <br />
             Image files size: {formatFileSize(totalImageSize)}
             <br />
-            Image files not already uploaded: {filteredImageFiles.length}
-            <br />
-            Image files size not already uploaded:{" "}
-            {formatFileSize(filteredImageSize)}
+            New images: {filteredImageFiles.length}
+            {filteredImageFiles.length > 0 && (
+              <>
+                <br />
+                New images size: {formatFileSize(filteredImageSize)}
+              </>
+            )}
           </p>
         )}
       </div>

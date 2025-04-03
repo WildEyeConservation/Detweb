@@ -135,12 +135,17 @@ export default function LaunchTask({
     const sqsClient = await getSqsClient();
     const command = new GetQueueAttributesCommand({
       QueueUrl: queueUrl,
-      AttributeNames: ["FifoQueue"],
+      AttributeNames: ["All"]
     });
 
     try {
       const response = await sqsClient.send(command);
-      return response.Attributes?.FifoQueue === "true" ? "FIFO" : "Standard";
+
+      if (response.Attributes?.FifoQueue) {
+        return "FIFO";
+      }
+
+      return "Standard";
     } catch (error) {
       console.warn(
         "Error fetching queue attributes, assuming Standard queue:",
@@ -182,10 +187,11 @@ export default function LaunchTask({
 
     const groupId = crypto.randomUUID();
     const batchSize = 10;
+    // Collect batch promises so we can await them
+    const batchPromises: Promise<any>[] = [];
     for (let i = 0; i < allLocations.length; i += batchSize) {
       const locationBatch = allLocations.slice(i, i + batchSize);
       const batchEntries = [];
-
       for (const locationId of locationBatch) {
         const location = {
           id: locationId,
@@ -218,7 +224,7 @@ export default function LaunchTask({
       }
 
       if (batchEntries.length > 0) {
-        limitConnections(() =>
+        const sendTask = limitConnections(() =>
           getSqsClient().then((sqsClient) =>
             sqsClient.send(
               new SendMessageBatchCommand({
@@ -228,8 +234,11 @@ export default function LaunchTask({
             )
           )
         ).then(() => setStepsCompleted((s: number) => s + batchEntries.length));
+        batchPromises.push(sendTask);
       }
     }
+    // Wait for all batch messages to be sent before moving on
+    await Promise.all(batchPromises);
 
     for (const taskId of selectedTasks) {
       await client.models.TasksOnAnnotationSet.create({

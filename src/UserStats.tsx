@@ -39,7 +39,13 @@ export default function UserStats() {
   const [endDate, setEndDate] = useState<Date | null>(new Date());
   const [userStats, setUserStats] = useState<UserStatsType[]>([]);
 
-  const [selectedSets, setSelectedSets] = useState<string[] | undefined>([]);
+  const [selectedSets, setSelectedSets] = useState<
+    | {
+        label: string;
+        value: string;
+      }[]
+    | undefined
+  >([]);
 
   const startString = startDate
     ? `${startDate?.getFullYear()}-${String(startDate?.getMonth() + 1).padStart(
@@ -110,7 +116,11 @@ export default function UserStats() {
             !startString ||
             (s.date >= startString && (!endString || s.date <= endString))
           ) {
-            if (selectedSets.length > 0 && selectedSets.includes(s.setId)) {
+            if (
+              selectedSets &&
+              selectedSets.length > 0 &&
+              selectedSets.some((set) => set.value === s.setId)
+            ) {
               setStats((prev) => {
                 if (!prev[s.userId]) {
                   prev[s.userId] = {
@@ -232,7 +242,7 @@ export default function UserStats() {
     //Create a lookup table for user names
     const userLookup = new Map<string, string>();
     allUsers.forEach((u) => userLookup.set(u.id + "::" + u.id, u.name));
-    for (const annotationSetId of selectedSets) {
+    for (const annotationSetId of selectedSets?.map((s) => s.value) || []) {
       const observations = await queryObservations(annotationSetId);
       const fileName = `DetWebObservations-${annotationSetId}`;
       const exportType = exportFromJSON.types.csv;

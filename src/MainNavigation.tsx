@@ -90,6 +90,14 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
               >
                 Jobs
               </Nav.Link>
+              <Nav.Link
+                as={NavLink}
+                eventKey={`annotation-statistics`}
+                to={`annotation-statistics`}
+                className="px-2"
+              >
+                Annotation Statistics
+              </Nav.Link>
               {isOrganizationAdmin && (
                 <Nav.Link
                   as={NavLink}
@@ -100,14 +108,6 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                   Permissions
                 </Nav.Link>
               )}
-              <Nav.Link
-                as={NavLink}
-                eventKey={`annotation-statistics`}
-                to={`annotation-statistics`}
-                className="px-2"
-              >
-                Annotation Statistics
-              </Nav.Link>
               {isOrganizationAdmin && (
                 <Nav.Link
                   as={NavLink}

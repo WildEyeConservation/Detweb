@@ -1,35 +1,30 @@
 import React, { useContext, useState, useEffect, useCallback } from "react";
-import { Stack, Modal, Form, Button } from "react-bootstrap";
-import { UserContext, GlobalContext, ManagementContext } from "./Context";
-import { QueueDropdown } from "./QueueDropDown";
-import { AnnotationSetDropdown } from "./AnnotationSetDropdownMulti";
+import { Form } from "react-bootstrap";
+import { UserContext, GlobalContext } from "./Context";
 import { fetchAllPaginatedResults, makeTransform, array2Matrix } from "./utils";
-import { ImageNeighbourType } from "./schemaTypes";
 import { SendMessageCommand } from "@aws-sdk/client-sqs";
-// import { ImageSetDropdown } from './ImageSetDropDown';
 import ImageSetDropdown from "./survey/ImageSetDropdown";
 import * as math from "mathjs";
 import { inv } from "mathjs";
 import { useUpdateProgress } from "./useUpdateProgress";
 import { Schema } from "../amplify/data/resource";
-import Select from "react-select";
-import { CreateQueueCommand } from "@aws-sdk/client-sqs";
 
 interface LaunchRegistrationProps {
   project: Schema["Project"]["type"];
   setHandleSubmit: React.Dispatch<
-    React.SetStateAction<(() => Promise<void>) | null>
+    React.SetStateAction<((url: string) => Promise<void>) | null>
   >;
+  selectedSets: string[];
 }
 
 const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
   project,
   setHandleSubmit,
+  selectedSets,
 }) => {
   const { client } = useContext(GlobalContext)!;
   const { getSqsClient } = useContext(UserContext)!;
   const [selectedImageSets, setSelectedImageSets] = useState<string[]>([]);
-  const [selectedSets, setSelectedSets] = useState<string[]>([]);
   const [selectedType, setSelectedType] = useState<boolean>(false);
   const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
     taskId: `Launch registration task`,
@@ -37,12 +32,6 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
     determinateTaskName: "Enqueueing pairs",
     stepFormatter: (step: number) => `${step} images`,
   });
-  // const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
-  //   taskId: `Launch registration task`,
-  //   indeterminateTaskName: `Finding images with annotations`,
-  //   determinateTaskName: "Enqueueing pairs",
-  //   stepName: "locations",
-  // });
 
   async function findPath(
     image1: { id: string; timestamp: number },
@@ -95,26 +84,7 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
     return math.divide(homography, scale) as math.Matrix;
   }
 
-  const handleSubmit = useCallback(async () => {
-    let url = "";
-    const queueName = `${project.name}_${crypto.randomUUID()}.fifo`;
-    getSqsClient().then(sqsClient => sqsClient.send(new CreateQueueCommand({
-      QueueName: queueName,
-      Attributes: {
-        MessageRetentionPeriod: '1209600',   
-        FifoQueue: "true",
-      },
-    }))
-    ).then(async ({ QueueUrl: url }) => {
-      const { data: queue } = await client.models.Queue.create({
-        name: selectedSets.join("_") + "_" + "registration",
-        projectId: project.id,
-        url,
-      });
-      if (queue?.url) {
-        url = queue.url;
-      }
-    })
+  const handleSubmit = useCallback(async (url: string) => {
 
     if (!(selectedSets.length && url)) return;
 
@@ -323,15 +293,15 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
         console.log(imageSetMemberships);
       }
     }
-  }, [selectedSets, selectedType, selectedImageSets, client]);
+  }, [selectedType, selectedImageSets, client]);
 
   useEffect(() => {
     setHandleSubmit(() => handleSubmit);
   }, [handleSubmit]);
 
   return (
-    <Form>
-      <Stack gap={2}>
+    <div>
+      <div className="mt-3 d-flex flex-column gap-2">
         <Form.Group>
           <Form.Check
             type="switch"
@@ -347,22 +317,8 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
           />
         )}
         </Form.Group>
-        <Form.Group>
-          <Form.Label>Annotation Sets</Form.Label>
-          <Select
-            isMulti
-            placeholder="Select Annotation Sets"
-            className="text-black"
-            options={project.annotationSets.map((set) => ({
-              label: set.name,
-              value: set.id,
-            }))}
-            value={selectedSets}
-            onChange={(e) => setSelectedSets(e)}
-          />
-        </Form.Group>
-      </Stack>
-    </Form>
+      </div>
+    </div>
   );
 };
 

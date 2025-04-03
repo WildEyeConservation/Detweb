@@ -81,8 +81,12 @@ export function JobsRemaining() {
     }
   }, [url, backupUrl, getSqsClient]);
 
-  return jobsRemaining === "0" || batchSize === 0 ? (
-    <Badge className="d-flex flex-row align-items-center justify-content-center gap-3 p-2 w-100">
+  return jobsRemaining === "0" ||
+    batchSize === 0 ||
+    parseInt(jobsRemaining) < batchSize ? (
+    <Badge
+      className="d-flex flex-row align-items-center justify-content-center gap-3 p-2 w-100 bg-secondary"
+    >
       <p className="mb-0">
         {jobsRemaining} jobs remaining
         {usingBackupQueue ? " on backup queue " : " "}(globally)
@@ -99,10 +103,13 @@ export function JobsRemaining() {
         variant="primary"
         max={batchSize}
         now={sessionJobsCompleted % batchSize}
-        label={`${sessionJobsCompleted % batchSize} of ${batchSize} jobs completed`}
+        label={`${
+          sessionJobsCompleted % batchSize
+        } of ${batchSize} jobs completed`}
       />
       <Badge className="m-0">
-        Batches completed this session: {Math.floor(sessionJobsCompleted / batchSize)}
+        Batches completed this session:{" "}
+        {Math.floor(sessionJobsCompleted / batchSize)}
       </Badge>
     </div>
   );

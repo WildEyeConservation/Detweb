@@ -8,19 +8,20 @@ import { makeSafeQueueName } from "../utils";
 import { CreateQueueCommand } from "@aws-sdk/client-sqs";
 import { GlobalContext, UserContext } from "../Context";
 import LaunchTask from "../LaunchTask";
+import LaunchRegistration from "../LaunchRegistration";
 
-type TaskType = "tiled" | "model" | "annotation";
+type TaskType = "tiled" | "model" | "annotation" | "registration";
 
 export default function LaunchAnnotationSetModal({
   show,
   onClose,
-  projectId,
+  project,
   imageSets,
   annotationSet,
 }: {
   show: boolean;
   onClose: () => void;
-  projectId: string;
+  project: Schema["Project"]["type"];
   imageSets: { id: string; name: string }[];
   annotationSet: Schema["AnnotationSet"]["type"];
 }) {
@@ -54,24 +55,23 @@ export default function LaunchAnnotationSetModal({
       }) => Promise<void>)
     | null
   >(null);
+  const [handleLaunchRegistration, setHandleLaunchRegistration] = useState<
+    ((url: string) => Promise<void>) | null
+  >(null);
   const [taskType, setTaskType] = useState<TaskType>("model");
   const [sendDetectionsToSecondaryQueue, setSendDetectionsToSecondaryQueue] =
     useState<boolean>(false);
+
   const { client } = useContext(GlobalContext)!;
   const { getSqsClient } = useContext(UserContext)!;
 
   const createQueue = async (
     name: string,
-    hidden: boolean
+    hidden: boolean,
+    fifo: boolean
   ): Promise<string | null> => {
-    const safeName = makeSafeQueueName(name + crypto.randomUUID());
-    const { data: queue } = await client.models.Queue.create({
-      name: name,
-      projectId: projectId,
-      batchSize: batchSize,
-      hidden: hidden,
-      zoom: zoom,
-    });
+    const safeName =
+      makeSafeQueueName(name + crypto.randomUUID()) + (fifo ? ".fifo" : "");
 
     return getSqsClient()
       .then((sqsClient) =>
@@ -80,13 +80,21 @@ export default function LaunchAnnotationSetModal({
             QueueName: safeName,
             Attributes: {
               MessageRetentionPeriod: "1209600",
+              FifoQueue: fifo ? "true" : undefined,
             },
           })
         )
       )
       .then(async ({ QueueUrl: url }) => {
-        if (queue) {
-          await client.models.Queue.update({ id: queue.id, url });
+        if (url) {
+          await client.models.Queue.create({
+            url,
+            name: name,
+            projectId: project.id,
+            batchSize: batchSize,
+            hidden: hidden,
+            zoom: zoom,
+          });
           return url ?? null;
         }
         return null;
@@ -97,10 +105,10 @@ export default function LaunchAnnotationSetModal({
     if (handleCreateTask) {
       const locationSetId = await handleCreateTask();
 
-      const queueUrl = await createQueue("Tiled Annotation", false);
+      const queueUrl = await createQueue("Tiled Annotation", false, false);
 
       const secondaryQueueUrl = sendDetectionsToSecondaryQueue
-        ? await createQueue("Tiled Annotation Secondary", true)
+        ? await createQueue("Tiled Annotation Secondary", true, false)
         : null;
 
       //push messages to queue
@@ -124,6 +132,16 @@ export default function LaunchAnnotationSetModal({
     alert("create annotation task");
   }
 
+  async function createRegistrationTask() {
+    if (handleLaunchRegistration) {
+      const queueUrl = await createQueue("Registration", false, true);
+
+      if (queueUrl) {
+        await handleLaunchRegistration(queueUrl);
+      }
+    }
+  }
+
   async function handleSubmit() {
     switch (taskType) {
       case "tiled":
@@ -134,6 +152,9 @@ export default function LaunchAnnotationSetModal({
         break;
       case "annotation":
         await createAnnotationTask();
+        break;
+      case "registration":
+        await createRegistrationTask();
         break;
     }
   }
@@ -153,6 +174,9 @@ export default function LaunchAnnotationSetModal({
                   break;
                 case 1:
                   setTaskType("tiled");
+                  break;
+                case 2:
+                  setTaskType("registration");
                   break;
               }
             }}
@@ -192,7 +216,7 @@ export default function LaunchAnnotationSetModal({
                     labels={annotationSet.categories}
                     hideUI={!manuallyDefineTileDimensions}
                     setHandleCreateTask={setHandleCreateTask}
-                    projectId={projectId}
+                    projectId={project.id}
                   />
                 </Form.Group>
                 <Form.Group>
@@ -336,6 +360,20 @@ export default function LaunchAnnotationSetModal({
                   </div>
                 )}
               </div>
+            </Tab>
+            <Tab label="Registration" className="mt-1">
+              <StandardOptions
+                imageSets={imageSets}
+                selectedImageSets={selectedImageSets}
+                setSelectedImageSets={setSelectedImageSets}
+                batchSize={batchSize}
+                setBatchSize={setBatchSize}
+              />
+              <LaunchRegistration
+                project={project}
+                setHandleSubmit={setHandleLaunchRegistration}
+                selectedSets={[annotationSet.id]}
+              />
             </Tab>
           </Tabs>
           <LaunchTask
