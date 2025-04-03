@@ -5,8 +5,13 @@ import { Schema } from "../../amplify/data/resource";
 import { Spinner, Button } from "react-bootstrap";
 import MyTable from "../Table";
 import { useNavigate } from "react-router-dom";
-import { type GetQueueAttributesCommandInput } from "@aws-sdk/client-sqs";
+import {
+  DeleteQueueCommand,
+  type GetQueueAttributesCommandInput,
+} from "@aws-sdk/client-sqs";
 import { GetQueueAttributesCommand } from "@aws-sdk/client-sqs";
+import ConfirmationModal from "../ConfirmationModal";
+import { useQueryClient } from "@tanstack/react-query";
 
 type Project = {
   id: string;
@@ -26,16 +31,20 @@ export default function Jobs() {
     user,
     getSqsClient,
   } = useContext(UserContext)!;
-  const { client } = useContext(GlobalContext)!;
+  const { client, showModal, modalToShow } = useContext(GlobalContext)!;
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const [projects, setProjects] = useState<Project[]>([]);
   const [displayProjects, setDisplayProjects] = useState<Project[]>([]);
   const [jobsRemaining, setJobsRemaining] = useState<Record<string, string>>(
     {}
   );
   const [isLoading, setIsLoading] = useState(false);
   const [takingJob, setTakingJob] = useState(false);
+  const [jobToDelete, setJobToDelete] = useState<
+    Schema["Queue"]["type"] | null
+  >(null);
+  const [deletingJob, setDeletingJob] = useState(false);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -81,7 +90,6 @@ export default function Jobs() {
 
       if (cancelled) return; // stop if unmounted
 
-      setProjects(validProjects);
       setDisplayProjects(validProjects);
       setIsLoading(false);
 
@@ -181,11 +189,42 @@ export default function Jobs() {
     setTakingJob(false);
   }
 
+  async function handleDeleteJob(job: Schema["Queue"]["type"]) {
+    setDeletingJob(true);
+
+    if (!job.url) {
+      alert("An unknown error occurred. Please try again later.");
+      console.error("Job has no URL");
+      setDeletingJob(false);
+      return;
+    }
+
+    try {
+      getSqsClient().then((sqsClient) =>
+        sqsClient
+          .send(new DeleteQueueCommand({ QueueUrl: job.url }))
+          .then(async () => {
+            await client.models.Queue.delete({ id: job.id });
+            queryClient.invalidateQueries({
+              queryKey: ["UserProjectMembership"],
+            });
+          })
+      );
+    } catch (error) {
+      alert("An unknown error occurred. Please try again later.");
+      console.error(error);
+    } finally {
+      setDeletingJob(false);
+    }
+  }
+
   const tableData = displayProjects.flatMap((project) =>
     project.queues
       .map((queue) => {
         const numJobsRemaining = Number(jobsRemaining[queue.url || ""] || 0);
-        const batchesRemaining = Math.ceil(numJobsRemaining / queue.batchSize);
+        const batchesRemaining = Math.ceil(
+          numJobsRemaining / (queue.batchSize || 0)
+        );
 
         if (numJobsRemaining === 0) return null;
 
@@ -225,21 +264,39 @@ export default function Jobs() {
                     </span>
                   )}
               </div>
-              <div className="d-flex flex-row gap-3 align-items-center">
+              <div className="d-flex flex-row gap-2 align-items-center">
                 {queue.batchSize && queue.batchSize > 0 ? (
                   <p className="mb-0">Batches remaining: {batchesRemaining}</p>
                 ) : (
                   <p className="mb-0">Jobs remaining: {numJobsRemaining}</p>
                 )}
                 <Button
+                  className="ms-1"
                   variant="primary"
                   disabled={takingJob}
                   onClick={() =>
-                    handleTakeJob({ queueId: queue.id, projectId: project.id })
+                    handleTakeJob({
+                      queueId: queue.id,
+                      projectId: project.id,
+                    })
                   }
                 >
                   Take Job
                 </Button>
+                {userProjectMembershipHook.data?.find(
+                  (membership) => membership.projectId === project.id
+                )?.isAdmin && (
+                  <Button
+                    variant="danger"
+                    disabled={deletingJob}
+                    onClick={() => {
+                      setJobToDelete(queue);
+                      showModal("deleteJob");
+                    }}
+                  >
+                    Delete
+                  </Button>
+                )}
               </div>
             </div>,
           ],
@@ -276,6 +333,33 @@ export default function Jobs() {
           )}
         </Card.Body>
       </Card>
+      {jobToDelete && (
+        <ConfirmationModal
+          show={modalToShow === "deleteJob"}
+          title="Delete Job"
+          onClose={() => {
+            showModal(null);
+            setJobToDelete(null);
+          }}
+          onConfirm={() => handleDeleteJob(jobToDelete)}
+          body={
+            <p className="mb-0">
+              Are you sure you want to delete the job <b>{jobToDelete.name}</b>{" "}
+              on survey{" "}
+              <b>
+                {
+                  displayProjects.find(
+                    (project) => project.id === jobToDelete.projectId
+                  )?.name
+                }
+              </b>
+              ?
+              <br />
+              This action cannot be undone.
+            </p>
+          }
+        />
+      )}
     </div>
   );
 }

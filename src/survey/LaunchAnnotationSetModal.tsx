@@ -77,10 +77,9 @@ export default function LaunchAnnotationSetModal({
       .then((sqsClient) =>
         sqsClient.send(
           new CreateQueueCommand({
-            QueueName: safeName + ".fifo",
+            QueueName: safeName,
             Attributes: {
               MessageRetentionPeriod: "1209600",
-              FifoQueue: "true",
             },
           })
         )
