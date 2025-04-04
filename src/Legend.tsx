@@ -2,8 +2,6 @@ import { useState, useEffect, useRef, useContext } from "react";
 import L from "leaflet";
 import { ProjectContext, UserContext } from "./Context";
 import { Card, Button } from "react-bootstrap";
-import OverlayTrigger from "react-bootstrap/OverlayTrigger";
-import Tooltip from "react-bootstrap/Tooltip";
 import { PanelLeft } from "lucide-react";
 
 /**

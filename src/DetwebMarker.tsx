@@ -36,16 +36,23 @@ function createIcon(
     if (annotation.candidate) attributes += " candidate";
     if (annotation.obscured) attributes += " obscured";
     if (annotation.shadow) attributes += " shadow";
-    let html = `<div class="marker" ${attributes}><div style="background-color: ${color}; border-color: ${
-      annotation.objectId == annotation.id
-        ? "#ffffff"
-        : annotation.objectId
-        ? "#888888"
-        : "#000000"
+    const borderColor = annotation.objectId === annotation.id 
+      ? "#ffffff"
+      : annotation.objectId
+        ? "#888888" 
+        : "#000000";
 
-    }">
-         <span class="markerLabel" style="position: relative; top: -1px; left: 0px;">${id ? jdenticon.toSvg(id, 20) : ""}</svg></span>
-         </div></div>`;
+    const markerLabel = id ? jdenticon.toSvg(id, 20) : "";
+
+    let html = `
+      <div class="marker" ${attributes}>
+        <div style="background-color: ${color}; border-color: ${borderColor}, position: relative; overflow: hidden;">
+          <span class="markerLabel" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+            ${markerLabel}
+          </span>
+        </div>
+      </div>
+    `;
     //let html = `<svg width="80" height="80" data-jdenticon-value="user127"/>`;
     //TODO : Confirm the units implicit in the various anchors defined below. If these are in pixels (or any other
     // absolute unit) then things may break upon a resize or even just on different resolution screens.
@@ -259,7 +266,7 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
               contextmenuItems={getContextMenuItems(annotation)}
             >
               <Tooltip>
-                Category: {getType(annotation)} <br />
+                Label: {getType(annotation)} <br />
                 Created by : {allUsers.find(u => u.id == annotation.owner)?.name || "Unknown"}
                 <br />
                 {annotation?.createdAt && (
@@ -290,6 +297,8 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
         prevAnno.proposedObjectId === nextAnno.proposedObjectId &&
         prevAnno.shadow === nextAnno.shadow &&
         prevAnno.obscured === nextAnno.obscured &&
+        prevAnno.createdAt === nextAnno.createdAt &&
+        prevAnno.owner === nextAnno.owner &&
         prevProps.activeAnnotation?.id === nextProps.activeAnnotation?.id
     );
     return arePropsEqual;
