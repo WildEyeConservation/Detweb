@@ -1,5 +1,5 @@
-import React, { useState, ReactElement } from 'react';
-import './Tabs.css';
+import React, { useState, ReactElement } from "react";
+import "./Tabs.css";
 
 interface TabProps {
   label: string;
@@ -12,6 +12,7 @@ interface TabsProps {
   defaultTab?: number;
   onTabChange?: (tab: number) => void;
   className?: string;
+  sharedChild?: React.ReactNode;
 }
 
 export const Tab: React.FC<TabProps> = ({ children, className }) => {
@@ -23,6 +24,7 @@ export const Tabs: React.FC<TabsProps> = ({
   defaultTab = 0,
   onTabChange,
   className,
+  sharedChild,
 }) => {
   const [activeTab, setActiveTab] = useState(defaultTab);
 
@@ -32,7 +34,7 @@ export const Tabs: React.FC<TabsProps> = ({
         {children.map((child, index) => (
           <div
             key={index}
-            className={`tab-label ${activeTab === index ? 'bg-primary' : ''}`}
+            className={`tab-label ${activeTab === index ? "bg-primary" : ""}`}
             onClick={() => {
               setActiveTab(index);
               onTabChange?.(index);
@@ -42,7 +44,10 @@ export const Tabs: React.FC<TabsProps> = ({
           </div>
         ))}
       </div>
-      <div className="">{children[activeTab]}</div>
+      <div className="">
+        {sharedChild}
+        {children[activeTab]}
+      </div>
     </div>
   );
 };

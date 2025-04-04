@@ -7,8 +7,8 @@ import { Schema } from "../../amplify/data/resource";
 import { makeSafeQueueName } from "../utils";
 import { CreateQueueCommand } from "@aws-sdk/client-sqs";
 import { GlobalContext, UserContext } from "../Context";
-import LaunchTask from "../LaunchTask";
 import LaunchRegistration from "../LaunchRegistration";
+import { useLaunchTask } from "../useLaunchTask";
 
 type TaskType = "tiled" | "model" | "annotation" | "registration";
 
@@ -47,14 +47,15 @@ export default function LaunchAnnotationSetModal({
   const [handleCreateTask, setHandleCreateTask] = useState<
     (() => Promise<string>) | null
   >(null);
-  const [handleLaunchTask, setHandleLaunchTask] = useState<
-    | ((options: {
-        selectedTasks: string[];
-        queueUrl: string;
-        secondaryQueueUrl: string | null;
-      }) => Promise<void>)
-    | null
-  >(null);
+  const launchTask = useLaunchTask({
+    allowOutside: allowAnnotationsOutsideLocationBoundaries,
+    filterObserved: viewUnobservedLocationsOnly,
+    lowerLimit: lowerLimit,
+    upperLimit: upperLimit,
+    skipLocationWithAnnotations: skipLocationsWithAnnotations,
+    taskTag: taskTag,
+    annotationSetId: annotationSet.id,
+  });
   const [handleLaunchRegistration, setHandleLaunchRegistration] = useState<
     ((url: string) => Promise<void>) | null
   >(null);
@@ -112,8 +113,8 @@ export default function LaunchAnnotationSetModal({
         : null;
 
       //push messages to queue
-      if (handleLaunchTask && queueUrl) {
-        await handleLaunchTask({
+      if (queueUrl) {
+        await launchTask({
           selectedTasks: [locationSetId],
           queueUrl: queueUrl,
           secondaryQueueUrl: secondaryQueueUrl,
@@ -180,45 +181,33 @@ export default function LaunchAnnotationSetModal({
                   break;
               }
             }}
-          >
-            <Tab label="Model Guided">
-              <StandardOptions
-                imageSets={imageSets}
-                selectedImageSets={selectedImageSets}
-                setSelectedImageSets={setSelectedImageSets}
-                batchSize={batchSize}
-                setBatchSize={setBatchSize}
-              />
-            </Tab>
-            <Tab label="Tiled Annotation">
-              <StandardOptions
-                imageSets={imageSets}
-                selectedImageSets={selectedImageSets}
-                setSelectedImageSets={setSelectedImageSets}
-                batchSize={batchSize}
-                setBatchSize={setBatchSize}
-              />
-              <div className="d-flex flex-column gap-3 mt-3">
-                <Form.Group className="d-flex flex-column gap-3">
-                  <Form.Switch
-                    label="Manually Define Tile Dimensions"
-                    checked={manuallyDefineTileDimensions}
-                    onChange={() =>
-                      setManuallyDefineTileDimensions(
-                        !manuallyDefineTileDimensions
-                      )
-                    }
-                  />
+            sharedChild={
+              <div className="d-flex flex-column gap-3">
+                <StandardOptions
+                  imageSets={imageSets}
+                  selectedImageSets={selectedImageSets}
+                  setSelectedImageSets={setSelectedImageSets}
+                  batchSize={batchSize}
+                  setBatchSize={setBatchSize}
+                />
+                {taskType !== "registration" && (
                   <CreateTask
                     name={annotationSet.name}
-                    taskType="tiled"
+                    taskType={taskType}
                     imageSets={selectedImageSets}
                     labels={annotationSet.categories}
-                    hideUI={!manuallyDefineTileDimensions}
                     setHandleCreateTask={setHandleCreateTask}
                     projectId={project.id}
                   />
-                </Form.Group>
+                )}
+              </div>
+            }
+          >
+            <Tab label="Model Guided">
+              <></>
+            </Tab>
+            <Tab label="Tiled Annotation">
+              <div className="d-flex flex-column gap-3 mt-3">
                 <Form.Group>
                   <Form.Switch
                     label="Show Advanced Options"
@@ -362,13 +351,6 @@ export default function LaunchAnnotationSetModal({
               </div>
             </Tab>
             <Tab label="Registration" className="mt-1">
-              <StandardOptions
-                imageSets={imageSets}
-                selectedImageSets={selectedImageSets}
-                setSelectedImageSets={setSelectedImageSets}
-                batchSize={batchSize}
-                setBatchSize={setBatchSize}
-              />
               <LaunchRegistration
                 project={project}
                 setHandleSubmit={setHandleLaunchRegistration}
@@ -376,18 +358,6 @@ export default function LaunchAnnotationSetModal({
               />
             </Tab>
           </Tabs>
-          <LaunchTask
-            options={{
-              allowOutside: allowAnnotationsOutsideLocationBoundaries,
-              filterObserved: viewUnobservedLocationsOnly,
-              lowerLimit: lowerLimit,
-              upperLimit: upperLimit,
-              skipLocationWithAnnotations: skipLocationsWithAnnotations,
-              taskTag: taskTag,
-              annotationSetId: annotationSet.id,
-            }}
-            setHandleLaunchTask={setHandleLaunchTask}
-          />
         </Form>
       </Modal.Body>
       <Modal.Footer>

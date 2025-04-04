@@ -11,15 +11,10 @@ import Form from "react-bootstrap/Form";
 import Modal from "react-bootstrap/Modal";
 import { UserContext, GlobalContext } from "./Context";
 import { useUpdateProgress } from "./useUpdateProgress";
-import { ImageSetDropdown } from "./ImageSetDropDown";
-//import { subset } from "mathjs";
 import { SendMessageCommand } from "@aws-sdk/client-sqs";
 import { fetchAllPaginatedResults } from "./utils";
 import LabeledToggleSwitch from "./LabeledToggleSwitch";
 import Papa from "papaparse";
-import { StringMap } from "aws-lambda/trigger/cognito-user-pool-trigger/_common";
-import { Tabs, Tab } from "./Tabs";
-import { CategoriesDropdown } from "./CategoriesDropDown";
 import { makeTransform, array2Matrix } from "./utils";
 import { inv } from "mathjs";
 import { MultiValue } from "react-select";
@@ -40,7 +35,6 @@ interface CreateTaskProps {
   name: string;
   projectId: string;
   labels: Schema["Category"]["type"][];
-  hideUI?: boolean;
   setHandleCreateTask?: React.Dispatch<
     React.SetStateAction<(() => Promise<string>) | null>
   >;
@@ -57,7 +51,6 @@ function CreateTask({
   taskType,
   projectId,
   labels,
-  hideUI = false,
   setHandleCreateTask,
 }: CreateTaskProps) {
   const { client, backend } = useContext(GlobalContext)!;
@@ -100,6 +93,7 @@ function CreateTask({
   const [selectedCategories, setSelectedCategories] = useState<
     MultiValue<CategoryOption> | SingleValue<CategoryOption>
   >([]);
+  const [hideTileDefinition, setHideTileDefinition] = useState<boolean>(true);
 
   const getImageId = useMemo(() => {
     const cache: { [path: string]: string } = {};
@@ -388,6 +382,7 @@ function CreateTask({
 
     switch (taskType) {
       case "model":
+        // Broken implementation
         if (modelId === "ivx") {
           allImages.map(async (image) => {
             const key = image.originalPath.replace("images", "heatmaps");
@@ -606,15 +601,8 @@ function CreateTask({
   }, [
     // There should be a beter way to do this, but while prototyping, here is an endless list of dependencies
     allImages,
-    backend.custom.pointFinderTaskQueueUrl,
-    backend.custom.scoutbotTaskQueueUrl,
-    backend.storage.buckets,
-    client.models.Annotation.annotationsByCategoryId,
-    client.models.Image.get,
-    client.models.ImageNeighbour.imageNeighboursByImage1key,
-    client.models.ImageNeighbour.imageNeighboursByImage2key,
-    client.models.Location.create,
-    client.models.LocationSet.create,
+    backend,
+    client,
     effectiveImageHeight,
     effectiveImageWidth,
     getImageId,
@@ -634,204 +622,218 @@ function CreateTask({
     taskType,
     threshold,
     verticalTiles,
-    width
+    width,
   ]);
-  
+
   useEffect(() => {
     if (setHandleCreateTask) {
       setHandleCreateTask(() => handleSubmit);
     }
   }, [setHandleCreateTask, handleSubmit]);
-  
-  if (hideUI) {
-    return null;
-  }
 
   switch (taskType) {
     case "tiled":
       return (
-        <div className="border border-dark shadow-sm p-2">
-          <Form.Label className="text-center" style={{ fontSize: "smaller" }}>
-            Detected image dimensions : {imageWidth}x{imageHeight}
-          </Form.Label>
-          <Form.Group className="mb-3 mt-3">
-            <LabeledToggleSwitch
-              leftLabel="Specify number of tiles"
-              rightLabel="Specify tile dimensions"
-              checked={specifyTileDimensions}
-              onChange={(checked) => {
-                setSpecifyTileDimensions(checked);
-              }}
+        <>
+          <Form.Group className="d-flex flex-column gap-3">
+            <Form.Switch
+              label="Manually Define Tile Dimensions"
+              checked={!hideTileDefinition}
+              onChange={() => setHideTileDefinition(!hideTileDefinition)}
             />
-
-            <div className="row">
-              <InputBox
-                label="Horizontal Tiles"
-                enabled={!specifyTileDimensions}
-                getter={() => horizontalTiles}
-                setter={(x) => setHorizontalTiles(x)}
-              />
-              <InputBox
-                label="Vertical Tiles"
-                enabled={!specifyTileDimensions}
-                getter={() => verticalTiles}
-                setter={(x) => setVerticalTiles(x)}
-              />
-              <InputBox
-                label="Width"
-                enabled={specifyTileDimensions}
-                getter={() => width}
-                setter={(x) => setWidth(x)}
-              />
-              <InputBox
-                label="Height"
-                enabled={specifyTileDimensions}
-                getter={() => height}
-                setter={(x) => setHeight(x)}
-              />
-            </div>
           </Form.Group>
-          <Form.Group className="mb-3 mt-3">
-            <LabeledToggleSwitch
-              leftLabel="Specify overlap (px)"
-              rightLabel="Specify overlap (%)"
-              checked={specifyOverlapInPercentage}
-              onChange={(checked) => {
-                setSpecifyOverlapInPercentage(checked);
-              }}
-            />
-            <div className="row">
-              <InputBox
-                label="Minimum sidelap (px)"
-                enabled={!specifyOverlapInPercentage}
-                getter={() => minSidelap}
-                setter={(x) => setMinSidelap(x)}
-              />
-              <InputBox
-                label="Minimum overlap (px)"
-                enabled={!specifyOverlapInPercentage}
-                getter={() => minOverlap}
-                setter={(x) => setMinOverlap(x)}
-              />
-              <InputBox
-                label="Minimum sidelap (%)"
-                enabled={specifyOverlapInPercentage}
-                getter={() => minSidelapPercentage}
-                setter={(x) => setMinSidelapPercentage(x)}
-              />
-              <InputBox
-                label="Minimum overlap (%)"
-                enabled={specifyOverlapInPercentage}
-                getter={() => minOverlapPercentage}
-                setter={(x) => setMinOverlapPercentage(x)}
-              />
-            </div>
-            <div className="row">
-              <InputBox
-                label="Actual sidelap (px)"
-                enabled={false}
-                getter={() => getSidelapPixels()}
-              />
-              <InputBox
-                label="Actual overlap (px)"
-                enabled={false}
-                getter={() => getOverlapPixels()}
-              />
-              <InputBox
-                label="Actual sidelap (%)"
-                enabled={false}
-                getter={() => getSidelapPercent().toFixed(2)}
-              />
-              <InputBox
-                label="Actual overlap (%)"
-                enabled={false}
-                getter={() => getOverlapPercent().toFixed(2)}
-              />
-            </div>
-          </Form.Group>
-          <Form.Group className="mb-3 mt-3">
-            <LabeledToggleSwitch
-              leftLabel="Process Entire Image"
-              rightLabel="Specify Processing Borders"
-              checked={specifyBorders}
-              onChange={(checked) => {
-                setSpecifyBorders(checked);
-                setMinX(0);
-                setMaxX(imageWidth!);
-                setMinY(0);
-                setMaxY(imageHeight!);
-              }}
-            />
-            {specifyBorders && (
-              <>
+          {!hideTileDefinition && (
+            <div className="border border-dark shadow-sm p-2">
+              <Form.Label
+                className="text-center"
+                style={{ fontSize: "smaller" }}
+              >
+                Detected image dimensions : {imageWidth}x{imageHeight}
+              </Form.Label>
+              <Form.Group className="mb-3 mt-3">
                 <LabeledToggleSwitch
-                  leftLabel="Specify Borders (px)"
-                  rightLabel="Specify Borders (%)"
-                  checked={specifyBorderPercentage}
+                  leftLabel="Specify number of tiles"
+                  rightLabel="Specify tile dimensions"
+                  checked={specifyTileDimensions}
                   onChange={(checked) => {
-                    setSpecifyBorderPercentage(checked);
+                    setSpecifyTileDimensions(checked);
+                  }}
+                />
+
+                <div className="row">
+                  <InputBox
+                    label="Horizontal Tiles"
+                    enabled={!specifyTileDimensions}
+                    getter={() => horizontalTiles}
+                    setter={(x) => setHorizontalTiles(x)}
+                  />
+                  <InputBox
+                    label="Vertical Tiles"
+                    enabled={!specifyTileDimensions}
+                    getter={() => verticalTiles}
+                    setter={(x) => setVerticalTiles(x)}
+                  />
+                  <InputBox
+                    label="Width"
+                    enabled={specifyTileDimensions}
+                    getter={() => width}
+                    setter={(x) => setWidth(x)}
+                  />
+                  <InputBox
+                    label="Height"
+                    enabled={specifyTileDimensions}
+                    getter={() => height}
+                    setter={(x) => setHeight(x)}
+                  />
+                </div>
+              </Form.Group>
+              <Form.Group className="mb-3 mt-3">
+                <LabeledToggleSwitch
+                  leftLabel="Specify overlap (px)"
+                  rightLabel="Specify overlap (%)"
+                  checked={specifyOverlapInPercentage}
+                  onChange={(checked) => {
+                    setSpecifyOverlapInPercentage(checked);
                   }}
                 />
                 <div className="row">
                   <InputBox
-                    label="Minimum X (px)"
-                    enabled={!specifyBorderPercentage}
-                    getter={() => minX}
-                    setter={(x) => setMinX(x)}
+                    label="Minimum sidelap (px)"
+                    enabled={!specifyOverlapInPercentage}
+                    getter={() => minSidelap}
+                    setter={(x) => setMinSidelap(x)}
                   />
                   <InputBox
-                    label="Minimum Y (px)"
-                    enabled={!specifyBorderPercentage}
-                    getter={() => minY}
-                    setter={(x) => setMinY(x)}
+                    label="Minimum overlap (px)"
+                    enabled={!specifyOverlapInPercentage}
+                    getter={() => minOverlap}
+                    setter={(x) => setMinOverlap(x)}
                   />
                   <InputBox
-                    label="Minimum X (%)"
-                    enabled={specifyBorderPercentage}
-                    getter={() => Math.round((minX / imageWidth!) * 100)}
-                    setter={(x) => setMinX(Math.round((imageWidth! * x) / 100))}
+                    label="Minimum sidelap (%)"
+                    enabled={specifyOverlapInPercentage}
+                    getter={() => minSidelapPercentage}
+                    setter={(x) => setMinSidelapPercentage(x)}
                   />
                   <InputBox
-                    label="Minimum Y (%)"
-                    enabled={specifyBorderPercentage}
-                    getter={() => Math.round((minY / imageHeight!) * 100)}
-                    setter={(x) =>
-                      setMinY(Math.round((imageHeight! * x) / 100))
-                    }
+                    label="Minimum overlap (%)"
+                    enabled={specifyOverlapInPercentage}
+                    getter={() => minOverlapPercentage}
+                    setter={(x) => setMinOverlapPercentage(x)}
                   />
                 </div>
                 <div className="row">
                   <InputBox
-                    label="Maximum X (px)"
-                    enabled={!specifyBorderPercentage}
-                    getter={() => maxX}
-                    setter={(x) => setMaxX(x)}
+                    label="Actual sidelap (px)"
+                    enabled={false}
+                    getter={() => getSidelapPixels()}
                   />
                   <InputBox
-                    label="Maximum Y (px)"
-                    enabled={!specifyBorderPercentage}
-                    getter={() => maxY}
-                    setter={(x) => setMaxY(x)}
+                    label="Actual overlap (px)"
+                    enabled={false}
+                    getter={() => getOverlapPixels()}
                   />
                   <InputBox
-                    label="Maximum X (%)"
-                    enabled={specifyBorderPercentage}
-                    getter={() => Math.round((maxX / imageWidth!) * 100)}
-                    setter={(x) => setMaxX(Math.round((imageWidth! * x) / 100))}
+                    label="Actual sidelap (%)"
+                    enabled={false}
+                    getter={() => getSidelapPercent().toFixed(2)}
                   />
                   <InputBox
-                    label="Maximum Y (%)"
-                    enabled={specifyBorderPercentage}
-                    getter={() => Math.round((maxY / imageHeight!) * 100)}
-                    setter={(x) =>
-                      setMaxY(Math.round((imageHeight! * x) / 100))
-                    }
+                    label="Actual overlap (%)"
+                    enabled={false}
+                    getter={() => getOverlapPercent().toFixed(2)}
                   />
                 </div>
-              </>
-            )}
-          </Form.Group>
-        </div>
+              </Form.Group>
+              <Form.Group className="mb-3 mt-3">
+                <LabeledToggleSwitch
+                  leftLabel="Process Entire Image"
+                  rightLabel="Specify Processing Borders"
+                  checked={specifyBorders}
+                  onChange={(checked) => {
+                    setSpecifyBorders(checked);
+                    setMinX(0);
+                    setMaxX(imageWidth!);
+                    setMinY(0);
+                    setMaxY(imageHeight!);
+                  }}
+                />
+                {specifyBorders && (
+                  <>
+                    <LabeledToggleSwitch
+                      leftLabel="Specify Borders (px)"
+                      rightLabel="Specify Borders (%)"
+                      checked={specifyBorderPercentage}
+                      onChange={(checked) => {
+                        setSpecifyBorderPercentage(checked);
+                      }}
+                    />
+                    <div className="row">
+                      <InputBox
+                        label="Minimum X (px)"
+                        enabled={!specifyBorderPercentage}
+                        getter={() => minX}
+                        setter={(x) => setMinX(x)}
+                      />
+                      <InputBox
+                        label="Minimum Y (px)"
+                        enabled={!specifyBorderPercentage}
+                        getter={() => minY}
+                        setter={(x) => setMinY(x)}
+                      />
+                      <InputBox
+                        label="Minimum X (%)"
+                        enabled={specifyBorderPercentage}
+                        getter={() => Math.round((minX / imageWidth!) * 100)}
+                        setter={(x) =>
+                          setMinX(Math.round((imageWidth! * x) / 100))
+                        }
+                      />
+                      <InputBox
+                        label="Minimum Y (%)"
+                        enabled={specifyBorderPercentage}
+                        getter={() => Math.round((minY / imageHeight!) * 100)}
+                        setter={(x) =>
+                          setMinY(Math.round((imageHeight! * x) / 100))
+                        }
+                      />
+                    </div>
+                    <div className="row">
+                      <InputBox
+                        label="Maximum X (px)"
+                        enabled={!specifyBorderPercentage}
+                        getter={() => maxX}
+                        setter={(x) => setMaxX(x)}
+                      />
+                      <InputBox
+                        label="Maximum Y (px)"
+                        enabled={!specifyBorderPercentage}
+                        getter={() => maxY}
+                        setter={(x) => setMaxY(x)}
+                      />
+                      <InputBox
+                        label="Maximum X (%)"
+                        enabled={specifyBorderPercentage}
+                        getter={() => Math.round((maxX / imageWidth!) * 100)}
+                        setter={(x) =>
+                          setMaxX(Math.round((imageWidth! * x) / 100))
+                        }
+                      />
+                      <InputBox
+                        label="Maximum Y (%)"
+                        enabled={specifyBorderPercentage}
+                        getter={() => Math.round((maxY / imageHeight!) * 100)}
+                        setter={(x) =>
+                          setMaxY(Math.round((imageHeight! * x) / 100))
+                        }
+                      />
+                    </div>
+                  </>
+                )}
+              </Form.Group>
+            </div>
+          )}
+        </>
       );
     case "model":
       return (
@@ -849,13 +851,14 @@ function CreateTask({
               value={modelId}
             >
               <option>Select AI model to use to guide annotation</option>
-              <option value="ivx">Elephant detection (nadir)</option>
+              {/* Broken */}
+              {/* <option value="ivx">Elephant detection (nadir)</option> */}
               <option value="scoutbotV3">ScoutBot v3</option>
               <option value="scoutbot">ScoutBot export file</option>
             </Form.Select>
           </Form.Group>
           {modelId === "scoutbot" && (
-            <Form.Group>
+            <Form.Group className="mt-3">
               <Form.Label>ScoutBot Input File</Form.Label>
               <div className="d-flex align-items-center">
                 <Form.Control
@@ -866,7 +869,7 @@ function CreateTask({
                   onClick={() => fileInputRef.current?.click()}
                 />
                 <Button
-                  variant="outline-secondary"
+                  variant="outline-primary"
                   onClick={() => fileInputRef.current?.click()}
                   className="ms-2"
                 >
