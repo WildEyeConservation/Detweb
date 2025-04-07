@@ -4,7 +4,6 @@ import { useEffect, useState, useRef, useContext, useCallback } from "react";
 import Modal from "react-bootstrap/Modal";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
-import { useUpdateProgress } from "./useUpdateProgress";
 import { list, uploadData } from "aws-amplify/storage";
 import { UserContext, GlobalContext } from "./Context.tsx";
 import pLimit from "p-limit";
@@ -113,19 +112,6 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
     }
   };
 
-  const formatFileSize = useCallback((bytes: number): string => {
-    const units = ["B", "KB", "MB", "GB", "TB"];
-    let size = bytes;
-    let unitIndex = 0;
-
-    while (size >= 1024 && unitIndex < units.length - 1) {
-      size /= 1024;
-      unitIndex++;
-    }
-
-    return `${size.toFixed(2)} ${units[unitIndex]}`;
-  }, []);
-
   async function getExifmeta(file: File) {
     const tags = await ExifReader.load(file);
     /* I am saving all of the exifdata to make it easier to answer questions about eg. lens used/ISO/shutterTime/aperture distributions later on. However, some
@@ -158,15 +144,13 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
     };
   }
 
-  const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
-    taskId: `Upload files ${name}`,
-    determinateTaskName: `Uploading files for imageSet ${name}`,
-    indeterminateTaskName: `Preparing files for imageSet ${name}`,
-    stepFormatter: formatFileSize,
-  });
-
   const handleSubmit = useCallback(
-    async (projectId: string) => {
+    async (
+      projectId: string,
+      setStepsCompleted: (stepsCompleted: number) => void,
+      setTotalSteps: (totalSteps: number) => void,
+      onFinished?: () => void
+    ) => {
       if (!projectId) {
         console.error("Project is required");
         return;
@@ -196,7 +180,7 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
       const imageSetId =
         imageSets.length > 0 ? imageSets[0].id : await createImageSet();
 
-      filteredImageFiles.map((file) =>
+      const uploadTasks = filteredImageFiles.map((file) =>
         limitConnections(async () => {
           let lastTransferred = 0;
           const tasks = [
@@ -208,11 +192,9 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
                     bucket: "inputs",
                     contentType: file.type,
                     onProgress: ({ transferredBytes }) => {
-                      {
-                        const additionalTransferred =
-                          transferredBytes - lastTransferred;
-                        setStepsCompleted((fc) => fc + additionalTransferred);
-                      }
+                      const additionalTransferred =
+                        transferredBytes - lastTransferred;
+                      setStepsCompleted((fc) => fc + additionalTransferred);
                       lastTransferred = transferredBytes;
                     },
                     onError: (error) => {
@@ -227,17 +209,15 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
               }
               return exifmeta;
             }),
-          ] as const;
+          ];
           const results = await Promise.all(tasks);
           const exifmeta = results[1];
-          // Get the exif metadata from the second task
-          client.models.Image.create({
+          await client.models.Image.create({
             projectId: projectId,
             width: exifmeta.width || 0,
             height: exifmeta.height || 0,
             timestamp: exifmeta.timestamp!,
             cameraSerial: exifmeta.cameraSerial,
-            //exifData: exifmeta.exifData,
             originalPath: file.webkitRelativePath,
           }).then(async ({ data: image }) => {
             if (!image) {
@@ -258,6 +238,8 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
         })
       );
 
+      await Promise.all(uploadTasks); // Ensure all uploads finish before continuing
+
       await client.models.ImageSet.update({
         id: imageSetId,
         imageCount: filteredImageFiles.length,
@@ -266,8 +248,12 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
       queryClient.invalidateQueries({
         queryKey: ["UserProjectMembership"],
       });
+
+      if (onFinished) {
+        onFinished();
+      }
     },
-    [upload, filteredImageFiles, name, client]
+    [upload, filteredImageFiles, name, client, filteredImageSize]
   );
 
   // Register the submit handler with the parent form if provided
@@ -381,6 +367,19 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
 export function FilesUploadForm(props: FilesUploadFormProps) {
   return <FileUploadCore {...props} />;
 }
+
+export const formatFileSize = (bytes: number): string => {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let size = bytes;
+  let unitIndex = 0;
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex++;
+  }
+
+  return `${size.toFixed(2)} ${units[unitIndex]}`;
+};
 
 // Original modal version
 export default function FilesUploadComponent({

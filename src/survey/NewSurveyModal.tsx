@@ -7,18 +7,20 @@ import LabeledToggleSwitch from "../LabeledToggleSwitch";
 import MyTable from "../Table";
 import { useUsers } from "../apiInterface";
 import { fetchAllPaginatedResults } from "../utils";
-import { FilesUploadForm } from "../FilesUploadComponent";
+import { FilesUploadForm, formatFileSize } from "../FilesUploadComponent";
 import { useQueryClient } from "@tanstack/react-query";
-import LabelEditor from "./LabelEditor";
+import { useUpdateProgress } from "../useUpdateProgress";
 
 export default function NewSurveyModal({
   show,
   onClose,
   projects,
+  setDisabledSurveys,
 }: {
   show: boolean;
   onClose: () => void;
   projects: string[];
+  setDisabledSurveys: React.Dispatch<React.SetStateAction<string[]>>;
 }) {
   const { myOrganizationHook, user } = useContext(UserContext)!;
   const { client } = useContext(GlobalContext)!;
@@ -59,8 +61,21 @@ export default function NewSurveyModal({
   >({});
   const [loading, setLoading] = useState(false);
   const [uploadSubmitFn, setUploadSubmitFn] = useState<
-    ((projectId: string) => Promise<void>) | null
+    | ((
+        projectId: string,
+        setStepsCompleted: (stepsCompleted: number) => void,
+        setTotalSteps: (totalSteps: number) => void,
+        onFinished?: () => void
+      ) => Promise<void>)
+    | null
   >(null);
+
+  const [setFilesUploaded, setTotalFiles] = useUpdateProgress({
+    taskId: `Upload files`,
+    determinateTaskName: `Uploading files`,
+    indeterminateTaskName: `Preparing files`,
+    stepFormatter: formatFileSize,
+  });
 
   async function handleSave() {
     if (!name || !organization) {
@@ -157,16 +172,23 @@ export default function NewSurveyModal({
         queryKey: ["UserProjectMembership"],
       });
 
+      setLoading(false);
       onClose();
 
       if (uploadSubmitFn) {
-        await uploadSubmitFn(project.id);
+        setDisabledSurveys((ds) => [...ds, project.id]);
+        await uploadSubmitFn(
+          project.id,
+          setFilesUploaded,
+          setTotalFiles,
+          () => {
+            setDisabledSurveys((ds) => [...ds, project.id]);
+          }
+        );
       }
     } else {
       alert("Failed to create project");
     }
-
-    setLoading(false);
   }
 
   useEffect(() => {

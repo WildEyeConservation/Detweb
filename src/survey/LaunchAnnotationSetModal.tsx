@@ -9,6 +9,8 @@ import { CreateQueueCommand } from "@aws-sdk/client-sqs";
 import { GlobalContext, UserContext } from "../Context";
 import LaunchRegistration from "../LaunchRegistration";
 import { useLaunchTask } from "../useLaunchTask";
+import { useUpdateProgress } from "../useUpdateProgress";
+import { useQueryClient } from "@tanstack/react-query";
 
 type TaskType = "tiled" | "model" | "annotation" | "registration";
 
@@ -45,8 +47,19 @@ export default function LaunchAnnotationSetModal({
   const [upperLimit, setUpperLimit] = useState<number>(1);
   const [hidden, setHidden] = useState<boolean>(false);
   const [handleCreateTask, setHandleCreateTask] = useState<
-    (() => Promise<string>) | null
+    (args: {
+      setLocationsCompleted: (steps: number) => void;
+      setTotalLocations: (steps: number) => void;
+    }) => Promise<string>
   >(null);
+  const [handleLaunchRegistration, setHandleLaunchRegistration] = useState<
+    ((url: string) => Promise<void>) | null
+  >(null);
+  const [taskType, setTaskType] = useState<TaskType>("model");
+  const [sendDetectionsToSecondaryQueue, setSendDetectionsToSecondaryQueue] =
+    useState<boolean>(false);
+  const queryClient = useQueryClient();
+
   const launchTask = useLaunchTask({
     allowOutside: allowAnnotationsOutsideLocationBoundaries,
     filterObserved: viewUnobservedLocationsOnly,
@@ -56,12 +69,13 @@ export default function LaunchAnnotationSetModal({
     taskTag: taskTag,
     annotationSetId: annotationSet.id,
   });
-  const [handleLaunchRegistration, setHandleLaunchRegistration] = useState<
-    ((url: string) => Promise<void>) | null
-  >(null);
-  const [taskType, setTaskType] = useState<TaskType>("model");
-  const [sendDetectionsToSecondaryQueue, setSendDetectionsToSecondaryQueue] =
-    useState<boolean>(false);
+
+  const [setLoadingLocations, setTotalLocations] = useUpdateProgress({
+    taskId: `Launch annotation set`,
+    indeterminateTaskName: `Loading locations`,
+    determinateTaskName: "Processing locations",
+    stepFormatter: (count) => `${count} locations`,
+  });
 
   const { client } = useContext(GlobalContext)!;
   const { getSqsClient } = useContext(UserContext)!;
@@ -103,8 +117,16 @@ export default function LaunchAnnotationSetModal({
   };
 
   async function createTiledTask() {
+    onClose();
+
     if (handleCreateTask) {
-      const locationSetId = await handleCreateTask();
+      const locationSetId = await handleCreateTask({
+        setLocationsCompleted: setLoadingLocations,
+        setTotalLocations: setTotalLocations,
+      });
+
+      setLoadingLocations(0);
+      setTotalLocations(0);
 
       const queueUrl = await createQueue("Tiled Annotation", false, false);
 
@@ -118,10 +140,14 @@ export default function LaunchAnnotationSetModal({
           selectedTasks: [locationSetId],
           queueUrl: queueUrl,
           secondaryQueueUrl: secondaryQueueUrl,
+          setStepsCompleted: setLoadingLocations,
+          setTotalSteps: setTotalLocations,
         });
       }
-
-      onClose();
+      
+      queryClient.invalidateQueries({
+        queryKey: ["UserProjectMembership"],
+      });
     }
   }
 

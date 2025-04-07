@@ -1,9 +1,11 @@
 import { useContext, useCallback } from "react";
-import { GetQueueAttributesCommand, SendMessageBatchCommand } from "@aws-sdk/client-sqs";
+import {
+  GetQueueAttributesCommand,
+  SendMessageBatchCommand,
+} from "@aws-sdk/client-sqs";
 import { QueryCommand } from "@aws-sdk/client-dynamodb";
 import pLimit from "p-limit";
 import { GlobalContext, UserContext } from "./Context";
-import { useUpdateProgress } from "./useUpdateProgress";
 
 // Types for options and function arguments
 export type LaunchTaskOptions = {
@@ -20,21 +22,21 @@ export type LaunchTaskArgs = {
   selectedTasks: string[];
   queueUrl: string;
   secondaryQueueUrl: string | null;
+  setStepsCompleted: (steps: number) => void;
+  setTotalSteps: (steps: number) => void;
 };
 
-export function useLaunchTask(options: LaunchTaskOptions): (args: LaunchTaskArgs) => Promise<void> {
+export function useLaunchTask(
+  options: LaunchTaskOptions
+): (args: LaunchTaskArgs) => Promise<void> {
   const { client, backend } = useContext(GlobalContext)!;
   const { getSqsClient, getDynamoClient } = useContext(UserContext)!;
   const limitConnections = pLimit(10);
 
-  const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
-    taskId: `Launch task`,
-    indeterminateTaskName: `Loading locations`,
-    determinateTaskName: `Enqueueing locations`,
-    stepFormatter: (count: number) => `${count} locations`,
-  });
-
-  async function queryLocations(locationSetId: string): Promise<string[]> {
+  async function queryLocations(
+    locationSetId: string,
+    setStepsCompleted: (steps: number) => void
+  ): Promise<string[]> {
     const dynamoClient = await getDynamoClient();
     const locationIds: string[] = [];
     let lastEvaluatedKey: Record<string, any> | undefined = undefined;
@@ -42,15 +44,16 @@ export function useLaunchTask(options: LaunchTaskOptions): (args: LaunchTaskArgs
       const command = new QueryCommand({
         TableName: backend.custom.locationTable,
         IndexName: "locationsBySetIdAndConfidence",
-        KeyConditionExpression: "setId = :locationSetId and confidence BETWEEN :lowerLimit and :upperLimit",
+        KeyConditionExpression:
+          "setId = :locationSetId and confidence BETWEEN :lowerLimit and :upperLimit",
         ExpressionAttributeValues: {
           ":locationSetId": { S: locationSetId },
           ":lowerLimit": { N: options.lowerLimit.toString() },
-          ":upperLimit": { N: options.upperLimit.toString() }
+          ":upperLimit": { N: options.upperLimit.toString() },
         },
         ProjectionExpression: "id",
         ExclusiveStartKey: lastEvaluatedKey,
-        Limit: 1000
+        Limit: 1000,
       });
       try {
         const response = await dynamoClient.send(command);
@@ -59,7 +62,9 @@ export function useLaunchTask(options: LaunchTaskOptions): (args: LaunchTaskArgs
         // Extract ids from the response
         const pageLocationIds = items.map((item: any) => item.id.S);
         locationIds.push(...pageLocationIds);
-        lastEvaluatedKey = response.LastEvaluatedKey as Record<string, any> | undefined;
+        lastEvaluatedKey = response.LastEvaluatedKey as
+          | Record<string, any>
+          | undefined;
       } catch (error) {
         console.error("Error querying DynamoDB:", error);
         throw error;
@@ -68,7 +73,10 @@ export function useLaunchTask(options: LaunchTaskOptions): (args: LaunchTaskArgs
     return locationIds;
   }
 
-  async function queryObservations(annotationSetId: string): Promise<string[]> {
+  async function queryObservations(
+    annotationSetId: string,
+    setStepsCompleted: (steps: number) => void
+  ): Promise<string[]> {
     const dynamoClient = await getDynamoClient();
     const locationIds: string[] = [];
     let lastEvaluatedKey: Record<string, any> | undefined = undefined;
@@ -78,11 +86,11 @@ export function useLaunchTask(options: LaunchTaskOptions): (args: LaunchTaskArgs
         IndexName: "observationsByAnnotationSetIdAndCreatedAt",
         KeyConditionExpression: "annotationSetId = :annotationSetId",
         ExpressionAttributeValues: {
-          ":annotationSetId": { S: annotationSetId }
+          ":annotationSetId": { S: annotationSetId },
         },
         ProjectionExpression: "locationId",
         ExclusiveStartKey: lastEvaluatedKey,
-        Limit: 1000
+        Limit: 1000,
       });
       try {
         const response = await dynamoClient.send(command);
@@ -90,7 +98,9 @@ export function useLaunchTask(options: LaunchTaskOptions): (args: LaunchTaskArgs
         setStepsCompleted((s: number) => s + items.length);
         const pageLocationIds = items.map((item: any) => item.locationId.S);
         locationIds.push(...pageLocationIds);
-        lastEvaluatedKey = response.LastEvaluatedKey as Record<string, any> | undefined;
+        lastEvaluatedKey = response.LastEvaluatedKey as
+          | Record<string, any>
+          | undefined;
       } catch (error) {
         console.error("Error querying DynamoDB:", error);
         throw error;
@@ -103,7 +113,7 @@ export function useLaunchTask(options: LaunchTaskOptions): (args: LaunchTaskArgs
     const sqsClient = await getSqsClient();
     const command = new GetQueueAttributesCommand({
       QueueUrl: queueUrl,
-      AttributeNames: ["All"]
+      AttributeNames: ["All"],
     });
     try {
       const response = await sqsClient.send(command);
@@ -112,95 +122,106 @@ export function useLaunchTask(options: LaunchTaskOptions): (args: LaunchTaskArgs
       }
       return "Standard";
     } catch (error) {
-      console.warn("Error fetching queue attributes, assuming Standard queue:", error);
+      console.warn(
+        "Error fetching queue attributes, assuming Standard queue:",
+        error
+      );
       return "Standard";
     }
   }
 
-  const launchTask = useCallback(async ({ selectedTasks, queueUrl, secondaryQueueUrl }: LaunchTaskArgs) => {
-    const allSeenLocations = options.filterObserved
-      ? await queryObservations(options.annotationSetId)
-      : [];
-    const allLocations = (await Promise.all(
-      selectedTasks.map((task) => queryLocations(task))
-    ))
-      .flat()
-      .filter((l) => !allSeenLocations.includes(l));
+  const launchTask = useCallback(
+    async ({
+      selectedTasks,
+      queueUrl,
+      secondaryQueueUrl,
+      setStepsCompleted,
+      setTotalSteps,
+    }: LaunchTaskArgs) => {
+      const allSeenLocations = options.filterObserved
+        ? await queryObservations(options.annotationSetId, setStepsCompleted)
+        : [];
+      const allLocations = (
+        await Promise.all(
+          selectedTasks.map((task) => queryLocations(task, setStepsCompleted))
+        )
+      )
+        .flat()
+        .filter((l) => !allSeenLocations.includes(l));
 
-    setStepsCompleted(0);
-    setTotalSteps(allLocations.length);
-    if (!queueUrl) {
-      throw new Error("Queue URL not found");
-    }
+      setStepsCompleted(0);
+      setTotalSteps(allLocations.length);
+      if (!queueUrl) {
+        throw new Error("Queue URL not found");
+      }
 
-    const queueType = await getQueueType(queueUrl);
-    const groupId = crypto.randomUUID();
-    const batchSize = 10;
-    const batchPromises: Promise<any>[] = [];
+      const queueType = await getQueueType(queueUrl);
+      const groupId = crypto.randomUUID();
+      const batchSize = 10;
+      const batchPromises: Promise<any>[] = [];
 
-    for (let i = 0; i < allLocations.length; i += batchSize) {
-      const locationBatch = allLocations.slice(i, i + batchSize);
-      const batchEntries: any[] = [];
-      for (const locationId of locationBatch) {
-        const location = {
-          id: locationId,
-          annotationSetId: options.annotationSetId
-        };
-        const body = JSON.stringify({
-          location,
-          allowOutside: options.allowOutside,
-          taskTag: options.taskTag,
-          secondaryQueueUrl: secondaryQueueUrl,
-          skipLocationWithAnnotations: options.skipLocationWithAnnotations
-        });
-        if (queueType === "FIFO") {
-          batchEntries.push({
-            Id: `msg-${locationId}`,
-            MessageBody: body,
-            MessageGroupId: groupId,
-            MessageDeduplicationId: body.replace(/[^a-zA-Z0-9\-_\.]/g, "").substring(0, 128)
+      for (let i = 0; i < allLocations.length; i += batchSize) {
+        const locationBatch = allLocations.slice(i, i + batchSize);
+        const batchEntries: any[] = [];
+        for (const locationId of locationBatch) {
+          const location = {
+            id: locationId,
+            annotationSetId: options.annotationSetId,
+          };
+          const body = JSON.stringify({
+            location,
+            allowOutside: options.allowOutside,
+            taskTag: options.taskTag,
+            secondaryQueueUrl: secondaryQueueUrl,
+            skipLocationWithAnnotations: options.skipLocationWithAnnotations,
           });
-        } else {
-          batchEntries.push({
-            Id: `msg-${locationId}`,
-            MessageBody: body
-          });
+          if (queueType === "FIFO") {
+            batchEntries.push({
+              Id: `msg-${locationId}`,
+              MessageBody: body,
+              MessageGroupId: groupId,
+              MessageDeduplicationId: body
+                .replace(/[^a-zA-Z0-9\-_\.]/g, "")
+                .substring(0, 128),
+            });
+          } else {
+            batchEntries.push({
+              Id: `msg-${locationId}`,
+              MessageBody: body,
+            });
+          }
+        }
+
+        if (batchEntries.length > 0) {
+          const sendTask = limitConnections(() =>
+            getSqsClient()
+              .then((sqsClient) =>
+                sqsClient.send(
+                  new SendMessageBatchCommand({
+                    QueueUrl: queueUrl,
+                    Entries: batchEntries,
+                  })
+                )
+              )
+              .then(() =>
+                setStepsCompleted((s: number) => s + batchEntries.length)
+              )
+          );
+          batchPromises.push(sendTask);
         }
       }
 
-      if (batchEntries.length > 0) {
-        const sendTask = limitConnections(() =>
-          getSqsClient().then((sqsClient) =>
-            sqsClient.send(
-              new SendMessageBatchCommand({
-                QueueUrl: queueUrl,
-                Entries: batchEntries
-              })
-            )
-          ).then(() => setStepsCompleted((s: number) => s + batchEntries.length))
-        );
-        batchPromises.push(sendTask);
+      await Promise.all(batchPromises);
+
+      for (const taskId of selectedTasks) {
+        await client.models.TasksOnAnnotationSet.create({
+          annotationSetId: options.annotationSetId,
+          locationSetId: taskId,
+        });
       }
-    }
-
-    await Promise.all(batchPromises);
-
-    for (const taskId of selectedTasks) {
-      await client.models.TasksOnAnnotationSet.create({
-        annotationSetId: options.annotationSetId,
-        locationSetId: taskId
-      });
-    }
-  }, [
-    options,
-    client,
-    backend,
-    getSqsClient,
-    getDynamoClient,
-    limitConnections,
-    setStepsCompleted,
-    setTotalSteps
-  ]);
+    },
+    [options, client, backend, getSqsClient, getDynamoClient, limitConnections]
+  );
 
   return launchTask;
-} 
+}

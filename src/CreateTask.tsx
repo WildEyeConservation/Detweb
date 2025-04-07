@@ -359,19 +359,19 @@ function CreateTask({
     stepFormatter: (x: number) => `${x} images`,
   });
 
-  const [setLocationsCompleted, setTotalLocations] = useUpdateProgress({
-    taskId: `Create task`,
-    indeterminateTaskName: `Loading locations`,
-    determinateTaskName: "Processing locations",
-    stepFormatter: (x: number) => `${x} locations`,
-  });
-
   const [threshold, setThreshold] = useState(5); // New state variable for threshold
 
-  const handleSubmit = useCallback(async () => {
-    const {
-      data: { id: locationSetId },
-    } = await client.models.LocationSet.create({
+  const handleSubmit = useCallback(
+    async ({
+      setLocationsCompleted,
+      setTotalLocations,
+    }: {
+      setLocationsCompleted: (steps: number) => void;
+      setTotalLocations: (steps: number) => void;
+    }) => {
+      const {
+        data: { id: locationSetId },
+      } = await client.models.LocationSet.create({
       name,
       projectId: projectId,
       locationCount:
@@ -617,8 +617,6 @@ function CreateTask({
     scoutbotFile,
     selectedCategories,
     setImagesCompleted,
-    setLocationsCompleted,
-    setTotalLocations,
     taskType,
     threshold,
     verticalTiles,

@@ -5,7 +5,7 @@ import { Card, Button, Form } from "react-bootstrap";
 import MyTable from "../Table.tsx";
 import NewSurveyModal from "./NewSurveyModal.tsx";
 import { useNavigate } from "react-router-dom";
-import FilesUploadComponent from "../FilesUploadComponent.tsx";
+import FilesUploadComponent, { formatFileSize } from "../FilesUploadComponent.tsx";
 import ConfirmationModal from "../ConfirmationModal.tsx";
 import AnnotationSetResults from "../AnnotationSetResults.tsx";
 import AnnotationCountModal from "../AnnotationCountModal.tsx";
@@ -16,6 +16,7 @@ import EditSurveyModal from "./editSurveyModal.tsx";
 import SpatioTemporalSubset from "../SpatioTemporalSubset.tsx";
 import SubsampleModal from "../Subsample.tsx";
 import FileStructureSubset from "../filestructuresubset.tsx";
+import { SquareArrowOutUpRight } from "lucide-react";
 
 export default function Surveys() {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
@@ -32,7 +33,8 @@ export default function Surveys() {
   >(null);
   const [search, setSearch] = useState("");
   const [selectedSets, setSelectedSets] = useState<string[]>([]);
-
+  const [disabledSurveys, setDisabledSurveys] = useState<string[]>([]);
+  
   useEffect(() => {
     async function getProjects() {
       const myAdminProjects = myProjectsHook.data?.filter(
@@ -62,15 +64,21 @@ export default function Surveys() {
                     "annotationSets.categories.color",
                     "imageSets.id",
                     "imageSets.name",
+                    "queues.id",
                   ],
                 }
               )
             ).data
         )
       ).then((projects) => {
-        console.log("projects", projects);
-        setProjects(
-          projects.filter((project) => project !== null && !project.hidden)
+        const validProjects = projects.filter(
+          (project) => project !== null && !project.hidden
+        );
+        setProjects(validProjects);
+        setDisabledSurveys(
+          validProjects
+            .filter((project) => project.queues.length > 0)
+            .map((project) => project.id)
         );
       });
     }
@@ -109,127 +117,149 @@ export default function Surveys() {
         project.name.toLowerCase().includes(search.toLowerCase()) ||
         project.organization.name.toLowerCase().includes(search.toLowerCase())
     )
-    .map((project) => ({
-      id: project.id,
-      rowData: [
-        <div className="d-flex justify-content-between align-items-center gap-2">
-          <div>
-            <h5 className="mb-0">{project.name}</h5>
-            <i style={{ fontSize: "14px" }}>{project.organization.name}</i>
-          </div>
-          <div className="d-flex gap-2">
-            <Button
-              variant="primary"
-              onClick={(e) => {
-                if (e.ctrlKey) {
-                  navigate(`/surveys/${project.id}/manage`);
-                } else {
-                  setSelectedProject(project);
-                  showModal("editSurvey");
-                }
-              }}
-            >
-              Edit
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                setSelectedProject(project);
-                showModal("addFiles");
-              }}
-            >
-              Add files
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                setSelectedProject(project);
-                showModal("addAnnotationSet");
-              }}
-            >
-              Add Annotation Set
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                setSelectedProject(project);
-                showModal("deleteSurvey");
-              }}
-            >
-              Delete
-            </Button>
-          </div>
-        </div>,
-        <div className="d-flex flex-column gap-2">
-          {project.annotationSets
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map((annotationSet, i) => (
-              <div
-                className={`d-flex justify-content-between align-items-center gap-2 ${
-                  i % 2 === 0 ? "" : "border-top border-light pt-2"
-                }`}
-                key={annotationSet.id}
+    .map((project) => {
+      const disabled = disabledSurveys.includes(project.id);
+      const hasJobs = project.queues.length > 0;
+      return {
+        id: project.id,
+        rowData: [
+          <div
+            className="d-flex justify-content-between align-items-center gap-2"
+          >
+            <div>
+              <h5 className="mb-0">{project.name}</h5>
+              <i style={{ fontSize: "14px" }}>{project.organization.name}</i>
+            </div>
+            <div className="d-flex gap-2">
+              <Button
+                variant="primary"
+                onClick={(e) => {
+                  if (e.ctrlKey) {
+                    navigate(`/surveys/${project.id}/manage`);
+                  } else {
+                    setSelectedProject(project);
+                    showModal("editSurvey");
+                  }
+                }}
+                disabled={disabled}
               >
-                <div style={{ fontSize: "16px" }}>{annotationSet.name}</div>
-                <div className="d-flex gap-2">
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      setSelectedAnnotationSet(annotationSet);
-                      showModal("annotationCount");
-                    }}
+                Edit
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setSelectedProject(project);
+                  showModal("addFiles");
+                }}
+                disabled={disabled}
+              >
+                Add files
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setSelectedProject(project);
+                  showModal("addAnnotationSet");
+                }}
+                disabled={disabled}
+              >
+                Add Annotation Set
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  setSelectedProject(project);
+                  showModal("deleteSurvey");
+                }}
+                disabled={disabled}
+              >
+                Delete
+              </Button>
+            </div>
+          </div>,
+          <div className="d-flex flex-row gap-3">
+            <div className="d-flex flex-column gap-2 flex-grow-1">
+              {project.annotationSets
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((annotationSet, i) => (
+                  <div
+                    className={`d-flex justify-content-between align-items-center gap-2 ${
+                      i % 2 === 0 ? "" : "border-top border-light pt-2"
+                    }`}
+                    key={annotationSet.id}
                   >
-                    Details
-                  </Button>
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      setSelectedProject(project);
-                      setSelectedAnnotationSet(annotationSet);
-                      showModal("launchAnnotationSet");
-                    }}
-                  >
-                    Launch
-                  </Button>
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      setSelectedProject(project);
-                      setSelectedAnnotationSet(annotationSet);
-                      showModal("editAnnotationSet");
-                    }}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      setSelectedProject(project);
-                      setSelectedAnnotationSet({
-                        id: annotationSet.id,
-                        name: annotationSet.name,
-                      });
-                      showModal("annotationSetResults");
-                    }}
-                  >
-                    Results
-                  </Button>
-                  <Button
-                    variant="danger"
-                    onClick={() => {
-                      setSelectedProject(project);
-                      setSelectedAnnotationSet(annotationSet);
-                      showModal("deleteAnnotationSet");
-                    }}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            ))}
-        </div>,
-      ],
-    }));
+                    <div style={{ fontSize: "16px" }}>{annotationSet.name}</div>
+                    <div className="d-flex gap-2">
+                      <Button
+                        variant="primary"
+                        onClick={() => {
+                          setSelectedAnnotationSet(annotationSet);
+                          showModal("annotationCount");
+                        }}
+                        disabled={disabled}
+                      >
+                        Details
+                      </Button>
+                      <Button
+                        variant="primary"
+                        onClick={() => {
+                          setSelectedProject(project);
+                          setSelectedAnnotationSet(annotationSet);
+                          showModal("launchAnnotationSet");
+                        }}
+                        disabled={disabled}
+                      >
+                        Launch
+                      </Button>
+                      <Button
+                        variant="primary"
+                        onClick={() => {
+                          setSelectedProject(project);
+                          setSelectedAnnotationSet(annotationSet);
+                          showModal("editAnnotationSet");
+                        }}
+                        disabled={disabled}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="primary"
+                        onClick={() => {
+                          setSelectedProject(project);
+                          setSelectedAnnotationSet({
+                            id: annotationSet.id,
+                            name: annotationSet.name,
+                          });
+                          showModal("annotationSetResults");
+                        }}
+                        disabled={disabled}
+                      >
+                        Results
+                      </Button>
+                      <Button
+                        variant="danger"
+                        onClick={() => {
+                          setSelectedProject(project);
+                          setSelectedAnnotationSet(annotationSet);
+                          showModal("deleteAnnotationSet");
+                        }}
+                        disabled={disabled}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+            {disabled && hasJobs && (
+              <Button variant="primary" onClick={() => navigate(`/jobs`)}>
+                <SquareArrowOutUpRight />
+              </Button>
+            )}
+          </div>,
+        ],
+      };
+    });
 
   if (projects.length === 0 && !isOrganizationAdmin) {
     return <div>You are not authorized to access this page.</div>;
@@ -283,6 +313,7 @@ export default function Surveys() {
         show={modalToShow === "newSurvey"}
         projects={projects.map((project) => project.name.toLowerCase())}
         onClose={() => showModal(null)}
+        setDisabledSurveys={setDisabledSurveys}
       />
       <ConfirmationModal
         show={modalToShow === "deleteSurvey"}
@@ -416,8 +447,7 @@ export default function Surveys() {
           show={modalToShow === "launchAnnotationSet"}
           onClose={() => {
             showModal(null);
-            setSelectedProject(null);
-            setSelectedAnnotationSet(null);
+            setDisabledSurveys((ds) => [...ds, selectedProject.id]);
           }}
           imageSets={selectedProject.imageSets}
           annotationSet={selectedAnnotationSet}
