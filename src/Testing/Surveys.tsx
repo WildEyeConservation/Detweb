@@ -142,6 +142,8 @@ export default function Surveys() {
           },
         ]}
         tableData={tableData}
+        pagination={true}
+        itemsPerPage={5}
         emptyMessage="No surveys found"
       />
       {selectedSurvey && (

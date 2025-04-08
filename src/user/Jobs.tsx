@@ -21,7 +21,6 @@ type Project = {
     name: string;
   };
   queues: Schema["Queue"]["type"][];
-  hidden: boolean;
 };
 
 export default function Jobs() {
@@ -64,7 +63,6 @@ export default function Jobs() {
               "organization.id",
               "organization.name",
               "queues.*",
-              "hidden",
             ],
           }
         )
@@ -75,7 +73,7 @@ export default function Jobs() {
         .map((result) => (result as { data: Project | null }).data)
         .filter(
           (project): project is Project =>
-            project !== null && project.queues.length > 0 && !project.hidden
+            project !== null && project.queues.length > 0
         )
         .map((project) => ({
           ...project,
@@ -123,14 +121,9 @@ export default function Jobs() {
 
         setJobsRemaining(jobsRemaining);
 
-        const filteredProjects = validProjects
-          .map((project) => ({
-            ...project,
-            queues: project.queues.filter(
-              (queue) => jobsRemaining[queue.url || ""] !== "0"
-            ),
-          }))
-          .filter((project) => project.queues.length > 0);
+        const filteredProjects = validProjects.filter(
+          (project) => project.queues.length > 0
+        );
         setDisplayProjects(filteredProjects);
       }
 
@@ -226,7 +219,14 @@ export default function Jobs() {
           numJobsRemaining / (queue.batchSize || 0)
         );
 
-        if (numJobsRemaining === 0) return null;
+        if (
+          numJobsRemaining === 0 &&
+          !userProjectMembershipHook.data?.find(
+            (membership) => membership.projectId === project.id
+          )?.isAdmin
+        ) {
+          return null;
+        }
 
         return {
           id: queue.id,
@@ -273,7 +273,7 @@ export default function Jobs() {
                 <Button
                   className="ms-1"
                   variant="primary"
-                  disabled={takingJob || deletingJob}
+                  disabled={takingJob || deletingJob || numJobsRemaining === 0}
                   onClick={() =>
                     handleTakeJob({
                       queueId: queue.id,

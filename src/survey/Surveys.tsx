@@ -5,7 +5,7 @@ import { Card, Button, Form } from "react-bootstrap";
 import MyTable from "../Table.tsx";
 import NewSurveyModal from "./NewSurveyModal.tsx";
 import { useNavigate } from "react-router-dom";
-import FilesUploadComponent, { formatFileSize } from "../FilesUploadComponent.tsx";
+import FilesUploadComponent from "../FilesUploadComponent.tsx";
 import ConfirmationModal from "../ConfirmationModal.tsx";
 import AnnotationSetResults from "../AnnotationSetResults.tsx";
 import AnnotationCountModal from "../AnnotationCountModal.tsx";
@@ -17,6 +17,7 @@ import SpatioTemporalSubset from "../SpatioTemporalSubset.tsx";
 import SubsampleModal from "../Subsample.tsx";
 import FileStructureSubset from "../filestructuresubset.tsx";
 import { SquareArrowOutUpRight } from "lucide-react";
+import { fetchAllPaginatedResults } from "../utils.tsx";
 
 export default function Surveys() {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
@@ -34,7 +35,7 @@ export default function Surveys() {
   const [search, setSearch] = useState("");
   const [selectedSets, setSelectedSets] = useState<string[]>([]);
   const [disabledSurveys, setDisabledSurveys] = useState<string[]>([]);
-  
+
   useEffect(() => {
     async function getProjects() {
       const myAdminProjects = myProjectsHook.data?.filter(
@@ -53,7 +54,6 @@ export default function Surveys() {
                     "id",
                     "organizationId",
                     "organization.name",
-                    "hidden",
                     "annotationSets.id",
                     "annotationSets.name",
                     "locationSets.id",
@@ -71,9 +71,7 @@ export default function Surveys() {
             ).data
         )
       ).then((projects) => {
-        const validProjects = projects.filter(
-          (project) => project !== null && !project.hidden
-        );
+        const validProjects = projects.filter((project) => project !== null);
         setProjects(validProjects);
         setDisabledSurveys(
           validProjects
@@ -87,8 +85,25 @@ export default function Surveys() {
   }, [myProjectsHook.data]);
 
   async function deleteProject(projectId: string) {
+    setDisabledSurveys((ds) => [...ds, projectId]);
     await client.models.Project.update({ id: projectId, hidden: true });
-    setProjects(projects.filter((project) => project.id !== projectId));
+
+    const projectMemberships = await fetchAllPaginatedResults(
+      client.models.UserProjectMembership.userProjectMembershipsByProjectId,
+      {
+        projectId: projectId,
+      }
+    );
+
+    Promise.all(
+      projectMemberships.map(async (membership) => {
+        await client.models.UserProjectMembership.delete({
+          id: membership.id,
+        });
+      })
+    );
+
+    setDisabledSurveys((ds) => ds.filter((id) => id !== projectId));
   }
 
   async function deleteAnnotationSet(
@@ -123,9 +138,7 @@ export default function Surveys() {
       return {
         id: project.id,
         rowData: [
-          <div
-            className="d-flex justify-content-between align-items-center gap-2"
-          >
+          <div className="d-flex justify-content-between align-items-center gap-2">
             <div>
               <h5 className="mb-0">{project.name}</h5>
               <i style={{ fontSize: "14px" }}>{project.organization.name}</i>
@@ -252,7 +265,11 @@ export default function Surveys() {
                 ))}
             </div>
             {disabled && hasJobs && (
-              <Button variant="primary" onClick={() => navigate(`/jobs`)}>
+              <Button
+                className="flex align-items-center justify-content-center"
+                variant="primary"
+                onClick={() => navigate(`/jobs`)}
+              >
                 <SquareArrowOutUpRight />
               </Button>
             )}
@@ -445,13 +462,11 @@ export default function Surveys() {
       {selectedProject && selectedAnnotationSet && (
         <LaunchAnnotationSetModal
           show={modalToShow === "launchAnnotationSet"}
-          onClose={() => {
-            showModal(null);
-            setDisabledSurveys((ds) => [...ds, selectedProject.id]);
-          }}
+          onClose={() => showModal(null)}
           imageSets={selectedProject.imageSets}
           annotationSet={selectedAnnotationSet}
           project={selectedProject}
+          setDisabledSurveys={setDisabledSurveys}
         />
       )}
       {selectedProject && (

@@ -20,12 +20,14 @@ export default function LaunchAnnotationSetModal({
   project,
   imageSets,
   annotationSet,
+  setDisabledSurveys,
 }: {
   show: boolean;
   onClose: () => void;
   project: Schema["Project"]["type"];
   imageSets: { id: string; name: string }[];
   annotationSet: Schema["AnnotationSet"]["type"];
+  setDisabledSurveys: React.Dispatch<React.SetStateAction<string[]>>;
 }) {
   const [selectedImageSets, setSelectedImageSets] = useState<string[]>([]);
   const [batchSize, setBatchSize] = useState<number>(200);
@@ -118,6 +120,7 @@ export default function LaunchAnnotationSetModal({
 
   async function createTiledTask() {
     onClose();
+    setDisabledSurveys((ds) => [...ds, project.id]);
 
     if (handleCreateTask) {
       const locationSetId = await handleCreateTask({
@@ -148,6 +151,7 @@ export default function LaunchAnnotationSetModal({
       queryClient.invalidateQueries({
         queryKey: ["UserProjectMembership"],
       });
+      setDisabledSurveys((ds) => ds.filter((id) => id !== project.id));
     }
   }
 
@@ -187,7 +191,10 @@ export default function LaunchAnnotationSetModal({
   }
 
   return (
-    <Modal show={show} onHide={onClose} size="lg">
+    <Modal show={show} onHide={() => {
+      onClose();
+      setTaskType("model");
+    }} size="lg">
       <Modal.Header closeButton>
         <Modal.Title>Launch for Manual Annotation</Modal.Title>
       </Modal.Header>

@@ -41,6 +41,8 @@ export default function Users() {
           { content: 'Test User' },
         ]}
         tableData={tableData}
+        pagination={true}
+        itemsPerPage={5}
         emptyMessage="Loading users..."
       />
     </div>
