@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useEffect, useState, useMemo, useContext } from "react";
 import { PreloaderFactory } from "./Preloader";
 import BufferSource from "./BufferSource";
@@ -11,15 +11,19 @@ import LabeledToggleSwitch from "./LabeledToggleSwitch";
 import "./Review.css";
 import { Card } from "react-bootstrap";
 import Button from "react-bootstrap/Button";
+import { PanelBottom } from "lucide-react";
 
 export function Review({ showAnnotationSetDropdown = true }) {
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<
+    { label: string; value: string }[]
+  >([]);
   const [selectedAnnotationSet, setSelectedAnnotationSet] =
     useState<string>("");
   const [imageBased, setImageBased] = useState(true);
   const [chronological, setChronological] = useState(false);
   const [annotations, setAnnotations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
   const {
     categoriesHook: { data: categories },
     project,
@@ -27,7 +31,6 @@ export function Review({ showAnnotationSetDropdown = true }) {
   const [locationsLoaded, setLocationsLoaded] = useState(0);
   const [index, setIndex] = useState(0);
   const [bufferSource, setBufferSource] = useState<BufferSource | null>(null);
-  const navigate = useNavigate();
   const { annotationSetId } = useParams();
   const { client } = useContext(GlobalContext)!;
   const {
@@ -182,12 +185,12 @@ export function Review({ showAnnotationSetDropdown = true }) {
         marginBottom: "16px",
       }}
     >
-      <div className="w-100 h-100 d-flex flex-row gap-3">
+      <div className="w-100 h-100 d-flex flex-column flex-sm-row gap-3">
         <div
           className="d-flex flex-column gap-3 w-100"
           style={{ maxWidth: "300px" }}
         >
-          <Card className="w-100">
+          <Card className="d-sm-block d-none w-100">
             <Card.Header>
               <Card.Title className="mb-0">Information</Card.Title>
             </Card.Header>
@@ -205,35 +208,55 @@ export function Review({ showAnnotationSetDropdown = true }) {
           </Card>
           <Card className="w-100 flex-grow-1">
             <Card.Header>
-              <Card.Title className="mb-0">Filters</Card.Title>
+              <Card.Title className="mb-0 d-flex align-items-center">
+                <Button
+                  className="p-0 mb-0"
+                  variant="outline"
+                  onClick={() => setShowFilters(!showFilters)}
+                >
+                  <PanelBottom
+                    className="d-sm-none"
+                    style={{
+                      transform: showFilters
+                        ? "rotate(180deg)"
+                        : "rotate(0deg)",
+                    }}
+                  />
+                </Button>
+                Filters
+              </Card.Title>
             </Card.Header>
-            <Card.Body className="d-flex flex-column gap-2 overflow-auto">
-              <div className="w-100">
-                <Form.Label>Labels</Form.Label>
-                <Select
-                  value={selectedCategories}
-                  onChange={setSelectedCategories}
-                  isMulti
-                  name="Labels to review"
-                  options={categories
-                    ?.filter((c) => c.annotationSetId === selectedAnnotationSet)
-                    .map((q) => ({
-                      label: q.name,
-                      value: q.id,
-                    }))}
-                  className="text-black w-100"
-                  closeMenuOnSelect={false}
-                />
-              </div>
+            {showFilters && (
+              <Card.Body className="d-flex flex-column gap-2">
+                <div className="w-100">
+                  <Form.Label>Labels</Form.Label>
+                  <Select
+                    value={selectedCategories}
+                    onChange={setSelectedCategories}
+                    isMulti
+                    name="Labels to review"
+                    options={categories
+                      ?.filter(
+                        (c) => c.annotationSetId === selectedAnnotationSet
+                      )
+                      .map((q) => ({
+                        label: q.name,
+                        value: q.id,
+                      }))}
+                    className="text-black w-100"
+                    closeMenuOnSelect={false}
+                  />
+                </div>
 
-              {showAnnotationSetDropdown && (
-                <AnnotationSetDropdown
-                  selectedSet={selectedAnnotationSet}
-                  setAnnotationSet={setSelectedAnnotationSet}
-                  canCreate={false}
-                />
-              )}
-            </Card.Body>
+                {showAnnotationSetDropdown && (
+                  <AnnotationSetDropdown
+                    selectedSet={selectedAnnotationSet}
+                    setAnnotationSet={setSelectedAnnotationSet}
+                    canCreate={false}
+                  />
+                )}
+              </Card.Body>
+            )}
           </Card>
         </div>
         {!annotations.length && isLoading ? (
@@ -245,7 +268,10 @@ export function Review({ showAnnotationSetDropdown = true }) {
           bufferSource && (
             <div className="d-flex flex-column align-items-center h-100 w-100">
               <Preloader
-                key={selectedAnnotationSet + selectedCategories.join(",")}
+                key={
+                  selectedAnnotationSet +
+                  selectedCategories.map((cat) => cat.value).join(",")
+                }
                 index={index}
                 setIndex={setIndex}
                 fetcher={() => bufferSource.fetch()}

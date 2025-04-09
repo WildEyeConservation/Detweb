@@ -44,7 +44,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
     }
   }, [isOrganizationAdmin]);
 
-  const expand = false;
+  const expand = "lg";
   return (
     <div
       className="App d-flex flex-column"
@@ -52,85 +52,86 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
     >
       <Navbar
         bg="secondary"
+        className="px-3"
         variant="dark"
         sticky="top"
         key={expand}
         expand={expand}
+        collapseOnSelect
       >
-        <div className="w-100 d-flex flex-row align-items-center px-3">
-          <div
-            className="d-flex flex-row align-items-center flex-nowrap me-2"
-            onClick={() => navigate(isOrganizationAdmin ? "/surveys" : "/jobs")}
-            style={{ cursor: "pointer" }}
-          >
-            <img
-              src="/Logo.png"
-              alt="Logo"
-              style={{ height: "32px", marginRight: "4px" }}
-            />
-            <h1 style={{ marginBottom: "0px", fontSize: "24px" }}>Detweb</h1>
-          </div>
-          <Nav fill activeKey={location.pathname} className="d-flex flex-row">
-            <>
-              {(myAdminProjects?.length > 0 || isOrganizationAdmin) && (
-                <Nav.Link
-                  as={NavLink}
-                  eventKey={`surveys`}
-                  to={`surveys`}
-                  className="px-2"
-                >
-                  Surveys
-                </Nav.Link>
-              )}
+        <Navbar.Brand
+          className="d-flex flex-row align-items-center flex-nowrap me-2"
+          onClick={() => navigate(isOrganizationAdmin ? "/surveys" : "/jobs")}
+          style={{ cursor: "pointer" }}
+        >
+          <img
+            src="/Logo.png"
+            alt="Logo"
+            style={{ height: "32px", marginRight: "4px" }}
+          />
+          <h1 style={{ marginBottom: "0px", fontSize: "24px" }}>SurveyScope</h1>
+        </Navbar.Brand>
+        <Navbar.Toggle aria-controls="responsive-navbar-nav" />
+        <Navbar.Collapse id="responsive-navbar-nav">
+          <Nav fill activeKey={location.pathname}>
+            {(myAdminProjects?.length > 0 || isOrganizationAdmin) && (
               <Nav.Link
                 as={NavLink}
-                eventKey={`jobs`}
-                to={`jobs`}
+                eventKey={`surveys`}
+                to={`surveys`}
                 className="px-2"
               >
-                Jobs
+                Surveys
               </Nav.Link>
+            )}
+            <Nav.Link
+              as={NavLink}
+              eventKey={`jobs`}
+              to={`jobs`}
+              className="px-2"
+            >
+              Jobs
+            </Nav.Link>
+            <Nav.Link
+              as={NavLink}
+              eventKey={`annotation-statistics`}
+              to={`annotation-statistics`}
+              className="px-2"
+            >
+              Annotation Statistics
+            </Nav.Link>
+            {isOrganizationAdmin && (
               <Nav.Link
                 as={NavLink}
-                eventKey={`annotation-statistics`}
-                to={`annotation-statistics`}
+                eventKey={`permissions`}
+                to={`permissions`}
                 className="px-2"
               >
-                Annotation Statistics
+                Permissions
               </Nav.Link>
-              {isOrganizationAdmin && (
-                <Nav.Link
-                  as={NavLink}
-                  eventKey={`permissions`}
-                  to={`permissions`}
-                  className="px-2"
-                >
-                  Permissions
-                </Nav.Link>
-              )}
-              {isOrganizationAdmin && (
-                <Nav.Link
-                  as={NavLink}
-                  eventKey={`testing`}
-                  to={`testing`}
-                  className="px-2"
-                >
-                  User Testing
-                </Nav.Link>
-              )}
-              {cognitoGroups.includes("sysadmin") && (
-                <Nav.Link
-                  as={NavLink}
-                  eventKey={`onboarding`}
-                  to={`onboarding`}
-                  className="px-2"
-                >
-                  Onboarding
-                </Nav.Link>
-              )}
-            </>
+            )}
+            {isOrganizationAdmin && (
+              <Nav.Link
+                as={NavLink}
+                eventKey={`testing`}
+                to={`testing`}
+                className="px-2"
+              >
+                User Testing
+              </Nav.Link>
+            )}
+            {cognitoGroups.includes("sysadmin") && (
+              <Nav.Link
+                as={NavLink}
+                eventKey={`onboarding`}
+                to={`onboarding`}
+                className="px-2"
+              >
+                Onboarding
+              </Nav.Link>
+            )}
           </Nav>
-          <div className="d-flex flex-row flex-grow-1 justify-content-end align-items-center">
+          <div className="d-flex flex-column flex-lg-row flex-grow-1 align-items-center justify-content-end gap-3 gap-lg-0 mt-2 mt-lg-0">
             <ProgressIndicators />
             <Nav.Link className="mx-2" onClick={signOut}>
               Logout
@@ -138,14 +139,11 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
             <Settings />
             <Notifications />
           </div>
-        </div>
+        </Navbar.Collapse>
       </Navbar>
       <Container
         fluid
         className="d-flex justify-content-center h-100 overflow-y-auto"
-        style={{
-          backgroundColor: "#2B3E50",
-        }}
       >
         <Outlet />
       </Container>

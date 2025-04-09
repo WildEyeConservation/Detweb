@@ -1,12 +1,8 @@
 import { SettingsIcon } from "lucide-react";
-import { useContext, useMemo, useEffect, useState } from "react";
-import { GlobalContext, UserContext } from "../Context";
-import { useOptimisticUpdates } from "../useOptimisticUpdates";
-import { Schema } from "../../amplify/data/resource";
-import Button from "react-bootstrap/Button";
+import { useContext, useState } from "react";
+import { UserContext } from "../Context";
 import { useUsers } from "../apiInterface";
-import { fetchAllPaginatedResults } from "../utils";
-import { Bell, Check, X } from "lucide-react";
+import { X } from "lucide-react";
 import { Card } from "react-bootstrap";
 
 /* 
@@ -23,18 +19,18 @@ export default function Settings() {
   const email = users?.find((u) => u.id === user.username)?.email;
 
   return (
-    <div>
+    <div className="position-relative">
       <button
         className="text-muted px-2 d-flex align-items-center justify-content-center"
         style={{
-          position: "relative",
           backgroundColor: "transparent",
           border: "none",
           cursor: "pointer",
         }}
         onClick={() => setShow(!show)}
       >
-        <SettingsIcon />
+        <SettingsIcon className="d-none d-lg-block" />
+        <span className="d-block d-lg-none">Settings</span>
       </button>
       {show && (
         <div
@@ -53,8 +49,8 @@ export default function Settings() {
         <Card
           style={{
             position: "absolute",
-            top: 56,
-            right: 24,
+            top: 42,
+            right: 0,
             width: "400px",
             opacity: show ? 1 : 0,
             pointerEvents: show ? "auto" : "none",

@@ -234,29 +234,45 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
 
             <Marker
                 key={crypto.randomUUID()}
-              eventHandlers={{
-                dragend: (e) => {
-                  let coords = latLng2xy(e.target.getLatLng());
-                  updateAnnotation({...annotation,
-                    y: Math.round(coords.y),
-                    x: Math.round(coords.x),
-                  });
-                },
-                mouseover: (e) => {
-                  //If the user hovers over the marker, move the input focus here.
-                  e.target.getElement().focus();
-                },
-                mouseout: (e) => {
-                  //If the user moves the mouse away from the marker, blur the input field.
-                  e.target.getElement().blur();
-                },
-                keydown: (e) => {
-                  //if the user presses the backspace key, delete the annotation
-                  if (e.originalEvent.key === 'Backspace') {
-                    deleteAnnotation(annotation);
-                  } 
-                }
-              }}
+                eventHandlers={{
+                  dragend: (e) => {
+                    let coords = latLng2xy(e.target.getLatLng());
+                    updateAnnotation({...annotation,
+                      y: Math.round(coords.y),
+                      x: Math.round(coords.x),
+                    });
+                  },
+                  mouseover: (e) => {
+                    //If the user hovers over the marker, move the input focus here.
+                    e.target.getElement().focus();
+                  },
+                  mouseout: (e) => {
+                    //If the user moves the mouse away from the marker, blur the input field.
+                    e.target.getElement().blur();
+                  },
+                  keydown: (e) => {
+                    //if the user presses the backspace key, delete the annotation
+                    if (e.originalEvent.key === 'Backspace') {
+                      deleteAnnotation(annotation);
+                    } 
+                  },
+                  dblclick: (e) => {
+                    // When the marker is double left-clicked, open the context menu.
+                    const markerElement = e.target.getElement();
+                    const rect = markerElement.getBoundingClientRect();
+                    const clientX = rect.left + rect.width / 2;
+                    const clientY = rect.top + rect.height / 2;
+                    markerElement.dispatchEvent(new MouseEvent('contextmenu', {
+                      bubbles: true,
+                      cancelable: true,
+                      view: window,
+                      button: 2,
+                      buttons: 2,
+                      clientX,
+                      clientY,
+                    }));
+                  }
+                }}
               position={xy2latLng(annotation)}
               draggable={true}
               autopan={true}

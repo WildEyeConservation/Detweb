@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useContext } from "react";
 import L from "leaflet";
-import { ProjectContext, UserContext } from "./Context";
+import { ProjectContext } from "./Context";
 import { Card, Button } from "react-bootstrap";
-import { PanelLeft } from "lucide-react";
 
 /**
  *
@@ -32,32 +31,17 @@ interface LegendProps {
   annotationSetId?: string;
 }
 
-export function SideLegend({
-  hideLegend,
-  setHideLegend,
-  annotationSetId,
-}: LegendProps) {
+export function SideLegend({ annotationSetId }: LegendProps) {
   const {
     categoriesHook: { data: categories },
     currentCategory,
     setCurrentCategory,
   } = useContext(ProjectContext)!;
 
-  if (hideLegend) {
-    return null;
-  }
-
   return (
-    <Card className="d-flex flex-column h-100 overflow-hidden">
+    <Card className="d-none d-md-flex flex-column h-100 overflow-hidden">
       <Card.Header>
         <Card.Title className="d-flex flex-row align-items-center gap-2 mb-2">
-          <Button
-            className="p-0"
-            variant="link"
-            onClick={setHideLegend}
-          >
-            <PanelLeft />
-          </Button>
           <span>Legend</span>
         </Card.Title>
         <span className="text-muted" style={{ fontSize: "14px" }}>
@@ -90,15 +74,11 @@ export function SideLegend({
   );
 }
 
-export function MapLegend({
-  position,
-  hideLegend = false,
-  setHideLegend,
-  annotationSetId,
-}: LegendProps) {
+export function MapLegend({ position, annotationSetId }: LegendProps) {
   const {
     categoriesHook: { data: categories },
     setCurrentCategory,
+    currentCategory,
   } = useContext(ProjectContext)!;
   const divRef = useRef<HTMLDivElement | null>(null);
   const positionClass =
@@ -111,19 +91,15 @@ export function MapLegend({
     }
   });
 
-  if (hideLegend) {
-    return null;
-  }
-
   return (
-    <div ref={divRef} className={positionClass}>
+    <div ref={divRef} className={positionClass + " d-block d-md-none"}>
       <div className="leaflet-control leaflet-bar">
         <div
           className="info legend"
           onMouseEnter={() => setExpanded(true)}
           onMouseLeave={() => setExpanded(false)}
         >
-          <div>
+          <div className="d-flex flex-column">
             {expanded
               ? categories
                   ?.filter((c) => c.annotationSetId === annotationSetId)
@@ -133,9 +109,19 @@ export function MapLegend({
                       <div
                         key={index}
                         onClick={() => setCurrentCategory(item)}
-                        style={{ display: "flex", flexDirection: "row" }}
+                        style={{
+                          display: "flex",
+                          flexDirection: "row",
+                          backgroundColor:
+                            currentCategory?.id === item.id
+                              ? "#bdbebf"
+                              : "transparent",
+                          padding: "8px",
+                        }}
                       >
-                        <i style={{ background: item.color || "#000" }}></i>
+                        <i
+                          style={{ background: item.color || "#000" }}
+                        ></i>
                         <div
                           style={{
                             display: "flex",
@@ -152,21 +138,6 @@ export function MapLegend({
                     );
                   })
               : "Legend"}
-            {expanded && setHideLegend && (
-              <div className="d-flex flex-row align-items-center gap-2">
-                <Button
-                  variant="primary"
-                  className="mt-2"
-                  size="sm"
-                  onClick={() => {
-                    setHideLegend();
-                    setExpanded(false);
-                  }}
-                >
-                  Pop out legend
-                </Button>
-              </div>
-            )}
           </div>
         </div>
       </div>

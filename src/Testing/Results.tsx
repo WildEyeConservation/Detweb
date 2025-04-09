@@ -311,7 +311,7 @@ export default function Results() {
       </div>
       {selectedProject && selectedUser && (
         <>
-          <div>
+          <div className="overflow-x-auto overflow-y-visible">
             {results.length === 0 ? (
               <p className="mt-2">
                 {isLoading ? 'Loading...' : 'No test results'}

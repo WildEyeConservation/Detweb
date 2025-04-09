@@ -34,8 +34,6 @@ export default function AnnotationImage(props: any) {
   );
   const {
     categoriesHook: { data: categories },
-    expandLegend,
-    setExpandLegend,
   } = useContext(ProjectContext)!;
   const annotationsHook = useOptimisticUpdates<
     Schema["Annotation"]["type"],
@@ -66,8 +64,6 @@ export default function AnnotationImage(props: any) {
       <MapLegend
         key="legend"
         position="bottomright"
-        hideLegend={expandLegend}
-        setHideLegend={() => setExpandLegend((e) => !e)}
         annotationSetId={annotationSetId}
       />,
     ].concat(
@@ -84,7 +80,7 @@ export default function AnnotationImage(props: any) {
           />
         ))
     );
-  }, [props.taskTag, location.image.id, annotationSetId, expandLegend]);
+  }, [props.taskTag, location.image.id, annotationSetId]);
 
   return (
     <ImageContextFromHook
@@ -122,8 +118,6 @@ export default function AnnotationImage(props: any) {
           </Image>
         </div>
         <SideLegend
-          hideLegend={!expandLegend}
-          setHideLegend={() => setExpandLegend((e) => !e)}
           annotationSetId={annotationSetId}
         />
       </div>

@@ -29,24 +29,29 @@ export function NavButtons({ prev, next }: NavButtonsProps) {
   }, []);
 
   return (
-    <div ref={divRef} className="d-flex flex-row align-items-center gap-1">
+    <div
+      ref={divRef}
+      className="d-flex flex-row align-items-center justify-content-center gap-1 w-100"
+    >
       <Button
-        className="d-flex flex-row align-items-center justify-content-center"
+        className="d-flex flex-row align-items-center justify-content-center w-100 h-100"
         variant="primary"
         onClick={prev}
         disabled={!prev}
-        style={{ width: "200px" }}
+        style={{ maxWidth: "200px" }}
       >
-        <ChevronLeft /> Previous Location
+        <ChevronLeft />
+        <span className="d-none d-sm-block">Previous Location</span>
       </Button>
       <Button
-        className="d-flex flex-row align-items-center justify-content-center"
+        className="d-flex flex-row align-items-center justify-content-center w-100 h-100"
         variant="primary"
         onClick={next}
         disabled={!next}
-        style={{ width: "200px" }}
+        style={{ maxWidth: "200px" }}
       >
-        Next Location <ChevronRight />
+        <span className="d-none d-sm-block">Next Location</span>
+        <ChevronRight />
       </Button>
     </div>
   );

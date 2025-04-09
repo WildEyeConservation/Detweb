@@ -272,7 +272,7 @@ export default function UserStats() {
           </Card.Title>
         </Card.Header>
         <Card.Body>
-          <div className="d-flex justify-content-between align-items-center">
+          <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
             <div className="d-flex align-items-center gap-2">
               <label htmlFor="start-date" className="mb-0">
                 From:
@@ -358,7 +358,7 @@ export default function UserStats() {
             />
           </div>
 
-          <div className="mt-3">
+          <div className="mt-3 overflow-x-auto">
             <MyTable
               tableHeadings={tableHeadings}
               tableData={tableData}

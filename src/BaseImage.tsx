@@ -221,10 +221,6 @@ const BaseImage: React.FC<BaseImageProps> = memo(
       prev,
     ]);
 
-    const testModalId = useMemo(() => {
-      return crypto.randomUUID();
-    }, []);
-
     const contextMenuItems = useMemo(() => {
       const items = [];
       if (source) {

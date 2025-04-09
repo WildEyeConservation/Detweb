@@ -175,7 +175,7 @@ export default function Users({
 
   return (
     <>
-      <div className="d-flex flex-column gap-2 mt-3 w-100">
+      <div className="d-flex flex-column gap-2 mt-3 w-100 overflow-x-auto overflow-y-visible">
         <h5>Organization Users</h5>
         <MyTable
           tableData={tableData}

@@ -299,13 +299,14 @@ export default function Surveys() {
             </Card.Title>
             <Form.Control
               type="text"
-              className="w-25"
+              className="w-100"
+              style={{ maxWidth: "300px" }}
               placeholder="Search by survey or organization"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </Card.Header>
-          <Card.Body>
+          <Card.Body className="overflow-x-auto overflow-y-visible">
             <MyTable
               tableHeadings={[
                 { content: "Survey", style: { width: "50%" } },

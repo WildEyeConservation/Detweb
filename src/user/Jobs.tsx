@@ -320,7 +320,7 @@ export default function Jobs() {
             <h4 className="mb-0">Jobs Available</h4>
           </Card.Title>
         </Card.Header>
-        <Card.Body>
+        <Card.Body className="overflow-x-auto">
           {isLoading ? (
             <Spinner />
           ) : (

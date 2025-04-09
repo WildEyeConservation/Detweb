@@ -1,10 +1,10 @@
-import MyTable from '../Table';
-import { useState, useContext, useEffect, useRef } from 'react';
-import Select from 'react-select';
-import { TestingContext, GlobalContext } from '../Context';
-import { Button } from 'react-bootstrap';
-import { Settings2 } from 'lucide-react';
-import ConfigModal from './ConfigModal';
+import MyTable from "../Table";
+import { useState, useContext, useEffect, useRef } from "react";
+import Select from "react-select";
+import { TestingContext, GlobalContext } from "../Context";
+import { Button } from "react-bootstrap";
+import { Settings2 } from "lucide-react";
+import ConfigModal from "./ConfigModal";
 
 interface Option {
   label: string;
@@ -95,50 +95,45 @@ export default function Surveys() {
       return {
         id: survey.id,
         rowData: [
-        survey.name,
-        <Select
-          className="text-black"
-          isMulti
-          value={selectedLocationPools[survey.id]}
-          options={locationPools.map((pool) => ({
-            label: pool.name,
-            value: pool.id,
-          }))}
-          onChange={(e) => handlePoolsChange(survey.id, e)}
-          styles={{
-            valueContainer: (base) => ({
-              ...base,
-              overflowY: 'auto',
-            }),
-          }}
-        />,
-        <Button
-          variant="outline-info"
-          className="w-100"
-          onClick={() => {
-            setSelectedSurvey({
-              label: survey.name,
-              value: survey.id,
-            });
-            showModal('configModal');
-          }}
-        >
-          <Settings2 />
-        </Button>,
-      ],
-    };
-  });
+          survey.name,
+          <Select
+            className="text-black"
+            isMulti
+            value={selectedLocationPools[survey.id]}
+            options={locationPools.map((pool) => ({
+              label: pool.name,
+              value: pool.id,
+            }))}
+            onChange={(e) => handlePoolsChange(survey.id, e)}
+          />,
+          <Button
+            variant="outline-info"
+            className="w-100"
+            onClick={() => {
+              setSelectedSurvey({
+                label: survey.name,
+                value: survey.id,
+              });
+              showModal("configModal");
+            }}
+          >
+            <Settings2 />
+          </Button>,
+        ],
+      };
+    });
 
   return (
-    <div className="d-flex flex-column gap-2 mt-3 w-100">
+    <div className="d-flex flex-column gap-2 mt-3 w-100"
+    >
       <h5 className="mb-0">Surveys</h5>
       <MyTable
         tableHeadings={[
-          { content: 'Name', style: { width: '45%' }, sort: true },
-          { content: 'Assigned Location Pools' },
+          { content: "Name", style: { width: "45%" }, sort: true },
+          { content: "Assigned Location Pools" },
           {
-            content: 'Configuration',
-            style: { width: '100px' },
+            content: "Configuration",
+            style: { width: "100px" },
           },
         ]}
         tableData={tableData}
@@ -148,7 +143,7 @@ export default function Surveys() {
       />
       {selectedSurvey && (
         <ConfigModal
-          show={modalToShow === 'configModal'}
+          show={modalToShow === "configModal"}
           onClose={() => showModal(null)}
           survey={{ id: selectedSurvey.value, name: selectedSurvey.label }}
         />

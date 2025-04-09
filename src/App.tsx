@@ -2,17 +2,19 @@ export function graphqlOperation(query: string, variables: any) {
   return { query, variables };
 }
 
-import { useEffect, useState } from 'react';
-import './App.css';
-import 'leaflet/dist/leaflet.css';
-import { configure } from 'react-hotkeys';
-import { withAuthenticator } from '@aws-amplify/ui-react';
-import '@aws-amplify/ui-react/styles.css';
-import { User } from './UserContext.js';
-import 'bootswatch/dist/superhero/bootstrap.min.css';
-import { fetchAuthSession, AuthUser } from 'aws-amplify/auth';
-import { BrowserView, MobileView } from 'react-device-detect';
-import MainNavigation from './MainNavigation.tsx';
+import { useEffect, useState } from "react";
+import "./App.css";
+import "leaflet/dist/leaflet.css";
+import { configure } from "react-hotkeys";
+// import { withAuthenticator } from "@aws-amplify/ui-react";
+import "@aws-amplify/ui-react/styles.css";
+import { User } from "./UserContext.js";
+import "bootswatch/dist/superhero/bootstrap.min.css";
+import { fetchAuthSession, AuthUser } from "aws-amplify/auth";
+import { BrowserView, MobileView } from "react-device-detect";
+import MainNavigation from "./MainNavigation.tsx";
+import { Button as PrimaryButton } from "react-bootstrap";
+import { Authenticator, useTheme } from "@aws-amplify/ui-react";
 //import { ErrorHandler } from './ErrorHandler';
 //import {TaskProgressHandler} from './TaskProgressHandler';
 
@@ -33,6 +35,7 @@ interface AppProps {
 function App({ signOut = () => {}, user }: AppProps) {
   const [session, setSession] = useState<any>();
   const [cognitoGroups, setCognitoGroups] = useState<string[]>([]);
+  const [continueOnMobile, setContinueOnMobile] = useState(false);
   // const [userAttributes, setUserAttributes] = useState<any>(null);
 
   // useEffect(() => {
@@ -46,34 +49,36 @@ function App({ signOut = () => {}, user }: AppProps) {
   //   setModalToShow(key);
   // };
 
-
   useEffect(() => {
-    window.addEventListener('beforeunload', alertUser);
+    window.addEventListener("beforeunload", alertUser);
     return () => {
-      window.removeEventListener('beforeunload', alertUser);
+      window.removeEventListener("beforeunload", alertUser);
     };
   }, []);
   const alertUser = (e: BeforeUnloadEvent) => {
     alert(
-      'If you use refresh to load new data it may result in some of your work being lost.'
+      "If you use refresh to load new data it may result in some of your work being lost."
     );
     e.preventDefault();
-    e.returnValue = '';
+    e.returnValue = "";
   };
   useEffect(() => {
     fetchAuthSession().then((sess) => {
       setSession(sess);
-      if (sess?.tokens?.accessToken?.payload['cognito:groups']) {
+      if (sess?.tokens?.accessToken?.payload["cognito:groups"]) {
         setCognitoGroups(
-          sess.tokens.accessToken.payload['cognito:groups'] as string[]
+          sess.tokens.accessToken.payload["cognito:groups"] as string[]
         );
       }
     });
   }, [user]);
 
-
-  return (
-    session && (
+  return session ? (
+    continueOnMobile ? (
+      <User user={user!} cognitoGroups={cognitoGroups}>
+        <MainNavigation signOut={signOut} />
+      </User>
+    ) : (
       <>
         <BrowserView>
           <User user={user!} cognitoGroups={cognitoGroups}>
@@ -81,15 +86,52 @@ function App({ signOut = () => {}, user }: AppProps) {
           </User>
         </BrowserView>
         <MobileView>
-          <p>
-            {' '}
-            This application is not supported on mobile devices. Please open on
-            a laptop or desktop device.
-          </p>
+          <Logo />
+          <div
+            className="d-flex flex-column justify-content-center align-items-center text-center p-3"
+            style={{
+              height: "calc(100vh - 64px)",
+            }}
+          >
+            <h1>This application is primarly designed for desktop use.</h1>
+            <p>Are you sure you want to continue?</p>
+            <PrimaryButton onClick={() => setContinueOnMobile(true)}>
+              Continue
+            </PrimaryButton>
+          </div>
         </MobileView>
       </>
     )
+  ) : (
+    null
   );
 }
 
-export default withAuthenticator(App);
+export default function AppWithAuthenticator() {
+  const components = {
+    Header() {
+      return <Logo />;
+    },
+  };
+
+  return (
+    <Authenticator components={components} variation="modal">
+      {({ signOut, user }) => <App signOut={signOut} user={user} />}
+    </Authenticator>
+  );
+}
+
+function Logo() {
+  return (
+    <div className="p-3 w-100 d-flex flex-column justify-content-center align-items-center bg-secondary">
+      <div className="d-flex flex-row align-items-center flex-nowrap">
+        <img
+          src="/Logo.png"
+          alt="Logo"
+          style={{ height: "32px", marginRight: "4px" }}
+        />
+        <h1 style={{ marginBottom: "0px", fontSize: "24px" }}>SurveyScope</h1>
+      </div>
+    </div>
+  );
+}
