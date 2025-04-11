@@ -1,40 +1,127 @@
-import { useState } from 'react';
-import Button from 'react-bootstrap/Button';
-import Card from 'react-bootstrap/Card';
-import Form from 'react-bootstrap/Form';
+import Button from "react-bootstrap/Button";
+import Card from "react-bootstrap/Card";
+import Form from "react-bootstrap/Form";
+import { useContext, useState } from "react";
+import { GlobalContext, UserContext } from "./Context";
+import { fetchAllPaginatedResults } from "./utils";
 
 /*
-    Send an email to superadmin
-    Optionally record info in DB to show in admin dashboard
+    todo: Notify sysadmin
 */
 
 export default function RegisterOrganization() {
+  const { client } = useContext(GlobalContext)!;
+  const { user } = useContext(UserContext)!;
+
+  const [isLoading, setIsLoading] = useState(false);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsLoading(true);
+
+    const formData = new FormData(event.target as HTMLFormElement);
+    const organizationName = formData.get("organizationName") as string;
+    const briefDescription = formData.get("briefDescription") as string;
+
+    const organizations = await fetchAllPaginatedResults(
+      client.models.Organization.list,
+      {
+        selectionSet: ["id"],
+        filter: {
+          name: {
+            eq: organizationName,
+          },
+        },
+      }
+    );
+
+    if (organizations.length > 0) {
+      alert("An organization with this name already exists");
+      return;
+    }
+
+    const registrations = await fetchAllPaginatedResults(
+      client.models.OrganizationRegistration.list,
+      {
+        selectionSet: ["id"],
+        filter: {
+          requestedBy: {
+            contains: user.userId,
+          },
+          status: {
+            eq: "pending",
+          },
+        },
+      }
+    );
+
+    if (registrations.length > 0) {
+      alert("You have already requested an organization registration");
+      setIsLoading(false);
+      return;
+    }
+
+    const { data: organizationRegistration } =
+      await client.models.OrganizationRegistration.create({
+        organizationName,
+        briefDescription,
+        requestedBy: user.userId,
+      });
+
+    if (!organizationRegistration) {
+      alert("An error occurred while submitting your request");
+      setIsLoading(false);
+      return;
+    }
+
+    alert("Your request has been submitted");
+
+    setIsLoading(false);
+  }
+
   return (
-    <Card className="w-50 mx-auto mt-5">
+    <Card
+      className="w-100"
+      style={{
+        marginTop: "12px",
+        marginBottom: "12px",
+        height: "fit-content",
+        maxWidth: "960px",
+      }}
+    >
+      <Card.Header>
+        <Card.Title className="mb-0">
+          <h4 className="mb-0">Register Organization</h4>
+        </Card.Title>
+      </Card.Header>
       <Card.Body>
-        <Card.Title className="text-center">Register Organization</Card.Title>
-        <Form className="d-flex flex-column gap-3">
+        <Form className="d-flex flex-column gap-3" onSubmit={handleSubmit}>
+          <span className="text-muted">
+            Here you can register your organization for SurveyScope - you will
+            automatically be redirected after a successful manual review of your
+            details.
+          </span>
           <Form.Group>
             <Form.Label>Organization Name</Form.Label>
-            <Form.Control type="text" placeholder="Enter organization name" />
-          </Form.Group>
-          <Form.Group>
-            <Form.Label> Email</Form.Label>
-            <Form.Control type="email" placeholder="Enter email" />
+            <Form.Control
+              name="organizationName"
+              type="text"
+              placeholder="Enter organization name"
+              required
+            />
           </Form.Group>
           <Form.Group>
             <Form.Label>Brief Description of Work</Form.Label>
             <Form.Control
-              type="text"
+              name="briefDescription"
+              as="textarea"
+              rows={3}
               placeholder="Enter brief description of work"
+              required
             />
           </Form.Group>
-          <Form.Group>
-            <Form.Label>What is 2 + 1?</Form.Label>
-            <Form.Control type="text" placeholder="Enter the answer" />
-          </Form.Group>
-          <Button type="submit" variant="info">
-            Submit
+          <Button type="submit" variant="primary" disabled={isLoading}>
+            {isLoading ? "Submitting..." : "Submit"}
           </Button>
         </Form>
       </Card.Body>

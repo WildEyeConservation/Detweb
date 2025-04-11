@@ -14,7 +14,12 @@ import { fetchAuthSession, AuthUser } from "aws-amplify/auth";
 import { BrowserView, MobileView } from "react-device-detect";
 import MainNavigation from "./MainNavigation.tsx";
 import { Button as PrimaryButton } from "react-bootstrap";
-import { Authenticator, useTheme } from "@aws-amplify/ui-react";
+import {
+  Authenticator,
+  useAuthenticator,
+  View,
+  Button as AmplifyButton,
+} from "@aws-amplify/ui-react";
 //import { ErrorHandler } from './ErrorHandler';
 //import {TaskProgressHandler} from './TaskProgressHandler';
 
@@ -102,15 +107,31 @@ function App({ signOut = () => {}, user }: AppProps) {
         </MobileView>
       </>
     )
-  ) : (
-    null
-  );
+  ) : null;
 }
 
 export default function AppWithAuthenticator() {
   const components = {
     Header() {
       return <Logo />;
+    },
+    SignIn: {
+      Footer() {        
+        const { toForgotPassword } = useAuthenticator();
+
+        return (
+          <View textAlign="center">
+            <AmplifyButton
+              fontWeight="bold"
+              onClick={toForgotPassword}
+              size="small"
+              variation="link"
+            >
+              Reset Password
+            </AmplifyButton>
+          </View>
+        );
+      },
     },
   };
 

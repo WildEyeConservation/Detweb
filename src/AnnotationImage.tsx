@@ -16,7 +16,7 @@ import { Badge } from "react-bootstrap";
 const Image = withCreateObservation(withAckOnTimeout(BaseImage));
 
 export default function AnnotationImage(props: any) {
-  const { location, next, prev, visible, id, ack, allowOutside, zoom } = props;
+  const { location, next, prev, visible, id, ack, allowOutside, zoom, hideNavButtons } = props;
   const { annotationSetId } = location;
   const { client } = useContext(GlobalContext)!;
   //testing
@@ -113,6 +113,7 @@ export default function AnnotationImage(props: any) {
             next={next}
             ack={ack}
             annotationSet={annotationSetId}
+            hideNavButtons={hideNavButtons}
           >
             {visible && memoizedChildren}
           </Image>

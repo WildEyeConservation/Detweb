@@ -69,7 +69,7 @@ export default function AddAnnotationSetModal({
 
   return (
     <Modal show={show} onHide={onClose} size="xl">
-      <Modal.Header>
+      <Modal.Header closeButton>
         <Modal.Title>Add Annotation Set</Modal.Title>
       </Modal.Header>
       <Modal.Body>

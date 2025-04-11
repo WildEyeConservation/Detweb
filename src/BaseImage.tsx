@@ -48,6 +48,7 @@ export interface BaseImageProps {
   visible: boolean;
   annotationSet: AnnotationSetType;
   otherImageId?: string;
+  hideNavButtons?: boolean;
 }
 
 const BaseImage: React.FC<BaseImageProps> = memo(
@@ -80,6 +81,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
       zoom,
       stats,
       otherImageId,
+      hideNavButtons,
     } = props;
     const { image } = location;
     const prevPropsRef = useRef(props);
@@ -519,7 +521,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
               </MapContainer>
             )}
           </div>
-          {(next || prev) && fullyLoaded && (
+          {(next || prev) && fullyLoaded && !hideNavButtons && (
             <NavButtons
               prev={prev}
               next={canAdvance ? next : undefined}

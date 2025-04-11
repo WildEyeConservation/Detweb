@@ -3,14 +3,14 @@ import { useContext, useState } from "react";
 import { UserContext } from "../Context";
 import { useUsers } from "../apiInterface";
 import { X } from "lucide-react";
-import { Card } from "react-bootstrap";
+import { Card, Button } from "react-bootstrap";
 
 /* 
   For now, this is a popup that displays the user's account information
   untill we have a settings page.
 */
 
-export default function Settings() {
+export default function Settings({ signOut }: { signOut: () => void }) {
   const [show, setShow] = useState(false);
   const { user } = useContext(UserContext)!;
   const { users } = useUsers();
@@ -47,11 +47,10 @@ export default function Settings() {
       )}
       {username && (
         <Card
+          className="position-fixed w-100 mt-lg-3"
           style={{
-            position: "absolute",
-            top: 42,
+            maxWidth: "400px",
             right: 0,
-            width: "400px",
             opacity: show ? 1 : 0,
             pointerEvents: show ? "auto" : "none",
             transition: "opacity 0.15s ease-in-out",
@@ -65,9 +64,16 @@ export default function Settings() {
           </Card.Header>
           <Card.Body>
             <div className="d-flex flex-column gap-2">
-              <p className="mb-0">{username}</p>
-              <p className="mb-0">{email}</p>
+              <p className="mb-0">Username: {username}</p>
+              <p className="mb-0">Email: {email}</p>
             </div>
+            <Button
+              className="w-100 mt-3"
+              variant="outline-danger"
+              onClick={signOut}
+            >
+              Sign Out
+            </Button>
           </Card.Body>
         </Card>
       )}

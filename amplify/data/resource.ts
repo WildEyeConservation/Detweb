@@ -669,6 +669,17 @@ const schema = a
       .secondaryIndexes((index) => [
         index('username').queryField('organizationInvitesByUsername'),
       ]),
+    OrganizationRegistration: a
+      .model({
+        organizationName: a.string().required(),
+        briefDescription: a.string().required(),
+        requestedBy: a.string().required(),
+        status: a.string().default('pending'),
+      })
+      .authorization((allow) => [allow.authenticated()])
+      .secondaryIndexes((index) => [
+        index('status').queryField('organizationRegistrationsByStatus'),
+      ]),
   })
   .authorization((allow) => [
     allow.resource(getAnnotationCounts),

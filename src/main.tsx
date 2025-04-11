@@ -18,13 +18,13 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import ErrorPage from './error-page';
 import ProjectView from './ProjectView';
 import Jobs from './user/Jobs.tsx';
-import CreateOrganization from './organization/CreateOrganization';
 import Surveys from './survey/Surveys.tsx';
 import Permissions from './Permissions.tsx';
 import Testing from './Testing/Testing';
 import { Registration } from "./Registration";
 import { persistQueryClient } from '@tanstack/react-query-persist-client'
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
+import Admin from './Admin';
 
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
@@ -54,7 +54,7 @@ const router = createBrowserRouter([
       <GlobalContextProvider>
         <Progress>
           <QueryClientProvider client={queryClient}>
-            <ReactQueryDevtools initialIsOpen={false} />
+            {/* <ReactQueryDevtools initialIsOpen={false} /> */}
             <AppWithAuthenticator />
           </QueryClientProvider>
         </Progress>
@@ -123,7 +123,7 @@ const router = createBrowserRouter([
         element: <Surveys />,
       },
       {
-        path: 'ESSRegisterAdmin',
+        path: 'SSRegisterOrganization',
         element: <RegisterOrganization />,
       },
       {
@@ -135,8 +135,8 @@ const router = createBrowserRouter([
         element: <UserStats />,
       },
       {
-        path: 'onboarding',
-        element: <CreateOrganization />,
+        path: 'SSAdmin',
+        element: <Admin />,
       },
       {
         path: 'testing',

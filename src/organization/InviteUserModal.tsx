@@ -90,7 +90,7 @@ export default function InviteUserModal({
             Send Invite
           </Button>
           <Form.Text className="d-block mt-2">
-            *This will send an invite to the user's ESS inbox. Don't worry, the
+            *This will send an invite to the user's SurveyScope inbox. Don't worry, the
             invite will be stored until they sign up{' '}
             <span
               className="text-muted"

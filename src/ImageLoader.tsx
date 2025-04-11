@@ -24,6 +24,7 @@ export function ImageLoader() {
             width: data.width,
             height: data.height,
           }}
+          hideNavButtons={true}
         />
       );
     });

@@ -68,11 +68,10 @@ export default function Notifications() {
       )}
       {username && (
         <Card
+          className="position-fixed w-100 mt-lg-3"
           style={{
-            position: "absolute",
-            top: 42,
+            maxWidth: "400px",
             right: 0,
-            width: "400px",
             opacity: show ? 1 : 0,
             pointerEvents: show ? "auto" : "none",
             transition: "opacity 0.15s ease-in-out",

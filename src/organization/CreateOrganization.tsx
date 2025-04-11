@@ -1,12 +1,22 @@
-import Card from "react-bootstrap/Card";
 import Form from "react-bootstrap/Form";
 import Button from "react-bootstrap/Button";
-import { useState, useContext } from "react";
-import { GlobalContext, UserContext } from "../Context";
+import { useState, useContext, useEffect } from "react";
+import { GlobalContext } from "../Context";
 import { useUsers } from "../apiInterface";
+import { Modal } from "react-bootstrap";
+import { Schema } from "../../amplify/data/resource";
 
-export default function CreateOrganization() {
-  const { cognitoGroups } = useContext(UserContext)!;
+export default function CreateOrganization({
+  show,
+  onHide,
+  request,
+}: {
+  show: boolean;
+  onHide: () => void;
+  request?: Schema["OrganizationRegistration"]["type"] & {
+    requestedByEmail: string;
+  };
+}) {
   const { client } = useContext(GlobalContext);
   const { users } = useUsers();
 
@@ -46,13 +56,32 @@ export default function CreateOrganization() {
         });
 
       if (membership) {
+        if (request) {
+          await client.models.OrganizationRegistration.update({
+            id: request.id,
+            status: "approved",
+          });
+        }
+
         alert("Organization " + name + " created for " + adminEmail);
       }
     }
 
     setIsSubmitting(false);
     handleClear();
+    onHide();
   };
+
+  async function handleDeny() {
+    if (request) {
+      await client.models.OrganizationRegistration.update({
+        id: request.id,
+        status: "denied",
+      });
+    }
+
+    onHide();
+  }
 
   const handleClear = () => {
     setName("");
@@ -60,65 +89,78 @@ export default function CreateOrganization() {
     setAdminEmail("");
   };
 
-  if (!cognitoGroups.includes("sysadmin")) {
-    return <div>You are not authorized to access this page.</div>;
-  }
+  useEffect(() => {
+    if (request) {
+      setName(request.organizationName);
+      setDescription(request.briefDescription);
+      setAdminEmail(request.requestedByEmail);
+    }
+    return () => {
+      handleClear();
+    };
+  }, [request]);
 
   return (
-    <div
-      className="d-flex flex-column gap-3 align-items-center mt-3"
-      style={{
-        maxWidth: "960px",
-        width: "100%",
-      }}
-    >
-      <Card className="w-100">
-        <Card.Header>
-          <Card.Title className="mb-0">
-            <h4 className="mb-0">Create Organization</h4>
-          </Card.Title>
-        </Card.Header>
-        <Card.Body>
-          <Form onSubmit={handleSubmit}>
-            <Form.Group className="mb-3">
-              <Form.Label>Name</Form.Label>
-              <Form.Control
-                type="text"
-                placeholder="Enter organization name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Description</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={3}
-                placeholder="Enter organization description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Admin Email</Form.Label>
-              <Form.Control
-                type="email"
-                placeholder="Enter admin email"
-                value={adminEmail}
-                onChange={(e) => setAdminEmail(e.target.value)}
-              />
-            </Form.Group>
-            <div className="d-flex gap-2 justify-content-end">
-              <Button variant="primary" type="submit" disabled={isSubmitting}>
-                Submit
+    <Modal show={show} onHide={onHide} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>{request ? "Add" : "Create"} Organization</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <Form onSubmit={handleSubmit}>
+          <Form.Group className="mb-3">
+            <Form.Label>Name</Form.Label>
+            <Form.Control
+              type="text"
+              placeholder="Enter organization name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </Form.Group>
+          <Form.Group className="mb-3">
+            <Form.Label>Description</Form.Label>
+            <Form.Control
+              as="textarea"
+              rows={3}
+              placeholder="Enter organization description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </Form.Group>
+          <Form.Group className="mb-3">
+            <Form.Label>Admin Email</Form.Label>
+            <Form.Control
+              type="email"
+              placeholder="Enter admin email"
+              value={adminEmail}
+              onChange={(e) => setAdminEmail(e.target.value)}
+            />
+          </Form.Group>
+          <div
+            className={`d-flex gap-2 justify-content-${
+              request ? "between" : "end"
+            }`}
+          >
+            {request && (
+              <Button variant="danger" onClick={handleDeny}>
+                Deny
               </Button>
-              <Button variant="dark" type="button" onClick={handleClear}>
-                Clear
+            )}
+            <div>
+              <Button
+                variant="primary"
+                className="me-2"
+                type="submit"
+                disabled={isSubmitting}
+              >
+                {request ? "Approve" : "Create"}
+              </Button>
+              <Button variant="dark" type="button" onClick={onHide}>
+                Cancel
               </Button>
             </div>
-          </Form>
-        </Card.Body>
-      </Card>
-    </div>
+          </div>
+        </Form>
+      </Modal.Body>
+    </Modal>
   );
 }

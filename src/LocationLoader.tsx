@@ -29,6 +29,7 @@ export function LocationLoader() {
         <AnnotationImage
           visible={true}
           location={{ ...data, annotationSetId }}
+          hideNavButtons
         />
       );
     });

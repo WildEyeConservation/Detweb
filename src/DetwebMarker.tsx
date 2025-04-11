@@ -256,22 +256,6 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo((props) => {
                       deleteAnnotation(annotation);
                     } 
                   },
-                  dblclick: (e) => {
-                    // When the marker is double left-clicked, open the context menu.
-                    const markerElement = e.target.getElement();
-                    const rect = markerElement.getBoundingClientRect();
-                    const clientX = rect.left + rect.width / 2;
-                    const clientY = rect.top + rect.height / 2;
-                    markerElement.dispatchEvent(new MouseEvent('contextmenu', {
-                      bubbles: true,
-                      cancelable: true,
-                      view: window,
-                      button: 2,
-                      buttons: 2,
-                      clientX,
-                      clientY,
-                    }));
-                  }
                 }}
               position={xy2latLng(annotation)}
               draggable={true}
