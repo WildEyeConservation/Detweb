@@ -2,7 +2,7 @@ import React, { useEffect, useContext, useState } from 'react';
 import { GlobalContext } from './Context';
 import OverlapOutline from './OverlapOutline';
 import { ImageType } from './schemaTypes';
-import { multiply, inv} from "mathjs";
+import { inv} from "mathjs";
 import { makeTransform, array2Matrix } from './utils';
 interface OverlapLoaderProps {
     image: ImageType;
