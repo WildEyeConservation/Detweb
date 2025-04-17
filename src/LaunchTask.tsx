@@ -8,6 +8,7 @@ import { GlobalContext, ManagementContext, UserContext } from "./Context";
 import { SendMessageBatchCommand } from "@aws-sdk/client-sqs";
 import { QueryCommand } from "@aws-sdk/client-dynamodb";
 import pLimit from 'p-limit';
+import { GetQueueAttributesCommand } from "@aws-sdk/client-sqs";
 
 interface LaunchTaskProps {
   show: boolean;
@@ -134,6 +135,22 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
     stepFormatter: (count)=>`${count} locations`,
   });
 
+  async function getQueueType(queueUrl: string): Promise<string> {
+    const sqsClient = await getSqsClient();
+    const command = new GetQueueAttributesCommand({
+      QueueUrl: queueUrl,
+      AttributeNames: ["FifoQueue"]
+    });
+
+    try {
+      const response = await sqsClient.send(command);
+      return response.Attributes?.FifoQueue === "true" ? "FIFO" : "Standard";
+    } catch (error) {
+      console.warn("Error fetching queue attributes, assuming Standard queue:", error);
+      return "Standard"; // Assume Standard if there's an error
+    }
+  }
+
   async function handleSubmit() {
     // try {
     handleClose();
@@ -157,6 +174,9 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
       await client.models.Queue.update({id: queueId, zoom: zoom});
     }
 
+    const queueType = await getQueueType(queueUrl);
+
+    const groupId = crypto.randomUUID();
     const batchSize = 10;
     for (let i = 0; i < allLocations.length; i += batchSize) {
       const locationBatch = allLocations.slice(i, i + batchSize);
@@ -164,10 +184,22 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
       
       for (const locationId of locationBatch) {
         const location = {id: locationId, annotationSetId: annotationSet};
-        batchEntries.push({
-          Id: `msg-${locationId}`, // Required unique ID for each message in batch
-          MessageBody: JSON.stringify({ location, allowOutside, taskTag, secondaryQueueUrl, skipLocationWithAnnotations})
-        });
+
+        const body = JSON.stringify({ location, allowOutside, taskTag, secondaryQueueUrl, skipLocationWithAnnotations});
+
+        if (queueType === "FIFO") {
+          batchEntries.push({
+            Id: `msg-${locationId}`,
+            MessageBody: body,
+            MessageGroupId: groupId,
+            MessageDeduplicationId: body.replace(/[^a-zA-Z0-9\-_\.]/g, '').substring(0, 128)
+          });
+        } else {
+          batchEntries.push({
+            Id: `msg-${locationId}`,
+            MessageBody: body,
+          });
+        }
       }
 
       if (batchEntries.length > 0) {  
@@ -175,7 +207,7 @@ function LaunchTask({ show, handleClose, selectedTasks, setSelectedTasks }: Laun
           getSqsClient().then(sqsClient => sqsClient.send(
             new SendMessageBatchCommand({
               QueueUrl: queueUrl,
-              Entries: batchEntries
+              Entries: batchEntries,
             })
           ))
         ).then(() => setStepsCompleted((s: number) => s + batchEntries.length));

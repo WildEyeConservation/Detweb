@@ -1,10 +1,11 @@
 import { useContext, useEffect, useState } from "react";
-import { ManagementContext, ProjectContext, UserContext } from "./Context";
+import { ManagementContext, ProjectContext, UserContext, GlobalContext } from "./Context";
 import { PurgeQueueCommand, GetQueueAttributesCommand } from '@aws-sdk/client-sqs'
 import { type GetQueueAttributesCommandInput } from '@aws-sdk/client-sqs'
 import ProgressBar from 'react-bootstrap/ProgressBar';
 
 export function JobsRemaining() {
+  const { client } = useContext(GlobalContext)!;
   const { getSqsClient, jobsCompleted: sessionJobsCompleted } = useContext(UserContext)!;
   const { currentPM } = useContext(ProjectContext)!;
   const [jobsRemaining, setJobsRemaining] = useState<string>("Unknown");
@@ -15,7 +16,7 @@ export function JobsRemaining() {
 
   useEffect(() => {
     if (currentPM.queueId) {
-      currentPM.queue().then(
+      client.models.Queue.get({ id: currentPM.queueId }).then(
           ({ data: { url, batchSize } }) => {
           setUrl(url);
 
@@ -24,7 +25,7 @@ export function JobsRemaining() {
           }
         });
         if (currentPM.backupQueueId) {
-          currentPM.backupQueue().then(
+          client.models.Queue.get({ id: currentPM.backupQueueId }).then(
             ({ data: { url } }) => {
               setBackupUrl(url);
             });
