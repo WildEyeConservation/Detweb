@@ -54,7 +54,7 @@ const router = createBrowserRouter([
       <GlobalContextProvider>
         <Progress>
           <QueryClientProvider client={queryClient}>
-            {/* <ReactQueryDevtools initialIsOpen={false} /> */}
+            <ReactQueryDevtools initialIsOpen={false} />
             <AppWithAuthenticator />
           </QueryClientProvider>
         </Progress>

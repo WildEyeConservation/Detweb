@@ -220,7 +220,7 @@ function AddGpsData({ imageSets, setHandleSubmit }: AddGpsDataProps) {
             <input
               id="file-upload"
               type="file"
-              accept=".csv"
+              accept=".csv,.gpx"
               onChange={handleChange}
               style={{ display: "none" }}
             />

@@ -182,7 +182,7 @@ export default function NewSurveyModal({
           setFilesUploaded,
           setTotalFiles,
           () => {
-            setDisabledSurveys((ds) => [...ds, project.id]);
+            setDisabledSurveys((ds) => ds.filter((id) => id !== project.id));
           }
         );
       }
@@ -254,6 +254,7 @@ export default function NewSurveyModal({
       setGlobalAnnotationAccess(null);
       setAddPermissionExceptions(false);
       setPermissionExceptions([]);
+      setUploadSubmitFn(null);
     }
   }, [show]);
 
