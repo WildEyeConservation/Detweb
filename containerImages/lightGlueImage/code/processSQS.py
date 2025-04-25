@@ -59,7 +59,7 @@ transport = RequestsHTTPTransport(url=os.environ['API_ENDPOINT'],
 client = Client(transport=transport,
                 fetch_schema_from_transport=False)
 
-TARGET_SIZE = 528*2
+TARGET_SIZE = 528
 
 def alignImages( body, img0, img1):
     img0_height, img0_width = img0.shape[1], img0.shape[2]
