@@ -199,7 +199,7 @@ const scoutbotAutoProcessor = new AutoProcessor(ecsStack, "ScoutbotAutoProcessor
   {
     vpc,
     instanceType: ec2.InstanceType.of(ec2.InstanceClass.G4DN, ec2.InstanceSize.XLARGE),
-    ecsImage: ecs.ContainerImage.fromEcrRepository(repo,"249ab41353c9e512c4d4520e37446a75ddcf4d5871f84a7f76318336a8efb4ab"),    
+    ecsImage: ecs.ContainerImage.fromAsset("containerImages/scoutbot"),    
     ecsTaskRole,
     memoryLimitMiB: 1024 * 12,
     gpuCount: 1,
