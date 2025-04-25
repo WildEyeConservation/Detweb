@@ -1,1 +1,0 @@
-docker run -v "%cd%/code:/workspace" --gpus all -it lh /bin/bash
