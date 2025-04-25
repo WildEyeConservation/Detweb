@@ -14,6 +14,8 @@ import * as turf from "@turf/turf";
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw/dist/leaflet.draw.css";
 import { Form } from "react-bootstrap";
+import Shapefile from "./Shapefile";
+import shp from "shpjs";
 
 // Define the GPS data structure
 export interface GPSData {
@@ -34,6 +36,7 @@ interface PolygonSubset {
 export interface GPSSubsetProps {
   gpsData: GPSData[];
   onFilter: (filteredData: GPSData[]) => void;
+  shapefileBuffer?: ArrayBuffer;
 }
 
 // A helper component to fit the map view to the given GPS points
@@ -54,7 +57,11 @@ const FitBoundsToPoints: React.FC<{ points: GPSData[] }> = ({ points }) => {
 };
 
 // The main component
-const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter }) => {
+const GPSSubset: React.FC<GPSSubsetProps> = ({
+  gpsData,
+  onFilter,
+  shapefileBuffer,
+}) => {
   const [polygons, setPolygons] = useState<PolygonSubset[]>([]);
   const featureGroupRef = useRef<L.FeatureGroup>(null);
 
@@ -65,6 +72,17 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter }) => {
   const [currentFilteredPoints, setCurrentFilteredPoints] =
     useState<GPSData[]>(validGpsData);
   const [deletedPointsStack, setDeletedPointsStack] = useState<GPSData[][]>([]);
+  const [initialTotalPoints] = useState(validGpsData.length);
+  const remainingPoints = currentFilteredPoints.length;
+  const removedPoints = initialTotalPoints - remainingPoints;
+  const percentRemoved =
+    initialTotalPoints > 0
+      ? Math.round((removedPoints / initialTotalPoints) * 100)
+      : 0;
+  const percentRemaining =
+    initialTotalPoints > 0
+      ? Math.round((remainingPoints / initialTotalPoints) * 100)
+      : 0;
 
   // When a polygon is created
   const handleCreated = useCallback((e: any) => {
@@ -142,53 +160,58 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter }) => {
   }, []);
 
   // Function to filter points within any drawn polygon
-  const handleFilterPoints = useCallback(() => {
-    if (polygons.length === 0) {
-      return;
-    }
-    const newVisiblePoints: GPSData[] = [];
-    const removedPoints: GPSData[] = [];
-    currentFilteredPoints.forEach((point) => {
-      const pt = turf.point([point.lng, point.lat]);
-      const inside = polygons.some((polygon) => {
-        const polyCoords = polygon.coords.map((coord) => {
-          if (Array.isArray(coord)) {
-            return [coord[1], coord[0]];
-          } else if (
-            coord &&
-            typeof coord === "object" &&
-            "lat" in coord &&
-            "lng" in coord
-          ) {
-            return [coord.lng, coord.lat];
-          }
-          return [0, 0];
-        });
-        if (
-          JSON.stringify(polyCoords[0]) !==
-          JSON.stringify(polyCoords[polyCoords.length - 1])
-        ) {
-          polyCoords.push(polyCoords[0]);
-        }
-        const turfPolygon = turf.polygon([polyCoords]);
-        return turf.booleanPointInPolygon(pt, turfPolygon);
-      });
-      if (inside) {
-        removedPoints.push(point);
-      } else {
-        newVisiblePoints.push(point);
+  const handleFilterPoints = useCallback(
+    (exclude: boolean) => {
+      if (polygons.length === 0) {
+        return;
       }
-    });
-    // Record the removed points (for undo) and update current visible points
-    setDeletedPointsStack((prev) => [...prev, removedPoints]);
-    setCurrentFilteredPoints(newVisiblePoints);
-    onFilter(newVisiblePoints);
-    // Clear polygon layers after filtering points
-    if (featureGroupRef.current) {
-      featureGroupRef.current.clearLayers();
-    }
-    setPolygons([]);
-  }, [currentFilteredPoints, polygons, onFilter]);
+      const newVisiblePoints: GPSData[] = [];
+      const removedPoints: GPSData[] = [];
+      currentFilteredPoints.forEach((point) => {
+        const pt = turf.point([point.lng, point.lat]);
+        const inside = polygons.some((polygon) => {
+          const polyCoords = polygon.coords.map((coord) => {
+            if (Array.isArray(coord)) {
+              return [coord[1], coord[0]];
+            } else if (
+              coord &&
+              typeof coord === "object" &&
+              "lat" in coord &&
+              "lng" in coord
+            ) {
+              return [coord.lng, coord.lat];
+            }
+            return [0, 0];
+          });
+          if (
+            JSON.stringify(polyCoords[0]) !==
+            JSON.stringify(polyCoords[polyCoords.length - 1])
+          ) {
+            polyCoords.push(polyCoords[0]);
+          }
+          const turfPolygon = turf.polygon([polyCoords]);
+          return turf.booleanPointInPolygon(pt, turfPolygon);
+        });
+        // If exclude is false, remove points inside the polygon.
+        // If exclude is true, remove points outside the polygon.
+        if ((!exclude && inside) || (exclude && !inside)) {
+          removedPoints.push(point);
+        } else {
+          newVisiblePoints.push(point);
+        }
+      });
+      // Record the removed points (for undo) and update current visible points
+      setDeletedPointsStack((prev) => [...prev, removedPoints]);
+      setCurrentFilteredPoints(newVisiblePoints);
+      onFilter(newVisiblePoints);
+      // Clear polygon layers after filtering points
+      if (featureGroupRef.current) {
+        featureGroupRef.current.clearLayers();
+      }
+      setPolygons([]);
+    },
+    [currentFilteredPoints, polygons, onFilter]
+  );
 
   const handleUndo = useCallback(() => {
     setDeletedPointsStack((oldStack) => {
@@ -206,18 +229,92 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter }) => {
     });
   }, [onFilter]);
 
+  useEffect(() => {
+    if (shapefileBuffer) {
+      shp(shapefileBuffer)
+        .then((geojson: any) => {
+          let allowedPolygons: any[] = [];
+          if (geojson.type === "FeatureCollection") {
+            allowedPolygons = geojson.features.filter(
+              (feature: any) =>
+                feature.geometry &&
+                (feature.geometry.type === "Polygon" ||
+                  feature.geometry.type === "MultiPolygon")
+            );
+          } else if (
+            geojson.type === "Feature" &&
+            geojson.geometry &&
+            (geojson.geometry.type === "Polygon" ||
+              geojson.geometry.type === "MultiPolygon")
+          ) {
+            allowedPolygons = [geojson];
+          }
+          if (allowedPolygons.length === 0) {
+            console.warn("No valid polygon found in shapefile");
+            return;
+          }
+          const newFilteredPoints = validGpsData.filter((point) => {
+            const pt = turf.point([point.lng, point.lat]);
+            return allowedPolygons.some((feature: any) =>
+              turf.booleanPointInPolygon(pt, feature)
+            );
+          });
+          setCurrentFilteredPoints(newFilteredPoints);
+          onFilter(newFilteredPoints);
+        })
+        .catch((err: any) => {
+          console.error("Error parsing shapefile", err);
+        });
+    }
+  }, [shapefileBuffer]);
+
   return (
     <Form.Group className="mt-3 d-flex flex-column gap-2">
       <div>
-        <Form.Label className="d-block mb-0">Filter Data (Optional)</Form.Label>
+        <Form.Label className="d-block mb-0">
+          Filter Data by Polygon (Optional)
+        </Form.Label>
         <Form.Text style={{ fontSize: "12px" }}>
           Use this tool to filter out points based on a polygon. Select the
           polygon function in the top-right corner of the map. Click to draw a
-          polygon. Click "Remove Points" to filter points within the polygon.
+          polygon. Click "Include Points" to keep only the points within the
+          polygon. Click "Remove Points" to remove points outside the polygon.
           Click "Undo" to reverse the last action.
         </Form.Text>
       </div>
+      <div>
+        <Form.Text className="d-block" style={{ fontSize: "12px" }}>
+          Take note:
+          <ul>
+            <li>
+              These points represent the GPS data. If your CSV uses filepaths or
+              the images contained sufficient EXIF metadata then these should
+              correspond to the images in your dataset.
+            </li>
+            <li>
+              If your data is timestamped then these points are an estimate of
+              what your images represent.
+            </li>
+          </ul>
+        </Form.Text>
+      </div>
       <div style={{ height: "600px", width: "100%", position: "relative" }}>
+        <div
+          style={{
+            position: "absolute",
+            top: "10px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            backgroundColor: "rgba(255, 255, 255, 0.8)",
+            padding: "4px 8px",
+            borderRadius: "4px",
+            zIndex: 1000,
+          }}
+        >
+          <p style={{ margin: 0 }} className="text-dark">
+            {`${remainingPoints} of ${initialTotalPoints} points remaining (${percentRemaining}%)`}
+          </p>
+        </div>
         <MapContainer
           style={{ height: "100%", width: "100%" }}
           center={[0, 0]}
@@ -228,6 +325,7 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter }) => {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
+          {shapefileBuffer && <Shapefile buffer={shapefileBuffer} />}
           <FeatureGroup ref={featureGroupRef}>
             <EditControl
               position="topright"
@@ -287,7 +385,10 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter }) => {
         </MapContainer>
       </div>
       <div className="d-flex flex-row gap-2">
-        <Button variant="primary" onClick={handleFilterPoints}>
+        <Button variant="info" onClick={() => handleFilterPoints(true)}>
+          Include Points
+        </Button>
+        <Button variant="danger" onClick={() => handleFilterPoints(false)}>
           Remove Points
         </Button>
         <Button

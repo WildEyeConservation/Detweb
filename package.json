@@ -72,6 +72,7 @@
     "react-router-dom": "^6.26.1",
     "react-select": "^5.8.0",
     "sharp": "^0.33.5",
+    "shpjs": "^6.1.0",
     "unique-names-generator": "^4.7.1"
   },
   "devDependencies": {

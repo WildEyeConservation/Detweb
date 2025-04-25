@@ -69,6 +69,10 @@ export default function NewSurveyModal({
       ) => Promise<void>)
     | null
   >(null);
+  const [model, setModel] = useState<{
+    label: string;
+    value: string;
+  } | null>(null);
 
   const [setFilesUploaded, setTotalFiles] = useUpdateProgress({
     taskId: `Upload files`,
@@ -439,6 +443,28 @@ export default function NewSurveyModal({
                 </Button>
               </>
             )}
+          </Form.Group>
+          <Form.Group>
+            <Form.Label className="mb-0">Model</Form.Label>
+            <Form.Text className="d-block text-muted mt-0 mb-1" style={{ fontSize: 12 }}>
+              Select the model you wish to use to guide annotation.
+            </Form.Text>
+            <Select
+              className="text-black"
+              value={model}
+              options={[
+                {
+                  label: "ScoutBot",
+                  value: "scoutbot",
+                },
+                {
+                  label: "Elephant Detection (nadir)",
+                  value: "elephant-detection-nadir",
+                },
+              ]}
+              onChange={(e) => setModel(e)}
+              placeholder="Select a model"
+            />
           </Form.Group>
           <Form.Group>
             <Form.Label className="mb-0">Files to Upload</Form.Label>
