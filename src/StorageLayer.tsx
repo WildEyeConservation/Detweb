@@ -29,7 +29,7 @@ async function getTileBlob(path: string): Promise<Blob> {
     }
 
     // If not in cache or expired, fetch the image
-    const signedUrl = await getUrl({ path });
+  const signedUrl = await getUrl({ path }, {useAccelerateEndpoint: true});
     const response = await fetch(signedUrl.url.toString(), {
       cache: 'no-store' // Prevent browser from caching the response
     });
