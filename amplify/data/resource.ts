@@ -36,7 +36,7 @@ const schema = a.schema({
     testPresets: a.hasMany('TestPreset', 'projectId'),
     annotationCountsPerCategoryPerSet: a.hasMany('AnnotationCountPerCategoryPerSet', 'projectId'),
     userTestConfigs: a.hasMany('UserTestConfig', 'projectId'),
-  }).authorization(allow => [allow.authenticated()]),
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()]),
     // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
     // allow.group('orgadmin').to(['create', 'update', 'delete', 'read']),
     // allow.custom()]),
@@ -53,7 +53,7 @@ const schema = a.schema({
     testPresets: a.hasMany('TestPresetCategory', 'categoryId'),
     locationAnnotationCounts: a.hasMany('LocationAnnotationCount', 'categoryId'),
     testResultCategoryCounts: a.hasMany('TestResultCategoryCount', 'categoryId')
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
     .secondaryIndexes((index)=>[index('projectId').queryField('categoriesByProjectId')]),
   Image: a.model({
@@ -83,7 +83,7 @@ const schema = a.schema({
     //   leftNeighbours: [ImageNeighbour] @hasMany(indexName:"bySecondNeighbour",fields:["key"]) 
     //   rightNeighbours: [ImageNeighbour] @hasMany(indexName:"byFirstNeighbour",fields:["key"]) 
 
-  }).authorization(allow => [allow.authenticated()]),
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()]),
     // .authorization(allow => [allow.groupDefinedIn('projectId')]),
   ImageFile: a.model({
     projectId: a.id().required(),
@@ -95,7 +95,7 @@ const schema = a.schema({
     type: a.string().required(),
     // Add this line to define the reverse relationship
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()])
     .secondaryIndexes((index) => [index('imageId').queryField('imagesByimageId'),
     index('path').queryField('imagesByPath')]),
   AnnotationSet: a.model({
@@ -110,7 +110,7 @@ const schema = a.schema({
     testPresetLocations: a.hasMany('TestPresetLocation', 'annotationSetId'),
     locationAnnotationCounts: a.hasMany('LocationAnnotationCount', 'annotationSetId'),
     testResults: a.hasMany('TestResult', 'annotationSetId')
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('projectId').queryField('annotationSetsByProjectId')]),
   AnnotationCountPerCategoryPerSet: a.model({
@@ -123,7 +123,7 @@ const schema = a.schema({
     annotationCount: a.integer().default(0)
   })
   .identifier(['annotationSetId', 'categoryId'])
-  .authorization(allow => [allow.authenticated()])
+  .authorization(allow => [allow.authenticated(), allow.publicApiKey()])
   .secondaryIndexes((index) => [index('annotationSetId').queryField('categoryCountsByAnnotationSetId')]),
   Annotation: a.model({
     projectId: a.id().required(),
@@ -140,7 +140,7 @@ const schema = a.schema({
     obscured: a.boolean(),
     objectId: a.id(),
     object: a.belongsTo('Object', 'objectId')
-  }).authorization(allow => [allow.authenticated(), allow.owner()])
+  }).authorization(allow => [allow.authenticated(), allow.owner(), allow.publicApiKey()])
   .secondaryIndexes((index)=>[
     index('setId').queryField('annotationsByAnnotationSetId'),
     index('imageId').sortKeys(['setId']).queryField('annotationsByImageIdAndSetId'),
@@ -158,7 +158,7 @@ const schema = a.schema({
     count: a.integer().default(0)
   })
   .identifier(['locationId', 'categoryId', 'annotationSetId'])
-  .authorization(allow => [allow.authenticated()])
+  .authorization(allow => [allow.authenticated(), allow.publicApiKey()])
   .secondaryIndexes((index) => [index('locationId').sortKeys(['annotationSetId']).queryField('categoryCountsByLocationIdAndAnnotationSetId')]),
   Object: a.model({
     projectId: a.id().required(),
@@ -166,7 +166,7 @@ const schema = a.schema({
     annotations: a.hasMany('Annotation', 'objectId'),
     categoryId: a.id().required(),
     category: a.belongsTo('Category', 'categoryId')
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('categoryId').queryField('objectsByCategoryId')]),
   Location: a.model({
@@ -187,7 +187,7 @@ const schema = a.schema({
     testPresets: a.hasMany('TestPresetLocation', 'locationId'),
     annotationCounts: a.hasMany('LocationAnnotationCount', 'locationId'),
     testResults: a.hasMany('TestResult', 'locationId')
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
 
     .secondaryIndexes((index) => [index('imageId').sortKeys(['confidence']).queryField('locationsByImageKey'), 
@@ -206,7 +206,7 @@ const schema = a.schema({
     annotationSetId: a.id().required(),
     annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
     createdAt: a.string().required()
-  }).authorization(allow => [allow.authenticated(), allow.owner()])
+  }).authorization(allow => [allow.authenticated(), allow.owner(), allow.publicApiKey()])
   .secondaryIndexes((index)=>[
     index('locationId').queryField('observationsByLocationId'), 
     index('annotationSetId').sortKeys(['createdAt']).queryField('observationsByAnnotationSetId'),
@@ -220,7 +220,7 @@ const schema = a.schema({
     memberships: a.hasMany('LocationSetMembership', 'locationSetId'),
     locationCount: a.integer().default(0),
     tasks: a.hasMany('TasksOnAnnotationSet', 'locationSetId')
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()])
     // .authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('projectId').queryField('locationSetsByProjectId')]),
   LocationSetMembership: a.model({
@@ -228,13 +228,13 @@ const schema = a.schema({
     locationSetId: a.id().required(),
     location: a.belongsTo('Location', 'locationId'),
     locationSet: a.belongsTo('LocationSet', 'locationSetId')
-  }).authorization(allow => [allow.authenticated()]),
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()]),
   ImageSetMembership: a.model({
     imageId: a.id().required(),
     imageSetId: a.id().required(),
     image: a.belongsTo('Image', 'imageId'),
     imageSet: a.belongsTo('ImageSet', 'imageSetId'),
-  }).authorization(allow=>[allow.authenticated()])
+  }).authorization(allow=>[allow.authenticated(), allow.publicApiKey()])
   .secondaryIndexes((index)=>[index('imageSetId').queryField('imageSetMembershipsByImageSetId')]),
   ImageSet: a.model({
     projectId: a.id().required(),
@@ -242,7 +242,7 @@ const schema = a.schema({
     name: a.string().required(),
     images: a.hasMany('ImageSetMembership', 'imageSetId'),
     imageCount: a.integer().default(0)
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()])
     //.authorization(allow => [allow.groupDefinedIn('projectId')])
   .secondaryIndexes((index)=>[index('projectId').queryField('imageSetsByProjectId')]),
   UserProjectMembership: a.model({
@@ -254,7 +254,7 @@ const schema = a.schema({
     queue: a.belongsTo('Queue', 'queueId'),
     backupQueueId: a.id(),
     backupQueue: a.belongsTo('Queue', 'backupQueueId')
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()])
     //.authorization(allow => [allow.groupDefinedIn('projectId'), allow.group('orgadmin')])
   .secondaryIndexes((index)=>[index('projectId').queryField('userProjectMembershipsByProjectId'),
     index('userId').queryField('userProjectMembershipsByUserId'),
@@ -281,7 +281,7 @@ const schema = a.schema({
     image2Id: a.id().required(),
     image2: a.belongsTo('Image', 'image2Id'),
     homography: a.float().array()
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()])
   .identifier(['image1Id', 'image2Id'])
   .secondaryIndexes((index)=>[index('image1Id').queryField('imageNeighboursByImage1key'),
     index('image2Id').queryField('imageNeighboursByImage2key')
@@ -295,7 +295,7 @@ const schema = a.schema({
     backupUsers: a.hasMany('UserProjectMembership', 'backupQueueId'),
     url: a.url(),
     zoom: a.integer(),
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()])
     //.authorization(allow => [allow.groupDefinedIn('projectId')])
     .secondaryIndexes((index) => [index('projectId').queryField('queuesByProjectId')]),
   UserStats: a.model({
@@ -319,7 +319,7 @@ const schema = a.schema({
     annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
     locationSetId: a.id().required(),
     locationSet: a.belongsTo('LocationSet', 'locationSetId')
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()])
   .secondaryIndexes((index) => [
     index('annotationSetId').queryField('locationSetsByAnnotationSetId'),
   ]),
@@ -333,7 +333,7 @@ const schema = a.schema({
     projectId: a.id(),
     project: a.belongsTo('Project', 'projectId'),
     testPresetUsers: a.hasMany('TestPresetUser', 'userConfigId')
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()])
   .secondaryIndexes((index) => [index('userId').queryField('testConfigByUserId')]),
   TestPresetUser: a.model({
     testPresetId: a.id().required(),
@@ -341,7 +341,7 @@ const schema = a.schema({
     userConfigId: a.id().required(),
     userConfig: a.belongsTo('UserTestConfig', 'userConfigId')
   })
-  .authorization(allow => [allow.authenticated()])
+  .authorization(allow => [allow.authenticated(), allow.publicApiKey()  ])
   .identifier(['testPresetId', 'userConfigId'])
   .secondaryIndexes((index) => [
     index('testPresetId').queryField('usersByTestPresetId'),
@@ -357,7 +357,7 @@ const schema = a.schema({
     users: a.hasMany('TestPresetUser', 'testPresetId'),
     testResults: a.hasMany('TestResult', 'testPresetId')
   })
-  .authorization(allow => [allow.authenticated()])
+  .authorization(allow => [allow.authenticated(), allow.publicApiKey()])
   .secondaryIndexes((index) => [
     index('projectId').queryField('testPresetsByProjectId')
   ]),
@@ -367,7 +367,7 @@ const schema = a.schema({
     categoryId: a.id().required(),
     category: a.belongsTo('Category', 'categoryId')
   })
-  .authorization(allow => [allow.authenticated()])
+  .authorization(allow => [allow.authenticated(), allow.publicApiKey()])
   .identifier(['testPresetId', 'categoryId'])
   .secondaryIndexes((index) => [
     index('testPresetId').queryField('categoriesByTestPresetId'),
@@ -381,7 +381,7 @@ const schema = a.schema({
     annotationSetId: a.id().required(),
     annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId')
   })
-  .authorization(allow => [allow.authenticated()])
+  .authorization(allow => [allow.authenticated(), allow.publicApiKey()])
   .identifier(['testPresetId', 'locationId', 'annotationSetId'])
   .secondaryIndexes((index) => [
     index('testPresetId').queryField('locationsByTestPresetId'),
@@ -401,7 +401,7 @@ const schema = a.schema({
     passedOnTotal: a.boolean().required(),
     categoryCounts: a.hasMany('TestResultCategoryCount', 'testResultId')
   })
-  .authorization(allow => [allow.authenticated()])
+  .authorization(allow => [allow.authenticated(), allow.publicApiKey()])
   .secondaryIndexes((index) => [
     index('userId').queryField('testResultsByUserId'),
     index('testPresetId').queryField('testResultsByTestPresetId'),
@@ -414,7 +414,7 @@ const schema = a.schema({
     userCount: a.integer().required(),
     testCount: a.integer().required()
   })
-  .authorization(allow => [allow.authenticated()])
+  .authorization(allow => [allow.authenticated(), allow.publicApiKey()])
   .identifier(['testResultId', 'categoryId'])
   .secondaryIndexes((index) => [
     index('testResultId').queryField('categoryCountsByTestResultId'),
@@ -423,29 +423,29 @@ const schema = a.schema({
   addUserToGroup: a.mutation().arguments({
       userId:a.string().required(), 
       groupName:a.string().required()
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()])
   .handler(a.handler.function(addUserToGroup))
   .returns(a.json()),
   removeUserFromGroup: a.mutation().arguments({
     userId:a.string().required(), 
     groupName:a.string().required()
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()])
   .handler(a.handler.function(addUserToGroup))
   .returns(a.json()),
   createGroup: a.mutation().arguments({
     groupName: a.string().required()
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()])
   .handler(a.handler.function(createGroup))
   .returns(a.json()),
   listUsers: a.query().arguments({
     nextToken: a.string()
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()])
   .handler(a.handler.function(listUsers))
   .returns(a.customType({Users: a.ref('UserType').array(), NextToken: a.string()})),
   listGroupsForUser: a.query().arguments({
     userId: a.string().required(),
     nextToken: a.string()
-  }).authorization(allow => [allow.authenticated()])
+  }).authorization(allow => [allow.authenticated(), allow.publicApiKey()])
   .handler(a.handler.function(listGroupsForUser))
     .returns(a.json()),
   // Message publish mutation
@@ -474,13 +474,13 @@ const schema = a.schema({
       entry: './receive.js'
     })) 
     // authorization rules as to who can subscribe to the data
-    .authorization(allow => [allow.authenticated()]),
+    .authorization(allow => [allow.authenticated(), allow.publicApiKey()]),
   processImages: a.mutation().arguments({
       s3key: a.string().required(),
       model: a.string().required(),
       threshold: a.float(),
   }).handler(a.handler.function(processImages)).returns(a.string())
-  .authorization(allow => [allow.authenticated()]),
+  .authorization(allow => [allow.authenticated(), allow.publicApiKey()]),
   CountType: a.customType({
     count: a.integer().required(),
   }),
@@ -490,7 +490,7 @@ const schema = a.schema({
       nextToken: a.string()
     })
     .returns(a.customType({count: a.integer(), nextToken: a.string()}))
-    .authorization(allow => [allow.authenticated()])
+    .authorization(allow => [allow.authenticated(), allow.publicApiKey()])
     .handler(a.handler.custom({
       entry: './getImageCounts.js',
       dataSource: a.ref('ImageSetMembership'),
@@ -500,7 +500,7 @@ const schema = a.schema({
       annotationSetId: a.string().required()
     })
     .returns(a.json())
-    .authorization(allow => [allow.authenticated()])
+    .authorization(allow => [allow.authenticated(), allow.publicApiKey()])
     .handler(a.handler.function(getAnnotationCounts)),
   //.authorization(allow => [allow.authenticated()])
   
@@ -519,6 +519,7 @@ const schema = a.schema({
   //     level: a.float(),
   //   })
 }).authorization(allow => [allow.resource(getAnnotationCounts),
+  allow.publicApiKey(),
   allow.resource(processImages),
   allow.resource(updateUserStats),
   allow.resource(updateAnnotationCounts)])
