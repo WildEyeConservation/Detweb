@@ -20,6 +20,7 @@ import { Policy, PolicyStatement, Effect } from "aws-cdk-lib/aws-iam";
 import { StartingPosition, EventSourceMapping } from "aws-cdk-lib/aws-lambda";
 import { Repository } from "aws-cdk-lib/aws-ecr";
 import { updateAnnotationCounts } from "./functions/updateAnnotationCounts/resource";
+import * as s3 from 'aws-cdk-lib/aws-s3';
 
 const backend=defineBackend({
   auth,
@@ -34,6 +35,14 @@ const backend=defineBackend({
   updateUserStats,
   updateAnnotationCounts
 });
+
+
+
+const s3Bucket = backend.outputBucket.resources.bucket;
+const cfnBucket = s3Bucket.node.defaultChild as s3.CfnBucket;
+cfnBucket.accelerateConfiguration = {
+  accelerationStatus: "Enabled" // 'Suspended' if you want to disable transfer acceleration
+}
 
 const observationTable = backend.data.resources.tables["Observation"];
 const annotationTable = backend.data.resources.tables["Annotation"];
