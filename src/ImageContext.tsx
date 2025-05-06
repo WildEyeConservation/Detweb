@@ -152,7 +152,7 @@ export function ImageContextFromHook({ hook, locationId, image, children, second
                 return acc;
             }, false)
             if (!insidePreviousImage) {
-                return hook.create({...annoStripped, id: proposedObjectId})
+                return hook.create({...annoStripped})
             }
             else {
                 return hook.create({ ...annoStripped, objectId: annoStripped.objectId || proposedObjectId})

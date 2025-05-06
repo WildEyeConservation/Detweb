@@ -7,7 +7,7 @@ FROM pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
 #wget does not exist in this image and my curl equivalent does not appear to work, so I am falling back to the alternate method.
 #RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/$distro/$arch/3bf863cc.pub
 #RUN pip install --upgrade pip
-
+ENV TORCH_HOME=/workspace
 #RUN adduser myuser
 #USER myuser
 #WORKDIR /home/myuser
