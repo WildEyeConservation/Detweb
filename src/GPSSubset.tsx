@@ -306,6 +306,7 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
             left: "50%",
             transform: "translateX(-50%)",
             backgroundColor: "rgba(255, 255, 255, 0.8)",
+            border: "2px solid rgba(0, 0, 0, 0.28)",
             padding: "4px 8px",
             borderRadius: "4px",
             zIndex: 1000,
@@ -383,21 +384,33 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
             </CircleMarker>
           ))}
         </MapContainer>
-      </div>
-      <div className="d-flex flex-row gap-2">
-        <Button variant="info" onClick={() => handleFilterPoints(true)}>
-          Include Points
-        </Button>
-        <Button variant="danger" onClick={() => handleFilterPoints(false)}>
-          Remove Points
-        </Button>
-        <Button
-          disabled={deletedPointsStack.length === 0}
-          variant="outline-primary"
-          onClick={handleUndo}
+        <div
+          className="d-flex flex-row gap-2 p-2"
+          style={{
+            position: "absolute",
+            bottom: "10px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 1000,
+            backgroundColor: "rgba(255,255,255,0.8)",
+            border: "2px solid rgba(0, 0, 0, 0.28)",
+            borderRadius: "4px",
+          }}
         >
-          Undo
-        </Button>
+          <Button variant="info" onClick={() => handleFilterPoints(true)}>
+            Include Points
+          </Button>
+          <Button variant="danger" onClick={() => handleFilterPoints(false)}>
+            Remove Points
+          </Button>
+          <Button
+            disabled={deletedPointsStack.length === 0}
+            variant="outline-primary"
+            onClick={handleUndo}
+          >
+            Undo
+          </Button>
+        </div>
       </div>
     </Form.Group>
   );

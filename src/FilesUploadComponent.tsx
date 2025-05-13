@@ -15,6 +15,7 @@ import Papa from "papaparse";
 import GPSSubset from "./GPSSubset";
 import { parseGPX } from "@we-gold/gpxjs";
 import FileInput from "./FileInput";
+import { Schema } from "../amplify/data/resource.ts";
 
 interface FilesUploadComponentProps {
   show: boolean;
@@ -26,7 +27,9 @@ interface FilesUploadComponentProps {
 interface FilesUploadBaseProps {
   project?: { id: string; name: string };
   setOnSubmit?: React.Dispatch<
-    React.SetStateAction<((projectId: string) => Promise<void>) | null>
+    React.SetStateAction<
+      ((projectId: string) => Promise<Schema["Image"]["type"][]>) | null
+    >
   >;
 }
 
@@ -298,12 +301,12 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
       onFinished?: () => void
     ) => {
       if (!projectId) {
-        console.error("Project is required");
+        alert("Project is required");
         return;
       }
 
       if (!csvData) {
-        console.error("GPS metadata is required");
+        alert("GPS metadata is required");
         return;
       }
 
@@ -343,6 +346,7 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
         } else {
           // csv/gpx file
           if (associateByTimestamp) {
+            console.log("123 associateByTimestamp");
             const csvRow = csvData.data.find(
               (row) => row.timestamp === exifMeta.timestamp
             );
@@ -395,12 +399,16 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
           } else {
             // Associate by filepath
             const csvRow = csvData.data.find(
-              (row) => row.filepath === file.webkitRelativePath
+              (row) => row.filepath?.toLowerCase() === file.webkitRelativePath.toLowerCase()
             );
             return csvRow !== undefined;
           }
         }
       });
+
+      const result: Schema["Image"]["type"][] = [];
+
+      console.log("123 gpsFilteredImageFiles", gpsFilteredImageFiles);
 
       const uploadTasks = gpsFilteredImageFiles.map((file) =>
         limitConnections(async () => {
@@ -466,7 +474,7 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
             }
           }
 
-          await client.models.Image.create({
+          const { data: image } = await client.models.Image.create({
             projectId: projectId,
             width: exifmeta.width,
             height: exifmeta.height,
@@ -476,21 +484,25 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
             latitude: gpsData?.lat,
             longitude: gpsData?.lng,
             altitude_agl: gpsData?.alt,
-          }).then(async ({ data: image }) => {
-            if (!image) {
-              throw new Error("Image not created");
-            }
-            await client.models.ImageSetMembership.create({
-              imageId: image.id,
-              imageSetId: imageSetId,
-            });
-            await client.models.ImageFile.create({
-              projectId: projectId,
-              imageId: image.id,
-              key: file.webkitRelativePath,
-              path: file.webkitRelativePath,
-              type: file.type,
-            });
+          });
+
+          if (!image) {
+            throw new Error("Image not created");
+          }
+
+          result.push(image);
+
+          await client.models.ImageSetMembership.create({
+            imageId: image.id,
+            imageSetId: imageSetId,
+          });
+
+          await client.models.ImageFile.create({
+            projectId: projectId,
+            imageId: image.id,
+            key: file.webkitRelativePath,
+            path: file.webkitRelativePath,
+            type: file.type,
           });
         })
       );
@@ -509,8 +521,10 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
       if (onFinished) {
         onFinished();
       }
+
+      return { images: result, imageSetId };
     },
-    [upload, filteredImageFiles, name, client, filteredImageSize]
+    [upload, filteredImageFiles, name, client, filteredImageSize, csvData]
   );
 
   // Register the submit handler with the parent form if provided
@@ -594,6 +608,14 @@ export function FileUploadCore({ setOnSubmit }: FilesUploadBaseProps) {
       transformFile(file);
     }
   }, [file, associateByTimestamp]);
+
+
+  // TODO: Remove after testing
+  useEffect(() => {
+    if (csvData) {
+      console.log("csvData", csvData);
+    }
+  }, [csvData]);
 
   // Update the time range for a given day.
   const updateTimeRange = (day: number, start: string, end: string) => {
@@ -859,7 +881,7 @@ export default function FilesUploadComponent({
   };
 
   return (
-    <Modal show={show} onHide={handleClose}>
+    <Modal show={show} onHide={handleClose} size="xl">
       <Modal.Header closeButton>
         <Modal.Title>Add files: {project?.name}</Modal.Title>
       </Modal.Header>

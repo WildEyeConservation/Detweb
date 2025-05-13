@@ -162,7 +162,9 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
       >
         {(!belongsToOrganization &&
           location.pathname === "/SSRegisterOrganization") ||
-        belongsToOrganization ? (
+        belongsToOrganization ||
+        (cognitoGroups.includes("sysadmin") &&
+          location.pathname === "/SSAdmin") ? (
           <Outlet />
         ) : (
           <Card

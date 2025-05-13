@@ -143,6 +143,7 @@ const schema = a
         ),
         testResults: a.hasMany('TestResult', 'annotationSetId'),
         categories: a.hasMany('Category', 'annotationSetId'),
+        register: a.boolean().default(false),
       })
       .authorization((allow) => [allow.authenticated()])
       // .authorization(allow => [allow.groupDefinedIn('projectId')])

@@ -10,6 +10,14 @@ import { fetchAllPaginatedResults } from "../utils";
 import { FilesUploadForm, formatFileSize } from "../FilesUploadComponent";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUpdateProgress } from "../useUpdateProgress";
+import { Schema } from "../../amplify/data/resource";
+import {
+  SendMessageBatchCommand,
+  SendMessageCommand,
+} from "@aws-sdk/client-sqs";
+import { S3Client, HeadObjectCommand } from "@aws-sdk/client-s3";
+import pLimit from "p-limit";
+import ImageMaskEditor from "../ImageMaskEditor";
 
 export default function NewSurveyModal({
   show,
@@ -22,10 +30,11 @@ export default function NewSurveyModal({
   projects: string[];
   setDisabledSurveys: React.Dispatch<React.SetStateAction<string[]>>;
 }) {
-  const { myOrganizationHook, user } = useContext(UserContext)!;
-  const { client } = useContext(GlobalContext)!;
+  const { myOrganizationHook, user, getSqsClient } = useContext(UserContext)!;
+  const { client, backend } = useContext(GlobalContext)!;
   const { users: allUsers } = useUsers();
   const queryClient = useQueryClient();
+  const limit = pLimit(10);
 
   const [name, setName] = useState("");
   const [organization, setOrganization] = useState<{
@@ -66,13 +75,17 @@ export default function NewSurveyModal({
         setStepsCompleted: (stepsCompleted: number) => void,
         setTotalSteps: (totalSteps: number) => void,
         onFinished?: () => void
-      ) => Promise<void>)
+      ) => Promise<{ images: Schema["Image"]["type"][]; imageSetId: string }>)
     | null
   >(null);
   const [model, setModel] = useState<{
     label: string;
     value: string;
-  } | null>(null);
+  }>({
+    label: "ScoutBot",
+    value: "scoutbot",
+  });
+  const [masks, setMasks] = useState<number[][][]>([]);
 
   const [setFilesUploaded, setTotalFiles] = useUpdateProgress({
     taskId: `Upload files`,
@@ -80,6 +93,85 @@ export default function NewSurveyModal({
     indeterminateTaskName: `Preparing files`,
     stepFormatter: formatFileSize,
   });
+
+  const [setImagesCompleted, setTotalImages] = useUpdateProgress({
+    taskId: `Create ${model.label} task`,
+    indeterminateTaskName: `Loading images`,
+    determinateTaskName: "Processing images",
+    stepFormatter: (x: number) => `${x} images`,
+  });
+
+  // Helper function to wait for heatmap completion before proceeding with point finder tasks
+  const waitForHeatmapCompletion = async (
+    images: Schema["Image"]["type"][]
+  ): Promise<void> => {
+    await Promise.all(
+      images.map(async (image) => {
+        const heatmapFilePath = image.originalPath!.replace(
+          "images",
+          "heatmaps"
+        );
+        let heatmapAvailable = false;
+        const s3Client = new S3Client({});
+        while (!heatmapAvailable) {
+          try {
+            await s3Client.send(
+              new HeadObjectCommand({
+                Bucket: backend.storage.buckets[0].bucket_name,
+                Key: heatmapFilePath,
+              })
+            );
+            heatmapAvailable = true;
+          } catch (err) {
+            // File not available yet, wait 2 seconds
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+          }
+        }
+      })
+    );
+  };
+
+  async function handlePair(
+    image1: Schema["Image"]["type"],
+    image2: Schema["Image"]["type"]
+  ) {
+    console.log(`Processing pair ${image1.id} and ${image2.id}`);
+    const { data: existingNeighbour } = await client.models.ImageNeighbour.get(
+      {
+        image1Id: image1.id,
+        image2Id: image2.id,
+      },
+      { selectionSet: ["homography"] }
+    );
+
+    if (existingNeighbour?.homography) {
+      console.log(
+        `Homography already exists for pair ${image1.id} and ${image2.id}`
+      );
+      // setMessagePreppingStepsCompleted((s) => s + 1);
+      return null; // Return null for filtered pairs
+    }
+
+    if (!existingNeighbour) {
+      await client.models.ImageNeighbour.create({
+        image1Id: image1.id,
+        image2Id: image2.id,
+      });
+    }
+    // setMessagePreppingStepsCompleted((s) => s + 1);
+    // Return the message instead of sending it immediately
+    return {
+      Id: `${image1.id}-${image2.id}`, // Required unique ID for batch entries
+      MessageBody: JSON.stringify({
+        inputBucket: backend.custom.inputsBucket,
+        image1Id: image1.id,
+        image2Id: image2.id,
+        keys: [image1.originalPath, image2.originalPath],
+        action: "register",
+        masks: masks.length > 0 ? masks : undefined,
+      }),
+    };
+  }
 
   async function handleSave() {
     if (!name || !organization) {
@@ -181,7 +273,8 @@ export default function NewSurveyModal({
 
       if (uploadSubmitFn) {
         setDisabledSurveys((ds) => [...ds, project.id]);
-        await uploadSubmitFn(
+
+        const { images, imageSetId } = await uploadSubmitFn(
           project.id,
           setFilesUploaded,
           setTotalFiles,
@@ -189,9 +282,149 @@ export default function NewSurveyModal({
             setDisabledSurveys((ds) => ds.filter((id) => id !== project.id));
           }
         );
+
+        const { data: locationSet } = await client.models.LocationSet.create({
+          name: project.name + `_${model.label}`,
+          projectId: project.id,
+        });
+
+        if (locationSet) {
+          // #region compute image registrations
+          // const imageCount =
+          //   (
+          //     await client.models.ImageSet.get(
+          //       { id: imageSetId },
+          //       { selectionSet: ["imageCount"] }
+          //     )
+          //   )?.data?.imageCount ?? 0;
+          // setMetaDataLoadingTotalSteps(imageCount);
+
+          images.sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
+          // setMessagePreppingTotalSteps(images.length - 1);
+          // setMessagePreppingStepsCompleted(0);
+          const pairPromises = [];
+          for (let i = 0; i < images.length - 1; i++) {
+            const image1 = images[i];
+            const image2 = images[i + 1];
+            if ((image2.timestamp ?? 0) - (image1.timestamp ?? 0) < 5) {
+              pairPromises.push(handlePair(image1, image2));
+            } else {
+              console.log(
+                `Skipping pair ${image1.id} and ${image2.id} because the time difference is greater than 5 seconds`
+              );
+              // setMessagePreppingStepsCompleted((s) => s + 1);
+            }
+          }
+
+          const messages = (await Promise.all(pairPromises)).filter(
+            (msg): msg is NonNullable<typeof msg> => msg !== null
+          );
+
+          // setRegistrationTotalSteps(messages.length);
+          // setRegistrationStepsCompleted(0);
+          // Send messages in batches of 10
+          const sqsClient = await getSqsClient();
+          for (let i = 0; i < messages.length; i += 10) {
+            const batch = messages.slice(i, i + 10);
+            await limit(() =>
+              sqsClient.send(
+                new SendMessageBatchCommand({
+                  QueueUrl: backend.custom.lightglueTaskQueueUrl,
+                  Entries: batch,
+                })
+              )
+            );
+            // setRegistrationStepsCompleted((s) => s + batch.length);
+          }
+
+          // #endregion
+
+          let i = 0;
+          
+          // kick off scoutbot or elephant detection tasks
+          switch (model.value) {
+            case "scoutbot":
+              const chunkSize = 4;
+              for (let i = 0; i < images.length; i += chunkSize) {
+                const chunk = images.slice(i, i + chunkSize);
+                const sqsClient = await getSqsClient();
+                await sqsClient.send(
+                  new SendMessageCommand({
+                    QueueUrl: backend.custom.scoutbotTaskQueueUrl,
+                    MessageBody: JSON.stringify({
+                      images: chunk.map((image) => ({
+                        imageId: image.id,
+                        key: "images/" + image.originalPath,
+                      })),
+                      projectId: project.id,
+                      bucket: backend.storage.buckets[1].bucket_name,
+                      setId: locationSet.id,
+                    }),
+                  })
+                );
+                setImagesCompleted((s: number) => s + chunk.length);
+                i++;
+              }
+              break;
+            case "elephant-detection-nadir":
+              // heatmap generation
+              const heatmapTasks = images.map(async (image) => {
+                const { data: imageFiles } =
+                  await client.models.ImageFile.imagesByimageId({
+                    imageId: image.id,
+                  });
+                const path = imageFiles.find(
+                  (imageFile) => imageFile.type == "image/jpeg"
+                )?.path;
+                if (path) {
+                  await client.mutations.processImages({
+                    s3key: path,
+                    model: "heatmap",
+                  });
+                } else {
+                  console.log(
+                    `No image file found for image ${image.id}. Skipping`
+                  );
+                }
+              });
+              await Promise.all(heatmapTasks);
+
+              // Wait until all heatmaps are processed before proceeding
+              // This polls the S3 bucket until the heatmaps are available
+              // A better approach would be to kick of the point finder task from the processImages function
+              await waitForHeatmapCompletion(images);
+
+              // point finder
+              const pointFinderTasks = images.map(async (image) => {
+                const key = image.originalPath!.replace("images", "heatmaps");
+                const sqsClient = await getSqsClient();
+                await sqsClient.send(
+                  new SendMessageCommand({
+                    QueueUrl: backend.custom.pointFinderTaskQueueUrl,
+                    MessageBody: JSON.stringify({
+                      imageId: image.id,
+                      projectId: project.id,
+                      key: "heatmaps/" + key + ".h5",
+                      width: 1024,
+                      height: 1024,
+                      threshold: 1 - Math.pow(10, -5),
+                      bucket: backend.storage.buckets[0].bucket_name,
+                      setId: locationSet.id,
+                    }),
+                  })
+                );
+                setImagesCompleted((s: number) => s + 1);
+                i++;
+              });
+              await Promise.all(pointFinderTasks);
+              break;
+          }
+
+          setTotalImages(i)
+        }
       }
     } else {
-      alert("Failed to create project");
+      alert("Failed to create survey");
     }
   }
 
@@ -259,6 +492,7 @@ export default function NewSurveyModal({
       setAddPermissionExceptions(false);
       setPermissionExceptions([]);
       setUploadSubmitFn(null);
+      setMasks([]);
     }
   }, [show]);
 
@@ -309,7 +543,7 @@ export default function NewSurveyModal({
               <Select
                 className="text-black"
                 value={globalAnnotationAccess}
-                placeholder="Default"
+                placeholder="Default (Yes)"
                 options={[
                   { value: "Yes", label: "Yes" },
                   { value: "No", label: "No" },
@@ -446,7 +680,10 @@ export default function NewSurveyModal({
           </Form.Group>
           <Form.Group>
             <Form.Label className="mb-0">Model</Form.Label>
-            <Form.Text className="d-block text-muted mt-0 mb-1" style={{ fontSize: 12 }}>
+            <Form.Text
+              className="d-block text-muted mt-0 mb-1"
+              style={{ fontSize: 12 }}
+            >
               Select the model you wish to use to guide annotation.
             </Form.Text>
             <Select
@@ -474,6 +711,7 @@ export default function NewSurveyModal({
             </p>
             <FilesUploadForm setOnSubmit={setUploadSubmitFn} />
           </Form.Group>
+          <ImageMaskEditor masks={masks} setMasks={setMasks} />
         </Form>
       </Modal.Body>
       <Modal.Footer>

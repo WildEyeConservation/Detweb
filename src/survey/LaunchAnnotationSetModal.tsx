@@ -48,12 +48,15 @@ export default function LaunchAnnotationSetModal({
   const [lowerLimit, setLowerLimit] = useState<number>(0);
   const [upperLimit, setUpperLimit] = useState<number>(1);
   const [hidden, setHidden] = useState<boolean>(false);
-  const [handleCreateTask, setHandleCreateTask] = useState<
-    (args: {
-      setLocationsCompleted: (steps: number) => void;
-      setTotalLocations: (steps: number) => void;
-    }) => Promise<string>
-  >(null);
+  const [handleCreateTask, setHandleCreateTask] =
+    useState<
+      (args: {
+        setLocationsCompleted: (steps: number) => void;
+        setTotalLocations: (steps: number) => void;
+      }) => Promise<string>
+    >(null);
+  const [hasStandardOptions, setHasStandardOptions] = useState<boolean>(true);
+  const [hasAdvancedOptions, setHasAdvancedOptions] = useState<boolean>(true);
   const [handleLaunchRegistration, setHandleLaunchRegistration] = useState<
     ((url: string) => Promise<void>) | null
   >(null);
@@ -147,7 +150,7 @@ export default function LaunchAnnotationSetModal({
           setTotalSteps: setTotalLocations,
         });
       }
-      
+
       queryClient.invalidateQueries({
         queryKey: ["UserProjectMembership"],
       });
@@ -156,7 +159,43 @@ export default function LaunchAnnotationSetModal({
   }
 
   async function createModelTask() {
-    alert("create model task");
+    onClose();
+    setDisabledSurveys((ds) => [...ds, project.id]);
+
+    const { data: locationSets } =
+      await client.models.LocationSet.locationSetsByProjectId({
+        projectId: project.id,
+      });
+
+    const modelGuidedLocationSet = locationSets.find(
+      (ls) =>
+        ls.name.toLowerCase().includes("scoutbot") ||
+        ls.name.toLowerCase().includes("elephant-detection-nadir")
+    );
+
+    if (!modelGuidedLocationSet) {
+      alert("No model guided location set found");
+      return;
+    }
+
+    //create queue
+    const queueUrl = await createQueue("Model Guided", false, false);
+
+    //push messages to queue
+    if (queueUrl) {
+      await launchTask({
+        selectedTasks: [modelGuidedLocationSet.id],
+        queueUrl: queueUrl,
+        secondaryQueueUrl: null,
+        setStepsCompleted: setLoadingLocations,
+        setTotalSteps: setTotalLocations,
+      });
+    }
+
+    queryClient.invalidateQueries({
+      queryKey: ["UserProjectMembership"],
+    });
+    setDisabledSurveys((ds) => ds.filter((id) => id !== project.id));
   }
 
   async function createAnnotationTask() {
@@ -164,13 +203,25 @@ export default function LaunchAnnotationSetModal({
   }
 
   async function createRegistrationTask() {
-    if (handleLaunchRegistration) {
-      const queueUrl = await createQueue("Registration", false, true);
+    // Legacy registration task
+    // if (handleLaunchRegistration) {
+    //   const queueUrl = await createQueue("Registration", false, true);
+    //   if (queueUrl) {
+    //     await handleLaunchRegistration(queueUrl);
+    //   }
+    // }
 
-      if (queueUrl) {
-        await handleLaunchRegistration(queueUrl);
-      }
-    }
+    onClose();
+
+    // Display registration job
+    await client.models.AnnotationSet.update({
+      id: annotationSet.id,
+      register: true,
+    });
+
+    queryClient.invalidateQueries({
+      queryKey: ["UserProjectMembership"],
+    });
   }
 
   async function handleSubmit() {
@@ -191,10 +242,14 @@ export default function LaunchAnnotationSetModal({
   }
 
   return (
-    <Modal show={show} onHide={() => {
-      onClose();
-      setTaskType("model");
-    }} size="lg">
+    <Modal
+      show={show}
+      onHide={() => {
+        onClose();
+        setTaskType("model");
+      }}
+      size="lg"
+    >
       <Modal.Header closeButton>
         <Modal.Title>Launch for Manual Annotation</Modal.Title>
       </Modal.Header>
@@ -205,52 +260,59 @@ export default function LaunchAnnotationSetModal({
               switch (tab) {
                 case 0:
                   setTaskType("model");
+                  setHasAdvancedOptions(true);
                   break;
                 case 1:
                   setTaskType("tiled");
+                  setHasAdvancedOptions(true);
                   break;
                 case 2:
                   setTaskType("registration");
+                  setHasAdvancedOptions(false);
                   break;
               }
             }}
             sharedChild={
-              <div className="d-flex flex-column gap-3">
-                <StandardOptions
-                  imageSets={imageSets}
-                  selectedImageSets={selectedImageSets}
-                  setSelectedImageSets={setSelectedImageSets}
-                  batchSize={batchSize}
-                  setBatchSize={setBatchSize}
-                />
-                {taskType !== "registration" && (
-                  <CreateTask
-                    name={annotationSet.name}
-                    taskType={taskType}
-                    imageSets={selectedImageSets}
-                    labels={annotationSet.categories}
-                    setHandleCreateTask={setHandleCreateTask}
-                    projectId={project.id}
-                  />
+              <div className="">
+                {hasStandardOptions && (
+                  <div className="d-flex flex-column gap-3 mt-2">
+                    <ImageSetDropdown
+                      imageSets={imageSets}
+                      selectedImageSets={selectedImageSets}
+                      setSelectedImageSets={setSelectedImageSets}
+                      hideIfOneImageSet
+                    />
+                    <Form.Group>
+                      <Form.Label className="mb-0">Batch Size</Form.Label>
+                      <span
+                        className="text-muted d-block mb-1"
+                        style={{ fontSize: "12px" }}
+                      >
+                        The number of annotation jobs a user can pick up at a
+                        time.
+                      </span>
+                      <Form.Control
+                        type="number"
+                        value={batchSize}
+                        onChange={(e) => setBatchSize(Number(e.target.value))}
+                      />
+                    </Form.Group>
+                  </div>
                 )}
-              </div>
-            }
-          >
-            <Tab label="Model Guided">
-              <></>
-            </Tab>
-            <Tab label="Tiled Annotation">
-              <div className="d-flex flex-column gap-3 mt-3">
-                <Form.Group>
-                  <Form.Switch
-                    label="Show Advanced Options"
-                    checked={showAdvancedOptions}
-                    onChange={() =>
-                      setShowAdvancedOptions(!showAdvancedOptions)
-                    }
-                  />
-                </Form.Group>
-                {showAdvancedOptions && (
+                {hasAdvancedOptions && (
+                  <div className="d-flex flex-column mt-2">
+                    <Form.Group>
+                      <Form.Switch
+                        label="Show Advanced Options"
+                        checked={showAdvancedOptions}
+                        onChange={() =>
+                          setShowAdvancedOptions(!showAdvancedOptions)
+                        }
+                      />
+                    </Form.Group>
+                  </div>
+                )}
+                {hasAdvancedOptions && showAdvancedOptions && (
                   <div className="d-flex flex-column gap-3 border border-dark shadow-sm p-2">
                     <Form.Group>
                       <Form.Label className="mb-0">Task Tag</Form.Label>
@@ -382,13 +444,23 @@ export default function LaunchAnnotationSetModal({
                   </div>
                 )}
               </div>
+            }
+          >
+            <Tab label="Model Guided">
+              <></>
+            </Tab>
+            <Tab label="Tiled Annotation">
+              <CreateTask
+                name={annotationSet.name}
+                taskType={"tiled"}
+                imageSets={selectedImageSets}
+                labels={annotationSet.categories}
+                setHandleCreateTask={setHandleCreateTask}
+                projectId={project.id}
+              />
             </Tab>
             <Tab label="Registration" className="mt-1">
-              <LaunchRegistration
-                project={project}
-                setHandleSubmit={setHandleLaunchRegistration}
-                selectedSets={[annotationSet.id]}
-              />
+              <></>
             </Tab>
           </Tabs>
         </Form>

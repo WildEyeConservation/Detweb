@@ -382,7 +382,6 @@ function CreateTask({
 
     switch (taskType) {
       case "model":
-        // Broken implementation
         if (modelId === "ivx") {
           allImages.map(async (image) => {
             const key = image.originalPath.replace("images", "heatmaps");
@@ -391,7 +390,7 @@ function CreateTask({
               new SendMessageCommand({
                 QueueUrl: backend.custom.pointFinderTaskQueueUrl,
                 MessageBody: JSON.stringify({
-                  imageId: id,
+                  imageId: image.id,
                   projectId: projectId,
                   key: "heatmaps/" + key + ".h5",
                   width: 1024,
@@ -633,7 +632,7 @@ function CreateTask({
     case "tiled":
       return (
         <>
-          <Form.Group className="d-flex flex-column gap-3">
+          <Form.Group className="d-flex flex-column gap-3 mt-2">
             <Form.Switch
               label="Manually Define Tile Dimensions"
               checked={!hideTileDefinition}
@@ -849,8 +848,7 @@ function CreateTask({
               value={modelId}
             >
               <option>Select AI model to use to guide annotation</option>
-              {/* Broken */}
-              {/* <option value="ivx">Elephant detection (nadir)</option> */}
+              <option value="ivx">Elephant detection (nadir)</option>
               <option value="scoutbotV3">ScoutBot v3</option>
               <option value="scoutbot">ScoutBot export file</option>
             </Form.Select>

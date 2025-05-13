@@ -117,23 +117,6 @@ export default function AnnotationSetResults({
           </Button>
         </div>
         <div>
-          <h5 className="mb-0">Registration</h5>
-          <span className="text-muted" style={{ fontSize: "14px" }}>
-            Register images from your annotation set.
-          </span>
-          <Button
-            className="d-block mt-1"
-            variant="primary"
-            onClick={() =>
-              navigate(
-                `/surveys/${surveyId}/set/${annotationSet.id}/registration`
-              )
-            }
-          >
-            Register
-          </Button>
-        </div>
-        <div>
           <h5 className="mb-0">CSV File</h5>
           <span className="text-muted" style={{ fontSize: "14px" }}>
             Download a CSV file of your annotation set.

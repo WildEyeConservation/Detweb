@@ -4,6 +4,7 @@ import Form from "react-bootstrap/Form";
 import { useContext, useState } from "react";
 import { GlobalContext, UserContext } from "./Context";
 import { fetchAllPaginatedResults } from "./utils";
+import { useNavigate } from "react-router-dom";
 
 /*
     todo: Notify sysadmin
@@ -11,8 +12,8 @@ import { fetchAllPaginatedResults } from "./utils";
 
 export default function RegisterOrganization() {
   const { client } = useContext(GlobalContext)!;
-  const { user } = useContext(UserContext)!;
-
+  const { user, cognitoGroups } = useContext(UserContext)!;
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -75,6 +76,12 @@ export default function RegisterOrganization() {
     }
 
     alert("Your request has been submitted");
+
+    if (cognitoGroups.includes("sysadmin")) {
+      navigate("/SSAdmin");
+    } else {
+      navigate("/");
+    }
 
     setIsLoading(false);
   }

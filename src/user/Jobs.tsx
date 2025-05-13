@@ -20,6 +20,9 @@ type Project = {
     id: string;
     name: string;
   };
+  annotationSets: {
+    id: string;
+  }[];
   queues: Schema["Queue"]["type"][];
 };
 
@@ -38,6 +41,13 @@ export default function Jobs() {
   const [jobsRemaining, setJobsRemaining] = useState<Record<string, string>>(
     {}
   );
+  const [registrationJobs, setRegistrationJobs] = useState<
+    {
+      id: string;
+      projectId: string;
+      register: boolean;
+    }[]
+  >([]);
   const [isLoading, setIsLoading] = useState(false);
   const [takingJob, setTakingJob] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<
@@ -62,6 +72,8 @@ export default function Jobs() {
               "name",
               "organization.id",
               "organization.name",
+              "annotationSets.id",
+              "annotationSets.register",
               "queues.*",
             ],
           }
@@ -73,7 +85,9 @@ export default function Jobs() {
         .map((result) => (result as { data: Project | null }).data)
         .filter(
           (project): project is Project =>
-            project !== null && project.queues.length > 0
+            project !== null &&
+            (project.queues.length > 0 ||
+              project.annotationSets.some((set) => set.register))
         )
         .map((project) => ({
           ...project,
@@ -121,8 +135,32 @@ export default function Jobs() {
 
         setJobsRemaining(jobsRemaining);
 
+        // check if registration jobs are available
+        const registrationJobs = await Promise.all(
+          validProjects.flatMap((project) =>
+            project.annotationSets.map(async (set) => {
+              const { data } = await client.models.AnnotationSet.get(
+                { id: set.id },
+                {
+                  selectionSet: ["register"],
+                }
+              );
+
+              return {
+                id: set.id,
+                projectId: project.id,
+                register: data?.register || false,
+              };
+            })
+          )
+        );
+
+        setRegistrationJobs(registrationJobs.filter((job) => job.register));
+
         const filteredProjects = validProjects.filter(
-          (project) => project.queues.length > 0
+          (project) =>
+            project.queues.length > 0 ||
+            project.annotationSets.some((set) => set.register)
         );
         setDisplayProjects(filteredProjects);
       }
@@ -211,99 +249,172 @@ export default function Jobs() {
     }
   }
 
-  const tableData = displayProjects.flatMap((project) =>
-    project.queues
-      .map((queue) => {
-        const numJobsRemaining = Number(jobsRemaining[queue.url || ""] || 0);
-        const batchesRemaining = Math.ceil(
-          numJobsRemaining / (queue.batchSize || 0)
-        );
+  const tableData = [
+    ...displayProjects.flatMap((project) =>
+      project.queues
+        .map((queue) => {
+          const numJobsRemaining = Number(jobsRemaining[queue.url || ""] || 0);
+          const batchesRemaining = Math.ceil(
+            numJobsRemaining / (queue.batchSize || 0)
+          );
 
-        if (
-          numJobsRemaining === 0 &&
-          !userProjectMembershipHook.data?.find(
-            (membership) => membership.projectId === project.id
-          )?.isAdmin
-        ) {
-          return null;
-        }
+          if (
+            numJobsRemaining === 0 &&
+            !userProjectMembershipHook.data?.find(
+              (membership) => membership.projectId === project.id
+            )?.isAdmin
+          ) {
+            return null;
+          }
 
-        return {
-          id: queue.id,
-          rowData: [
-            <div
-              className="d-flex justify-content-between align-items-center p-2"
-              key={queue.id}
-            >
-              <div className="d-flex flex-row gap-3 align-items-center">
-                <div>
-                  <h5 className="mb-0">{project.name}</h5>
-                  <i style={{ fontSize: "14px", display: "block" }}>
-                    {project.organization.name}
-                  </i>
-                  <p
-                    style={{
-                      fontSize: "14px",
-                      display: "block",
-                      marginBottom: "0px",
-                    }}
-                  >
-                    Type: {queue.name}
-                  </p>
-                </div>
-                {myOrganizationHook.data?.find(
-                  (membership) =>
-                    membership.organizationId === project.organization.id
-                )?.isAdmin &&
-                  queue.hidden && (
-                    <span
-                      className="badge bg-secondary"
-                      style={{ fontSize: "14px" }}
+          return {
+            id: queue.id,
+            rowData: [
+              <div
+                className="d-flex justify-content-between align-items-center p-2"
+                key={queue.id}
+              >
+                <div className="d-flex flex-row gap-3 align-items-center">
+                  <div>
+                    <h5 className="mb-0">{project.name}</h5>
+                    <i style={{ fontSize: "14px", display: "block" }}>
+                      {project.organization.name}
+                    </i>
+                    <p
+                      style={{
+                        fontSize: "14px",
+                        display: "block",
+                        marginBottom: "0px",
+                      }}
                     >
-                      Hidden
-                    </span>
+                      Type: {queue.name}
+                    </p>
+                  </div>
+                  {myOrganizationHook.data?.find(
+                    (membership) =>
+                      membership.organizationId === project.organization.id
+                  )?.isAdmin &&
+                    queue.hidden && (
+                      <span
+                        className="badge bg-secondary"
+                        style={{ fontSize: "14px" }}
+                      >
+                        Hidden
+                      </span>
+                    )}
+                </div>
+                <div className="d-flex flex-row gap-2 align-items-center">
+                  {queue.batchSize && queue.batchSize > 0 ? (
+                    <p className="mb-0">
+                      Batches remaining: {batchesRemaining}
+                    </p>
+                  ) : (
+                    <p className="mb-0">Jobs remaining: {numJobsRemaining}</p>
                   )}
-              </div>
-              <div className="d-flex flex-row gap-2 align-items-center">
-                {queue.batchSize && queue.batchSize > 0 ? (
-                  <p className="mb-0">Batches remaining: {batchesRemaining}</p>
-                ) : (
-                  <p className="mb-0">Jobs remaining: {numJobsRemaining}</p>
-                )}
-                <Button
-                  className="ms-1"
-                  variant="primary"
-                  disabled={takingJob || deletingJob || numJobsRemaining === 0}
-                  onClick={() =>
-                    handleTakeJob({
-                      queueId: queue.id,
-                      projectId: project.id,
-                    })
-                  }
-                >
-                  Take Job
-                </Button>
-                {userProjectMembershipHook.data?.find(
-                  (membership) => membership.projectId === project.id
-                )?.isAdmin && (
                   <Button
-                    variant="danger"
-                    disabled={deletingJob}
-                    onClick={() => {
-                      setJobToDelete(queue);
-                      showModal("deleteJob");
-                    }}
+                    className="ms-1"
+                    variant="primary"
+                    disabled={
+                      takingJob || deletingJob || numJobsRemaining === 0
+                    }
+                    onClick={() =>
+                      handleTakeJob({
+                        queueId: queue.id,
+                        projectId: project.id,
+                      })
+                    }
                   >
-                    Delete
+                    Take Job
                   </Button>
-                )}
+                  {userProjectMembershipHook.data?.find(
+                    (membership) => membership.projectId === project.id
+                  )?.isAdmin && (
+                    <Button
+                      variant="danger"
+                      disabled={deletingJob}
+                      onClick={() => {
+                        setJobToDelete(queue);
+                        showModal("deleteJob");
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
+              </div>,
+            ],
+          };
+        })
+        .filter((item) => item !== null)
+    ),
+    ...registrationJobs.map((job) => {
+      const project = displayProjects.find(
+        (project) => project.id === job.projectId
+      );
+
+      if (!project) {
+        return <></>;
+      }
+
+      return {
+        id: job.id,
+        rowData: [
+          <div
+            className="d-flex justify-content-between align-items-center p-2"
+            key={job.id}
+          >
+            <div className="d-flex flex-row gap-3 align-items-center">
+              <div>
+                <h5 className="mb-0">{project.name}</h5>
+                <i style={{ fontSize: "14px", display: "block" }}>
+                  {project.organization.name}
+                </i>
+                <p
+                  style={{
+                    fontSize: "14px",
+                    display: "block",
+                    marginBottom: "0px",
+                  }}
+                >
+                  Type: Registration
+                </p>
               </div>
-            </div>,
-          ],
-        };
-      })
-      .filter((item) => item !== null)
-  );
+            </div>
+            <div className="d-flex flex-row gap-2 align-items-center">
+              <Button
+                className="ms-1"
+                variant="primary"
+                onClick={() =>
+                  navigate(`/surveys/${project.id}/set/${job.id}/registration`)
+                }
+              >
+                Take Job
+              </Button>
+              {userProjectMembershipHook.data?.find(
+                (membership) => membership.projectId === project.id
+              )?.isAdmin && (
+                <Button
+                  variant="danger"
+                  onClick={async () => {
+                    await client.models.AnnotationSet.update({
+                      id: job.id,
+                      register: false,
+                    });
+
+                    setRegistrationJobs((rjs) =>
+                      rjs.filter((j) => j.id !== job.id)
+                    );
+                  }}
+                >
+                  Delete
+                </Button>
+              )}
+            </div>
+          </div>,
+        ],
+      };
+    }),
+  ];
 
   return (
     <div

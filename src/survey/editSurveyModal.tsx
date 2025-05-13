@@ -39,34 +39,27 @@ export default function EditSurveyModal({
         <Tabs
           defaultTab={openTab || 0}
           onTabChange={(tab) => {
-            setTab(tab);
-            let label = "";
-            switch (tab) {
-              case 0:
-                label = "Submit";
-                break;
-              case 1:
-                label = "Process";
-                break;
-              case 3:
-                label = "Launch";
-                break;
-            }
-            setButtonLabel(label);
-            setPrevButtonLabel(label);
+            // setTab(tab);
+            // let label = "";
+            // switch (tab) {
+            //   case 0:
+            //     label = "Submit";
+            //     break;
+            //   case 1:
+            //     label = "Process";
+            //     break;
+            //   case 3:
+            //     label = "Launch";
+            //     break;
+            // }
+            // setButtonLabel(label);
+            // setPrevButtonLabel(label);
           }}
         >
-          <Tab label="Add GPS Data" className="mt-1">
-            <AddGpsData
-              imageSets={project.imageSets}
-              setHandleSubmit={setAddGpsData}
-            />
-          </Tab>
-          <Tab label="Process Images" className="mt-1">
-            <ProcessImages
-              imageSets={project.imageSets}
-              setHandleSubmit={setProcessImages}
-            />
+          <Tab label="Transects" className="mt-1">
+            <p className="mb-0">
+            Transects
+            </p>
           </Tab>
           <Tab label="Create Subsets" className="mt-1">
             <CreateSubset
@@ -77,33 +70,6 @@ export default function EditSurveyModal({
         </Tabs>
       </Modal.Body>
       <Modal.Footer>
-        {tab !== 2 && (
-          <Button
-            variant="primary"
-            disabled={loading}
-            onClick={async () => {
-              setLoading(true);
-              switch (tab) {
-                case 0:
-                  if (addGpsData) {
-                    setButtonLabel("Submitting...");
-                    await addGpsData();
-                  }
-                  break;
-                case 1:
-                  if (processImages) {
-                    setButtonLabel("Processing...");
-                    await processImages();
-                  }
-                  break;
-              }
-              setButtonLabel(prevButtonLabel);
-              setLoading(false);
-            }}
-          >
-            {buttonLabel}
-          </Button>
-        )}
         <Button variant="dark" onClick={onClose}>
           Close
         </Button>

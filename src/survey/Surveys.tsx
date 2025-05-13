@@ -56,6 +56,7 @@ export default function Surveys() {
                     "organization.name",
                     "annotationSets.id",
                     "annotationSets.name",
+                    "annotationSets.register",
                     "locationSets.id",
                     "locationSets.name",
                     "annotationSets.categories.id",
@@ -75,7 +76,11 @@ export default function Surveys() {
         setProjects(validProjects);
         setDisabledSurveys(
           validProjects
-            .filter((project) => project.queues.length > 0)
+            .filter(
+              (project) =>
+                project.queues.length > 0 ||
+                project.annotationSets.some((set) => set.register)
+            )
             .map((project) => project.id)
         );
       });
@@ -134,7 +139,9 @@ export default function Surveys() {
     )
     .map((project) => {
       const disabled = disabledSurveys.includes(project.id);
-      const hasJobs = project.queues.length > 0;
+      const hasJobs =
+        project.queues.length > 0 ||
+        project.annotationSets.some((set) => set.register);
       return {
         id: project.id,
         rowData: [
