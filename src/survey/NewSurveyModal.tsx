@@ -36,6 +36,7 @@ export default function NewSurveyModal({
   const queryClient = useQueryClient();
   const limit = pLimit(10);
 
+  const [filesReady, setFilesReady] = useState(false);
   const [name, setName] = useState("");
   const [organization, setOrganization] = useState<{
     label: string;
@@ -86,6 +87,8 @@ export default function NewSurveyModal({
     value: "scoutbot",
   });
   const [masks, setMasks] = useState<number[][][]>([]);
+
+  const canSubmit = !loading && filesReady && name && organization;
 
   const [setFilesUploaded, setTotalFiles] = useUpdateProgress({
     taskId: `Upload files`,
@@ -283,64 +286,68 @@ export default function NewSurveyModal({
           }
         );
 
+        // #region compute image registrations
+        // const imageCount =
+        //   (
+        //     await client.models.ImageSet.get(
+        //       { id: imageSetId },
+        //       { selectionSet: ["imageCount"] }
+        //     )
+        //   )?.data?.imageCount ?? 0;
+        // setMetaDataLoadingTotalSteps(imageCount);
+
+        images.sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
+        // setMessagePreppingTotalSteps(images.length - 1);
+        // setMessagePreppingStepsCompleted(0);
+        const pairPromises = [];
+        for (let i = 0; i < images.length - 1; i++) {
+          const image1 = images[i];
+          const image2 = images[i + 1];
+          if ((image2.timestamp ?? 0) - (image1.timestamp ?? 0) < 5) {
+            pairPromises.push(handlePair(image1, image2));
+          } else {
+            console.log(
+              `Skipping pair ${image1.id} and ${image2.id} because the time difference is greater than 5 seconds`
+            );
+            // setMessagePreppingStepsCompleted((s) => s + 1);
+          }
+        }
+
+        const messages = (await Promise.all(pairPromises)).filter(
+          (msg): msg is NonNullable<typeof msg> => msg !== null
+        );
+
+        // setRegistrationTotalSteps(messages.length);
+        // setRegistrationStepsCompleted(0);
+        // Send messages in batches of 10
+        const sqsClient = await getSqsClient();
+        for (let i = 0; i < messages.length; i += 10) {
+          const batch = messages.slice(i, i + 10);
+          await limit(() =>
+            sqsClient.send(
+              new SendMessageBatchCommand({
+                QueueUrl: backend.custom.lightglueTaskQueueUrl,
+                Entries: batch,
+              })
+            )
+          );
+          // setRegistrationStepsCompleted((s) => s + batch.length);
+        }
+
+        // #endregion
+
+        if (model.value === "manual") {
+          return;
+        }
+
         const { data: locationSet } = await client.models.LocationSet.create({
-          name: project.name + `_${model.label}`,
+          name: project.name + `_${model.value}`,
           projectId: project.id,
         });
 
         if (locationSet) {
-          // #region compute image registrations
-          // const imageCount =
-          //   (
-          //     await client.models.ImageSet.get(
-          //       { id: imageSetId },
-          //       { selectionSet: ["imageCount"] }
-          //     )
-          //   )?.data?.imageCount ?? 0;
-          // setMetaDataLoadingTotalSteps(imageCount);
-
-          images.sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
-          // setMessagePreppingTotalSteps(images.length - 1);
-          // setMessagePreppingStepsCompleted(0);
-          const pairPromises = [];
-          for (let i = 0; i < images.length - 1; i++) {
-            const image1 = images[i];
-            const image2 = images[i + 1];
-            if ((image2.timestamp ?? 0) - (image1.timestamp ?? 0) < 5) {
-              pairPromises.push(handlePair(image1, image2));
-            } else {
-              console.log(
-                `Skipping pair ${image1.id} and ${image2.id} because the time difference is greater than 5 seconds`
-              );
-              // setMessagePreppingStepsCompleted((s) => s + 1);
-            }
-          }
-
-          const messages = (await Promise.all(pairPromises)).filter(
-            (msg): msg is NonNullable<typeof msg> => msg !== null
-          );
-
-          // setRegistrationTotalSteps(messages.length);
-          // setRegistrationStepsCompleted(0);
-          // Send messages in batches of 10
-          const sqsClient = await getSqsClient();
-          for (let i = 0; i < messages.length; i += 10) {
-            const batch = messages.slice(i, i + 10);
-            await limit(() =>
-              sqsClient.send(
-                new SendMessageBatchCommand({
-                  QueueUrl: backend.custom.lightglueTaskQueueUrl,
-                  Entries: batch,
-                })
-              )
-            );
-            // setRegistrationStepsCompleted((s) => s + batch.length);
-          }
-
-          // #endregion
-
           let i = 0;
-          
+
           // kick off scoutbot or elephant detection tasks
           switch (model.value) {
             case "scoutbot":
@@ -420,7 +427,7 @@ export default function NewSurveyModal({
               break;
           }
 
-          setTotalImages(i)
+          setTotalImages(i);
         }
       }
     } else {
@@ -698,6 +705,10 @@ export default function NewSurveyModal({
                   label: "Elephant Detection (nadir)",
                   value: "elephant-detection-nadir",
                 },
+                {
+                  label: "Manual (model may be launched later)",
+                  value: "manual",
+                },
               ]}
               onChange={(e) => setModel(e)}
               placeholder="Select a model"
@@ -709,13 +720,20 @@ export default function NewSurveyModal({
               Upload the survey files by selecting the entire folder you wish to
               upload.
             </p>
-            <FilesUploadForm setOnSubmit={setUploadSubmitFn} />
+            <FilesUploadForm
+              setOnSubmit={setUploadSubmitFn}
+              setReadyToSubmit={setFilesReady}
+            />
           </Form.Group>
           <ImageMaskEditor masks={masks} setMasks={setMasks} />
         </Form>
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="primary" onClick={handleSave} disabled={loading}>
+        <Button
+          variant="primary"
+          onClick={handleSave}
+          disabled={!canSubmit}
+        >
           {loading ? "Creating..." : "Create"}
         </Button>
         <Button variant="dark" onClick={onClose}>

@@ -10,15 +10,8 @@ function Shapefile({ buffer }: { buffer: ArrayBuffer }) {
     const geo = L.geoJson(
       { features: [] },
       {
-        onEachFeature: function popUp(f, l) {
-          var out = [];
-          if (f.properties) {
-            for (var key in f.properties) {
-              out.push(key + ": " + f.properties[key]);
-            }
-            l.bindPopup(out.join("<br />"));
-          }
-        }
+        style: { color: "orange", opacity: 0.2 },
+        interactive: false,
       }
     ).addTo(map);
 

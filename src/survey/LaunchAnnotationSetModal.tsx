@@ -1,5 +1,5 @@
 import { Modal, Button, Form } from "react-bootstrap";
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect } from "react";
 import ImageSetDropdown from "./ImageSetDropdown";
 import { Tabs, Tab } from "../Tabs";
 import CreateTask from "../CreateTask";
@@ -11,6 +11,7 @@ import LaunchRegistration from "../LaunchRegistration";
 import { useLaunchTask } from "../useLaunchTask";
 import { useUpdateProgress } from "../useUpdateProgress";
 import { useQueryClient } from "@tanstack/react-query";
+import Select from "react-select";
 
 type TaskType = "tiled" | "model" | "annotation" | "registration";
 
@@ -61,6 +62,13 @@ export default function LaunchAnnotationSetModal({
     ((url: string) => Promise<void>) | null
   >(null);
   const [taskType, setTaskType] = useState<TaskType>("model");
+  const [model, setModel] = useState<string>("scoutbot");
+  const [modelOptions, setModelOptions] = useState<{
+    label: string;
+    value: string;
+  }[]>([
+  ]);
+  const [locationSets, setLocationSets] = useState<Schema["LocationSet"]["type"][]>([]);
   const [sendDetectionsToSecondaryQueue, setSendDetectionsToSecondaryQueue] =
     useState<boolean>(false);
   const queryClient = useQueryClient();
@@ -159,18 +167,17 @@ export default function LaunchAnnotationSetModal({
   }
 
   async function createModelTask() {
+    if (modelOptions.length === 0) {
+      alert("You must first process your images before launching a model guided task.");
+      return;
+    }
+
     onClose();
     setDisabledSurveys((ds) => [...ds, project.id]);
-
-    const { data: locationSets } =
-      await client.models.LocationSet.locationSetsByProjectId({
-        projectId: project.id,
-      });
-
+      
     const modelGuidedLocationSet = locationSets.find(
       (ls) =>
-        ls.name.toLowerCase().includes("scoutbot") ||
-        ls.name.toLowerCase().includes("elephant-detection-nadir")
+        ls.name.toLowerCase().includes(model)
     );
 
     if (!modelGuidedLocationSet) {
@@ -240,6 +247,17 @@ export default function LaunchAnnotationSetModal({
         break;
     }
   }
+
+  useEffect(() => {
+    async function fetchLocationSets() {
+      const { data: locationSets } =
+        await client.models.LocationSet.locationSetsByProjectId({
+          projectId: project.id,
+        });
+      setLocationSets(locationSets);
+    }
+    fetchLocationSets();
+  }, [project.id]);
 
   return (
     <Modal
@@ -447,7 +465,23 @@ export default function LaunchAnnotationSetModal({
             }
           >
             <Tab label="Model Guided">
-              <></>
+              {modelOptions.length > 0 ? (
+                <Form.Group>
+                  <Form.Label className="mb-0">Model</Form.Label>
+                  <Select
+                    value={model}
+                    onChange={(m) => setModel(m)}
+                    options={modelOptions}
+                    placeholder="Select a model"
+                    className="text-black"
+                  />
+                </Form.Group>
+              ) : (
+                <p className="text-muted mb-0 mt-2" style={{ fontSize: "12px" }}>
+                  You must first process your images before launching a model
+                  guided task.
+                </p>
+              )}
             </Tab>
             <Tab label="Tiled Annotation">
               <CreateTask

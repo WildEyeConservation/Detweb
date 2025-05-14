@@ -16,6 +16,7 @@ import "leaflet-draw/dist/leaflet.draw.css";
 import { Form } from "react-bootstrap";
 import Shapefile from "./Shapefile";
 import shp from "shpjs";
+import FileInput from "./FileInput";
 
 // Define the GPS data structure
 export interface GPSData {
@@ -36,7 +37,6 @@ interface PolygonSubset {
 export interface GPSSubsetProps {
   gpsData: GPSData[];
   onFilter: (filteredData: GPSData[]) => void;
-  shapefileBuffer?: ArrayBuffer;
 }
 
 // A helper component to fit the map view to the given GPS points
@@ -57,13 +57,12 @@ const FitBoundsToPoints: React.FC<{ points: GPSData[] }> = ({ points }) => {
 };
 
 // The main component
-const GPSSubset: React.FC<GPSSubsetProps> = ({
-  gpsData,
-  onFilter,
-  shapefileBuffer,
-}) => {
+const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter }) => {
   const [polygons, setPolygons] = useState<PolygonSubset[]>([]);
   const featureGroupRef = useRef<L.FeatureGroup>(null);
+  const [shapefileBuffer, setShapefileBuffer] = useState<
+    ArrayBuffer | undefined
+  >(undefined);
 
   const validGpsData = gpsData.filter(
     (point) => Number.isFinite(point.lat) && Number.isFinite(point.lng)
@@ -72,18 +71,6 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
   const [currentFilteredPoints, setCurrentFilteredPoints] =
     useState<GPSData[]>(validGpsData);
   const [deletedPointsStack, setDeletedPointsStack] = useState<GPSData[][]>([]);
-  const [initialTotalPoints] = useState(validGpsData.length);
-  const remainingPoints = currentFilteredPoints.length;
-  const removedPoints = initialTotalPoints - remainingPoints;
-  const percentRemoved =
-    initialTotalPoints > 0
-      ? Math.round((removedPoints / initialTotalPoints) * 100)
-      : 0;
-  const percentRemaining =
-    initialTotalPoints > 0
-      ? Math.round((remainingPoints / initialTotalPoints) * 100)
-      : 0;
-
   // When a polygon is created
   const handleCreated = useCallback((e: any) => {
     const { layer } = e;
@@ -229,6 +216,20 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
     });
   }, [onFilter]);
 
+  const handleRemovePoint = useCallback(
+    (index: number) => {
+      setCurrentFilteredPoints((prevPoints) => {
+        if (index < 0 || index >= prevPoints.length) return prevPoints;
+        const removedPoint = prevPoints[index];
+        const newPoints = prevPoints.filter((_, i) => i !== index);
+        onFilter(newPoints);
+        setDeletedPointsStack((prevStack) => [...prevStack, [removedPoint]]);
+        return newPoints;
+      });
+    },
+    [onFilter]
+  );
+
   useEffect(() => {
     if (shapefileBuffer) {
       shp(shapefileBuffer)
@@ -269,150 +270,161 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
   }, [shapefileBuffer]);
 
   return (
-    <Form.Group className="mt-3 d-flex flex-column gap-2">
-      <div>
-        <Form.Label className="d-block mb-0">
-          Filter Data by Polygon (Optional)
-        </Form.Label>
-        <Form.Text style={{ fontSize: "12px" }}>
-          Use this tool to filter out points based on a polygon. Select the
-          polygon function in the top-right corner of the map. Click to draw a
-          polygon. Click "Include Points" to keep only the points within the
-          polygon. Click "Remove Points" to remove points outside the polygon.
-          Click "Undo" to reverse the last action.
+    <>
+      <Form.Group className="mt-3">
+        <Form.Label className="mb-0">Upload Shapefile (Optional)</Form.Label>
+        <Form.Text className="d-block mb-1 mt-0" style={{ fontSize: "12px" }}>
+          If you have a zipped shapefile, you can upload it here. Uploading this
+          file will filter the GPS data to only include points within the
+          shapefile.
         </Form.Text>
-      </div>
-      <div>
-        <Form.Text className="d-block" style={{ fontSize: "12px" }}>
-          Take note:
-          <ul>
-            <li>
-              These points represent the GPS data. If your CSV uses filepaths or
-              the images contained sufficient EXIF metadata then these should
-              correspond to the images in your dataset.
-            </li>
-            <li>
-              If your data is timestamped then these points are an estimate of
-              what your images represent.
-            </li>
-          </ul>
-        </Form.Text>
-      </div>
-      <div style={{ height: "600px", width: "100%", position: "relative" }}>
-        <div
-          style={{
-            position: "absolute",
-            top: "10px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            backgroundColor: "rgba(255, 255, 255, 0.8)",
-            border: "2px solid rgba(0, 0, 0, 0.28)",
-            padding: "4px 8px",
-            borderRadius: "4px",
-            zIndex: 1000,
+        <FileInput
+          id="shapefile-file"
+          fileType=".zip"
+          onFileChange={async (files) => {
+            const buffer = await files[0].arrayBuffer();
+            setShapefileBuffer(buffer);
           }}
         >
-          <p style={{ margin: 0 }} className="text-dark">
-            {`${remainingPoints} of ${initialTotalPoints} points remaining (${percentRemaining}%)`}
-          </p>
+          <p className="mb-0">Select Shapefile</p>
+        </FileInput>
+      </Form.Group>
+      <Form.Group className="mt-3 d-flex flex-column gap-2">
+        <div>
+          <Form.Label className="d-block mb-0">
+            Filter Data by Polygon (Optional)
+          </Form.Label>
+          <Form.Text style={{ fontSize: "12px" }}>
+            Use this tool to filter out points based on a polygon. Select the
+            polygon function in the top-right corner of the map. Click to draw a
+            polygon. Click "Include Points" to keep only the points within the
+            polygon. Click "Remove Points" to remove points outside the polygon.
+            Click "Undo" to reverse the last action.
+          </Form.Text>
         </div>
-        <MapContainer
-          style={{ height: "100%", width: "100%" }}
-          center={[0, 0]}
-          zoom={2}
-        >
-          <FitBoundsToPoints points={validGpsData} />
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          {shapefileBuffer && <Shapefile buffer={shapefileBuffer} />}
-          <FeatureGroup ref={featureGroupRef}>
-            <EditControl
-              position="topright"
-              onCreated={handleCreated}
-              onEdited={handleEdited}
-              onDeleted={handleDeleted}
-              draw={{
-                polygon: {
-                  allowIntersection: false,
-                  shapeOptions: { color: "#97009c" },
-                },
-                rectangle: false,
-                circle: false,
-                circlemarker: false,
-                marker: false,
-                polyline: false,
-              }}
-              edit={
-                featureGroupRef.current
-                  ? { featureGroup: featureGroupRef.current }
-                  : {}
-              }
-            />
-          </FeatureGroup>
-          {validGpsData.map((point, index) => (
-            <CircleMarker
-              key={index}
-              center={[point.lat, point.lng]}
-              radius={3}
-              color="orange"
-            >
-              <Popup>
-                <div>
-                  {point.timestamp && (
-                    <div>
-                      <strong>Timestamp:</strong> {point.timestamp}
-                    </div>
-                  )}
-                  {point.filepath && (
-                    <div>
-                      <strong>Filepath:</strong> {point.filepath}
-                    </div>
-                  )}
-                  <div>
-                    <strong>Lng:</strong> {point.lng}
-                  </div>
-                  <div>
-                    <strong>Lat:</strong> {point.lat}
-                  </div>
-                  <div>
-                    <strong>Alt:</strong> {point.alt}
-                  </div>
-                </div>
-              </Popup>
-            </CircleMarker>
-          ))}
-        </MapContainer>
-        <div
-          className="d-flex flex-row gap-2 p-2"
-          style={{
-            position: "absolute",
-            bottom: "10px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 1000,
-            backgroundColor: "rgba(255,255,255,0.8)",
-            border: "2px solid rgba(0, 0, 0, 0.28)",
-            borderRadius: "4px",
-          }}
-        >
-          <Button variant="info" onClick={() => handleFilterPoints(true)}>
-            Include Points
-          </Button>
-          <Button variant="danger" onClick={() => handleFilterPoints(false)}>
-            Remove Points
-          </Button>
-          <Button
-            disabled={deletedPointsStack.length === 0}
-            variant="outline-primary"
-            onClick={handleUndo}
+        <div>
+          <Form.Text className="d-block" style={{ fontSize: "12px" }}>
+            Take note:
+            <ul>
+              <li>
+                These points represent the GPS data. If your CSV uses filepaths
+                or the images contained sufficient EXIF metadata then these
+                should correspond to the images in your dataset.
+              </li>
+              <li>
+                If your data is timestamped then these points are an estimate of
+                what your images represent.
+              </li>
+            </ul>
+          </Form.Text>
+        </div>
+        <div style={{ height: "600px", width: "100%", position: "relative" }}>
+          <MapContainer
+            style={{ height: "100%", width: "100%" }}
+            center={[0, 0]}
+            zoom={2}
           >
-            Undo
-          </Button>
+            <FitBoundsToPoints points={validGpsData} />
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            {shapefileBuffer && <Shapefile buffer={shapefileBuffer} />}
+            <FeatureGroup ref={featureGroupRef}>
+              <EditControl
+                position="topright"
+                onCreated={handleCreated}
+                onEdited={handleEdited}
+                onDeleted={handleDeleted}
+                draw={{
+                  polygon: {
+                    allowIntersection: false,
+                    shapeOptions: { color: "#97009c" },
+                  },
+                  rectangle: false,
+                  circle: false,
+                  circlemarker: false,
+                  marker: false,
+                  polyline: false,
+                }}
+                edit={
+                  featureGroupRef.current
+                    ? { featureGroup: featureGroupRef.current }
+                    : {}
+                }
+              />
+            </FeatureGroup>
+            {validGpsData.map((point, index) => (
+              <CircleMarker
+                key={index}
+                center={[point.lat, point.lng]}
+                radius={3}
+                color="orange"
+              >
+                <Popup>
+                  <div>
+                    {point.timestamp && (
+                      <div>
+                        <strong>Timestamp:</strong> {point.timestamp}
+                      </div>
+                    )}
+                    {point.filepath && (
+                      <div>
+                        <strong>Filepath:</strong> {point.filepath}
+                      </div>
+                    )}
+                    <div>
+                      <strong>Lng:</strong> {point.lng}
+                    </div>
+                    <div>
+                      <strong>Lat:</strong> {point.lat}
+                    </div>
+                    <div>
+                      <strong>Alt:</strong> {point.alt}
+                    </div>
+                    <Button
+                      className="w-100 mt-2"
+                      variant="danger"
+                      size="sm"
+                      onClick={() => handleRemovePoint(index)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            ))}
+          </MapContainer>
+          <div
+            className="d-flex flex-row gap-2 p-2"
+            style={{
+              position: "absolute",
+              bottom: "10px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 1000,
+              backgroundColor: "rgba(255,255,255,0.8)",
+              border: "2px solid rgba(0, 0, 0, 0.28)",
+              borderRadius: "4px",
+            }}
+          >
+            <Button variant="info" onClick={() => handleFilterPoints(true)}>
+              Include Points
+            </Button>
+            <Button variant="danger" onClick={() => handleFilterPoints(false)}>
+              Remove Points
+            </Button>
+            <Button
+              disabled={deletedPointsStack.length === 0}
+              variant="outline-primary"
+              onClick={handleUndo}
+            >
+              Undo
+            </Button>
+          </div>
         </div>
-      </div>
-    </Form.Group>
+      </Form.Group>
+    </>
   );
 };
 
