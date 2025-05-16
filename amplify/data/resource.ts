@@ -7,12 +7,7 @@ import { processImages } from '../functions/processImages/resource';
 import { getAnnotationCounts } from '../functions/getAnnotationCounts/resource';
 import { updateUserStats } from '../functions/updateUserStats/resource';
 import { updateAnnotationCounts } from '../functions/updateAnnotationCounts/resource';
-/*== STEP 1 ===============================================================
-The section below creates a Todo database table with a "content" field. Try
-adding a new "isDone" field as a boolean. The authorization rule below
-specifies that any user authenticated via an API key can "create", "read",
-"update", and "delete" any "Todo" records.
-=========================================================================*/
+
 const schema = a
   .schema({
     UserType: a.customType({
@@ -45,6 +40,7 @@ const schema = a
         testResults: a.hasMany('TestResult', 'projectId'),
         createdBy: a.string().required(),
         hidden: a.boolean().default(false),
+        status: a.string().default('active'),
       })
       .authorization((allow) => [allow.authenticated()]),
     // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),

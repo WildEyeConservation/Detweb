@@ -18,6 +18,7 @@ import SubsampleModal from "../Subsample.tsx";
 import FileStructureSubset from "../filestructuresubset.tsx";
 import { SquareArrowOutUpRight } from "lucide-react";
 import { fetchAllPaginatedResults } from "../utils.tsx";
+import { Badge } from "react-bootstrap";
 
 export default function Surveys() {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
@@ -66,6 +67,7 @@ export default function Surveys() {
                     "imageSets.id",
                     "imageSets.name",
                     "queues.id",
+                    "status",
                   ],
                 }
               )
@@ -138,7 +140,10 @@ export default function Surveys() {
         project.organization.name.toLowerCase().includes(search.toLowerCase())
     )
     .map((project) => {
-      const disabled = disabledSurveys.includes(project.id);
+      const disabled =
+        disabledSurveys.includes(project.id) ||
+        project.status === "uploading" ||
+        project.status === "processing";
       const hasJobs =
         project.queues.length > 0 ||
         project.annotationSets.some((set) => set.register);
@@ -146,9 +151,14 @@ export default function Surveys() {
         id: project.id,
         rowData: [
           <div className="d-flex justify-content-between align-items-center gap-2">
-            <div>
+            <div className="d-flex flex-column gap-1">
               <h5 className="mb-0">{project.name}</h5>
               <i style={{ fontSize: "14px" }}>{project.organization.name}</i>
+              {project.status !== "active" && (
+                <Badge style={{ fontSize: "14px" }} bg={"info"}>
+                  {project.status}
+                </Badge>
+              )}
             </div>
             <div className="d-flex gap-2">
               <Button
@@ -338,7 +348,6 @@ export default function Surveys() {
         show={modalToShow === "newSurvey"}
         projects={projects.map((project) => project.name.toLowerCase())}
         onClose={() => showModal(null)}
-        setDisabledSurveys={setDisabledSurveys}
       />
       <ConfirmationModal
         show={modalToShow === "deleteSurvey"}

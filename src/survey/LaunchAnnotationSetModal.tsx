@@ -62,15 +62,19 @@ export default function LaunchAnnotationSetModal({
     ((url: string) => Promise<void>) | null
   >(null);
   const [taskType, setTaskType] = useState<TaskType>("model");
-  const [model, setModel] = useState<string>("scoutbot");
-  const [modelOptions, setModelOptions] = useState<{
-    label: string;
-    value: string;
-  }[]>([
-  ]);
-  const [locationSets, setLocationSets] = useState<Schema["LocationSet"]["type"][]>([]);
+  const [model, setModel] = useState<{ label: string; value: string }>();
+  const [modelOptions, setModelOptions] = useState<
+    {
+      label: string;
+      value: string;
+    }[]
+  >([]);
+  const [locationSets, setLocationSets] = useState<
+    Schema["LocationSet"]["type"][]
+  >([]);
   const [sendDetectionsToSecondaryQueue, setSendDetectionsToSecondaryQueue] =
     useState<boolean>(false);
+  const [loadingLocationSets, setLoadingLocationSets] = useState<boolean>(false);
   const queryClient = useQueryClient();
 
   const launchTask = useLaunchTask({
@@ -168,16 +172,17 @@ export default function LaunchAnnotationSetModal({
 
   async function createModelTask() {
     if (modelOptions.length === 0) {
-      alert("You must first process your images before launching a model guided task.");
+      alert(
+        "You must first process your images before launching a model guided task."
+      );
       return;
     }
 
     onClose();
-    setDisabledSurveys((ds) => [...ds, project.id]);
-      
-    const modelGuidedLocationSet = locationSets.find(
-      (ls) =>
-        ls.name.toLowerCase().includes(model)
+    // setDisabledSurveys((ds) => [...ds, project.id]);
+
+    const modelGuidedLocationSet = locationSets.find((ls) =>
+      ls.name.toLowerCase().includes(model?.value)
     );
 
     if (!modelGuidedLocationSet) {
@@ -250,11 +255,30 @@ export default function LaunchAnnotationSetModal({
 
   useEffect(() => {
     async function fetchLocationSets() {
+      setLoadingLocationSets(true);
       const { data: locationSets } =
         await client.models.LocationSet.locationSetsByProjectId({
           projectId: project.id,
         });
       setLocationSets(locationSets);
+
+      const modelOptions: { label: string; value: string }[] = [];
+
+      for (const locationSet of locationSets) {
+        if (locationSet.name.toLowerCase().includes("scoutbot")) {
+          modelOptions.push({ label: "ScoutBot", value: "scoutbot" });
+        }
+        if (
+          locationSet.name.toLowerCase().includes("elephant-detection-nadir")
+        ) {
+          modelOptions.push({
+            label: "Elephant Detection Nadir",
+            value: "elephant-detection-nadir",
+          });
+        }
+      }
+      setModelOptions(modelOptions);
+      setLoadingLocationSets(false);
     }
     fetchLocationSets();
   }, [project.id]);
@@ -465,7 +489,9 @@ export default function LaunchAnnotationSetModal({
             }
           >
             <Tab label="Model Guided">
-              {modelOptions.length > 0 ? (
+              {loadingLocationSets ? (
+                <p className="mb-0 mt-2">Loading models...</p>
+              ) : modelOptions.length > 0 ? (
                 <Form.Group>
                   <Form.Label className="mb-0">Model</Form.Label>
                   <Select
@@ -477,7 +503,10 @@ export default function LaunchAnnotationSetModal({
                   />
                 </Form.Group>
               ) : (
-                <p className="text-muted mb-0 mt-2" style={{ fontSize: "12px" }}>
+                <p
+                  className="text-muted mb-0 mt-2"
+                  style={{ fontSize: "12px" }}
+                >
                   You must first process your images before launching a model
                   guided task.
                 </p>

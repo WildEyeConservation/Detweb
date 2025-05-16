@@ -190,7 +190,7 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({
   }, [imageDimensions, mapRef]);
 
   return (
-    <Form.Group className="mt-2">
+    <Form.Group className="mt-3">
       <Form.Label className="d-block mb-0">
         Create Image Masks (optional)
       </Form.Label>
@@ -209,7 +209,7 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({
             width: "100%",
             position: "relative",
             marginTop: "8px",
-            marginBottom: "8px",
+            marginBottom: "12px",
           }}
         >
           <MapContainer
