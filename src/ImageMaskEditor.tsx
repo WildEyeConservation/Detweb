@@ -3,7 +3,6 @@ import {
   MapContainer,
   ImageOverlay,
   FeatureGroup,
-  Polygon,
 } from "react-leaflet";
 import { CRS } from "leaflet";
 import { EditControl } from "react-leaflet-draw";
@@ -13,12 +12,12 @@ import FileInput from "./FileInput";
 import { Form } from "react-bootstrap";
 
 interface ImageMaskEditorProps {
-  masks: number[][][]; // Each mask is an array of [x, y] coordinates
+  sampleImage: File;
   setMasks: (masks: number[][][]) => void;
 }
 
 const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({
-  masks,
+  sampleImage,
   setMasks,
 }) => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -105,7 +104,6 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({
       }
     });
 
-    console.log("masks:", newMasks);
     setMasks(newMasks);
   }, [setMasks, imageDimensions]);
 
@@ -188,6 +186,12 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({
       ]);
     }
   }, [imageDimensions, mapRef]);
+
+  useEffect(() => {
+    if (sampleImage) {
+      handleFileChange([sampleImage]);
+    }
+  }, []);
 
   return (
     <Form.Group className="mt-3">

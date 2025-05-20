@@ -41,7 +41,7 @@ export default function ExceptionsModal({
       const projects = await fetchAllPaginatedResults(
         client.models.Project.list,
         {
-          selectionSet: ['id', 'name', 'hidden'],
+          selectionSet: ['id', 'name', 'status'],
           filter: {
             organizationId: {
               eq: organization.id,
@@ -51,7 +51,7 @@ export default function ExceptionsModal({
       );
 
       const validProjects = projects.filter(
-        (project) => !project.hidden
+        (project) => project.status !== "deleted"
       );
 
       if (validProjects.length > 0) {

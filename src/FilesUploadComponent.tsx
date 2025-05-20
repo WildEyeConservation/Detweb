@@ -330,9 +330,6 @@ export function FileUploadCore({
         return;
       }
 
-      setTotalSteps(filteredImageSize);
-      setStepsCompleted(0);
-
       const imageSets = await fetchAllPaginatedResults(
         client.models.ImageSet.list,
         { filter: { projectId: { eq: projectId } }, selectionSet: ["id"] }
@@ -370,7 +367,6 @@ export function FileUploadCore({
             const csvRow = csvData.data.find(
               (row) => row.timestamp === exifMeta.timestamp
             );
-
             if (csvRow) {
               // Exact timestamp match found
               return true;
@@ -428,8 +424,19 @@ export function FileUploadCore({
         }
       });
 
+      // Update progress total to reflect only the size of files that will actually be uploaded
+      const totalUploadSize = gpsFilteredImageFiles.reduce(
+        (acc, file) => acc + file.size,
+        0
+      );
+      setTotalSteps(totalUploadSize);
+
       const imagesToProcess: Schema["Image"]["type"][] = [];
       let filesToUpload = gpsFilteredImageFiles;
+
+      //debugging
+      console.log("gpsFilteredImageFiles", gpsFilteredImageFiles);
+
       const maxAttempts = 3;
       let totalUploaded = 0;
       for (
@@ -437,24 +444,32 @@ export function FileUploadCore({
         attempt <= maxAttempts && filesToUpload.length > 0;
         attempt++
       ) {
+        //debugging
+        console.log("filesToUpload on attempt", attempt, filesToUpload);
+
         const uploadTasks = filesToUpload.map((file) =>
           limitConnections(async () => {
             let lastTransferred = 0;
 
-            await uploadData({
-              path: "images/" + file.webkitRelativePath,
-              data: file,
-              options: {
-                bucket: "inputs",
-                contentType: file.type,
-                onProgress: ({ transferredBytes }) => {
-                  const additionalTransferred =
-                    transferredBytes - lastTransferred;
-                  setStepsCompleted((fc) => fc + additionalTransferred);
-                  lastTransferred = transferredBytes;
+            try {
+              await uploadData({
+                path: "images/" + file.webkitRelativePath,
+                data: file,
+                options: {
+                  bucket: "inputs",
+                  contentType: file.type,
+                  onProgress: ({ transferredBytes }) => {
+                    const additionalTransferred =
+                      transferredBytes - lastTransferred;
+                    setStepsCompleted((fc) => fc + additionalTransferred);
+                    lastTransferred = transferredBytes;
+                  },
                 },
-              },
-            }).result;
+              }).result;
+            } catch (error) {
+              console.error(error);
+              return;
+            }
 
             const exifmeta = exifData[file.webkitRelativePath];
             let gpsData = null;
@@ -526,6 +541,7 @@ export function FileUploadCore({
 
         await Promise.all(uploadTasks);
 
+        // check if all files were uploaded
         const { items } = await list({
           path: `images/${name}`,
           options: { bucket: "inputs", listAll: true },
@@ -536,9 +552,15 @@ export function FileUploadCore({
           return set;
         }, new Set());
 
+        //debugging
+        console.log("uploaded files after attempt", attempt, uploadedFiles);
+
         const failedFiles = filesToUpload.filter(
           (file) => !uploadedFiles.has(file.webkitRelativePath)
         );
+
+        //debugging
+        console.log("failed files after attempt", attempt, failedFiles);
 
         if (failedFiles.length > 0) {
           console.warn(
@@ -1153,12 +1175,15 @@ export function FileUploadCore({
                 message = `No image files available for CSV file path matching.`;
               }
             }
-            return <div className="alert alert-info">{message}</div>;
+            return <div className="alert alert-info mb-0">{message}</div>;
           })()}
         </div>
       )}
-      {imageFiles.length > 0 && (
-        <ImageMaskEditor masks={masks} setMasks={setMasks} />
+      {filteredImageFiles.length > 0 && (
+        <ImageMaskEditor
+          sampleImage={filteredImageFiles[0]}
+          setMasks={setMasks}
+        />
       )}
     </>
   );

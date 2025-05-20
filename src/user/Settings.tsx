@@ -1,4 +1,4 @@
-import { SettingsIcon } from "lucide-react";
+import { SettingsIcon, UserIcon } from "lucide-react";
 import { useContext, useState } from "react";
 import { UserContext } from "../Context";
 import { useUsers } from "../apiInterface";
@@ -29,8 +29,10 @@ export default function Settings({ signOut }: { signOut: () => void }) {
         }}
         onClick={() => setShow(!show)}
       >
-        <SettingsIcon className="d-none d-lg-block" />
-        <span className="d-block d-lg-none">Settings</span>
+        {/* <SettingsIcon className="d-none d-lg-block" /> */}
+        <UserIcon className="d-none d-lg-block" />
+        {/* <span className="d-block d-lg-none">Settings</span> */}
+        <span className="d-block d-lg-none">User</span>
       </button>
       {show && (
         <div
@@ -59,7 +61,8 @@ export default function Settings({ signOut }: { signOut: () => void }) {
           }}
         >
           <Card.Header className="d-flex justify-content-between align-items-center">
-            <Card.Title className="mb-0">Settings</Card.Title>
+            {/* <Card.Title className="mb-0">Settings</Card.Title> */}
+            <Card.Title className="mb-0">User</Card.Title>
             <X onClick={() => setShow(false)} style={{ cursor: "pointer" }} />
           </Card.Header>
           <Card.Body>

@@ -133,7 +133,7 @@ export default function AddAnnotationSetModal({
       </Modal.Body>
       <Modal.Footer>
         <Button variant="primary" onClick={handleSave} disabled={busy}>
-          {busy ? "Submitting..." : "Submit"}
+          {busy ? "Creating..." : "Create"}
         </Button>
         <Button variant="dark" onClick={onClose}>
           Cancel

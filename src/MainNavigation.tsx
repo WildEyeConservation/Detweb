@@ -128,14 +128,15 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                 >
                   Permissions
                 </Nav.Link>
-                <Nav.Link
+                {/* Testing has a few issues that need to be fixed before it can be used again */}
+                {/* <Nav.Link
                   as={NavLink}
                   eventKey={`testing`}
                   to={`testing`}
                   className="px-2"
                 >
                   User Testing
-                </Nav.Link>
+                </Nav.Link> */}
               </>
             )}
             {cognitoGroups.includes("sysadmin") && (

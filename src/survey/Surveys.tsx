@@ -19,6 +19,7 @@ import FileStructureSubset from "../filestructuresubset.tsx";
 import { SquareArrowOutUpRight } from "lucide-react";
 import { fetchAllPaginatedResults } from "../utils.tsx";
 import { Badge } from "react-bootstrap";
+import ComingSoonOverlay from "../ComingSoonOverlay.tsx";
 
 export default function Surveys() {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
@@ -93,7 +94,7 @@ export default function Surveys() {
 
   async function deleteProject(projectId: string) {
     setDisabledSurveys((ds) => [...ds, projectId]);
-    await client.models.Project.update({ id: projectId, hidden: true });
+    await client.models.Project.update({ id: projectId, status: "deleted" });
 
     const projectMemberships = await fetchAllPaginatedResults(
       client.models.UserProjectMembership.userProjectMembershipsByProjectId,
@@ -136,8 +137,11 @@ export default function Surveys() {
   const tableData = projects
     .filter(
       (project) =>
-        project.name.toLowerCase().includes(search.toLowerCase()) ||
-        project.organization.name.toLowerCase().includes(search.toLowerCase())
+        project.status !== "deleted" &&
+        (project.name.toLowerCase().includes(search.toLowerCase()) ||
+          project.organization.name
+            .toLowerCase()
+            .includes(search.toLowerCase()))
     )
     .map((project) => {
       const disabled =
@@ -155,36 +159,45 @@ export default function Surveys() {
               <h5 className="mb-0">{project.name}</h5>
               <i style={{ fontSize: "14px" }}>{project.organization.name}</i>
               {project.status !== "active" && (
-                <Badge style={{ fontSize: "14px" }} bg={"info"}>
-                  {project.status}
+                <Badge
+                  style={{ fontSize: "14px", width: "fit-content" }}
+                  bg={"info"}
+                >
+                  {project.status.replace(/\b\w/g, (char) =>
+                    char.toUpperCase()
+                  )}
                 </Badge>
               )}
             </div>
             <div className="d-flex gap-2">
-              <Button
-                variant="primary"
-                onClick={(e) => {
-                  if (e.ctrlKey) {
-                    navigate(`/surveys/${project.id}/manage`);
-                  } else {
-                    setSelectedProject(project);
-                    showModal("editSurvey");
-                  }
-                }}
-                disabled={disabled}
-              >
-                Edit
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  setSelectedProject(project);
-                  showModal("addFiles");
-                }}
-                disabled={disabled}
-              >
-                Add files
-              </Button>
+              <ComingSoonOverlay>
+                <Button
+                  variant="primary"
+                  // onClick={(e) => {
+                  //   if (e.ctrlKey) {
+                  //     navigate(`/surveys/${project.id}/manage`);
+                  //   } else {
+                  //     setSelectedProject(project);
+                  //     showModal("editSurvey");
+                  //   }
+                  // }}
+                  disabled={disabled}
+                >
+                  Edit
+                </Button>
+              </ComingSoonOverlay>
+              <ComingSoonOverlay>
+                <Button
+                  variant="primary"
+                  // onClick={() => {
+                  //   setSelectedProject(project);
+                  //   showModal("addFiles");
+                  // }}
+                  disabled={disabled}
+                >
+                  Add files
+                </Button>
+              </ComingSoonOverlay>
               <Button
                 variant="primary"
                 onClick={() => {
