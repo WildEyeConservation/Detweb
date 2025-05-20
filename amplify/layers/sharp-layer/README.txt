@@ -1,0 +1,1 @@
+This folder just contains the unzipped pre built-layer from https://github.com/Umkus/lambda-layer-sharp/releases/download/0.32.6/sharp-layer.zip
