@@ -9,8 +9,9 @@ import { makeTransform, array2Matrix } from "./utils";
 import { inv } from "mathjs";
 import { GlobalContext, ManagementContext } from "./Context";
 import { RegisterPair } from "./RegisterPair";
-import { Card, Button } from "react-bootstrap";
+import { Card, Button, Form } from "react-bootstrap";
 import { useNavigate, useParams } from "react-router-dom";
+import { PanelBottom } from "lucide-react";
 
 export function Registration({ showAnnotationSetDropdown = true }) {
   const { client } = useContext(GlobalContext)!;
@@ -32,6 +33,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
     annotations: Schema["Annotation"]["type"][];
   } | null>(null);
   const [numLoaded, setNumLoaded] = useState(0);
+  const [showFilters, setShowFilters] = useState(true);
   const subscriptionFilter = useMemo(
     () => ({ filter: { setId: { eq: selectedAnnotationSet } } }),
     [selectedAnnotationSet]
@@ -227,114 +229,143 @@ export function Registration({ showAnnotationSetDropdown = true }) {
       style={{
         width: "100%",
         maxWidth: "1555px",
-        marginTop: "16px",
-        marginBottom: "16px",
+        paddingTop: "16px",
+        paddingBottom: "16px",
+        height: "100%",
       }}
     >
-      <Card className="h-100">
-        <Card.Body>
-          <Card.Title className="d-flex justify-content-between align-items-center">
-            <h4>
-              Register{" "}
-              {
-                annotationSets?.find((set) => set.id === selectedAnnotationSet)
-                  ?.name
-              }{" "}
-              ({project.name})
-            </h4>
-            <Button variant="dark" onClick={() => navigate("/surveys")}>
-              Back to Surveys
-            </Button>
-          </Card.Title>
-          <div
-            style={{
-              display: "flex",
-              marginTop: "1rem",
-              flexDirection: "column",
-              alignItems: "center",
-              width: "100%",
-              // gap: '16px'
-            }}
-          >
-            <div
-              className="w-100 d-flex align-items-center justify-content-center gap-2 p-2"
-              style={{
-                maxWidth: "600px",
-              }}
-            >
-              <Select
-                value={selectedCategories}
-                onChange={setSelectedCategories}
-                isMulti
-                name="Categories to register"
-                options={categories
-                  ?.sort((a, b) => a.name.localeCompare(b.name))
-                  ?.map((q) => ({ label: q.name, value: q.id }))}
-                className="text-black w-100"
-                closeMenuOnSelect={false}
+      <div className="w-100 h-100 d-flex flex-column flex-md-row gap-3">
+        <div
+          className="d-flex flex-column gap-3 w-100"
+          style={{ maxWidth: "300px" }}
+        >
+          <Card className="d-sm-block d-none w-100">
+            <Card.Header>
+              <Card.Title className="mb-0">Information</Card.Title>
+            </Card.Header>
+            <Card.Body className="d-flex flex-column gap-2">
+              <InfoTag label="Survey" value={project.name} />
+              <InfoTag
+                label="Annotation Set"
+                value={
+                  annotationSets?.find(
+                    (set) => set.id === selectedAnnotationSet
+                  )?.name ?? "Unknown"
+                }
               />
-              {showAnnotationSetDropdown && (
-                <AnnotationSetDropdown
-                  selectedSet={selectedAnnotationSet}
-                  setAnnotationSet={setSelectedAnnotationSet}
-                  canCreate={false}
-                />
-              )}
-            </div>
+            </Card.Body>
+          </Card>
+          <Card className="w-100 flex-grow-1">
+            <Card.Header>
+              <Card.Title className="mb-0 d-flex align-items-center">
+                <Button
+                  className="p-0 mb-0"
+                  variant="outline"
+                  onClick={() => setShowFilters(!showFilters)}
+                >
+                  <PanelBottom
+                    className="d-sm-none"
+                    style={{
+                      transform: showFilters
+                        ? "rotate(180deg)"
+                        : "rotate(0deg)",
+                    }}
+                  />
+                </Button>
+                Filters
+              </Card.Title>
+            </Card.Header>
+            {showFilters && (
+              <Card.Body className="d-flex flex-column gap-2">
+                <div className="w-100">
+                  <Form.Label>Labels</Form.Label>
+                  <Select
+                    value={selectedCategories}
+                    onChange={setSelectedCategories}
+                    isMulti
+                    name="Labels to register"
+                    options={categories
+                      ?.filter(
+                        (c) => c.annotationSetId === selectedAnnotationSet
+                      )
+                      .map((q) => ({
+                        label: q.name,
+                        value: q.id,
+                      }))}
+                    className="text-black w-100"
+                    closeMenuOnSelect={false}
+                  />
+                </div>
 
-            {annotationHook.meta?.isLoading ? (
-              <div>
-                Phase 1/3: Loading annotations... {numLoaded} annotations loaded
-                so far
-              </div>
-            ) : !imageNeighboursQueries.every((q) => q.isSuccess) ? (
-              <div>
-                Phase 2/3: Loading image neighbours...{" "}
-                {imageNeighboursQueries.reduce(
-                  (acc, q) => acc + (q.isSuccess ? 1 : 0),
-                  0
-                )}
-                of {imageNeighboursQueries.length} neighbours loaded
-              </div>
-            ) : !imageMetaDataQueries.every((q) => q.isSuccess) ? (
-              <div>
-                Phase 3/3: Loading image metadata...{" "}
-                {imageMetaDataQueries.reduce(
-                  (acc, q) => acc + (q.isSuccess ? 1 : 0),
-                  0
-                )}
-                of {imageMetaDataQueries.length} images loaded
-              </div>
-            ) : (
-              <div>
-                {activePair && (
-                  <RegisterPair
-                    key={activePair.primary + activePair.secondary}
-                    images={[
-                      imageMetaData[activePair?.primary],
-                      imageMetaData[activePair?.secondary],
-                    ]}
-                    selectedCategoryIDs={selectedCategoryIDs}
+                {showAnnotationSetDropdown && (
+                  <AnnotationSetDropdown
                     selectedSet={selectedAnnotationSet}
-                    transforms={[
-                      imageNeighbours[activePair?.primary][
-                        activePair?.secondary
-                      ].tf,
-                      imageNeighbours[activePair?.secondary][
-                        activePair?.primary
-                      ].tf,
-                    ]}
-                    next={nextPair}
-                    prev={() => {}}
-                    visible={true}
-                    ack={() => {}}
+                    setAnnotationSet={setSelectedAnnotationSet}
+                    canCreate={false}
                   />
                 )}
-              </div>
+              </Card.Body>
             )}
-          </div>
-        </Card.Body>
-      </Card>
+          </Card>
+        </div>
+        <div className="d-flex flex-column align-items-center h-100 w-100">
+          {annotationHook.meta?.isLoading ? (
+            <div>
+              Phase 1/3: Loading annotations... {numLoaded} annotations loaded
+              so far
+            </div>
+          ) : !imageNeighboursQueries.every((q) => q.isSuccess) ? (
+            <div>
+              Phase 2/3: Loading image neighbours...
+              {imageNeighboursQueries.reduce(
+                (acc, q) => acc + (q.isSuccess ? 1 : 0),
+                0
+              )}{" "}
+              of {imageNeighboursQueries.length} neighbours loaded
+            </div>
+          ) : !imageMetaDataQueries.every((q) => q.isSuccess) ? (
+            <div>
+              Phase 3/3: Loading image metadata...
+              {imageMetaDataQueries.reduce(
+                (acc, q) => acc + (q.isSuccess ? 1 : 0),
+                0
+              )}{" "}
+              of {imageMetaDataQueries.length} images loaded
+            </div>
+          ) : (
+            activePair && (
+              <RegisterPair
+                key={activePair.primary + activePair.secondary}
+                images={[
+                  imageMetaData[activePair?.primary],
+                  imageMetaData[activePair?.secondary],
+                ]}
+                selectedCategoryIDs={selectedCategoryIDs}
+                selectedSet={selectedAnnotationSet}
+                transforms={[
+                  imageNeighbours[activePair?.primary][activePair?.secondary]
+                    .tf,
+                  imageNeighbours[activePair?.secondary][activePair?.primary]
+                    .tf,
+                ]}
+                next={nextPair}
+                prev={() => {}}
+                visible={true}
+                ack={() => {}}
+              />
+            )
+          )}
+        </div>
+      </div>
     </div>
+  );
+}
+
+function InfoTag({ label, value }: { label: string; value: string }) {
+  return (
+    <p className="mb-0 d-flex flex-row gap-2 justify-content-between">
+      <span>{label}:</span>
+      <span>{value}</span>
+    </p>
   );
 }
