@@ -68,7 +68,7 @@ export class EC2QueueProcessor extends Construct {
       vpc: props.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       instanceType: props.instanceType,
-      machineImage: ec2.MachineImage.genericLinux({ 'eu-west-2': props.amiId }),
+      machineImage: ec2.MachineImage.genericLinux({ 'eu-west-1': props.amiId }),
       minCapacity: 0,
       maxCapacity: 1,
       desiredCapacity: 0,
