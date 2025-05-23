@@ -318,7 +318,9 @@ export function FileUploadCore({
     async (
       projectId: string,
       setStepsCompleted: (stepsCompleted: number) => void,
-      setTotalSteps: (totalSteps: number) => void
+      setTotalSteps: (totalSteps: number) => void,
+      setPreppingImages: (preppingImages: number) => void,
+      setTotalPreppingImages: (totalPreppingImages: number) => void,
     ) => {
       if (!projectId) {
         alert("Survey is required");
@@ -587,14 +589,10 @@ export function FileUploadCore({
         imageCount: (imageSet?.imageCount || 0) + totalUploaded,
       });
 
-      await client.models.Project.update({
-        id: projectId,
-        status: "processing",
-      });
-
-      queryClient.invalidateQueries({
-        queryKey: ["UserProjectMembership"],
-      });
+      // total number of tasks(pairs and model messages pushed) completed
+      // operations are async so we need to set the total tasks to 1 to notify the user there is a process running
+      let totalTasks = 1; 
+      setPreppingImages(totalTasks);
 
       //#region image registration
       async function handlePair(
@@ -624,6 +622,9 @@ export function FileUploadCore({
             image2Id: image2.id,
           });
         }
+
+        totalTasks++;
+        setPreppingImages(totalTasks);
         // Return the message instead of sending it immediately
         return {
           Id: `${image1.id}-${image2.id}`, // Required unique ID for batch entries
@@ -668,10 +669,22 @@ export function FileUploadCore({
             })
           )
         );
+        totalTasks += batch.length;
+        setPreppingImages(totalTasks);
       }
       //#endregion
 
       if (model.value === "manual") {
+        await client.models.Project.update({
+          id: projectId,
+          status: "processing",
+        });
+  
+        client.mutations.updateProjectMemberships({
+          projectId: projectId,
+        });
+
+        setTotalPreppingImages(totalTasks);
         return;
       }
 
@@ -735,7 +748,10 @@ export function FileUploadCore({
                 }),
               })
             );
+            totalTasks += chunkSize;
+            setPreppingImages(totalTasks);
           }
+          setTotalPreppingImages(totalTasks);
           break;
         case "elephant-detection-nadir":
           // heatmap generation
@@ -790,7 +806,14 @@ export function FileUploadCore({
       }
       //#endregion
 
-      //TODO: still need progress checking within the models to update the project status
+      await client.models.Project.update({
+        id: projectId,
+        status: "processing",
+      });
+
+      client.mutations.updateProjectMemberships({
+        projectId: projectId,
+      });
     },
     [upload, filteredImageFiles, name, client, filteredImageSize, csvData]
   );
@@ -937,14 +960,14 @@ export function FileUploadCore({
               label: "ScoutBot",
               value: "scoutbot",
             },
-            {
-              label: "Elephant Detection (nadir)",
-              value: "elephant-detection-nadir",
-            },
-            {
-              label: "Manual (model may be launched later)",
-              value: "manual",
-            },
+            // {
+            //   label: "Elephant Detection (nadir)",
+            //   value: "elephant-detection-nadir",
+            // },
+            // {
+            //   label: "Manual (model may be launched later)",
+            //   value: "manual",
+            // },
           ]}
           onChange={(e) => setModel(e)}
           placeholder="Select a model"

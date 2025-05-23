@@ -51,7 +51,7 @@ export function useLaunchTask(
           ":lowerLimit": { N: options.lowerLimit.toString() },
           ":upperLimit": { N: options.upperLimit.toString() },
         },
-        ProjectionExpression: "id",
+        ProjectionExpression: "id, x, y, width, height, confidence",
         ExclusiveStartKey: lastEvaluatedKey,
         Limit: 1000,
       });
@@ -59,8 +59,17 @@ export function useLaunchTask(
         const response = await dynamoClient.send(command);
         const items = response.Items || [];
         setStepsCompleted((s: number) => s + items.length);
-        // Extract ids from the response
-        const pageLocationIds = items.map((item: any) => item.id.S);
+        // Filter out locations with zero values
+        const pageLocationIds = items
+          .filter((item: any) => {
+            const x = parseFloat(item.x?.N || "0");
+            const y = parseFloat(item.y?.N || "0");
+            const width = parseFloat(item.width?.N || "0");
+            const height = parseFloat(item.height?.N || "0");
+            const confidence = parseFloat(item.confidence?.N || "0");
+            return x !== 0 && y !== 0 && width !== 0 && height !== 0 && confidence !== 0;
+          })
+          .map((item: any) => item.id.S);
         locationIds.push(...pageLocationIds);
         lastEvaluatedKey = response.LastEvaluatedKey as
           | Record<string, any>

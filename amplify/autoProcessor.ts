@@ -53,8 +53,15 @@ export class AutoProcessor extends Construct {
 
     const { vpc, ecsImage,instanceType,ecsTaskRole,memoryLimitMiB,gpuCount,machineImage } = props;
 
-    // Create SQS Queue
-    this.queue = new sqs.Queue(this, 'ProcessingQueue');
+    // Create Dead Letter Queue for processing
+    const dlq = new sqs.Queue(this, 'ProcessingDeadLetterQueue');
+    // Create SQS Queue with dead letter queue configuration
+    this.queue = new sqs.Queue(this, 'ProcessingQueue', {
+      deadLetterQueue: {
+        queue: dlq,
+        maxReceiveCount: 3,
+      }
+    });
 
     // Create ECS Cluster
     const cluster = new ecs.Cluster(this, 'ProcessorCluster', {
@@ -147,7 +154,6 @@ export class AutoProcessor extends Construct {
 
 export interface AutoProcessorEC2Props extends cdk.StackProps {
   vpc: ec2.Vpc;
-  inputqueue: sqs.Queue;
   outputqueue: sqs.Queue;
   amiArn: string;
 }
@@ -156,7 +162,15 @@ export class AutoProcessorEC2 extends Construct {
   constructor(scope: Construct, id: string, props: AutoProcessorEC2Props) {
     super(scope, id);
 
-    const { vpc, inputqueue,outputqueue, amiArn } = props;
+    const { vpc, outputqueue, amiArn } = props;
+    // Create processing queue with dead letter queue for EC2 auto processor
+    const ec2dlq = new sqs.Queue(this, 'EC2ProcessingDeadLetterQueue');
+    const processingQueue = new sqs.Queue(this, 'EC2ProcessingQueue', {
+      deadLetterQueue: {
+        queue: ec2dlq,
+        maxReceiveCount: 3,
+      },
+    });
 
     // Create Security Group for EC2 instance
     const securityGroup = new ec2.SecurityGroup(this, 'ProcessorInstanceSG', {
@@ -175,8 +189,8 @@ export class AutoProcessorEC2 extends Construct {
     role.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSQSFullAccess'));
     role.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonEC2FullAccess'));
 
-    // Grant permissions to the EC2 instance to access the SQS queue
-    inputqueue.grantConsumeMessages(role);
+    // Grant permissions to the EC2 instance to access the processing queue
+    processingQueue.grantConsumeMessages(role);
     outputqueue.grantSendMessages(role);
 
     // Set up scaling based on SQS queue
@@ -190,11 +204,11 @@ export class AutoProcessorEC2 extends Construct {
       securityGroup,
       role,
       keyName: "wildcru2",
-      userData: createUserData(inputqueue,outputqueue),
+      userData: createUserData(processingQueue, outputqueue),
     });
 
     scaling.scaleOnMetric('ScaleOnSQSMessages', {
-      metric: inputqueue.metricApproximateNumberOfMessagesVisible(),
+      metric: processingQueue.metricApproximateNumberOfMessagesVisible(),
       scalingSteps: [
         { upper: 0, change: -1 },
         { lower: 1, change: +1 },
