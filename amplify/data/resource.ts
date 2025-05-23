@@ -7,6 +7,8 @@ import { processImages } from '../functions/processImages/resource';
 import { getAnnotationCounts } from '../functions/getAnnotationCounts/resource';
 import { updateUserStats } from '../functions/updateUserStats/resource';
 import { updateAnnotationCounts } from '../functions/updateAnnotationCounts/resource';
+import { monitorModelProgress } from '../functions/monitorModelProgress/resource';
+import { updateProjectMemberships } from '../functions/updateProjectMemberships/resource';
 
 const schema = a
   .schema({
@@ -677,12 +679,22 @@ const schema = a
       .secondaryIndexes((index) => [
         index('status').queryField('organizationRegistrationsByStatus'),
       ]),
+    updateProjectMemberships: a
+      .mutation()
+      .arguments({
+        projectId: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(updateProjectMemberships)),
   })
   .authorization((allow) => [
     allow.resource(getAnnotationCounts),
     allow.resource(processImages),
     allow.resource(updateUserStats),
     allow.resource(updateAnnotationCounts),
+    allow.resource(monitorModelProgress),
+    allow.resource(updateProjectMemberships),
   ]);
 
 export type Schema = ClientSchema<typeof schema>;

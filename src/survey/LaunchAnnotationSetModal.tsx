@@ -21,14 +21,12 @@ export default function LaunchAnnotationSetModal({
   project,
   imageSets,
   annotationSet,
-  setDisabledSurveys,
 }: {
   show: boolean;
   onClose: () => void;
   project: Schema["Project"]["type"];
   imageSets: { id: string; name: string }[];
   annotationSet: Schema["AnnotationSet"]["type"];
-  setDisabledSurveys: React.Dispatch<React.SetStateAction<string[]>>;
 }) {
   const [selectedImageSets, setSelectedImageSets] = useState<string[]>([]);
   const [batchSize, setBatchSize] = useState<number>(200);
@@ -46,7 +44,7 @@ export default function LaunchAnnotationSetModal({
     useState<boolean>(false);
   const [taskTag, setTaskTag] = useState<string>(annotationSet.name);
   const [zoom, setZoom] = useState<number | undefined>(undefined);
-  const [lowerLimit, setLowerLimit] = useState<number>(0);
+  const [lowerLimit, setLowerLimit] = useState<number>(0.6);
   const [upperLimit, setUpperLimit] = useState<number>(1);
   const [hidden, setHidden] = useState<boolean>(false);
   const [handleCreateTask, setHandleCreateTask] =
@@ -135,7 +133,6 @@ export default function LaunchAnnotationSetModal({
 
   async function createTiledTask() {
     onClose();
-    setDisabledSurveys((ds) => [...ds, project.id]);
 
     if (handleCreateTask) {
       const locationSetId = await handleCreateTask({
@@ -162,11 +159,6 @@ export default function LaunchAnnotationSetModal({
           setTotalSteps: setTotalLocations,
         });
       }
-
-      queryClient.invalidateQueries({
-        queryKey: ["UserProjectMembership"],
-      });
-      setDisabledSurveys((ds) => ds.filter((id) => id !== project.id));
     }
   }
 
@@ -179,7 +171,6 @@ export default function LaunchAnnotationSetModal({
     }
 
     onClose();
-    // setDisabledSurveys((ds) => [...ds, project.id]);
 
     const modelGuidedLocationSet = locationSets.find((ls) =>
       ls.name.toLowerCase().includes(model?.value)
@@ -203,11 +194,6 @@ export default function LaunchAnnotationSetModal({
         setTotalSteps: setTotalLocations,
       });
     }
-
-    queryClient.invalidateQueries({
-      queryKey: ["UserProjectMembership"],
-    });
-    setDisabledSurveys((ds) => ds.filter((id) => id !== project.id));
   }
 
   async function createAnnotationTask() {
@@ -230,13 +216,18 @@ export default function LaunchAnnotationSetModal({
       id: annotationSet.id,
       register: true,
     });
-
-    queryClient.invalidateQueries({
-      queryKey: ["UserProjectMembership"],
-    });
   }
 
   async function handleSubmit() {
+    await client.models.Project.update({
+      id: project.id,
+      status: "launching",
+    });
+
+    await client.mutations.updateProjectMemberships({
+      projectId: project.id,
+    });
+
     switch (taskType) {
       case "tiled":
         await createTiledTask();
@@ -251,6 +242,15 @@ export default function LaunchAnnotationSetModal({
         await createRegistrationTask();
         break;
     }
+
+    await client.models.Project.update({
+      id: project.id,
+      status: "active",
+    });
+
+    await client.mutations.updateProjectMemberships({
+      projectId: project.id,
+    });
   }
 
   useEffect(() => {

@@ -13,14 +13,25 @@ import CreateAnnotationOnHotKey from "./CreateAnnotationOnHotKey";
 import { Schema } from "../amplify/data/resource";
 import useImageStats from "./useImageStats";
 import { Badge } from "react-bootstrap";
+import { Share2 } from "lucide-react";
 const Image = withCreateObservation(withAckOnTimeout(BaseImage));
 
 export default function AnnotationImage(props: any) {
-  const { location, next, prev, visible, id, ack, allowOutside, zoom, hideNavButtons } = props;
+  const {
+    location,
+    next,
+    prev,
+    visible,
+    id,
+    ack,
+    allowOutside,
+    zoom,
+    hideNavButtons,
+  } = props;
   const { annotationSetId } = location;
   const { client } = useContext(GlobalContext)!;
   //testing
-  const { currentTaskTag } = useContext(UserContext)!;
+  const { currentTaskTag, isTesting } = useContext(UserContext)!;
   const subscriptionFilter = useMemo(
     () => ({
       filter: {
@@ -50,16 +61,18 @@ export default function AnnotationImage(props: any) {
   const stats = useImageStats(annotationsHook);
   const memoizedChildren = useMemo(() => {
     console.log("memoizing");
+    // non-existing setId for testing since annotations are recorded in context
+    const setId = isTesting ? "123" : annotationSetId;
     const source = props.taskTag ? `manual-${props.taskTag}` : "manual";
     return [
       <CreateAnnotationOnClick
         key="caok"
         allowOutside={allowOutside}
         location={location}
-        annotationSet={annotationSetId}
+        annotationSet={setId}
         source={source}
       />,
-      <ShowMarkers key="showMarkers" annotationSetId={annotationSetId} />,
+      <ShowMarkers key="showMarkers" annotationSetId={setId} />,
       <Location key="location" {...location} />,
       <MapLegend
         key="legend"
@@ -73,14 +86,39 @@ export default function AnnotationImage(props: any) {
           <CreateAnnotationOnHotKey
             key={category.id}
             hotkey={category.shortcutKey}
-            setId={annotationSetId}
+            setId={setId}
             category={category}
             imageId={location.image.id}
             source={source}
           />
         ))
     );
-  }, [props.taskTag, location.image.id, annotationSetId]);
+  }, [props.taskTag, location.image.id, annotationSetId, isTesting]);
+
+  async function handleShare() {
+    const base = window.location.href;
+    let url = "";
+
+    if (location.id && location.annotationSetId) {
+      url = base.replace(
+        /\/[^/]+\/?$/,
+        `/location/${location?.id}/${location?.annotationSetId}`
+      );
+    } else if (location.image.id && location.annotationSetId) {
+      url = base.replace(
+        /\/[^/]+\/?$/,
+        `/image/${location.image.id}/${location?.annotationSetId}`
+      );
+    } else {
+      return;
+    }
+
+    try {
+      await navigator.share({ url: url });
+    } catch (error) {
+      console.error(error);
+    }
+  }
 
   return (
     <ImageContextFromHook
@@ -97,11 +135,32 @@ export default function AnnotationImage(props: any) {
             maxWidth: "1024px",
           }}
         >
-          {visible && (props.taskTag || currentTaskTag) && (
-            <Badge bg="secondary">
-              Working on: {props.taskTag || currentTaskTag}
-            </Badge>
-          )}
+          <div
+            className="d-flex flex-row justify-content-center align-items-center w-100 gap-3 overflow-hidden"
+            style={{ position: "relative", height: "26px" }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+              }}
+            >
+              <Share2
+                size={24}
+                onClick={handleShare}
+                style={{ cursor: "pointer" }}
+              />
+            </div>
+            {visible && (
+              <Badge bg="secondary">
+                Working on:{" "}
+                {props.taskTag || currentTaskTag
+                  ? `${props.taskTag || currentTaskTag}`
+                  : "Viewing image"}
+              </Badge>
+            )}
+          </div>
           <Image
             stats={stats}
             visible={visible}
@@ -118,9 +177,7 @@ export default function AnnotationImage(props: any) {
             {visible && memoizedChildren}
           </Image>
         </div>
-        <SideLegend
-          annotationSetId={annotationSetId}
-        />
+        <SideLegend annotationSetId={annotationSetId} />
       </div>
     </ImageContextFromHook>
   );

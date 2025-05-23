@@ -85,13 +85,13 @@ export function JobsRemaining() {
     batchSize === 0 ||
     parseInt(jobsRemaining) < batchSize ? (
     <Badge
-      className="d-flex flex-row align-items-center justify-content-center gap-3 p-2 w-100 bg-secondary"
+      className="d-flex flex-row align-items-center justify-content-center gap-3 p-2 w-100 bg-secondary flex-wrap"
     >
       <p className="mb-0">
         {jobsRemaining} jobs remaining
         {usingBackupQueue ? " on backup queue " : " "}(globally)
       </p>
-      <span>|</span>
+      <span className="d-none d-sm-block">|</span>
       <p className="mb-0">
         {sessionJobsCompleted} jobs completed in this session
       </p>

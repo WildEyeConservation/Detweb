@@ -77,18 +77,34 @@ def process_output(output_queue):
         detects_list, message = output
         body = json.loads(message['Body'])
         for detects, image in zip(detects_list, body['images']):
-            for detect in detects:
+            logging.info(f"Image {image['imageId']} detects: {detects}")
+            if not detects:
                 resp = client.execute(createLocation, variable_values=json.dumps({
-                    'height': round(detect['h']),
+                    'height': 0,
                     'imageId': image['imageId'],
                     'projectId': body['projectId'],
-                    'x': round(detect['x'] + detect['w'] / 2),
-                    'y': round(detect['y'] + detect['h'] / 2),
-                    'width': round(detect['w']),
+                    'x': 0,
+                    'y': 0,
+                    'width': 0,
                     'setId': body['setId'],
-                    'confidence': detect['c'],
+                    'confidence': 0,
                     'source': 'scoutbotv3'
                 }))
+                logging.info(f"Added zero location for image {image['imageId']}.")
+            else:
+                for detect in detects:
+                    resp = client.execute(createLocation, variable_values=json.dumps({
+                        'height': round(detect['h']),
+                        'imageId': image['imageId'],
+                        'projectId': body['projectId'],
+                        'x': round(detect['x'] + detect['w'] / 2),
+                        'y': round(detect['y'] + detect['h'] / 2),
+                        'width': round(detect['w']),
+                        'setId': body['setId'],
+                        'confidence': detect['c'],
+                        'source': 'scoutbotv3'
+                    }))
+                    logging.info(f"Added location for image {image['imageId']} with confidence {detect['c']}.")
         sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=message['ReceiptHandle'])
 
 def main():

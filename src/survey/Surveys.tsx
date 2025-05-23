@@ -36,7 +36,6 @@ export default function Surveys() {
   >(null);
   const [search, setSearch] = useState("");
   const [selectedSets, setSelectedSets] = useState<string[]>([]);
-  const [disabledSurveys, setDisabledSurveys] = useState<string[]>([]);
 
   useEffect(() => {
     async function getProjects() {
@@ -77,15 +76,6 @@ export default function Surveys() {
       ).then((projects) => {
         const validProjects = projects.filter((project) => project !== null);
         setProjects(validProjects);
-        setDisabledSurveys(
-          validProjects
-            .filter(
-              (project) =>
-                project.queues.length > 0 ||
-                project.annotationSets.some((set) => set.register)
-            )
-            .map((project) => project.id)
-        );
       });
     }
 
@@ -93,7 +83,6 @@ export default function Surveys() {
   }, [myProjectsHook.data]);
 
   async function deleteProject(projectId: string) {
-    setDisabledSurveys((ds) => [...ds, projectId]);
     await client.models.Project.update({ id: projectId, status: "deleted" });
 
     const projectMemberships = await fetchAllPaginatedResults(
@@ -110,8 +99,6 @@ export default function Surveys() {
         });
       })
     );
-
-    setDisabledSurveys((ds) => ds.filter((id) => id !== projectId));
   }
 
   async function deleteAnnotationSet(
@@ -145,9 +132,11 @@ export default function Surveys() {
     )
     .map((project) => {
       const disabled =
-        disabledSurveys.includes(project.id) ||
         project.status === "uploading" ||
-        project.status === "processing";
+        project.status === "processing" ||
+        project.status === "launching" ||
+        project.queues.length > 0 ||
+        project.annotationSets.some((set) => set.register);
       const hasJobs =
         project.queues.length > 0 ||
         project.annotationSets.some((set) => set.register);
@@ -496,7 +485,6 @@ export default function Surveys() {
           imageSets={selectedProject.imageSets}
           annotationSet={selectedAnnotationSet}
           project={selectedProject}
-          setDisabledSurveys={setDisabledSurveys}
         />
       )}
       {selectedProject && (

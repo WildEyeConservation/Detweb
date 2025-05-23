@@ -236,8 +236,8 @@ export default function Jobs() {
           .send(new DeleteQueueCommand({ QueueUrl: job.url }))
           .then(async () => {
             await client.models.Queue.delete({ id: job.id });
-            queryClient.invalidateQueries({
-              queryKey: ["UserProjectMembership"],
+            client.mutations.updateProjectMemberships({
+              projectId: job.projectId,
             });
           })
       );

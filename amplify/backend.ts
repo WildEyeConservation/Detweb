@@ -20,6 +20,7 @@ import { Policy, PolicyStatement, Effect } from "aws-cdk-lib/aws-iam";
 import { StartingPosition, EventSourceMapping } from "aws-cdk-lib/aws-lambda";
 import { Repository } from "aws-cdk-lib/aws-ecr";
 import { updateAnnotationCounts } from "./functions/updateAnnotationCounts/resource";
+import { monitorModelProgress } from "./functions/monitorModelProgress/resource";
 
 const backend=defineBackend({
   auth,
@@ -32,7 +33,8 @@ const backend=defineBackend({
   postDeploy,
   getAnnotationCounts,
   updateUserStats,
-  updateAnnotationCounts
+  updateAnnotationCounts,
+  monitorModelProgress
 });
 
 const observationTable = backend.data.resources.tables["Observation"];

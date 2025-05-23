@@ -90,8 +90,8 @@ export default function LabelEditor({
         );
       }
 
-      queryClient.invalidateQueries({
-        queryKey: ["UserProjectMembership"],
+      client.mutations.updateProjectMemberships({
+        projectId: projectId,
       });
     },
     [client, labels]

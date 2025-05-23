@@ -8,7 +8,6 @@ import MyTable from "../Table";
 import { useUsers } from "../apiInterface";
 import { fetchAllPaginatedResults } from "../utils";
 import { FilesUploadForm, formatFileSize } from "../FilesUploadComponent";
-import { useQueryClient } from "@tanstack/react-query";
 import { useUpdateProgress } from "../useUpdateProgress";
 
 export default function NewSurveyModal({
@@ -19,12 +18,10 @@ export default function NewSurveyModal({
   show: boolean;
   onClose: () => void;
   projects: string[];
-  setDisabledSurveys: React.Dispatch<React.SetStateAction<string[]>>;
 }) {
   const { myOrganizationHook, user } = useContext(UserContext)!;
   const { client } = useContext(GlobalContext)!;
   const { users: allUsers } = useUsers();
-  const queryClient = useQueryClient();
 
   const [filesReady, setFilesReady] = useState(false);
   const [name, setName] = useState("");
@@ -65,6 +62,8 @@ export default function NewSurveyModal({
         projectId: string,
         setStepsCompleted: (stepsCompleted: number) => void,
         setTotalSteps: (totalSteps: number) => void,
+        setPreppingImages: (preppingImages: number) => void,
+        setTotalPreppingImages: (totalPreppingImages: number) => void,
       ) => Promise<void>)
     | null
   >(null);
@@ -76,6 +75,13 @@ export default function NewSurveyModal({
     determinateTaskName: `Uploading files`,
     indeterminateTaskName: `Preparing files`,
     stepFormatter: formatFileSize,
+  });
+
+  const [setPreppingImages, setTotalPreppingImages] = useUpdateProgress({
+    taskId: `Finishing up`,
+    indeterminateTaskName: `Finishing up. This may take a while, do not close this page.`,
+    determinateTaskName: "Finishing up. This may take a while, do not close this page.",
+    stepFormatter: (x: number) => `${x} tasks`,
   });
 
   const [setImagesCompleted, setTotalImages] = useUpdateProgress({
@@ -98,10 +104,6 @@ export default function NewSurveyModal({
       organizationId: organization.value,
       createdBy: user.userId,
       status: "uploading",
-    });
-
-    queryClient.invalidateQueries({
-      queryKey: ["UserProjectMembership"],
     });
 
     if (!project) {
@@ -181,8 +183,8 @@ export default function NewSurveyModal({
       projectId: project.id,
     });
 
-    queryClient.invalidateQueries({
-      queryKey: ["UserProjectMembership"],
+    client.mutations.updateProjectMemberships({
+      projectId: project.id,
     });
 
     setLoading(false);
@@ -193,6 +195,8 @@ export default function NewSurveyModal({
         project.id,
         setFilesUploaded,
         setTotalFiles,
+        setPreppingImages,
+        setTotalPreppingImages,
       );
     }
   }
