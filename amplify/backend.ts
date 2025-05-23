@@ -232,7 +232,7 @@ const processor = new EC2QueueProcessor(customStack, 'MyProcessor', {
 vpc: vpc, // Your VPC
 instanceType: ec2.InstanceType.of(ec2.InstanceClass.G4DN, ec2.InstanceSize.XLARGE), // Or any instance type you prefer
 amiId: 'ami-085491cd874e9cd28', // Your AMI ID
-keyName: 'phindulo', // Optional: Your EC2 key pair name
+keyName: 'surveyscope', // Optional: Your EC2 key pair name
 });
 
 backend.processImages.addEnvironment('PROCESS_QUEUE_URL', processor.queue.queueUrl)
