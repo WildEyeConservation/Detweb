@@ -38,6 +38,7 @@ import { Schema } from "../amplify/data/resource";
 import Test from "./Test";
 import {Outlet} from "react-router-dom";
 import { StorageImage } from '@aws-amplify/ui-react-storage';
+import Button from "react-bootstrap/Button";
 //import { ErrorHandler } from './ErrorHandler';
 //import {TaskProgressHandler} from './TaskProgressHandler';
 
@@ -60,7 +61,10 @@ function App({ signOut = () => {}, user }: AppProps) {
   const [currentPM, setCurrentPM] = useState<Schema['UserProjectMembership']['type'] | undefined>(undefined);
   const { showModal } = useContext(GlobalContext)!
   const [userAttributes, setUserAttributes] = useState<any>(null);
+  const [showNotice, setShowNotice] = useState(true);
   const location = useLocation();
+  const [browserUrl, setBrowserUrl] = useState("");
+
   useEffect(() => {
     //fetchAuthSession().then((sess) => setSession(sess));
     fetchUserAttributes().then(attributes => setUserAttributes(attributes));
@@ -73,6 +77,11 @@ function App({ signOut = () => {}, user }: AppProps) {
   //   }
   //   setModalToShow(key);
   // };
+
+  useEffect(() => {
+    const url = window.location.href;
+    setBrowserUrl(url);
+  }, []);
   
   useEffect(() => {
     window.addEventListener("beforeunload", alertUser);
@@ -98,9 +107,21 @@ function App({ signOut = () => {}, user }: AppProps) {
             <User user={user}>
                   <div
                     className="App d-flex flex-column"
-                    style={{ height: "100vh", overflow: "hidden" }} // Changed overflow to hidden
+                    style={{position: "relative", height: "100vh", overflow: "hidden" }} // Changed overflow to hidden
                   >
-                    
+                  {process.env.NODE_ENV !== 'development' && !browserUrl.includes("legacy") && showNotice && (
+                    <div 
+                      className="alert alert-warning w-100 d-flex flex-row align-items-center justify-content-center gap-3"
+                      style={{ zIndex: 2000, position: "absolute", top: 0, left: 0, right: 0, margin: "0 auto", textAlign: "center" }}>
+                      <p className="m-0">This application is now available at <a href="https://legacy.surveyscope.org">https://legacy.surveyscope.org</a></p>
+                      <Button variant="secondary" size="sm" onClick={() => {
+                        setShowNotice(false);
+                      }}>
+                        Close Notice
+                      </Button>
+                    </div>
+                  )}
+
               <Navbar bg="primary" variant="dark" fixed="top">
                 
       <Container fluid>
@@ -147,7 +168,6 @@ function App({ signOut = () => {}, user }: AppProps) {
         </Nav>
       </Container>
               </Navbar>
-              
               {currentPM && <Project currentPM={currentPM}><Management>
                 <Container
                   fluid
