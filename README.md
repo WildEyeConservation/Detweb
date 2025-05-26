@@ -52,7 +52,7 @@ You can manually fix this by running:
 aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 275736403632.dkr.ecr.eu-west-2.amazonaws.com
 ```
 
-Replace 275736403632 with your account number and both occurrences of eu-west-2 with your region.
+Replace "275736403632" with your account number and both occurrences of eu-west-2 with your region.
 
 ### 6. API Field Undefined Error
 Writing this up as it has now happened twice. Sometimes API calls would "randomly" start failing with the following error reported in the browser console:
