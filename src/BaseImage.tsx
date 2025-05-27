@@ -92,17 +92,19 @@ const BaseImage: React.FC<BaseImageProps> = memo(
     );
 
     async function useForTestPreset() {
-      const { data: [testPreset] } = await client.models.TestPreset.testPresetsByName({
+      const {
+        data: [testPreset],
+      } = await client.models.TestPreset.testPresetsByName({
         name: project.name,
-      })
-  
-      const { data: testPresetLocation } = await client.models.TestPresetLocation.get({
-        testPresetId: testPreset.id,
-        locationId: location?.id,
-        annotationSetId: location?.annotationSetId,
       });
-  
-  
+
+      const { data: testPresetLocation } =
+        await client.models.TestPresetLocation.get({
+          testPresetId: testPreset.id,
+          locationId: location?.id,
+          annotationSetId: location?.annotationSetId,
+        });
+
       if (!testPresetLocation) {
         await client.models.TestPresetLocation.create({
           testPresetId: testPreset.id,
@@ -110,13 +112,13 @@ const BaseImage: React.FC<BaseImageProps> = memo(
           annotationSetId: location?.annotationSetId,
         });
       }
-  
+
       const annotations = await fetchAllPaginatedResults(
         client.models.Annotation.annotationsByImageIdAndSetId,
         {
           imageId: location!.image.id,
           setId: { eq: location.annotationSetId },
-          selectionSet: ['categoryId', 'x', 'y'],
+          selectionSet: ["categoryId", "x", "y"],
         }
       );
 
@@ -124,22 +126,21 @@ const BaseImage: React.FC<BaseImageProps> = memo(
         [location!.x - location!.width / 2, location!.y - location!.height / 2],
         [location!.x + location!.width / 2, location!.y + location!.height / 2],
       ];
-  
+
       const annotationCounts: { [key: string]: number } = {};
       for (const annotation of annotations) {
-        
         const isWithin =
           annotation.x >= boundsxy[0][0] &&
           annotation.y >= boundsxy[0][1] &&
           annotation.x <= boundsxy[1][0] &&
           annotation.y <= boundsxy[1][1];
-  
+
         if (isWithin) {
           annotationCounts[annotation.categoryId] =
             (annotationCounts[annotation.categoryId] || 0) + 1;
         }
       }
-  
+
       for (const [categoryId, count] of Object.entries(annotationCounts)) {
         const { data: locationAnnotationCount } =
           await client.models.LocationAnnotationCount.get({
@@ -147,7 +148,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
             categoryId: categoryId,
             annotationSetId: location?.annotationSetId,
           });
-  
+
         if (locationAnnotationCount) {
           await client.models.LocationAnnotationCount.update({
             locationId: location?.id,
@@ -417,12 +418,12 @@ const BaseImage: React.FC<BaseImageProps> = memo(
         location?.x
           ? xy2latLng([
               [
-                location.x - location.width / 2,
-                location.y - location.height / 2,
+                location.x - location.width * 1.5,
+                location.y - location.height * 1.5,
               ],
               [
-                location.x + location.width / 2,
-                location.y + location.height / 2,
+                location.x + location.width * 1.5,
+                location.y + location.height * 1.5,
               ],
             ])
           : imageBounds,
@@ -522,10 +523,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
             )}
           </div>
           {(next || prev) && fullyLoaded && !hideNavButtons && (
-            <NavButtons
-              prev={prev}
-              next={canAdvance ? next : undefined}
-            />
+            <NavButtons prev={prev} next={canAdvance ? next : undefined} />
           )}
         </div>
       ),
