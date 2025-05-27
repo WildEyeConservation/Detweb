@@ -1,15 +1,25 @@
 import { useEffect, useState, useContext, useCallback } from "react";
-import { UserContext,ProjectContext, GlobalContext } from "./Context";
-import { ReceiveMessageCommand, DeleteMessageCommand } from "@aws-sdk/client-sqs";
+import { UserContext, ProjectContext, GlobalContext } from "./Context";
+import {
+  ReceiveMessageCommand,
+  DeleteMessageCommand,
+} from "@aws-sdk/client-sqs";
 
-export default function useSQS(filterPredicate: (message: any) => Promise<boolean> = async () => { return true }) {
+export default function useSQS(
+  filterPredicate: (message: any) => Promise<boolean> = async () => {
+    return true;
+  }
+) {
   const { currentPM } = useContext(ProjectContext)!;
-  const {getSqsClient} = useContext(UserContext)!;
+  const { getSqsClient } = useContext(UserContext)!;
   const { client } = useContext(GlobalContext)!;
-  const [url,setUrl] = useState<string | undefined>(undefined);
-  const [backupUrl,setBackupUrl] = useState<string | undefined>(undefined);
-  const [zoom,setZoom] = useState<number | undefined>(undefined);
-  const [backupZoom,setBackupZoom] = useState<number | undefined>(undefined);
+  const [url, setUrl] = useState<string | undefined>(undefined);
+  const [backupUrl, setBackupUrl] = useState<string | undefined>(undefined);
+  const [zoom, setZoom] = useState<number | undefined>(undefined);
+  const [backupZoom, setBackupZoom] = useState<number | undefined>(undefined);
+  const [processedLocations, setProcessedLocations] = useState<Set<string>>(
+    new Set()
+  );
 
   useEffect(() => {
     if (currentPM.queueId) {
@@ -17,82 +27,120 @@ export default function useSQS(filterPredicate: (message: any) => Promise<boolea
         ({ data: { url, zoom } }) => {
           setUrl(url);
           setZoom(zoom);
-        });
+        }
+      );
       if (currentPM.backupQueueId) {
         client.models.Queue.get({ id: currentPM.backupQueueId }).then(
           ({ data: { url, zoom } }) => {
             setBackupUrl(url);
             setBackupZoom(zoom);
-          });
+          }
+        );
       }
     }
   }, [currentPM]);
-    
-    const fetcher = useCallback(async (): Promise<Identifiable> => {
-        while (true) {
-            if (!url) {
-                console.log('No queue URL set');
-                await new Promise(resolve => setTimeout(resolve, 5000));
-                continue;
-            }
 
-            const sqsClient = await getSqsClient();
+  const fetcher = useCallback(async (): Promise<Identifiable> => {
+    while (true) {
+      if (!url) {
+        console.log("No queue URL set");
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        continue;
+      }
 
-            const getResponse = async (url: string) => {
-              const response = await sqsClient.send(new ReceiveMessageCommand({
-                QueueUrl: url,
-                MaxNumberOfMessages: 1,
-                MessageAttributeNames: ["All"],
-                VisibilityTimeout: 600,
-              }));
+      const sqsClient = await getSqsClient();
 
-              return response;
-            }
+      const getResponse = async (url: string) => {
+        const response = await sqsClient.send(
+          new ReceiveMessageCommand({
+            QueueUrl: url,
+            MaxNumberOfMessages: 1,
+            MessageAttributeNames: ["All"],
+            VisibilityTimeout: 600,
+          })
+        );
 
-            let usingBackup = false;
-            let response = await getResponse(url);
+        return response;
+      };
 
-            if (!response.Messages && backupUrl) {
-                console.log('No message from main queue, checking backup queue');
-                response = await getResponse(backupUrl);
+      let usingBackup = false;
+      let response = await getResponse(url);
 
-                if (response.Messages) {
-                    usingBackup = true;
-                }
-            }
+      if (!response.Messages && backupUrl) {
+        console.log("No message from main queue, checking backup queue");
+        response = await getResponse(backupUrl);
 
-            // Messages from either queue
-            if (response.Messages) {
-                const entity = response.Messages[0];
-                const body = JSON.parse(entity.Body!);
-                body.message_id = crypto.randomUUID();
-                body.zoom = usingBackup ? backupZoom : zoom;
-                // The messages we receive typically HAVE ids. These correspond to location ids. But there is no guarantee that we won't receive the same ID twice,
-                // the admin may have launched the same task on the same queue twice, or one of our earlier messages may have passed its visibility timeout and
-                // been refetched. So we have to assign our own id upon receipt to guarantee uniqueness.
-                body.ack = async () => {
-                    try {
-                        const sqsClient = await getSqsClient();
-                        await sqsClient.send(new DeleteMessageCommand({
-                            QueueUrl: usingBackup ? backupUrl : url,
-                            ReceiptHandle: entity.ReceiptHandle,
-                        }));
-                    } catch {
-                        console.log(
-                            `Ack Failed for location ${body.id} with receipthandle ${entity.ReceiptHandle}`,
-                        );
-                    }
-                };
-                if (await filterPredicate(body)) {
-                    return body;
-                } else {
-                    body.ack();
-                }
-            } else {
-                await new Promise(resolve => setTimeout(resolve, 5000));
-            }
+        if (response.Messages) {
+          usingBackup = true;
         }
-    }, [url, backupUrl, getSqsClient, filterPredicate]);
+      }
 
-  return {fetcher : url ? fetcher : undefined};
+      // Messages from either queue
+      if (response.Messages) {
+        const entity = response.Messages[0];
+        const body = JSON.parse(entity.Body!);
+        body.message_id = crypto.randomUUID();
+        body.zoom = usingBackup ? backupZoom : zoom;
+
+        // Check if we've already processed this location
+        if (body.location?.id && processedLocations.has(body.location.id)) {
+          console.log(`Skipping duplicate location ${body.location.id}`);
+          body.ack = async () => {
+            try {
+              const sqsClient = await getSqsClient();
+              await sqsClient.send(
+                new DeleteMessageCommand({
+                  QueueUrl: usingBackup ? backupUrl : url,
+                  ReceiptHandle: entity.ReceiptHandle,
+                })
+              );
+            } catch {
+              console.log(
+                `Ack Failed for location ${body.location.id} with receipthandle ${entity.ReceiptHandle}`
+              );
+            }
+          };
+          body.ack();
+          continue;
+        }
+
+        // Add the location ID to processed locations if it exists
+        if (body.location?.id) {
+          console.log(
+            `Adding new location ${body.location.id} to processed locations`
+          );
+          setProcessedLocations((prev) => {
+            const newSet = new Set(prev);
+            newSet.add(body.location.id);
+            return newSet;
+          });
+        }
+
+        body.ack = async () => {
+          try {
+            const sqsClient = await getSqsClient();
+            await sqsClient.send(
+              new DeleteMessageCommand({
+                QueueUrl: usingBackup ? backupUrl : url,
+                ReceiptHandle: entity.ReceiptHandle,
+              })
+            );
+          } catch {
+            console.log(
+              `Ack Failed for location ${body.location.id} with receipthandle ${entity.ReceiptHandle}`
+            );
+          }
+        };
+        if (await filterPredicate(body)) {
+          return body;
+        } else {
+          body.ack();
+        }
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+    }
+  }, [url, backupUrl, getSqsClient, filterPredicate, processedLocations]);
+
+  return { fetcher: url ? fetcher : undefined };
 }
