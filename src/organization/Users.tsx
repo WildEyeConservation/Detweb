@@ -134,7 +134,13 @@ export default function Users({
         />,
         <Button
           className="fixed-width-button"
-          disabled={membership.isAdmin ? true : false}
+          disabled={
+            process.env.NODE_ENV === 'development'
+              ? false
+              : membership.isAdmin
+              ? true
+              : false
+          }
           variant={'info'}
           onClick={() => {
             setUserToEdit({

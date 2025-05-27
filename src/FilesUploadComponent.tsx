@@ -1,33 +1,37 @@
-import { useEffect, useState, useRef, useContext, useCallback } from "react";
+import { useEffect, useState, useRef, useContext, useCallback } from 'react';
 // import moment from 'moment'
 // import {MD5,enc} from 'crypto-js'
-import Modal from "react-bootstrap/Modal";
-import Button from "react-bootstrap/Button";
-import Form from "react-bootstrap/Form";
-import { list, uploadData } from "aws-amplify/storage";
-import { UserContext, GlobalContext } from "./Context.tsx";
-import pLimit from "p-limit";
-import ExifReader from "exifreader";
-import { DateTime } from "luxon";
-import { fetchAllPaginatedResults } from "./utils";
-import { useQueryClient } from "@tanstack/react-query";
-import Papa from "papaparse";
-import GPSSubset from "./GPSSubset";
-import { parseGPX } from "@we-gold/gpxjs";
-import { Schema } from "../amplify/data/resource.ts";
-import FileInput from "./FileInput";
+import Modal from 'react-bootstrap/Modal';
+import Button from 'react-bootstrap/Button';
+import Form from 'react-bootstrap/Form';
+import { list, uploadData } from 'aws-amplify/storage';
+import { UserContext, GlobalContext } from './Context.tsx';
+import pLimit from 'p-limit';
+import ExifReader from 'exifreader';
+import { DateTime } from 'luxon';
+import { fetchAllPaginatedResults } from './utils';
+import { useQueryClient } from '@tanstack/react-query';
+import Papa from 'papaparse';
+import GPSSubset from './GPSSubset';
+import { parseGPX } from '@we-gold/gpxjs';
+import { Schema } from '../amplify/data/resource.ts';
+import FileInput from './FileInput';
 import {
   SendMessageBatchCommand,
   SendMessageCommand,
-} from "@aws-sdk/client-sqs";
-import ImageMaskEditor from "./ImageMaskEditor.tsx";
-import Select from "react-select";
-import { S3Client, HeadObjectCommand } from "@aws-sdk/client-s3";
+} from '@aws-sdk/client-sqs';
+import ImageMaskEditor from './ImageMaskEditor.tsx';
+import Select from 'react-select';
+import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
 
 interface FilesUploadComponentProps {
   show: boolean;
   handleClose: () => void;
   project?: { id: string; name: string };
+  setFilesUploaded: (filesUploaded: number) => void;
+  setTotalFiles: (totalFiles: number) => void;
+  setPreppingImages: (preppingImages: number) => void;
+  setTotalPreppingImages: (totalPreppingImages: number) => void;
 }
 
 // Shared props for both modal and form versions
@@ -35,7 +39,7 @@ interface FilesUploadBaseProps {
   project?: { id: string; name: string };
   setOnSubmit?: React.Dispatch<
     React.SetStateAction<
-      ((projectId: string) => Promise<Schema["Image"]["type"][]>) | null
+      ((projectId: string) => Promise<Schema['Image']['type'][]>) | null
     >
   >;
   setReadyToSubmit: React.Dispatch<React.SetStateAction<boolean>>;
@@ -80,7 +84,7 @@ export function FileUploadCore({
 }: FilesUploadBaseProps) {
   const limitConnections = pLimit(10);
   const [upload, setUpload] = useState(true);
-  const [name, setName] = useState("");
+  const [name, setName] = useState('');
   const { client, backend } = useContext(GlobalContext)!;
   const [scannedFiles, setScannedFiles] = useState<File[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -106,8 +110,8 @@ export function FileUploadCore({
     label: string;
     value: string;
   }>({
-    label: "ScoutBot",
-    value: "scoutbot",
+    label: 'ScoutBot',
+    value: 'scoutbot',
   });
 
   const queryClient = useQueryClient();
@@ -119,7 +123,7 @@ export function FileUploadCore({
 
   useEffect(() => {
     setImageFiles(
-      scannedFiles.filter((file) => file.type.startsWith("image/jpeg"))
+      scannedFiles.filter((file) => file.type.startsWith('image/jpeg'))
     );
   }, [scannedFiles]);
 
@@ -139,11 +143,11 @@ export function FileUploadCore({
 
       const { items } = await list({
         path: `images/${name}`,
-        options: { bucket: "inputs", listAll: true },
+        options: { bucket: 'inputs', listAll: true },
       });
 
       const existingFiles = items.reduce<Set<string>>((set, x) => {
-        set.add(x.path.substring("images/".length));
+        set.add(x.path.substring('images/'.length));
         return set;
       }, new Set());
 
@@ -222,7 +226,7 @@ export function FileUploadCore({
   const handleFileInputChange = (files: File[]) => {
     if (files) {
       setScannedFiles(Array.from(files));
-      setName(files[0].webkitRelativePath.split("/")[0]);
+      setName(files[0].webkitRelativePath.split('/')[0]);
     }
   };
 
@@ -230,9 +234,9 @@ export function FileUploadCore({
     const tags = await ExifReader.load(file);
     /* I am saving all of the exifdata to make it easier to answer questions about eg. lens used/ISO/shutterTime/aperture distributions later on. However, some
       EXIF fields are absolutely huge and make writing to my database impossibly slow. I explicitly drop those here*/
-    delete tags["Thumbnail"];
-    delete tags["Images"];
-    delete tags["MakerNote"];
+    delete tags['Thumbnail'];
+    delete tags['Images'];
+    delete tags['MakerNote'];
     for (const tag of Object.keys(tags)) {
       if (tags[tag]?.description?.length > 100) {
         console.log(
@@ -242,23 +246,23 @@ export function FileUploadCore({
         delete tags[tag];
       }
     }
-    const rotated = (tags["Orientation"]?.value as number) > 4;
+    const rotated = (tags['Orientation']?.value as number) > 4;
 
     return {
       key: file.webkitRelativePath,
-      width: rotated ? tags["Image Height"]?.value : tags["Image Width"]?.value,
+      width: rotated ? tags['Image Height']?.value : tags['Image Width']?.value,
       height: rotated
-        ? tags["Image Width"]?.value
-        : tags["Image Height"]?.value,
+        ? tags['Image Width']?.value
+        : tags['Image Height']?.value,
       timestamp: DateTime.fromFormat(
         tags.DateTimeOriginal?.description as string,
-        "yyyy:MM:dd HH:mm:ss"
+        'yyyy:MM:dd HH:mm:ss'
       ).toSeconds(),
-      cameraSerial: tags["Internal Serial Number"]?.value,
+      cameraSerial: tags['Internal Serial Number']?.value,
       gpsData: {
-        lat: tags["GPSLatitude"]?.description,
-        lng: tags["GPSLongitude"]?.description,
-        alt: tags["GPSAltitude"]?.description,
+        lat: tags['GPSLatitude']?.description,
+        lng: tags['GPSLongitude']?.description,
+        alt: tags['GPSAltitude']?.description,
       },
       //exifData: JSON.stringify({ ...tags, 'ImageHeight':undefined, 'ImageWidth':undefined})
     };
@@ -269,7 +273,7 @@ export function FileUploadCore({
     queryTimestamp: number
   ) => {
     if (csvData.length === 0) {
-      throw new Error("No GPS data available for interpolation.");
+      throw new Error('No GPS data available for interpolation.');
     }
 
     const sortedCsvData = csvData.sort((a, b) => a.timestamp - b.timestamp);
@@ -310,7 +314,7 @@ export function FileUploadCore({
         alt: altitude,
       };
     } else {
-      throw new Error("Extrapolation required for GPS data interpolation.");
+      throw new Error('Extrapolation required for GPS data interpolation.');
     }
   };
 
@@ -320,34 +324,34 @@ export function FileUploadCore({
       setStepsCompleted: (stepsCompleted: number) => void,
       setTotalSteps: (totalSteps: number) => void,
       setPreppingImages: (preppingImages: number) => void,
-      setTotalPreppingImages: (totalPreppingImages: number) => void,
+      setTotalPreppingImages: (totalPreppingImages: number) => void
     ) => {
       if (!projectId) {
-        alert("Survey is required");
+        alert('Survey is required');
         return;
       }
 
       if (!csvData) {
-        alert("GPS metadata is required");
+        alert('GPS metadata is required');
         return;
       }
 
       const imageSets = await fetchAllPaginatedResults(
         client.models.ImageSet.list,
-        { filter: { projectId: { eq: projectId } }, selectionSet: ["id"] }
+        { filter: { projectId: { eq: projectId } }, selectionSet: ['id'] }
       );
 
       async function createImageSet() {
         const { data: project } = await client.models.Project.get(
           { id: projectId },
-          { selectionSet: ["name"] }
+          { selectionSet: ['name'] }
         );
 
         const { data: imageSet } = await client.models.ImageSet.create({
           name: project?.name || name,
           projectId: projectId,
         });
-        return imageSet?.id || "";
+        return imageSet?.id || '';
       }
 
       // only one image set exists for a survey
@@ -433,11 +437,11 @@ export function FileUploadCore({
       );
       setTotalSteps(totalUploadSize);
 
-      const imagesToProcess: Schema["Image"]["type"][] = [];
+      const imagesToProcess: Schema['Image']['type'][] = [];
       let filesToUpload = gpsFilteredImageFiles;
 
       //debugging
-      console.log("gpsFilteredImageFiles", gpsFilteredImageFiles);
+      console.log('gpsFilteredImageFiles', gpsFilteredImageFiles);
 
       const maxAttempts = 3;
       let totalUploaded = 0;
@@ -447,7 +451,7 @@ export function FileUploadCore({
         attempt++
       ) {
         //debugging
-        console.log("filesToUpload on attempt", attempt, filesToUpload);
+        console.log('filesToUpload on attempt', attempt, filesToUpload);
 
         const uploadTasks = filesToUpload.map((file) =>
           limitConnections(async () => {
@@ -455,10 +459,10 @@ export function FileUploadCore({
 
             try {
               await uploadData({
-                path: "images/" + file.webkitRelativePath,
+                path: 'images/' + file.webkitRelativePath,
                 data: file,
                 options: {
-                  bucket: "inputs",
+                  bucket: 'inputs',
                   contentType: file.type,
                   onProgress: ({ transferredBytes }) => {
                     const additionalTransferred =
@@ -491,7 +495,7 @@ export function FileUploadCore({
                   exifmeta.timestamp
                 );
               } else {
-                console.warn("Timestamp outside of GPS data range");
+                console.warn('Timestamp outside of GPS data range');
               }
             } else {
               const csvRow = csvData.data.find(
@@ -536,7 +540,7 @@ export function FileUploadCore({
 
               imagesToProcess.push(image);
             } else {
-              throw new Error("Image not created");
+              throw new Error('Image not created');
             }
           })
         );
@@ -546,23 +550,23 @@ export function FileUploadCore({
         // check if all files were uploaded
         const { items } = await list({
           path: `images/${name}`,
-          options: { bucket: "inputs", listAll: true },
+          options: { bucket: 'inputs', listAll: true },
         });
 
         const uploadedFiles = items.reduce((set, x) => {
-          set.add(x.path.substring("images/".length));
+          set.add(x.path.substring('images/'.length));
           return set;
         }, new Set());
 
         //debugging
-        console.log("uploaded files after attempt", attempt, uploadedFiles);
+        console.log('uploaded files after attempt', attempt, uploadedFiles);
 
         const failedFiles = filesToUpload.filter(
           (file) => !uploadedFiles.has(file.webkitRelativePath)
         );
 
         //debugging
-        console.log("failed files after attempt", attempt, failedFiles);
+        console.log('failed files after attempt', attempt, failedFiles);
 
         if (failedFiles.length > 0) {
           console.warn(
@@ -591,13 +595,13 @@ export function FileUploadCore({
 
       // total number of tasks(pairs and model messages pushed) completed
       // operations are async so we need to set the total tasks to 1 to notify the user there is a process running
-      let totalTasks = 1; 
+      let totalTasks = 1;
       setPreppingImages(totalTasks);
 
       //#region image registration
       async function handlePair(
-        image1: Schema["Image"]["type"],
-        image2: Schema["Image"]["type"]
+        image1: Schema['Image']['type'],
+        image2: Schema['Image']['type']
       ) {
         console.log(`Processing pair ${image1.id} and ${image2.id}`);
         const { data: existingNeighbour } =
@@ -606,7 +610,7 @@ export function FileUploadCore({
               image1Id: image1.id,
               image2Id: image2.id,
             },
-            { selectionSet: ["homography"] }
+            { selectionSet: ['homography'] }
           );
 
         if (existingNeighbour?.homography) {
@@ -633,7 +637,7 @@ export function FileUploadCore({
             image1Id: image1.id,
             image2Id: image2.id,
             keys: [image1.originalPath, image2.originalPath],
-            action: "register",
+            action: 'register',
             masks: masks.length > 0 ? masks : undefined,
           }),
         };
@@ -674,12 +678,12 @@ export function FileUploadCore({
       }
       //#endregion
 
-      if (model.value === "manual") {
+      if (model.value === 'manual') {
         await client.models.Project.update({
           id: projectId,
-          status: "processing",
+          status: 'processing',
         });
-  
+
         client.mutations.updateProjectMemberships({
           projectId: projectId,
         });
@@ -694,18 +698,18 @@ export function FileUploadCore({
       });
 
       if (!locationSet) {
-        throw new Error("Location set not created");
+        throw new Error('Location set not created');
       }
 
       // Helper function to wait for heatmap completion before proceeding with point finder tasks
       const waitForHeatmapCompletion = async (
-        images: Schema["Image"]["type"][]
+        images: Schema['Image']['type'][]
       ): Promise<void> => {
         await Promise.all(
           images.map(async (image) => {
             const heatmapFilePath = image.originalPath!.replace(
-              "images",
-              "heatmaps"
+              'images',
+              'heatmaps'
             );
             let heatmapAvailable = false;
             const s3Client = new S3Client({});
@@ -729,7 +733,7 @@ export function FileUploadCore({
 
       //#region model guided task
       switch (model.value) {
-        case "scoutbot":
+        case 'scoutbot':
           const chunkSize = 4;
           for (let i = 0; i < imagesToProcess.length; i += chunkSize) {
             const chunk = imagesToProcess.slice(i, i + chunkSize);
@@ -740,7 +744,7 @@ export function FileUploadCore({
                 MessageBody: JSON.stringify({
                   images: chunk.map((image) => ({
                     imageId: image.id,
-                    key: "images/" + image.originalPath,
+                    key: 'images/' + image.originalPath,
                   })),
                   projectId: projectId,
                   bucket: backend.storage.buckets[1].bucket_name,
@@ -753,7 +757,7 @@ export function FileUploadCore({
           }
           setTotalPreppingImages(totalTasks);
           break;
-        case "elephant-detection-nadir":
+        case 'elephant-detection-nadir':
           // heatmap generation
           const heatmapTasks = imagesToProcess.map(async (image) => {
             const { data: imageFiles } =
@@ -761,12 +765,12 @@ export function FileUploadCore({
                 imageId: image.id,
               });
             const path = imageFiles.find(
-              (imageFile) => imageFile.type == "image/jpeg"
+              (imageFile) => imageFile.type == 'image/jpeg'
             )?.path;
             if (path) {
               await client.mutations.processImages({
                 s3key: path,
-                model: "heatmap",
+                model: 'heatmap',
               });
             } else {
               console.log(
@@ -783,7 +787,7 @@ export function FileUploadCore({
 
           // point finder
           const pointFinderTasks = imagesToProcess.map(async (image) => {
-            const key = image.originalPath!.replace("images", "heatmaps");
+            const key = image.originalPath!.replace('images', 'heatmaps');
             const sqsClient = await getSqsClient();
             await sqsClient.send(
               new SendMessageCommand({
@@ -791,7 +795,7 @@ export function FileUploadCore({
                 MessageBody: JSON.stringify({
                   imageId: image.id,
                   projectId: projectId,
-                  key: "heatmaps/" + key + ".h5",
+                  key: 'heatmaps/' + key + '.h5',
                   width: 1024,
                   height: 1024,
                   threshold: 1 - Math.pow(10, -5),
@@ -808,7 +812,7 @@ export function FileUploadCore({
 
       await client.models.Project.update({
         id: projectId,
-        status: "processing",
+        status: 'processing',
       });
 
       client.mutations.updateProjectMemberships({
@@ -835,7 +839,7 @@ export function FileUploadCore({
 
   useEffect(() => {
     async function transformFile(file: File) {
-      if (file.type === "text/gpx") {
+      if (file.type === 'text/gpx') {
         setAssociateByTimestamp(true);
 
         const text = await file.text();
@@ -865,9 +869,9 @@ export function FileUploadCore({
         skipEmptyLines: true,
         complete: function (results) {
           const hasTimestamp = results.data.some(
-            (row: any) => row["Timestamp"]
+            (row: any) => row['Timestamp']
           );
-          const hasFilepath = results.data.some((row: any) => row["FilePath"]);
+          const hasFilepath = results.data.some((row: any) => row['FilePath']);
 
           setAssociateByTimestamp(hasTimestamp && !hasFilepath);
 
@@ -876,12 +880,12 @@ export function FileUploadCore({
               .map((row: any) => {
                 return {
                   timestamp: hasTimestamp
-                    ? Number(row["Timestamp"])
+                    ? Number(row['Timestamp'])
                     : undefined,
-                  filepath: hasFilepath ? row["FilePath"] : undefined,
-                  lat: Number(row["Latitude"]),
-                  lng: Number(row["Longitude"]),
-                  alt: Number(row["Altitude"]),
+                  filepath: hasFilepath ? row['FilePath'] : undefined,
+                  lat: Number(row['Latitude']),
+                  lng: Number(row['Longitude']),
+                  alt: Number(row['Altitude']),
                 };
               })
               .sort((a, b) =>
@@ -918,7 +922,7 @@ export function FileUploadCore({
 
   // Helper: converts a "HH:mm" string to total minutes.
   const timeToMinutes = (timeStr: string): number => {
-    const [hours, minutes] = timeStr.split(":").map(Number);
+    const [hours, minutes] = timeStr.split(':').map(Number);
     return hours * 60 + minutes;
   };
 
@@ -957,8 +961,8 @@ export function FileUploadCore({
           value={model}
           options={[
             {
-              label: "ScoutBot",
-              value: "scoutbot",
+              label: 'ScoutBot',
+              value: 'scoutbot',
             },
             // {
             //   label: "Elephant Detection (nadir)",
@@ -981,7 +985,7 @@ export function FileUploadCore({
         </p>
         <div
           className="p-2 mb-2 bg-white text-black"
-          style={{ minHeight: "136px", overflow: "auto" }}
+          style={{ minHeight: '136px', overflow: 'auto' }}
         >
           {scannedFiles.length > 0 && (
             <code className="m-0 text-dark">
@@ -994,7 +998,7 @@ export function FileUploadCore({
               Image files size: {formatFileSize(totalImageSize)}
               <br />
               {listingS3Images ? (
-                "Searching for images in S3..."
+                'Searching for images in S3...'
               ) : (
                 <>
                   New images: {filteredImageFiles.length}
@@ -1011,9 +1015,9 @@ export function FileUploadCore({
         </div>
         <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
           }}
         >
           <Form.Group>
@@ -1024,8 +1028,8 @@ export function FileUploadCore({
             >
               <p style={{ margin: 0 }}>
                 {scannedFiles.length > 0
-                  ? "Change source folder"
-                  : "Select Files"}
+                  ? 'Change source folder'
+                  : 'Select Files'}
               </p>
             </FileInput>
           </Form.Group>
@@ -1069,17 +1073,17 @@ export function FileUploadCore({
         <Form.Group className="mt-3 d-flex flex-column gap-2">
           <div>
             <Form.Label className="mb-0">
-              {missingGpsData ? "Missing GPS data" : "GPS data found"}
+              {missingGpsData ? 'Missing GPS data' : 'GPS data found'}
             </Form.Label>
-            <Form.Text className="d-block mb-0" style={{ fontSize: "12px" }}>
+            <Form.Text className="d-block mb-0" style={{ fontSize: '12px' }}>
               {missingGpsData
-                ? "Some images do not have GPS data. Please upload the gpx or csv file containing the GPS data for all images."
-                : "The selected images have GPS data. Would you like to upload a separate file containing the GPS data for all images?"}
+                ? 'Some images do not have GPS data. Please upload the gpx or csv file containing the GPS data for all images.'
+                : 'The selected images have GPS data. Would you like to upload a separate file containing the GPS data for all images?'}
             </Form.Text>
-            <Form.Text className="d-block mb-0" style={{ fontSize: "12px" }}>
+            <Form.Text className="d-block mb-0" style={{ fontSize: '12px' }}>
               If your data contains file paths instead of timestamps, the format
-              should be:{" "}
-              <code className="text-primary" style={{ fontSize: "14px" }}>
+              should be:{' '}
+              <code className="text-primary" style={{ fontSize: '14px' }}>
                 {imageFiles[0].webkitRelativePath}
               </code>
             </Form.Text>
@@ -1108,7 +1112,7 @@ export function FileUploadCore({
               </Form.Label>
               <Form.Text
                 className="d-block mb-1 mt-0"
-                style={{ fontSize: "12px" }}
+                style={{ fontSize: '12px' }}
               >
                 Select the effective time range for each day. The default range
                 is the earliest and latest timestamp recorded for that day.
@@ -1130,22 +1134,22 @@ export function FileUploadCore({
                       <span className="me-2">Day {day}</span>
                       <input
                         type="time"
-                        value={timeRanges[day]?.start || "00:00"}
+                        value={timeRanges[day]?.start || '00:00'}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                           updateTimeRange(
                             day,
                             e.target.value,
-                            timeRanges[day]?.end || "23:59"
+                            timeRanges[day]?.end || '23:59'
                           )
                         }
                       />
                       <input
                         type="time"
-                        value={timeRanges[day]?.end || "23:59"}
+                        value={timeRanges[day]?.end || '23:59'}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                           updateTimeRange(
                             day,
-                            timeRanges[day]?.start || "00:00",
+                            timeRanges[day]?.start || '00:00',
                             e.target.value
                           )
                         }
@@ -1163,7 +1167,7 @@ export function FileUploadCore({
       {csvData && (
         <div className="mt-3">
           {(() => {
-            let message = "";
+            let message = '';
             if (associateByTimestamp) {
               const csvTimestamps = csvData.data.map(
                 (row) => row.timestamp || 0
@@ -1218,7 +1222,7 @@ export function FilesUploadForm(props: FilesUploadFormProps) {
 }
 
 export const formatFileSize = (bytes: number): string => {
-  const units = ["B", "KB", "MB", "GB", "TB"];
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let size = bytes;
   let unitIndex = 0;
 
@@ -1235,9 +1239,21 @@ export default function FilesUploadComponent({
   show,
   handleClose,
   project,
+  setFilesUploaded,
+  setTotalFiles,
+  setPreppingImages,
+  setTotalPreppingImages,
 }: FilesUploadComponentProps) {
+  const { client } = useContext(GlobalContext)!;
   const [uploadSubmitFn, setUploadSubmitFn] = useState<
-    ((projectId: string) => Promise<void>) | null
+    | ((
+        projectId: string,
+        setStepsCompleted: (stepsCompleted: number) => void,
+        setTotalSteps: (totalSteps: number) => void,
+        setPreppingImages: (preppingImages: number) => void,
+        setTotalPreppingImages: (totalPreppingImages: number) => void
+      ) => Promise<void>)
+    | null
   >(null);
   const [readyToSubmit, setReadyToSubmit] = useState(false);
 
@@ -1246,7 +1262,18 @@ export default function FilesUploadComponent({
     // Close the modal first, so the user doesn't experience the UI as unresponsive
     handleClose();
     if (uploadSubmitFn && project?.id) {
-      await uploadSubmitFn(project.id);
+      await client.models.Project.update({
+        id: project.id,
+        status: 'uploading',
+      });
+
+      await uploadSubmitFn(
+        project.id,
+        setFilesUploaded,
+        setTotalFiles,
+        setPreppingImages,
+        setTotalPreppingImages
+      );
     }
   };
 
