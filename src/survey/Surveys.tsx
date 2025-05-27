@@ -5,7 +5,7 @@ import { Card, Button, Form } from "react-bootstrap";
 import MyTable from "../Table.tsx";
 import NewSurveyModal from "./NewSurveyModal.tsx";
 import { useNavigate } from "react-router-dom";
-import FilesUploadComponent from "../FilesUploadComponent.tsx";
+import FilesUploadComponent, { formatFileSize } from "../FilesUploadComponent.tsx";
 import ConfirmationModal from "../ConfirmationModal.tsx";
 import AnnotationSetResults from "../AnnotationSetResults.tsx";
 import AnnotationCountModal from "../AnnotationCountModal.tsx";
@@ -20,6 +20,7 @@ import { SquareArrowOutUpRight } from "lucide-react";
 import { fetchAllPaginatedResults } from "../utils.tsx";
 import { Badge } from "react-bootstrap";
 import ComingSoonOverlay from "../ComingSoonOverlay.tsx";
+import { useUpdateProgress } from "../useUpdateProgress.tsx";
 
 export default function Surveys() {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
@@ -36,6 +37,20 @@ export default function Surveys() {
   >(null);
   const [search, setSearch] = useState("");
   const [selectedSets, setSelectedSets] = useState<string[]>([]);
+
+  const [setFilesUploaded, setTotalFiles] = useUpdateProgress({
+    taskId: `Upload files`,
+    determinateTaskName: `Uploading files`,
+    indeterminateTaskName: `Preparing files`,
+    stepFormatter: formatFileSize,
+  });
+
+  const [setPreppingImages, setTotalPreppingImages] = useUpdateProgress({
+    taskId: `Finishing up`,
+    indeterminateTaskName: `Finishing up. This may take a while, do not close this page.`,
+    determinateTaskName: "Finishing up. This may take a while, do not close this page.",
+    stepFormatter: (x: number) => `${x} tasks`,
+  });
 
   useEffect(() => {
     async function getProjects() {
@@ -175,18 +190,16 @@ export default function Surveys() {
                   Edit
                 </Button>
               </ComingSoonOverlay>
-              <ComingSoonOverlay>
                 <Button
                   variant="primary"
-                  // onClick={() => {
-                  //   setSelectedProject(project);
-                  //   showModal("addFiles");
-                  // }}
+                  onClick={() => {
+                    setSelectedProject(project);
+                    showModal("addFiles");
+                  }}
                   disabled={disabled}
                 >
                   Add files
                 </Button>
-              </ComingSoonOverlay>
               <Button
                 variant="primary"
                 onClick={() => {
@@ -394,6 +407,10 @@ export default function Surveys() {
             setSelectedProject(null);
           }}
           project={{ id: selectedProject.id, name: selectedProject.name }}
+          setFilesUploaded={setFilesUploaded}
+          setTotalFiles={setTotalFiles}
+          setPreppingImages={setPreppingImages}
+          setTotalPreppingImages={setTotalPreppingImages}
         />
       )}
       {selectedProject && selectedAnnotationSet && (
