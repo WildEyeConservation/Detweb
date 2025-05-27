@@ -5,7 +5,9 @@ import { Card, Button, Form } from "react-bootstrap";
 import MyTable from "../Table.tsx";
 import NewSurveyModal from "./NewSurveyModal.tsx";
 import { useNavigate } from "react-router-dom";
-import FilesUploadComponent, { formatFileSize } from "../FilesUploadComponent.tsx";
+import FilesUploadComponent, {
+  formatFileSize,
+} from "../FilesUploadComponent.tsx";
 import ConfirmationModal from "../ConfirmationModal.tsx";
 import AnnotationSetResults from "../AnnotationSetResults.tsx";
 import AnnotationCountModal from "../AnnotationCountModal.tsx";
@@ -48,7 +50,8 @@ export default function Surveys() {
   const [setPreppingImages, setTotalPreppingImages] = useUpdateProgress({
     taskId: `Finishing up`,
     indeterminateTaskName: `Finishing up. This may take a while, do not close this page.`,
-    determinateTaskName: "Finishing up. This may take a while, do not close this page.",
+    determinateTaskName:
+      "Finishing up. This may take a while, do not close this page.",
     stepFormatter: (x: number) => `${x} tasks`,
   });
 
@@ -150,6 +153,7 @@ export default function Surveys() {
         project.status === "uploading" ||
         project.status === "processing" ||
         project.status === "launching" ||
+        project.status === "updating" ||
         project.queues.length > 0 ||
         project.annotationSets.some((set) => set.register);
       const hasJobs =
@@ -190,16 +194,16 @@ export default function Surveys() {
                   Edit
                 </Button>
               </ComingSoonOverlay>
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    setSelectedProject(project);
-                    showModal("addFiles");
-                  }}
-                  disabled={disabled}
-                >
-                  Add files
-                </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setSelectedProject(project);
+                  showModal("addFiles");
+                }}
+                disabled={disabled}
+              >
+                Add files
+              </Button>
               <Button
                 variant="primary"
                 onClick={() => {

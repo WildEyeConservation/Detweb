@@ -90,7 +90,12 @@ export default function LabelEditor({
         );
       }
 
-      client.mutations.updateProjectMemberships({
+      await client.models.Project.update({
+        id: projectId,
+        status: "active",
+      });
+
+      await client.mutations.updateProjectMemberships({
         projectId: projectId,
       });
     },

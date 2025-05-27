@@ -27,7 +27,9 @@ export default function AddAnnotationSetModal({
   const [selectedAnnotationSet, setSelectedAnnotationSet] =
     useState<string>("");
   const [busy, setBusy] = useState(false);
-  const [importedLabels, setImportedLabels] = useState<Schema["Category"]["type"][]>([]);
+  const [importedLabels, setImportedLabels] = useState<
+    Schema["Category"]["type"][]
+  >([]);
 
   async function handleSave() {
     if (!name) {
@@ -36,6 +38,15 @@ export default function AddAnnotationSetModal({
     }
 
     setBusy(true);
+
+    await client.models.Project.update({
+      id: project.id,
+      status: "updating",
+    });
+
+    await client.mutations.updateProjectMemberships({
+      projectId: project.id,
+    });
 
     const { data: annotationSet } = await client.models.AnnotationSet.create({
       name,
