@@ -28,6 +28,10 @@ interface FilesUploadComponentProps {
   show: boolean;
   handleClose: () => void;
   project?: { id: string; name: string };
+  setFilesUploaded: (filesUploaded: number) => void;
+  setTotalFiles: (totalFiles: number) => void;
+  setPreppingImages: (preppingImages: number) => void;
+  setTotalPreppingImages: (totalPreppingImages: number) => void;
 }
 
 // Shared props for both modal and form versions
@@ -320,7 +324,7 @@ export function FileUploadCore({
       setStepsCompleted: (stepsCompleted: number) => void,
       setTotalSteps: (totalSteps: number) => void,
       setPreppingImages: (preppingImages: number) => void,
-      setTotalPreppingImages: (totalPreppingImages: number) => void,
+      setTotalPreppingImages: (totalPreppingImages: number) => void
     ) => {
       if (!projectId) {
         alert("Survey is required");
@@ -591,7 +595,7 @@ export function FileUploadCore({
 
       // total number of tasks(pairs and model messages pushed) completed
       // operations are async so we need to set the total tasks to 1 to notify the user there is a process running
-      let totalTasks = 1; 
+      let totalTasks = 1;
       setPreppingImages(totalTasks);
 
       //#region image registration
@@ -679,7 +683,7 @@ export function FileUploadCore({
           id: projectId,
           status: "processing",
         });
-  
+
         client.mutations.updateProjectMemberships({
           projectId: projectId,
         });
@@ -1235,9 +1239,20 @@ export default function FilesUploadComponent({
   show,
   handleClose,
   project,
+  setFilesUploaded,
+  setTotalFiles,
+  setPreppingImages,
+  setTotalPreppingImages,
 }: FilesUploadComponentProps) {
   const [uploadSubmitFn, setUploadSubmitFn] = useState<
-    ((projectId: string) => Promise<void>) | null
+    | ((
+        projectId: string,
+        setStepsCompleted: (stepsCompleted: number) => void,
+        setTotalSteps: (totalSteps: number) => void,
+        setPreppingImages: (preppingImages: number) => void,
+        setTotalPreppingImages: (totalPreppingImages: number) => void
+      ) => Promise<void>)
+    | null
   >(null);
   const [readyToSubmit, setReadyToSubmit] = useState(false);
 
@@ -1246,7 +1261,13 @@ export default function FilesUploadComponent({
     // Close the modal first, so the user doesn't experience the UI as unresponsive
     handleClose();
     if (uploadSubmitFn && project?.id) {
-      await uploadSubmitFn(project.id);
+      await uploadSubmitFn(
+        project.id,
+        setFilesUploaded,
+        setTotalFiles,
+        setPreppingImages,
+        setTotalPreppingImages
+      );
     }
   };
 
