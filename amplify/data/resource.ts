@@ -378,6 +378,8 @@ const schema = a
         url: a.url(),
         zoom: a.integer(),
         hidden: a.boolean().default(false),
+        // used in conjuction with the cleanupJobs function (every 15m) to determine if the queue is still active
+        approximateSize: a.integer(),
       })
       .authorization((allow) => [allow.authenticated()])
       //.authorization(allow => [allow.groupDefinedIn('projectId')])
