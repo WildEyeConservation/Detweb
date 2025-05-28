@@ -11,6 +11,7 @@ import {
 import {
   updateProject,
   updateUserProjectMembership,
+  deleteLocation,
 } from "./graphql/mutations";
 import type { GraphQLResult } from "@aws-amplify/api-graphql";
 import { UserProjectMembership } from "./graphql/API";
@@ -66,6 +67,11 @@ interface Image {
 interface Location {
   id: string;
   imageId?: string | null;
+  setId: string;
+  height?: number | null;
+  width?: number | null;
+  x: number;
+  y: number;
   source: string;
 }
 
@@ -202,6 +208,57 @@ export const handler: Handler = async (event, context) => {
 
       // Update project status if all images are processed
       if (allImagesProcessed) {
+        // Delete all duplicate locations
+        console.log(
+          `Checking for duplicate locations in project ${project.id}`
+        );
+
+        // Create a map to track unique locations
+        const uniqueLocations = new Map<string, Location>();
+        const duplicateLocationIds: string[] = [];
+
+        // Process each location
+        for (const location of projectLocations) {
+          // Skip locations without required fields
+          if (!location.imageId || !location.setId) continue;
+
+          // Create a unique key based on the specified criteria
+          const locationKey = `${location.imageId}-${location.setId}-${location.height}-${location.width}-${location.x}-${location.y}`;
+
+          if (uniqueLocations.has(locationKey)) {
+            // This is a duplicate, add to deletion list
+            duplicateLocationIds.push(location.id);
+          } else {
+            // This is a unique location, add to our map
+            uniqueLocations.set(locationKey, location);
+          }
+        }
+
+        // Delete all duplicate locations
+        console.log(
+          `Found ${duplicateLocationIds.length} duplicate locations to delete`
+        );
+        for (const locationId of duplicateLocationIds) {
+          try {
+            await client.graphql({
+              query: deleteLocation,
+              variables: {
+                input: {
+                  id: locationId,
+                },
+              },
+            });
+            console.log(
+              `Successfully deleted duplicate location ${locationId}`
+            );
+          } catch (error) {
+            console.error(
+              `Failed to delete duplicate location ${locationId}:`,
+              error
+            );
+          }
+        }
+
         console.log(
           `All images processed for project ${project.id}, updating status to "active"`
         );
