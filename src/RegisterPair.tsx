@@ -190,6 +190,7 @@ export function RegisterPair({
               style={{
                 position: "relative",
               }}
+              key={image.id}
             >
               <ImageContextFromHook
                 key={i}
@@ -237,7 +238,7 @@ export function RegisterPair({
                     }}
                   />
                   <ShowMarkers
-                    annotationsHook={enhancedAnnotationHooks[i]}
+                    annotationSetId={selectedSet}
                     activeAnnotation={activeAnnotation}
                   />
                   {transforms && linkImages && (
@@ -249,7 +250,13 @@ export function RegisterPair({
                       setBlocked={setBlocked}
                     />
                   )}
-                  {i == 1 && <MapLegend position="bottomright" />}
+                  {i == 1 && (
+                    <MapLegend
+                      position="bottomright"
+                      annotationSetId={selectedSet}
+                      alwaysVisible={true}
+                    />
+                  )}
                 </BaseImage>
               </ImageContextFromHook>
             </div>

@@ -9,6 +9,7 @@ import { updateUserStats } from '../functions/updateUserStats/resource';
 import { updateAnnotationCounts } from '../functions/updateAnnotationCounts/resource';
 import { monitorModelProgress } from '../functions/monitorModelProgress/resource';
 import { updateProjectMemberships } from '../functions/updateProjectMemberships/resource';
+import { cleanupJobs } from '../functions/cleanupJobs/resource';
 
 const schema = a
   .schema({
@@ -697,6 +698,7 @@ const schema = a
     allow.resource(updateAnnotationCounts),
     allow.resource(monitorModelProgress),
     allow.resource(updateProjectMemberships),
+    allow.resource(cleanupJobs),
   ]);
 
 export type Schema = ClientSchema<typeof schema>;
