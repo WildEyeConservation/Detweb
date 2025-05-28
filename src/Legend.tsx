@@ -29,6 +29,7 @@ interface LegendProps {
   hideLegend?: boolean;
   setHideLegend?: VoidFunction;
   annotationSetId?: string;
+  alwaysVisible?: boolean;
 }
 
 export function SideLegend({ annotationSetId }: LegendProps) {
@@ -74,7 +75,11 @@ export function SideLegend({ annotationSetId }: LegendProps) {
   );
 }
 
-export function MapLegend({ position, annotationSetId }: LegendProps) {
+export function MapLegend({
+  position,
+  annotationSetId,
+  alwaysVisible = false,
+}: LegendProps) {
   const {
     categoriesHook: { data: categories },
     setCurrentCategory,
@@ -92,7 +97,12 @@ export function MapLegend({ position, annotationSetId }: LegendProps) {
   });
 
   return (
-    <div ref={divRef} className={positionClass + " d-block d-md-none"}>
+    <div
+      ref={divRef}
+      className={
+        positionClass + (alwaysVisible ? " d-block" : " d-block d-md-none")
+      }
+    >
       <div className="leaflet-control leaflet-bar">
         <div
           className="info legend"
@@ -119,9 +129,7 @@ export function MapLegend({ position, annotationSetId }: LegendProps) {
                           padding: "8px",
                         }}
                       >
-                        <i
-                          style={{ background: item.color || "#000" }}
-                        ></i>
+                        <i style={{ background: item.color || "#000" }}></i>
                         <div
                           style={{
                             display: "flex",
