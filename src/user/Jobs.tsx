@@ -231,20 +231,18 @@ export default function Jobs() {
     }
 
     try {
-      getSqsClient().then((sqsClient) =>
-        sqsClient
-          .send(new DeleteQueueCommand({ QueueUrl: job.url }))
-          .then(async () => {
-            await client.models.Queue.delete({ id: job.id });
-            client.mutations.updateProjectMemberships({
-              projectId: job.projectId,
-            });
-          })
-      );
+      const sqsClient = await getSqsClient();
+      await sqsClient.send(new DeleteQueueCommand({ QueueUrl: job.url }));
+      await client.models.Queue.delete({ id: job.id });
+      await client.mutations.updateProjectMemberships({
+        projectId: job.projectId,
+      });
     } catch (error) {
       alert("An unknown error occurred. Please try again later.");
       console.error(error);
     } finally {
+      //remove queue from displayProjects
+      setDisplayProjects(displayProjects.filter((project) => project.id !== job.projectId));
       setDeletingJob(false);
     }
   }
