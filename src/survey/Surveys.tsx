@@ -178,22 +178,20 @@ export default function Surveys() {
               )}
             </div>
             <div className="d-flex gap-2">
-              <ComingSoonOverlay>
-                <Button
-                  variant="primary"
-                  // onClick={(e) => {
-                  //   if (e.ctrlKey) {
-                  //     navigate(`/surveys/${project.id}/manage`);
-                  //   } else {
-                  //     setSelectedProject(project);
-                  //     showModal("editSurvey");
-                  //   }
-                  // }}
-                  disabled={disabled}
-                >
-                  Edit
-                </Button>
-              </ComingSoonOverlay>
+              <Button
+                variant="primary"
+                onClick={(e) => {
+                  if (e.ctrlKey) {
+                    navigate(`/surveys/${project.id}/manage`);
+                  } else {
+                    setSelectedProject(project);
+                    showModal("editSurvey");
+                  }
+                }}
+                disabled={disabled}
+              >
+                Edit
+              </Button>
               <Button
                 variant="primary"
                 onClick={() => {
@@ -511,10 +509,12 @@ export default function Surveys() {
       {selectedProject && (
         <EditSurveyModal
           show={modalToShow === "editSurvey"}
+          setPreppingImages={setPreppingImages}
+          setTotalPreppingImages={setTotalPreppingImages}
           onClose={() => {
             showModal(null);
-            setSelectedProject(null);
-            setSelectedSets([]);
+            // setSelectedProject(null);
+            // setSelectedSets([]);
           }}
           project={selectedProject}
           openTab={tab}
