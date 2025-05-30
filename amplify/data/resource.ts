@@ -14,7 +14,7 @@ import { cleanupJobs } from '../functions/cleanupJobs/resource';
 const schema = a
   .schema({
     UserType: a.customType({
-      name: a.string().required(),
+      name: a.string(),
       id: a.id().required(),
       email: a.string(),
       isAdmin: a.boolean(),
