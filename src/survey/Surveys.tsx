@@ -231,7 +231,7 @@ export default function Surveys() {
                 .map((annotationSet, i) => (
                   <div
                     className={`d-flex justify-content-between align-items-center gap-2 ${
-                      i % 2 === 0 ? "" : "border-top border-light pt-2"
+                      i === 0 ? "" : "border-top border-light pt-2"
                     }`}
                     key={annotationSet.id}
                   >

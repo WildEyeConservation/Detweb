@@ -1,10 +1,10 @@
-import Button from 'react-bootstrap/Button';
-import Form from 'react-bootstrap/Form';
-import { Modal } from 'react-bootstrap';
-import { useContext } from 'react';
-import { GlobalContext, UserContext } from '../Context';
-import { useUsers } from '../apiInterface';
-import { Schema } from '../../amplify/data/resource';
+import Button from "react-bootstrap/Button";
+import Form from "react-bootstrap/Form";
+import { Modal } from "react-bootstrap";
+import { useContext } from "react";
+import { GlobalContext, UserContext } from "../Context";
+import { useUsers } from "../apiInterface";
+import { Schema } from "../../amplify/data/resource";
 
 export default function InviteUserModal({
   memberships,
@@ -12,7 +12,7 @@ export default function InviteUserModal({
   show,
   onClose,
 }: {
-  memberships: Schema['OrganizationMembership']['type'][];
+  memberships: Schema["OrganizationMembership"]["type"][];
   organization: {
     id: string;
     name: string;
@@ -27,17 +27,19 @@ export default function InviteUserModal({
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.target as HTMLFormElement);
-    const username = formData.get('username') as string;
+    const username = formData.get("username") as string;
 
     if (!username) {
-      alert('Please enter a username');
+      alert("Please enter a username");
       return;
     }
 
-    const userId = users?.find((user) => user.name === username)?.id;
+    const userId = users?.find(
+      (user) => user.name === username || user.email === username
+    )?.id;
 
     if (memberships?.some((membership) => membership.userId === userId)) {
-      alert('User is already a member of the organization');
+      alert("User is already a member of the organization");
       return;
     }
 
@@ -50,11 +52,11 @@ export default function InviteUserModal({
       old.length > 0 &&
       old.some(
         (invite) =>
-          invite.status === 'pending' &&
+          invite.status === "pending" &&
           invite.organizationId === organization.id
       )
     ) {
-      alert('User already has a pending invitation');
+      alert("User already has a pending invitation");
       return;
     }
 
@@ -65,9 +67,9 @@ export default function InviteUserModal({
     });
 
     if (invite) {
-      alert('Invite sent!');
+      alert("Invite sent!");
     } else {
-      alert('Failed to send invite');
+      alert("Failed to send invite");
     }
   };
 
@@ -90,14 +92,13 @@ export default function InviteUserModal({
             Send Invite
           </Button>
           <Form.Text className="d-block mt-2">
-            *This will send an invite to the user's SurveyScope inbox. Don't worry, the
-            invite will be stored until they sign up{' '}
+            *This will send an invite to the user's SurveyScope inbox.{" "}
             <span
               className="text-muted"
-              style={{ textDecoration: 'underline', cursor: 'pointer' }}
+              style={{ textDecoration: "underline", cursor: "pointer" }}
               onClick={() => {
                 navigator.clipboard.writeText(window.location.origin);
-                alert('Signup link copied to clipboard!');
+                alert("Signup link copied to clipboard!");
               }}
             >
               (Copy link to signup page)
