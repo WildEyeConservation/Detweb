@@ -165,11 +165,21 @@ export function RegisterPair({
     );
   }, [activeObjectId, enhancedAnnotationHooks]);
 
+  // Added state and callback to debounce the spacebar press
+  const [isSpaceDisabled, setIsSpaceDisabled] = useState(false);
+  const SPACE_DISABLE_TIMEOUT_MS = 300;
+  const handleSpace = useCallback(() => {
+    if (isSpaceDisabled) return;
+    confirmMatch();
+    setIsSpaceDisabled(true);
+    setTimeout(() => setIsSpaceDisabled(false), SPACE_DISABLE_TIMEOUT_MS);
+  }, [isSpaceDisabled, confirmMatch]);
+
   useHotkeys("ArrowRight", nextAnnotation, { enabled: visible });
   useHotkeys("Ctrl+ArrowRight", next, { enabled: visible });
   useHotkeys("ArrowLeft", prevAnnotation, { enabled: visible });
   useHotkeys("Ctrl+ArrowLeft", prev, { enabled: visible });
-  useHotkeys("Space", confirmMatch, { enabled: visible });
+  useHotkeys("Space", handleSpace, { enabled: visible });
   useHotkeys(
     "BACKSPACE",
     () => {
