@@ -2,8 +2,7 @@ import { Modal, Button } from "react-bootstrap";
 import { Schema } from "../../amplify/data/resource";
 import { Tabs, Tab } from "../Tabs";
 import { useState } from "react";
-import AddGpsData from "../AddGpsData";
-import ProcessImages from "../ProcessImages";
+import ProcessImages from "./ProcessImages";
 import CreateSubset from "../CreateSubset";
 
 export default function EditSurveyModal({
@@ -11,24 +10,31 @@ export default function EditSurveyModal({
   onClose,
   project,
   openTab,
-  setSelectedSets,
+  setPreppingImages,
+  setTotalPreppingImages,
 }: {
   show: boolean;
   onClose: () => void;
   project: Schema["Project"]["type"];
   openTab?: number;
   setSelectedSets: (sets: string[]) => void;
+  setPreppingImages: (preppingImages: number) => void;
+  setTotalPreppingImages: (totalPreppingImages: number) => void;
 }) {
-  const [addGpsData, setAddGpsData] = useState<(() => Promise<void>) | null>(
-    null
-  );
-  const [tab, setTab] = useState(openTab || 0);
-  const [loading, setLoading] = useState(false);
-  const [prevButtonLabel, setPrevButtonLabel] = useState("Save");
-  const [buttonLabel, setButtonLabel] = useState("Save");
-  const [processImages, setProcessImages] = useState<
+  const [handleSubmit, setHandleSubmit] = useState<
     (() => Promise<void>) | null
   >(null);
+  const [tab, setTab] = useState(openTab || 0);
+  const [loading, setLoading] = useState(false);
+  const [prevButtonLabel, setPrevButtonLabel] = useState("Process");
+  const [buttonLabel, setButtonLabel] = useState("Process");
+  const [submitDisabled, setSubmitDisabled] = useState(false);
+
+  function handleOnClick() {
+    if (handleSubmit) {
+      handleSubmit();
+    }
+  }
 
   return (
     <Modal show={show} onHide={onClose} size="xl">
@@ -39,37 +45,44 @@ export default function EditSurveyModal({
         <Tabs
           defaultTab={openTab || 0}
           onTabChange={(tab) => {
-            // setTab(tab);
-            // let label = "";
-            // switch (tab) {
-            //   case 0:
-            //     label = "Submit";
-            //     break;
-            //   case 1:
-            //     label = "Process";
-            //     break;
-            //   case 3:
-            //     label = "Launch";
-            //     break;
-            // }
-            // setButtonLabel(label);
-            // setPrevButtonLabel(label);
+            setTab(tab);
+            let label = "";
+            switch (tab) {
+              case 0:
+                label = "Process";
+                break;
+              case 1:
+                label = "Transect Definition";
+                break;
+              case 2:
+                label = "Create Subsets";
+                break;
+            }
+            setButtonLabel(label);
+            setPrevButtonLabel(label);
           }}
+          className="mb-2"
         >
-          <Tab label="Transects" className="mt-1">
-            <p className="mb-0">
-            Transects
-            </p>
-          </Tab>
-          <Tab label="Create Subsets" className="mt-1">
-            <CreateSubset
-              imageSets={project.imageSets}
-              setSelectedSets={setSelectedSets}
+          <Tab label="Process Images">
+            <ProcessImages
+              onClose={onClose}
+              projectId={project.id}
+              setPreppingImages={setPreppingImages}
+              setTotalPreppingImages={setTotalPreppingImages}
+              setHandleSubmit={setHandleSubmit}
+              setSubmitDisabled={setSubmitDisabled}
             />
           </Tab>
         </Tabs>
       </Modal.Body>
       <Modal.Footer>
+        <Button
+          variant="primary"
+          disabled={submitDisabled}
+          onClick={handleOnClick}
+        >
+          {buttonLabel}
+        </Button>
         <Button variant="dark" onClick={onClose}>
           Close
         </Button>

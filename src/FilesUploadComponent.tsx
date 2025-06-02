@@ -248,6 +248,20 @@ export function FileUploadCore({
     }
     const rotated = (tags['Orientation']?.value as number) > 4;
 
+    // Get GPS coordinates with proper sign handling
+    let lat = tags['GPSLatitude']?.value;
+    let lng = tags['GPSLongitude']?.value;
+    const latRef = tags['GPSLatitudeRef']?.value;
+    const lngRef = tags['GPSLongitudeRef']?.value;
+
+    // Convert coordinates to decimal degrees with proper sign
+    if (lat && latRef) {
+      lat = convertDMSToDD(lat, latRef === 'N' ? 1 : -1);
+    }
+    if (lng && lngRef) {
+      lng = convertDMSToDD(lng, lngRef === 'E' ? 1 : -1);
+    }
+
     return {
       key: file.webkitRelativePath,
       width: rotated ? tags['Image Height']?.value : tags['Image Width']?.value,
@@ -260,12 +274,20 @@ export function FileUploadCore({
       ).toSeconds(),
       cameraSerial: tags['Internal Serial Number']?.value,
       gpsData: {
-        lat: tags['GPSLatitude']?.description,
-        lng: tags['GPSLongitude']?.description,
+        lat: lat?.toString(),
+        lng: lng?.toString(),
         alt: tags['GPSAltitude']?.description,
       },
-      //exifData: JSON.stringify({ ...tags, 'ImageHeight':undefined, 'ImageWidth':undefined})
     };
+  }
+
+  // Helper function to convert DMS (Degrees, Minutes, Seconds) to decimal degrees
+  function convertDMSToDD(dms: number[], sign: number): number {
+    if (!Array.isArray(dms) || dms.length === 0) return 0;
+    const degrees = dms[0] || 0;
+    const minutes = dms[1] || 0;
+    const seconds = dms[2] || 0;
+    return sign * (degrees + minutes / 60 + seconds / 3600);
   }
 
   const interpolateGpsData = (
@@ -335,6 +357,11 @@ export function FileUploadCore({
         alert('GPS metadata is required');
         return;
       }
+
+      setTotalSteps(0);
+      setStepsCompleted(0);
+      setPreppingImages(0);
+      setTotalPreppingImages(0);
 
       const imageSets = await fetchAllPaginatedResults(
         client.models.ImageSet.list,
@@ -681,7 +708,7 @@ export function FileUploadCore({
       if (model.value === 'manual') {
         await client.models.Project.update({
           id: projectId,
-          status: 'processing',
+          status: 'active',
         });
 
         client.mutations.updateProjectMemberships({
@@ -839,14 +866,20 @@ export function FileUploadCore({
 
   useEffect(() => {
     async function transformFile(file: File) {
-      if (file.type === 'text/gpx') {
+      // Check for GPX files by both type and extension
+      if (file.type === 'text/gpx' || file.name.toLowerCase().endsWith('.gpx')) {
         setAssociateByTimestamp(true);
 
         const text = await file.text();
         const [gpxFile, error] = parseGPX(text);
 
         if (error) {
-          console.error(error);
+          console.error('Error parsing GPX file:', error);
+          return;
+        }
+
+        if (!gpxFile.waypoints || gpxFile.waypoints.length === 0) {
+          console.error('No waypoints found in GPX file');
           return;
         }
 
@@ -968,10 +1001,10 @@ export function FileUploadCore({
             //   label: "Elephant Detection (nadir)",
             //   value: "elephant-detection-nadir",
             // },
-            // {
-            //   label: "Manual (model may be launched later)",
-            //   value: "manual",
-            // },
+            {
+              label: "Manual (images may be processed later)",
+              value: "manual",
+            },
           ]}
           onChange={(e) => setModel(e)}
           placeholder="Select a model"

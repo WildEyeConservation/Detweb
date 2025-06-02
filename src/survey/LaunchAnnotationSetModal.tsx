@@ -175,11 +175,11 @@ export default function LaunchAnnotationSetModal({
 
     onClose();
 
-    const modelGuidedLocationSet = locationSets.find((ls) =>
+    const modelGuidedLocationSets = locationSets.filter((ls) =>
       ls.name.toLowerCase().includes(model?.value)
     );
 
-    if (!modelGuidedLocationSet) {
+    if (modelGuidedLocationSets.length === 0) {
       alert('No model guided location set found');
       return;
     }
@@ -190,7 +190,7 @@ export default function LaunchAnnotationSetModal({
     //push messages to queue
     if (queueUrl) {
       await launchTask({
-        selectedTasks: [modelGuidedLocationSet.id],
+        selectedTasks: modelGuidedLocationSets.map((ls) => ls.id),
         queueUrl: queueUrl,
         secondaryQueueUrl: null,
         setStepsCompleted: setLoadingLocations,
@@ -273,15 +273,19 @@ export default function LaunchAnnotationSetModal({
 
       for (const locationSet of locationSets) {
         if (locationSet.name.toLowerCase().includes('scoutbot')) {
-          modelOptions.push({ label: 'ScoutBot', value: 'scoutbot' });
+          if (!modelOptions.some((option) => option.value === 'scoutbot')) {
+            modelOptions.push({ label: 'ScoutBot', value: 'scoutbot' });
+          }
         }
         if (
           locationSet.name.toLowerCase().includes('elephant-detection-nadir')
         ) {
-          modelOptions.push({
-            label: 'Elephant Detection Nadir',
-            value: 'elephant-detection-nadir',
-          });
+          if (!modelOptions.some((option) => option.value === 'elephant-detection-nadir')) {
+            modelOptions.push({
+              label: 'Elephant Detection Nadir',
+              value: 'elephant-detection-nadir',
+            });
+          }
         }
       }
       setModelOptions(modelOptions);
