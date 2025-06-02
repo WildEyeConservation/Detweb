@@ -883,12 +883,14 @@ export function FileUploadCore({
           return;
         }
 
-        const csvFormat = gpxFile.waypoints.map((waypoint) => ({
-          timestamp: Number(waypoint.time),
-          lat: waypoint.latitude,
-          lng: waypoint.longitude,
-          alt: waypoint.elevation || 0,
-        }));
+        const csvFormat = gpxFile.tracks.flatMap((track) =>
+          track.points.map((point) => ({
+            timestamp: Number(point.time),
+            lat: point.latitude,
+            lng: point.longitude,
+            alt: point.elevation || 0,
+          }))
+        );
 
         setCsvData({
           data: csvFormat.sort((a, b) => a.timestamp - b.timestamp),
@@ -1190,7 +1192,7 @@ export function FileUploadCore({
                     </div>
                   ))}
               </div>
-              <Button variant="primary" onClick={applyTimeFilter}>
+              <Button variant="primary" onClick={applyTimeFilter} className='mt-2'>
                 Filter Data
               </Button>
             </Form.Group>
@@ -1212,10 +1214,11 @@ export function FileUploadCore({
                 ? Math.max(...csvTimestamps)
                 : 0;
               if (csvTimestamps.length) {
+                const formatTimestamp = (timestamp: number) => new Date(timestamp).toLocaleString();
                 if (csvMin < minTimestamp || csvMax > maxTimestamp) {
-                  message = `Timestamp mismatch: CSV timestamps (${csvMin} - ${csvMax}) are outside the image timestamps range (${minTimestamp} - ${maxTimestamp}).`;
+                  message = `Timestamp mismatch: CSV timestamps (${formatTimestamp(csvMin)} - ${formatTimestamp(csvMax)}) are outside the image timestamps range.`;
                 } else {
-                  message = `Timestamp range valid: CSV timestamps (${csvMin} - ${csvMax}) are within the image timestamps range (${minTimestamp} - ${maxTimestamp}).`;
+                  message = `Timestamp range valid: CSV timestamps (${formatTimestamp(csvMin)} - ${formatTimestamp(csvMax)}) are within the image timestamps range.`;
                 }
               }
             } else {
