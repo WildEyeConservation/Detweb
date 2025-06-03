@@ -467,18 +467,23 @@ export function FileUploadCore({
       const imagesToProcess: Schema['Image']['type'][] = [];
       let filesToUpload = gpsFilteredImageFiles;
 
-      //debugging
-      console.log('gpsFilteredImageFiles', gpsFilteredImageFiles);
+      // Helper function to calculate next retry delay using exponential backoff
+      const getNextRetryDelay = (attempt: number): number => {
+        // Base delay of 1 second, doubles each attempt
+        const baseDelay = 1000; // 1 second in milliseconds
+        const maxDelay = 300000; // 5 minutes in milliseconds
+        const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), maxDelay);
+        // Add some jitter to prevent thundering herd
+        return delay + Math.random() * 1000;
+      };
 
-      const maxAttempts = 3;
-      let totalUploaded = 0;
-      for (
-        let attempt = 1;
-        attempt <= maxAttempts && filesToUpload.length > 0;
-        attempt++
-      ) {
-        //debugging
-        console.log('filesToUpload on attempt', attempt, filesToUpload);
+      // Track total retry time
+      const startTime = Date.now();
+      const maxRetryTime = 12 * 60 * 60 * 1000; // 12 hours in milliseconds
+      let attempt = 1;
+
+      while (filesToUpload.length > 0 && Date.now() - startTime < maxRetryTime) {
+        console.log(`Attempt ${attempt} with ${filesToUpload.length} files remaining`);
 
         const uploadTasks = filesToUpload.map((file) =>
           limitConnections(async () => {
@@ -585,28 +590,32 @@ export function FileUploadCore({
           return set;
         }, new Set());
 
-        //debugging
-        console.log('uploaded files after attempt', attempt, uploadedFiles);
-
         const failedFiles = filesToUpload.filter(
           (file) => !uploadedFiles.has(file.webkitRelativePath)
         );
-
-        //debugging
-        console.log('failed files after attempt', attempt, failedFiles);
 
         if (failedFiles.length > 0) {
           console.warn(
             `Attempt ${attempt}: ${failedFiles.length} files failed to upload.`
           );
+          
+          // Calculate next retry delay
+          const retryDelay = getNextRetryDelay(attempt);
+          console.log(`Waiting ${retryDelay/1000} seconds before next retry attempt`);
+          
+          // Wait for the calculated delay
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          
+          filesToUpload = failedFiles;
+          attempt++;
+        } else {
+          break; // All files uploaded successfully
         }
-
-        filesToUpload = failedFiles;
       }
 
       if (filesToUpload.length > 0) {
         console.warn(
-          `After ${maxAttempts} attempts, ${filesToUpload.length} files failed to upload.`
+          `After ${attempt} attempts over ${(Date.now() - startTime)/1000/60} minutes, ${filesToUpload.length} files failed to upload.`
         );
       }
 
