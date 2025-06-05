@@ -22,6 +22,8 @@ import {
 } from "@aws-amplify/ui-react";
 //import { ErrorHandler } from './ErrorHandler';
 //import {TaskProgressHandler} from './TaskProgressHandler';
+import UploadManager from "./upload/UploadManager.tsx";
+import { Upload } from "./UserContext.tsx";
 
 configure({ ignoreRepeatedEventsWhenKeyHeldDown: false });
 
@@ -81,13 +83,19 @@ function App({ signOut = () => {}, user }: AppProps) {
   return session ? (
     continueOnMobile ? (
       <User user={user!} cognitoGroups={cognitoGroups}>
-        <MainNavigation signOut={signOut} />
+        <Upload>
+          <UploadManager />
+          <MainNavigation signOut={signOut} />
+        </Upload>
       </User>
     ) : (
       <>
         <BrowserView>
           <User user={user!} cognitoGroups={cognitoGroups}>
-            <MainNavigation signOut={signOut} />
+            <Upload>
+              <UploadManager />
+              <MainNavigation signOut={signOut} />
+            </Upload>
           </User>
         </BrowserView>
         <MobileView>
@@ -116,7 +124,7 @@ export default function AppWithAuthenticator() {
       return <Logo />;
     },
     SignIn: {
-      Footer() {        
+      Footer() {
         const { toForgotPassword } = useAuthenticator();
 
         return (

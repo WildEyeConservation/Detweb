@@ -9,6 +9,8 @@ import Notifications from "./user/Notifications.tsx";
 import { UserContext } from "./Context.tsx";
 import Settings from "./user/Settings.tsx";
 import { Card, Button } from "react-bootstrap";
+import UploadProgress from "./upload/UploadProgress.tsx";
+import UploadManager from "./upload/UploadManager.tsx";
 
 export default function MainNavigation({ signOut }: { signOut: () => void }) {
   const {
@@ -151,6 +153,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
             )}
           </Nav>
           <div className="d-flex flex-column flex-lg-row flex-grow-1 align-items-center justify-content-end gap-3 gap-lg-0 mt-2 mt-lg-0">
+            <UploadProgress />
             <ProgressIndicators />
             <Settings signOut={signOut} />
             <Notifications />
