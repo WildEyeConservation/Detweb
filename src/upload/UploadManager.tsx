@@ -81,7 +81,9 @@ export default function UploadManager() {
           const { value: image, done } = iterator.next();
           if (done) break;
           try {
-            const file = files.find((file) => file.webkitRelativePath === image.originalPath);
+            const file = files.find(
+              (file) => file.webkitRelativePath === image.originalPath
+            );
             if (!file) {
               console.error("File not found", image.originalPath);
               continue;
@@ -93,7 +95,14 @@ export default function UploadManager() {
                 options: { bucket: "inputs", contentType: file.type },
               }).result;
             } catch (error) {
-              console.error(`Error uploading image ${image.originalPath}:`, error);
+              console.error(
+                `Error uploading image ${image.originalPath}:`,
+                error
+              );
+              if (!navigator.onLine) {
+                // propagate offline error to trigger backoff
+                throw error;
+              }
               continue;
             }
 
@@ -129,13 +138,20 @@ export default function UploadManager() {
               throw new Error("Image not created");
             }
           } catch (error) {
-            console.error(`Error processing image ${image.originalPath}:`, error);
+            console.error(
+              `Error processing image ${image.originalPath}:`,
+              error
+            );
+            if (!navigator.onLine) {
+              // propagate offline error to trigger backoff
+              throw error;
+            }
           } finally {
             processedImages++;
             setProgress((progress) => ({
               ...progress,
               processed: processedImages,
-              isComplete: processedImages === totalImages,
+              // defer marking complete until all workers finish
             }));
           }
         }
@@ -147,6 +163,12 @@ export default function UploadManager() {
         workers.push(runWorker());
       }
       await Promise.all(workers);
+      // all workers finished successfully; mark upload complete
+      setProgress((progress) => ({
+        ...progress,
+        processed: totalImages,
+        isComplete: true,
+      }));
     } catch (error) {
       console.error("Error uploading files:", error);
       setProgress((progress) => ({
@@ -303,7 +325,10 @@ export default function UploadManager() {
   // handles upload events
   useEffect(() => {
     if (error) {
-      handleError(error);
+      // clear the error to prevent continuous retries
+      setProgress((prev) => ({ ...prev, error: null }));
+      // schedule retry on network failure
+      retryWithBackoff();
     } else if (isComplete) {
       handleComplete();
     } else if (projectId) {
