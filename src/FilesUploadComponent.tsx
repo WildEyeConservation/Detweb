@@ -102,6 +102,7 @@ export function FileUploadCore({
   const [totalImageSize, setTotalImageSize] = useState(0);
   const [filteredImageSize, setFilteredImageSize] = useState(0);
   const [advancedImageOptions, setAdvancedImageOptions] = useState(false);
+  const [scanEnabled, setScanEnabled] = useState(false);
   const [exifData, setExifData] = useState<ExifData>({});
   const [missingGpsData, setMissingGpsData] = useState(false);
   const [associateByTimestamp, setAssociateByTimestamp] = useState(false);
@@ -147,90 +148,84 @@ export function FileUploadCore({
   }, [filteredImageFiles]);
 
   useEffect(() => {
-    async function getExistingFiles() {
+    async function listExistingFiles() {
       setListingS3Images(true);
-
       const { items } = await list({
         path: `images/${name}`,
         options: { bucket: "inputs", listAll: true },
       });
-
-      const existingFiles = items.reduce<Set<string>>((set, x) => {
-        set.add(x.path.substring("images/".length));
-        return set;
-      }, new Set());
-
-      const fImages = imageFiles.filter(
-        (file) => !existingFiles.has(file.webkitRelativePath)
+      const existing = new Set(
+        items.map((x) => x.path.substring("images/".length))
       );
-
+      const fImages = imageFiles.filter(
+        (file) => !existing.has(file.webkitRelativePath)
+      );
       setFilteredImageFiles(fImages);
       setListingS3Images(false);
-
-      const gpsToCSVData: CsvFile = [];
-      let missing = false;
-
-      setScanningEXIF(true);
-
-      // Get EXIF metadata for each file
-      const exifData = await Promise.all(
-        fImages.map(async (file) => {
-          const exif = await getExifmeta(file);
-
-          const updatedExif = {
-            ...exif,
-            width: exif.width || 0,
-            height: exif.height || 0,
-            gpsData:
-              exif.gpsData.alt && exif.gpsData.lat && exif.gpsData.lng
-                ? {
-                    lat: Number(exif.gpsData.lat),
-                    lng: Number(exif.gpsData.lng),
-                    alt: Number(exif.gpsData.alt),
-                  }
-                : null,
-          };
-
-          if (updatedExif.gpsData === null) {
-            missing = true;
-          } else {
-            gpsToCSVData.push({
-              ...updatedExif.gpsData,
-              timestamp: updatedExif.timestamp,
-            });
-          }
-
-          return updatedExif;
-        })
-      );
-
-      setScanningEXIF(false);
-
-      setMissingGpsData(missing);
-      if (!missing) {
-        setCsvData({
-          data: gpsToCSVData,
-        });
-        setAssociateByTimestamp(true);
-        setMinTimestamp(
-          Math.min(...gpsToCSVData.map((row) => row.timestamp || 0))
-        );
-        setMaxTimestamp(
-          Math.max(...gpsToCSVData.map((row) => row.timestamp || 0))
-        );
-      }
-
-      setExifData(
-        exifData.reduce((acc, x) => {
-          acc[x.key] = x;
-          return acc;
-        }, {} as ExifData)
-      );
     }
     if (imageFiles.length > 0) {
-      getExistingFiles();
+      listExistingFiles();
     }
-  }, [imageFiles]);
+  }, [imageFiles, name]);
+
+  const handleScanImages = useCallback(async () => {
+    if (filteredImageFiles.length === 0) return;
+    setScanningEXIF(true);
+    const gpsToCSVData: CsvFile = [];
+    let missing = false;
+
+    const exifArr = await Promise.all(
+      filteredImageFiles.map(async (file) => {
+        const exif = await getExifmeta(file);
+        const updated = {
+          ...exif,
+          width: exif.width || 0,
+          height: exif.height || 0,
+          gpsData:
+            exif.gpsData.alt && exif.gpsData.lat && exif.gpsData.lng
+              ? {
+                  lat: Number(exif.gpsData.lat),
+                  lng: Number(exif.gpsData.lng),
+                  alt: Number(exif.gpsData.alt),
+                }
+              : null,
+        };
+        if (updated.gpsData === null) {
+          missing = true;
+        } else {
+          gpsToCSVData.push({
+            ...updated.gpsData,
+            timestamp: updated.timestamp,
+          });
+        }
+        return updated;
+      })
+    );
+
+    setScanningEXIF(false);
+    setMissingGpsData(missing);
+
+    if (missing) {
+      setScanEnabled(false);
+    }
+    if (!missing) {
+      setCsvData({ data: gpsToCSVData });
+      setAssociateByTimestamp(true);
+      setMinTimestamp(
+        Math.min(...gpsToCSVData.map((r) => r.timestamp || 0))
+      );
+      setMaxTimestamp(
+        Math.max(...gpsToCSVData.map((r) => r.timestamp || 0))
+      );
+    }
+
+    setExifData(
+      exifArr.reduce((acc, x) => {
+        acc[x.key] = x;
+        return acc;
+      }, {} as ExifData)
+    );
+  }, [filteredImageFiles, getExifmeta]);
 
   const handleFileInputChange = (files: File[]) => {
     if (files) {
@@ -880,7 +875,8 @@ export function FileUploadCore({
         setCsvData({
           data: csvFormat.sort((a, b) => a.timestamp - b.timestamp),
         });
-
+        // Reset missingGpsData now that we have loaded GPS metadata
+        setMissingGpsData(false);
         return;
       }
 
@@ -923,6 +919,8 @@ export function FileUploadCore({
               Math.max(...results.data.map((row: any) => row.timestamp))
             );
           }
+          // Reset missingGpsData now that we have loaded GPS metadata
+          setMissingGpsData(false);
         },
       });
     }
@@ -1053,50 +1051,46 @@ export function FileUploadCore({
               </p>
             </FileInput>
           </Form.Group>
-          {/* <div>
-          <Form.Group>
+          <Form.Group className="mt-2">
             <Form.Check
               type="switch"
-              id="custom-switch"
-              label="Advanced Options"
-              checked={advancedImageOptions}
-              onChange={(x) => {
-                setAdvancedImageOptions(x.target.checked);
-                if (!x.target.checked) {
-                  setUpload(true);
-                  setIntegrityCheck(true);
-                }
-              }}
+              id="scan-images-switch"
+              label="Scan images for GPS data"
+              checked={scanEnabled}
+              onChange={(e) => setScanEnabled(e.target.checked)}
             />
           </Form.Group>
-          {advancedImageOptions && (
-              <Form.Group>
-                <Form.Check
-                  type="switch"
-                  id="custom-switch"
-                  label="Upload files to S3"
-                  checked={upload}
-                  onChange={(x) => {
-                    setUpload(x.target.checked);
-                  }}
-                />
-              </Form.Group>
-          )}
-        </div> */}
         </div>
       </Form.Group>
-      {scanningEXIF ? (
-        <p className="mt-3 mb-0">
-          Scanning images for GPS data (this may take a while)...
-        </p>
+      {scanEnabled ? (
+        scanningEXIF ? (
+          <p className="mt-3 mb-0">
+            Scanning images for GPS data (this may take a while)...
+          </p>
+        ) : (
+          <Button
+            variant="primary"
+            onClick={handleScanImages}
+            disabled={filteredImageFiles.length === 0}
+            className="mt-3"
+          >
+            Scan images for GPS data
+          </Button>
+        )
       ) : imageFiles.length > 0 ? (
         <Form.Group className="mt-3 d-flex flex-column gap-2">
           <div>
             <Form.Label className="mb-0">
-              {missingGpsData ? "Missing GPS data" : "GPS data found"}
+              {!csvData
+                ? "No GPS data loaded"
+                : missingGpsData
+                ? "Missing GPS data"
+                : "GPS data found"}
             </Form.Label>
             <Form.Text className="d-block mb-0" style={{ fontSize: "12px" }}>
-              {missingGpsData
+              {!csvData
+                ? "Please upload the gpx or csv file containing the GPS data for all images."
+                : missingGpsData
                 ? "Some images do not have GPS data. Please upload the gpx or csv file containing the GPS data for all images."
                 : "The selected images have GPS data. Would you like to upload a separate file containing the GPS data for all images?"}
             </Form.Text>
