@@ -13,6 +13,7 @@ import scoutbot
 from requests_aws4auth import AWS4Auth
 import multiprocessing
 from multiprocessing import Queue
+import torch
 import logging                                                                                                          
                                                                                                                         
 logging.basicConfig(level=logging.INFO)   
@@ -61,7 +62,7 @@ def process_scoutbot(input_queue, output_queue):
             output_queue.put(None)
             logging.info('Scoutbot process received sentinel value. Exiting.')
             break
-        _, detects_list = scoutbot.batch_v3(task['files'], 'v3')
+        _, detects_list = scoutbot.batch_v3(task['files'], 'v3',torch.cuda.current_device())
         # Delete the files
         for file in task['files']:
             os.remove(file)
