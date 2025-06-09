@@ -31,9 +31,9 @@ const fileStore = localforage.createInstance({
   storeName: "files",
 });
 
-const modelStore = localforage.createInstance({
-  name: "modelStore",
-  storeName: "models",
+const metadataStore = localforage.createInstance({
+  name: "metadataStore",
+  storeName: "metadata",
 });
 
 interface FilesUploadComponentProps {
@@ -102,7 +102,6 @@ export function FileUploadCore({
   const [totalImageSize, setTotalImageSize] = useState(0);
   const [filteredImageSize, setFilteredImageSize] = useState(0);
   const [advancedImageOptions, setAdvancedImageOptions] = useState(false);
-  const [scanEnabled, setScanEnabled] = useState(false);
   const [exifData, setExifData] = useState<ExifData>({});
   const [missingGpsData, setMissingGpsData] = useState(false);
   const [associateByTimestamp, setAssociateByTimestamp] = useState(false);
@@ -148,84 +147,90 @@ export function FileUploadCore({
   }, [filteredImageFiles]);
 
   useEffect(() => {
-    async function listExistingFiles() {
+    async function getExistingFiles() {
       setListingS3Images(true);
+
       const { items } = await list({
         path: `images/${name}`,
         options: { bucket: "inputs", listAll: true },
       });
-      const existing = new Set(
-        items.map((x) => x.path.substring("images/".length))
-      );
+
+      const existingFiles = items.reduce<Set<string>>((set, x) => {
+        set.add(x.path.substring("images/".length));
+        return set;
+      }, new Set());
+
       const fImages = imageFiles.filter(
-        (file) => !existing.has(file.webkitRelativePath)
+        (file) => !existingFiles.has(file.webkitRelativePath)
       );
+
       setFilteredImageFiles(fImages);
       setListingS3Images(false);
+
+      const gpsToCSVData: CsvFile = [];
+      let missing = false;
+
+      setScanningEXIF(true);
+
+      // Get EXIF metadata for each file
+      const exifData = await Promise.all(
+        fImages.map(async (file) => {
+          const exif = await getExifmeta(file);
+
+          const updatedExif = {
+            ...exif,
+            width: exif.width || 0,
+            height: exif.height || 0,
+            gpsData:
+              exif.gpsData.alt && exif.gpsData.lat && exif.gpsData.lng
+                ? {
+                    lat: Number(exif.gpsData.lat),
+                    lng: Number(exif.gpsData.lng),
+                    alt: Number(exif.gpsData.alt),
+                  }
+                : null,
+          };
+
+          if (updatedExif.gpsData === null) {
+            missing = true;
+          } else {
+            gpsToCSVData.push({
+              ...updatedExif.gpsData,
+              timestamp: updatedExif.timestamp,
+            });
+          }
+
+          return updatedExif;
+        })
+      );
+
+      setScanningEXIF(false);
+
+      setMissingGpsData(missing);
+      if (!missing) {
+        setCsvData({
+          data: gpsToCSVData,
+        });
+        setAssociateByTimestamp(true);
+        setMinTimestamp(
+          Math.min(...gpsToCSVData.map((row) => row.timestamp || 0))
+        );
+        setMaxTimestamp(
+          Math.max(...gpsToCSVData.map((row) => row.timestamp || 0))
+        );
+      }
+
+      setExifData(
+        exifData.reduce((acc, x) => {
+          acc[x.key] = x;
+          return acc;
+        }, {} as ExifData)
+      );
     }
     if (imageFiles.length > 0) {
-      listExistingFiles();
+      getExistingFiles();
     }
-  }, [imageFiles, name]);
-
-  const handleScanImages = useCallback(async () => {
-    if (filteredImageFiles.length === 0) return;
-    setScanningEXIF(true);
-    const gpsToCSVData: CsvFile = [];
-    let missing = false;
-
-    const exifArr = await Promise.all(
-      filteredImageFiles.map(async (file) => {
-        const exif = await getExifmeta(file);
-        const updated = {
-          ...exif,
-          width: exif.width || 0,
-          height: exif.height || 0,
-          gpsData:
-            exif.gpsData.alt && exif.gpsData.lat && exif.gpsData.lng
-              ? {
-                  lat: Number(exif.gpsData.lat),
-                  lng: Number(exif.gpsData.lng),
-                  alt: Number(exif.gpsData.alt),
-                }
-              : null,
-        };
-        if (updated.gpsData === null) {
-          missing = true;
-        } else {
-          gpsToCSVData.push({
-            ...updated.gpsData,
-            timestamp: updated.timestamp,
-          });
-        }
-        return updated;
-      })
-    );
-
-    setScanningEXIF(false);
-    setMissingGpsData(missing);
-
-    if (missing) {
-      setScanEnabled(false);
-    }
-    if (!missing) {
-      setCsvData({ data: gpsToCSVData });
-      setAssociateByTimestamp(true);
-      setMinTimestamp(
-        Math.min(...gpsToCSVData.map((r) => r.timestamp || 0))
-      );
-      setMaxTimestamp(
-        Math.max(...gpsToCSVData.map((r) => r.timestamp || 0))
-      );
-    }
-
-    setExifData(
-      exifArr.reduce((acc, x) => {
-        acc[x.key] = x;
-        return acc;
-      }, {} as ExifData)
-    );
-  }, [filteredImageFiles, getExifmeta]);
+  }, [imageFiles]);
 
   const handleFileInputChange = (files: File[]) => {
     if (files) {
@@ -491,7 +496,10 @@ export function FileUploadCore({
 
       //store image data & model in local storage
       await fileStore.setItem(projectId, images);
-      await modelStore.setItem(projectId, model.value);
+      await metadataStore.setItem(projectId, {
+        model: model.value,
+        masks: masks,
+      });
 
       // push new task to upload manager
       setTask({
@@ -500,199 +508,7 @@ export function FileUploadCore({
         retryDelay: 0,
       });
 
-      //#region upload files
-
-      // Update progress total to reflect only the size of files that will actually be uploaded
-      // const totalUploadSize = gpsFilteredImageFiles.reduce(
-      //   (acc, file) => acc + file.size,
-      //   0
-      // );
-      // setTotalSteps(totalUploadSize);
-
-      // const imagesToProcess: Schema["Image"]["type"][] = [];
-      // let filesToUpload = gpsFilteredImageFiles;
-
-      // // Helper function to calculate next retry delay using exponential backoff
-      // const getNextRetryDelay = (attempt: number): number => {
-      //   // Base delay of 1 second, doubles each attempt
-      //   const baseDelay = 1000; // 1 second in milliseconds
-      //   const maxDelay = 300000; // 5 minutes in milliseconds
-      //   const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), maxDelay);
-      //   // Add some jitter to prevent thundering herd
-      //   return delay + Math.random() * 1000;
-      // };
-
-      // // Track total retry time
-      // const startTime = Date.now();
-      // const maxRetryTime = 12 * 60 * 60 * 1000; // 12 hours in milliseconds
-      // let attempt = 1;
-
-      // while (
-      //   filesToUpload.length > 0 &&
-      //   Date.now() - startTime < maxRetryTime
-      // ) {
-      //   console.log(
-      //     `Attempt ${attempt} with ${filesToUpload.length} files remaining`
-      //   );
-
-      //   ...image upload logic
-
-      //   // check if all files were uploaded
-      //   const { items } = await list({
-      //     path: `images/${name}`, // image set name
-      //     options: { bucket: "inputs", listAll: true },
-      //   });
-
-      //   const uploadedFiles = items.reduce((set, x) => {
-      //     set.add(x.path.substring("images/".length));
-      //     return set;
-      //   }, new Set());
-
-      //   const failedFiles = filesToUpload.filter(
-      //     (file) => !uploadedFiles.has(file.webkitRelativePath)
-      //   );
-
-      //   if (failedFiles.length > 0) {
-      //     console.warn(
-      //       `Attempt ${attempt}: ${failedFiles.length} files failed to upload.`
-      //     );
-
-      //     // Calculate next retry delay
-      //     const retryDelay = getNextRetryDelay(attempt);
-      //     console.log(
-      //       `Waiting ${retryDelay / 1000} seconds before next retry attempt`
-      //     );
-
-      //     // Wait for the calculated delay
-      //     await new Promise((resolve) => setTimeout(resolve, retryDelay));
-
-      //     filesToUpload = failedFiles;
-      //     attempt++;
-      //   } else {
-      //     break; // All files uploaded successfully
-      //   }
-      // }
-
-      // if (filesToUpload.length > 0) {
-      //   console.warn(
-      //     `After ${attempt} attempts over ${
-      //       (Date.now() - startTime) / 1000 / 60
-      //     } minutes, ${filesToUpload.length} files failed to upload.`
-      //   );
-      // }
-
-      // //update image set count
-      // const { data: imageSet } = await client.models.ImageSet.get({
-      //   id: imageSetId,
-      // });
-
-      // await client.models.ImageSet.update({
-      //   id: imageSetId,
-      //   imageCount: (imageSet?.imageCount || 0) + totalUploaded,
-      // });
-
-      //#endregion
-
       //#region model tasks
-
-      // total number of tasks(pairs and model messages pushed) completed
-      // operations are async so we need to set the total tasks to 1 to notify the user there is a process running
-      // let totalTasks = 1;
-      // setPreppingImages(totalTasks);
-
-      // //#region image registration
-      // async function handlePair(
-      //   image1: Schema['Image']['type'],
-      //   image2: Schema['Image']['type']
-      // ) {
-      //   console.log(`Processing pair ${image1.id} and ${image2.id}`);
-      //   const { data: existingNeighbour } =
-      //     await client.models.ImageNeighbour.get(
-      //       {
-      //         image1Id: image1.id,
-      //         image2Id: image2.id,
-      //       },
-      //       { selectionSet: ['homography'] }
-      //     );
-
-      //   if (existingNeighbour?.homography) {
-      //     console.log(
-      //       `Homography already exists for pair ${image1.id} and ${image2.id}`
-      //     );
-      //     return null; // Return null for filtered pairs
-      //   }
-
-      //   if (!existingNeighbour) {
-      //     await client.models.ImageNeighbour.create({
-      //       image1Id: image1.id,
-      //       image2Id: image2.id,
-      //     });
-      //   }
-
-      //   totalTasks++;
-      //   setPreppingImages(totalTasks);
-      //   // Return the message instead of sending it immediately
-      //   return {
-      //     Id: `${image1.id}-${image2.id}`, // Required unique ID for batch entries
-      //     MessageBody: JSON.stringify({
-      //       inputBucket: backend.custom.inputsBucket,
-      //       image1Id: image1.id,
-      //       image2Id: image2.id,
-      //       keys: [image1.originalPath, image2.originalPath],
-      //       action: 'register',
-      //       masks: masks.length > 0 ? masks : undefined,
-      //     }),
-      //   };
-      // }
-
-      // imagesToProcess.sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
-
-      // const pairPromises = [];
-      // for (let i = 0; i < imagesToProcess.length - 1; i++) {
-      //   const image1 = imagesToProcess[i];
-      //   const image2 = imagesToProcess[i + 1];
-      //   if ((image2.timestamp ?? 0) - (image1.timestamp ?? 0) < 5) {
-      //     pairPromises.push(handlePair(image1, image2));
-      //   } else {
-      //     console.log(
-      //       `Skipping pair ${image1.id} and ${image2.id} because the time difference is greater than 5 seconds`
-      //     );
-      //   }
-      // }
-
-      // const messages = (await Promise.all(pairPromises)).filter(
-      //   (msg): msg is NonNullable<typeof msg> => msg !== null
-      // );
-
-      // const sqsClient = await getSqsClient();
-      // for (let i = 0; i < messages.length; i += 10) {
-      //   const batch = messages.slice(i, i + 10);
-      //   await limitConnections(() =>
-      //     sqsClient.send(
-      //       new SendMessageBatchCommand({
-      //         QueueUrl: backend.custom.lightglueTaskQueueUrl,
-      //         Entries: batch,
-      //       })
-      //     )
-      //   );
-      //   totalTasks += batch.length;
-      //   setPreppingImages(totalTasks);
-      // }
-      // //#endregion
-
-      // if (model.value === 'manual') {
-      // await client.models.Project.update({
-      //   id: projectId,
-      //   status: 'active',
-      // });
-
-      // client.mutations.updateProjectMemberships({
-      //   projectId: projectId,
-      // });
-
-      //   setTotalPreppingImages(totalTasks);
-      //   return;
-      // }
 
       // const { data: locationSet } = await client.models.LocationSet.create({
       //   name: projectId + `_${model.value}`,
@@ -733,32 +549,6 @@ export function FileUploadCore({
       //   );
       // };
 
-      // //#region model guided task
-      // switch (model.value) {
-      //   case 'scoutbot':
-      //     const chunkSize = 4;
-      //     for (let i = 0; i < imagesToProcess.length; i += chunkSize) {
-      //       const chunk = imagesToProcess.slice(i, i + chunkSize);
-      //       const sqsClient = await getSqsClient();
-      //       await sqsClient.send(
-      //         new SendMessageCommand({
-      //           QueueUrl: backend.custom.scoutbotTaskQueueUrl,
-      //           MessageBody: JSON.stringify({
-      //             images: chunk.map((image) => ({
-      //               imageId: image.id,
-      //               key: 'images/' + image.originalPath,
-      //             })),
-      //             projectId: projectId,
-      //             bucket: backend.storage.buckets[1].bucket_name,
-      //             setId: locationSet.id,
-      //           }),
-      //         })
-      //       );
-      //       totalTasks += chunkSize;
-      //       setPreppingImages(totalTasks);
-      //     }
-      //     setTotalPreppingImages(totalTasks);
-      //     break;
       //   case 'elephant-detection-nadir':
       //     // heatmap generation
       //     const heatmapTasks = imagesToProcess.map(async (image) => {
@@ -810,16 +600,6 @@ export function FileUploadCore({
       //     await Promise.all(pointFinderTasks);
       //     break;
       // }
-      // //#endregion
-
-      // await client.models.Project.update({
-      //   id: projectId,
-      //   status: 'processing',
-      // });
-
-      // client.mutations.updateProjectMemberships({
-      //   projectId: projectId,
-      // });
 
       //#endregion
     },
@@ -875,8 +655,7 @@ export function FileUploadCore({
         setCsvData({
           data: csvFormat.sort((a, b) => a.timestamp - b.timestamp),
         });
-        // Reset missingGpsData now that we have loaded GPS metadata
-        setMissingGpsData(false);
+
         return;
       }
 
@@ -919,8 +698,6 @@ export function FileUploadCore({
               Math.max(...results.data.map((row: any) => row.timestamp))
             );
           }
-          // Reset missingGpsData now that we have loaded GPS metadata
-          setMissingGpsData(false);
         },
       });
     }
@@ -1051,46 +828,50 @@ export function FileUploadCore({
               </p>
             </FileInput>
           </Form.Group>
-          <Form.Group className="mt-2">
+          {/* <div>
+          <Form.Group>
             <Form.Check
               type="switch"
-              id="scan-images-switch"
-              label="Scan images for GPS data"
-              checked={scanEnabled}
-              onChange={(e) => setScanEnabled(e.target.checked)}
+              id="custom-switch"
+              label="Advanced Options"
+              checked={advancedImageOptions}
+              onChange={(x) => {
+                setAdvancedImageOptions(x.target.checked);
+                if (!x.target.checked) {
+                  setUpload(true);
+                  setIntegrityCheck(true);
+                }
+              }}
             />
           </Form.Group>
+          {advancedImageOptions && (
+              <Form.Group>
+                <Form.Check
+                  type="switch"
+                  id="custom-switch"
+                  label="Upload files to S3"
+                  checked={upload}
+                  onChange={(x) => {
+                    setUpload(x.target.checked);
+                  }}
+                />
+              </Form.Group>
+          )}
+        </div> */}
         </div>
       </Form.Group>
-      {scanEnabled ? (
-        scanningEXIF ? (
-          <p className="mt-3 mb-0">
-            Scanning images for GPS data (this may take a while)...
-          </p>
-        ) : (
-          <Button
-            variant="primary"
-            onClick={handleScanImages}
-            disabled={filteredImageFiles.length === 0}
-            className="mt-3"
-          >
-            Scan images for GPS data
-          </Button>
-        )
+      {scanningEXIF ? (
+        <p className="mt-3 mb-0">
+          Scanning images for GPS data (this may take a while)...
+        </p>
       ) : imageFiles.length > 0 ? (
         <Form.Group className="mt-3 d-flex flex-column gap-2">
           <div>
             <Form.Label className="mb-0">
-              {!csvData
-                ? "No GPS data loaded"
-                : missingGpsData
-                ? "Missing GPS data"
-                : "GPS data found"}
+              {missingGpsData ? "Missing GPS data" : "GPS data found"}
             </Form.Label>
             <Form.Text className="d-block mb-0" style={{ fontSize: "12px" }}>
-              {!csvData
-                ? "Please upload the gpx or csv file containing the GPS data for all images."
-                : missingGpsData
+              {missingGpsData
                 ? "Some images do not have GPS data. Please upload the gpx or csv file containing the GPS data for all images."
                 : "The selected images have GPS data. Would you like to upload a separate file containing the GPS data for all images?"}
             </Form.Text>

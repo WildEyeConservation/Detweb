@@ -1,23 +1,28 @@
-import localforage from "localforage";
-import { UploadContext, GlobalContext, UserContext } from "../Context";
-import { useContext, useEffect, useRef, useState } from "react";
-import { uploadData, list } from "aws-amplify/storage";
-import { ImageData, UploadedFiles } from "../types/ImageData";
-import ConfirmationModal from "../ConfirmationModal";
+import localforage from 'localforage';
+import { UploadContext, GlobalContext, UserContext } from '../Context';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { uploadData, list } from 'aws-amplify/storage';
+import { CreatedImage, ImageData, UploadedFiles } from '../types/ImageData';
+import ConfirmationModal from '../ConfirmationModal';
 
 const fileStore = localforage.createInstance({
-  name: "fileStore",
-  storeName: "files",
+  name: 'fileStore',
+  storeName: 'files',
 });
 
 const fileStoreUploaded = localforage.createInstance({
-  name: "fileStoreUploaded",
-  storeName: "filesUploaded",
+  name: 'fileStoreUploaded',
+  storeName: 'filesUploaded',
 });
 
-const modelStore = localforage.createInstance({
-  name: "modelStore",
-  storeName: "models",
+const createdImagesStore = localforage.createInstance({
+  name: 'createdImagesStore',
+  storeName: 'createdImages',
+});
+
+const metadataStore = localforage.createInstance({
+  name: 'metadataStore',
+  storeName: 'metadata',
 });
 
 export default function UploadManager() {
@@ -27,7 +32,7 @@ export default function UploadManager() {
     setTask,
     setProgress,
   } = useContext(UploadContext)!;
-  const { client } = useContext(GlobalContext)!;
+  const { client, backend } = useContext(GlobalContext)!;
   const { myMembershipHook: myProjectsHook } = useContext(UserContext)!;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingResumeProjectIdRef = useRef<{ id: string; name: string } | null>(
@@ -39,7 +44,7 @@ export default function UploadManager() {
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
 
   async function uploadProject() {
-    console.log("uploading project", projectId);
+    console.log('uploading project', projectId);
 
     if (retryDelay) {
       // Wait for the calculated delay
@@ -57,6 +62,8 @@ export default function UploadManager() {
         ((await fileStore.getItem(projectId)) as ImageData[]) ?? [];
       const uploadedFiles =
         ((await fileStoreUploaded.getItem(projectId)) as UploadedFiles) ?? [];
+      const createdImages =
+        ((await createdImagesStore.getItem(projectId)) as CreatedImage[]) ?? [];
 
       //images to upload
       const images = allImages.filter(
@@ -85,14 +92,14 @@ export default function UploadManager() {
               (file) => file.webkitRelativePath === image.originalPath
             );
             if (!file) {
-              console.error("File not found", image.originalPath);
+              console.error('File not found', image.originalPath);
               continue;
             }
             try {
               await uploadData({
-                path: "images/" + image.originalPath,
+                path: 'images/' + image.originalPath,
                 data: file,
-                options: { bucket: "inputs", contentType: file.type },
+                options: { bucket: 'inputs', contentType: file.type },
               }).result;
             } catch (error) {
               console.error(
@@ -122,6 +129,13 @@ export default function UploadManager() {
             });
 
             if (img) {
+              createdImages.push({
+                id: img.id,
+                originalPath: image.originalPath,
+                timestamp: image.timestamp,
+              });
+              await createdImagesStore.setItem(projectId, createdImages);
+
               await client.models.ImageSetMembership.create({
                 imageId: img.id,
                 imageSetId: imageSet.id,
@@ -135,7 +149,7 @@ export default function UploadManager() {
                 type: file.type,
               });
             } else {
-              throw new Error("Image not created");
+              throw new Error('Image not created');
             }
           } catch (error) {
             console.error(
@@ -170,7 +184,7 @@ export default function UploadManager() {
         isComplete: true,
       }));
     } catch (error) {
-      console.error("Error uploading files:", error);
+      console.error('Error uploading files:', error);
       setProgress((progress) => ({
         ...progress,
         isComplete: false,
@@ -228,17 +242,17 @@ export default function UploadManager() {
 
       const { items } = await list({
         path: `images/${imageSet.name}`, // image set name
-        options: { bucket: "inputs", listAll: true },
+        options: { bucket: 'inputs', listAll: true },
       });
 
       const uploadedFiles = items.reduce((set, x) => {
-        set.add(x.path.substring("images/".length));
+        set.add(x.path.substring('images/'.length));
         return set;
       }, new Set());
 
       return uploadedFiles;
     } catch (error) {
-      console.error("Error fetching files from S3:", error);
+      console.error('Error fetching files from S3:', error);
 
       //get remaining files from local storage
       const filesToUpload =
@@ -265,17 +279,92 @@ export default function UploadManager() {
       filesOnS3.has(file.originalPath)
     );
 
-    await fileStoreUploaded.setItem(projectId, uploadedFiles);
+    await fileStoreUploaded.setItem(
+      projectId,
+      uploadedFiles.map((file) => file.originalPath)
+    );
 
     if (uploadedFiles.length !== filesToUpload.length) {
       await retryWithBackoff();
     } else {
       // finish upload
+      const createdImages =
+        ((await createdImagesStore.getItem(projectId)) as CreatedImage[]) ?? [];
+
+      createdImages.sort((a, b) => a.timestamp - b.timestamp);
+
+      const metadata = (await metadataStore.getItem(projectId)) as {
+        model: string;
+        masks: number[][][];
+      };
+      const model = metadata?.model ?? 'manual';
+      const masks = metadata?.masks ?? [];
+
+      // invoke a new lambda for each batch - the lambda will invoke itself if it doesn't complete the batch in time
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
+        const batch = createdImages.slice(i, i + BATCH_SIZE);
+        const batchStrings = batch.map(
+          (image) => `${image.id}---${image.originalPath}---${image.timestamp}`
+        );
+
+        // kick off image registration
+        client.mutations.runImageRegistration({
+          images: batchStrings,
+          projectId: projectId,
+          masks: JSON.stringify(masks),
+          queueUrl: backend.custom.lightglueTaskQueueUrl,
+        });
+      }
+
+      if (model === 'manual') {
+        await client.models.Project.update({
+          id: projectId,
+          status: 'active',
+        });
+      }
+
+      if (model === 'scoutbot') {
+        const { data: locationSet } = await client.models.LocationSet.create({
+          name: projectId + `_${model}`,
+          projectId: projectId,
+        });
+
+        if (!locationSet) {
+          console.error('Failed to create location set');
+          alert('Something went wrong, please try again.');
+          return;
+        }
+
+        for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
+          const batch = createdImages.slice(i, i + BATCH_SIZE);
+          const batchStrings = batch.map(
+            (image) => `${image.id}---${image.originalPath}`
+          );
+          
+          client.mutations.runScoutbot({
+            projectId: projectId,
+            images: batchStrings,
+            setId: locationSet.id,
+            bucket: backend.storage.buckets[1].bucket_name,
+            queueUrl: backend.custom.scoutbotTaskQueueUrl,
+          });
+        }
+
+        await client.models.Project.update({
+          id: projectId,
+          status: 'processing',
+        });
+      }
+
+      //clear local storage
       await fileStore.removeItem(projectId);
       await fileStoreUploaded.removeItem(projectId);
+      await metadataStore.removeItem(projectId);
+      await createdImagesStore.removeItem(projectId);
 
       setTask({
-        projectId: "",
+        projectId: '',
         files: [],
         retryDelay: 0,
       });
@@ -287,38 +376,9 @@ export default function UploadManager() {
         error: null,
       });
 
-      const model = await modelStore.getItem(projectId);
-
-      if (model === "manual") {
-        await client.models.Project.update({
-          id: projectId,
-          status: "active",
-        });
-      }
-
-      if (model === "scoutbot") {
-        //TODO: kick off scoutbot processing
-
-        await client.models.Project.update({
-          id: projectId,
-          status: "processing",
-        });
-      }
-
       client.mutations.updateProjectMemberships({
         projectId: projectId,
       });
-    }
-  }
-
-  function handleError(error: string) {
-    console.error("Error uploading files:", JSON.parse(error));
-    if (
-      window.confirm(
-        "An unexpected error occurred while uploading files. Would you like to refresh the page to try again? Already uploaded files won't be affected."
-      )
-    ) {
-      window.location.reload();
     }
   }
 
@@ -350,7 +410,7 @@ export default function UploadManager() {
               await client.models.Project.get(
                 { id: project.projectId },
                 {
-                  selectionSet: ["id", "name", "status"],
+                  selectionSet: ['id', 'name', 'status'],
                 }
               )
             ).data;
@@ -358,7 +418,7 @@ export default function UploadManager() {
         );
 
         const uploadingProjects = projects
-          .filter((project) => project && project?.status === "uploading")
+          .filter((project) => project && project?.status === 'uploading')
           .map((project) => ({ id: project?.id, name: project?.name }));
 
         return uploadingProjects as { id: string; name: string }[];
@@ -415,7 +475,7 @@ export default function UploadManager() {
         directory="true"
         multiple
         onChange={handleFileSelect}
-        style={{ display: "none" }}
+        style={{ display: 'none' }}
       />
       <ConfirmationModal
         show={showConfirmationModal}

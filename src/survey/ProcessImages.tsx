@@ -1,22 +1,17 @@
-import { Form } from "react-bootstrap";
-import { useState, useContext, useEffect, useCallback } from "react";
-import { GlobalContext, UserContext } from "../Context";
-import Select from "react-select";
-import { fetchAllPaginatedResults } from "../utils";
-import { SendMessageCommand } from "@aws-sdk/client-sqs";
+import { Form, Spinner } from 'react-bootstrap';
+import { useState, useContext, useEffect, useCallback } from 'react';
+import { GlobalContext, UserContext } from '../Context';
+import Select from 'react-select';
+import { fetchAllPaginatedResults } from '../utils';
 
 export default function ProcessImages({
   projectId,
   onClose,
-  setPreppingImages,
-  setTotalPreppingImages,
   setHandleSubmit,
   setSubmitDisabled,
 }: {
   projectId: string;
   onClose: () => void;
-  setPreppingImages: (preppingImages: number) => void;
-  setTotalPreppingImages: (totalPreppingImages: number) => void;
   setHandleSubmit: React.Dispatch<
     React.SetStateAction<(() => Promise<void>) | null>
   >;
@@ -42,14 +37,10 @@ export default function ProcessImages({
       setLoading(true);
 
       const images = await fetchAllPaginatedResults(
-        client.models.Image.list,
+        client.models.Image.imagesByProjectId,
         {
-          selectionSet: ["id", "originalPath"],
-          filter: {
-            projectId: {
-              eq: projectId,
-            },
-          },
+          projectId,
+          selectionSet: ['id', 'originalPath'],
         },
         setImagesLoaded
       );
@@ -57,7 +48,7 @@ export default function ProcessImages({
       const locations = await fetchAllPaginatedResults(
         client.models.Location.list,
         {
-          selectionSet: ["id", "imageId", "source"],
+          selectionSet: ['id', 'imageId', 'source'],
           filter: {
             projectId: {
               eq: projectId,
@@ -72,7 +63,7 @@ export default function ProcessImages({
         return !locations.some(
           (location) =>
             location.imageId === image.id &&
-            location.source.includes("scoutbot")
+            location.source.includes('scoutbot')
         );
       });
 
@@ -95,14 +86,14 @@ export default function ProcessImages({
     });
 
     if (!locationSet) {
-      console.error("Failed to create location set");
-      alert("Something went wrong, please try again.");
+      console.error('Failed to create location set');
+      alert('Something went wrong, please try again.');
       return;
     }
 
     await client.models.Project.update({
       id: projectId,
-      status: "processing",
+      status: 'processing',
     });
 
     client.mutations.updateProjectMemberships({
@@ -111,32 +102,23 @@ export default function ProcessImages({
 
     onClose();
 
-    let totalTasks = 0;
-
     switch (model.value) {
-      case "scoutbot":
-        const chunkSize = 4;
-        for (let i = 0; i < unprocessedImages.length; i += chunkSize) {
-          const chunk = unprocessedImages.slice(i, i + chunkSize);
-          const sqsClient = await getSqsClient();
-          await sqsClient.send(
-            new SendMessageCommand({
-              QueueUrl: backend.custom.scoutbotTaskQueueUrl,
-              MessageBody: JSON.stringify({
-                images: chunk.map((image) => ({
-                  imageId: image.id,
-                  key: "images/" + image.originalPath,
-                })),
-                projectId: projectId,
-                bucket: backend.storage.buckets[1].bucket_name,
-                setId: locationSet.id,
-              }),
-            })
+      case 'scoutbot':
+        const BATCH_SIZE = 500;
+        for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
+          const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
+          const batchStrings = batch.map(
+            (image) => `${image.id}---${image.originalPath}`
           );
-          totalTasks += chunkSize;
-          setPreppingImages(totalTasks);
+
+          client.mutations.runScoutbot({
+            projectId: projectId,
+            images: batchStrings,
+            setId: locationSet.id,
+            bucket: backend.storage.buckets[1].bucket_name,
+            queueUrl: backend.custom.scoutbotTaskQueueUrl,
+          });
         }
-        setTotalPreppingImages(totalTasks);
         break;
     }
 
@@ -148,8 +130,6 @@ export default function ProcessImages({
     client,
     backend,
     getSqsClient,
-    setPreppingImages,
-    setTotalPreppingImages,
   ]);
 
   useEffect(() => {
@@ -164,7 +144,8 @@ export default function ProcessImages({
     <Form>
       <Form.Group>
         {loading ? (
-          <div>
+          <div className="d-flex flex-column align-items-center">
+            <Spinner animation="border" role="status" />
             <p className="mb-0">Determining images to process...</p>
             <p className="mb-1">Found {imagesLoaded ?? 0} images</p>
             {locationsLoaded !== null && (
@@ -180,7 +161,7 @@ export default function ProcessImages({
             <Select
               value={model}
               onChange={(m) => setModel(m)}
-              options={[{ label: "ScoutBot", value: "scoutbot" }]}
+              options={[{ label: 'ScoutBot', value: 'scoutbot' }]}
               placeholder="Select a model"
               className="text-black"
             />

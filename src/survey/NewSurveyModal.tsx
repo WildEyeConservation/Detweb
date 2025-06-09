@@ -1,14 +1,14 @@
-import { Button, Form, Modal } from "react-bootstrap";
-import { useState } from "react";
-import { GlobalContext, UserContext } from "../Context";
-import { useContext, useEffect } from "react";
-import Select from "react-select";
-import LabeledToggleSwitch from "../LabeledToggleSwitch";
-import MyTable from "../Table";
-import { useUsers } from "../apiInterface";
-import { fetchAllPaginatedResults } from "../utils";
-import { FilesUploadForm, formatFileSize } from "../FilesUploadComponent";
-import { useUpdateProgress } from "../useUpdateProgress";
+import { Button, Form, Modal } from 'react-bootstrap';
+import { useState } from 'react';
+import { GlobalContext, UserContext } from '../Context';
+import { useContext, useEffect } from 'react';
+import Select from 'react-select';
+import LabeledToggleSwitch from '../LabeledToggleSwitch';
+import MyTable from '../Table';
+import { useUsers } from '../apiInterface';
+import { fetchAllPaginatedResults } from '../utils';
+import { FilesUploadForm, formatFileSize } from '../FilesUploadComponent';
+import { useUpdateProgress } from '../useUpdateProgress';
 
 export default function NewSurveyModal({
   show,
@@ -24,7 +24,7 @@ export default function NewSurveyModal({
   const { users: allUsers } = useUsers();
 
   const [filesReady, setFilesReady] = useState(false);
-  const [name, setName] = useState("");
+  const [name, setName] = useState('');
   const [organization, setOrganization] = useState<{
     label: string;
     value: string;
@@ -60,40 +60,15 @@ export default function NewSurveyModal({
   const [uploadSubmitFn, setUploadSubmitFn] = useState<
     | ((
         projectId: string,
-        setStepsCompleted: (stepsCompleted: number) => void,
-        setTotalSteps: (totalSteps: number) => void,
-        setPreppingImages: (preppingImages: number) => void,
-        setTotalPreppingImages: (totalPreppingImages: number) => void,
       ) => Promise<void>)
     | null
   >(null);
 
   const canSubmit = !loading && filesReady && name && organization;
 
-  const [setFilesUploaded, setTotalFiles] = useUpdateProgress({
-    taskId: `Upload files`,
-    determinateTaskName: `Uploading files`,
-    indeterminateTaskName: `Preparing files`,
-    stepFormatter: formatFileSize,
-  });
-
-  const [setPreppingImages, setTotalPreppingImages] = useUpdateProgress({
-    taskId: `Finishing up`,
-    indeterminateTaskName: `Finishing up. This may take a while, do not close this page.`,
-    determinateTaskName: "Finishing up. This may take a while, do not close this page.",
-    stepFormatter: (x: number) => `${x} tasks`,
-  });
-
-  const [setImagesCompleted, setTotalImages] = useUpdateProgress({
-    taskId: `Create model guided task`,
-    indeterminateTaskName: `Loading images`,
-    determinateTaskName: "Processing images",
-    stepFormatter: (x: number) => `${x} images`,
-  });
-
   async function handleSave() {
     if (projects.includes(name.toLowerCase())) {
-      alert("A project with this name already exists");
+      alert('A project with this name already exists');
       return;
     }
 
@@ -103,11 +78,11 @@ export default function NewSurveyModal({
       name,
       organizationId: organization.value,
       createdBy: user.userId,
-      status: "uploading",
+      status: 'uploading',
     });
 
     if (!project) {
-      alert("Failed to create survey");
+      alert('Failed to create survey');
       setLoading(false);
       return;
     }
@@ -117,7 +92,7 @@ export default function NewSurveyModal({
       {
         organizationId: organization.value,
         filter: { isAdmin: { eq: true } },
-        selectionSet: ["userId"],
+        selectionSet: ['userId'],
       }
     );
 
@@ -152,7 +127,7 @@ export default function NewSurveyModal({
 
     if (
       globalAnnotationAccess === null ||
-      globalAnnotationAccess?.value === "Yes"
+      globalAnnotationAccess?.value === 'Yes'
     ) {
       await Promise.all(
         other.map(async (u) => {
@@ -167,7 +142,7 @@ export default function NewSurveyModal({
 
     await client.models.ProjectTestConfig.create({
       projectId: project.id,
-      testType: "interval",
+      testType: 'interval',
       interval: 100,
       accuracy: 50,
       postTestConfirmation: false,
@@ -191,13 +166,7 @@ export default function NewSurveyModal({
     onClose();
 
     if (uploadSubmitFn) {
-      await uploadSubmitFn(
-        project.id,
-        setFilesUploaded,
-        setTotalFiles,
-        setPreppingImages,
-        setTotalPreppingImages,
-      );
+      await uploadSubmitFn(project.id);
     }
   }
 
@@ -216,7 +185,7 @@ export default function NewSurveyModal({
                   id: o.organizationId,
                 },
                 {
-                  selectionSet: ["name", "id", "memberships.*"],
+                  selectionSet: ['name', 'id', 'memberships.*'],
                 }
               )
             ).data
@@ -248,7 +217,7 @@ export default function NewSurveyModal({
                   .filter((m) => !m.isAdmin)
                   .map((m) => ({
                     id: m.userId,
-                    name: allUsers.find((u) => u.id === m.userId)?.name || "",
+                    name: allUsers.find((u) => u.id === m.userId)?.name || '',
                   })),
               }),
               {}
@@ -260,7 +229,7 @@ export default function NewSurveyModal({
 
   useEffect(() => {
     if (!show) {
-      setName("");
+      setName('');
       setGlobalAnnotationAccess(null);
       setAddPermissionExceptions(false);
       setPermissionExceptions([]);
@@ -294,7 +263,7 @@ export default function NewSurveyModal({
               styles={{
                 valueContainer: (base) => ({
                   ...base,
-                  overflowY: "auto",
+                  overflowY: 'auto',
                 }),
               }}
             />
@@ -317,14 +286,14 @@ export default function NewSurveyModal({
                 value={globalAnnotationAccess}
                 placeholder="Default (Yes)"
                 options={[
-                  { value: "Yes", label: "Yes" },
-                  { value: "No", label: "No" },
+                  { value: 'Yes', label: 'Yes' },
+                  { value: 'No', label: 'No' },
                 ]}
                 onChange={(e) => setGlobalAnnotationAccess(e)}
                 styles={{
                   valueContainer: (base) => ({
                     ...base,
-                    overflowY: "auto",
+                    overflowY: 'auto',
                   }),
                 }}
               />
@@ -336,7 +305,7 @@ export default function NewSurveyModal({
               checked={addPermissionExceptions}
               onChange={(e) => {
                 if (!organization) {
-                  alert("Please select an organization first");
+                  alert('Please select an organization first');
                   return;
                 }
                 setAddPermissionExceptions(e.target.checked);
@@ -349,9 +318,9 @@ export default function NewSurveyModal({
               <>
                 <MyTable
                   tableHeadings={[
-                    { content: "Username", style: { width: "33%" } },
-                    { content: "Annotation Access", style: { width: "33%" } },
-                    { content: "Remove Exception", style: { width: "33%" } },
+                    { content: 'Username', style: { width: '33%' } },
+                    { content: 'Annotation Access', style: { width: '33%' } },
+                    { content: 'Remove Exception', style: { width: '33%' } },
                   ]}
                   tableData={permissionExceptions.map((exception) => ({
                     id: exception.user.id,
@@ -362,7 +331,7 @@ export default function NewSurveyModal({
                           label: exception.user.name,
                           value: exception.user.id,
                         }}
-                        options={users[organization?.value || ""]
+                        options={users[organization?.value || '']
                           ?.filter(
                             (u) =>
                               !permissionExceptions.some(
@@ -428,7 +397,7 @@ export default function NewSurveyModal({
                   onClick={() => {
                     if (permissionExceptions.some((e) => e.temp)) {
                       alert(
-                        "Please complete the current permission exception before adding another"
+                        'Please complete the current permission exception before adding another'
                       );
                       return;
                     }
@@ -437,7 +406,7 @@ export default function NewSurveyModal({
                       {
                         user: {
                           id: crypto.randomUUID(),
-                          name: "Select a user",
+                          name: 'Select a user',
                         },
                         annotationAccess: false,
                         temp: true,
@@ -458,7 +427,7 @@ export default function NewSurveyModal({
       </Modal.Body>
       <Modal.Footer>
         <Button variant="primary" onClick={handleSave} disabled={!canSubmit}>
-          {loading ? "Creating..." : "Create"}
+          {loading ? 'Creating...' : 'Create'}
         </Button>
         <Button variant="dark" onClick={onClose}>
           Cancel

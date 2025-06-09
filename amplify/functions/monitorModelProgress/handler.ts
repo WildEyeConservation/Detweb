@@ -86,7 +86,6 @@ async function fetchAllPages<T, K extends string>(
   let nextToken: string | undefined;
 
   do {
-    console.log(`Fetching ${queryName} next page`);
     const response = await queryFn(nextToken);
     const items = response.data?.[queryName]?.items ?? [];
     allItems.push(...(items as T[]));

@@ -9,4 +9,10 @@ export interface ImageData {
   altitude_agl?: number;
 }
 
-export type UploadedFiles = string[]; 
+export type UploadedFiles = string[];
+
+export interface CreatedImage {
+  id: string;
+  originalPath: string;
+  timestamp: number;
+}

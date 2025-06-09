@@ -10,7 +10,8 @@ import { updateAnnotationCounts } from '../functions/updateAnnotationCounts/reso
 import { monitorModelProgress } from '../functions/monitorModelProgress/resource';
 import { updateProjectMemberships } from '../functions/updateProjectMemberships/resource';
 import { cleanupJobs } from '../functions/cleanupJobs/resource';
-// import { runImageRegistration } from '../functions/runImageRegistration/resource';
+import { runImageRegistration } from '../functions/runImageRegistration/resource';
+import { runScoutbot } from '../functions/runScoutbot/resource';
 
 const schema = a
   .schema({
@@ -694,20 +695,32 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(updateProjectMemberships)),
-    // runImageRegistration: a
-    //   .mutation()
-    //   .arguments({
-    //     projectId: a.string().required(),
-    //     //imageId-originalPath-timestamp
-    //     images: a.string().array(),
-    //     //JSON stringified array of masks
-    //     masks: a.string().required(),
-    //     inputBucket: a.string().required(),
-    //     queueUrl: a.string().required(),
-    //   })
-    //   .returns(a.json())
-    //   .authorization((allow) => [allow.authenticated()])
-    //   .handler(a.handler.function(runImageRegistration)),
+    runImageRegistration: a
+      .mutation()
+      .arguments({
+        projectId: a.string().required(),
+        //imageId---originalPath---timestamp
+        images: a.string().array(),
+        //JSON stringified array of masks
+        masks: a.string().required(),
+        // inputBucket: a.string().required(),
+        queueUrl: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(runImageRegistration)),
+    runScoutbot: a
+      .mutation()
+      .arguments({
+        projectId: a.string().required(),
+        bucket: a.string().required(),
+        queueUrl: a.string().required(),
+        images: a.string().array(),
+        setId: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(runScoutbot)),
   })
   .authorization((allow) => [
     allow.resource(getAnnotationCounts),
@@ -717,7 +730,8 @@ const schema = a
     allow.resource(monitorModelProgress),
     allow.resource(updateProjectMemberships),
     allow.resource(cleanupJobs),
-    // allow.resource(runImageRegistration),
+    allow.resource(runImageRegistration),
+    allow.resource(runScoutbot),
   ]);
 
 export type Schema = ClientSchema<typeof schema>;
