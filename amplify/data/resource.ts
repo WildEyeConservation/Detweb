@@ -16,7 +16,7 @@ import { runScoutbot } from '../functions/runScoutbot/resource';
 const schema = a
   .schema({
     UserType: a.customType({
-      name: a.string().required(),
+      name: a.string(),
       id: a.id().required(),
       email: a.string(),
       isAdmin: a.boolean(),
