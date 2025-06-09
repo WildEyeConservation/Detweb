@@ -1,10 +1,10 @@
-import { useState, useEffect, useContext, useMemo, useCallback } from 'react';
-import { SQSClient } from '@aws-sdk/client-sqs';
-import { LambdaClient } from '@aws-sdk/client-lambda';
-import { S3Client } from '@aws-sdk/client-s3';
-import { AuthUser, fetchAuthSession } from 'aws-amplify/auth';
-import { Schema } from '../amplify/data/resource'; // Path to your backend resource definition
-import { useUsers } from './apiInterface.tsx';
+import { useState, useEffect, useContext, useMemo, useCallback } from "react";
+import { SQSClient } from "@aws-sdk/client-sqs";
+import { LambdaClient } from "@aws-sdk/client-lambda";
+import { S3Client } from "@aws-sdk/client-s3";
+import { AuthUser, fetchAuthSession } from "aws-amplify/auth";
+import { Schema } from "../amplify/data/resource"; // Path to your backend resource definition
+import { useUsers } from "./apiInterface.tsx";
 import {
   GlobalContext,
   ProjectContext,
@@ -13,11 +13,12 @@ import {
   ProgressContext,
   ProgressType,
   OrganizationContext,
-} from './Context.tsx';
-import { generateClient } from 'aws-amplify/api';
-import outputs from '../amplify_outputs.json';
-import { useOptimisticUpdates, useQueues } from './useOptimisticUpdates.tsx';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+  UploadContext,
+} from "./Context.tsx";
+import { generateClient } from "aws-amplify/api";
+import outputs from "../amplify_outputs.json";
+import { useOptimisticUpdates, useQueues } from "./useOptimisticUpdates.tsx";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { useQuery } from "@tanstack/react-query";
 
 export function Project({
@@ -25,37 +26,48 @@ export function Project({
   currentPM,
 }: {
   children: React.ReactNode;
-  currentPM: Schema['UserProjectMembership']['type'];
+  currentPM: Schema["UserProjectMembership"]["type"];
 }) {
   const { client } = useContext(GlobalContext)!;
-  const [ expandLegend, setExpandLegend] = useState<boolean>(true);
-  const {myMembershipHook} = useContext(UserContext)!;
-  const subscriptionFilter = useMemo(() => ({
-    filter: { projectId: { eq: currentPM?.projectId } }
-  }), [currentPM?.projectId]);
+  const [expandLegend, setExpandLegend] = useState<boolean>(true);
+  const { myMembershipHook } = useContext(UserContext)!;
+  const subscriptionFilter = useMemo(
+    () => ({
+      filter: { projectId: { eq: currentPM?.projectId } },
+    }),
+    [currentPM?.projectId]
+  );
   //const [currentProject, setCurrentProject] = useState<Schema['Project']['type'] | undefined>(undefined)
-    const categoriesHook = useOptimisticUpdates<Schema['Category']['type'], 'Category'>('Category',
-      async (nextToken) => client.models.Category.list({
+  const categoriesHook = useOptimisticUpdates<
+    Schema["Category"]["type"],
+    "Category"
+  >(
+    "Category",
+    async (nextToken) =>
+      client.models.Category.list({
         filter: { projectId: { eq: currentPM?.projectId } },
         nextToken,
       }),
-      subscriptionFilter)
-  const [currentCategory, setCurrentCategory] = useState<Schema['Category']['type']|undefined>(categoriesHook.data?.[0])
-    // useEffect(() => {
-    // if (currentPM) {
-    //   client.models.Project.get({ id: currentPM.projectId }).then(p =>
-    //     setCurrentProject(p['data']!));
-    // } else {
-    //   setCurrentProject(undefined);
-    // }
-    // }, [currentPM])
-  
+    subscriptionFilter
+  );
+  const [currentCategory, setCurrentCategory] = useState<
+    Schema["Category"]["type"] | undefined
+  >(categoriesHook.data?.[0]);
+  // useEffect(() => {
+  // if (currentPM) {
+  //   client.models.Project.get({ id: currentPM.projectId }).then(p =>
+  //     setCurrentProject(p['data']!));
+  // } else {
+  //   setCurrentProject(undefined);
+  // }
+  // }, [currentPM])
+
   const projectQuery = useQuery({
     queryKey: ["project", currentPM?.projectId],
-    queryFn: () => client.models.Project.get({ id: currentPM?.projectId })
-  })
-  
-  const currentProject = projectQuery.data?.data
+    queryFn: () => client.models.Project.get({ id: currentPM?.projectId }),
+  });
+
+  const currentProject = projectQuery.data?.data;
 
   useEffect(() => {
     if (!currentCategory) {
@@ -64,19 +76,60 @@ export function Project({
   }, [categoriesHook.data]);
 
   return (
-    currentProject && 
-    <ProjectContext.Provider value={{
-        project: currentProject,
-        categoriesHook,
-        currentPM : myMembershipHook.data.find(m=>m.projectId==currentProject.id),
-        currentCategory,
-        setCurrentCategory,
-        expandLegend,
-        setExpandLegend
-    }}>
-      {currentProject && children}
-    </ProjectContext.Provider>
-  )
+    currentProject && (
+      <ProjectContext.Provider
+        value={{
+          project: currentProject,
+          categoriesHook,
+          currentPM: myMembershipHook.data.find(
+            (m) => m.projectId == currentProject.id
+          ),
+          currentCategory,
+          setCurrentCategory,
+          expandLegend,
+          setExpandLegend,
+        }}
+      >
+        {currentProject && children}
+      </ProjectContext.Provider>
+    )
+  );
+}
+
+export function Upload({ children }: { children: React.ReactNode }) {
+  const [task, setTask] = useState<{
+    projectId: string;
+    files: File[];
+    retryDelay: number;
+  }>({
+    projectId: "",
+    files: [],
+    retryDelay: 0,
+  });
+  const [progress, setProgress] = useState<{
+    processed: number;
+    total: number;
+    isComplete: boolean;
+    error: string | null;
+  }>({
+    processed: 0,
+    total: 0,
+    isComplete: false,
+    error: null,
+  });
+
+  return (
+    <UploadContext.Provider
+      value={{
+        task,
+        progress,
+        setTask,
+        setProgress,
+      }}
+    >
+      {children}
+    </UploadContext.Provider>
+  );
 }
 
 export function User({
@@ -90,7 +143,7 @@ export function User({
 }) {
   const [jobsCompleted, setJobsCompleted] = useState<number>(0);
   const [unannotatedJobs, setUnannotatedJobs] = useState<number>(0);
-  const [currentTaskTag, setCurrentTaskTag] = useState<string>('');
+  const [currentTaskTag, setCurrentTaskTag] = useState<string>("");
   const [isTesting, setIsTesting] = useState<boolean>(false);
   const [isRegistering, setIsRegistering] = useState<boolean>(false);
   const [currentAnnoCount, setCurrentAnnoCount] = useState<{
@@ -114,10 +167,10 @@ export function User({
   //   subscriptionFilter)
 
   const myMembershipHook = useOptimisticUpdates<
-    Schema['UserProjectMembership']['type'],
-    'UserProjectMembership'
+    Schema["UserProjectMembership"]["type"],
+    "UserProjectMembership"
   >(
-    'UserProjectMembership',
+    "UserProjectMembership",
     async (nextToken) =>
       client.models.UserProjectMembership.list({
         filter: { userId: { eq: user!.username } },
@@ -127,10 +180,10 @@ export function User({
   );
 
   const myOrganizationHook = useOptimisticUpdates<
-    Schema['OrganizationMembership']['type'],
-    'OrganizationMembership'
+    Schema["OrganizationMembership"]["type"],
+    "OrganizationMembership"
   >(
-    'OrganizationMembership',
+    "OrganizationMembership",
     async (nextToken) =>
       client.models.OrganizationMembership.list({
         filter: { userId: { eq: user!.username } },
@@ -227,10 +280,10 @@ export function Management({ children }: { children: React.ReactNode }) {
   //   async (nextToken) => client.models.UserProjectMembership.list({ filter: subscriptionFilter,nextToken }),
   //   subscriptionFilter)
   const projectMembershipHook = useOptimisticUpdates<
-    Schema['UserProjectMembership']['type'],
-    'UserProjectMembership'
+    Schema["UserProjectMembership"]["type"],
+    "UserProjectMembership"
   >(
-    'UserProjectMembership',
+    "UserProjectMembership",
     async (nextToken) =>
       client.models.UserProjectMembership.list({
         filter: subscriptionFilter.filter,
@@ -239,10 +292,10 @@ export function Management({ children }: { children: React.ReactNode }) {
     subscriptionFilter
   );
   const imageSetsHook = useOptimisticUpdates<
-    Schema['ImageSet']['type'],
-    'ImageSet'
+    Schema["ImageSet"]["type"],
+    "ImageSet"
   >(
-    'ImageSet',
+    "ImageSet",
     async (nextToken) =>
       client.models.ImageSet.list({
         filter: subscriptionFilter.filter,
@@ -251,10 +304,10 @@ export function Management({ children }: { children: React.ReactNode }) {
     subscriptionFilter
   );
   const locationSetsHook = useOptimisticUpdates<
-    Schema['LocationSet']['type'],
-    'LocationSet'
+    Schema["LocationSet"]["type"],
+    "LocationSet"
   >(
-    'LocationSet',
+    "LocationSet",
     async (nextToken) =>
       client.models.LocationSet.list({
         filter: subscriptionFilter.filter,
@@ -263,10 +316,10 @@ export function Management({ children }: { children: React.ReactNode }) {
     subscriptionFilter
   );
   const annotationSetsHook = useOptimisticUpdates<
-    Schema['AnnotationSet']['type'],
-    'AnnotationSet'
+    Schema["AnnotationSet"]["type"],
+    "AnnotationSet"
   >(
-    'AnnotationSet',
+    "AnnotationSet",
     async (nextToken) =>
       client.models.AnnotationSet.list({
         filter: subscriptionFilter.filter,

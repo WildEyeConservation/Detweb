@@ -1,37 +1,45 @@
-import { useEffect, useState, useRef, useContext, useCallback } from 'react';
+import { useEffect, useState, useRef, useContext, useCallback } from "react";
 // import moment from 'moment'
 // import {MD5,enc} from 'crypto-js'
-import Modal from 'react-bootstrap/Modal';
-import Button from 'react-bootstrap/Button';
-import Form from 'react-bootstrap/Form';
-import { list, uploadData } from 'aws-amplify/storage';
-import { UserContext, GlobalContext } from './Context.tsx';
-import pLimit from 'p-limit';
-import ExifReader from 'exifreader';
-import { DateTime } from 'luxon';
-import { fetchAllPaginatedResults } from './utils';
-import { useQueryClient } from '@tanstack/react-query';
-import Papa from 'papaparse';
-import GPSSubset from './GPSSubset';
-import { parseGPX } from '@we-gold/gpxjs';
-import { Schema } from '../amplify/data/resource.ts';
-import FileInput from './FileInput';
+import Modal from "react-bootstrap/Modal";
+import Button from "react-bootstrap/Button";
+import Form from "react-bootstrap/Form";
+import { list, uploadData } from "aws-amplify/storage";
+import { UserContext, GlobalContext, UploadContext } from "./Context.tsx";
+import pLimit from "p-limit";
+import ExifReader from "exifreader";
+import { DateTime } from "luxon";
+import { fetchAllPaginatedResults } from "./utils";
+import { useQueryClient } from "@tanstack/react-query";
+import Papa from "papaparse";
+import GPSSubset from "./GPSSubset";
+import { parseGPX } from "@we-gold/gpxjs";
+import { Schema } from "../amplify/data/resource.ts";
+import FileInput from "./FileInput";
 import {
   SendMessageBatchCommand,
   SendMessageCommand,
-} from '@aws-sdk/client-sqs';
-import ImageMaskEditor from './ImageMaskEditor.tsx';
-import Select from 'react-select';
-import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
+} from "@aws-sdk/client-sqs";
+import ImageMaskEditor from "./ImageMaskEditor.tsx";
+import Select from "react-select";
+import { S3Client, HeadObjectCommand } from "@aws-sdk/client-s3";
+import localforage from "localforage";
+
+// Configure a dedicated storage instance for file paths
+const fileStore = localforage.createInstance({
+  name: "fileStore",
+  storeName: "files",
+});
+
+const metadataStore = localforage.createInstance({
+  name: "metadataStore",
+  storeName: "metadata",
+});
 
 interface FilesUploadComponentProps {
   show: boolean;
   handleClose: () => void;
   project?: { id: string; name: string };
-  setFilesUploaded: (filesUploaded: number) => void;
-  setTotalFiles: (totalFiles: number) => void;
-  setPreppingImages: (preppingImages: number) => void;
-  setTotalPreppingImages: (totalPreppingImages: number) => void;
 }
 
 // Shared props for both modal and form versions
@@ -39,7 +47,7 @@ interface FilesUploadBaseProps {
   project?: { id: string; name: string };
   setOnSubmit?: React.Dispatch<
     React.SetStateAction<
-      ((projectId: string) => Promise<Schema['Image']['type'][]>) | null
+      ((projectId: string) => Promise<Schema["Image"]["type"][]>) | null
     >
   >;
   setReadyToSubmit: React.Dispatch<React.SetStateAction<boolean>>;
@@ -84,12 +92,13 @@ export function FileUploadCore({
 }: FilesUploadBaseProps) {
   const limitConnections = pLimit(10);
   const [upload, setUpload] = useState(true);
-  const [name, setName] = useState('');
+  const [name, setName] = useState("");
   const { client, backend } = useContext(GlobalContext)!;
   const [scannedFiles, setScannedFiles] = useState<File[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [filteredImageFiles, setFilteredImageFiles] = useState<File[]>([]);
   const { getSqsClient } = useContext(UserContext)!;
+  const { setTask } = useContext(UploadContext)!;
   const [totalImageSize, setTotalImageSize] = useState(0);
   const [filteredImageSize, setFilteredImageSize] = useState(0);
   const [advancedImageOptions, setAdvancedImageOptions] = useState(false);
@@ -110,8 +119,8 @@ export function FileUploadCore({
     label: string;
     value: string;
   }>({
-    label: 'ScoutBot',
-    value: 'scoutbot',
+    label: "ScoutBot",
+    value: "scoutbot",
   });
 
   const queryClient = useQueryClient();
@@ -123,7 +132,7 @@ export function FileUploadCore({
 
   useEffect(() => {
     setImageFiles(
-      scannedFiles.filter((file) => file.type.startsWith('image/jpeg'))
+      scannedFiles.filter((file) => file.type.startsWith("image/jpeg"))
     );
   }, [scannedFiles]);
 
@@ -143,11 +152,11 @@ export function FileUploadCore({
 
       const { items } = await list({
         path: `images/${name}`,
-        options: { bucket: 'inputs', listAll: true },
+        options: { bucket: "inputs", listAll: true },
       });
 
       const existingFiles = items.reduce<Set<string>>((set, x) => {
-        set.add(x.path.substring('images/'.length));
+        set.add(x.path.substring("images/".length));
         return set;
       }, new Set());
 
@@ -226,7 +235,7 @@ export function FileUploadCore({
   const handleFileInputChange = (files: File[]) => {
     if (files) {
       setScannedFiles(Array.from(files));
-      setName(files[0].webkitRelativePath.split('/')[0]);
+      setName(files[0].webkitRelativePath.split("/")[0]);
     }
   };
 
@@ -234,9 +243,9 @@ export function FileUploadCore({
     const tags = await ExifReader.load(file);
     /* I am saving all of the exifdata to make it easier to answer questions about eg. lens used/ISO/shutterTime/aperture distributions later on. However, some
       EXIF fields are absolutely huge and make writing to my database impossibly slow. I explicitly drop those here*/
-    delete tags['Thumbnail'];
-    delete tags['Images'];
-    delete tags['MakerNote'];
+    delete tags["Thumbnail"];
+    delete tags["Images"];
+    delete tags["MakerNote"];
     for (const tag of Object.keys(tags)) {
       if (tags[tag]?.description?.length > 100) {
         console.log(
@@ -246,37 +255,37 @@ export function FileUploadCore({
         delete tags[tag];
       }
     }
-    const rotated = (tags['Orientation']?.value as number) > 4;
+    const rotated = (tags["Orientation"]?.value as number) > 4;
 
     // Get GPS coordinates with proper sign handling
-    let lat = tags['GPSLatitude']?.value;
-    let lng = tags['GPSLongitude']?.value;
-    const latRef = tags['GPSLatitudeRef']?.value;
-    const lngRef = tags['GPSLongitudeRef']?.value;
+    let lat = tags["GPSLatitude"]?.value;
+    let lng = tags["GPSLongitude"]?.value;
+    const latRef = tags["GPSLatitudeRef"]?.value;
+    const lngRef = tags["GPSLongitudeRef"]?.value;
 
     // Convert coordinates to decimal degrees with proper sign
     if (lat && latRef) {
-      lat = convertDMSToDD(lat, latRef === 'N' ? 1 : -1);
+      lat = convertDMSToDD(lat, latRef === "N" ? 1 : -1);
     }
     if (lng && lngRef) {
-      lng = convertDMSToDD(lng, lngRef === 'E' ? 1 : -1);
+      lng = convertDMSToDD(lng, lngRef === "E" ? 1 : -1);
     }
 
     return {
       key: file.webkitRelativePath,
-      width: rotated ? tags['Image Height']?.value : tags['Image Width']?.value,
+      width: rotated ? tags["Image Height"]?.value : tags["Image Width"]?.value,
       height: rotated
-        ? tags['Image Width']?.value
-        : tags['Image Height']?.value,
+        ? tags["Image Width"]?.value
+        : tags["Image Height"]?.value,
       timestamp: DateTime.fromFormat(
         tags.DateTimeOriginal?.description as string,
-        'yyyy:MM:dd HH:mm:ss'
+        "yyyy:MM:dd HH:mm:ss"
       ).toSeconds(),
-      cameraSerial: tags['Internal Serial Number']?.value,
+      cameraSerial: tags["Internal Serial Number"]?.value,
       gpsData: {
         lat: lat?.toString(),
         lng: lng?.toString(),
-        alt: tags['GPSAltitude']?.description,
+        alt: tags["GPSAltitude"]?.description,
       },
     };
   }
@@ -295,7 +304,7 @@ export function FileUploadCore({
     queryTimestamp: number
   ) => {
     if (csvData.length === 0) {
-      throw new Error('No GPS data available for interpolation.');
+      throw new Error("No GPS data available for interpolation.");
     }
 
     const sortedCsvData = csvData.sort((a, b) => a.timestamp - b.timestamp);
@@ -336,54 +345,34 @@ export function FileUploadCore({
         alt: altitude,
       };
     } else {
-      throw new Error('Extrapolation required for GPS data interpolation.');
+      throw new Error("Extrapolation required for GPS data interpolation.");
     }
   };
 
   const handleSubmit = useCallback(
-    async (
-      projectId: string,
-      setStepsCompleted: (stepsCompleted: number) => void,
-      setTotalSteps: (totalSteps: number) => void,
-      setPreppingImages: (preppingImages: number) => void,
-      setTotalPreppingImages: (totalPreppingImages: number) => void
-    ) => {
+    async (projectId: string) => {
       if (!projectId) {
-        alert('Survey is required');
+        alert("Survey is required");
         return;
       }
 
       if (!csvData) {
-        alert('GPS metadata is required');
+        alert("GPS metadata is required");
         return;
       }
 
-      setTotalSteps(0);
-      setStepsCompleted(0);
-      setPreppingImages(0);
-      setTotalPreppingImages(0);
-
       const imageSets = await fetchAllPaginatedResults(
         client.models.ImageSet.list,
-        { filter: { projectId: { eq: projectId } }, selectionSet: ['id'] }
+        { filter: { projectId: { eq: projectId } }, selectionSet: ["id"] }
       );
 
-      async function createImageSet() {
-        const { data: project } = await client.models.Project.get(
-          { id: projectId },
-          { selectionSet: ['name'] }
-        );
-
-        const { data: imageSet } = await client.models.ImageSet.create({
-          name: project?.name || name,
+      // only one image set exists for a survey
+      if (imageSets.length === 0) {
+        await client.models.ImageSet.create({
+          name: name,
           projectId: projectId,
         });
-        return imageSet?.id || '';
       }
-
-      // only one image set exists for a survey
-      const imageSetId =
-        imageSets.length > 0 ? imageSets[0].id : await createImageSet();
 
       const gpsFilteredImageFiles = filteredImageFiles.filter((file) => {
         const exifMeta = exifData[file.webkitRelativePath];
@@ -457,403 +446,162 @@ export function FileUploadCore({
         }
       });
 
-      // Update progress total to reflect only the size of files that will actually be uploaded
-      const totalUploadSize = gpsFilteredImageFiles.reduce(
-        (acc, file) => acc + file.size,
-        0
-      );
-      setTotalSteps(totalUploadSize);
+      const images = [];
 
-      const imagesToProcess: Schema['Image']['type'][] = [];
-      let filesToUpload = gpsFilteredImageFiles;
+      for (const file of gpsFilteredImageFiles) {
+        const exifmeta = exifData[file.webkitRelativePath];
+        let gpsData = null;
 
-      // Helper function to calculate next retry delay using exponential backoff
-      const getNextRetryDelay = (attempt: number): number => {
-        // Base delay of 1 second, doubles each attempt
-        const baseDelay = 1000; // 1 second in milliseconds
-        const maxDelay = 300000; // 5 minutes in milliseconds
-        const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), maxDelay);
-        // Add some jitter to prevent thundering herd
-        return delay + Math.random() * 1000;
-      };
-
-      // Track total retry time
-      const startTime = Date.now();
-      const maxRetryTime = 12 * 60 * 60 * 1000; // 12 hours in milliseconds
-      let attempt = 1;
-
-      while (filesToUpload.length > 0 && Date.now() - startTime < maxRetryTime) {
-        console.log(`Attempt ${attempt} with ${filesToUpload.length} files remaining`);
-
-        const uploadTasks = filesToUpload.map((file) =>
-          limitConnections(async () => {
-            let lastTransferred = 0;
-
-            try {
-              await uploadData({
-                path: 'images/' + file.webkitRelativePath,
-                data: file,
-                options: {
-                  bucket: 'inputs',
-                  contentType: file.type,
-                  onProgress: ({ transferredBytes }) => {
-                    const additionalTransferred =
-                      transferredBytes - lastTransferred;
-                    setStepsCompleted((fc) => fc + additionalTransferred);
-                    lastTransferred = transferredBytes;
-                  },
-                },
-              }).result;
-            } catch (error) {
-              console.error(error);
-              return;
-            }
-
-            const exifmeta = exifData[file.webkitRelativePath];
-            let gpsData = null;
-
-            if (associateByTimestamp) {
-              if (
-                exifmeta.timestamp > minTimestamp &&
-                exifmeta.timestamp < maxTimestamp
-              ) {
-                gpsData = interpolateGpsData(
-                  csvData.data.map((row) => ({
-                    timestamp: row.timestamp!,
-                    lat: row.lat,
-                    lng: row.lng,
-                    alt: row.alt,
-                  })),
-                  exifmeta.timestamp
-                );
-              } else {
-                console.warn('Timestamp outside of GPS data range');
-              }
-            } else {
-              const csvRow = csvData.data.find(
-                (row) => row.filepath === file.webkitRelativePath
-              );
-              if (csvRow) {
-                gpsData = { lat: csvRow.lat, lng: csvRow.lng, alt: csvRow.alt };
-              } else {
-                console.warn(
-                  `No GPS data found for image ${file.webkitRelativePath}`
-                );
-              }
-            }
-
-            const { data: image } = await client.models.Image.create({
-              projectId: projectId,
-              width: exifmeta.width,
-              height: exifmeta.height,
-              timestamp: exifmeta.timestamp,
-              cameraSerial: exifmeta.cameraSerial,
-              originalPath: file.webkitRelativePath,
-              latitude: gpsData ? gpsData.lat : undefined,
-              longitude: gpsData ? gpsData.lng : undefined,
-              altitude_agl: gpsData ? gpsData.alt : undefined,
-            });
-
-            if (image) {
-              totalUploaded++;
-
-              await client.models.ImageSetMembership.create({
-                imageId: image.id,
-                imageSetId: imageSetId,
-              });
-
-              await client.models.ImageFile.create({
-                projectId: projectId,
-                imageId: image.id,
-                key: file.webkitRelativePath,
-                path: file.webkitRelativePath,
-                type: file.type,
-              });
-
-              imagesToProcess.push(image);
-            } else {
-              throw new Error('Image not created');
-            }
-          })
-        );
-
-        await Promise.all(uploadTasks);
-
-        // check if all files were uploaded
-        const { items } = await list({
-          path: `images/${name}`,
-          options: { bucket: 'inputs', listAll: true },
-        });
-
-        const uploadedFiles = items.reduce((set, x) => {
-          set.add(x.path.substring('images/'.length));
-          return set;
-        }, new Set());
-
-        const failedFiles = filesToUpload.filter(
-          (file) => !uploadedFiles.has(file.webkitRelativePath)
-        );
-
-        if (failedFiles.length > 0) {
-          console.warn(
-            `Attempt ${attempt}: ${failedFiles.length} files failed to upload.`
-          );
-          
-          // Calculate next retry delay
-          const retryDelay = getNextRetryDelay(attempt);
-          console.log(`Waiting ${retryDelay/1000} seconds before next retry attempt`);
-          
-          // Wait for the calculated delay
-          await new Promise(resolve => setTimeout(resolve, retryDelay));
-          
-          filesToUpload = failedFiles;
-          attempt++;
-        } else {
-          break; // All files uploaded successfully
-        }
-      }
-
-      if (filesToUpload.length > 0) {
-        console.warn(
-          `After ${attempt} attempts over ${(Date.now() - startTime)/1000/60} minutes, ${filesToUpload.length} files failed to upload.`
-        );
-      }
-
-      //update image set count
-      const { data: imageSet } = await client.models.ImageSet.get({
-        id: imageSetId,
-      });
-
-      await client.models.ImageSet.update({
-        id: imageSetId,
-        imageCount: (imageSet?.imageCount || 0) + totalUploaded,
-      });
-
-      // total number of tasks(pairs and model messages pushed) completed
-      // operations are async so we need to set the total tasks to 1 to notify the user there is a process running
-      let totalTasks = 1;
-      setPreppingImages(totalTasks);
-
-      //#region image registration
-      async function handlePair(
-        image1: Schema['Image']['type'],
-        image2: Schema['Image']['type']
-      ) {
-        console.log(`Processing pair ${image1.id} and ${image2.id}`);
-        const { data: existingNeighbour } =
-          await client.models.ImageNeighbour.get(
-            {
-              image1Id: image1.id,
-              image2Id: image2.id,
-            },
-            { selectionSet: ['homography'] }
-          );
-
-        if (existingNeighbour?.homography) {
-          console.log(
-            `Homography already exists for pair ${image1.id} and ${image2.id}`
-          );
-          return null; // Return null for filtered pairs
-        }
-
-        if (!existingNeighbour) {
-          await client.models.ImageNeighbour.create({
-            image1Id: image1.id,
-            image2Id: image2.id,
-          });
-        }
-
-        totalTasks++;
-        setPreppingImages(totalTasks);
-        // Return the message instead of sending it immediately
-        return {
-          Id: `${image1.id}-${image2.id}`, // Required unique ID for batch entries
-          MessageBody: JSON.stringify({
-            inputBucket: backend.custom.inputsBucket,
-            image1Id: image1.id,
-            image2Id: image2.id,
-            keys: [image1.originalPath, image2.originalPath],
-            action: 'register',
-            masks: masks.length > 0 ? masks : undefined,
-          }),
-        };
-      }
-
-      imagesToProcess.sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
-
-      const pairPromises = [];
-      for (let i = 0; i < imagesToProcess.length - 1; i++) {
-        const image1 = imagesToProcess[i];
-        const image2 = imagesToProcess[i + 1];
-        if ((image2.timestamp ?? 0) - (image1.timestamp ?? 0) < 5) {
-          pairPromises.push(handlePair(image1, image2));
-        } else {
-          console.log(
-            `Skipping pair ${image1.id} and ${image2.id} because the time difference is greater than 5 seconds`
-          );
-        }
-      }
-
-      const messages = (await Promise.all(pairPromises)).filter(
-        (msg): msg is NonNullable<typeof msg> => msg !== null
-      );
-
-      const sqsClient = await getSqsClient();
-      for (let i = 0; i < messages.length; i += 10) {
-        const batch = messages.slice(i, i + 10);
-        await limitConnections(() =>
-          sqsClient.send(
-            new SendMessageBatchCommand({
-              QueueUrl: backend.custom.lightglueTaskQueueUrl,
-              Entries: batch,
-            })
-          )
-        );
-        totalTasks += batch.length;
-        setPreppingImages(totalTasks);
-      }
-      //#endregion
-
-      if (model.value === 'manual') {
-        await client.models.Project.update({
-          id: projectId,
-          status: 'active',
-        });
-
-        client.mutations.updateProjectMemberships({
-          projectId: projectId,
-        });
-
-        setTotalPreppingImages(totalTasks);
-        return;
-      }
-
-      const { data: locationSet } = await client.models.LocationSet.create({
-        name: projectId + `_${model.value}`,
-        projectId: projectId,
-      });
-
-      if (!locationSet) {
-        throw new Error('Location set not created');
-      }
-
-      // Helper function to wait for heatmap completion before proceeding with point finder tasks
-      const waitForHeatmapCompletion = async (
-        images: Schema['Image']['type'][]
-      ): Promise<void> => {
-        await Promise.all(
-          images.map(async (image) => {
-            const heatmapFilePath = image.originalPath!.replace(
-              'images',
-              'heatmaps'
+        if (associateByTimestamp) {
+          if (
+            exifmeta.timestamp > minTimestamp &&
+            exifmeta.timestamp < maxTimestamp
+          ) {
+            gpsData = interpolateGpsData(
+              csvData.data.map((row) => ({
+                timestamp: row.timestamp!,
+                lat: row.lat,
+                lng: row.lng,
+                alt: row.alt,
+              })),
+              exifmeta.timestamp
             );
-            let heatmapAvailable = false;
-            const s3Client = new S3Client({});
-            while (!heatmapAvailable) {
-              try {
-                await s3Client.send(
-                  new HeadObjectCommand({
-                    Bucket: backend.storage.buckets[0].bucket_name,
-                    Key: heatmapFilePath,
-                  })
-                );
-                heatmapAvailable = true;
-              } catch (err) {
-                // File not available yet, wait 2 seconds
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-              }
-            }
-          })
-        );
-      };
-
-      //#region model guided task
-      switch (model.value) {
-        case 'scoutbot':
-          const chunkSize = 4;
-          for (let i = 0; i < imagesToProcess.length; i += chunkSize) {
-            const chunk = imagesToProcess.slice(i, i + chunkSize);
-            const sqsClient = await getSqsClient();
-            await sqsClient.send(
-              new SendMessageCommand({
-                QueueUrl: backend.custom.scoutbotTaskQueueUrl,
-                MessageBody: JSON.stringify({
-                  images: chunk.map((image) => ({
-                    imageId: image.id,
-                    key: 'images/' + image.originalPath,
-                  })),
-                  projectId: projectId,
-                  bucket: backend.storage.buckets[1].bucket_name,
-                  setId: locationSet.id,
-                }),
-              })
-            );
-            totalTasks += chunkSize;
-            setPreppingImages(totalTasks);
+          } else {
+            console.warn("Timestamp outside of GPS data range");
           }
-          setTotalPreppingImages(totalTasks);
-          break;
-        case 'elephant-detection-nadir':
-          // heatmap generation
-          const heatmapTasks = imagesToProcess.map(async (image) => {
-            const { data: imageFiles } =
-              await client.models.ImageFile.imagesByimageId({
-                imageId: image.id,
-              });
-            const path = imageFiles.find(
-              (imageFile) => imageFile.type == 'image/jpeg'
-            )?.path;
-            if (path) {
-              await client.mutations.processImages({
-                s3key: path,
-                model: 'heatmap',
-              });
-            } else {
-              console.log(
-                `No image file found for image ${image.id}. Skipping`
-              );
-            }
-          });
-          await Promise.all(heatmapTasks);
-
-          // Wait until all heatmaps are processed before proceeding
-          // This polls the S3 bucket until the heatmaps are available
-          // A better approach would be to kick of the point finder task from the processImages function
-          await waitForHeatmapCompletion(imagesToProcess);
-
-          // point finder
-          const pointFinderTasks = imagesToProcess.map(async (image) => {
-            const key = image.originalPath!.replace('images', 'heatmaps');
-            const sqsClient = await getSqsClient();
-            await sqsClient.send(
-              new SendMessageCommand({
-                QueueUrl: backend.custom.pointFinderTaskQueueUrl,
-                MessageBody: JSON.stringify({
-                  imageId: image.id,
-                  projectId: projectId,
-                  key: 'heatmaps/' + key + '.h5',
-                  width: 1024,
-                  height: 1024,
-                  threshold: 1 - Math.pow(10, -5),
-                  bucket: backend.storage.buckets[0].bucket_name,
-                  setId: locationSet.id,
-                }),
-              })
+        } else {
+          const csvRow = csvData.data.find(
+            (row) => row.filepath === file.webkitRelativePath
+          );
+          if (csvRow) {
+            gpsData = { lat: csvRow.lat, lng: csvRow.lng, alt: csvRow.alt };
+          } else {
+            console.warn(
+              `No GPS data found for image ${file.webkitRelativePath}`
             );
-          });
-          await Promise.all(pointFinderTasks);
-          break;
+          }
+        }
+
+        images.push({
+          width: exifmeta.width,
+          height: exifmeta.height,
+          timestamp: exifmeta.timestamp,
+          cameraSerial: exifmeta.cameraSerial,
+          originalPath: file.webkitRelativePath,
+          latitude: gpsData ? gpsData.lat : undefined,
+          longitude: gpsData ? gpsData.lng : undefined,
+          altitude_agl: gpsData ? gpsData.alt : undefined,
+        });
       }
+
+      //store image data & model in local storage
+      await fileStore.setItem(projectId, images);
+      await metadataStore.setItem(projectId, {
+        model: model.value,
+        masks: masks,
+      });
+
+      // push new task to upload manager
+      setTask({
+        projectId,
+        files: gpsFilteredImageFiles,
+        retryDelay: 0,
+      });
+
+      //#region model tasks
+
+      // const { data: locationSet } = await client.models.LocationSet.create({
+      //   name: projectId + `_${model.value}`,
+      //   projectId: projectId,
+      // });
+
+      // if (!locationSet) {
+      //   throw new Error('Location set not created');
+      // }
+
+      // // Helper function to wait for heatmap completion before proceeding with point finder tasks
+      // const waitForHeatmapCompletion = async (
+      //   images: Schema['Image']['type'][]
+      // ): Promise<void> => {
+      //   await Promise.all(
+      //     images.map(async (image) => {
+      //       const heatmapFilePath = image.originalPath!.replace(
+      //         'images',
+      //         'heatmaps'
+      //       );
+      //       let heatmapAvailable = false;
+      //       const s3Client = new S3Client({});
+      //       while (!heatmapAvailable) {
+      //         try {
+      //           await s3Client.send(
+      //             new HeadObjectCommand({
+      //               Bucket: backend.storage.buckets[0].bucket_name,
+      //               Key: heatmapFilePath,
+      //             })
+      //           );
+      //           heatmapAvailable = true;
+      //         } catch (err) {
+      //           // File not available yet, wait 2 seconds
+      //           await new Promise((resolve) => setTimeout(resolve, 2000));
+      //         }
+      //       }
+      //     })
+      //   );
+      // };
+
+      //   case 'elephant-detection-nadir':
+      //     // heatmap generation
+      //     const heatmapTasks = imagesToProcess.map(async (image) => {
+      //       const { data: imageFiles } =
+      //         await client.models.ImageFile.imagesByimageId({
+      //           imageId: image.id,
+      //         });
+      //       const path = imageFiles.find(
+      //         (imageFile) => imageFile.type == 'image/jpeg'
+      //       )?.path;
+      //       if (path) {
+      //         await client.mutations.processImages({
+      //           s3key: path,
+      //           model: 'heatmap',
+      //         });
+      //       } else {
+      //         console.log(
+      //           `No image file found for image ${image.id}. Skipping`
+      //         );
+      //       }
+      //     });
+      //     await Promise.all(heatmapTasks);
+
+      //     // Wait until all heatmaps are processed before proceeding
+      //     // This polls the S3 bucket until the heatmaps are available
+      //     // A better approach would be to kick of the point finder task from the processImages function
+      //     await waitForHeatmapCompletion(imagesToProcess);
+
+      //     // point finder
+      //     const pointFinderTasks = imagesToProcess.map(async (image) => {
+      //       const key = image.originalPath!.replace('images', 'heatmaps');
+      //       const sqsClient = await getSqsClient();
+      //       await sqsClient.send(
+      //         new SendMessageCommand({
+      //           QueueUrl: backend.custom.pointFinderTaskQueueUrl,
+      //           MessageBody: JSON.stringify({
+      //             imageId: image.id,
+      //             projectId: projectId,
+      //             key: 'heatmaps/' + key + '.h5',
+      //             width: 1024,
+      //             height: 1024,
+      //             threshold: 1 - Math.pow(10, -5),
+      //             bucket: backend.storage.buckets[0].bucket_name,
+      //             setId: locationSet.id,
+      //           }),
+      //         })
+      //       );
+      //     });
+      //     await Promise.all(pointFinderTasks);
+      //     break;
+      // }
+
       //#endregion
-
-      await client.models.Project.update({
-        id: projectId,
-        status: 'processing',
-      });
-
-      client.mutations.updateProjectMemberships({
-        projectId: projectId,
-      });
     },
     [upload, filteredImageFiles, name, client, filteredImageSize, csvData]
   );
@@ -876,19 +624,22 @@ export function FileUploadCore({
   useEffect(() => {
     async function transformFile(file: File) {
       // Check for GPX files by both type and extension
-      if (file.type === 'text/gpx' || file.name.toLowerCase().endsWith('.gpx')) {
+      if (
+        file.type === "text/gpx" ||
+        file.name.toLowerCase().endsWith(".gpx")
+      ) {
         setAssociateByTimestamp(true);
 
         const text = await file.text();
         const [gpxFile, error] = parseGPX(text);
 
         if (error) {
-          console.error('Error parsing GPX file:', error);
+          console.error("Error parsing GPX file:", error);
           return;
         }
 
         if (!gpxFile.waypoints || gpxFile.waypoints.length === 0) {
-          console.error('No waypoints found in GPX file');
+          console.error("No waypoints found in GPX file");
           return;
         }
 
@@ -913,9 +664,9 @@ export function FileUploadCore({
         skipEmptyLines: true,
         complete: function (results) {
           const hasTimestamp = results.data.some(
-            (row: any) => row['Timestamp']
+            (row: any) => row["Timestamp"]
           );
-          const hasFilepath = results.data.some((row: any) => row['FilePath']);
+          const hasFilepath = results.data.some((row: any) => row["FilePath"]);
 
           setAssociateByTimestamp(hasTimestamp && !hasFilepath);
 
@@ -924,12 +675,12 @@ export function FileUploadCore({
               .map((row: any) => {
                 return {
                   timestamp: hasTimestamp
-                    ? Number(row['Timestamp'])
+                    ? Number(row["Timestamp"])
                     : undefined,
-                  filepath: hasFilepath ? row['FilePath'] : undefined,
-                  lat: Number(row['Latitude']),
-                  lng: Number(row['Longitude']),
-                  alt: Number(row['Altitude']),
+                  filepath: hasFilepath ? row["FilePath"] : undefined,
+                  lat: Number(row["Latitude"]),
+                  lng: Number(row["Longitude"]),
+                  alt: Number(row["Altitude"]),
                 };
               })
               .sort((a, b) =>
@@ -966,7 +717,7 @@ export function FileUploadCore({
 
   // Helper: converts a "HH:mm" string to total minutes.
   const timeToMinutes = (timeStr: string): number => {
-    const [hours, minutes] = timeStr.split(':').map(Number);
+    const [hours, minutes] = timeStr.split(":").map(Number);
     return hours * 60 + minutes;
   };
 
@@ -1005,8 +756,8 @@ export function FileUploadCore({
           value={model}
           options={[
             {
-              label: 'ScoutBot',
-              value: 'scoutbot',
+              label: "ScoutBot",
+              value: "scoutbot",
             },
             // {
             //   label: "Elephant Detection (nadir)",
@@ -1029,7 +780,7 @@ export function FileUploadCore({
         </p>
         <div
           className="p-2 mb-2 bg-white text-black"
-          style={{ minHeight: '136px', overflow: 'auto' }}
+          style={{ minHeight: "136px", overflow: "auto" }}
         >
           {scannedFiles.length > 0 && (
             <code className="m-0 text-dark">
@@ -1042,7 +793,7 @@ export function FileUploadCore({
               Image files size: {formatFileSize(totalImageSize)}
               <br />
               {listingS3Images ? (
-                'Searching for images in S3...'
+                "Searching for images in S3..."
               ) : (
                 <>
                   New images: {filteredImageFiles.length}
@@ -1059,9 +810,9 @@ export function FileUploadCore({
         </div>
         <div
           style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
           }}
         >
           <Form.Group>
@@ -1072,8 +823,8 @@ export function FileUploadCore({
             >
               <p style={{ margin: 0 }}>
                 {scannedFiles.length > 0
-                  ? 'Change source folder'
-                  : 'Select Files'}
+                  ? "Change source folder"
+                  : "Select Files"}
               </p>
             </FileInput>
           </Form.Group>
@@ -1117,17 +868,17 @@ export function FileUploadCore({
         <Form.Group className="mt-3 d-flex flex-column gap-2">
           <div>
             <Form.Label className="mb-0">
-              {missingGpsData ? 'Missing GPS data' : 'GPS data found'}
+              {missingGpsData ? "Missing GPS data" : "GPS data found"}
             </Form.Label>
-            <Form.Text className="d-block mb-0" style={{ fontSize: '12px' }}>
+            <Form.Text className="d-block mb-0" style={{ fontSize: "12px" }}>
               {missingGpsData
-                ? 'Some images do not have GPS data. Please upload the gpx or csv file containing the GPS data for all images.'
-                : 'The selected images have GPS data. Would you like to upload a separate file containing the GPS data for all images?'}
+                ? "Some images do not have GPS data. Please upload the gpx or csv file containing the GPS data for all images."
+                : "The selected images have GPS data. Would you like to upload a separate file containing the GPS data for all images?"}
             </Form.Text>
-            <Form.Text className="d-block mb-0" style={{ fontSize: '12px' }}>
+            <Form.Text className="d-block mb-0" style={{ fontSize: "12px" }}>
               If your data contains file paths instead of timestamps, the format
-              should be:{' '}
-              <code className="text-primary" style={{ fontSize: '14px' }}>
+              should be:{" "}
+              <code className="text-primary" style={{ fontSize: "14px" }}>
                 {imageFiles[0].webkitRelativePath}
               </code>
             </Form.Text>
@@ -1156,7 +907,7 @@ export function FileUploadCore({
               </Form.Label>
               <Form.Text
                 className="d-block mb-1 mt-0"
-                style={{ fontSize: '12px' }}
+                style={{ fontSize: "12px" }}
               >
                 Select the effective time range for each day. The default range
                 is the earliest and latest timestamp recorded for that day.
@@ -1178,22 +929,22 @@ export function FileUploadCore({
                       <span className="me-2">Day {day}</span>
                       <input
                         type="time"
-                        value={timeRanges[day]?.start || '00:00'}
+                        value={timeRanges[day]?.start || "00:00"}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                           updateTimeRange(
                             day,
                             e.target.value,
-                            timeRanges[day]?.end || '23:59'
+                            timeRanges[day]?.end || "23:59"
                           )
                         }
                       />
                       <input
                         type="time"
-                        value={timeRanges[day]?.end || '23:59'}
+                        value={timeRanges[day]?.end || "23:59"}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                           updateTimeRange(
                             day,
-                            timeRanges[day]?.start || '00:00',
+                            timeRanges[day]?.start || "00:00",
                             e.target.value
                           )
                         }
@@ -1201,7 +952,11 @@ export function FileUploadCore({
                     </div>
                   ))}
               </div>
-              <Button variant="primary" onClick={applyTimeFilter} className='mt-2'>
+              <Button
+                variant="primary"
+                onClick={applyTimeFilter}
+                className="mt-2"
+              >
                 Filter Data
               </Button>
             </Form.Group>
@@ -1211,7 +966,7 @@ export function FileUploadCore({
       {csvData && (
         <div className="mt-3">
           {(() => {
-            let message = '';
+            let message = "";
             if (associateByTimestamp) {
               const csvTimestamps = csvData.data.map(
                 (row) => row.timestamp || 0
@@ -1223,11 +978,20 @@ export function FileUploadCore({
                 ? Math.max(...csvTimestamps)
                 : 0;
               if (csvTimestamps.length) {
-                const formatTimestamp = (timestamp: number) => new Date(timestamp).toLocaleString();
+                const formatTimestamp = (timestamp: number) =>
+                  new Date(timestamp).toLocaleString();
                 if (csvMin < minTimestamp || csvMax > maxTimestamp) {
-                  message = `Timestamp mismatch: CSV timestamps (${formatTimestamp(csvMin)} - ${formatTimestamp(csvMax)}) are outside the image timestamps range.`;
+                  message = `Timestamp mismatch: CSV timestamps (${formatTimestamp(
+                    csvMin
+                  )} - ${formatTimestamp(
+                    csvMax
+                  )}) are outside the image timestamps range.`;
                 } else {
-                  message = `Timestamp range valid: CSV timestamps (${formatTimestamp(csvMin)} - ${formatTimestamp(csvMax)}) are within the image timestamps range.`;
+                  message = `Timestamp range valid: CSV timestamps (${formatTimestamp(
+                    csvMin
+                  )} - ${formatTimestamp(
+                    csvMax
+                  )}) are within the image timestamps range.`;
                 }
               }
             } else {
@@ -1267,7 +1031,7 @@ export function FilesUploadForm(props: FilesUploadFormProps) {
 }
 
 export const formatFileSize = (bytes: number): string => {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const units = ["B", "KB", "MB", "GB", "TB"];
   let size = bytes;
   let unitIndex = 0;
 
@@ -1284,41 +1048,26 @@ export default function FilesUploadComponent({
   show,
   handleClose,
   project,
-  setFilesUploaded,
-  setTotalFiles,
-  setPreppingImages,
-  setTotalPreppingImages,
 }: FilesUploadComponentProps) {
   const { client } = useContext(GlobalContext)!;
   const [uploadSubmitFn, setUploadSubmitFn] = useState<
-    | ((
-        projectId: string,
-        setStepsCompleted: (stepsCompleted: number) => void,
-        setTotalSteps: (totalSteps: number) => void,
-        setPreppingImages: (preppingImages: number) => void,
-        setTotalPreppingImages: (totalPreppingImages: number) => void
-      ) => Promise<void>)
-    | null
+    ((projectId: string) => Promise<void>) | null
   >(null);
   const [readyToSubmit, setReadyToSubmit] = useState(false);
 
   // Modal version needs to handle its own submit
   const handleModalSubmit = async () => {
     // Close the modal first, so the user doesn't experience the UI as unresponsive
-    handleClose();
+
     if (uploadSubmitFn && project?.id) {
       await client.models.Project.update({
         id: project.id,
-        status: 'uploading',
+        status: "uploading",
       });
 
-      await uploadSubmitFn(
-        project.id,
-        setFilesUploaded,
-        setTotalFiles,
-        setPreppingImages,
-        setTotalPreppingImages
-      );
+      handleClose();
+
+      await uploadSubmitFn(project.id);
     }
   };
 
