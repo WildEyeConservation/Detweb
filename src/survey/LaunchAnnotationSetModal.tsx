@@ -1,19 +1,19 @@
-import { Modal, Button, Form } from 'react-bootstrap';
-import { useState, useContext, useEffect } from 'react';
-import ImageSetDropdown from './ImageSetDropdown';
-import { Tabs, Tab } from '../Tabs';
-import CreateTask from '../CreateTask';
-import { Schema } from '../../amplify/data/resource';
-import { makeSafeQueueName } from '../utils';
-import { CreateQueueCommand } from '@aws-sdk/client-sqs';
-import { GlobalContext, UserContext } from '../Context';
-import LaunchRegistration from '../LaunchRegistration';
-import { useLaunchTask } from '../useLaunchTask';
-import { useUpdateProgress } from '../useUpdateProgress';
-import { useQueryClient } from '@tanstack/react-query';
-import Select from 'react-select';
+import { Modal, Button, Form } from "react-bootstrap";
+import { useState, useContext, useEffect } from "react";
+import ImageSetDropdown from "./ImageSetDropdown";
+import { Tabs, Tab } from "../Tabs";
+import CreateTask from "../CreateTask";
+import { Schema } from "../../amplify/data/resource";
+import { makeSafeQueueName } from "../utils";
+import { CreateQueueCommand } from "@aws-sdk/client-sqs";
+import { GlobalContext, UserContext } from "../Context";
+import LaunchRegistration from "../LaunchRegistration";
+import { useLaunchTask } from "../useLaunchTask";
+import { useUpdateProgress } from "../useUpdateProgress";
+import Select from "react-select";
+import LabeledToggleSwitch from "../LabeledToggleSwitch";
 
-type TaskType = 'tiled' | 'model' | 'annotation' | 'registration';
+type TaskType = "species-labelling" | "registration";
 
 export default function LaunchAnnotationSetModal({
   show,
@@ -24,9 +24,9 @@ export default function LaunchAnnotationSetModal({
 }: {
   show: boolean;
   onClose: () => void;
-  project: Schema['Project']['type'];
+  project: Schema["Project"]["type"];
   imageSets: { id: string; name: string }[];
-  annotationSet: Schema['AnnotationSet']['type'];
+  annotationSet: Schema["AnnotationSet"]["type"];
 }) {
   const [selectedImageSets, setSelectedImageSets] = useState<string[]>([]);
   const [batchSize, setBatchSize] = useState<number>(200);
@@ -59,7 +59,7 @@ export default function LaunchAnnotationSetModal({
   const [handleLaunchRegistration, setHandleLaunchRegistration] = useState<
     ((url: string) => Promise<void>) | null
   >(null);
-  const [taskType, setTaskType] = useState<TaskType>('model');
+  const [taskType, setTaskType] = useState<TaskType>("species-labelling");
   const [model, setModel] = useState<{ label: string; value: string }>();
   const [modelOptions, setModelOptions] = useState<
     {
@@ -68,15 +68,14 @@ export default function LaunchAnnotationSetModal({
     }[]
   >([]);
   const [locationSets, setLocationSets] = useState<
-    Schema['LocationSet']['type'][]
+    Schema["LocationSet"]["type"][]
   >([]);
   const [sendDetectionsToSecondaryQueue, setSendDetectionsToSecondaryQueue] =
     useState<boolean>(false);
   const [loadingLocationSets, setLoadingLocationSets] =
     useState<boolean>(false);
   const [launching, setLaunching] = useState(false);
-
-  const queryClient = useQueryClient();
+  const [modelGuided, setModelGuided] = useState<boolean>(true);
 
   const launchTask = useLaunchTask({
     allowOutside: allowAnnotationsOutsideLocationBoundaries,
@@ -91,7 +90,7 @@ export default function LaunchAnnotationSetModal({
   const [setLoadingLocations, setTotalLocations] = useUpdateProgress({
     taskId: `Launch annotation set`,
     indeterminateTaskName: `Loading locations`,
-    determinateTaskName: 'Processing locations',
+    determinateTaskName: "Processing locations",
     stepFormatter: (count) => `${count} locations`,
   });
 
@@ -104,7 +103,7 @@ export default function LaunchAnnotationSetModal({
     fifo: boolean
   ): Promise<string | null> => {
     const safeName =
-      makeSafeQueueName(name + crypto.randomUUID()) + (fifo ? '.fifo' : '');
+      makeSafeQueueName(name + crypto.randomUUID()) + (fifo ? ".fifo" : "");
 
     return getSqsClient()
       .then((sqsClient) =>
@@ -112,8 +111,8 @@ export default function LaunchAnnotationSetModal({
           new CreateQueueCommand({
             QueueName: safeName,
             Attributes: {
-              MessageRetentionPeriod: '1209600',
-              FifoQueue: fifo ? 'true' : undefined,
+              MessageRetentionPeriod: "1209600",
+              FifoQueue: fifo ? "true" : undefined,
             },
           })
         )
@@ -146,10 +145,10 @@ export default function LaunchAnnotationSetModal({
       setLoadingLocations(0);
       setTotalLocations(0);
 
-      const queueUrl = await createQueue('Tiled Annotation', false, false);
+      const queueUrl = await createQueue("Tiled Annotation", false, false);
 
       const secondaryQueueUrl = sendDetectionsToSecondaryQueue
-        ? await createQueue('Tiled Annotation Secondary', true, false)
+        ? await createQueue("Tiled Annotation Secondary", true, false)
         : null;
 
       //push messages to queue
@@ -168,7 +167,7 @@ export default function LaunchAnnotationSetModal({
   async function createModelTask() {
     if (modelOptions.length === 0) {
       alert(
-        'You must first process your images before launching a model guided task.'
+        "You must first process your images before launching a model guided task."
       );
       return;
     }
@@ -180,12 +179,12 @@ export default function LaunchAnnotationSetModal({
     );
 
     if (modelGuidedLocationSets.length === 0) {
-      alert('No model guided location set found');
+      alert("No model guided location set found");
       return;
     }
 
     //create queue
-    const queueUrl = await createQueue('Model Guided', false, false);
+    const queueUrl = await createQueue("Model Guided", false, false);
 
     //push messages to queue
     if (queueUrl) {
@@ -200,7 +199,7 @@ export default function LaunchAnnotationSetModal({
   }
 
   async function createAnnotationTask() {
-    alert('create annotation task');
+    alert("create annotation task");
   }
 
   async function createRegistrationTask() {
@@ -226,7 +225,7 @@ export default function LaunchAnnotationSetModal({
 
     await client.models.Project.update({
       id: project.id,
-      status: 'launching',
+      status: "launching",
     });
 
     await client.mutations.updateProjectMemberships({
@@ -234,23 +233,21 @@ export default function LaunchAnnotationSetModal({
     });
 
     switch (taskType) {
-      case 'tiled':
-        await createTiledTask();
+      case "species-labelling":
+        if (modelGuided) {
+          await createModelTask();
+        } else {
+          await createTiledTask();
+        }
         break;
-      case 'model':
-        await createModelTask();
-        break;
-      case 'annotation':
-        await createAnnotationTask();
-        break;
-      case 'registration':
+      case "registration":
         await createRegistrationTask();
         break;
     }
 
     await client.models.Project.update({
       id: project.id,
-      status: 'active',
+      status: "active",
     });
 
     await client.mutations.updateProjectMemberships({
@@ -272,22 +269,31 @@ export default function LaunchAnnotationSetModal({
       const modelOptions: { label: string; value: string }[] = [];
 
       for (const locationSet of locationSets) {
-        if (locationSet.name.toLowerCase().includes('scoutbot')) {
-          if (!modelOptions.some((option) => option.value === 'scoutbot')) {
-            modelOptions.push({ label: 'ScoutBot', value: 'scoutbot' });
+        if (locationSet.name.toLowerCase().includes("scoutbot")) {
+          if (!modelOptions.some((option) => option.value === "scoutbot")) {
+            modelOptions.push({ label: "ScoutBot", value: "scoutbot" });
           }
         }
         if (
-          locationSet.name.toLowerCase().includes('elephant-detection-nadir')
+          locationSet.name.toLowerCase().includes("elephant-detection-nadir")
         ) {
-          if (!modelOptions.some((option) => option.value === 'elephant-detection-nadir')) {
+          if (
+            !modelOptions.some(
+              (option) => option.value === "elephant-detection-nadir"
+            )
+          ) {
             modelOptions.push({
-              label: 'Elephant Detection Nadir',
-              value: 'elephant-detection-nadir',
+              label: "Elephant Detection Nadir",
+              value: "elephant-detection-nadir",
             });
           }
         }
       }
+
+      if (modelOptions.length === 1) {
+        setModel(modelOptions[0]);
+      }
+
       setModelOptions(modelOptions);
       setLoadingLocationSets(false);
     }
@@ -299,7 +305,7 @@ export default function LaunchAnnotationSetModal({
       show={show}
       onHide={() => {
         onClose();
-        setTaskType('model');
+        setTaskType("species-labelling");
       }}
       size="lg"
     >
@@ -312,15 +318,11 @@ export default function LaunchAnnotationSetModal({
             onTabChange={(tab) => {
               switch (tab) {
                 case 0:
-                  setTaskType('model');
+                  setTaskType("species-labelling");
                   setHasAdvancedOptions(true);
                   break;
                 case 1:
-                  setTaskType('tiled');
-                  setHasAdvancedOptions(true);
-                  break;
-                case 2:
-                  setTaskType('registration');
+                  setTaskType("registration");
                   setHasAdvancedOptions(false);
                   break;
               }
@@ -339,7 +341,7 @@ export default function LaunchAnnotationSetModal({
                       <Form.Label className="mb-0">Batch Size</Form.Label>
                       <span
                         className="text-muted d-block mb-1"
-                        style={{ fontSize: '12px' }}
+                        style={{ fontSize: "12px" }}
                       >
                         The number of annotation jobs a user can pick up at a
                         time.
@@ -371,7 +373,7 @@ export default function LaunchAnnotationSetModal({
                       <Form.Label className="mb-0">Task Tag</Form.Label>
                       <span
                         className="text-muted d-block mb-1"
-                        style={{ fontSize: '12px' }}
+                        style={{ fontSize: "12px" }}
                       >
                         This tag will be added to all locations in the task.
                       </span>
@@ -385,7 +387,7 @@ export default function LaunchAnnotationSetModal({
                       <Form.Label className="mb-0">Zoom Level</Form.Label>
                       <span
                         className="text-muted d-block mb-1"
-                        style={{ fontSize: '12px' }}
+                        style={{ fontSize: "12px" }}
                       >
                         Select the default zoom level for images.
                       </span>
@@ -393,7 +395,7 @@ export default function LaunchAnnotationSetModal({
                         value={zoom}
                         onChange={(e) =>
                           setZoom(
-                            e.target.value == 'auto'
+                            e.target.value == "auto"
                               ? undefined
                               : e.target.value
                           )
@@ -413,7 +415,7 @@ export default function LaunchAnnotationSetModal({
                       </Form.Label>
                       <span
                         className="text-muted d-block mb-1"
-                        style={{ fontSize: '12px' }}
+                        style={{ fontSize: "12px" }}
                       >
                         Filter images by confidence value.
                       </span>
@@ -427,7 +429,7 @@ export default function LaunchAnnotationSetModal({
                           onChange={(e) =>
                             setLowerLimit(Number(e.target.value))
                           }
-                          style={{ width: '80px' }}
+                          style={{ width: "80px" }}
                         />
                         <span>to</span>
                         <Form.Control
@@ -439,7 +441,7 @@ export default function LaunchAnnotationSetModal({
                           onChange={(e) =>
                             setUpperLimit(Number(e.target.value))
                           }
-                          style={{ width: '80px' }}
+                          style={{ width: "80px" }}
                         />
                       </div>
                     </Form.Group>
@@ -499,39 +501,57 @@ export default function LaunchAnnotationSetModal({
               </div>
             }
           >
-            <Tab label="Model Guided">
-              {loadingLocationSets ? (
-                <p className="mb-0 mt-2">Loading models...</p>
-              ) : modelOptions.length > 0 ? (
-                <Form.Group>
-                  <Form.Label className="mb-0">Model</Form.Label>
-                  <Select
-                    value={model}
-                    onChange={(m) => setModel(m)}
-                    options={modelOptions}
-                    placeholder="Select a model"
-                    className="text-black"
-                  />
-                </Form.Group>
-              ) : (
-                <p
-                  className="text-muted mb-0 mt-2"
-                  style={{ fontSize: '12px' }}
-                >
-                  You must first process your images before launching a model
-                  guided task.
-                </p>
-              )}
-            </Tab>
-            <Tab label="Tiled Annotation">
-              <CreateTask
-                name={annotationSet.name}
-                taskType={'tiled'}
-                imageSets={selectedImageSets}
-                labels={annotationSet.categories}
-                setHandleCreateTask={setHandleCreateTask}
-                projectId={project.id}
+            <Tab label="Species Labelling">
+              <LabeledToggleSwitch
+                className="m-0 border-top pt-2 mt-2 border-dark"
+                leftLabel="Model Guided"
+                rightLabel="Tiled Annotation"
+                checked={!modelGuided}
+                onChange={(checked) => {
+                  setModelGuided(!checked);
+                }}
               />
+
+              {modelGuided ? (
+                loadingLocationSets ? (
+                  <p
+                    className="text-muted mb-0 mt-2 text-center"
+                    style={{ fontSize: "12px" }}
+                  >
+                    Loading models...
+                  </p>
+                ) : modelOptions.length > 1 ? (
+                  <Form.Group>
+                    <Form.Label className="mb-0">Model</Form.Label>
+                    <Select
+                      value={model}
+                      onChange={(m) => setModel(m)}
+                      options={modelOptions}
+                      placeholder="Select a model"
+                      className="text-black"
+                    />
+                  </Form.Group>
+                ) : (
+                  modelOptions.length === 0 && (
+                    <p
+                      className="text-muted mb-0 mt-2 text-center"
+                      style={{ fontSize: "12px" }}
+                    >
+                      You must first process your images before launching a
+                      model guided task.
+                    </p>
+                  )
+                )
+              ) : (
+                <CreateTask
+                  name={annotationSet.name}
+                  taskType={"tiled"}
+                  imageSets={selectedImageSets}
+                  labels={annotationSet.categories}
+                  setHandleCreateTask={setHandleCreateTask}
+                  projectId={project.id}
+                />
+              )}
             </Tab>
             <Tab label="Registration" className="mt-1">
               <></>
@@ -574,7 +594,7 @@ function StandardOptions({
       />
       <Form.Group>
         <Form.Label className="mb-0">Batch Size</Form.Label>
-        <span className="text-muted d-block mb-1" style={{ fontSize: '12px' }}>
+        <span className="text-muted d-block mb-1" style={{ fontSize: "12px" }}>
           The number of clusters in each unit of work collected by workers.
         </span>
         <Form.Control

@@ -2,7 +2,6 @@ import React, { useContext, useEffect, useState } from "react";
 import { Modal, Button, Form } from "react-bootstrap";
 import { GlobalContext } from "./Context";
 import { Tab, Tabs } from "./Tabs";
-import MoveObservations from "./MoveObservations";
 import { Schema } from "../amplify/data/resource";
 import LabelEditor from "./survey/LabelEditor";
 
@@ -99,20 +98,6 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
                 }))}
                 setHandleSave={setSaveLabels}
               />
-            </Form>
-          </Tab>
-          <Tab label="Advanced">
-            <Form className="mt-1">
-              <Form.Group controlId="moveObservations">
-                <Form.Label style={{ fontSize: "16px", marginTop: "8px" }}>
-                  Move Observations
-                </Form.Label>
-                <MoveObservations
-                  annotationSetId={annotationSet.id}
-                  project={project}
-                  setHandleMove={setHandleMove}
-                />
-              </Form.Group>
             </Form>
           </Tab>
         </Tabs>

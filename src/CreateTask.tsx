@@ -93,7 +93,6 @@ function CreateTask({
   const [selectedCategories, setSelectedCategories] = useState<
     MultiValue<CategoryOption> | SingleValue<CategoryOption>
   >([]);
-  const [hideTileDefinition, setHideTileDefinition] = useState<boolean>(true);
 
   const getImageId = useMemo(() => {
     const cache: { [path: string]: string } = {};
@@ -372,255 +371,257 @@ function CreateTask({
       const {
         data: { id: locationSetId },
       } = await client.models.LocationSet.create({
-      name,
-      projectId: projectId,
-      locationCount:
-        taskType !== "model"
-          ? allImages.length * horizontalTiles * verticalTiles
-          : 0,
-    });
+        name,
+        projectId: projectId,
+        locationCount:
+          taskType !== "model"
+            ? allImages.length * horizontalTiles * verticalTiles
+            : 0,
+      });
 
-    switch (taskType) {
-      case "model":
-        if (modelId === "ivx") {
-          allImages.map(async (image) => {
-            const key = image.originalPath.replace("images", "heatmaps");
-            const sqsClient = await getSqsClient();
-            await sqsClient.send(
-              new SendMessageCommand({
-                QueueUrl: backend.custom.pointFinderTaskQueueUrl,
-                MessageBody: JSON.stringify({
-                  imageId: image.id,
-                  projectId: projectId,
-                  key: "heatmaps/" + key + ".h5",
-                  width: 1024,
-                  height: 1024,
-                  threshold: 1 - Math.pow(10, -threshold),
-                  bucket: backend.storage.buckets[0].bucket_name,
-                  setId: locationSetId,
-                }),
-              })
-            );
-            setImagesCompleted((s: number) => s + 1);
-          });
-        }
-        if (modelId === "scoutbotV3") {
-          // Chunk allImages into groups of 4
-          const chunkSize = 4;
-          for (let i = 0; i < allImages.length; i += chunkSize) {
-            const chunk = allImages.slice(i, i + chunkSize);
-
-            const sqsClient = await getSqsClient();
-            await sqsClient.send(
-              new SendMessageCommand({
-                QueueUrl: backend.custom.scoutbotTaskQueueUrl,
-                MessageBody: JSON.stringify({
-                  images: chunk.map((image) => ({
+      switch (taskType) {
+        case "model":
+          if (modelId === "ivx") {
+            allImages.map(async (image) => {
+              const key = image.originalPath.replace("images", "heatmaps");
+              const sqsClient = await getSqsClient();
+              await sqsClient.send(
+                new SendMessageCommand({
+                  QueueUrl: backend.custom.pointFinderTaskQueueUrl,
+                  MessageBody: JSON.stringify({
                     imageId: image.id,
-                    key: "images/" + image.originalPath,
-                  })),
-                  projectId: projectId,
-                  bucket: backend.storage.buckets[1].bucket_name,
-                  setId: locationSetId,
-                }),
-              })
-            );
+                    projectId: projectId,
+                    key: "heatmaps/" + key + ".h5",
+                    width: 1024,
+                    height: 1024,
+                    threshold: 1 - Math.pow(10, -threshold),
+                    bucket: backend.storage.buckets[0].bucket_name,
+                    setId: locationSetId,
+                  }),
+                })
+              );
+              setImagesCompleted((s: number) => s + 1);
+            });
+          }
+          if (modelId === "scoutbotV3") {
+            // Chunk allImages into groups of 4
+            const chunkSize = 4;
+            for (let i = 0; i < allImages.length; i += chunkSize) {
+              const chunk = allImages.slice(i, i + chunkSize);
 
-            // Update progress for the entire chunk
-            setImagesCompleted((s: number) => s + chunk.length);
+              const sqsClient = await getSqsClient();
+              await sqsClient.send(
+                new SendMessageCommand({
+                  QueueUrl: backend.custom.scoutbotTaskQueueUrl,
+                  MessageBody: JSON.stringify({
+                    images: chunk.map((image) => ({
+                      imageId: image.id,
+                      key: "images/" + image.originalPath,
+                    })),
+                    projectId: projectId,
+                    bucket: backend.storage.buckets[1].bucket_name,
+                    setId: locationSetId,
+                  }),
+                })
+              );
+
+              // Update progress for the entire chunk
+              setImagesCompleted((s: number) => s + chunk.length);
+            }
           }
-        }
-        if (modelId === "scoutbot") {
-          Papa.parse(scoutbotFile!, {
-            complete: (result: {
-              data: {
-                "Label Confidence": string;
-                "Image Filename": string;
-                "Box X": string;
-                "Box Y": string;
-                "Box W": string;
-                "Box H": string;
-              }[];
-            }) => {
-              // Handle the parsed data here
-              console.log("Parsed CSV data:", result.data);
-              for (const row of result.data) {
-                if (Number(row["Label Confidence"]) > threshold) {
-                  getImageId(row["Image Filename"])
-                    .then(async (id) => {
-                      await client.models.Location.create({
-                        x:
-                          Math.round(Number(row["Box X"])) +
-                          Math.round(Number(row["Box W"]) / 2),
-                        y:
-                          Math.round(Number(row["Box Y"])) +
-                          Math.round(Number(row["Box H"]) / 2),
-                        width: Math.round(Number(row["Box W"])),
-                        height: Math.round(Number(row["Box H"])),
-                        confidence: 1,
-                        imageId: id,
-                        projectId: projectId,
-                        source: "manual",
-                        setId: locationSetId,
-                      });
-                    })
-                    .then(() => setLocationsCompleted((fc: any) => fc + 1));
+          if (modelId === "scoutbot") {
+            Papa.parse(scoutbotFile!, {
+              complete: (result: {
+                data: {
+                  "Label Confidence": string;
+                  "Image Filename": string;
+                  "Box X": string;
+                  "Box Y": string;
+                  "Box W": string;
+                  "Box H": string;
+                }[];
+              }) => {
+                // Handle the parsed data here
+                console.log("Parsed CSV data:", result.data);
+                for (const row of result.data) {
+                  if (Number(row["Label Confidence"]) > threshold) {
+                    getImageId(row["Image Filename"])
+                      .then(async (id) => {
+                        await client.models.Location.create({
+                          x:
+                            Math.round(Number(row["Box X"])) +
+                            Math.round(Number(row["Box W"]) / 2),
+                          y:
+                            Math.round(Number(row["Box Y"])) +
+                            Math.round(Number(row["Box H"]) / 2),
+                          width: Math.round(Number(row["Box W"])),
+                          height: Math.round(Number(row["Box H"])),
+                          confidence: 1,
+                          imageId: id,
+                          projectId: projectId,
+                          source: "manual",
+                          setId: locationSetId,
+                        });
+                      })
+                      .then(() => setLocationsCompleted((fc: any) => fc + 1));
+                  }
                 }
-              }
-            },
-            header: true, // Assumes the first row of the CSV is headers
-            skipEmptyLines: true,
-            error: (error) => {
-              console.error("Error parsing CSV:", error);
-            },
-          });
-        }
-        break;
-      case "tiled":
-        setTotalLocations(allImages.length * horizontalTiles * verticalTiles);
-        const promises: Promise<void>[] = [];
-        for (const { id } of allImages) {
-          const xStepSize =
-            (effectiveImageWidth - width) / (horizontalTiles - 1);
-          const yStepSize =
-            (effectiveImageHeight - height) / (verticalTiles - 1);
-          for (var xStep = 0; xStep < horizontalTiles; xStep++) {
-            for (var yStep = 0; yStep < verticalTiles; yStep++) {
-              const x = Math.round(
-                xStep * (xStepSize ? xStepSize : 0) + minX + width / 2
-              );
-              const y = Math.round(
-                yStep * (yStepSize ? yStepSize : 0) + minY + height / 2
-              );
-              promises.push(
-                client.models.Location.create({
-                  x,
-                  y,
-                  width,
-                  height,
-                  imageId: id,
-                  projectId: projectId,
-                  confidence: 1,
-                  source: "manual",
-                  setId: locationSetId,
-                }).then(() => setLocationsCompleted((fc: any) => fc + 1))
-              );
-            }
-          }
-        }
-        await Promise.all(promises);
-        break;
-      case "annotation":
-        const newLocations = [];
-        //Iterate over the selected categories
-        for (const category of selectedCategories) {
-          //Get all annotations of the selected category
-          const annotations = await fetchAllPaginatedResults(
-            client.models.Annotation.annotationsByCategoryId,
-            {
-              categoryId: category.value,
-            }
-          );
-          // Now we create a dictionary with the imageId as the key and a list of annotation coordinates as the value
-          let imageAnnotations = {};
-          for (const annotation of annotations) {
-            imageAnnotations[annotation.imageId] =
-              imageAnnotations[annotation.imageId] || [];
-            imageAnnotations[annotation.imageId].push({
-              x: annotation.x,
-              y: annotation.y,
+              },
+              header: true, // Assumes the first row of the CSV is headers
+              skipEmptyLines: true,
+              error: (error) => {
+                console.error("Error parsing CSV:", error);
+              },
             });
           }
-          // Now we iterate through the imageAnnotations dictionary
-          for (const imageId in imageAnnotations) {
-            const { data: image } = await client.models.Image.get({
-              id: imageId,
-            });
-            // Now we find all images that have a defined homography between themselves and the current image
-            const { data: nextNeighbors } =
-              await client.models.ImageNeighbour.imageNeighboursByImage1key({
-                image1Id: imageId,
-              });
-            const { data: previousNeighbors } =
-              await client.models.ImageNeighbour.imageNeighboursByImage2key({
-                image2Id: imageId,
-              });
-            const neighbors = [
-              ...nextNeighbors
-                .filter((n) => n.homography)
-                .map((n) => ({
-                  transform: makeTransform(array2Matrix(n.homography)),
-                  imageId: n.image2Id,
-                })),
-              ...previousNeighbors
-                .filter((n) => n.homography)
-                .map((n) => ({
-                  transform: makeTransform(inv(array2Matrix(n.homography))),
-                  imageId: n.image1Id,
-                })),
-            ];
-            //Iterate over the neighbors
-            for (const neighbor of neighbors) {
-              //Iterate over the annotations of the current image
-              for (const annotation of imageAnnotations[imageId]) {
-                const transformedAnnotation = neighbor.transform([
-                  annotation.x,
-                  annotation.y,
-                ]);
-                //Check if the transformed annotation is inside the image bounds
-                if (
-                  transformedAnnotation[0] >= 0 &&
-                  transformedAnnotation[0] <= image.width &&
-                  transformedAnnotation[1] >= 0 &&
-                  transformedAnnotation[1] <= image.height
-                ) {
-                  newLocations.push({
-                    x: Math.round(transformedAnnotation[0]),
-                    y: Math.round(transformedAnnotation[1]),
-                    imageId: neighbor.imageId,
-                    width: 100,
-                    height: 100,
+          break;
+        case "tiled":
+          setTotalLocations(allImages.length * horizontalTiles * verticalTiles);
+          const promises: Promise<void>[] = [];
+          for (const { id } of allImages) {
+            const xStepSize =
+              (effectiveImageWidth - width) / (horizontalTiles - 1);
+            const yStepSize =
+              (effectiveImageHeight - height) / (verticalTiles - 1);
+            for (var xStep = 0; xStep < horizontalTiles; xStep++) {
+              for (var yStep = 0; yStep < verticalTiles; yStep++) {
+                const x = Math.round(
+                  xStep * (xStepSize ? xStepSize : 0) + minX + width / 2
+                );
+                const y = Math.round(
+                  yStep * (yStepSize ? yStepSize : 0) + minY + height / 2
+                );
+                promises.push(
+                  client.models.Location.create({
+                    x,
+                    y,
+                    width,
+                    height,
+                    imageId: id,
                     projectId: projectId,
                     confidence: 1,
-                    source: "other annotation",
+                    source: "manual",
                     setId: locationSetId,
-                  });
+                  }).then(() => setLocationsCompleted((fc: any) => fc + 1))
+                );
+              }
+            }
+          }
+          await Promise.all(promises);
+          break;
+        case "annotation":
+          const newLocations = [];
+          //Iterate over the selected categories
+          for (const category of selectedCategories) {
+            //Get all annotations of the selected category
+            const annotations = await fetchAllPaginatedResults(
+              client.models.Annotation.annotationsByCategoryId,
+              {
+                categoryId: category.value,
+              }
+            );
+            // Now we create a dictionary with the imageId as the key and a list of annotation coordinates as the value
+            let imageAnnotations = {};
+            for (const annotation of annotations) {
+              imageAnnotations[annotation.imageId] =
+                imageAnnotations[annotation.imageId] || [];
+              imageAnnotations[annotation.imageId].push({
+                x: annotation.x,
+                y: annotation.y,
+              });
+            }
+            // Now we iterate through the imageAnnotations dictionary
+            for (const imageId in imageAnnotations) {
+              const { data: image } = await client.models.Image.get({
+                id: imageId,
+              });
+              // Now we find all images that have a defined homography between themselves and the current image
+              const { data: nextNeighbors } =
+                await client.models.ImageNeighbour.imageNeighboursByImage1key({
+                  image1Id: imageId,
+                });
+              const { data: previousNeighbors } =
+                await client.models.ImageNeighbour.imageNeighboursByImage2key({
+                  image2Id: imageId,
+                });
+              const neighbors = [
+                ...nextNeighbors
+                  .filter((n) => n.homography)
+                  .map((n) => ({
+                    transform: makeTransform(array2Matrix(n.homography)),
+                    imageId: n.image2Id,
+                  })),
+                ...previousNeighbors
+                  .filter((n) => n.homography)
+                  .map((n) => ({
+                    transform: makeTransform(inv(array2Matrix(n.homography))),
+                    imageId: n.image1Id,
+                  })),
+              ];
+              //Iterate over the neighbors
+              for (const neighbor of neighbors) {
+                //Iterate over the annotations of the current image
+                for (const annotation of imageAnnotations[imageId]) {
+                  const transformedAnnotation = neighbor.transform([
+                    annotation.x,
+                    annotation.y,
+                  ]);
+                  //Check if the transformed annotation is inside the image bounds
+                  if (
+                    transformedAnnotation[0] >= 0 &&
+                    transformedAnnotation[0] <= image.width &&
+                    transformedAnnotation[1] >= 0 &&
+                    transformedAnnotation[1] <= image.height
+                  ) {
+                    newLocations.push({
+                      x: Math.round(transformedAnnotation[0]),
+                      y: Math.round(transformedAnnotation[1]),
+                      imageId: neighbor.imageId,
+                      width: 100,
+                      height: 100,
+                      projectId: projectId,
+                      confidence: 1,
+                      source: "other annotation",
+                      setId: locationSetId,
+                    });
+                  }
                 }
               }
             }
           }
-        }
-        await Promise.all(
-          newLocations.map((l) => client.models.Location.create(l))
-        );
-        break;
-    }
+          await Promise.all(
+            newLocations.map((l) => client.models.Location.create(l))
+          );
+          break;
+      }
 
-    return locationSetId;
-  }, [
-    // There should be a beter way to do this, but while prototyping, here is an endless list of dependencies
-    allImages,
-    backend,
-    client,
-    effectiveImageHeight,
-    effectiveImageWidth,
-    getImageId,
-    getSqsClient,
-    height,
-    horizontalTiles,
-    minX,
-    minY,
-    modelId,
-    name,
-    projectId,
-    scoutbotFile,
-    selectedCategories,
-    setImagesCompleted,
-    taskType,
-    threshold,
-    verticalTiles,
-    width,
-  ]);
+      return locationSetId;
+    },
+    [
+      // There should be a beter way to do this, but while prototyping, here is an endless list of dependencies
+      allImages,
+      backend,
+      client,
+      effectiveImageHeight,
+      effectiveImageWidth,
+      getImageId,
+      getSqsClient,
+      height,
+      horizontalTiles,
+      minX,
+      minY,
+      modelId,
+      name,
+      projectId,
+      scoutbotFile,
+      selectedCategories,
+      setImagesCompleted,
+      taskType,
+      threshold,
+      verticalTiles,
+      width,
+    ]
+  );
 
   useEffect(() => {
     if (setHandleCreateTask) {
@@ -632,204 +633,193 @@ function CreateTask({
     case "tiled":
       return (
         <>
-          <Form.Group className="d-flex flex-column gap-3 mt-2">
-            <Form.Switch
-              label="Manually Define Tile Dimensions"
-              checked={!hideTileDefinition}
-              onChange={() => setHideTileDefinition(!hideTileDefinition)}
-            />
-          </Form.Group>
-          {!hideTileDefinition && (
-            <div className="border border-dark shadow-sm p-2">
-              <Form.Label
-                className="text-center"
-                style={{ fontSize: "smaller" }}
-              >
-                Detected image dimensions : {imageWidth}x{imageHeight}
-              </Form.Label>
-              <Form.Group className="mb-3 mt-3">
-                <LabeledToggleSwitch
-                  leftLabel="Specify number of tiles"
-                  rightLabel="Specify tile dimensions"
-                  checked={specifyTileDimensions}
-                  onChange={(checked) => {
-                    setSpecifyTileDimensions(checked);
-                  }}
-                />
+          <Form.Group className="d-flex flex-column gap-3 mt-2"></Form.Group>
+          <div className="border border-dark shadow-sm p-2">
+            <Form.Label className="text-center" style={{ fontSize: "smaller" }}>
+              Detected image dimensions : {imageWidth}x{imageHeight}
+            </Form.Label>
+            <Form.Group className="mb-3 mt-3">
+              <LabeledToggleSwitch
+                leftLabel="Specify number of tiles"
+                rightLabel="Specify tile dimensions"
+                checked={specifyTileDimensions}
+                onChange={(checked) => {
+                  setSpecifyTileDimensions(checked);
+                }}
+              />
 
-                <div className="row">
-                  <InputBox
-                    label="Horizontal Tiles"
-                    enabled={!specifyTileDimensions}
-                    getter={() => horizontalTiles}
-                    setter={(x) => setHorizontalTiles(x)}
-                  />
-                  <InputBox
-                    label="Vertical Tiles"
-                    enabled={!specifyTileDimensions}
-                    getter={() => verticalTiles}
-                    setter={(x) => setVerticalTiles(x)}
-                  />
-                  <InputBox
-                    label="Width"
-                    enabled={specifyTileDimensions}
-                    getter={() => width}
-                    setter={(x) => setWidth(x)}
-                  />
-                  <InputBox
-                    label="Height"
-                    enabled={specifyTileDimensions}
-                    getter={() => height}
-                    setter={(x) => setHeight(x)}
-                  />
-                </div>
-              </Form.Group>
-              <Form.Group className="mb-3 mt-3">
-                <LabeledToggleSwitch
-                  leftLabel="Specify overlap (px)"
-                  rightLabel="Specify overlap (%)"
-                  checked={specifyOverlapInPercentage}
-                  onChange={(checked) => {
-                    setSpecifyOverlapInPercentage(checked);
-                  }}
+              <div className="row">
+                <InputBox
+                  label="Horizontal Tiles"
+                  enabled={!specifyTileDimensions}
+                  getter={() => horizontalTiles}
+                  setter={(x) => setHorizontalTiles(x)}
                 />
-                <div className="row">
-                  <InputBox
-                    label="Minimum sidelap (px)"
-                    enabled={!specifyOverlapInPercentage}
-                    getter={() => minSidelap}
-                    setter={(x) => setMinSidelap(x)}
-                  />
-                  <InputBox
-                    label="Minimum overlap (px)"
-                    enabled={!specifyOverlapInPercentage}
-                    getter={() => minOverlap}
-                    setter={(x) => setMinOverlap(x)}
-                  />
-                  <InputBox
-                    label="Minimum sidelap (%)"
-                    enabled={specifyOverlapInPercentage}
-                    getter={() => minSidelapPercentage}
-                    setter={(x) => setMinSidelapPercentage(x)}
-                  />
-                  <InputBox
-                    label="Minimum overlap (%)"
-                    enabled={specifyOverlapInPercentage}
-                    getter={() => minOverlapPercentage}
-                    setter={(x) => setMinOverlapPercentage(x)}
-                  />
-                </div>
-                <div className="row">
-                  <InputBox
-                    label="Actual sidelap (px)"
-                    enabled={false}
-                    getter={() => getSidelapPixels()}
-                  />
-                  <InputBox
-                    label="Actual overlap (px)"
-                    enabled={false}
-                    getter={() => getOverlapPixels()}
-                  />
-                  <InputBox
-                    label="Actual sidelap (%)"
-                    enabled={false}
-                    getter={() => getSidelapPercent().toFixed(2)}
-                  />
-                  <InputBox
-                    label="Actual overlap (%)"
-                    enabled={false}
-                    getter={() => getOverlapPercent().toFixed(2)}
-                  />
-                </div>
-              </Form.Group>
-              <Form.Group className="mb-3 mt-3">
-                <LabeledToggleSwitch
-                  leftLabel="Process Entire Image"
-                  rightLabel="Specify Processing Borders"
-                  checked={specifyBorders}
-                  onChange={(checked) => {
-                    setSpecifyBorders(checked);
-                    setMinX(0);
-                    setMaxX(imageWidth!);
-                    setMinY(0);
-                    setMaxY(imageHeight!);
-                  }}
+                <InputBox
+                  label="Vertical Tiles"
+                  enabled={!specifyTileDimensions}
+                  getter={() => verticalTiles}
+                  setter={(x) => setVerticalTiles(x)}
                 />
-                {specifyBorders && (
-                  <>
-                    <LabeledToggleSwitch
-                      leftLabel="Specify Borders (px)"
-                      rightLabel="Specify Borders (%)"
-                      checked={specifyBorderPercentage}
-                      onChange={(checked) => {
-                        setSpecifyBorderPercentage(checked);
-                      }}
+                <InputBox
+                  label="Width"
+                  enabled={specifyTileDimensions}
+                  getter={() => width}
+                  setter={(x) => setWidth(x)}
+                />
+                <InputBox
+                  label="Height"
+                  enabled={specifyTileDimensions}
+                  getter={() => height}
+                  setter={(x) => setHeight(x)}
+                />
+              </div>
+            </Form.Group>
+            <Form.Group className="mb-3 mt-3">
+              <LabeledToggleSwitch
+                leftLabel="Specify overlap (px)"
+                rightLabel="Specify overlap (%)"
+                checked={specifyOverlapInPercentage}
+                onChange={(checked) => {
+                  setSpecifyOverlapInPercentage(checked);
+                }}
+              />
+              <div className="row">
+                <InputBox
+                  label="Minimum sidelap (px)"
+                  enabled={!specifyOverlapInPercentage}
+                  getter={() => minSidelap}
+                  setter={(x) => setMinSidelap(x)}
+                />
+                <InputBox
+                  label="Minimum overlap (px)"
+                  enabled={!specifyOverlapInPercentage}
+                  getter={() => minOverlap}
+                  setter={(x) => setMinOverlap(x)}
+                />
+                <InputBox
+                  label="Minimum sidelap (%)"
+                  enabled={specifyOverlapInPercentage}
+                  getter={() => minSidelapPercentage}
+                  setter={(x) => setMinSidelapPercentage(x)}
+                />
+                <InputBox
+                  label="Minimum overlap (%)"
+                  enabled={specifyOverlapInPercentage}
+                  getter={() => minOverlapPercentage}
+                  setter={(x) => setMinOverlapPercentage(x)}
+                />
+              </div>
+              <div className="row">
+                <InputBox
+                  label="Actual sidelap (px)"
+                  enabled={false}
+                  getter={() => getSidelapPixels()}
+                />
+                <InputBox
+                  label="Actual overlap (px)"
+                  enabled={false}
+                  getter={() => getOverlapPixels()}
+                />
+                <InputBox
+                  label="Actual sidelap (%)"
+                  enabled={false}
+                  getter={() => getSidelapPercent().toFixed(2)}
+                />
+                <InputBox
+                  label="Actual overlap (%)"
+                  enabled={false}
+                  getter={() => getOverlapPercent().toFixed(2)}
+                />
+              </div>
+            </Form.Group>
+            <Form.Group className="mb-3 mt-3">
+              <LabeledToggleSwitch
+                leftLabel="Process Entire Image"
+                rightLabel="Specify Processing Borders"
+                checked={specifyBorders}
+                onChange={(checked) => {
+                  setSpecifyBorders(checked);
+                  setMinX(0);
+                  setMaxX(imageWidth!);
+                  setMinY(0);
+                  setMaxY(imageHeight!);
+                }}
+              />
+              {specifyBorders && (
+                <>
+                  <LabeledToggleSwitch
+                    leftLabel="Specify Borders (px)"
+                    rightLabel="Specify Borders (%)"
+                    checked={specifyBorderPercentage}
+                    onChange={(checked) => {
+                      setSpecifyBorderPercentage(checked);
+                    }}
+                  />
+                  <div className="row">
+                    <InputBox
+                      label="Minimum X (px)"
+                      enabled={!specifyBorderPercentage}
+                      getter={() => minX}
+                      setter={(x) => setMinX(x)}
                     />
-                    <div className="row">
-                      <InputBox
-                        label="Minimum X (px)"
-                        enabled={!specifyBorderPercentage}
-                        getter={() => minX}
-                        setter={(x) => setMinX(x)}
-                      />
-                      <InputBox
-                        label="Minimum Y (px)"
-                        enabled={!specifyBorderPercentage}
-                        getter={() => minY}
-                        setter={(x) => setMinY(x)}
-                      />
-                      <InputBox
-                        label="Minimum X (%)"
-                        enabled={specifyBorderPercentage}
-                        getter={() => Math.round((minX / imageWidth!) * 100)}
-                        setter={(x) =>
-                          setMinX(Math.round((imageWidth! * x) / 100))
-                        }
-                      />
-                      <InputBox
-                        label="Minimum Y (%)"
-                        enabled={specifyBorderPercentage}
-                        getter={() => Math.round((minY / imageHeight!) * 100)}
-                        setter={(x) =>
-                          setMinY(Math.round((imageHeight! * x) / 100))
-                        }
-                      />
-                    </div>
-                    <div className="row">
-                      <InputBox
-                        label="Maximum X (px)"
-                        enabled={!specifyBorderPercentage}
-                        getter={() => maxX}
-                        setter={(x) => setMaxX(x)}
-                      />
-                      <InputBox
-                        label="Maximum Y (px)"
-                        enabled={!specifyBorderPercentage}
-                        getter={() => maxY}
-                        setter={(x) => setMaxY(x)}
-                      />
-                      <InputBox
-                        label="Maximum X (%)"
-                        enabled={specifyBorderPercentage}
-                        getter={() => Math.round((maxX / imageWidth!) * 100)}
-                        setter={(x) =>
-                          setMaxX(Math.round((imageWidth! * x) / 100))
-                        }
-                      />
-                      <InputBox
-                        label="Maximum Y (%)"
-                        enabled={specifyBorderPercentage}
-                        getter={() => Math.round((maxY / imageHeight!) * 100)}
-                        setter={(x) =>
-                          setMaxY(Math.round((imageHeight! * x) / 100))
-                        }
-                      />
-                    </div>
-                  </>
-                )}
-              </Form.Group>
-            </div>
-          )}
+                    <InputBox
+                      label="Minimum Y (px)"
+                      enabled={!specifyBorderPercentage}
+                      getter={() => minY}
+                      setter={(x) => setMinY(x)}
+                    />
+                    <InputBox
+                      label="Minimum X (%)"
+                      enabled={specifyBorderPercentage}
+                      getter={() => Math.round((minX / imageWidth!) * 100)}
+                      setter={(x) =>
+                        setMinX(Math.round((imageWidth! * x) / 100))
+                      }
+                    />
+                    <InputBox
+                      label="Minimum Y (%)"
+                      enabled={specifyBorderPercentage}
+                      getter={() => Math.round((minY / imageHeight!) * 100)}
+                      setter={(x) =>
+                        setMinY(Math.round((imageHeight! * x) / 100))
+                      }
+                    />
+                  </div>
+                  <div className="row">
+                    <InputBox
+                      label="Maximum X (px)"
+                      enabled={!specifyBorderPercentage}
+                      getter={() => maxX}
+                      setter={(x) => setMaxX(x)}
+                    />
+                    <InputBox
+                      label="Maximum Y (px)"
+                      enabled={!specifyBorderPercentage}
+                      getter={() => maxY}
+                      setter={(x) => setMaxY(x)}
+                    />
+                    <InputBox
+                      label="Maximum X (%)"
+                      enabled={specifyBorderPercentage}
+                      getter={() => Math.round((maxX / imageWidth!) * 100)}
+                      setter={(x) =>
+                        setMaxX(Math.round((imageWidth! * x) / 100))
+                      }
+                    />
+                    <InputBox
+                      label="Maximum Y (%)"
+                      enabled={specifyBorderPercentage}
+                      getter={() => Math.round((maxY / imageHeight!) * 100)}
+                      setter={(x) =>
+                        setMaxY(Math.round((imageHeight! * x) / 100))
+                      }
+                    />
+                  </div>
+                </>
+              )}
+            </Form.Group>
+          </div>
         </>
       );
     case "model":
