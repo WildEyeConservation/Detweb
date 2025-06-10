@@ -39,7 +39,7 @@ export default function InviteUserModal({
     )?.id;
 
     if (memberships?.some((membership) => membership.userId === userId)) {
-      alert("User is already a member of the organization");
+      alert("User is already a member of the organisation");
       return;
     }
 

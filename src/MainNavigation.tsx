@@ -187,22 +187,22 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
             </Card.Header>
             <Card.Body>
               <Card.Text>
-                You are not currently a member of any organization. If your
-                organization is already registered, please contact your
-                administrator to be invited to their organization. You will
+                You are not currently a member of any organisation. If your
+                organisation is already registered, please contact your
+                administrator to be invited to their organisation. You will
                 receive the invite in your notifications drawer. Click the bell
                 icon in the top right corner of the screen to view your
                 notifications.
               </Card.Text>
               <Card.Text>
-                If your organization is not registered, please register an
-                organization below.
+                If your organisation is not registered, please register an
+                organisation below.
               </Card.Text>
               <Button
                 variant="primary"
                 onClick={() => navigate("/SSRegisterOrganization")}
               >
-                Register Organization
+                Register Organisation
               </Button>
             </Card.Body>
           </Card>

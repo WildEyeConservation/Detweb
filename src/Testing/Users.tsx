@@ -34,7 +34,7 @@ export default function Users() {
 
   return (
     <div className="d-flex flex-column gap-2 mt-3 w-100">
-      <h5 className="mb-0">Organization Users</h5>
+      <h5 className="mb-0">Organisation Users</h5>
       <MyTable
         tableHeadings={[
           { content: 'Name', style: { width: '50%' }, sort: true },

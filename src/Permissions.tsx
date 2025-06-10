@@ -110,7 +110,7 @@ function PermissionsBody({
           setOnClick={setOnClick}
         />
       </Tab>
-      <Tab label="Organization Info">
+      <Tab label="Organisation Info">
         <Info organizationId={organization.id}/>
       </Tab>
     </Tabs>

@@ -214,7 +214,7 @@ function Invite({
           <b>
             {organizations.find((o) => o.id === invite.organizationId)?.name}
           </b>{" "}
-          invited you to their organization.
+          invited you to their organisation.
         </p>
       </div>
       <div className="d-flex gap-1">

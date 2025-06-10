@@ -40,21 +40,6 @@ export default function Surveys() {
   const [search, setSearch] = useState("");
   const [selectedSets, setSelectedSets] = useState<string[]>([]);
 
-  const [setFilesUploaded, setTotalFiles] = useUpdateProgress({
-    taskId: `Upload files`,
-    determinateTaskName: `Uploading files`,
-    indeterminateTaskName: `Preparing files`,
-    stepFormatter: formatFileSize,
-  });
-
-  const [setPreppingImages, setTotalPreppingImages] = useUpdateProgress({
-    taskId: `Finishing up`,
-    indeterminateTaskName: `Finishing up. This may take a while, do not close this page.`,
-    determinateTaskName:
-      "Finishing up. This may take a while, do not close this page.",
-    stepFormatter: (x: number) => `${x} tasks`,
-  });
-
   useEffect(() => {
     async function getProjects() {
       const myAdminProjects = myProjectsHook.data?.filter(
@@ -335,7 +320,7 @@ export default function Surveys() {
               type="text"
               className="w-100"
               style={{ maxWidth: "300px" }}
-              placeholder="Search by survey or organization"
+              placeholder="Search by survey or organisation"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -409,10 +394,6 @@ export default function Surveys() {
             setSelectedProject(null);
           }}
           project={{ id: selectedProject.id, name: selectedProject.name }}
-          setFilesUploaded={setFilesUploaded}
-          setTotalFiles={setTotalFiles}
-          setPreppingImages={setPreppingImages}
-          setTotalPreppingImages={setTotalPreppingImages}
         />
       )}
       {selectedProject && selectedAnnotationSet && (
@@ -509,8 +490,6 @@ export default function Surveys() {
       {selectedProject && (
         <EditSurveyModal
           show={modalToShow === "editSurvey"}
-          setPreppingImages={setPreppingImages}
-          setTotalPreppingImages={setTotalPreppingImages}
           onClose={() => {
             showModal(null);
             // setSelectedProject(null);

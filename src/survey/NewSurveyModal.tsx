@@ -254,7 +254,7 @@ export default function NewSurveyModal({
             />
           </Form.Group>
           <Form.Group>
-            <Form.Label>Organization</Form.Label>
+            <Form.Label>Organisation</Form.Label>
             <Select
               className="text-black"
               value={organization}
@@ -305,7 +305,7 @@ export default function NewSurveyModal({
               checked={addPermissionExceptions}
               onChange={(e) => {
                 if (!organization) {
-                  alert('Please select an organization first');
+                  alert('Please select an organisation first');
                   return;
                 }
                 setAddPermissionExceptions(e.target.checked);

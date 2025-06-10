@@ -55,7 +55,7 @@ export default function PendingOrganizations() {
     });
 
   const tableHeadings = [
-    { content: "Organization Name", style: { width: "20%" }, sort: true },
+    { content: "Organisation Name", style: { width: "20%" }, sort: true },
     { content: "Brief Description", style: { width: "20%" }, sort: true },
     { content: "Requested By", style: { width: "20%" }, sort: true },
     { content: "Date", style: { width: "20%" }, sort: true },
@@ -64,20 +64,20 @@ export default function PendingOrganizations() {
 
   return (
     <div className="m-2">
-      <h5>Pending Organizations</h5>
+      <h5>Pending Organisations</h5>
       <MyTable
         tableData={tableData}
         tableHeadings={tableHeadings}
         pagination={true}
         itemsPerPage={10}
-        emptyMessage="No pending organizations"
+        emptyMessage="No pending organisations"
       />
       <div className="d-flex justify-content-center align-items-center border-top pt-3 border-dark mt-3">
         <Button
           variant="primary"
           onClick={() => showModal("createOrganization")}
         >
-          Create Organization
+          Create Organisation
         </Button>
       </div>
       <CreateOrganization

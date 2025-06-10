@@ -63,7 +63,7 @@ export default function CreateOrganization({
           });
         }
 
-        alert("Organization " + name + " created for " + adminEmail);
+        alert("Organisation " + name + " created for " + adminEmail);
       }
     }
 
@@ -103,7 +103,7 @@ export default function CreateOrganization({
   return (
     <Modal show={show} onHide={onHide} size="lg">
       <Modal.Header closeButton>
-        <Modal.Title>{request ? "Add" : "Create"} Organization</Modal.Title>
+        <Modal.Title>{request ? "Add" : "Create"} Organisation</Modal.Title>
       </Modal.Header>
       <Modal.Body>
         <Form onSubmit={handleSubmit}>
@@ -111,7 +111,7 @@ export default function CreateOrganization({
             <Form.Label>Name</Form.Label>
             <Form.Control
               type="text"
-              placeholder="Enter organization name"
+              placeholder="Enter organisation name"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
@@ -121,7 +121,7 @@ export default function CreateOrganization({
             <Form.Control
               as="textarea"
               rows={3}
-              placeholder="Enter organization description"
+              placeholder="Enter organisation description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />

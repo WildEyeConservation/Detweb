@@ -37,7 +37,7 @@ export default function RegisterOrganization() {
     );
 
     if (organizations.length > 0) {
-      alert("An organization with this name already exists");
+      alert("An organisation with this name already exists");
       return;
     }
 
@@ -57,7 +57,7 @@ export default function RegisterOrganization() {
     );
 
     if (registrations.length > 0) {
-      alert("You have already requested an organization registration");
+      alert("You have already requested an organisation registration");
       setIsLoading(false);
       return;
     }
@@ -98,22 +98,22 @@ export default function RegisterOrganization() {
     >
       <Card.Header>
         <Card.Title className="mb-0">
-          <h4 className="mb-0">Register Organization</h4>
+          <h4 className="mb-0">Register Organisation</h4>
         </Card.Title>
       </Card.Header>
       <Card.Body>
         <Form className="d-flex flex-column gap-3" onSubmit={handleSubmit}>
           <span className="text-muted">
-            Here you can register your organization for SurveyScope - you will
+            Here you can register your organisation for SurveyScope - you will
             automatically be redirected after a successful manual review of your
             details.
           </span>
           <Form.Group>
-            <Form.Label>Organization Name</Form.Label>
+            <Form.Label>Organisation Name</Form.Label>
             <Form.Control
               name="organizationName"
               type="text"
-              placeholder="Enter organization name"
+              placeholder="Enter organisation name"
               required
             />
           </Form.Group>

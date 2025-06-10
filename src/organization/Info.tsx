@@ -36,7 +36,7 @@ export default function Info({ organizationId }: { organizationId: string }) {
 
     if (updatedOrganization) {
       setOrganization(updatedOrganization);
-      alert('Organization updated');
+      alert('Organisation updated');
     }
   };
 
@@ -63,13 +63,13 @@ export default function Info({ organizationId }: { organizationId: string }) {
 
   return (
     <div className="d-flex flex-column gap-2 mt-3 w-100">
-      <h5>Organization Info</h5>
+      <h5>Organisation Info</h5>
       <Form onSubmit={handleSubmit}>
         <Form.Group className="mb-2" controlId="formBasicEmail">
           <Form.Label>Name</Form.Label>
           <Form.Control
             type="text"
-            placeholder="Enter organization name"
+            placeholder="Enter organisation name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={loading}
@@ -80,7 +80,7 @@ export default function Info({ organizationId }: { organizationId: string }) {
           <Form.Control
             as="textarea"
             rows={3}
-            placeholder="Enter organization description"
+            placeholder="Enter organisation description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             disabled={loading}
