@@ -1017,7 +1017,6 @@ export function FileUploadCore({
       )}
       {filteredImageFiles.length > 0 && (
         <ImageMaskEditor
-          sampleImage={filteredImageFiles[0]}
           setMasks={setMasks}
         />
       )}
