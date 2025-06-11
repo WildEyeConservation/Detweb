@@ -642,8 +642,9 @@ export function FileUploadCore({
           return;
         }
 
-        if (!gpxFile.waypoints || gpxFile.waypoints.length === 0) {
-          console.error("No waypoints found in GPX file");
+        if (!gpxFile.tracks || gpxFile.tracks.length === 0) {
+          alert("No tracks found in GPX file");
+          console.error("No tracks found in GPX file");
           return;
         }
 
