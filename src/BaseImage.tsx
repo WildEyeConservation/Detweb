@@ -66,7 +66,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
       projectMembershipHook: { data: projectMemberships },
     } = useContext(ManagementContext)!;
     const { project } = useContext(ProjectContext)!;
-    const { user } = useContext(UserContext)!;
+    const { user, isAnnotatePath } = useContext(UserContext)!;
     const [fullyLoaded, setFullyLoaded] = useState(false);
     const [imageFiles, setImageFiles] = useState<ImageFileType[]>([]);
     const [canAdvance, setCanAdvance] = useState(false);
@@ -356,12 +356,12 @@ const BaseImage: React.FC<BaseImageProps> = memo(
             },
           ]
         );
-        if (belongsToCurrentProject?.isAdmin && location?.id) {
-          items.push({
-            text: "Use as test location",
-            callback: () => useForTestPreset(),
-          });
-        }
+        // if (belongsToCurrentProject?.isAdmin && location?.id) {
+        //   items.push({
+        //     text: "Use as test location",
+        //     callback: () => useForTestPreset(),
+        //   });
+        // }
       }
 
       return items;
@@ -488,7 +488,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
                       />
                     </LayersControl.BaseLayer>
                   ))}
-                  {prevImages?.toReversed()?.map((im, idx) => (
+                  {!isAnnotatePath && prevImages?.toReversed()?.map((im, idx) => (
                     <LayersControl.Overlay
                       name={`Overlap ${im.image.originalPath}`}
                       key={idx}
@@ -502,7 +502,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
                       </LayerGroup>
                     </LayersControl.Overlay>
                   ))}
-                  {nextImages?.map((im, idx) => (
+                  {!isAnnotatePath && nextImages?.map((im, idx) => (
                     <LayersControl.Overlay
                       name={`Overlap ${im.image.originalPath}`}
                       key={idx}
