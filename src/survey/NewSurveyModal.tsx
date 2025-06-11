@@ -9,6 +9,7 @@ import { useUsers } from '../apiInterface';
 import { fetchAllPaginatedResults } from '../utils';
 import { FilesUploadForm, formatFileSize } from '../FilesUploadComponent';
 import { useUpdateProgress } from '../useUpdateProgress';
+import { X, Check } from 'lucide-react';
 
 export default function NewSurveyModal({
   show,
@@ -63,8 +64,9 @@ export default function NewSurveyModal({
       ) => Promise<void>)
     | null
   >(null);
+  const [gpsReady, setGpsReady] = useState(false);
 
-  const canSubmit = !loading && filesReady && name && organization;
+  const canSubmit = !loading && filesReady && name && organization && gpsReady;
 
   async function handleSave() {
     if (projects.includes(name.toLowerCase())) {
@@ -422,9 +424,23 @@ export default function NewSurveyModal({
           <FilesUploadForm
             setOnSubmit={setUploadSubmitFn}
             setReadyToSubmit={setFilesReady}
+            setGpsDataReady={setGpsReady}
           />
         </Form>
       </Modal.Body>
+      <div className="pb-2 pt-2 text-end border-top border-dark mx-3">
+        <ul className="list-unstyled mb-2">
+          <li style={{ color: name ? 'lime' : 'red' }}>
+            Name: {name ? <Check /> : <X />}
+          </li>
+          <li style={{ color: filesReady ? 'lime' : 'red' }}>
+            Files: {filesReady ? <Check /> : <X />}
+          </li>
+          <li style={{ color: gpsReady ? 'lime' : 'red' }}>
+            GPS Data: {gpsReady ? <Check /> : <X />}
+          </li>
+        </ul>
+      </div>
       <Modal.Footer>
         <Button variant="primary" onClick={handleSave} disabled={!canSubmit}>
           {loading ? 'Creating...' : 'Create'}

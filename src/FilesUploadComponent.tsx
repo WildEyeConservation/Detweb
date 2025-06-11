@@ -51,6 +51,7 @@ interface FilesUploadBaseProps {
     >
   >;
   setReadyToSubmit: React.Dispatch<React.SetStateAction<boolean>>;
+  setGpsDataReady?: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 // Props for form-compatible version
@@ -89,6 +90,7 @@ type CsvData = {
 export function FileUploadCore({
   setOnSubmit,
   setReadyToSubmit,
+  setGpsDataReady,
 }: FilesUploadBaseProps) {
   const limitConnections = pLimit(10);
   const [upload, setUpload] = useState(true);
@@ -231,6 +233,12 @@ export function FileUploadCore({
       getExistingFiles();
     }
   }, [imageFiles]);
+
+  useEffect(() => {
+    if (setGpsDataReady) {
+      setGpsDataReady(!scanningEXIF && filteredImageFiles.length > 0 && (!missingGpsData || Boolean(csvData)));
+    }
+  }, [filteredImageFiles, missingGpsData, csvData, setGpsDataReady]);
 
   const handleFileInputChange = (files: File[]) => {
     if (files) {
@@ -607,12 +615,8 @@ export function FileUploadCore({
   );
 
   useEffect(() => {
-    if (filteredImageFiles.length > 0 && csvData) {
-      setReadyToSubmit(true);
-    } else {
-      setReadyToSubmit(false);
-    }
-  }, [filteredImageFiles, csvData]);
+    setReadyToSubmit(filteredImageFiles.length > 0);
+  }, [filteredImageFiles, setReadyToSubmit]);
 
   // Register the submit handler with the parent form if provided
   useEffect(() => {
