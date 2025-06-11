@@ -107,7 +107,7 @@ export default function Users({
   const tableHeadings = [
     { content: 'Username' },
     { content: 'Email' },
-    { content: 'Organization Admin' },
+    { content: 'Organisation Admin' },
     { content: 'Permission Exceptions' },
     { content: 'Remove' },
   ];
@@ -182,7 +182,7 @@ export default function Users({
   return (
     <>
       <div className="d-flex flex-column gap-2 mt-3 w-100 overflow-x-auto overflow-y-visible">
-        <h5>Organization Users</h5>
+        <h5>Organisation Users</h5>
         <MyTable
           tableData={tableData}
           tableHeadings={tableHeadings}

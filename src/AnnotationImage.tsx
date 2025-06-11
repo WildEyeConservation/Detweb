@@ -1,19 +1,20 @@
-import { useMemo, useContext, useCallback, useEffect, useState } from "react";
-import BaseImage from "./BaseImage";
-import { withAckOnTimeout } from "./useAckOnTimeout";
-import { MapLegend, SideLegend } from "./Legend";
-import Location from "./Location";
-import { withCreateObservation } from "./useCreateObservation";
-import CreateAnnotationOnClick from "./CreateAnnotationOnClick";
-import { GlobalContext, ProjectContext, UserContext } from "./Context";
-import { ShowMarkers } from "./ShowMarkers";
-import { useOptimisticUpdates } from "./useOptimisticUpdates";
-import { ImageContextFromHook } from "./ImageContext";
-import CreateAnnotationOnHotKey from "./CreateAnnotationOnHotKey";
-import { Schema } from "../amplify/data/resource";
-import useImageStats from "./useImageStats";
-import { Badge } from "react-bootstrap";
-import { Share2 } from "lucide-react";
+import { useMemo, useContext, useCallback, useEffect, useState } from 'react';
+import BaseImage from './BaseImage';
+import { withAckOnTimeout } from './useAckOnTimeout';
+import { MapLegend, SideLegend } from './Legend';
+import Location from './Location';
+import { withCreateObservation } from './useCreateObservation';
+import CreateAnnotationOnClick from './CreateAnnotationOnClick';
+import { GlobalContext, ProjectContext, UserContext } from './Context';
+import { ShowMarkers } from './ShowMarkers';
+import { useOptimisticUpdates } from './useOptimisticUpdates';
+import { ImageContextFromHook } from './ImageContext';
+import CreateAnnotationOnHotKey from './CreateAnnotationOnHotKey';
+import { Schema } from '../amplify/data/resource';
+import useImageStats from './useImageStats';
+import { Badge, Button } from 'react-bootstrap';
+import { Share2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 const Image = withCreateObservation(withAckOnTimeout(BaseImage));
 
 export default function AnnotationImage(props: any) {
@@ -31,7 +32,9 @@ export default function AnnotationImage(props: any) {
   const { annotationSetId } = location;
   const { client } = useContext(GlobalContext)!;
   //testing
-  const { currentTaskTag, isTesting } = useContext(UserContext)!;
+  const { currentTaskTag, isTesting, isAnnotatePath } =
+    useContext(UserContext)!;
+  const navigate = useNavigate();
   const subscriptionFilter = useMemo(
     () => ({
       filter: {
@@ -47,10 +50,10 @@ export default function AnnotationImage(props: any) {
     categoriesHook: { data: categories },
   } = useContext(ProjectContext)!;
   const annotationsHook = useOptimisticUpdates<
-    Schema["Annotation"]["type"],
-    "Annotation"
+    Schema['Annotation']['type'],
+    'Annotation'
   >(
-    "Annotation",
+    'Annotation',
     async (nextToken) =>
       client.models.Annotation.annotationsByImageIdAndSetId(
         { imageId: location.image.id, setId: { eq: location.annotationSetId } },
@@ -60,10 +63,10 @@ export default function AnnotationImage(props: any) {
   );
   const stats = useImageStats(annotationsHook);
   const memoizedChildren = useMemo(() => {
-    console.log("memoizing");
+    console.log('memoizing');
     // non-existing setId for testing since annotations are recorded in context
-    const setId = isTesting ? "123" : annotationSetId;
-    const source = props.taskTag ? `manual-${props.taskTag}` : "manual";
+    const setId = isTesting ? '123' : annotationSetId;
+    const source = props.taskTag ? `manual-${props.taskTag}` : 'manual';
     return [
       <CreateAnnotationOnClick
         key="caok"
@@ -97,7 +100,7 @@ export default function AnnotationImage(props: any) {
 
   async function handleShare() {
     const base = window.location.href;
-    let url = "";
+    let url = '';
 
     if (location.id && location.annotationSetId) {
       url = base.replace(
@@ -128,20 +131,20 @@ export default function AnnotationImage(props: any) {
       secondaryQueueUrl={props.secondaryQueueUrl}
       taskTag={props.taskTag}
     >
-      <div className="d-flex flex-row justify-content-center w-100 h-100 gap-3 overflow-auto">
+      <div className="d-flex flex-md-row flex-column justify-content-center w-100 h-100 gap-3 overflow-auto">
         <div
           className={`d-flex flex-column align-items-center w-100 h-100 gap-3`}
           style={{
-            maxWidth: "1024px",
+            maxWidth: '1024px',
           }}
         >
           <div
             className="d-flex flex-row justify-content-center align-items-center w-100 gap-3 overflow-hidden"
-            style={{ position: "relative", height: "26px" }}
+            style={{ position: 'relative', height: '26px' }}
           >
             <div
               style={{
-                position: "absolute",
+                position: 'absolute',
                 top: 0,
                 left: 0,
               }}
@@ -149,15 +152,15 @@ export default function AnnotationImage(props: any) {
               <Share2
                 size={24}
                 onClick={handleShare}
-                style={{ cursor: "pointer" }}
+                style={{ cursor: 'pointer' }}
               />
             </div>
             {visible && (
               <Badge bg="secondary">
-                Working on:{" "}
+                Working on:{' '}
                 {props.taskTag || currentTaskTag
                   ? `${props.taskTag || currentTaskTag}`
-                  : "Viewing image"}
+                  : 'Viewing image'}
               </Badge>
             )}
           </div>
@@ -177,7 +180,19 @@ export default function AnnotationImage(props: any) {
             {visible && memoizedChildren}
           </Image>
         </div>
-        <SideLegend annotationSetId={annotationSetId} />
+        <div className="d-flex flex-column align-items-center gap-3">
+          <SideLegend annotationSetId={annotationSetId} />
+          {isAnnotatePath && (
+            <Button
+              onClick={() => {
+                navigate('/jobs');
+              }}
+              className="w-100"
+            >
+              Save & Exit
+            </Button>
+          )}
+        </div>
       </div>
     </ImageContextFromHook>
   );

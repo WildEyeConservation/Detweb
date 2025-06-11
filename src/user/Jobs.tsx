@@ -1,17 +1,13 @@
-import { Card } from "react-bootstrap";
-import { useContext, useEffect, useState } from "react";
-import { UserContext, GlobalContext } from "../Context";
-import { Schema } from "../../amplify/data/resource";
-import { Spinner, Button } from "react-bootstrap";
-import MyTable from "../Table";
-import { useNavigate } from "react-router-dom";
-import {
-  DeleteQueueCommand,
-  type GetQueueAttributesCommandInput,
-} from "@aws-sdk/client-sqs";
-import { GetQueueAttributesCommand } from "@aws-sdk/client-sqs";
-import ConfirmationModal from "../ConfirmationModal";
-import { useQueryClient } from "@tanstack/react-query";
+import { Card } from 'react-bootstrap';
+import { useContext, useEffect, useState } from 'react';
+import { UserContext, GlobalContext } from '../Context';
+import { Schema } from '../../amplify/data/resource';
+import { Spinner, Button, ProgressBar } from 'react-bootstrap';
+import MyTable from '../Table';
+import { useNavigate } from 'react-router-dom';
+import { type GetQueueAttributesCommandInput } from '@aws-sdk/client-sqs';
+import { GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
+import ConfirmationModal from '../ConfirmationModal';
 
 type Project = {
   id: string;
@@ -23,7 +19,7 @@ type Project = {
   annotationSets: {
     id: string;
   }[];
-  queues: Schema["Queue"]["type"][];
+  queues: Schema['Queue']['type'][];
 };
 
 export default function Jobs() {
@@ -35,7 +31,6 @@ export default function Jobs() {
   } = useContext(UserContext)!;
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
   const [displayProjects, setDisplayProjects] = useState<Project[]>([]);
   const [jobsRemaining, setJobsRemaining] = useState<Record<string, string>>(
@@ -51,7 +46,7 @@ export default function Jobs() {
   const [isLoading, setIsLoading] = useState(false);
   const [takingJob, setTakingJob] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<
-    Schema["Queue"]["type"] | null
+    Schema['Queue']['type'] | null
   >(null);
   const [deletingJob, setDeletingJob] = useState(false);
 
@@ -68,13 +63,13 @@ export default function Jobs() {
           { id: membership.projectId },
           {
             selectionSet: [
-              "id",
-              "name",
-              "organization.id",
-              "organization.name",
-              "annotationSets.id",
-              "annotationSets.register",
-              "queues.*",
+              'id',
+              'name',
+              'organization.id',
+              'organization.name',
+              'annotationSets.id',
+              'annotationSets.register',
+              'queues.*',
             ],
           }
         )
@@ -109,7 +104,7 @@ export default function Jobs() {
         if (cancelled) return;
 
         const queueUrls = validProjects.flatMap((project) =>
-          project.queues.map((queue) => queue.url || "")
+          project.queues.map((queue) => queue.url || '')
         );
 
         const jobsRemaining = (
@@ -117,7 +112,7 @@ export default function Jobs() {
             queueUrls.map(async (queueUrl) => {
               const params: GetQueueAttributesCommandInput = {
                 QueueUrl: queueUrl,
-                AttributeNames: ["ApproximateNumberOfMessages"],
+                AttributeNames: ['ApproximateNumberOfMessages'],
               };
               const sqsClient = await getSqsClient();
               const result = await sqsClient.send(
@@ -125,7 +120,7 @@ export default function Jobs() {
               );
               return {
                 [queueUrl]:
-                  result.Attributes?.ApproximateNumberOfMessages || "Unknown",
+                  result.Attributes?.ApproximateNumberOfMessages || 'Unknown',
               };
             })
           )
@@ -142,7 +137,7 @@ export default function Jobs() {
               const { data } = await client.models.AnnotationSet.get(
                 { id: set.id },
                 {
-                  selectionSet: ["register"],
+                  selectionSet: ['register'],
                 }
               );
 
@@ -197,7 +192,7 @@ export default function Jobs() {
             navigate(`/surveys/${job.projectId}/annotate`);
           },
           onError: (error) => {
-            alert("Failed to take job");
+            alert('Failed to take job');
             console.error(error);
           },
         }
@@ -210,7 +205,7 @@ export default function Jobs() {
             navigate(`/surveys/${job.projectId}/annotate`);
           },
           onError: (error) => {
-            alert("Failed to take job");
+            alert('Failed to take job');
             console.error(error);
           },
         }
@@ -220,38 +215,11 @@ export default function Jobs() {
     setTakingJob(false);
   }
 
-  async function handleDeleteJob(job: Schema["Queue"]["type"]) {
-    setDeletingJob(true);
-
-    if (!job.url) {
-      alert("An unknown error occurred. Please try again later.");
-      console.error("Job has no URL");
-      setDeletingJob(false);
-      return;
-    }
-
-    try {
-      const sqsClient = await getSqsClient();
-      await sqsClient.send(new DeleteQueueCommand({ QueueUrl: job.url }));
-      await client.models.Queue.delete({ id: job.id });
-      await client.mutations.updateProjectMemberships({
-        projectId: job.projectId,
-      });
-    } catch (error) {
-      alert("An unknown error occurred. Please try again later.");
-      console.error(error);
-    } finally {
-      //remove queue from displayProjects
-      setDisplayProjects(displayProjects.filter((project) => project.id !== job.projectId));
-      setDeletingJob(false);
-    }
-  }
-
   const tableData = [
     ...displayProjects.flatMap((project) =>
       project.queues
         .map((queue) => {
-          const numJobsRemaining = Number(jobsRemaining[queue.url || ""] || 0);
+          const numJobsRemaining = Number(jobsRemaining[queue.url || ''] || 0);
           const batchesRemaining = Math.ceil(
             numJobsRemaining / (queue.batchSize || 0)
           );
@@ -275,14 +243,14 @@ export default function Jobs() {
                 <div className="d-flex flex-row gap-3 align-items-center">
                   <div>
                     <h5 className="mb-0">{project.name}</h5>
-                    <i style={{ fontSize: "14px", display: "block" }}>
+                    <i style={{ fontSize: '14px', display: 'block' }}>
                       {project.organization.name}
                     </i>
                     <p
                       style={{
-                        fontSize: "14px",
-                        display: "block",
-                        marginBottom: "0px",
+                        fontSize: '14px',
+                        display: 'block',
+                        marginBottom: '0px',
                       }}
                     >
                       Type: {queue.name}
@@ -295,17 +263,26 @@ export default function Jobs() {
                     queue.hidden && (
                       <span
                         className="badge bg-secondary"
-                        style={{ fontSize: "14px" }}
+                        style={{ fontSize: '14px' }}
                       >
                         Hidden
                       </span>
                     )}
                 </div>
-                <div className="d-flex flex-row gap-2 align-items-center">
+                <div
+                  className="d-flex flex-row gap-2 align-items-center"
+                  style={{ maxWidth: '600px', width: '100%' }}
+                >
                   {queue.batchSize && queue.batchSize > 0 ? (
-                    <p className="mb-0">
-                      Batches remaining: {batchesRemaining}
-                    </p>
+                    <div className="w-100">
+                      <p className="mb-0">{batchesRemaining} batches remaining</p>
+                      <ProgressBar
+                        now={queue.totalBatches - batchesRemaining}
+                        max={queue.totalBatches}
+                        animated
+                        className="w-100"
+                      />
+                    </div>
                   ) : (
                     <p className="mb-0">Jobs remaining: {numJobsRemaining}</p>
                   )}
@@ -321,23 +298,10 @@ export default function Jobs() {
                         projectId: project.id,
                       })
                     }
+                    style={{ whiteSpace: 'nowrap' }}
                   >
                     Take Job
                   </Button>
-                  {userProjectMembershipHook.data?.find(
-                    (membership) => membership.projectId === project.id
-                  )?.isAdmin && (
-                    <Button
-                      variant="danger"
-                      disabled={deletingJob}
-                      onClick={() => {
-                        setJobToDelete(queue);
-                        showModal("deleteJob");
-                      }}
-                    >
-                      Delete
-                    </Button>
-                  )}
                 </div>
               </div>,
             ],
@@ -364,50 +328,29 @@ export default function Jobs() {
             <div className="d-flex flex-row gap-3 align-items-center">
               <div>
                 <h5 className="mb-0">{project.name}</h5>
-                <i style={{ fontSize: "14px", display: "block" }}>
+                <i style={{ fontSize: '14px', display: 'block' }}>
                   {project.organization.name}
                 </i>
                 <p
                   style={{
-                    fontSize: "14px",
-                    display: "block",
-                    marginBottom: "0px",
+                    fontSize: '14px',
+                    display: 'block',
+                    marginBottom: '0px',
                   }}
                 >
                   Type: Registration
                 </p>
               </div>
             </div>
-            <div className="d-flex flex-row gap-2 align-items-center">
-              <Button
-                className="ms-1"
-                variant="primary"
-                onClick={() =>
-                  navigate(`/surveys/${project.id}/set/${job.id}/registration`)
-                }
-              >
-                Take Job
-              </Button>
-              {userProjectMembershipHook.data?.find(
-                (membership) => membership.projectId === project.id
-              )?.isAdmin && (
-                <Button
-                  variant="danger"
-                  onClick={async () => {
-                    await client.models.AnnotationSet.update({
-                      id: job.id,
-                      register: false,
-                    });
-
-                    setRegistrationJobs((rjs) =>
-                      rjs.filter((j) => j.id !== job.id)
-                    );
-                  }}
-                >
-                  Delete
-                </Button>
-              )}
-            </div>
+            <Button
+              className="ms-1"
+              variant="primary"
+              onClick={() =>
+                navigate(`/surveys/${project.id}/set/${job.id}/registration`)
+              }
+            >
+              Take Job
+            </Button>
           </div>,
         ],
       };
@@ -417,10 +360,10 @@ export default function Jobs() {
   return (
     <div
       style={{
-        width: "100%",
-        maxWidth: "1555px",
-        marginTop: "16px",
-        marginBottom: "16px",
+        width: '100%',
+        maxWidth: '1555px',
+        marginTop: '16px',
+        marginBottom: '16px',
       }}
     >
       <Card>
@@ -444,7 +387,7 @@ export default function Jobs() {
       </Card>
       {jobToDelete && (
         <ConfirmationModal
-          show={modalToShow === "deleteJob"}
+          show={modalToShow === 'deleteJob'}
           title="Delete Job"
           onClose={() => {
             showModal(null);
@@ -453,8 +396,8 @@ export default function Jobs() {
           onConfirm={() => handleDeleteJob(jobToDelete)}
           body={
             <p className="mb-0">
-              Are you sure you want to delete the job <b>{jobToDelete.name}</b>{" "}
-              on survey{" "}
+              Are you sure you want to delete the job <b>{jobToDelete.name}</b>{' '}
+              on survey{' '}
               <b>
                 {
                   displayProjects.find(

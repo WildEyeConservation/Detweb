@@ -27,7 +27,7 @@ export default function Admin() {
         </Card.Header>
         <Card.Body>
           <Tabs>
-            <Tab label="Pending Organizations">
+            <Tab label="Pending Organisations">
               <PendingOrganizations />
             </Tab>
             <Tab label="Statistics">

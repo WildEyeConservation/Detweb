@@ -380,6 +380,7 @@ const schema = a
         name: a.string().required(),
         users: a.hasMany('UserProjectMembership', 'queueId'),
         batchSize: a.integer().default(0),
+        totalBatches: a.integer().default(0),
         backupUsers: a.hasMany('UserProjectMembership', 'backupQueueId'),
         url: a.url(),
         zoom: a.integer(),

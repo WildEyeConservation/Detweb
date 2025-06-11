@@ -1,4 +1,4 @@
-import { useContext, useEffect } from "react";
+import { useContext, useEffect, useState } from "react";
 import Navbar from "react-bootstrap/Navbar";
 import Nav from "react-bootstrap/Nav";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
@@ -10,7 +10,6 @@ import { UserContext } from "./Context.tsx";
 import Settings from "./user/Settings.tsx";
 import { Card, Button } from "react-bootstrap";
 import UploadProgress from "./upload/UploadProgress.tsx";
-import UploadManager from "./upload/UploadManager.tsx";
 
 export default function MainNavigation({ signOut }: { signOut: () => void }) {
   const {
@@ -18,6 +17,8 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
     myOrganizationHook,
     isOrganizationAdmin,
     myMembershipHook: myProjectsHook,
+    isAnnotatePath,
+    setIsAnnotatePath,
   } = useContext(UserContext)!;
 
   const location = useLocation();
@@ -28,6 +29,10 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
   );
 
   const belongsToOrganization = myOrganizationHook.data.length > 0;
+
+  useEffect(() => {
+    setIsAnnotatePath(/^\/surveys\/[^/]+\/annotate$/.test(location.pathname));
+  }, [location.pathname]);
 
   useEffect(() => {
     if (
@@ -89,7 +94,8 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
         </Navbar.Brand>
         <Navbar.Toggle aria-controls="responsive-navbar-nav" />
         <Navbar.Collapse id="responsive-navbar-nav">
-          <Nav fill activeKey={location.pathname}>
+          {!isAnnotatePath && (
+            <Nav fill activeKey={location.pathname}>
             {belongsToOrganization && (
               <>
                 {(myAdminProjects?.length > 0 || isOrganizationAdmin) && (
@@ -152,6 +158,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
               </Nav.Link>
             )}
           </Nav>
+          )}
           <div className="d-flex flex-column flex-lg-row flex-grow-1 align-items-center justify-content-end gap-3 gap-lg-0 mt-2 mt-lg-0">
             <UploadProgress />
             <ProgressIndicators />
@@ -187,22 +194,22 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
             </Card.Header>
             <Card.Body>
               <Card.Text>
-                You are not currently a member of any organization. If your
-                organization is already registered, please contact your
-                administrator to be invited to their organization. You will
+                You are not currently a member of any organisation. If your
+                organisation is already registered, please contact your
+                administrator to be invited to their organisation. You will
                 receive the invite in your notifications drawer. Click the bell
                 icon in the top right corner of the screen to view your
                 notifications.
               </Card.Text>
               <Card.Text>
-                If your organization is not registered, please register an
-                organization below.
+                If your organisation is not registered, please register an
+                organisation below.
               </Card.Text>
               <Button
                 variant="primary"
                 onClick={() => navigate("/SSRegisterOrganization")}
               >
-                Register Organization
+                Register Organisation
               </Button>
             </Card.Body>
           </Card>

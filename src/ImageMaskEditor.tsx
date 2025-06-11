@@ -12,12 +12,10 @@ import FileInput from "./FileInput";
 import { Form } from "react-bootstrap";
 
 interface ImageMaskEditorProps {
-  sampleImage: File;
   setMasks: (masks: number[][][]) => void;
 }
 
 const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({
-  sampleImage,
   setMasks,
 }) => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -187,12 +185,6 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({
     }
   }, [imageDimensions, mapRef]);
 
-  useEffect(() => {
-    if (sampleImage) {
-      handleFileChange([sampleImage]);
-    }
-  }, []);
-
   return (
     <Form.Group className="mt-3">
       <Form.Label className="d-block mb-0">
@@ -222,7 +214,7 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({
             style={{ height: "100%", width: "100%" }}
             crs={CRS.Simple}
             center={[imageDimensions.height / 2, imageDimensions.width / 2]}
-            zoom={0}
+            zoom={-4}
             minZoom={-5}
           >
             <ImageOverlay

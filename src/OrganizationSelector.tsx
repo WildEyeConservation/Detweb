@@ -62,7 +62,7 @@ function OrganizationSelector({
       title={
         organization.id
           ? organizations.find((org) => org.id === organization.id)?.name
-          : 'Select an Organization'
+          : 'Select an Organisation'
       }
     >
       {organizations?.map((organization) => (

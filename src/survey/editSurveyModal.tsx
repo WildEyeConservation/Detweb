@@ -10,16 +10,12 @@ export default function EditSurveyModal({
   onClose,
   project,
   openTab,
-  setPreppingImages,
-  setTotalPreppingImages,
 }: {
   show: boolean;
   onClose: () => void;
   project: Schema["Project"]["type"];
   openTab?: number;
   setSelectedSets: (sets: string[]) => void;
-  setPreppingImages: (preppingImages: number) => void;
-  setTotalPreppingImages: (totalPreppingImages: number) => void;
 }) {
   const [handleSubmit, setHandleSubmit] = useState<
     (() => Promise<void>) | null
@@ -67,8 +63,6 @@ export default function EditSurveyModal({
             <ProcessImages
               onClose={onClose}
               projectId={project.id}
-              setPreppingImages={setPreppingImages}
-              setTotalPreppingImages={setTotalPreppingImages}
               setHandleSubmit={setHandleSubmit}
               setSubmitDisabled={setSubmitDisabled}
             />

@@ -137,6 +137,12 @@ export default function AddAnnotationSetModal({
             </Form.Select>
           </Form.Group>
           <LabelEditor
+            defaultLabels={[{
+              id: crypto.randomUUID(),
+              name: "Unknown",
+              shortcutKey: "u",
+              color: "#ff2643",
+            }]}
             importLabels={importedLabels}
             setHandleSave={setSaveLabels}
           />

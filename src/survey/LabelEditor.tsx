@@ -4,7 +4,6 @@ import MyTable from "../Table";
 import { useState, useEffect, useCallback } from "react";
 import { useContext } from "react";
 import { GlobalContext } from "../Context";
-import { useQueryClient } from "@tanstack/react-query";
 
 interface Label {
   id: string;
@@ -30,7 +29,6 @@ export default function LabelEditor({
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
   const [labels, setLabels] = useState<Label[]>(defaultLabels);
   const { client } = useContext(GlobalContext)!;
-  const queryClient = useQueryClient();
 
   const handleSave = useCallback(
     async (annotationSetId: string, projectId: string) => {
@@ -164,12 +162,17 @@ export default function LabelEditor({
               onFocus={start}
               onBlur={() => {
                 stop();
+                const newShortcutKey = Array.from(keys).join("+");
+                if (labels.some((l) => l.id !== label.id && l.shortcutKey === newShortcutKey)) {
+                  alert("This shortcut key is already in use by another label.");
+                  return;
+                }
                 setLabels(
                   labels.map((l) =>
                     l.id === label.id
                       ? {
                           ...l,
-                          shortcutKey: Array.from(keys).join("+"),
+                          shortcutKey: newShortcutKey,
                         }
                       : l
                   )

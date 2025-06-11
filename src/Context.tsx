@@ -68,6 +68,8 @@ export interface UserContextType {
   isOrganizationAdmin: boolean;
   jobsCompleted: number;
   setJobsCompleted: React.Dispatch<React.SetStateAction<number>>;
+  isAnnotatePath: boolean;
+  setIsAnnotatePath: React.Dispatch<React.SetStateAction<boolean>>;
 
   // user testing - maybe move to own context
   isTesting: boolean;

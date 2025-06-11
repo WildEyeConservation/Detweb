@@ -10,10 +10,10 @@ import { GlobalContext, UserContext } from '../Context';
 import LaunchRegistration from '../LaunchRegistration';
 import { useLaunchTask } from '../useLaunchTask';
 import { useUpdateProgress } from '../useUpdateProgress';
-import { useQueryClient } from '@tanstack/react-query';
 import Select from 'react-select';
+import LabeledToggleSwitch from '../LabeledToggleSwitch';
 
-type TaskType = 'tiled' | 'model' | 'annotation' | 'registration';
+type TaskType = 'species-labelling' | 'registration';
 
 export default function LaunchAnnotationSetModal({
   show,
@@ -59,7 +59,7 @@ export default function LaunchAnnotationSetModal({
   const [handleLaunchRegistration, setHandleLaunchRegistration] = useState<
     ((url: string) => Promise<void>) | null
   >(null);
-  const [taskType, setTaskType] = useState<TaskType>('model');
+  const [taskType, setTaskType] = useState<TaskType>('species-labelling');
   const [model, setModel] = useState<{ label: string; value: string }>();
   const [modelOptions, setModelOptions] = useState<
     {
@@ -75,8 +75,7 @@ export default function LaunchAnnotationSetModal({
   const [loadingLocationSets, setLoadingLocationSets] =
     useState<boolean>(false);
   const [launching, setLaunching] = useState(false);
-
-  const queryClient = useQueryClient();
+  const [modelGuided, setModelGuided] = useState<boolean>(true);
 
   const launchTask = useLaunchTask({
     allowOutside: allowAnnotationsOutsideLocationBoundaries,
@@ -102,7 +101,7 @@ export default function LaunchAnnotationSetModal({
     name: string,
     hidden: boolean,
     fifo: boolean
-  ): Promise<string | null> => {
+  ): Promise<{ id: string; url: string } | null> => {
     const safeName =
       makeSafeQueueName(name + crypto.randomUUID()) + (fifo ? '.fifo' : '');
 
@@ -120,7 +119,7 @@ export default function LaunchAnnotationSetModal({
       )
       .then(async ({ QueueUrl: url }) => {
         if (url) {
-          await client.models.Queue.create({
+          const { data: queue } = await client.models.Queue.create({
             url,
             name: name,
             projectId: project.id,
@@ -128,7 +127,10 @@ export default function LaunchAnnotationSetModal({
             hidden: hidden,
             zoom: zoom,
           });
-          return url ?? null;
+
+          if (queue) {
+            return { id: queue.id, url: url, batchSize: batchSize };
+          }
         }
         return null;
       });
@@ -146,18 +148,18 @@ export default function LaunchAnnotationSetModal({
       setLoadingLocations(0);
       setTotalLocations(0);
 
-      const queueUrl = await createQueue('Tiled Annotation', false, false);
+      const queue = await createQueue('Tiled Annotation', false, false);
 
-      const secondaryQueueUrl = sendDetectionsToSecondaryQueue
+      const secondaryQueue = sendDetectionsToSecondaryQueue
         ? await createQueue('Tiled Annotation Secondary', true, false)
         : null;
 
       //push messages to queue
-      if (queueUrl) {
+      if (queue) {
         await launchTask({
           selectedTasks: [locationSetId],
-          queueUrl: queueUrl,
-          secondaryQueueUrl: secondaryQueueUrl,
+          queue: queue,
+          secondaryQueue: secondaryQueue,
           setStepsCompleted: setLoadingLocations,
           setTotalSteps: setTotalLocations,
         });
@@ -185,14 +187,14 @@ export default function LaunchAnnotationSetModal({
     }
 
     //create queue
-    const queueUrl = await createQueue('Model Guided', false, false);
+    const queue = await createQueue('Model Guided', false, false);
 
     //push messages to queue
-    if (queueUrl) {
+    if (queue) {
       await launchTask({
         selectedTasks: modelGuidedLocationSets.map((ls) => ls.id),
-        queueUrl: queueUrl,
-        secondaryQueueUrl: null,
+        queue: queue,
+        secondaryQueue: null,
         setStepsCompleted: setLoadingLocations,
         setTotalSteps: setTotalLocations,
       });
@@ -234,14 +236,12 @@ export default function LaunchAnnotationSetModal({
     });
 
     switch (taskType) {
-      case 'tiled':
-        await createTiledTask();
-        break;
-      case 'model':
-        await createModelTask();
-        break;
-      case 'annotation':
-        await createAnnotationTask();
+      case 'species-labelling':
+        if (modelGuided) {
+          await createModelTask();
+        } else {
+          await createTiledTask();
+        }
         break;
       case 'registration':
         await createRegistrationTask();
@@ -280,7 +280,11 @@ export default function LaunchAnnotationSetModal({
         if (
           locationSet.name.toLowerCase().includes('elephant-detection-nadir')
         ) {
-          if (!modelOptions.some((option) => option.value === 'elephant-detection-nadir')) {
+          if (
+            !modelOptions.some(
+              (option) => option.value === 'elephant-detection-nadir'
+            )
+          ) {
             modelOptions.push({
               label: 'Elephant Detection Nadir',
               value: 'elephant-detection-nadir',
@@ -288,6 +292,11 @@ export default function LaunchAnnotationSetModal({
           }
         }
       }
+
+      if (modelOptions.length === 1) {
+        setModel(modelOptions[0]);
+      }
+
       setModelOptions(modelOptions);
       setLoadingLocationSets(false);
     }
@@ -299,7 +308,7 @@ export default function LaunchAnnotationSetModal({
       show={show}
       onHide={() => {
         onClose();
-        setTaskType('model');
+        setTaskType('species-labelling');
       }}
       size="lg"
     >
@@ -312,14 +321,10 @@ export default function LaunchAnnotationSetModal({
             onTabChange={(tab) => {
               switch (tab) {
                 case 0:
-                  setTaskType('model');
+                  setTaskType('species-labelling');
                   setHasAdvancedOptions(true);
                   break;
                 case 1:
-                  setTaskType('tiled');
-                  setHasAdvancedOptions(true);
-                  break;
-                case 2:
                   setTaskType('registration');
                   setHasAdvancedOptions(false);
                   break;
@@ -499,39 +504,57 @@ export default function LaunchAnnotationSetModal({
               </div>
             }
           >
-            <Tab label="Model Guided">
-              {loadingLocationSets ? (
-                <p className="mb-0 mt-2">Loading models...</p>
-              ) : modelOptions.length > 0 ? (
-                <Form.Group>
-                  <Form.Label className="mb-0">Model</Form.Label>
-                  <Select
-                    value={model}
-                    onChange={(m) => setModel(m)}
-                    options={modelOptions}
-                    placeholder="Select a model"
-                    className="text-black"
-                  />
-                </Form.Group>
-              ) : (
-                <p
-                  className="text-muted mb-0 mt-2"
-                  style={{ fontSize: '12px' }}
-                >
-                  You must first process your images before launching a model
-                  guided task.
-                </p>
-              )}
-            </Tab>
-            <Tab label="Tiled Annotation">
-              <CreateTask
-                name={annotationSet.name}
-                taskType={'tiled'}
-                imageSets={selectedImageSets}
-                labels={annotationSet.categories}
-                setHandleCreateTask={setHandleCreateTask}
-                projectId={project.id}
+            <Tab label="Species Labelling">
+              <LabeledToggleSwitch
+                className="m-0 border-top pt-2 mt-2 border-dark"
+                leftLabel="Model Guided"
+                rightLabel="Tiled Annotation"
+                checked={!modelGuided}
+                onChange={(checked) => {
+                  setModelGuided(!checked);
+                }}
               />
+
+              {modelGuided ? (
+                loadingLocationSets ? (
+                  <p
+                    className="text-muted mb-0 mt-2 text-center"
+                    style={{ fontSize: '12px' }}
+                  >
+                    Loading models...
+                  </p>
+                ) : modelOptions.length > 1 ? (
+                  <Form.Group>
+                    <Form.Label className="mb-0">Model</Form.Label>
+                    <Select
+                      value={model}
+                      onChange={(m) => setModel(m)}
+                      options={modelOptions}
+                      placeholder="Select a model"
+                      className="text-black"
+                    />
+                  </Form.Group>
+                ) : (
+                  modelOptions.length === 0 && (
+                    <p
+                      className="text-muted mb-0 mt-2 text-center"
+                      style={{ fontSize: '12px' }}
+                    >
+                      You must first process your images before launching a
+                      model guided task.
+                    </p>
+                  )
+                )
+              ) : (
+                <CreateTask
+                  name={annotationSet.name}
+                  taskType={'tiled'}
+                  imageSets={selectedImageSets}
+                  labels={annotationSet.categories}
+                  setHandleCreateTask={setHandleCreateTask}
+                  projectId={project.id}
+                />
+              )}
             </Tab>
             <Tab label="Registration" className="mt-1">
               <></>
