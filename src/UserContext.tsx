@@ -149,6 +149,7 @@ export function User({
   const [currentAnnoCount, setCurrentAnnoCount] = useState<{
     [key: string]: number;
   }>({});
+  const [isAnnotatePath, setIsAnnotatePath] = useState<boolean>(false);
   const { client, region } = useContext(GlobalContext)!;
   //const { items: myMemberships } = useObserveQuery('UserProjectMembership', { filter: { userId: { eq: user!.username } } });
   // const { data: myMemberships } = useOptimisticUpdates(
@@ -258,6 +259,8 @@ export function User({
         myOrganizationHook,
         isOrganizationAdmin,
         getDynamoClient,
+        isAnnotatePath,
+        setIsAnnotatePath,
       }}
     >
       {children}
