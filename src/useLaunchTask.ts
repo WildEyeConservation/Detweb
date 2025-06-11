@@ -1,11 +1,11 @@
-import { useContext, useCallback } from "react";
+import { useContext, useCallback } from 'react';
 import {
   GetQueueAttributesCommand,
   SendMessageBatchCommand,
-} from "@aws-sdk/client-sqs";
-import { QueryCommand } from "@aws-sdk/client-dynamodb";
-import pLimit from "p-limit";
-import { GlobalContext, UserContext } from "./Context";
+} from '@aws-sdk/client-sqs';
+import { QueryCommand } from '@aws-sdk/client-dynamodb';
+import pLimit from 'p-limit';
+import { GlobalContext, UserContext } from './Context';
 
 // Types for options and function arguments
 export type LaunchTaskOptions = {
@@ -20,8 +20,8 @@ export type LaunchTaskOptions = {
 
 export type LaunchTaskArgs = {
   selectedTasks: string[];
-  queueUrl: string;
-  secondaryQueueUrl: string | null;
+  queue: { id: string; url: string; batchSize: number };
+  secondaryQueue: { id: string; url: string; batchSize: number } | null;
   setStepsCompleted: (steps: number) => void;
   setTotalSteps: (steps: number) => void;
 };
@@ -43,15 +43,15 @@ export function useLaunchTask(
     do {
       const command = new QueryCommand({
         TableName: backend.custom.locationTable,
-        IndexName: "locationsBySetIdAndConfidence",
+        IndexName: 'locationsBySetIdAndConfidence',
         KeyConditionExpression:
-          "setId = :locationSetId and confidence BETWEEN :lowerLimit and :upperLimit",
+          'setId = :locationSetId and confidence BETWEEN :lowerLimit and :upperLimit',
         ExpressionAttributeValues: {
-          ":locationSetId": { S: locationSetId },
-          ":lowerLimit": { N: options.lowerLimit.toString() },
-          ":upperLimit": { N: options.upperLimit.toString() },
+          ':locationSetId': { S: locationSetId },
+          ':lowerLimit': { N: options.lowerLimit.toString() },
+          ':upperLimit': { N: options.upperLimit.toString() },
         },
-        ProjectionExpression: "id, x, y, width, height, confidence",
+        ProjectionExpression: 'id, x, y, width, height, confidence',
         ExclusiveStartKey: lastEvaluatedKey,
         Limit: 1000,
       });
@@ -62,12 +62,18 @@ export function useLaunchTask(
         // Filter out locations with zero values
         const pageLocationIds = items
           .filter((item: any) => {
-            const x = parseFloat(item.x?.N || "0");
-            const y = parseFloat(item.y?.N || "0");
-            const width = parseFloat(item.width?.N || "0");
-            const height = parseFloat(item.height?.N || "0");
-            const confidence = parseFloat(item.confidence?.N || "0");
-            return x !== 0 && y !== 0 && width !== 0 && height !== 0 && confidence !== 0;
+            const x = parseFloat(item.x?.N || '0');
+            const y = parseFloat(item.y?.N || '0');
+            const width = parseFloat(item.width?.N || '0');
+            const height = parseFloat(item.height?.N || '0');
+            const confidence = parseFloat(item.confidence?.N || '0');
+            return (
+              x !== 0 &&
+              y !== 0 &&
+              width !== 0 &&
+              height !== 0 &&
+              confidence !== 0
+            );
           })
           .map((item: any) => item.id.S);
         locationIds.push(...pageLocationIds);
@@ -75,7 +81,7 @@ export function useLaunchTask(
           | Record<string, any>
           | undefined;
       } catch (error) {
-        console.error("Error querying DynamoDB:", error);
+        console.error('Error querying DynamoDB:', error);
         throw error;
       }
     } while (lastEvaluatedKey);
@@ -92,12 +98,12 @@ export function useLaunchTask(
     do {
       const command = new QueryCommand({
         TableName: backend.custom.observationTable,
-        IndexName: "observationsByAnnotationSetIdAndCreatedAt",
-        KeyConditionExpression: "annotationSetId = :annotationSetId",
+        IndexName: 'observationsByAnnotationSetIdAndCreatedAt',
+        KeyConditionExpression: 'annotationSetId = :annotationSetId',
         ExpressionAttributeValues: {
-          ":annotationSetId": { S: annotationSetId },
+          ':annotationSetId': { S: annotationSetId },
         },
-        ProjectionExpression: "locationId",
+        ProjectionExpression: 'locationId',
         ExclusiveStartKey: lastEvaluatedKey,
         Limit: 1000,
       });
@@ -111,7 +117,7 @@ export function useLaunchTask(
           | Record<string, any>
           | undefined;
       } catch (error) {
-        console.error("Error querying DynamoDB:", error);
+        console.error('Error querying DynamoDB:', error);
         throw error;
       }
     } while (lastEvaluatedKey);
@@ -122,28 +128,28 @@ export function useLaunchTask(
     const sqsClient = await getSqsClient();
     const command = new GetQueueAttributesCommand({
       QueueUrl: queueUrl,
-      AttributeNames: ["All"],
+      AttributeNames: ['All'],
     });
     try {
       const response = await sqsClient.send(command);
       if (response.Attributes && response.Attributes.FifoQueue) {
-        return "FIFO";
+        return 'FIFO';
       }
-      return "Standard";
+      return 'Standard';
     } catch (error) {
       console.warn(
-        "Error fetching queue attributes, assuming Standard queue:",
+        'Error fetching queue attributes, assuming Standard queue:',
         error
       );
-      return "Standard";
+      return 'Standard';
     }
   }
 
   const launchTask = useCallback(
     async ({
       selectedTasks,
-      queueUrl,
-      secondaryQueueUrl,
+      queue,
+      secondaryQueue,
       setStepsCompleted,
       setTotalSteps,
     }: LaunchTaskArgs) => {
@@ -160,11 +166,11 @@ export function useLaunchTask(
 
       setStepsCompleted(0);
       setTotalSteps(allLocations.length);
-      if (!queueUrl) {
-        throw new Error("Queue URL not found");
+      if (!queue.url) {
+        throw new Error('Queue URL not found');
       }
 
-      const queueType = await getQueueType(queueUrl);
+      const queueType = await getQueueType(queue.url);
       const groupId = crypto.randomUUID();
       const batchSize = 10;
       const batchPromises: Promise<any>[] = [];
@@ -181,16 +187,16 @@ export function useLaunchTask(
             location,
             allowOutside: options.allowOutside,
             taskTag: options.taskTag,
-            secondaryQueueUrl: secondaryQueueUrl,
+            secondaryQueueUrl: secondaryQueue?.url,
             skipLocationWithAnnotations: options.skipLocationWithAnnotations,
           });
-          if (queueType === "FIFO") {
+          if (queueType === 'FIFO') {
             batchEntries.push({
               Id: `msg-${locationId}`,
               MessageBody: body,
               MessageGroupId: groupId,
               MessageDeduplicationId: body
-                .replace(/[^a-zA-Z0-9\-_\.]/g, "")
+                .replace(/[^a-zA-Z0-9\-_\.]/g, '')
                 .substring(0, 128),
             });
           } else {
@@ -207,7 +213,7 @@ export function useLaunchTask(
               .then((sqsClient) =>
                 sqsClient.send(
                   new SendMessageBatchCommand({
-                    QueueUrl: queueUrl,
+                    QueueUrl: queue.url,
                     Entries: batchEntries,
                   })
                 )
@@ -221,6 +227,11 @@ export function useLaunchTask(
       }
 
       await Promise.all(batchPromises);
+
+      await client.models.Queue.update({
+        id: queue.id,
+        totalBatches: Math.ceil(allLocations.length / queue.batchSize),
+      });
 
       for (const taskId of selectedTasks) {
         await client.models.TasksOnAnnotationSet.create({
