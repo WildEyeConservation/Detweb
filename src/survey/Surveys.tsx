@@ -1,43 +1,43 @@
-import { useContext, useEffect, useState } from "react";
-import { UserContext, GlobalContext } from "../Context.tsx";
-import { Schema } from "../../amplify/data/resource.ts";
-import { Card, Button, Form } from "react-bootstrap";
-import MyTable from "../Table.tsx";
-import NewSurveyModal from "./NewSurveyModal.tsx";
-import { useNavigate } from "react-router-dom";
-import FilesUploadComponent, {
-  formatFileSize,
-} from "../FilesUploadComponent.tsx";
-import ConfirmationModal from "../ConfirmationModal.tsx";
-import AnnotationSetResults from "../AnnotationSetResults.tsx";
-import AnnotationCountModal from "../AnnotationCountModal.tsx";
-import EditAnnotationSetModal from "../EditAnnotationSet.tsx";
-import AddAnnotationSetModal from "./AddAnnotationSetModal.tsx";
-import LaunchAnnotationSetModal from "./LaunchAnnotationSetModal.tsx";
-import EditSurveyModal from "./editSurveyModal.tsx";
-import SpatioTemporalSubset from "../SpatioTemporalSubset.tsx";
-import SubsampleModal from "../Subsample.tsx";
-import FileStructureSubset from "../filestructuresubset.tsx";
-import { SquareArrowOutUpRight } from "lucide-react";
-import { fetchAllPaginatedResults } from "../utils.tsx";
-import { Badge } from "react-bootstrap";
-import ComingSoonOverlay from "../ComingSoonOverlay.tsx";
-import { useUpdateProgress } from "../useUpdateProgress.tsx";
+import { useContext, useEffect, useState } from 'react';
+import { UserContext, GlobalContext } from '../Context.tsx';
+import { Schema } from '../../amplify/data/resource.ts';
+import { Card, Button, Form } from 'react-bootstrap';
+import MyTable from '../Table.tsx';
+import NewSurveyModal from './NewSurveyModal.tsx';
+import { useNavigate } from 'react-router-dom';
+import FilesUploadComponent from '../FilesUploadComponent.tsx';
+import ConfirmationModal from '../ConfirmationModal.tsx';
+import AnnotationSetResults from '../AnnotationSetResults.tsx';
+import AnnotationCountModal from '../AnnotationCountModal.tsx';
+import EditAnnotationSetModal from '../EditAnnotationSet.tsx';
+import AddAnnotationSetModal from './AddAnnotationSetModal.tsx';
+import LaunchAnnotationSetModal from './LaunchAnnotationSetModal.tsx';
+import EditSurveyModal from './editSurveyModal.tsx';
+import SpatioTemporalSubset from '../SpatioTemporalSubset.tsx';
+import SubsampleModal from '../Subsample.tsx';
+import FileStructureSubset from '../filestructuresubset.tsx';
+import { SquareArrowOutUpRight, X } from 'lucide-react';
+import { fetchAllPaginatedResults } from '../utils.tsx';
+import { Badge } from 'react-bootstrap';
+import { DeleteQueueCommand } from '@aws-sdk/client-sqs';
 
 export default function Surveys() {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
-  const { myMembershipHook: myProjectsHook, isOrganizationAdmin } =
-    useContext(UserContext)!;
+  const {
+    myMembershipHook: myProjectsHook,
+    isOrganizationAdmin,
+    getSqsClient,
+  } = useContext(UserContext)!;
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
-  const [projects, setProjects] = useState<Schema["Project"]["type"][]>([]);
+  const [projects, setProjects] = useState<Schema['Project']['type'][]>([]);
   const [selectedProject, setSelectedProject] = useState<
-    Schema["Project"]["type"] | null
+    Schema['Project']['type'] | null
   >(null);
   const [selectedAnnotationSet, setSelectedAnnotationSet] = useState<
-    Schema["AnnotationSet"]["type"] | null
+    Schema['AnnotationSet']['type'] | null
   >(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
   const [selectedSets, setSelectedSets] = useState<string[]>([]);
 
   useEffect(() => {
@@ -54,23 +54,24 @@ export default function Surveys() {
                 { id: project.projectId },
                 {
                   selectionSet: [
-                    "name",
-                    "id",
-                    "organizationId",
-                    "organization.name",
-                    "annotationSets.id",
-                    "annotationSets.name",
-                    "annotationSets.register",
-                    "locationSets.id",
-                    "locationSets.name",
-                    "annotationSets.categories.id",
-                    "annotationSets.categories.name",
-                    "annotationSets.categories.shortcutKey",
-                    "annotationSets.categories.color",
-                    "imageSets.id",
-                    "imageSets.name",
-                    "queues.id",
-                    "status",
+                    'name',
+                    'id',
+                    'organizationId',
+                    'organization.name',
+                    'annotationSets.id',
+                    'annotationSets.name',
+                    'annotationSets.register',
+                    'locationSets.id',
+                    'locationSets.name',
+                    'annotationSets.categories.id',
+                    'annotationSets.categories.name',
+                    'annotationSets.categories.shortcutKey',
+                    'annotationSets.categories.color',
+                    'imageSets.id',
+                    'imageSets.name',
+                    'queues.id',
+                    'queues.url',
+                    'status',
                   ],
                 }
               )
@@ -86,7 +87,7 @@ export default function Surveys() {
   }, [myProjectsHook.data]);
 
   async function deleteProject(projectId: string) {
-    await client.models.Project.update({ id: projectId, status: "deleted" });
+    await client.models.Project.update({ id: projectId, status: 'deleted' });
 
     const projectMemberships = await fetchAllPaginatedResults(
       client.models.UserProjectMembership.userProjectMembershipsByProjectId,
@@ -124,10 +125,54 @@ export default function Surveys() {
     );
   }
 
+  async function handleCancelJob() {
+    setProjects(
+      projects.map((project) => {
+        if (project.id === selectedProject!.id) {
+          return { ...project, status: 'updating' };
+        }
+        return project;
+      })
+    );
+
+    try {
+      // cancel registration job if it exists
+      const annotationSet = selectedProject?.annotationSets.find(
+        (set) => set.register
+      );
+
+      if (annotationSet) {
+        await client.models.AnnotationSet.update({
+          id: annotationSet.id,
+          register: false,
+        });
+        return;
+      }
+
+      const job = selectedProject?.queues[0];
+
+      if (!job?.url) {
+        alert('An unknown error occurred. Please try again later.');
+        return;
+      }
+
+      const sqsClient = await getSqsClient();
+      await sqsClient.send(new DeleteQueueCommand({ QueueUrl: job.url }));
+      await client.models.Queue.delete({ id: job.id });
+    } catch (error) {
+      alert('An unknown error occurred. Please try again later.');
+      console.error(error);
+    } finally {
+      await client.mutations.updateProjectMemberships({
+        projectId: selectedProject!.id,
+      });
+    }
+  }
+
   const tableData = projects
     .filter(
       (project) =>
-        project.status !== "deleted" &&
+        project.status !== 'deleted' &&
         (project.name.toLowerCase().includes(search.toLowerCase()) ||
           project.organization.name
             .toLowerCase()
@@ -135,12 +180,10 @@ export default function Surveys() {
     )
     .map((project) => {
       const disabled =
-        project.status === "uploading" ||
-        project.status === "processing" ||
-        project.status === "launching" ||
-        project.status === "updating" ||
-        project.queues.length > 0 ||
-        project.annotationSets.some((set) => set.register);
+        project.status === 'uploading' ||
+        project.status === 'processing' ||
+        project.status === 'launching' ||
+        project.status === 'updating';
       const hasJobs =
         project.queues.length > 0 ||
         project.annotationSets.some((set) => set.register);
@@ -150,11 +193,11 @@ export default function Surveys() {
           <div className="d-flex justify-content-between align-items-center gap-2">
             <div className="d-flex flex-column gap-1">
               <h5 className="mb-0">{project.name}</h5>
-              <i style={{ fontSize: "14px" }}>{project.organization.name}</i>
-              {project.status !== "active" && (
+              <i style={{ fontSize: '14px' }}>{project.organization.name}</i>
+              {project.status !== 'active' && (
                 <Badge
-                  style={{ fontSize: "14px", width: "fit-content" }}
-                  bg={"info"}
+                  style={{ fontSize: '14px', width: 'fit-content' }}
+                  bg={'info'}
                 >
                   {project.status.replace(/\b\w/g, (char) =>
                     char.toUpperCase()
@@ -170,10 +213,10 @@ export default function Surveys() {
                     navigate(`/surveys/${project.id}/manage`);
                   } else {
                     setSelectedProject(project);
-                    showModal("editSurvey");
+                    showModal('editSurvey');
                   }
                 }}
-                disabled={disabled}
+                disabled={disabled || hasJobs}
               >
                 Edit
               </Button>
@@ -181,9 +224,9 @@ export default function Surveys() {
                 variant="primary"
                 onClick={() => {
                   setSelectedProject(project);
-                  showModal("addFiles");
+                  showModal('addFiles');
                 }}
-                disabled={disabled}
+                disabled={disabled || hasJobs}
               >
                 Add files
               </Button>
@@ -191,9 +234,9 @@ export default function Surveys() {
                 variant="primary"
                 onClick={() => {
                   setSelectedProject(project);
-                  showModal("addAnnotationSet");
+                  showModal('addAnnotationSet');
                 }}
-                disabled={disabled}
+                disabled={disabled || hasJobs}
               >
                 Add Annotation Set
               </Button>
@@ -201,9 +244,9 @@ export default function Surveys() {
                 variant="danger"
                 onClick={() => {
                   setSelectedProject(project);
-                  showModal("deleteSurvey");
+                  showModal('deleteSurvey');
                 }}
-                disabled={disabled}
+                disabled={disabled || hasJobs}
               >
                 Delete
               </Button>
@@ -216,19 +259,19 @@ export default function Surveys() {
                 .map((annotationSet, i) => (
                   <div
                     className={`d-flex justify-content-between align-items-center gap-2 ${
-                      i === 0 ? "" : "border-top border-light pt-2"
+                      i === 0 ? '' : 'border-top border-light pt-2'
                     }`}
                     key={annotationSet.id}
                   >
-                    <div style={{ fontSize: "16px" }}>{annotationSet.name}</div>
+                    <div style={{ fontSize: '16px' }}>{annotationSet.name}</div>
                     <div className="d-flex gap-2">
                       <Button
                         variant="primary"
                         onClick={() => {
                           setSelectedAnnotationSet(annotationSet);
-                          showModal("annotationCount");
+                          showModal('annotationCount');
                         }}
-                        disabled={disabled}
+                        disabled={disabled || hasJobs}
                       >
                         Details
                       </Button>
@@ -237,9 +280,9 @@ export default function Surveys() {
                         onClick={() => {
                           setSelectedProject(project);
                           setSelectedAnnotationSet(annotationSet);
-                          showModal("launchAnnotationSet");
+                          showModal('launchAnnotationSet');
                         }}
-                        disabled={disabled}
+                        disabled={disabled || hasJobs}
                       >
                         Launch
                       </Button>
@@ -248,9 +291,9 @@ export default function Surveys() {
                         onClick={() => {
                           setSelectedProject(project);
                           setSelectedAnnotationSet(annotationSet);
-                          showModal("editAnnotationSet");
+                          showModal('editAnnotationSet');
                         }}
-                        disabled={disabled}
+                        disabled={disabled || hasJobs}
                       >
                         Edit
                       </Button>
@@ -262,9 +305,9 @@ export default function Surveys() {
                             id: annotationSet.id,
                             name: annotationSet.name,
                           });
-                          showModal("annotationSetResults");
+                          showModal('annotationSetResults');
                         }}
-                        disabled={disabled}
+                        disabled={disabled || hasJobs}
                       >
                         Results
                       </Button>
@@ -273,9 +316,9 @@ export default function Surveys() {
                         onClick={() => {
                           setSelectedProject(project);
                           setSelectedAnnotationSet(annotationSet);
-                          showModal("deleteAnnotationSet");
+                          showModal('deleteAnnotationSet');
                         }}
-                        disabled={disabled}
+                        disabled={disabled || hasJobs}
                       >
                         Delete
                       </Button>
@@ -283,14 +326,28 @@ export default function Surveys() {
                   </div>
                 ))}
             </div>
-            {disabled && hasJobs && (
-              <Button
-                className="flex align-items-center justify-content-center"
-                variant="primary"
-                onClick={() => navigate(`/jobs`)}
-              >
-                <SquareArrowOutUpRight />
-              </Button>
+            {hasJobs && (
+              <div className="d-flex flex-row gap-2">
+                <Button
+                  className="flex align-items-center justify-content-center"
+                  disabled={disabled}
+                  variant="primary"
+                  onClick={() => navigate(`/jobs`)}
+                >
+                  <SquareArrowOutUpRight />
+                </Button>
+                <Button
+                  className="flex align-items-center justify-content-center"
+                  disabled={disabled}
+                  variant="danger"
+                  onClick={() => {
+                    setSelectedProject(project);
+                    showModal('deleteJob');
+                  }}
+                >
+                  <X />
+                </Button>
+              </div>
             )}
           </div>,
         ],
@@ -305,10 +362,10 @@ export default function Surveys() {
     <>
       <div
         style={{
-          width: "100%",
-          maxWidth: "1555px",
-          marginTop: "16px",
-          marginBottom: "16px",
+          width: '100%',
+          maxWidth: '1555px',
+          marginTop: '16px',
+          marginBottom: '16px',
         }}
       >
         <Card>
@@ -319,7 +376,7 @@ export default function Surveys() {
             <Form.Control
               type="text"
               className="w-100"
-              style={{ maxWidth: "300px" }}
+              style={{ maxWidth: '300px' }}
               placeholder="Search by survey or organisation"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -328,8 +385,8 @@ export default function Surveys() {
           <Card.Body className="overflow-x-auto overflow-y-visible">
             <MyTable
               tableHeadings={[
-                { content: "Survey", style: { width: "50%" } },
-                { content: "Annotation Sets", style: { width: "50%" } },
+                { content: 'Survey', style: { width: '50%' } },
+                { content: 'Annotation Sets', style: { width: '50%' } },
               ]}
               tableData={tableData}
               pagination={true}
@@ -339,7 +396,7 @@ export default function Surveys() {
           </Card.Body>
           {isOrganizationAdmin && (
             <Card.Footer className="d-flex justify-content-center">
-              <Button variant="primary" onClick={() => showModal("newSurvey")}>
+              <Button variant="primary" onClick={() => showModal('newSurvey')}>
                 New Survey
               </Button>
             </Card.Footer>
@@ -347,12 +404,12 @@ export default function Surveys() {
         </Card>
       </div>
       <NewSurveyModal
-        show={modalToShow === "newSurvey"}
+        show={modalToShow === 'newSurvey'}
         projects={projects.map((project) => project.name.toLowerCase())}
         onClose={() => showModal(null)}
       />
       <ConfirmationModal
-        show={modalToShow === "deleteSurvey"}
+        show={modalToShow === 'deleteSurvey'}
         onClose={() => {
           showModal(null);
           setSelectedProject(null);
@@ -368,7 +425,7 @@ export default function Surveys() {
         }
       />
       <ConfirmationModal
-        show={modalToShow === "deleteAnnotationSet"}
+        show={modalToShow === 'deleteAnnotationSet'}
         onClose={() => {
           showModal(null);
           setSelectedProject(null);
@@ -386,9 +443,26 @@ export default function Surveys() {
           </p>
         }
       />
+      <ConfirmationModal
+        show={modalToShow === 'deleteJob'}
+        title="Cancel Associated Job"
+        body={
+          <p className="mb-0">
+            Are you sure you want to cancel the job associated with{' '}
+            {selectedProject?.name}?
+            <br />
+            You can re-launch the job later.
+          </p>
+        }
+        onConfirm={() => handleCancelJob()}
+        onClose={() => {
+          showModal(null);
+          setSelectedProject(null);
+        }}
+      />
       {selectedProject && (
         <FilesUploadComponent
-          show={modalToShow === "addFiles"}
+          show={modalToShow === 'addFiles'}
           handleClose={() => {
             showModal(null);
             setSelectedProject(null);
@@ -398,7 +472,7 @@ export default function Surveys() {
       )}
       {selectedProject && selectedAnnotationSet && (
         <AnnotationSetResults
-          show={modalToShow === "annotationSetResults"}
+          show={modalToShow === 'annotationSetResults'}
           onClose={() => {
             showModal(null);
             setSelectedProject(null);
@@ -411,7 +485,7 @@ export default function Surveys() {
       {selectedAnnotationSet && (
         <AnnotationCountModal
           setId={selectedAnnotationSet.id}
-          show={modalToShow === "annotationCount"}
+          show={modalToShow === 'annotationCount'}
           handleClose={() => {
             showModal(null);
             setSelectedAnnotationSet(null);
@@ -420,7 +494,7 @@ export default function Surveys() {
       )}
       {selectedAnnotationSet && selectedProject && (
         <EditAnnotationSetModal
-          show={modalToShow === "editAnnotationSet"}
+          show={modalToShow === 'editAnnotationSet'}
           handleClose={() => {
             showModal(null);
             setSelectedProject(null);
@@ -449,7 +523,7 @@ export default function Surveys() {
       )}
       {selectedProject && (
         <AddAnnotationSetModal
-          show={modalToShow === "addAnnotationSet"}
+          show={modalToShow === 'addAnnotationSet'}
           onClose={() => {
             showModal(null);
             setSelectedProject(null);
@@ -480,7 +554,7 @@ export default function Surveys() {
       )}
       {selectedProject && selectedAnnotationSet && (
         <LaunchAnnotationSetModal
-          show={modalToShow === "launchAnnotationSet"}
+          show={modalToShow === 'launchAnnotationSet'}
           onClose={() => showModal(null)}
           imageSets={selectedProject.imageSets}
           annotationSet={selectedAnnotationSet}
@@ -489,7 +563,7 @@ export default function Surveys() {
       )}
       {selectedProject && (
         <EditSurveyModal
-          show={modalToShow === "editSurvey"}
+          show={modalToShow === 'editSurvey'}
           onClose={() => {
             showModal(null);
             // setSelectedProject(null);
@@ -503,20 +577,20 @@ export default function Surveys() {
       {selectedProject && (
         <>
           <SpatioTemporalSubset
-            show={modalToShow == "SpatiotemporalSubset"}
+            show={modalToShow == 'SpatiotemporalSubset'}
             handleClose={() => showModal(null)}
             selectedImageSets={selectedSets}
             project={selectedProject}
           />
           <SubsampleModal
-            show={modalToShow == "Subsample"}
+            show={modalToShow == 'Subsample'}
             handleClose={() => showModal(null)}
             selectedImageSets={selectedSets}
             setSelectedImageSets={setSelectedSets}
             project={selectedProject}
           />
           <FileStructureSubset
-            show={modalToShow == "FileStructureSubset"}
+            show={modalToShow == 'FileStructureSubset'}
             handleClose={() => showModal(null)}
             selectedImageSets={selectedSets}
             imageSets={selectedProject.imageSets}

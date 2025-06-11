@@ -220,33 +220,6 @@ export default function Jobs() {
     setTakingJob(false);
   }
 
-  async function handleDeleteJob(job: Schema["Queue"]["type"]) {
-    setDeletingJob(true);
-
-    if (!job.url) {
-      alert("An unknown error occurred. Please try again later.");
-      console.error("Job has no URL");
-      setDeletingJob(false);
-      return;
-    }
-
-    try {
-      const sqsClient = await getSqsClient();
-      await sqsClient.send(new DeleteQueueCommand({ QueueUrl: job.url }));
-      await client.models.Queue.delete({ id: job.id });
-      await client.mutations.updateProjectMemberships({
-        projectId: job.projectId,
-      });
-    } catch (error) {
-      alert("An unknown error occurred. Please try again later.");
-      console.error(error);
-    } finally {
-      //remove queue from displayProjects
-      setDisplayProjects(displayProjects.filter((project) => project.id !== job.projectId));
-      setDeletingJob(false);
-    }
-  }
-
   const tableData = [
     ...displayProjects.flatMap((project) =>
       project.queues
@@ -324,20 +297,6 @@ export default function Jobs() {
                   >
                     Take Job
                   </Button>
-                  {userProjectMembershipHook.data?.find(
-                    (membership) => membership.projectId === project.id
-                  )?.isAdmin && (
-                    <Button
-                      variant="danger"
-                      disabled={deletingJob}
-                      onClick={() => {
-                        setJobToDelete(queue);
-                        showModal("deleteJob");
-                      }}
-                    >
-                      Delete
-                    </Button>
-                  )}
                 </div>
               </div>,
             ],
@@ -378,7 +337,6 @@ export default function Jobs() {
                 </p>
               </div>
             </div>
-            <div className="d-flex flex-row gap-2 align-items-center">
               <Button
                 className="ms-1"
                 variant="primary"
@@ -388,26 +346,6 @@ export default function Jobs() {
               >
                 Take Job
               </Button>
-              {userProjectMembershipHook.data?.find(
-                (membership) => membership.projectId === project.id
-              )?.isAdmin && (
-                <Button
-                  variant="danger"
-                  onClick={async () => {
-                    await client.models.AnnotationSet.update({
-                      id: job.id,
-                      register: false,
-                    });
-
-                    setRegistrationJobs((rjs) =>
-                      rjs.filter((j) => j.id !== job.id)
-                    );
-                  }}
-                >
-                  Delete
-                </Button>
-              )}
-            </div>
           </div>,
         ],
       };
