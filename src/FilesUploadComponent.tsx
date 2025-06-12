@@ -288,7 +288,7 @@ export function FileUploadCore({
       timestamp: DateTime.fromFormat(
         tags.DateTimeOriginal?.description as string,
         "yyyy:MM:dd HH:mm:ss"
-      ).toSeconds(),
+      ).toMillis(),
       cameraSerial: tags["Internal Serial Number"]?.value,
       gpsData: {
         lat: lat?.toString(),
@@ -655,11 +655,36 @@ export function FileUploadCore({
             lng: point.longitude,
             alt: point.elevation || 0,
           }))
-        );
+        ).sort((a, b) => a.timestamp - b.timestamp);
 
         setCsvData({
-          data: csvFormat.sort((a, b) => a.timestamp - b.timestamp),
+          data: csvFormat,
         });
+
+        // Set global timestamp bounds for GPX data
+        const gpxTimestamps = csvFormat.map((row) => row.timestamp);
+        setMinTimestamp(Math.min(...gpxTimestamps));
+        setMaxTimestamp(Math.max(...gpxTimestamps));
+        // Initialize time ranges for each day based on GPX data
+        const initialRanges: { [day: number]: { start: string; end: string } } = {};
+        csvFormat.forEach(({ timestamp }) => {
+          const date = new Date(timestamp);
+          const day = date.getUTCDate();
+          const hours = date.getUTCHours().toString().padStart(2, "0");
+          const minutes = date.getUTCMinutes().toString().padStart(2, "0");
+          const timeStr = `${hours}:${minutes}`;
+          if (!initialRanges[day]) {
+            initialRanges[day] = { start: timeStr, end: timeStr };
+          } else {
+            if (timeStr < initialRanges[day].start) {
+              initialRanges[day].start = timeStr;
+            }
+            if (timeStr > initialRanges[day].end) {
+              initialRanges[day].end = timeStr;
+            }
+          }
+        });
+        setTimeRanges(initialRanges);
 
         return;
       }
@@ -732,9 +757,9 @@ export function FileUploadCore({
       if (!prev) return prev;
       const filtered = prev.data.filter((row) => {
         const date = new Date(row.timestamp!);
-        const day = date.getDate();
+        const day = date.getUTCDate();
         if (timeRanges[day]) {
-          const rowMinutes = date.getHours() * 60 + date.getMinutes();
+          const rowMinutes = date.getUTCHours() * 60 + date.getUTCMinutes();
           const startMinutes = timeToMinutes(timeRanges[day].start);
           const endMinutes = timeToMinutes(timeRanges[day].end);
           return rowMinutes >= startMinutes && rowMinutes <= endMinutes;
@@ -917,11 +942,17 @@ export function FileUploadCore({
                 Select the effective time range for each day. The default range
                 is the earliest and latest timestamp recorded for that day.
               </Form.Text>
+              <Form.Text
+                className="d-block mb-1"
+                style={{ fontSize: "12px", fontStyle: 'italic' }}
+              >
+                All times shown in UTC.
+              </Form.Text>
               <div className="d-flex flex-column gap-2">
                 {Array.from(
                   new Set(
                     csvData.data.map((row) =>
-                      new Date(row.timestamp!).getDate()
+                      new Date(row.timestamp!).getUTCDate()
                     )
                   )
                 )
@@ -931,7 +962,7 @@ export function FileUploadCore({
                       key={`day-${day}`}
                       className="d-flex flex-row align-items-center gap-2"
                     >
-                      <span className="me-2">Day {day}</span>
+                      <span className="me-2">{new Date(csvData.data[0].timestamp!).toLocaleDateString()}</span>
                       <input
                         type="time"
                         value={timeRanges[day]?.start || "00:00"}
@@ -984,7 +1015,7 @@ export function FileUploadCore({
                 : 0;
               if (csvTimestamps.length) {
                 const formatTimestamp = (timestamp: number) =>
-                  new Date(timestamp).toLocaleString();
+                  new Date(timestamp).toLocaleString(undefined, { timeZone: 'UTC' }) + ' UTC';
                 if (csvMin < minTimestamp || csvMax > maxTimestamp) {
                   message = `Timestamp mismatch: CSV timestamps (${formatTimestamp(
                     csvMin
