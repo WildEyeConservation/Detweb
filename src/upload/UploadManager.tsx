@@ -27,7 +27,7 @@ const metadataStore = localforage.createInstance({
 
 export default function UploadManager() {
   const {
-    task: { projectId, files, retryDelay },
+    task: { projectId, files, retryDelay, resumeId },
     progress: { isComplete, error },
     setTask,
     setProgress,
@@ -341,7 +341,7 @@ export default function UploadManager() {
           const batchStrings = batch.map(
             (image) => `${image.id}---${image.originalPath}`
           );
-          
+
           client.mutations.runScoutbot({
             projectId: projectId,
             images: batchStrings,
@@ -382,6 +382,74 @@ export default function UploadManager() {
     }
   }
 
+  const fetchUploadingProjects = async () => {
+    const myAdminProjects = myProjectsHook.data?.filter(
+      (project) => project.isAdmin
+    );
+
+    const projects = await Promise.all(
+      myAdminProjects?.map(async (project) => {
+        return (
+          await client.models.Project.get(
+            { id: project.projectId },
+            {
+              selectionSet: ['id', 'name', 'status'],
+            }
+          )
+        ).data;
+      })
+    );
+
+    const uploadingProjects = projects
+      .filter((project) => project && project?.status === 'uploading')
+      .map((project) => ({ id: project?.id, name: project?.name }));
+
+    return uploadingProjects as { id: string; name: string }[];
+  };
+
+  const findUploadsToComplete = async () => {
+    const uploadingProjects = await fetchUploadingProjects();
+    const uploadsToComplete = [];
+
+    for (const project of uploadingProjects) {
+      const uploads = await fileStoreUploaded.getItem(project.id);
+      if (uploads) {
+        uploadsToComplete.push(project);
+      }
+    }
+
+    return uploadsToComplete;
+  };
+
+  const completeUploads = async () => {
+    if (resumeId) {
+      const { data: project } = await client.models.Project.get({
+        id: resumeId,
+      });
+      if (project) {
+        pendingResumeProjectIdRef.current = {
+          id: project.id,
+          name: project.name,
+        };
+      }
+      setTask((task) => ({
+        ...task,
+        resumeId: undefined,
+      }));
+    } else {
+      const uploadsToComplete = await findUploadsToComplete();
+
+      if (uploadsToComplete.length === 0) return;
+
+      // handles only one failed project for now
+      const project = uploadsToComplete[0];
+
+      pendingResumeProjectIdRef.current = project;
+    }
+
+    setShowConfirmationModal(true);
+  };
+
   // handles upload events
   useEffect(() => {
     if (error) {
@@ -389,67 +457,18 @@ export default function UploadManager() {
       setProgress((prev) => ({ ...prev, error: null }));
       // schedule retry on network failure
       retryWithBackoff();
+    } else if (resumeId) {
+      completeUploads();
     } else if (isComplete) {
       handleComplete();
     } else if (projectId) {
       uploadProject();
     }
-  }, [projectId, retryDelay, isComplete, error]);
+  }, [projectId, resumeId, retryDelay, isComplete, error]);
 
   // picks up unfinished uploads and queues them for completion
   useEffect(() => {
     if (!projectId) {
-      const fetchUploadingProjects = async () => {
-        const myAdminProjects = myProjectsHook.data?.filter(
-          (project) => project.isAdmin
-        );
-
-        const projects = await Promise.all(
-          myAdminProjects?.map(async (project) => {
-            return (
-              await client.models.Project.get(
-                { id: project.projectId },
-                {
-                  selectionSet: ['id', 'name', 'status'],
-                }
-              )
-            ).data;
-          })
-        );
-
-        const uploadingProjects = projects
-          .filter((project) => project && project?.status === 'uploading')
-          .map((project) => ({ id: project?.id, name: project?.name }));
-
-        return uploadingProjects as { id: string; name: string }[];
-      };
-
-      const findUploadsToComplete = async () => {
-        const uploadingProjects = await fetchUploadingProjects();
-        const uploadsToComplete = [];
-
-        for (const project of uploadingProjects) {
-          const uploads = await fileStoreUploaded.getItem(project.id);
-          if (uploads) {
-            uploadsToComplete.push(project);
-          }
-        }
-
-        return uploadsToComplete;
-      };
-
-      const completeUploads = async () => {
-        const uploadsToComplete = await findUploadsToComplete();
-
-        if (uploadsToComplete.length === 0) return;
-
-        // handles only one failed project for now
-        const project = uploadsToComplete[0];
-
-        pendingResumeProjectIdRef.current = project;
-        setShowConfirmationModal(true);
-      };
-
       completeUploads();
     }
   }, []);
