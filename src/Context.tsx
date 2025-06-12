@@ -34,12 +34,14 @@ export interface UploadContextType {
     projectId: string;
     files: File[];
     retryDelay: number;
+    resumeId?: string;
   };
   setTask: React.Dispatch<
     React.SetStateAction<{
       projectId: string;
       files: File[];
       retryDelay: number;
+      resumeId?: string;
     }>
   >;
   progress: {

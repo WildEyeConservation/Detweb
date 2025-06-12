@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react';
-import { UserContext, GlobalContext } from '../Context.tsx';
+import { UserContext, GlobalContext, UploadContext } from '../Context.tsx';
 import { Schema } from '../../amplify/data/resource.ts';
 import { Card, Button, Form } from 'react-bootstrap';
 import MyTable from '../Table.tsx';
@@ -20,6 +20,12 @@ import { SquareArrowOutUpRight, X } from 'lucide-react';
 import { fetchAllPaginatedResults } from '../utils.tsx';
 import { Badge } from 'react-bootstrap';
 import { DeleteQueueCommand } from '@aws-sdk/client-sqs';
+import localforage from 'localforage';
+
+const fileStoreUploaded = localforage.createInstance({
+  name: 'fileStoreUploaded',
+  storeName: 'filesUploaded',
+});
 
 export default function Surveys() {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
@@ -28,6 +34,7 @@ export default function Surveys() {
     isOrganizationAdmin,
     getSqsClient,
   } = useContext(UserContext)!;
+  const { task, setTask } = useContext(UploadContext)!;
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
   const [projects, setProjects] = useState<Schema['Project']['type'][]>([]);
@@ -184,9 +191,16 @@ export default function Surveys() {
         project.status === 'processing' ||
         project.status === 'launching' ||
         project.status === 'updating';
+
       const hasJobs =
         project.queues.length > 0 ||
         project.annotationSets.some((set) => set.register);
+
+      const showResumeButton =
+        !task.projectId &&
+        project.status === 'uploading' &&
+        fileStoreUploaded.getItem(project.id);
+
       return {
         id: project.id,
         rowData: [
@@ -250,6 +264,19 @@ export default function Surveys() {
               >
                 Delete
               </Button>
+              {showResumeButton && (
+                <Button
+                  variant="info"
+                  onClick={() => {
+                    setTask((task) => ({
+                      ...task,
+                      resumeId: project.id,
+                    }));
+                  }}
+                >
+                  Resume
+                </Button>
+              )}
             </div>
           </div>,
           <div className="d-flex flex-row gap-3">
