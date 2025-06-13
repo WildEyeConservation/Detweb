@@ -187,7 +187,7 @@ export default function AnnotationImage(props: any) {
               onClick={() => {
                 navigate('/jobs');
               }}
-              className="w-100"
+              className="w-100 bg-success border-success"
             >
               Save & Exit
             </Button>
