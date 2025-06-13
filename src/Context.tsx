@@ -35,6 +35,7 @@ export interface UploadContextType {
     files: File[];
     retryDelay: number;
     resumeId?: string;
+    deleteId?: string;
   };
   setTask: React.Dispatch<
     React.SetStateAction<{
@@ -42,6 +43,7 @@ export interface UploadContextType {
       files: File[];
       retryDelay: number;
       resumeId?: string;
+      deleteId?: string;
     }>
   >;
   progress: {

@@ -27,7 +27,7 @@ const metadataStore = localforage.createInstance({
 
 export default function UploadManager() {
   const {
-    task: { projectId, files, retryDelay, resumeId },
+    task: { projectId, files, retryDelay, resumeId, deleteId },
     progress: { isComplete, error },
     setTask,
     setProgress,
@@ -42,6 +42,10 @@ export default function UploadManager() {
     {}
   );
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [showDeleteConfirmationModal, setShowDeleteConfirmationModal] =
+    useState(false);
+  const deletingRef = useRef<boolean>(false);
+  const cancelledRef = useRef<boolean>(false);
 
   async function uploadProject() {
     console.log('uploading project', projectId);
@@ -85,6 +89,8 @@ export default function UploadManager() {
       const iterator = images[Symbol.iterator]();
       const runWorker = async () => {
         while (true) {
+          // Abort worker if deletion is in progress
+          if (cancelledRef.current) break;
           const { value: image, done } = iterator.next();
           if (done) break;
           try {
@@ -177,6 +183,8 @@ export default function UploadManager() {
         workers.push(runWorker());
       }
       await Promise.all(workers);
+      // if deletion was requested, abort completion marking
+      if (cancelledRef.current) return;
       // all workers finished successfully; mark upload complete
       setProgress((progress) => ({
         ...progress,
@@ -450,8 +458,74 @@ export default function UploadManager() {
     setShowConfirmationModal(true);
   };
 
-  // handles upload events
+  async function handleDelete() {
+    // Cancel any ongoing uploads
+    cancelledRef.current = true;
+    const id = deleteId!;
+    try {
+      console.log(`Deleting project ${id}`);
+      // Fetch the associated image set
+      const {
+        data: [imageSet],
+      } = await client.models.ImageSet.imageSetsByProjectId({ projectId: id });
+
+      // Delete the image set
+      await client.models.ImageSet.delete({ id: imageSet.id });
+      setProgress((prev) => ({ ...prev, processed: 1, total: 3 }));
+
+      // Delete the project memberships
+      const { data: memberships } =
+        await client.models.UserProjectMembership.userProjectMembershipsByProjectId(
+          { projectId: id }
+        );
+      await Promise.all(
+        memberships.map((membership) =>
+          client.models.UserProjectMembership.delete({ id: membership.id })
+        )
+      );
+      setProgress((prev) => ({ ...prev, processed: 2 }));
+
+      // Delete the project
+      await client.models.Project.delete({ id });
+      setProgress((prev) => ({
+        ...prev,
+        processed: 3,
+      }));
+
+      // Reset task context
+      setTask({
+        projectId: '',
+        files: [],
+        retryDelay: 0,
+        deleteId: undefined,
+      });
+
+      setProgress({
+        processed: 0,
+        total: 0,
+        isComplete: false,
+        error: null,
+      });
+
+      // clear local storage
+      await fileStore.removeItem(id);
+      await fileStoreUploaded.removeItem(id);
+      await metadataStore.removeItem(id);
+      await createdImagesStore.removeItem(id);
+
+      setShowDeleteConfirmationModal(false);
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      setProgress((prev) => ({ ...prev, error: JSON.stringify(error) }));
+    }
+  }
+
+  // handles upload events and deletion
   useEffect(() => {
+    if (deleteId) {
+      setShowDeleteConfirmationModal(true);
+      return;
+    }
     if (error) {
       // clear the error to prevent continuous retries
       setProgress((prev) => ({ ...prev, error: null }));
@@ -464,7 +538,7 @@ export default function UploadManager() {
     } else if (projectId) {
       uploadProject();
     }
-  }, [projectId, resumeId, retryDelay, isComplete, error]);
+  }, [projectId, resumeId, retryDelay, isComplete, error, deleteId]);
 
   // picks up unfinished uploads and queues them for completion
   useEffect(() => {
@@ -485,6 +559,34 @@ export default function UploadManager() {
     }
   };
 
+  useEffect(() => {
+    let pingInterval: NodeJS.Timeout | null = null;
+
+    if (projectId && !isComplete) {
+      // Function to perform an empty update
+      const pingProject = async () => {
+        try {
+          await client.models.Project.update({
+            id: projectId,
+          });
+          console.log(`Pinged project ${projectId}`);
+        } catch (error) {
+          console.error('Error pinging project:', error);
+        }
+      };
+
+      // Set interval to ping every 5 minutes
+      pingInterval = setInterval(pingProject, 300000);
+    }
+
+    // Clear interval on cleanup
+    return () => {
+      if (pingInterval) {
+        clearInterval(pingInterval);
+      }
+    };
+  }, [projectId, isComplete]);
+
   return (
     <>
       <input
@@ -502,6 +604,21 @@ export default function UploadManager() {
         onConfirm={() => fileInputRef.current?.click()}
         title="Found interrupted uploads"
         body={`Uploads were interrupted for ${pendingResumeProjectIdRef.current?.name}. Would you like to resume? After confirming, please select the files again. Only the files that were interrupted will be uploaded.`}
+      />
+      <ConfirmationModal
+        show={showDeleteConfirmationModal}
+        onClose={() => {
+          if (!deletingRef.current) {
+            setTask((task) => ({ ...task, deleteId: undefined }));
+          }
+          setShowDeleteConfirmationModal(false);
+        }}
+        onConfirm={() => {
+          deletingRef.current = true;
+          handleDelete();
+        }}
+        title="Cancel upload and delete project"
+        body={`Are you sure you want to cancel the upload and delete ${pendingResumeProjectIdRef.current?.name}? This action cannot be undone.`}
       />
     </>
   );

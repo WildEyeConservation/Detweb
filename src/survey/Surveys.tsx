@@ -16,7 +16,7 @@ import EditSurveyModal from './editSurveyModal.tsx';
 import SpatioTemporalSubset from '../SpatioTemporalSubset.tsx';
 import SubsampleModal from '../Subsample.tsx';
 import FileStructureSubset from '../filestructuresubset.tsx';
-import { SquareArrowOutUpRight, X } from 'lucide-react';
+import { SquareArrowOutUpRight, X, Pause, Play, Trash } from 'lucide-react';
 import { fetchAllPaginatedResults } from '../utils.tsx';
 import { Badge } from 'react-bootstrap';
 import { DeleteQueueCommand } from '@aws-sdk/client-sqs';
@@ -82,6 +82,7 @@ export default function Surveys() {
                     'queues.id',
                     'queues.url',
                     'status',
+                    'updatedAt',
                   ],
                 }
               )
@@ -216,6 +217,13 @@ export default function Surveys() {
         project.status === 'uploading' &&
         hasUploadedFiles[project.id];
 
+      const showPauseButton =
+        task.projectId === project.id && project.status === 'uploading';
+
+      const isStale =
+        project.status === 'uploading' &&
+        new Date(project.updatedAt).getTime() < Date.now() - 1000 * 60 * 30;
+
       return {
         id: project.id,
         rowData: [
@@ -235,62 +243,64 @@ export default function Surveys() {
               )}
             </div>
             <div className="d-flex gap-2">
-              <Button
-                variant="primary"
-                onClick={(e) => {
-                  if (e.ctrlKey) {
-                    navigate(`/surveys/${project.id}/manage`);
-                  } else {
-                    setSelectedProject(project);
-                    showModal('editSurvey');
-                  }
-                }}
-                disabled={disabled || hasJobs}
-              >
-                Edit
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  setSelectedProject(project);
-                  showModal('addFiles');
-                }}
-                disabled={disabled || hasJobs}
-              >
-                Add files
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  setSelectedProject(project);
-                  showModal('addAnnotationSet');
-                }}
-                disabled={disabled || hasJobs}
-              >
-                Add Annotation Set
-              </Button>
-              <Button
-                variant="danger"
-                onClick={() => {
-                  setSelectedProject(project);
-                  showModal('deleteSurvey');
-                }}
-                disabled={disabled || hasJobs}
-              >
-                Delete
-              </Button>
-              {showResumeButton && (
-                <Button
-                  variant="info"
-                  onClick={() => {
+              {project.status !== 'uploading' ? (
+                <div className="d-flex gap-2">
+                  <Button
+                    variant="primary"
+                    onClick={(e) => {
+                      if (e.ctrlKey) {
+                        navigate(`/surveys/${project.id}/manage`);
+                      } else {
+                        setSelectedProject(project);
+                        showModal('editSurvey');
+                      }
+                    }}
+                    disabled={disabled || hasJobs}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setSelectedProject(project);
+                      showModal('addFiles');
+                    }}
+                    disabled={disabled || hasJobs}
+                  >
+                    Add files
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setSelectedProject(project);
+                      showModal('addAnnotationSet');
+                    }}
+                    disabled={disabled || hasJobs}
+                  >
+                    Add Annotation Set
+                  </Button>
+                  <Button
+                    variant="danger"
+                    onClick={() => {
+                      setSelectedProject(project);
+                      showModal('deleteSurvey');
+                    }}
+                    disabled={disabled || hasJobs}
+                  >
+                    <Trash />
+                  </Button>
+                </div>
+              ) : (
+                <div className="d-flex gap-2">
+                  <Button variant="danger" onClick={() => {
                     setTask((task) => ({
                       ...task,
-                      resumeId: project.id,
+                      deleteId: project.id,
                     }));
-                  }}
-                >
-                  Resume
-                </Button>
+                  }}>
+                    <Trash />
+                  </Button>
+                </div>
               )}
             </div>
           </div>,
@@ -300,71 +310,73 @@ export default function Surveys() {
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((annotationSet, i) => (
                   <div
-                    className={`d-flex justify-content-between align-items-center gap-2 ${
+                    className={`d-flex justify-content-between align-items-center gap-2 h-100 ${
                       i === 0 ? '' : 'border-top border-light pt-2'
                     }`}
                     key={annotationSet.id}
                   >
                     <div style={{ fontSize: '16px' }}>{annotationSet.name}</div>
-                    <div className="d-flex gap-2">
-                      <Button
-                        variant="primary"
-                        onClick={() => {
-                          setSelectedAnnotationSet(annotationSet);
-                          showModal('annotationCount');
-                        }}
-                        disabled={disabled || hasJobs}
-                      >
-                        Details
-                      </Button>
-                      <Button
-                        variant="primary"
-                        onClick={() => {
-                          setSelectedProject(project);
-                          setSelectedAnnotationSet(annotationSet);
-                          showModal('launchAnnotationSet');
-                        }}
-                        disabled={disabled || hasJobs}
-                      >
-                        Launch
-                      </Button>
-                      <Button
-                        variant="primary"
-                        onClick={() => {
-                          setSelectedProject(project);
-                          setSelectedAnnotationSet(annotationSet);
-                          showModal('editAnnotationSet');
-                        }}
-                        disabled={disabled || hasJobs}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="primary"
-                        onClick={() => {
-                          setSelectedProject(project);
-                          setSelectedAnnotationSet({
-                            id: annotationSet.id,
-                            name: annotationSet.name,
-                          });
-                          showModal('annotationSetResults');
-                        }}
-                        disabled={disabled || hasJobs}
-                      >
-                        Results
-                      </Button>
-                      <Button
-                        variant="danger"
-                        onClick={() => {
-                          setSelectedProject(project);
-                          setSelectedAnnotationSet(annotationSet);
-                          showModal('deleteAnnotationSet');
-                        }}
-                        disabled={disabled || hasJobs}
-                      >
-                        Delete
-                      </Button>
-                    </div>
+                    {!hasJobs && (
+                      <div className="d-flex gap-2">
+                        <Button
+                          variant="primary"
+                          onClick={() => {
+                            setSelectedAnnotationSet(annotationSet);
+                            showModal('annotationCount');
+                          }}
+                          disabled={disabled || hasJobs}
+                        >
+                          Details
+                        </Button>
+                        <Button
+                          variant="primary"
+                          onClick={() => {
+                            setSelectedProject(project);
+                            setSelectedAnnotationSet(annotationSet);
+                            showModal('launchAnnotationSet');
+                          }}
+                          disabled={disabled || hasJobs}
+                        >
+                          Launch
+                        </Button>
+                        <Button
+                          variant="primary"
+                          onClick={() => {
+                            setSelectedProject(project);
+                            setSelectedAnnotationSet(annotationSet);
+                            showModal('editAnnotationSet');
+                          }}
+                          disabled={disabled || hasJobs}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="primary"
+                          onClick={() => {
+                            setSelectedProject(project);
+                            setSelectedAnnotationSet({
+                              id: annotationSet.id,
+                              name: annotationSet.name,
+                            });
+                            showModal('annotationSetResults');
+                          }}
+                          disabled={disabled || hasJobs}
+                        >
+                          Results
+                        </Button>
+                        <Button
+                          variant="danger"
+                          onClick={() => {
+                            setSelectedProject(project);
+                            setSelectedAnnotationSet(annotationSet);
+                            showModal('deleteAnnotationSet');
+                          }}
+                          disabled={disabled || hasJobs}
+                        >
+                          <Trash />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
             </div>
