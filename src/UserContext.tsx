@@ -103,12 +103,14 @@ export function Upload({ children }: { children: React.ReactNode }) {
     retryDelay: number;
     resumeId?: string;
     deleteId?: string;
+    pauseId?: string;
   }>({
     projectId: "",
     files: [],
     retryDelay: 0,
     resumeId: undefined,
     deleteId: undefined,
+    pauseId: undefined,
   });
   const [progress, setProgress] = useState<{
     processed: number;

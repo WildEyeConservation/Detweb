@@ -27,7 +27,7 @@ const metadataStore = localforage.createInstance({
 
 export default function UploadManager() {
   const {
-    task: { projectId, files, retryDelay, resumeId, deleteId },
+    task: { projectId, files, retryDelay, resumeId, deleteId, pauseId },
     progress: { isComplete, error },
     setTask,
     setProgress,
@@ -44,8 +44,11 @@ export default function UploadManager() {
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [showDeleteConfirmationModal, setShowDeleteConfirmationModal] =
     useState(false);
+  const [showPauseConfirmationModal, setShowPauseConfirmationModal] =
+    useState(false);
   const deletingRef = useRef<boolean>(false);
   const cancelledRef = useRef<boolean>(false);
+  const pausedRef = useRef<boolean>(false);
 
   async function uploadProject() {
     console.log('uploading project', projectId);
@@ -183,8 +186,19 @@ export default function UploadManager() {
         workers.push(runWorker());
       }
       await Promise.all(workers);
-      // if deletion was requested, abort completion marking
-      if (cancelledRef.current) return;
+      // if pause was requested, after active uploads finish, reset state
+      if (cancelledRef.current) {
+        setProgress({ processed: 0, total: 0, isComplete: false, error: null });
+        setTask({
+          projectId: '',
+          files: [],
+          retryDelay: 0,
+          resumeId: undefined,
+          deleteId: undefined,
+          pauseId: undefined,
+        });
+        return;
+      }
       // all workers finished successfully; mark upload complete
       setProgress((progress) => ({
         ...progress,
@@ -375,6 +389,8 @@ export default function UploadManager() {
         projectId: '',
         files: [],
         retryDelay: 0,
+        pauseId: undefined,
+        deleteId: undefined,
       });
 
       setProgress({
@@ -443,6 +459,8 @@ export default function UploadManager() {
       setTask((task) => ({
         ...task,
         resumeId: undefined,
+        pauseId: undefined,
+        deleteId: undefined,
       }));
     } else {
       const uploadsToComplete = await findUploadsToComplete();
@@ -498,6 +516,7 @@ export default function UploadManager() {
         files: [],
         retryDelay: 0,
         deleteId: undefined,
+        pauseId: undefined,
       });
 
       setProgress({
@@ -520,32 +539,35 @@ export default function UploadManager() {
     }
   }
 
+  function handlePause() {
+    cancelledRef.current = true;
+  }
+
+  function resetRefs() {
+    pausedRef.current = false;
+    deletingRef.current = false;
+  }
+
   // handles upload events and deletion
   useEffect(() => {
-    if (deleteId) {
-      setShowDeleteConfirmationModal(true);
-      return;
-    }
     if (error) {
-      // clear the error to prevent continuous retries
       setProgress((prev) => ({ ...prev, error: null }));
-      // schedule retry on network failure
       retryWithBackoff();
+    } else if (pauseId) {
+      setShowPauseConfirmationModal(true);
+    } else if (deleteId) {
+      setShowDeleteConfirmationModal(true);
     } else if (resumeId) {
+      resetRefs();
       completeUploads();
     } else if (isComplete) {
+      resetRefs();
       handleComplete();
     } else if (projectId) {
+      resetRefs();
       uploadProject();
     }
-  }, [projectId, resumeId, retryDelay, isComplete, error, deleteId]);
-
-  // picks up unfinished uploads and queues them for completion
-  useEffect(() => {
-    if (!projectId) {
-      completeUploads();
-    }
-  }, []);
+  }, [projectId, resumeId, retryDelay, isComplete, error, deleteId, pauseId]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = event.target.files;
@@ -554,6 +576,8 @@ export default function UploadManager() {
         projectId: pendingResumeProjectIdRef.current.id,
         files: Array.from(selectedFiles),
         retryDelay: 0,
+        pauseId: undefined,
+        deleteId: undefined,
       });
       pendingResumeProjectIdRef.current = null;
     }
@@ -604,6 +628,21 @@ export default function UploadManager() {
         onConfirm={() => fileInputRef.current?.click()}
         title="Found interrupted uploads"
         body={`Uploads were interrupted for ${pendingResumeProjectIdRef.current?.name}. Would you like to resume? After confirming, please select the files again. Only the files that were interrupted will be uploaded.`}
+      />
+      <ConfirmationModal
+        show={showPauseConfirmationModal}
+        onClose={() => {
+          if (!pausedRef.current) {
+            setTask((task) => ({ ...task, pauseId: undefined }));
+          }
+          setShowPauseConfirmationModal(false);
+        }}
+        onConfirm={() => {
+          pausedRef.current = true;
+          handlePause();
+        }}
+        title="Pause upload"
+        body={`Are you sure you want to pause the upload? The in flight uploads will be completed and the remaining files will be uploaded when you resume.`}
       />
       <ConfirmationModal
         show={showDeleteConfirmationModal}

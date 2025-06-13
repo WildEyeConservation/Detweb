@@ -36,6 +36,7 @@ export interface UploadContextType {
     retryDelay: number;
     resumeId?: string;
     deleteId?: string;
+    pauseId?: string;
   };
   setTask: React.Dispatch<
     React.SetStateAction<{
@@ -44,6 +45,7 @@ export interface UploadContextType {
       retryDelay: number;
       resumeId?: string;
       deleteId?: string;
+      pauseId?: string;
     }>
   >;
   progress: {

@@ -292,12 +292,51 @@ export default function Surveys() {
                 </div>
               ) : (
                 <div className="d-flex gap-2">
-                  <Button variant="danger" onClick={() => {
-                    setTask((task) => ({
-                      ...task,
-                      deleteId: project.id,
-                    }));
-                  }}>
+                  {showPauseButton && (
+                    <Button
+                      disabled={task.pauseId === project.id}
+                      variant="info"
+                      onClick={() => {
+                        setTask((task) => ({
+                          ...task,
+                          pauseId: project.id,
+                        }));
+                      }}
+                    >
+                      <Pause />
+                    </Button>
+                  )}
+                  {!showPauseButton && (showResumeButton || isStale) && (
+                    <Button
+                      variant="info"
+                      onClick={() => {
+                        if (showResumeButton) {
+                          setTask((task) => ({
+                            ...task,
+                            resumeId: project.id,
+                          }));
+                          return;
+                        }
+
+                        // if stale, do whatever
+                      }}
+                    >
+                      <Play />
+                    </Button>
+                  )}
+                  <Button
+                    variant="danger"
+                    disabled={
+                      task.pauseId === project.id ||
+                      task.deleteId === project.id
+                    }
+                    onClick={() => {
+                      setTask((task) => ({
+                        ...task,
+                        deleteId: project.id,
+                      }));
+                    }}
+                  >
                     <Trash />
                   </Button>
                 </div>
