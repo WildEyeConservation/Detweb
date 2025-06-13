@@ -46,6 +46,9 @@ export default function Surveys() {
   >(null);
   const [search, setSearch] = useState('');
   const [selectedSets, setSelectedSets] = useState<string[]>([]);
+  const [hasUploadedFiles, setHasUploadedFiles] = useState<{
+    [projectId: string]: boolean;
+  }>({});
 
   useEffect(() => {
     async function getProjects() {
@@ -84,9 +87,21 @@ export default function Surveys() {
               )
             ).data
         )
-      ).then((projects) => {
+      ).then(async (projects) => {
         const validProjects = projects.filter((project) => project !== null);
         setProjects(validProjects);
+
+        const hasUploadedFiles = await Promise.all(
+          validProjects.map(async (project) => {
+            const hasUploadedFiles = Boolean(
+              await fileStoreUploaded.getItem(project.id)
+            );
+            return { [project.id]: hasUploadedFiles };
+          })
+        );
+        setHasUploadedFiles(
+          hasUploadedFiles.reduce((acc, curr) => ({ ...acc, ...curr }), {})
+        );
       });
     }
 
@@ -199,7 +214,7 @@ export default function Surveys() {
       const showResumeButton =
         !task.projectId &&
         project.status === 'uploading' &&
-        fileStoreUploaded.getItem(project.id);
+        hasUploadedFiles[project.id];
 
       return {
         id: project.id,
