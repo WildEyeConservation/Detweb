@@ -4,25 +4,17 @@ import { useEffect, useState, useRef, useContext, useCallback } from "react";
 import Modal from "react-bootstrap/Modal";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
-import { list, uploadData } from "aws-amplify/storage";
-import { UserContext, GlobalContext, UploadContext } from "./Context.tsx";
-import pLimit from "p-limit";
+import { list } from "aws-amplify/storage";
+import { GlobalContext, UploadContext } from "./Context.tsx";
 import ExifReader from "exifreader";
 import { DateTime } from "luxon";
 import { fetchAllPaginatedResults } from "./utils";
-import { useQueryClient } from "@tanstack/react-query";
 import Papa from "papaparse";
 import GPSSubset from "./GPSSubset";
 import { parseGPX } from "@we-gold/gpxjs";
-import { Schema } from "../amplify/data/resource.ts";
 import FileInput from "./FileInput";
-import {
-  SendMessageBatchCommand,
-  SendMessageCommand,
-} from "@aws-sdk/client-sqs";
 import ImageMaskEditor from "./ImageMaskEditor.tsx";
 import Select from "react-select";
-import { S3Client, HeadObjectCommand } from "@aws-sdk/client-s3";
 import localforage from "localforage";
 
 // Configure a dedicated storage instance for file paths
@@ -92,18 +84,15 @@ export function FileUploadCore({
   setReadyToSubmit,
   setGpsDataReady,
 }: FilesUploadBaseProps) {
-  const limitConnections = pLimit(10);
   const [upload, setUpload] = useState(true);
   const [name, setName] = useState("");
-  const { client, backend } = useContext(GlobalContext)!;
+  const { client } = useContext(GlobalContext)!;
   const [scannedFiles, setScannedFiles] = useState<File[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [filteredImageFiles, setFilteredImageFiles] = useState<File[]>([]);
-  const { getSqsClient } = useContext(UserContext)!;
   const { setTask } = useContext(UploadContext)!;
   const [totalImageSize, setTotalImageSize] = useState(0);
   const [filteredImageSize, setFilteredImageSize] = useState(0);
-  const [advancedImageOptions, setAdvancedImageOptions] = useState(false);
   const [exifData, setExifData] = useState<ExifData>({});
   const [missingGpsData, setMissingGpsData] = useState(false);
   const [associateByTimestamp, setAssociateByTimestamp] = useState(false);
@@ -124,8 +113,6 @@ export function FileUploadCore({
     label: "ScoutBot",
     value: "scoutbot",
   });
-
-  const queryClient = useQueryClient();
 
   useEffect(() => {
     setFilteredImageSize(0);
@@ -873,6 +860,7 @@ export function FileUploadCore({
           value={model}
           options={[
             { label: "ScoutBot", value: "scoutbot" },
+            { label: "Elephant Detection Nadir", value: "elephant-detection-nadir" },
             { label: "Manual (images may be processed later)", value: "manual" },
           ]}
           onChange={(e) => {

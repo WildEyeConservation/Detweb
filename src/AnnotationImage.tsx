@@ -184,10 +184,11 @@ export default function AnnotationImage(props: any) {
           <SideLegend annotationSetId={annotationSetId} />
           {isAnnotatePath && (
             <Button
+              variant="success"
               onClick={() => {
                 navigate('/jobs');
               }}
-              className="w-100 bg-success border-success"
+              className="w-100"
             >
               Save & Exit
             </Button>

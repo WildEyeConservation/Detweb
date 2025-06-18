@@ -79,7 +79,6 @@ async function handlePair(
   image1: Image,
   image2: Image,
   masks: string
-  // inputBucket: string
 ) {
   try {
     console.log(`Processing pair ${image1.id} and ${image2.id}`);
@@ -118,7 +117,6 @@ async function handlePair(
     return {
       Id: `${image1.id}-${image2.id}`, // Required unique ID for batch entries
       MessageBody: JSON.stringify({
-        // inputBucket,
         image1Id: image1.id,
         image2Id: image2.id,
         keys: [image1.originalPath, image2.originalPath],
@@ -171,7 +169,6 @@ export const handler: Handler = async (event, context) => {
       ({ originalString }) => originalString
     );
     const masks = event.arguments.masks as string;
-    // const inputBucket = event.inputBucket as string;
     const queueUrl = event.arguments.queueUrl as string;
 
     const TIME_THRESHOLD_MS = 60000;
@@ -201,7 +198,6 @@ export const handler: Handler = async (event, context) => {
               JSON.stringify({
                 images: remainingImageStrings,
                 masks,
-                // inputBucket,
                 queueUrl,
               })
             ),

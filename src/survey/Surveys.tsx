@@ -204,7 +204,7 @@ export default function Surveys() {
     .map((project) => {
       const disabled =
         project.status === 'uploading' ||
-        project.status === 'processing' ||
+        project.status?.includes('processing') ||
         project.status === 'launching' ||
         project.status === 'updating';
 
@@ -236,9 +236,11 @@ export default function Surveys() {
                   style={{ fontSize: '14px', width: 'fit-content' }}
                   bg={'info'}
                 >
-                  {project.status.replace(/\b\w/g, (char) =>
-                    char.toUpperCase()
-                  )}
+                  {project.status.includes('processing')
+                    ? 'Processing'
+                    : project.status.replace(/\b\w/g, (char) =>
+                        char.toUpperCase()
+                      )}
                 </Badge>
               )}
             </div>

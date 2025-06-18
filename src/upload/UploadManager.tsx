@@ -322,8 +322,8 @@ export default function UploadManager() {
       const model = metadata?.model ?? 'manual';
       const masks = metadata?.masks ?? [];
 
-      // invoke a new lambda for each batch - the lambda will invoke itself if it doesn't complete the batch in time
       const BATCH_SIZE = 500;
+
       for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
         const batch = createdImages.slice(i, i + BATCH_SIZE);
         const batchStrings = batch.map(
@@ -346,18 +346,18 @@ export default function UploadManager() {
         });
       }
 
+      const { data: locationSet } = await client.models.LocationSet.create({
+        name: projectId + `_${model}`,
+        projectId: projectId,
+      });
+
+      if (!locationSet) {
+        console.error('Failed to create location set');
+        alert('Something went wrong, please try again.');
+        return;
+      }
+
       if (model === 'scoutbot') {
-        const { data: locationSet } = await client.models.LocationSet.create({
-          name: projectId + `_${model}`,
-          projectId: projectId,
-        });
-
-        if (!locationSet) {
-          console.error('Failed to create location set');
-          alert('Something went wrong, please try again.');
-          return;
-        }
-
         for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
           const batch = createdImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map(
@@ -375,7 +375,23 @@ export default function UploadManager() {
 
         await client.models.Project.update({
           id: projectId,
-          status: 'processing',
+          status: 'processing-scoutbot',
+        });
+      }
+
+      if (model === 'elephant-detection-nadir') {
+        for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
+          const batch = createdImages.slice(i, i + BATCH_SIZE);
+          const batchStrings = batch.map((image) => `${image.originalPath}`);
+
+          client.mutations.runHeatmapper({
+            images: batchStrings,
+          });
+        }
+
+        await client.models.Project.update({
+          id: projectId,
+          status: 'processing-heatmap-busy',
         });
       }
 
@@ -656,8 +672,8 @@ export default function UploadManager() {
           deletingRef.current = true;
           handleDelete();
         }}
-        title="Cancel upload and delete project"
-        body={`Are you sure you want to cancel the upload and delete ${pendingResumeProjectIdRef.current?.name}? This action cannot be undone.`}
+        title="Delete Survey"
+        body={`This will cancel the upload and delete the survey. This action cannot be undone.`}
       />
     </>
   );
