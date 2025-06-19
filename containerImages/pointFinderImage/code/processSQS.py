@@ -93,18 +93,31 @@ def process(body):
         print(tmpFile.name)
         pts=processFile(tmpFile.name,height,width,threshold)
         print(pts)
-    for point,val in pts:
+    if not pts:
         resp = client.execute(createLocation, variable_values=json.dumps({
-            'height': height , 
-            'imageId': body['imageId'], 
+            'height': 0,
+            'imageId': body['imageId'],
             'projectId': body['projectId'],
-            'x': point[0], 
-            'y':point[1], 
-            'width': width,             
+            'x': 0,
+            'y': 0,
+            'width': 0,
             'setId': setId,
-            'confidence':val,
+            'confidence': 0,
             'source': 'heatmap'}))
         print(resp)
+    else:
+        for point,val in pts:
+            resp = client.execute(createLocation, variable_values=json.dumps({
+                'height': height , 
+                'imageId': body['imageId'], 
+                'projectId': body['projectId'],
+                'x': point[0], 
+                'y':point[1], 
+                'width': width,             
+                'setId': setId,
+                'confidence':val,
+                'source': 'heatmap'}))
+            print(resp)
     return True
         # location=Location(x=int(pt[0]), y=int(pt[1]), image=image)
         # for ftype in hm_xyv['features'].keys():
