@@ -32,6 +32,7 @@ export interface GlobalContextType {
 export interface UploadContextType {
   task: {
     projectId: string;
+    fromStaleUpload?: boolean;
     files: File[];
     retryDelay: number;
     resumeId?: string;
@@ -41,6 +42,7 @@ export interface UploadContextType {
   setTask: React.Dispatch<
     React.SetStateAction<{
       projectId: string;
+      fromStaleUpload?: boolean;
       files: File[];
       retryDelay: number;
       resumeId?: string;

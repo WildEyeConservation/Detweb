@@ -41,6 +41,7 @@ export default function Surveys() {
   const [selectedProject, setSelectedProject] = useState<
     Schema['Project']['type'] | null
   >(null);
+  const [fromStaleUpload, setFromStaleUpload] = useState(false);
   const [selectedAnnotationSet, setSelectedAnnotationSet] = useState<
     Schema['AnnotationSet']['type'] | null
   >(null);
@@ -320,7 +321,9 @@ export default function Surveys() {
                           return;
                         }
 
-                        // if stale, do whatever
+                        setFromStaleUpload(true);
+                        setSelectedProject(project);
+                        showModal('addFiles');
                       }}
                     >
                       <Play />
@@ -558,9 +561,11 @@ export default function Surveys() {
       {selectedProject && (
         <FilesUploadComponent
           show={modalToShow === 'addFiles'}
+          fromStaleUpload={fromStaleUpload}
           handleClose={() => {
             showModal(null);
             setSelectedProject(null);
+            setFromStaleUpload(false);
           }}
           project={{ id: selectedProject.id, name: selectedProject.name }}
         />

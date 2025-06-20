@@ -4,6 +4,7 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { uploadData, list } from 'aws-amplify/storage';
 import { CreatedImage, ImageData, UploadedFiles } from '../types/ImageData';
 import ConfirmationModal from '../ConfirmationModal';
+import { fetchAllPaginatedResults } from '../utils';
 
 const fileStore = localforage.createInstance({
   name: 'fileStore',
@@ -27,7 +28,15 @@ const metadataStore = localforage.createInstance({
 
 export default function UploadManager() {
   const {
-    task: { projectId, files, retryDelay, resumeId, deleteId, pauseId },
+    task: {
+      projectId,
+      files,
+      retryDelay,
+      resumeId,
+      deleteId,
+      pauseId,
+      fromStaleUpload,
+    },
     progress: { isComplete, error },
     setTask,
     setProgress,
@@ -67,6 +76,46 @@ export default function UploadManager() {
 
       const allImages =
         ((await fileStore.getItem(projectId)) as ImageData[]) ?? [];
+
+      // if resuming from stale upload, get all images from DB and set them as uploaded
+      if (fromStaleUpload) {
+        const staleImages = (await fetchAllPaginatedResults(
+          client.models.Image.imagesByProjectId,
+          {
+            projectId: projectId,
+            selectionSet: [
+              'id',
+              'width',
+              'height',
+              'timestamp',
+              'cameraSerial',
+              'originalPath',
+              'latitude',
+              'longitude',
+              'altitude_agl',
+            ],
+          }
+        )) as (ImageData & { id: string })[];
+
+        await fileStore.setItem(projectId, [...allImages, ...staleImages]);
+        allImages.push(...staleImages);
+
+        const imagePaths = staleImages.map((image) => image.originalPath);
+        await fileStoreUploaded.setItem(projectId, imagePaths);
+
+        const createdImages = staleImages.map((image) => ({
+          id: image.id,
+          originalPath: image.originalPath,
+          timestamp: image.timestamp,
+        }));
+        await createdImagesStore.setItem(projectId, createdImages);
+
+        setTask((task) => ({
+          ...task,
+          fromStaleUpload: false,
+        }));
+      }
+
       const uploadedFiles =
         ((await fileStoreUploaded.getItem(projectId)) as UploadedFiles) ?? [];
       const createdImages =
@@ -382,7 +431,7 @@ export default function UploadManager() {
       if (model === 'elephant-detection-nadir') {
         for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
           const batch = createdImages.slice(i, i + BATCH_SIZE);
-          const batchStrings = batch.map((image) => `${image.originalPath}`);
+          const batchStrings = batch.map((image) => image.originalPath);
 
           client.mutations.runHeatmapper({
             images: batchStrings,
@@ -461,7 +510,7 @@ export default function UploadManager() {
     return uploadsToComplete;
   };
 
-  const completeUploads = async () => {
+  const resumeUploads = async () => {
     if (resumeId) {
       const { data: project } = await client.models.Project.get({
         id: resumeId,
@@ -575,7 +624,7 @@ export default function UploadManager() {
       setShowDeleteConfirmationModal(true);
     } else if (resumeId) {
       resetRefs();
-      completeUploads();
+      resumeUploads();
     } else if (isComplete) {
       resetRefs();
       handleComplete();
