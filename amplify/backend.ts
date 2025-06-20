@@ -265,7 +265,7 @@ const processor = new EC2QueueProcessor(customStack, "MyProcessor", {
     ec2.InstanceClass.G4DN,
     ec2.InstanceSize.XLARGE
   ), // Or any instance type you prefer
-  amiId: "ami-085491cd874e9cd28", // Your AMI ID
+  amiId: "ami-09c2f8895f9b68243", // Your AMI ID
   keyName: "surveyscope", // Optional: Your EC2 key pair name
 });
 
