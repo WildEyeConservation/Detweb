@@ -72,13 +72,18 @@ async function fetchAllPages<T, K extends string>(
 }
 
 export const handler: Handler = async (event, context) => {
+  const projectId = event.arguments?.projectId ?? (event.projectId as string);
+  if (!projectId) {
+    console.error('projectId not provided');
+    throw new Error('projectId not provided');
+  }
   try {
     const images = await fetchAllPages<Image, 'imagesByProjectId'>(
       (nextToken) =>
         client.graphql({
           query: imagesByProjectId,
           variables: {
-            projectId: event.arguments.projectId,
+            projectId,
             limit: 1000,
             nextToken,
           },
@@ -91,7 +96,7 @@ export const handler: Handler = async (event, context) => {
     } = await client.graphql({
       query: locationSetsByProjectId,
       variables: {
-        projectId: event.arguments.projectId,
+        projectId,
       },
     });
 

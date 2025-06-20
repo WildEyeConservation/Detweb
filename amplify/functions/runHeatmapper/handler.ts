@@ -36,6 +36,10 @@ export const handler: Handler = async (event, context) => {
   try {
     const imagePaths = event.arguments.images as string[];
 
+    //log a sample
+    console.log('imagePath sample', imagePaths[0]);
+    console.log('queue url', env.PROCESS_QUEUE_URL);
+
     const sqsClient = new SQSClient({
       region: env.AWS_REGION,
       credentials: {
@@ -70,7 +74,7 @@ export const handler: Handler = async (event, context) => {
           } catch (err) {
             console.warn(`Heatmap file ${heatmapFilePath} not available yet`);
             try {
-              await sqsClient.send(
+              const result = await sqsClient.send(
                 new SendMessageCommand({
                   QueueUrl: env.PROCESS_QUEUE_URL,
                   MessageBody: JSON.stringify({
@@ -81,6 +85,7 @@ export const handler: Handler = async (event, context) => {
                   }),
                 })
               );
+              console.log(`message sent for ${path}:`, result);
             } catch (err) {
               console.error('Error submitting job to heatmapper:', err);
             }

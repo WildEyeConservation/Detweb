@@ -337,7 +337,7 @@ export const handler: Handler = async (event, context) => {
 
         const imagePaths = projectImages.map((image) => image.originalPath);
 
-        const results = await Promise.allSettled(
+        const results = await Promise.all(
           imagePaths.map(async (path) => {
             const heatmapFilePath = 'heatmaps/' + path + '.h5';
             try {
@@ -356,9 +356,7 @@ export const handler: Handler = async (event, context) => {
           })
         );
 
-        const availableCount = results.filter(
-          (r) => r.status === 'fulfilled'
-        ).length;
+        const availableCount = results.filter((r) => r).length;
 
         if (availableCount === imagePaths.length) {
           console.log(`All heatmap files available for project ${project.id}`);
