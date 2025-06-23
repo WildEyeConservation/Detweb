@@ -176,7 +176,7 @@ const pointFinderAutoProcessor = new AutoProcessor(
   }
 );
 
-const envName = process.env.AMPLIFY_ENV!;  // e.g. "sandbox" or "production"
+const envName = process.env.AMPLIFY_ENV ?? process.env.AWS_BRANCH ?? 'production';  // use AWS_BRANCH or default if AMPLIFY_ENV is undefined
 
 new ssm.StringParameter(ecsStack, "PointFinderQueueUrlParameter", {
   parameterName: `/${envName}/runPointFinder/QueueUrl`,
