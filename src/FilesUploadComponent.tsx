@@ -503,7 +503,7 @@ export function FileUploadCore({
         images.push({
           width: exifmeta.width,
           height: exifmeta.height,
-          timestamp: exifmeta.timestamp,
+          timestamp: Math.floor(exifmeta.timestamp / 1000),
           cameraSerial: exifmeta.cameraSerial,
           originalPath: file.webkitRelativePath,
           latitude: gpsData ? gpsData.lat : undefined,
