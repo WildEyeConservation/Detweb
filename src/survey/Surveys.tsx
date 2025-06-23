@@ -228,9 +228,9 @@ export default function Surveys() {
       return {
         id: project.id,
         rowData: [
-          <div className="d-flex justify-content-between align-items-center gap-2">
-            <div className="d-flex flex-column gap-1">
-              <h5 className="mb-0">{project.name}</h5>
+          <div className='d-flex justify-content-between align-items-center gap-2'>
+            <div className='d-flex flex-column gap-1'>
+              <h5 className='mb-0'>{project.name}</h5>
               <i style={{ fontSize: '14px' }}>{project.organization.name}</i>
               {project.status !== 'active' && (
                 <Badge
@@ -245,11 +245,11 @@ export default function Surveys() {
                 </Badge>
               )}
             </div>
-            <div className="d-flex gap-2">
+            <div className='d-flex gap-2'>
               {project.status !== 'uploading' ? (
-                <div className="d-flex gap-2">
+                <div className='d-flex gap-2'>
                   <Button
-                    variant="primary"
+                    variant='primary'
                     onClick={(e) => {
                       if (e.ctrlKey) {
                         navigate(`/surveys/${project.id}/manage`);
@@ -263,7 +263,7 @@ export default function Surveys() {
                     Edit
                   </Button>
                   <Button
-                    variant="primary"
+                    variant='primary'
                     onClick={() => {
                       setSelectedProject(project);
                       showModal('addFiles');
@@ -273,7 +273,7 @@ export default function Surveys() {
                     Add files
                   </Button>
                   <Button
-                    variant="primary"
+                    variant='primary'
                     onClick={() => {
                       setSelectedProject(project);
                       showModal('addAnnotationSet');
@@ -283,7 +283,7 @@ export default function Surveys() {
                     Add Annotation Set
                   </Button>
                   <Button
-                    variant="danger"
+                    variant='danger'
                     onClick={() => {
                       setSelectedProject(project);
                       showModal('deleteSurvey');
@@ -294,8 +294,8 @@ export default function Surveys() {
                   </Button>
                 </div>
               ) : (
-                <div className="d-flex gap-2">
-                  {showPauseButton && (
+                <div className='d-flex gap-2'>
+                  {/* {showPauseButton && (
                     <Button
                       disabled={task.pauseId === project.id}
                       variant="info"
@@ -308,10 +308,10 @@ export default function Surveys() {
                     >
                       <Pause />
                     </Button>
-                  )}
+                  )} */}
                   {!showPauseButton && (showResumeButton || isStale) && (
                     <Button
-                      variant="info"
+                      variant='info'
                       onClick={() => {
                         if (showResumeButton) {
                           setTask((task) => ({
@@ -329,7 +329,24 @@ export default function Surveys() {
                       <Play />
                     </Button>
                   )}
-                  <Button
+                  {isStale && (
+                    <Button
+                      variant='danger'
+                      disabled={
+                        task.pauseId === project.id ||
+                        task.deleteId === project.id
+                      }
+                      onClick={() => {
+                        setTask((task) => ({
+                          ...task,
+                          deleteId: project.id,
+                        }));
+                      }}
+                    >
+                      <Trash />
+                    </Button>
+                  )}
+                  {/* <Button
                     variant="danger"
                     disabled={
                       task.pauseId === project.id ||
@@ -343,13 +360,13 @@ export default function Surveys() {
                     }}
                   >
                     <Trash />
-                  </Button>
+                  </Button> */}
                 </div>
               )}
             </div>
           </div>,
-          <div className="d-flex flex-row gap-3">
-            <div className="d-flex flex-column gap-2 flex-grow-1">
+          <div className='d-flex flex-row gap-3'>
+            <div className='d-flex flex-column gap-2 flex-grow-1'>
               {project.annotationSets
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((annotationSet, i) => (
@@ -361,9 +378,9 @@ export default function Surveys() {
                   >
                     <div style={{ fontSize: '16px' }}>{annotationSet.name}</div>
                     {!hasJobs && (
-                      <div className="d-flex gap-2">
+                      <div className='d-flex gap-2'>
                         <Button
-                          variant="primary"
+                          variant='primary'
                           onClick={() => {
                             setSelectedAnnotationSet(annotationSet);
                             showModal('annotationCount');
@@ -373,7 +390,7 @@ export default function Surveys() {
                           Details
                         </Button>
                         <Button
-                          variant="primary"
+                          variant='primary'
                           onClick={() => {
                             setSelectedProject(project);
                             setSelectedAnnotationSet(annotationSet);
@@ -384,7 +401,7 @@ export default function Surveys() {
                           Launch
                         </Button>
                         <Button
-                          variant="primary"
+                          variant='primary'
                           onClick={() => {
                             setSelectedProject(project);
                             setSelectedAnnotationSet(annotationSet);
@@ -395,7 +412,7 @@ export default function Surveys() {
                           Edit
                         </Button>
                         <Button
-                          variant="primary"
+                          variant='primary'
                           onClick={() => {
                             setSelectedProject(project);
                             setSelectedAnnotationSet({
@@ -409,7 +426,7 @@ export default function Surveys() {
                           Results
                         </Button>
                         <Button
-                          variant="danger"
+                          variant='danger'
                           onClick={() => {
                             setSelectedProject(project);
                             setSelectedAnnotationSet(annotationSet);
@@ -425,19 +442,19 @@ export default function Surveys() {
                 ))}
             </div>
             {hasJobs && (
-              <div className="d-flex flex-row gap-2">
+              <div className='d-flex flex-row gap-2'>
                 <Button
-                  className="flex align-items-center justify-content-center"
+                  className='flex align-items-center justify-content-center'
                   disabled={disabled}
-                  variant="primary"
+                  variant='primary'
                   onClick={() => navigate(`/jobs`)}
                 >
                   <SquareArrowOutUpRight />
                 </Button>
                 <Button
-                  className="flex align-items-center justify-content-center"
+                  className='flex align-items-center justify-content-center'
                   disabled={disabled}
-                  variant="danger"
+                  variant='danger'
                   onClick={() => {
                     setSelectedProject(project);
                     showModal('deleteJob');
@@ -467,20 +484,20 @@ export default function Surveys() {
         }}
       >
         <Card>
-          <Card.Header className="d-flex justify-content-between align-items-center">
-            <Card.Title className="mb-0">
-              <h4 className="mb-0">Your Surveys</h4>
+          <Card.Header className='d-flex justify-content-between align-items-center'>
+            <Card.Title className='mb-0'>
+              <h4 className='mb-0'>Your Surveys</h4>
             </Card.Title>
             <Form.Control
-              type="text"
-              className="w-100"
+              type='text'
+              className='w-100'
               style={{ maxWidth: '300px' }}
-              placeholder="Search by survey or organisation"
+              placeholder='Search by survey or organisation'
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </Card.Header>
-          <Card.Body className="overflow-x-auto overflow-y-visible">
+          <Card.Body className='overflow-x-auto overflow-y-visible'>
             <MyTable
               tableHeadings={[
                 { content: 'Survey', style: { width: '50%' } },
@@ -489,12 +506,12 @@ export default function Surveys() {
               tableData={tableData}
               pagination={true}
               itemsPerPage={5}
-              emptyMessage="You are not an admin of any surveys."
+              emptyMessage='You are not an admin of any surveys.'
             />
           </Card.Body>
           {isOrganizationAdmin && (
-            <Card.Footer className="d-flex justify-content-center">
-              <Button variant="primary" onClick={() => showModal('newSurvey')}>
+            <Card.Footer className='d-flex justify-content-center'>
+              <Button variant='primary' onClick={() => showModal('newSurvey')}>
                 New Survey
               </Button>
             </Card.Footer>
@@ -513,9 +530,9 @@ export default function Surveys() {
           setSelectedProject(null);
         }}
         onConfirm={() => deleteProject(selectedProject!.id)}
-        title="Delete Survey"
+        title='Delete Survey'
         body={
-          <p className="mb-0">
+          <p className='mb-0'>
             Are you sure you want to delete {selectedProject?.name}?
             <br />
             This action cannot be undone.
@@ -532,9 +549,9 @@ export default function Surveys() {
         onConfirm={() =>
           deleteAnnotationSet(selectedProject!.id, selectedAnnotationSet!.id)
         }
-        title="Delete Annotation Set"
+        title='Delete Annotation Set'
         body={
-          <p className="mb-0">
+          <p className='mb-0'>
             Are you sure you want to delete {selectedAnnotationSet?.name}?
             <br />
             This action cannot be undone.
@@ -543,9 +560,9 @@ export default function Surveys() {
       />
       <ConfirmationModal
         show={modalToShow === 'deleteJob'}
-        title="Cancel Associated Job"
+        title='Cancel Associated Job'
         body={
-          <p className="mb-0">
+          <p className='mb-0'>
             Are you sure you want to cancel the job associated with{' '}
             {selectedProject?.name}?
             <br />
