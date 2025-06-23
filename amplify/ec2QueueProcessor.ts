@@ -55,11 +55,10 @@ export class EC2QueueProcessor extends Construct {
     // Create user data to pass queue URL to the instance and run docker compose
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
-      `echo "export QUEUE_URL=${this.queue.queueUrl}" >> /etc/environment`,
-      `echo "export AWS_DEFAULT_REGION=${this.queue.env.region}" >> /etc/environment`,
-      'cd /home/ubuntu',
-      'source /etc/environment',
-      'QUEUE_URL=$QUEUE_URL AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION docker-compose up'
+      `cat <<EOF > /etc/gpu-worker.env`,
+      `QUEUE_URL=${this.queue.queueUrl}`,
+      `AWS_DEFAULT_REGION=${this.queue.env.region}`,
+      `EOF`
     );
     
 

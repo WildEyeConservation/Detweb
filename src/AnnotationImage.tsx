@@ -99,19 +99,13 @@ export default function AnnotationImage(props: any) {
   }, [props.taskTag, location.image.id, annotationSetId, isTesting]);
 
   async function handleShare() {
-    const base = window.location.href;
+    const windowUrl = new URL(window.location.href);
     let url = '';
 
     if (location.id && location.annotationSetId) {
-      url = base.replace(
-        /\/[^/]+\/?$/,
-        `/location/${location?.id}/${location?.annotationSetId}`
-      );
+      url = `${windowUrl.origin}/location/${location?.id}/${location?.annotationSetId}`;
     } else if (location.image.id && location.annotationSetId) {
-      url = base.replace(
-        /\/[^/]+\/?$/,
-        `/image/${location.image.id}/${location?.annotationSetId}`
-      );
+      url = `${windowUrl.origin}/image/${location.image.id}/${location?.annotationSetId}`;
     } else {
       return;
     }
@@ -184,6 +178,7 @@ export default function AnnotationImage(props: any) {
           <SideLegend annotationSetId={annotationSetId} />
           {isAnnotatePath && (
             <Button
+              variant="success"
               onClick={() => {
                 navigate('/jobs');
               }}

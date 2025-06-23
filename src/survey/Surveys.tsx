@@ -16,7 +16,7 @@ import EditSurveyModal from './editSurveyModal.tsx';
 import SpatioTemporalSubset from '../SpatioTemporalSubset.tsx';
 import SubsampleModal from '../Subsample.tsx';
 import FileStructureSubset from '../filestructuresubset.tsx';
-import { SquareArrowOutUpRight, X } from 'lucide-react';
+import { SquareArrowOutUpRight, X, Pause, Play, Trash } from 'lucide-react';
 import { fetchAllPaginatedResults } from '../utils.tsx';
 import { Badge } from 'react-bootstrap';
 import { DeleteQueueCommand } from '@aws-sdk/client-sqs';
@@ -41,6 +41,7 @@ export default function Surveys() {
   const [selectedProject, setSelectedProject] = useState<
     Schema['Project']['type'] | null
   >(null);
+  const [fromStaleUpload, setFromStaleUpload] = useState(false);
   const [selectedAnnotationSet, setSelectedAnnotationSet] = useState<
     Schema['AnnotationSet']['type'] | null
   >(null);
@@ -82,6 +83,7 @@ export default function Surveys() {
                     'queues.id',
                     'queues.url',
                     'status',
+                    'updatedAt',
                   ],
                 }
               )
@@ -203,7 +205,7 @@ export default function Surveys() {
     .map((project) => {
       const disabled =
         project.status === 'uploading' ||
-        project.status === 'processing' ||
+        project.status?.includes('processing') ||
         project.status === 'launching' ||
         project.status === 'updating';
 
@@ -215,6 +217,13 @@ export default function Surveys() {
         !task.projectId &&
         project.status === 'uploading' &&
         hasUploadedFiles[project.id];
+
+      const showPauseButton =
+        task.projectId === project.id && project.status === 'uploading';
+
+      const isStale =
+        project.status === 'uploading' &&
+        new Date(project.updatedAt).getTime() < Date.now() - 1000 * 60 * 30;
 
       return {
         id: project.id,
@@ -228,69 +237,114 @@ export default function Surveys() {
                   style={{ fontSize: '14px', width: 'fit-content' }}
                   bg={'info'}
                 >
-                  {project.status.replace(/\b\w/g, (char) =>
-                    char.toUpperCase()
-                  )}
+                  {project.status.includes('processing')
+                    ? 'Processing'
+                    : project.status.replace(/\b\w/g, (char) =>
+                        char.toUpperCase()
+                      )}
                 </Badge>
               )}
             </div>
             <div className="d-flex gap-2">
-              <Button
-                variant="primary"
-                onClick={(e) => {
-                  if (e.ctrlKey) {
-                    navigate(`/surveys/${project.id}/manage`);
-                  } else {
-                    setSelectedProject(project);
-                    showModal('editSurvey');
-                  }
-                }}
-                disabled={disabled || hasJobs}
-              >
-                Edit
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  setSelectedProject(project);
-                  showModal('addFiles');
-                }}
-                disabled={disabled || hasJobs}
-              >
-                Add files
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  setSelectedProject(project);
-                  showModal('addAnnotationSet');
-                }}
-                disabled={disabled || hasJobs}
-              >
-                Add Annotation Set
-              </Button>
-              <Button
-                variant="danger"
-                onClick={() => {
-                  setSelectedProject(project);
-                  showModal('deleteSurvey');
-                }}
-                disabled={disabled || hasJobs}
-              >
-                Delete
-              </Button>
-              {showResumeButton && (
-                <Button
-                  variant="info"
-                  onClick={() => {
-                    setTask((task) => ({
-                      ...task,
-                      resumeId: project.id,
-                    }));
-                  }}
-                >
-                  Resume
-                </Button>
+              {project.status !== 'uploading' ? (
+                <div className="d-flex gap-2">
+                  <Button
+                    variant="primary"
+                    onClick={(e) => {
+                      if (e.ctrlKey) {
+                        navigate(`/surveys/${project.id}/manage`);
+                      } else {
+                        setSelectedProject(project);
+                        showModal('editSurvey');
+                      }
+                    }}
+                    disabled={disabled || hasJobs}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setSelectedProject(project);
+                      showModal('addFiles');
+                    }}
+                    disabled={disabled || hasJobs}
+                  >
+                    Add files
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setSelectedProject(project);
+                      showModal('addAnnotationSet');
+                    }}
+                    disabled={disabled || hasJobs}
+                  >
+                    Add Annotation Set
+                  </Button>
+                  <Button
+                    variant="danger"
+                    onClick={() => {
+                      setSelectedProject(project);
+                      showModal('deleteSurvey');
+                    }}
+                    disabled={disabled || hasJobs}
+                  >
+                    <Trash />
+                  </Button>
+                </div>
+              ) : (
+                <div className="d-flex gap-2">
+                  {showPauseButton && (
+                    <Button
+                      disabled={task.pauseId === project.id}
+                      variant="info"
+                      onClick={() => {
+                        setTask((task) => ({
+                          ...task,
+                          pauseId: project.id,
+                        }));
+                      }}
+                    >
+                      <Pause />
+                    </Button>
+                  )}
+                  {!showPauseButton && (showResumeButton || isStale) && (
+                    <Button
+                      variant="info"
+                      onClick={() => {
+                        if (showResumeButton) {
+                          setTask((task) => ({
+                            ...task,
+                            resumeId: project.id,
+                          }));
+                          return;
+                        }
+
+                        setFromStaleUpload(true);
+                        setSelectedProject(project);
+                        showModal('addFiles');
+                      }}
+                    >
+                      <Play />
+                    </Button>
+                  )}
+                  <Button
+                    variant="danger"
+                    disabled={
+                      task.pauseId === project.id ||
+                      task.deleteId === project.id
+                    }
+                    onClick={() => {
+                      setTask((task) => ({
+                        ...task,
+                        deleteId: project.id,
+                      }));
+                    }}
+                  >
+                    <Trash />
+                  </Button>
+                </div>
               )}
             </div>
           </div>,
@@ -300,71 +354,73 @@ export default function Surveys() {
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((annotationSet, i) => (
                   <div
-                    className={`d-flex justify-content-between align-items-center gap-2 ${
+                    className={`d-flex justify-content-between align-items-center gap-2 h-100 ${
                       i === 0 ? '' : 'border-top border-light pt-2'
                     }`}
                     key={annotationSet.id}
                   >
                     <div style={{ fontSize: '16px' }}>{annotationSet.name}</div>
-                    <div className="d-flex gap-2">
-                      <Button
-                        variant="primary"
-                        onClick={() => {
-                          setSelectedAnnotationSet(annotationSet);
-                          showModal('annotationCount');
-                        }}
-                        disabled={disabled || hasJobs}
-                      >
-                        Details
-                      </Button>
-                      <Button
-                        variant="primary"
-                        onClick={() => {
-                          setSelectedProject(project);
-                          setSelectedAnnotationSet(annotationSet);
-                          showModal('launchAnnotationSet');
-                        }}
-                        disabled={disabled || hasJobs}
-                      >
-                        Launch
-                      </Button>
-                      <Button
-                        variant="primary"
-                        onClick={() => {
-                          setSelectedProject(project);
-                          setSelectedAnnotationSet(annotationSet);
-                          showModal('editAnnotationSet');
-                        }}
-                        disabled={disabled || hasJobs}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="primary"
-                        onClick={() => {
-                          setSelectedProject(project);
-                          setSelectedAnnotationSet({
-                            id: annotationSet.id,
-                            name: annotationSet.name,
-                          });
-                          showModal('annotationSetResults');
-                        }}
-                        disabled={disabled || hasJobs}
-                      >
-                        Results
-                      </Button>
-                      <Button
-                        variant="danger"
-                        onClick={() => {
-                          setSelectedProject(project);
-                          setSelectedAnnotationSet(annotationSet);
-                          showModal('deleteAnnotationSet');
-                        }}
-                        disabled={disabled || hasJobs}
-                      >
-                        Delete
-                      </Button>
-                    </div>
+                    {!hasJobs && (
+                      <div className="d-flex gap-2">
+                        <Button
+                          variant="primary"
+                          onClick={() => {
+                            setSelectedAnnotationSet(annotationSet);
+                            showModal('annotationCount');
+                          }}
+                          disabled={disabled || hasJobs}
+                        >
+                          Details
+                        </Button>
+                        <Button
+                          variant="primary"
+                          onClick={() => {
+                            setSelectedProject(project);
+                            setSelectedAnnotationSet(annotationSet);
+                            showModal('launchAnnotationSet');
+                          }}
+                          disabled={disabled || hasJobs}
+                        >
+                          Launch
+                        </Button>
+                        <Button
+                          variant="primary"
+                          onClick={() => {
+                            setSelectedProject(project);
+                            setSelectedAnnotationSet(annotationSet);
+                            showModal('editAnnotationSet');
+                          }}
+                          disabled={disabled || hasJobs}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="primary"
+                          onClick={() => {
+                            setSelectedProject(project);
+                            setSelectedAnnotationSet({
+                              id: annotationSet.id,
+                              name: annotationSet.name,
+                            });
+                            showModal('annotationSetResults');
+                          }}
+                          disabled={disabled || hasJobs}
+                        >
+                          Results
+                        </Button>
+                        <Button
+                          variant="danger"
+                          onClick={() => {
+                            setSelectedProject(project);
+                            setSelectedAnnotationSet(annotationSet);
+                            showModal('deleteAnnotationSet');
+                          }}
+                          disabled={disabled || hasJobs}
+                        >
+                          <Trash />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
             </div>
@@ -505,9 +561,11 @@ export default function Surveys() {
       {selectedProject && (
         <FilesUploadComponent
           show={modalToShow === 'addFiles'}
+          fromStaleUpload={fromStaleUpload}
           handleClose={() => {
             showModal(null);
             setSelectedProject(null);
+            setFromStaleUpload(false);
           }}
           project={{ id: selectedProject.id, name: selectedProject.name }}
         />

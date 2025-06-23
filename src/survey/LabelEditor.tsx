@@ -106,17 +106,7 @@ export default function LabelEditor({
 
   useEffect(() => {
     if (importLabels.length > 0) {
-      setLabels((labels) => {
-        const newLabels = importLabels.filter(
-          (l) =>
-            !labels.some(
-              (label) =>
-                label.id === l.id ||
-                label.name.toLowerCase() === l.name.toLowerCase()
-            )
-        );
-        return [...labels, ...newLabels];
-      });
+      setLabels(importLabels);
     }
   }, [importLabels]);
 

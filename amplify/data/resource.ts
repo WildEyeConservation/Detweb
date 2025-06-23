@@ -12,6 +12,8 @@ import { updateProjectMemberships } from '../functions/updateProjectMemberships/
 import { cleanupJobs } from '../functions/cleanupJobs/resource';
 import { runImageRegistration } from '../functions/runImageRegistration/resource';
 import { runScoutbot } from '../functions/runScoutbot/resource';
+import { runHeatmapper } from '../functions/runHeatmapper/resource';
+import { runPointFinder } from '../functions/runPointFinder/resource';
 
 const schema = a
   .schema({
@@ -722,6 +724,14 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(runScoutbot)),
+    runHeatmapper: a
+      .mutation()
+      .arguments({
+        images: a.string().array(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(runHeatmapper)),
   })
   .authorization((allow) => [
     allow.resource(getAnnotationCounts),
@@ -733,6 +743,8 @@ const schema = a
     allow.resource(cleanupJobs),
     allow.resource(runImageRegistration),
     allow.resource(runScoutbot),
+    allow.resource(runHeatmapper),
+    allow.resource(runPointFinder),
   ]);
 
 export type Schema = ClientSchema<typeof schema>;

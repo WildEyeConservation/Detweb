@@ -74,15 +74,15 @@ export const handler: Handler = async (event, context) => {
     if (!exists) {
       const sqsClient = new SQSClient({ region: env.AWS_REGION })
       await publishToClients(`${heatMapPath} does not exist on ${env.OUTPUTS_BUCKET_NAME}. Submitting job to heatmapper`)
-      await sqsClient.send(new SendMessageCommand({
-        QueueUrl: env.PROCESS_QUEUE_URL,
-        MessageBody: JSON.stringify({
-          inputbucket: env.INPUTS_BUCKET_NAME,
-          inputPath: 'images/' + event.arguments.s3key,
-          outputbucket: env.OUTPUTS_BUCKET_NAME,
-          heatmapPath: heatMapPath,
-        }),
-      }))
+      // await sqsClient.send(new SendMessageCommand({
+      //   QueueUrl: env.PROCESS_QUEUE_URL,
+      //   MessageBody: JSON.stringify({
+      //     inputbucket: env.INPUTS_BUCKET_NAME,
+      //     inputPath: 'images/' + event.arguments.s3key,
+      //     outputbucket: env.OUTPUTS_BUCKET_NAME,
+      //     heatmapPath: heatMapPath,
+      //   }),
+      // }))
       console.log('Submitted job to heatmapper')
     } else {
       publishToClients(`${heatMapPath} exists on ${env.OUTPUTS_BUCKET_NAME}. Skipping`)

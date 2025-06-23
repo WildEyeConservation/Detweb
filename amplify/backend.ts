@@ -22,6 +22,9 @@ import { Repository } from "aws-cdk-lib/aws-ecr";
 import { updateAnnotationCounts } from "./functions/updateAnnotationCounts/resource";
 import { monitorModelProgress } from "./functions/monitorModelProgress/resource";
 import { cleanupJobs } from "./functions/cleanupJobs/resource";
+import { runHeatmapper } from "./functions/runHeatmapper/resource";
+import { runPointFinder } from "./functions/runPointFinder/resource";
+import * as ssm from "aws-cdk-lib/aws-ssm";
 
 const backend = defineBackend({
   auth,
@@ -36,6 +39,8 @@ const backend = defineBackend({
   updateUserStats,
   updateAnnotationCounts,
   monitorModelProgress,
+  runHeatmapper,
+  runPointFinder,
   cleanupJobs,
 });
 
@@ -170,6 +175,14 @@ const pointFinderAutoProcessor = new AutoProcessor(
     machineImage: ecs.EcsOptimizedImage.amazonLinux2(),
   }
 );
+
+const envName = process.env.AMPLIFY_ENV!;  // e.g. "sandbox" or "production"
+
+new ssm.StringParameter(ecsStack, "PointFinderQueueUrlParameter", {
+  parameterName: `/${envName}/runPointFinder/QueueUrl`,
+  stringValue: pointFinderAutoProcessor.queue.queueUrl,
+});
+
 ecsTaskRole.addToPrincipalPolicy(
   new iam.PolicyStatement({
     actions: ["s3:ListBucket", "s3:GetObject", "s3:PutObject"],
@@ -252,13 +265,28 @@ const processor = new EC2QueueProcessor(customStack, "MyProcessor", {
     ec2.InstanceClass.G4DN,
     ec2.InstanceSize.XLARGE
   ), // Or any instance type you prefer
-  amiId: "ami-09c2f8895f9b68243", // Your AMI ID
+  amiId: "ami-0d0e015cd8fe6c8c1", // Your AMI ID
   keyName: "surveyscope", // Optional: Your EC2 key pair name
 });
 
 backend.processImages.addEnvironment(
   "PROCESS_QUEUE_URL",
   processor.queue.queueUrl
+);
+
+backend.monitorModelProgress.addEnvironment(
+  "RUN_POINT_FINDER_FUNCTION_NAME",
+  backend.runPointFinder.resources.lambda.functionName
+);
+
+backend.runHeatmapper.addEnvironment(
+  "PROCESS_QUEUE_URL",
+  processor.queue.queueUrl
+);
+
+backend.runPointFinder.addEnvironment(
+  "POINT_FINDER_QUEUE_URL_PARAM",
+  `/${envName}/runPointFinder/QueueUrl`
 );
 
 const statement = new iam.PolicyStatement({

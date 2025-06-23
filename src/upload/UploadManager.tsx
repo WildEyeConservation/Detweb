@@ -4,6 +4,7 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { uploadData, list } from 'aws-amplify/storage';
 import { CreatedImage, ImageData, UploadedFiles } from '../types/ImageData';
 import ConfirmationModal from '../ConfirmationModal';
+import { fetchAllPaginatedResults } from '../utils';
 
 const fileStore = localforage.createInstance({
   name: 'fileStore',
@@ -27,7 +28,15 @@ const metadataStore = localforage.createInstance({
 
 export default function UploadManager() {
   const {
-    task: { projectId, files, retryDelay, resumeId },
+    task: {
+      projectId,
+      files,
+      retryDelay,
+      resumeId,
+      deleteId,
+      pauseId,
+      fromStaleUpload,
+    },
     progress: { isComplete, error },
     setTask,
     setProgress,
@@ -42,6 +51,13 @@ export default function UploadManager() {
     {}
   );
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [showDeleteConfirmationModal, setShowDeleteConfirmationModal] =
+    useState(false);
+  const [showPauseConfirmationModal, setShowPauseConfirmationModal] =
+    useState(false);
+  const deletingRef = useRef<boolean>(false);
+  const cancelledRef = useRef<boolean>(false);
+  const pausedRef = useRef<boolean>(false);
 
   async function uploadProject() {
     console.log('uploading project', projectId);
@@ -60,6 +76,46 @@ export default function UploadManager() {
 
       const allImages =
         ((await fileStore.getItem(projectId)) as ImageData[]) ?? [];
+
+      // if resuming from stale upload, get all images from DB and set them as uploaded
+      if (fromStaleUpload) {
+        const staleImages = (await fetchAllPaginatedResults(
+          client.models.Image.imagesByProjectId,
+          {
+            projectId: projectId,
+            selectionSet: [
+              'id',
+              'width',
+              'height',
+              'timestamp',
+              'cameraSerial',
+              'originalPath',
+              'latitude',
+              'longitude',
+              'altitude_agl',
+            ],
+          }
+        )) as (ImageData & { id: string })[];
+
+        await fileStore.setItem(projectId, [...allImages, ...staleImages]);
+        allImages.push(...staleImages);
+
+        const imagePaths = staleImages.map((image) => image.originalPath);
+        await fileStoreUploaded.setItem(projectId, imagePaths);
+
+        const createdImages = staleImages.map((image) => ({
+          id: image.id,
+          originalPath: image.originalPath,
+          timestamp: image.timestamp,
+        }));
+        await createdImagesStore.setItem(projectId, createdImages);
+
+        setTask((task) => ({
+          ...task,
+          fromStaleUpload: false,
+        }));
+      }
+
       const uploadedFiles =
         ((await fileStoreUploaded.getItem(projectId)) as UploadedFiles) ?? [];
       const createdImages =
@@ -85,6 +141,8 @@ export default function UploadManager() {
       const iterator = images[Symbol.iterator]();
       const runWorker = async () => {
         while (true) {
+          // Abort worker if deletion is in progress
+          if (cancelledRef.current) break;
           const { value: image, done } = iterator.next();
           if (done) break;
           try {
@@ -177,6 +235,19 @@ export default function UploadManager() {
         workers.push(runWorker());
       }
       await Promise.all(workers);
+      // if pause was requested, after active uploads finish, reset state
+      if (cancelledRef.current) {
+        setProgress({ processed: 0, total: 0, isComplete: false, error: null });
+        setTask({
+          projectId: '',
+          files: [],
+          retryDelay: 0,
+          resumeId: undefined,
+          deleteId: undefined,
+          pauseId: undefined,
+        });
+        return;
+      }
       // all workers finished successfully; mark upload complete
       setProgress((progress) => ({
         ...progress,
@@ -300,8 +371,8 @@ export default function UploadManager() {
       const model = metadata?.model ?? 'manual';
       const masks = metadata?.masks ?? [];
 
-      // invoke a new lambda for each batch - the lambda will invoke itself if it doesn't complete the batch in time
       const BATCH_SIZE = 500;
+
       for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
         const batch = createdImages.slice(i, i + BATCH_SIZE);
         const batchStrings = batch.map(
@@ -324,18 +395,18 @@ export default function UploadManager() {
         });
       }
 
+      const { data: locationSet } = await client.models.LocationSet.create({
+        name: projectId + `_${model}`,
+        projectId: projectId,
+      });
+
+      if (!locationSet) {
+        console.error('Failed to create location set');
+        alert('Something went wrong, please try again.');
+        return;
+      }
+
       if (model === 'scoutbot') {
-        const { data: locationSet } = await client.models.LocationSet.create({
-          name: projectId + `_${model}`,
-          projectId: projectId,
-        });
-
-        if (!locationSet) {
-          console.error('Failed to create location set');
-          alert('Something went wrong, please try again.');
-          return;
-        }
-
         for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
           const batch = createdImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map(
@@ -353,7 +424,23 @@ export default function UploadManager() {
 
         await client.models.Project.update({
           id: projectId,
-          status: 'processing',
+          status: 'processing-scoutbot',
+        });
+      }
+
+      if (model === 'elephant-detection-nadir') {
+        for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
+          const batch = createdImages.slice(i, i + BATCH_SIZE);
+          const batchStrings = batch.map((image) => image.originalPath);
+
+          client.mutations.runHeatmapper({
+            images: batchStrings,
+          });
+        }
+
+        await client.models.Project.update({
+          id: projectId,
+          status: 'processing-heatmap-busy',
         });
       }
 
@@ -367,6 +454,8 @@ export default function UploadManager() {
         projectId: '',
         files: [],
         retryDelay: 0,
+        pauseId: undefined,
+        deleteId: undefined,
       });
 
       setProgress({
@@ -421,7 +510,7 @@ export default function UploadManager() {
     return uploadsToComplete;
   };
 
-  const completeUploads = async () => {
+  const resumeUploads = async () => {
     if (resumeId) {
       const { data: project } = await client.models.Project.get({
         id: resumeId,
@@ -435,6 +524,8 @@ export default function UploadManager() {
       setTask((task) => ({
         ...task,
         resumeId: undefined,
+        pauseId: undefined,
+        deleteId: undefined,
       }));
     } else {
       const uploadsToComplete = await findUploadsToComplete();
@@ -450,28 +541,98 @@ export default function UploadManager() {
     setShowConfirmationModal(true);
   };
 
-  // handles upload events
+  async function handleDelete() {
+    // Cancel any ongoing uploads
+    cancelledRef.current = true;
+    const id = deleteId!;
+    try {
+      console.log(`Deleting project ${id}`);
+      // Fetch the associated image set
+      const {
+        data: [imageSet],
+      } = await client.models.ImageSet.imageSetsByProjectId({ projectId: id });
+
+      // Delete the image set
+      await client.models.ImageSet.delete({ id: imageSet.id });
+      setProgress((prev) => ({ ...prev, processed: 1, total: 3 }));
+
+      // Delete the project memberships
+      const { data: memberships } =
+        await client.models.UserProjectMembership.userProjectMembershipsByProjectId(
+          { projectId: id }
+        );
+      await Promise.all(
+        memberships.map((membership) =>
+          client.models.UserProjectMembership.delete({ id: membership.id })
+        )
+      );
+      setProgress((prev) => ({ ...prev, processed: 2 }));
+
+      // Delete the project
+      await client.models.Project.delete({ id });
+      setProgress((prev) => ({
+        ...prev,
+        processed: 3,
+      }));
+
+      // Reset task context
+      setTask({
+        projectId: '',
+        files: [],
+        retryDelay: 0,
+        deleteId: undefined,
+        pauseId: undefined,
+      });
+
+      setProgress({
+        processed: 0,
+        total: 0,
+        isComplete: false,
+        error: null,
+      });
+
+      // clear local storage
+      await fileStore.removeItem(id);
+      await fileStoreUploaded.removeItem(id);
+      await metadataStore.removeItem(id);
+      await createdImagesStore.removeItem(id);
+
+      setShowDeleteConfirmationModal(false);
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      setProgress((prev) => ({ ...prev, error: JSON.stringify(error) }));
+    }
+  }
+
+  function handlePause() {
+    cancelledRef.current = true;
+  }
+
+  function resetRefs() {
+    pausedRef.current = false;
+    deletingRef.current = false;
+  }
+
+  // handles upload events and deletion
   useEffect(() => {
     if (error) {
-      // clear the error to prevent continuous retries
       setProgress((prev) => ({ ...prev, error: null }));
-      // schedule retry on network failure
       retryWithBackoff();
+    } else if (pauseId) {
+      setShowPauseConfirmationModal(true);
+    } else if (deleteId) {
+      setShowDeleteConfirmationModal(true);
     } else if (resumeId) {
-      completeUploads();
+      resetRefs();
+      resumeUploads();
     } else if (isComplete) {
+      resetRefs();
       handleComplete();
     } else if (projectId) {
+      resetRefs();
       uploadProject();
     }
-  }, [projectId, resumeId, retryDelay, isComplete, error]);
-
-  // picks up unfinished uploads and queues them for completion
-  useEffect(() => {
-    if (!projectId) {
-      completeUploads();
-    }
-  }, []);
+  }, [projectId, resumeId, retryDelay, isComplete, error, deleteId, pauseId]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = event.target.files;
@@ -480,10 +641,40 @@ export default function UploadManager() {
         projectId: pendingResumeProjectIdRef.current.id,
         files: Array.from(selectedFiles),
         retryDelay: 0,
+        pauseId: undefined,
+        deleteId: undefined,
       });
       pendingResumeProjectIdRef.current = null;
     }
   };
+
+  useEffect(() => {
+    let pingInterval: NodeJS.Timeout | null = null;
+
+    if (projectId && !isComplete) {
+      // Function to perform an empty update
+      const pingProject = async () => {
+        try {
+          await client.models.Project.update({
+            id: projectId,
+          });
+          console.log(`Pinged project ${projectId}`);
+        } catch (error) {
+          console.error('Error pinging project:', error);
+        }
+      };
+
+      // Set interval to ping every 5 minutes
+      pingInterval = setInterval(pingProject, 300000);
+    }
+
+    // Clear interval on cleanup
+    return () => {
+      if (pingInterval) {
+        clearInterval(pingInterval);
+      }
+    };
+  }, [projectId, isComplete]);
 
   return (
     <>
@@ -502,6 +693,36 @@ export default function UploadManager() {
         onConfirm={() => fileInputRef.current?.click()}
         title="Found interrupted uploads"
         body={`Uploads were interrupted for ${pendingResumeProjectIdRef.current?.name}. Would you like to resume? After confirming, please select the files again. Only the files that were interrupted will be uploaded.`}
+      />
+      <ConfirmationModal
+        show={showPauseConfirmationModal}
+        onClose={() => {
+          if (!pausedRef.current) {
+            setTask((task) => ({ ...task, pauseId: undefined }));
+          }
+          setShowPauseConfirmationModal(false);
+        }}
+        onConfirm={() => {
+          pausedRef.current = true;
+          handlePause();
+        }}
+        title="Pause upload"
+        body={`Are you sure you want to pause the upload? The in flight uploads will be completed and the remaining files will be uploaded when you resume.`}
+      />
+      <ConfirmationModal
+        show={showDeleteConfirmationModal}
+        onClose={() => {
+          if (!deletingRef.current) {
+            setTask((task) => ({ ...task, deleteId: undefined }));
+          }
+          setShowDeleteConfirmationModal(false);
+        }}
+        onConfirm={() => {
+          deletingRef.current = true;
+          handleDelete();
+        }}
+        title="Delete Survey"
+        body={`This will cancel the upload and delete the survey. This action cannot be undone.`}
       />
     </>
   );

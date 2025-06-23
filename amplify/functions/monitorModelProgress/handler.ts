@@ -1,20 +1,22 @@
-import type { Handler } from "aws-lambda";
-import { env } from "$amplify/env/monitorModelProgress";
-import { Amplify } from "aws-amplify";
-import { generateClient } from "aws-amplify/data";
+import type { Handler } from 'aws-lambda';
+import { env } from '$amplify/env/monitorModelProgress';
+import { Amplify } from 'aws-amplify';
+import { generateClient } from 'aws-amplify/data';
 import {
   listProjects,
-  listImages,
   listLocations,
   listUserProjectMemberships,
-} from "./graphql/queries";
+} from './graphql/queries';
 import {
   updateProject,
   updateUserProjectMembership,
   deleteLocation,
-} from "./graphql/mutations";
-import type { GraphQLResult } from "@aws-amplify/api-graphql";
-import { UserProjectMembership } from "./graphql/API";
+} from './graphql/mutations';
+import type { GraphQLResult } from '@aws-amplify/api-graphql';
+import { UserProjectMembership } from './graphql/API';
+import { imagesByProjectId } from './graphql/queries';
+import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 
 Amplify.configure(
   {
@@ -22,7 +24,7 @@ Amplify.configure(
       GraphQL: {
         endpoint: env.AMPLIFY_DATA_GRAPHQL_ENDPOINT,
         region: env.AWS_REGION,
-        defaultAuthMode: "iam",
+        defaultAuthMode: 'iam',
       },
     },
   },
@@ -45,7 +47,16 @@ Amplify.configure(
 );
 
 const client = generateClient({
-  authMode: "iam",
+  authMode: 'iam',
+});
+
+const s3Client = new S3Client({
+  region: env.AWS_REGION,
+  credentials: {
+    accessKeyId: env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+    sessionToken: env.AWS_SESSION_TOKEN,
+  },
 });
 
 interface PagedList<T> {
@@ -62,6 +73,7 @@ interface Project {
 interface Image {
   id: string;
   projectId: string;
+  originalPath: string;
 }
 
 interface Location {
@@ -98,25 +110,194 @@ async function fetchAllPages<T, K extends string>(
   return allItems;
 }
 
+async function updateProgress(
+  project: Project,
+  projectImages: Image[],
+  source: string
+) {
+  // 2.2 Fetch all locations for the project at once
+  console.log(`Fetching all locations for project ${project.id}`);
+  const projectLocations = await fetchAllPages<Location, 'listLocations'>(
+    (nextToken) =>
+      client.graphql({
+        query: listLocations,
+        variables: {
+          filter: {
+            projectId: {
+              eq: project.id,
+            },
+          },
+          limit: 1000,
+          nextToken,
+        },
+      }) as Promise<GraphQLResult<{ listLocations: PagedList<Location> }>>,
+    'listLocations'
+  );
+
+  console.log(
+    `Found ${projectLocations.length} total locations for project ${project.id}`
+  );
+  const processedImages = new Set();
+
+  // 2.3 Process each image using the project's locations
+  for (const image of projectImages) {
+    console.log(`Checking locations for image ${image.id}`);
+
+    // Filter locations for this specific image
+    const imageLocations = projectLocations.filter(
+      (location) => location.imageId === image.id
+    );
+
+    console.log(
+      `Found ${imageLocations.length} locations for image ${image.id}`
+    );
+
+    // Check if any location has the correct source
+    const hasCorrectSource = imageLocations.some(
+      (location) => location.source === source
+    );
+
+    if (hasCorrectSource) {
+      console.log(`Image ${image.id} has been processed by ${source}`);
+      processedImages.add(image.id);
+    } else {
+      console.log(`Image ${image.id} has not been processed by ${source} yet`);
+    }
+  }
+
+  // 2.4 Check if all images are processed
+  const allImagesProcessed = projectImages.every((image) =>
+    processedImages.has(image.id)
+  );
+
+  // Update project status if all images are processed
+  if (allImagesProcessed) {
+    // Delete all duplicate locations
+    console.log(`Checking for duplicate locations in project ${project.id}`);
+
+    // Create a map to track unique locations
+    const uniqueLocations = new Map<string, Location>();
+    const duplicateLocationIds: string[] = [];
+
+    // Process each location
+    for (const location of projectLocations) {
+      // Skip locations without required fields
+      if (!location.imageId || !location.setId) continue;
+
+      // Create a unique key based on the specified criteria
+      const locationKey = `${location.imageId}-${location.setId}-${location.height}-${location.width}-${location.x}-${location.y}`;
+
+      if (uniqueLocations.has(locationKey)) {
+        // This is a duplicate, add to deletion list
+        duplicateLocationIds.push(location.id);
+      } else {
+        // This is a unique location, add to our map
+        uniqueLocations.set(locationKey, location);
+      }
+    }
+
+    // Delete all duplicate locations
+    console.log(
+      `Found ${duplicateLocationIds.length} duplicate locations to delete`
+    );
+    for (const locationId of duplicateLocationIds) {
+      try {
+        await client.graphql({
+          query: deleteLocation,
+          variables: {
+            input: {
+              id: locationId,
+            },
+          },
+        });
+        console.log(`Successfully deleted duplicate location ${locationId}`);
+      } catch (error) {
+        console.error(
+          `Failed to delete duplicate location ${locationId}:`,
+          error
+        );
+      }
+    }
+
+    console.log(
+      `All images processed for project ${project.id}, updating status to "active"`
+    );
+    await client.graphql({
+      query: updateProject,
+      variables: {
+        input: {
+          id: project.id,
+          status: 'active',
+        },
+      },
+    });
+
+    //get all UserProjectMembership records for the project
+    const memberships = await fetchAllPages<
+      UserProjectMembership,
+      'listUserProjectMemberships'
+    >(
+      (nextToken) =>
+        client.graphql({
+          query: listUserProjectMemberships,
+          variables: {
+            filter: {
+              projectId: {
+                eq: project.id,
+              },
+            },
+            nextToken,
+          },
+        }) as Promise<
+          GraphQLResult<{
+            listUserProjectMemberships: PagedList<UserProjectMembership>;
+          }>
+        >,
+      'listUserProjectMemberships'
+    );
+
+    //dummy update the project memberships
+    for (const membership of memberships) {
+      await client.graphql({
+        query: updateUserProjectMembership,
+        variables: {
+          input: {
+            id: membership.id,
+          },
+        },
+      });
+    }
+    console.log(
+      `Successfully updated project ${project.id} status to "active"`
+    );
+  } else {
+    console.log(
+      `Project ${project.id} still has ${
+        projectImages.length - processedImages.size
+      } images to process`
+    );
+  }
+}
+
 export const handler: Handler = async (event, context) => {
-  console.log("Starting monitorModelProgress function execution");
+  console.log('Starting monitorModelProgress function execution');
   try {
     // 1. List all projects with status "processing"
     console.log('Fetching projects with status "processing"');
-    const processingProjects = await fetchAllPages<Project, "listProjects">(
+    const processingProjects = await fetchAllPages<Project, 'listProjects'>(
       (nextToken) =>
         client.graphql({
           query: listProjects,
           variables: {
             filter: {
               status: {
-                eq: "processing",
+                contains: 'processing',
               },
             },
             nextToken,
           },
         }) as Promise<GraphQLResult<{ listProjects: PagedList<Project> }>>,
-      "listProjects"
+      'listProjects'
     );
 
     console.log(
@@ -129,205 +310,108 @@ export const handler: Handler = async (event, context) => {
 
       // 2.1 List all images for the project
       console.log(`Fetching images for project ${project.id}`);
-      const projectImages = await fetchAllPages<Image, "listImages">(
+      const projectImages = await fetchAllPages<Image, 'imagesByProjectId'>(
         (nextToken) =>
           client.graphql({
-            query: listImages,
+            query: imagesByProjectId,
             variables: {
-              filter: {
-                projectId: {
-                  eq: project.id,
-                },
-              },
+              projectId: project.id,
+              limit: 1000,
               nextToken,
             },
-          }) as Promise<GraphQLResult<{ listImages: PagedList<Image> }>>,
-        "listImages"
+          }) as Promise<GraphQLResult<{ imagesByProjectId: PagedList<Image> }>>,
+        'imagesByProjectId'
       );
 
       console.log(
         `Found ${projectImages.length} images for project ${project.id}`
       );
 
-      // 2.2 Fetch all locations for the project at once
-      console.log(`Fetching all locations for project ${project.id}`);
-      const projectLocations = await fetchAllPages<Location, "listLocations">(
-        (nextToken) =>
-          client.graphql({
-            query: listLocations,
-            variables: {
-              filter: {
-                projectId: {
-                  eq: project.id,
-                },
-              },
-              nextToken,
-            },
-          }) as Promise<GraphQLResult<{ listLocations: PagedList<Location> }>>,
-        "listLocations"
-      );
-
-      console.log(
-        `Found ${projectLocations.length} total locations for project ${project.id}`
-      );
-      const processedImages = new Set();
-
-      // 2.3 Process each image using the project's locations
-      for (const image of projectImages) {
-        console.log(`Checking locations for image ${image.id}`);
-
-        // Filter locations for this specific image
-        const imageLocations = projectLocations.filter(
-          (location) => location.imageId === image.id
-        );
-
-        console.log(
-          `Found ${imageLocations.length} locations for image ${image.id}`
-        );
-
-        // Check if any location has source "scoutbotv3"
-        const hasScoutbotV3Location = imageLocations.some(
-          (location) => location.source === "scoutbotv3"
-        );
-
-        if (hasScoutbotV3Location) {
-          console.log(`Image ${image.id} has been processed by scoutbotv3`);
-          processedImages.add(image.id);
-        } else {
-          console.log(
-            `Image ${image.id} has not been processed by scoutbotv3 yet`
-          );
-        }
+      if (project.status?.includes('scoutbot')) {
+        console.log(`Project ${project.id} is running scoutbot`);
+        await updateProgress(project, projectImages, 'scoutbotv3');
       }
 
-      // 2.4 Check if all images are processed
-      const allImagesProcessed = projectImages.every((image) =>
-        processedImages.has(image.id)
-      );
+      if (project.status?.includes('heatmap-busy')) {
+        console.log(`Project ${project.id} is running heatmapper`);
 
-      // Update project status if all images are processed
-      if (allImagesProcessed) {
-        // Delete all duplicate locations
-        console.log(
-          `Checking for duplicate locations in project ${project.id}`
+        const imagePaths = projectImages.map((image) => image.originalPath);
+
+        const results = await Promise.all(
+          imagePaths.map(async (path) => {
+            const heatmapFilePath = 'heatmaps/' + path + '.h5';
+            try {
+              await s3Client.send(
+                new HeadObjectCommand({
+                  Bucket: env.OUTPUTS_BUCKET_NAME,
+                  Key: heatmapFilePath,
+                })
+              );
+              console.info(`Heatmap file ${heatmapFilePath} available`);
+              return true;
+            } catch (err) {
+              console.warn(`Heatmap file ${heatmapFilePath} not available yet`);
+              return false;
+            }
+          })
         );
 
-        // Create a map to track unique locations
-        const uniqueLocations = new Map<string, Location>();
-        const duplicateLocationIds: string[] = [];
+        const availableCount = results.filter((r) => r).length;
 
-        // Process each location
-        for (const location of projectLocations) {
-          // Skip locations without required fields
-          if (!location.imageId || !location.setId) continue;
-
-          // Create a unique key based on the specified criteria
-          const locationKey = `${location.imageId}-${location.setId}-${location.height}-${location.width}-${location.x}-${location.y}`;
-
-          if (uniqueLocations.has(locationKey)) {
-            // This is a duplicate, add to deletion list
-            duplicateLocationIds.push(location.id);
-          } else {
-            // This is a unique location, add to our map
-            uniqueLocations.set(locationKey, location);
-          }
-        }
-
-        // Delete all duplicate locations
-        console.log(
-          `Found ${duplicateLocationIds.length} duplicate locations to delete`
-        );
-        for (const locationId of duplicateLocationIds) {
-          try {
-            await client.graphql({
-              query: deleteLocation,
-              variables: {
-                input: {
-                  id: locationId,
-                },
-              },
-            });
-            console.log(
-              `Successfully deleted duplicate location ${locationId}`
-            );
-          } catch (error) {
-            console.error(
-              `Failed to delete duplicate location ${locationId}:`,
-              error
-            );
-          }
-        }
-
-        console.log(
-          `All images processed for project ${project.id}, updating status to "active"`
-        );
-        await client.graphql({
-          query: updateProject,
-          variables: {
-            input: {
-              id: project.id,
-              status: "active",
-            },
-          },
-        });
-
-        //get all UserProjectMembership records for the project
-        const memberships = await fetchAllPages<
-          UserProjectMembership,
-          "listUserProjectMemberships"
-        >(
-          (nextToken) =>
-            client.graphql({
-              query: listUserProjectMemberships,
-              variables: {
-                filter: {
-                  projectId: {
-                    eq: project.id,
-                  },
-                },
-                nextToken,
-              },
-            }) as Promise<
-              GraphQLResult<{
-                listUserProjectMemberships: PagedList<UserProjectMembership>;
-              }>
-            >,
-          "listUserProjectMemberships"
-        );
-
-        //dummy update the project memberships
-        for (const membership of memberships) {
+        if (availableCount === imagePaths.length) {
+          console.log(`All heatmap files available for project ${project.id}`);
           await client.graphql({
-            query: updateUserProjectMembership,
+            query: updateProject,
             variables: {
-              input: {
-                id: membership.id,
-              },
+              input: { id: project.id, status: 'processing-heatmap-done' },
             },
           });
         }
-        console.log(
-          `Successfully updated project ${project.id} status to "active"`
+      }
+
+      if (project.status?.includes('heatmap-done')) {
+        console.log(`Project ${project.id} is done running heatmapper`);
+        const lambdaClient = new LambdaClient({
+          region: env.AWS_REGION,
+          credentials: {
+            accessKeyId: env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+            sessionToken: env.AWS_SESSION_TOKEN,
+          },
+        });
+
+        await lambdaClient.send(
+          new InvokeCommand({
+            FunctionName: env.RUN_POINT_FINDER_FUNCTION_NAME,
+            InvocationType: 'Event',
+            Payload: Buffer.from(JSON.stringify({ projectId: project.id })),
+          })
         );
-      } else {
-        console.log(
-          `Project ${project.id} still has ${
-            projectImages.length - processedImages.size
-          } images to process`
-        );
+
+        await client.graphql({
+          query: updateProject,
+          variables: {
+            input: { id: project.id, status: 'processing-pointFinder' },
+          },
+        });
+      }
+
+      if (project.status?.includes('pointFinder')) {
+        console.log(`Project ${project.id} is running pointFinder`);
+        await updateProgress(project, projectImages, 'heatmap');
       }
     }
 
-    console.log("Project status monitoring completed successfully");
+    console.log('Project status monitoring completed successfully');
     return {
       statusCode: 200,
       body: JSON.stringify({
-        message: "Project status monitoring completed successfully",
+        message: 'Project status monitoring completed successfully',
       }),
     };
   } catch (error: any) {
-    console.error("Error in monitorModelProgress:", error);
-    console.error("Error details:", {
+    console.error('Error in monitorModelProgress:', error);
+    console.error('Error details:', {
       message: error.message,
       stack: error.stack,
       name: error.name,
@@ -335,7 +419,7 @@ export const handler: Handler = async (event, context) => {
     return {
       statusCode: 500,
       body: JSON.stringify({
-        message: "Error monitoring project status",
+        message: 'Error monitoring project status',
         error: error.message,
       }),
     };

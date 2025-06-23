@@ -1,6 +1,9 @@
 import { defineStorage } from "@aws-amplify/backend"
 import { handleS3Upload } from "./handleS3Upload/resource"
 import { processImages } from "../functions/processImages/resource"
+import { runPointFinder } from "../functions/runPointFinder/resource"
+import { runHeatmapper } from "../functions/runHeatmapper/resource"
+import { monitorModelProgress } from "../functions/monitorModelProgress/resource"
 
 export const outputBucket = defineStorage({
   name: "outputs",
@@ -12,6 +15,9 @@ export const outputBucket = defineStorage({
     ],
     'heatmaps/*': [
       allow.resource(processImages).to(['write', 'list', 'delete']),
+      allow.resource(runPointFinder).to(['read']),
+      allow.resource(runHeatmapper).to(['read']),
+      allow.resource(monitorModelProgress).to(['read']),
       allow.authenticated.to(['read'])
     ]
   })
@@ -32,6 +38,7 @@ export const inputBucket = defineStorage({
     'images/*': [
       allow.resource(handleS3Upload).to(['get']),
       allow.resource(processImages).to(['read']),
+      allow.resource(runHeatmapper).to(['read']),
       allow.authenticated.to(['read','write','delete'])
     ]
   }),

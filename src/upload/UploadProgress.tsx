@@ -4,7 +4,7 @@ import { WifiOff } from "lucide-react";
 
 export default function UploadProgress() {
   const {
-    task: { projectId, retryDelay },
+    task: { projectId, retryDelay, deleteId },
     progress: { isComplete, error, processed, total },
   } = useContext(UploadContext)!;
 
@@ -31,6 +31,7 @@ export default function UploadProgress() {
   >(null); // seconds
 
   useEffect(() => {
+    if (deleteId || !projectId) return;
     if (projectId && !isComplete && !error) {
       if (
         currentUploadIdRef.current !== projectId ||
@@ -49,9 +50,10 @@ export default function UploadProgress() {
       }
       setEstimatedTimeRemaining(isComplete ? 0 : null);
     }
-  }, [projectId, isComplete, error, total]);
+  }, [projectId, isComplete, error, total, deleteId]);
 
   useEffect(() => {
+    if (deleteId || !projectId) return;
     if (
       startTimeRef.current &&
       projectId &&
@@ -80,9 +82,10 @@ export default function UploadProgress() {
       setAverageSpeed(0);
       setEstimatedTimeRemaining(null);
     }
-  }, [projectId, processed, total, isComplete, error]);
+  }, [projectId, processed, total, isComplete, error, deleteId]);
 
   useEffect(() => {
+    if (deleteId || !projectId) return;
     if (
       estimatedTimeRemaining === null ||
       estimatedTimeRemaining <= 0 ||
@@ -119,9 +122,11 @@ export default function UploadProgress() {
     averageSpeed,
     processed,
     total,
+    deleteId,
+    projectId,
   ]);
 
-  if (!projectId) return null;
+  if (!projectId && !deleteId) return null;
 
   const percent = Math.round((processed / total) * 100) || 0;
 
@@ -149,14 +154,18 @@ export default function UploadProgress() {
           {error ? (
             <p className="m-0">Error</p>
           ) : !isComplete ? (
-            <div className="d-flex flex-column">
-              <p className="m-0">{`${processed}/${total} (${percent}%) images`}</p>
-              {estimatedTimeRemaining && (
-                <p className="m-0">{`${(estimatedTimeRemaining / 3600).toFixed(
-                  2
-                )} hours remaining`}</p>
-              )}
-            </div>
+            deleteId ? (
+              <p className="m-0">{`Deleting project: ${processed}/${total}`}</p>
+            ) : (
+              <div className="d-flex flex-column">
+                <p className="m-0">{`${processed}/${total} (${percent}%) images`}</p>
+                {estimatedTimeRemaining && (
+                  <p className="m-0">{`${(estimatedTimeRemaining / 3600).toFixed(
+                    2
+                  )} hours remaining`}</p>
+                )}
+              </div>
+            )
           ) : (
             <p className="m-0">Finished</p>
           )}
