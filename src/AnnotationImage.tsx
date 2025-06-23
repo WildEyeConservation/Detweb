@@ -14,7 +14,7 @@ import { Schema } from '../amplify/data/resource';
 import useImageStats from './useImageStats';
 import { Badge, Button } from 'react-bootstrap';
 import { Share2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 const Image = withCreateObservation(withAckOnTimeout(BaseImage));
 
 export default function AnnotationImage(props: any) {
@@ -35,6 +35,7 @@ export default function AnnotationImage(props: any) {
   const { currentTaskTag, isTesting, isAnnotatePath } =
     useContext(UserContext)!;
   const navigate = useNavigate();
+  const { surveyId } = useParams();
   const subscriptionFilter = useMemo(
     () => ({
       filter: {
@@ -100,12 +101,12 @@ export default function AnnotationImage(props: any) {
 
   async function handleShare() {
     const windowUrl = new URL(window.location.href);
-    let url = '';
+    let url = `${windowUrl.origin}/surveys/${surveyId}`;
 
     if (location.id && location.annotationSetId) {
-      url = `${windowUrl.origin}/location/${location?.id}/${location?.annotationSetId}`;
+      url = `${url}/location/${location.id}/${location.annotationSetId}`;
     } else if (location.image.id && location.annotationSetId) {
-      url = `${windowUrl.origin}/image/${location.image.id}/${location?.annotationSetId}`;
+      url = `${url}/image/${location.image.id}/${location.annotationSetId}`;
     } else {
       return;
     }
