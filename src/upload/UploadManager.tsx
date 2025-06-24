@@ -77,168 +77,170 @@ export default function UploadManager() {
       const allImages =
         ((await fileStore.getItem(projectId)) as ImageData[]) ?? [];
 
-      // if resuming from stale upload, get all images from DB and set them as uploaded
-      if (fromStaleUpload) {
-        const staleImages = (await fetchAllPaginatedResults(
-          client.models.Image.imagesByProjectId,
-          {
-            projectId: projectId,
-            selectionSet: [
-              'id',
-              'width',
-              'height',
-              'timestamp',
-              'cameraSerial',
-              'originalPath',
-              'latitude',
-              'longitude',
-              'altitude_agl',
-            ],
-          }
-        )) as (ImageData & { id: string })[];
+      // seed uploaded files from S3 and created images from DB
+      const s3Files = (await fetchFilesFromS3()) as Set<string>;
+      const dbRawImages = (await (fetchAllPaginatedResults as any)(
+        client.models.Image.imagesByProjectId,
+        {
+          projectId,
+          selectionSet: ['id', 'originalPath', 'timestamp'],
+        }
+      )) as { id: string; originalPath: string; timestamp: number }[];
 
-        await fileStore.setItem(projectId, [...allImages, ...staleImages]);
-        allImages.push(...staleImages);
+      // track which files are already on S3
+      const uploadedFiles = Array.from(s3Files);
+      await fileStoreUploaded.setItem(projectId, uploadedFiles);
 
-        const imagePaths = staleImages.map((image) => image.originalPath);
-        await fileStoreUploaded.setItem(projectId, imagePaths);
+      // track which images are already created in the DB
+      let createdImages: CreatedImage[] = dbRawImages.map((img) => ({
+        id: img.id,
+        originalPath: img.originalPath,
+        timestamp: img.timestamp,
+      }));
+      await createdImagesStore.setItem(projectId, createdImages);
 
-        const createdImages = staleImages.map((image) => ({
-          id: image.id,
-          originalPath: image.originalPath,
-          timestamp: image.timestamp,
-        }));
-        await createdImagesStore.setItem(projectId, createdImages);
-
-        setTask((task) => ({
-          ...task,
-          fromStaleUpload: false,
-        }));
-      }
-
-      const uploadedFiles =
-        ((await fileStoreUploaded.getItem(projectId)) as UploadedFiles) ?? [];
-      const createdImages =
-        ((await createdImagesStore.getItem(projectId)) as CreatedImage[]) ?? [];
-
-      //images to upload
+      // determine DB-seed tasks (existing S3 files without DB entries)
+      const dbPaths = new Set(createdImages.map((img) => img.originalPath));
+      const seedPaths = uploadedFiles.filter((path) => !dbPaths.has(path));
+      // determine S3-upload tasks (files not yet on S3)
       const images = allImages.filter(
-        (image) => !uploadedFiles.includes(image.originalPath)
+        (image) => !s3Files.has(image.originalPath)
       );
-
-      const CONCURRENCY = 20;
-      const totalImages = images.length;
-      let processedImages = 0;
-
+      // total tasks = DB seeds + uploads
+      const totalTasks = seedPaths.length + images.length;
+      // initialize progress over all tasks
       setProgress({
-        processed: processedImages,
-        total: totalImages,
+        processed: 0,
+        total: totalTasks,
         isComplete: false,
         error: null,
       });
+      // 1) seed existing S3 files into DB in parallel
+      const SEED_CONCURRENCY = 5;
+      const seedIterator = seedPaths[Symbol.iterator]();
+      const seedWorker = async () => {
+        while (true) {
+          const { value: originalPath, done } = seedIterator.next();
+          if (done) break;
+          const imageData = allImages.find(
+            (img) => img.originalPath === originalPath
+          );
+          if (imageData) {
+            const fileObj = files.find(
+              (f) => f.webkitRelativePath === originalPath
+            );
+            const fileType = fileObj?.type ?? 'application/octet-stream';
+            const { data: img } = await (client.models.Image.create as any)({
+              projectId,
+              width: imageData.width,
+              height: imageData.height,
+              timestamp: imageData.timestamp,
+              cameraSerial: imageData.cameraSerial,
+              originalPath: imageData.originalPath,
+              latitude: imageData.latitude,
+              longitude: imageData.longitude,
+            });
+            if (img) {
+              createdImages.push({
+                id: img.id,
+                originalPath: img.originalPath!,
+                timestamp: img.timestamp!,
+              });
+              await createdImagesStore.setItem(projectId, createdImages);
+              await (client.models.ImageSetMembership.create as any)({
+                imageId: img.id,
+                imageSetId: imageSet.id,
+              });
+              await (client.models.ImageFile.create as any)({
+                projectId,
+                imageId: img.id,
+                key: img.originalPath!,
+                path: img.originalPath!,
+                type: fileType,
+              });
+            }
+          }
+          // increment progress after each seed
+          setProgress((prev) => ({ ...prev, processed: prev.processed + 1 }));
+        }
+      };
+      const seedWorkers: Promise<void>[] = [];
+      for (let i = 0; i < SEED_CONCURRENCY; i++) {
+        seedWorkers.push(seedWorker());
+      }
+      await Promise.all(seedWorkers);
 
-      // Process images with concurrency limit
+      // 2) upload new files to S3 with concurrency, continuing progress count
+      const CONCURRENCY = 20;
+      let processedTasks = 0; // counts only upload tasks here but progress is tracked globally via state
       const iterator = images[Symbol.iterator]();
       const runWorker = async () => {
         while (true) {
-          // Abort worker if deletion is in progress
           if (cancelledRef.current) break;
           const { value: image, done } = iterator.next();
           if (done) break;
           try {
             const file = files.find(
-              (file) => file.webkitRelativePath === image.originalPath
+              (f) => f.webkitRelativePath === image.originalPath
             );
-            if (!file) {
-              console.error('File not found', image.originalPath);
-              continue;
-            }
-            try {
+            if (file) {
               await uploadData({
                 path: 'images/' + image.originalPath,
                 data: file,
                 options: { bucket: 'inputs', contentType: file.type },
               }).result;
-            } catch (error) {
-              console.error(
-                `Error uploading image ${image.originalPath}:`,
-                error
-              );
-              if (!navigator.onLine) {
-                // propagate offline error to trigger backoff
-                throw error;
-              }
-              continue;
-            }
-
-            // record the file as uploaded
-            uploadedFiles.push(image.originalPath);
-            await fileStoreUploaded.setItem(projectId, uploadedFiles);
-
-            const { data: img } = await client.models.Image.create({
-              projectId: projectId,
-              width: image.width,
-              height: image.height,
-              timestamp: image.timestamp,
-              cameraSerial: image.cameraSerial,
-              originalPath: image.originalPath,
-              latitude: image.latitude,
-              longitude: image.longitude,
-            });
-
-            if (img) {
-              createdImages.push({
-                id: img.id,
-                originalPath: image.originalPath,
+              uploadedFiles.push(image.originalPath);
+              await fileStoreUploaded.setItem(projectId, uploadedFiles);
+              const { data: img } = await (client.models.Image.create as any)({
+                projectId,
+                width: image.width,
+                height: image.height,
                 timestamp: image.timestamp,
+                cameraSerial: image.cameraSerial,
+                originalPath: image.originalPath,
+                latitude: image.latitude,
+                longitude: image.longitude,
               });
-              await createdImagesStore.setItem(projectId, createdImages);
-
-              await client.models.ImageSetMembership.create({
-                imageId: img.id,
-                imageSetId: imageSet.id,
-              });
-
-              await client.models.ImageFile.create({
-                projectId: projectId,
-                imageId: img.id,
-                key: img.originalPath!,
-                path: img.originalPath!,
-                type: file.type,
-              });
-            } else {
-              throw new Error('Image not created');
+              if (img) {
+                createdImages.push({
+                  id: img.id,
+                  originalPath: image.originalPath,
+                  timestamp: image.timestamp,
+                });
+                await createdImagesStore.setItem(projectId, createdImages);
+                await (client.models.ImageSetMembership.create as any)({
+                  imageId: img.id,
+                  imageSetId: imageSet.id,
+                });
+                await (client.models.ImageFile.create as any)({
+                  projectId,
+                  imageId: img.id,
+                  key: img.originalPath!,
+                  path: image.originalPath,
+                  type: file.type,
+                });
+              }
             }
           } catch (error) {
             console.error(
               `Error processing image ${image.originalPath}:`,
               error
             );
-            if (!navigator.onLine) {
-              // propagate offline error to trigger backoff
-              throw error;
-            }
+            if (!navigator.onLine) throw error;
           } finally {
-            processedImages++;
-            setProgress((progress) => ({
-              ...progress,
-              processed: processedImages,
-              // defer marking complete until all workers finish
-            }));
+            // increment progress after each upload task
+            setProgress((prev) => ({ ...prev, processed: prev.processed + 1 }));
           }
         }
       };
-
-      // Start concurrent workers
       const workers: Promise<void>[] = [];
-      for (let i = 0; i < CONCURRENCY; i++) {
-        workers.push(runWorker());
-      }
+      for (let i = 0; i < CONCURRENCY; i++) workers.push(runWorker());
       await Promise.all(workers);
       // if pause was requested, after active uploads finish, reset state
       if (cancelledRef.current) {
         setProgress({ processed: 0, total: 0, isComplete: false, error: null });
         setTask({
+          newProject: true,
           projectId: '',
           files: [],
           retryDelay: 0,
@@ -248,10 +250,10 @@ export default function UploadManager() {
         });
         return;
       }
-      // all workers finished successfully; mark upload complete
-      setProgress((progress) => ({
-        ...progress,
-        processed: totalImages,
+      // all tasks finished successfully; mark upload complete
+      setProgress((prev) => ({
+        ...prev,
+        processed: totalTasks,
         isComplete: true,
       }));
     } catch (error) {
@@ -389,13 +391,13 @@ export default function UploadManager() {
       }
 
       if (model === 'manual') {
-        await client.models.Project.update({
+        await (client.models.Project.update as any)({
           id: projectId,
           status: 'active',
         });
       }
 
-      const { data: locationSet } = await client.models.LocationSet.create({
+      const { data: locationSet } = await (client.models.LocationSet.create as any)({
         name: projectId + `_${model}`,
         projectId: projectId,
       });
@@ -451,6 +453,7 @@ export default function UploadManager() {
       await createdImagesStore.removeItem(projectId);
 
       setTask({
+        newProject: true,
         projectId: '',
         files: [],
         retryDelay: 0,
@@ -558,7 +561,7 @@ export default function UploadManager() {
 
       // Delete the project memberships
       const { data: memberships } =
-        await client.models.UserProjectMembership.userProjectMembershipsByProjectId(
+        await (client.models.UserProjectMembership.userProjectMembershipsByProjectId as any)(
           { projectId: id }
         );
       await Promise.all(
@@ -577,6 +580,7 @@ export default function UploadManager() {
 
       // Reset task context
       setTask({
+        newProject: true,
         projectId: '',
         files: [],
         retryDelay: 0,
@@ -613,15 +617,25 @@ export default function UploadManager() {
     deletingRef.current = false;
   }
 
-  // handles upload events and deletion
+  // Show pause modal when pauseId is set
+  useEffect(() => {
+    if (pauseId) {
+      setShowPauseConfirmationModal(true);
+    }
+  }, [pauseId]);
+
+  // Show delete modal when deleteId is set
+  useEffect(() => {
+    if (deleteId) {
+      setShowDeleteConfirmationModal(true);
+    }
+  }, [deleteId]);
+
+  // Core upload event handling (retry, resume, complete, new upload)
   useEffect(() => {
     if (error) {
       setProgress((prev) => ({ ...prev, error: null }));
       retryWithBackoff();
-    } else if (pauseId) {
-      setShowPauseConfirmationModal(true);
-    } else if (deleteId) {
-      setShowDeleteConfirmationModal(true);
     } else if (resumeId) {
       resetRefs();
       resumeUploads();
@@ -632,12 +646,13 @@ export default function UploadManager() {
       resetRefs();
       uploadProject();
     }
-  }, [projectId, resumeId, retryDelay, isComplete, error, deleteId, pauseId]);
+  }, [projectId, resumeId, retryDelay, isComplete, error]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = event.target.files;
     if (selectedFiles && pendingResumeProjectIdRef.current) {
       setTask({
+        newProject: false,
         projectId: pendingResumeProjectIdRef.current.id,
         files: Array.from(selectedFiles),
         retryDelay: 0,
@@ -680,9 +695,9 @@ export default function UploadManager() {
     <>
       <input
         ref={fileInputRef}
-        type="file"
-        webkitdirectory="true"
-        directory="true"
+        type='file'
+        webkitdirectory='true'
+        directory='true'
         multiple
         onChange={handleFileSelect}
         style={{ display: 'none' }}
@@ -691,7 +706,7 @@ export default function UploadManager() {
         show={showConfirmationModal}
         onClose={() => setShowConfirmationModal(false)}
         onConfirm={() => fileInputRef.current?.click()}
-        title="Found interrupted uploads"
+        title='Found interrupted uploads'
         body={`Uploads were interrupted for ${pendingResumeProjectIdRef.current?.name}. Would you like to resume? After confirming, please select the files again. Only the files that were interrupted will be uploaded.`}
       />
       <ConfirmationModal
@@ -706,7 +721,7 @@ export default function UploadManager() {
           pausedRef.current = true;
           handlePause();
         }}
-        title="Pause upload"
+        title='Pause upload'
         body={`Are you sure you want to pause the upload? The in flight uploads will be completed and the remaining files will be uploaded when you resume.`}
       />
       <ConfirmationModal
@@ -721,7 +736,7 @@ export default function UploadManager() {
           deletingRef.current = true;
           handleDelete();
         }}
-        title="Delete Survey"
+        title='Delete Survey'
         body={`This will cancel the upload and delete the survey. This action cannot be undone.`}
       />
     </>

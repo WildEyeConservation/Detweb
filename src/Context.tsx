@@ -31,6 +31,7 @@ export interface GlobalContextType {
 
 export interface UploadContextType {
   task: {
+    newProject: boolean;
     projectId: string;
     fromStaleUpload?: boolean;
     files: File[];
@@ -41,6 +42,7 @@ export interface UploadContextType {
   };
   setTask: React.Dispatch<
     React.SetStateAction<{
+      newProject: boolean;
       projectId: string;
       fromStaleUpload?: boolean;
       files: File[];

@@ -1,31 +1,31 @@
-import { useEffect, useState, useRef, useContext, useCallback } from "react";
+import { useEffect, useState, useRef, useContext, useCallback } from 'react';
 // import moment from 'moment'
 // import {MD5,enc} from 'crypto-js'
-import Modal from "react-bootstrap/Modal";
-import Button from "react-bootstrap/Button";
-import Form from "react-bootstrap/Form";
-import { list } from "aws-amplify/storage";
-import { GlobalContext, UploadContext } from "./Context.tsx";
-import ExifReader from "exifreader";
-import { DateTime } from "luxon";
-import { fetchAllPaginatedResults } from "./utils";
-import Papa from "papaparse";
-import GPSSubset from "./GPSSubset";
-import { parseGPX } from "@we-gold/gpxjs";
-import FileInput from "./FileInput";
-import ImageMaskEditor from "./ImageMaskEditor.tsx";
-import Select from "react-select";
-import localforage from "localforage";
+import Modal from 'react-bootstrap/Modal';
+import Button from 'react-bootstrap/Button';
+import Form from 'react-bootstrap/Form';
+import { list } from 'aws-amplify/storage';
+import { GlobalContext, UploadContext } from './Context.tsx';
+import ExifReader from 'exifreader';
+import { DateTime } from 'luxon';
+import { fetchAllPaginatedResults } from './utils';
+import Papa from 'papaparse';
+import GPSSubset from './GPSSubset';
+import { parseGPX } from '@we-gold/gpxjs';
+import FileInput from './FileInput';
+import ImageMaskEditor from './ImageMaskEditor.tsx';
+import Select from 'react-select';
+import localforage from 'localforage';
 
 // Configure a dedicated storage instance for file paths
 const fileStore = localforage.createInstance({
-  name: "fileStore",
-  storeName: "files",
+  name: 'fileStore',
+  storeName: 'files',
 });
 
 const metadataStore = localforage.createInstance({
-  name: "metadataStore",
-  storeName: "metadata",
+  name: 'metadataStore',
+  storeName: 'metadata',
 });
 
 interface FilesUploadComponentProps {
@@ -45,6 +45,7 @@ interface FilesUploadBaseProps {
   >;
   setReadyToSubmit: React.Dispatch<React.SetStateAction<boolean>>;
   setGpsDataReady?: React.Dispatch<React.SetStateAction<boolean>>;
+  newProject?: boolean;
 }
 
 // Props for form-compatible version
@@ -84,9 +85,10 @@ export function FileUploadCore({
   setOnSubmit,
   setReadyToSubmit,
   setGpsDataReady,
+  newProject = true,
 }: FilesUploadBaseProps) {
   const [upload, setUpload] = useState(true);
-  const [name, setName] = useState("");
+  const [name, setName] = useState('');
   const { client } = useContext(GlobalContext)!;
   const [scannedFiles, setScannedFiles] = useState<File[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -107,12 +109,14 @@ export function FileUploadCore({
     [day: number]: { start: string; end: string };
   }>({});
   const [masks, setMasks] = useState<number[][][]>([]);
+  const [toUploadFiles, setToUploadFiles] = useState<File[]>([]);
+  const [toUploadSize, setToUploadSize] = useState(0);
   const [model, setModel] = useState<{
     label: string;
     value: string;
   }>({
-    label: "ScoutBot",
-    value: "scoutbot",
+    label: 'ScoutBot',
+    value: 'scoutbot',
   });
 
   useEffect(() => {
@@ -122,7 +126,7 @@ export function FileUploadCore({
 
   useEffect(() => {
     setImageFiles(
-      scannedFiles.filter((file) => file.type.startsWith("image/jpeg"))
+      scannedFiles.filter((file) => file.type.startsWith('image/jpeg'))
     );
   }, [scannedFiles]);
 
@@ -138,23 +142,27 @@ export function FileUploadCore({
 
   useEffect(() => {
     async function getExistingFiles() {
+      // Always fetch existing files on S3 to determine upload count
       setListingS3Images(true);
-
       const { items } = await list({
         path: `images/${name}`,
-        options: { bucket: "inputs", listAll: true },
+        options: { bucket: 'inputs', listAll: true },
       });
-
       const existingFiles = items.reduce<Set<string>>((set, x) => {
-        set.add(x.path.substring("images/".length));
+        set.add(x.path.substring('images/'.length));
         return set;
       }, new Set());
 
-      const fImages = imageFiles.filter(
+      // Files to actually upload
+      const uploadFiles = imageFiles.filter(
         (file) => !existingFiles.has(file.webkitRelativePath)
       );
+      setToUploadFiles(uploadFiles);
+      setToUploadSize(uploadFiles.reduce((acc, f) => acc + f.size, 0));
 
-      setFilteredImageFiles(fImages);
+      // Files to show on map/exif: all for new project, only new for existing
+      const mapFiles = newProject ? imageFiles : uploadFiles;
+      setFilteredImageFiles(mapFiles);
       setListingS3Images(false);
 
       const gpsToCSVData: CsvFile = [];
@@ -164,7 +172,7 @@ export function FileUploadCore({
 
       // Get EXIF metadata for each file
       const exifData = await Promise.all(
-        fImages.map(async (file) => {
+        mapFiles.map(async (file) => {
           const exif = await getExifmeta(file);
 
           const updatedExif = {
@@ -220,7 +228,7 @@ export function FileUploadCore({
     if (imageFiles.length > 0) {
       getExistingFiles();
     }
-  }, [imageFiles]);
+  }, [imageFiles, name, newProject]);
 
   useEffect(() => {
     if (setGpsDataReady) {
@@ -235,7 +243,7 @@ export function FileUploadCore({
   const handleFileInputChange = (files: File[]) => {
     if (files) {
       setScannedFiles(Array.from(files));
-      setName(files[0].webkitRelativePath.split("/")[0]);
+      setName(files[0].webkitRelativePath.split('/')[0]);
     }
   };
 
@@ -243,9 +251,9 @@ export function FileUploadCore({
     const tags = await ExifReader.load(file);
     /* I am saving all of the exifdata to make it easier to answer questions about eg. lens used/ISO/shutterTime/aperture distributions later on. However, some
       EXIF fields are absolutely huge and make writing to my database impossibly slow. I explicitly drop those here*/
-    delete tags["Thumbnail"];
-    delete tags["Images"];
-    delete tags["MakerNote"];
+    delete tags['Thumbnail'];
+    delete tags['Images'];
+    delete tags['MakerNote'];
     for (const tag of Object.keys(tags)) {
       if (tags[tag]?.description?.length > 100) {
         console.log(
@@ -255,27 +263,27 @@ export function FileUploadCore({
         delete tags[tag];
       }
     }
-    const rotated = (tags["Orientation"]?.value as number) > 4;
+    const rotated = (tags['Orientation']?.value as number) > 4;
 
     // Retrieve raw GPS values, allow number[] or string
-    let lat: any = tags["GPSLatitude"]?.value;
-    let lng: any = tags["GPSLongitude"]?.value;
-    const latRef = tags["GPSLatitudeRef"]?.value;
-    const lngRef = tags["GPSLongitudeRef"]?.value;
+    let lat: any = tags['GPSLatitude']?.value;
+    let lng: any = tags['GPSLongitude']?.value;
+    const latRef = tags['GPSLatitudeRef']?.value;
+    const lngRef = tags['GPSLongitudeRef']?.value;
 
     // Convert coordinates to decimal degrees when value is an array
     if (Array.isArray(lat) && latRef) {
-      lat = convertDMSToDD(lat as number[], latRef === "N" ? 1 : -1);
+      lat = convertDMSToDD(lat as number[], latRef === 'N' ? 1 : -1);
     }
     if (Array.isArray(lng) && lngRef) {
-      lng = convertDMSToDD(lng as number[], lngRef === "E" ? 1 : -1);
+      lng = convertDMSToDD(lng as number[], lngRef === 'E' ? 1 : -1);
     }
 
     // Parse EXIF original timestamp, fallback to file.lastModified
     let timestamp: number;
     const dateStr = tags.DateTimeOriginal?.description;
-    if (typeof dateStr === "string") {
-      const dt = DateTime.fromFormat(dateStr, "yyyy:MM:dd HH:mm:ss");
+    if (typeof dateStr === 'string') {
+      const dt = DateTime.fromFormat(dateStr, 'yyyy:MM:dd HH:mm:ss');
       if (dt.isValid) {
         timestamp = dt.toMillis();
       } else {
@@ -292,16 +300,16 @@ export function FileUploadCore({
     }
     return {
       key: file.webkitRelativePath,
-      width: rotated ? tags["Image Height"]?.value : tags["Image Width"]?.value,
+      width: rotated ? tags['Image Height']?.value : tags['Image Width']?.value,
       height: rotated
-        ? tags["Image Width"]?.value
-        : tags["Image Height"]?.value,
+        ? tags['Image Width']?.value
+        : tags['Image Height']?.value,
       timestamp,
-      cameraSerial: tags["Internal Serial Number"]?.value,
+      cameraSerial: tags['Internal Serial Number']?.value,
       gpsData: {
         lat: lat?.toString(),
         lng: lng?.toString(),
-        alt: tags["GPSAltitude"]?.description,
+        alt: tags['GPSAltitude']?.description,
       },
     };
   }
@@ -320,7 +328,7 @@ export function FileUploadCore({
     queryTimestamp: number
   ) => {
     if (csvData.length === 0) {
-      throw new Error("No GPS data available for interpolation.");
+      throw new Error('No GPS data available for interpolation.');
     }
 
     const sortedCsvData = csvData.sort((a, b) => a.timestamp - b.timestamp);
@@ -361,26 +369,26 @@ export function FileUploadCore({
         alt: altitude,
       };
     } else {
-      throw new Error("Extrapolation required for GPS data interpolation.");
+      throw new Error('Extrapolation required for GPS data interpolation.');
     }
   };
 
   const handleSubmit = useCallback(
     async (projectId: string, fromStaleUpload?: boolean) => {
       if (!projectId) {
-        alert("Survey is required");
+        alert('Survey is required');
         return;
       }
 
       if (!csvData) {
-        alert("GPS metadata is required");
+        alert('GPS metadata is required');
         return;
       }
 
       // Simplify return type to avoid complex union
       const imageSets: any[] = await (fetchAllPaginatedResults as any)(
         client.models.ImageSet.list,
-        { filter: { projectId: { eq: projectId } }, selectionSet: ["id"] }
+        { filter: { projectId: { eq: projectId } }, selectionSet: ['id'] }
       );
 
       // only one image set exists for a survey
@@ -485,7 +493,7 @@ export function FileUploadCore({
               exifmeta.timestamp
             );
           } else {
-            console.warn("Timestamp outside of GPS data range");
+            console.warn('Timestamp outside of GPS data range');
           }
         } else {
           const csvRow = csvData.data.find(
@@ -522,6 +530,7 @@ export function FileUploadCore({
       // push new task to upload manager
       setTask({
         projectId,
+        newProject,
         fromStaleUpload: fromStaleUpload ?? false,
         files: gpsFilteredImageFiles,
         retryDelay: 0,
@@ -548,8 +557,8 @@ export function FileUploadCore({
     async function transformFile(file: File) {
       // Check for GPX files by both type and extension
       if (
-        file.type === "text/gpx" ||
-        file.name.toLowerCase().endsWith(".gpx")
+        file.type === 'text/gpx' ||
+        file.name.toLowerCase().endsWith('.gpx')
       ) {
         setAssociateByTimestamp(true);
 
@@ -557,13 +566,13 @@ export function FileUploadCore({
         const [gpxFile, error] = parseGPX(text);
 
         if (error) {
-          console.error("Error parsing GPX file:", error);
+          console.error('Error parsing GPX file:', error);
           return;
         }
 
         if (!gpxFile.tracks || gpxFile.tracks.length === 0) {
-          alert("No tracks found in GPX file");
-          console.error("No tracks found in GPX file");
+          alert('No tracks found in GPX file');
+          console.error('No tracks found in GPX file');
           return;
         }
 
@@ -623,8 +632,8 @@ export function FileUploadCore({
         imagePoints.forEach(({ timestamp }) => {
           const date = new Date(timestamp!);
           const day = date.getUTCDate();
-          const hours = date.getUTCHours().toString().padStart(2, "0");
-          const minutes = date.getUTCMinutes().toString().padStart(2, "0");
+          const hours = date.getUTCHours().toString().padStart(2, '0');
+          const minutes = date.getUTCMinutes().toString().padStart(2, '0');
           const timeStr = `${hours}:${minutes}`;
           if (!initialRanges[day]) {
             initialRanges[day] = { start: timeStr, end: timeStr };
@@ -645,19 +654,19 @@ export function FileUploadCore({
         skipEmptyLines: true,
         complete: function (results) {
           const hasTimestamp = results.data.some(
-            (row: any) => row["Timestamp"]
+            (row: any) => row['Timestamp']
           );
-          const hasFilepath = results.data.some((row: any) => row["FilePath"]);
+          const hasFilepath = results.data.some((row: any) => row['FilePath']);
 
           setAssociateByTimestamp(hasTimestamp && !hasFilepath);
           // Build raw CSV data
           const rawData = results.data
             .map((row: any) => ({
-              timestamp: hasTimestamp ? Number(row["Timestamp"]) : undefined,
-              filepath: hasFilepath ? row["FilePath"] : undefined,
-              lat: Number(row["Latitude"]),
-              lng: Number(row["Longitude"]),
-              alt: Number(row["Altitude"]),
+              timestamp: hasTimestamp ? Number(row['Timestamp']) : undefined,
+              filepath: hasFilepath ? row['FilePath'] : undefined,
+              lat: Number(row['Latitude']),
+              lng: Number(row['Longitude']),
+              alt: Number(row['Altitude']),
             }))
             .sort((a, b) =>
               hasTimestamp
@@ -762,7 +771,7 @@ export function FileUploadCore({
 
   // Helper: converts a "HH:mm" string to total minutes.
   const timeToMinutes = (timeStr: string): number => {
-    const [hours, minutes] = timeStr.split(":").map(Number);
+    const [hours, minutes] = timeStr.split(':').map(Number);
     return hours * 60 + minutes;
   };
 
@@ -789,45 +798,45 @@ export function FileUploadCore({
   return (
     <>
       <Form.Group>
-        <Form.Label className="mb-0">Model</Form.Label>
+        <Form.Label className='mb-0'>Model</Form.Label>
         <Form.Text
-          className="d-block text-muted mt-0 mb-1"
+          className='d-block text-muted mt-0 mb-1'
           style={{ fontSize: 12 }}
         >
           Select the model you wish to use to guide annotation.
         </Form.Text>
         <Select
-          className="text-black"
+          className='text-black'
           value={model}
           options={[
-            { label: "ScoutBot", value: "scoutbot" },
+            { label: 'ScoutBot', value: 'scoutbot' },
             {
-              label: "Elephant Detection Nadir",
-              value: "elephant-detection-nadir",
+              label: 'Elephant Detection Nadir',
+              value: 'elephant-detection-nadir',
             },
             {
-              label: "Manual (images may be processed later)",
-              value: "manual",
+              label: 'Manual (images may be processed later)',
+              value: 'manual',
             },
           ]}
           onChange={(e) => {
             if (e) setModel(e);
           }}
-          placeholder="Select a model"
+          placeholder='Select a model'
         />
       </Form.Group>
       <Form.Group>
-        <Form.Label className="mb-0">Files to Upload</Form.Label>
-        <p className="text-muted mb-1" style={{ fontSize: 12 }}>
+        <Form.Label className='mb-0'>Files to Upload</Form.Label>
+        <p className='text-muted mb-1' style={{ fontSize: 12 }}>
           Upload the survey files by selecting the entire folder you wish to
           upload.
         </p>
         <div
-          className="p-2 mb-2 bg-white text-black"
-          style={{ minHeight: "136px", overflow: "auto" }}
+          className='p-2 mb-2 bg-white text-black'
+          style={{ minHeight: '136px', overflow: 'auto' }}
         >
           {scannedFiles.length > 0 && (
-            <code className="m-0 text-dark">
+            <code className='m-0 text-dark'>
               Folder name: {name}
               <br />
               Total files: {scannedFiles.length}
@@ -837,14 +846,14 @@ export function FileUploadCore({
               Image files size: {formatFileSize(totalImageSize)}
               <br />
               {listingS3Images ? (
-                "Searching for images in S3..."
+                'Searching for images in S3...'
               ) : (
                 <>
-                  New images: {filteredImageFiles.length}
-                  {filteredImageFiles.length > 0 && (
+                  To upload: {toUploadFiles.length}
+                  {toUploadFiles.length > 0 && (
                     <>
                       <br />
-                      New images size: {formatFileSize(filteredImageSize)}
+                      To upload size: {formatFileSize(toUploadSize)}
                     </>
                   )}
                 </>
@@ -854,21 +863,21 @@ export function FileUploadCore({
         </div>
         <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
           }}
         >
           <Form.Group>
             <FileInput
-              id="filepicker"
-              webkitdirectory=""
+              id='filepicker'
+              webkitdirectory=''
               onFileChange={handleFileInputChange}
             >
               <p style={{ margin: 0 }}>
                 {scannedFiles.length > 0
-                  ? "Change source folder"
-                  : "Select Folder"}
+                  ? 'Change source folder'
+                  : 'Select Folder'}
               </p>
             </FileInput>
           </Form.Group>
@@ -905,34 +914,34 @@ export function FileUploadCore({
         </div>
       </Form.Group>
       {scanningEXIF ? (
-        <p className="mt-3 mb-0">
+        <p className='mt-3 mb-0'>
           Scanning images for GPS data (this may take a while)...
         </p>
       ) : imageFiles.length > 0 ? (
-        <Form.Group className="mt-3 d-flex flex-column gap-2">
+        <Form.Group className='mt-3 d-flex flex-column gap-2'>
           <div>
-            <Form.Label className="mb-0">
-              {missingGpsData ? "Missing GPS data" : "GPS data found"}
+            <Form.Label className='mb-0'>
+              {missingGpsData ? 'Missing GPS data' : 'GPS data found'}
             </Form.Label>
-            <Form.Text className="d-block mb-0" style={{ fontSize: "12px" }}>
+            <Form.Text className='d-block mb-0' style={{ fontSize: '12px' }}>
               {missingGpsData
-                ? "Some images do not have GPS data. Please upload the gpx or csv file containing the GPS data for all images."
-                : "The selected images have GPS data. Would you like to upload a separate file containing the GPS data for all images?"}
+                ? 'Some images do not have GPS data. Please upload the gpx or csv file containing the GPS data for all images.'
+                : 'The selected images have GPS data. Would you like to upload a separate file containing the GPS data for all images?'}
             </Form.Text>
-            <Form.Text className="d-block mb-0" style={{ fontSize: "12px" }}>
+            <Form.Text className='d-block mb-0' style={{ fontSize: '12px' }}>
               If your data contains file paths instead of timestamps, the format
-              should be:{" "}
-              <code className="text-primary" style={{ fontSize: "14px" }}>
+              should be:{' '}
+              <code className='text-primary' style={{ fontSize: '14px' }}>
                 {imageFiles[0].webkitRelativePath}
               </code>
             </Form.Text>
           </div>
           <FileInput
-            id="gps-metadata-file"
-            fileType=".csv,.gpx"
+            id='gps-metadata-file'
+            fileType='.csv,.gpx'
             onFileChange={(files) => setFile(files[0])}
           >
-            <p className="mb-0">Select GPS metadata file</p>
+            <p className='mb-0'>Select GPS metadata file</p>
           </FileInput>
         </Form.Group>
       ) : null}
@@ -946,23 +955,23 @@ export function FileUploadCore({
           />
           {associateByTimestamp && (
             <Form.Group>
-              <Form.Label className="mb-0">
+              <Form.Label className='mb-0'>
                 Filter Data by Time Range (Optional)
               </Form.Label>
               <Form.Text
-                className="d-block mb-1 mt-0"
-                style={{ fontSize: "12px" }}
+                className='d-block mb-1 mt-0'
+                style={{ fontSize: '12px' }}
               >
                 Select the effective time range for each day. The default range
                 is the earliest and latest timestamp recorded for that day.
               </Form.Text>
               <Form.Text
-                className="d-block mb-1"
-                style={{ fontSize: "12px", fontStyle: "italic" }}
+                className='d-block mb-1'
+                style={{ fontSize: '12px', fontStyle: 'italic' }}
               >
                 All times shown in UTC.
               </Form.Text>
-              <div className="d-flex flex-column gap-2">
+              <div className='d-flex flex-column gap-2'>
                 {Array.from(
                   new Set(
                     csvData.data.map((row) =>
@@ -974,31 +983,31 @@ export function FileUploadCore({
                   .map((day: number) => (
                     <div
                       key={`day-${day}`}
-                      className="d-flex flex-row align-items-center gap-2"
+                      className='d-flex flex-row align-items-center gap-2'
                     >
-                      <span className="me-2">
+                      <span className='me-2'>
                         {new Date(
                           csvData.data[0].timestamp!
                         ).toLocaleDateString()}
                       </span>
                       <input
-                        type="time"
-                        value={timeRanges[day]?.start || "00:00"}
+                        type='time'
+                        value={timeRanges[day]?.start || '00:00'}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                           updateTimeRange(
                             day,
                             e.target.value,
-                            timeRanges[day]?.end || "23:59"
+                            timeRanges[day]?.end || '23:59'
                           )
                         }
                       />
                       <input
-                        type="time"
-                        value={timeRanges[day]?.end || "23:59"}
+                        type='time'
+                        value={timeRanges[day]?.end || '23:59'}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                           updateTimeRange(
                             day,
-                            timeRanges[day]?.start || "00:00",
+                            timeRanges[day]?.start || '00:00',
                             e.target.value
                           )
                         }
@@ -1007,9 +1016,9 @@ export function FileUploadCore({
                   ))}
               </div>
               <Button
-                variant="primary"
+                variant='primary'
                 onClick={applyTimeFilter}
-                className="mt-2"
+                className='mt-2'
               >
                 Filter Data
               </Button>
@@ -1018,9 +1027,9 @@ export function FileUploadCore({
         </>
       )}
       {csvData && (
-        <div className="mt-3">
+        <div className='mt-3'>
           {(() => {
-            let message = "";
+            let message = '';
             if (associateByTimestamp) {
               const csvTimestamps = csvData.data.map(
                 (row) => row.timestamp || 0
@@ -1034,8 +1043,8 @@ export function FileUploadCore({
               if (csvTimestamps.length) {
                 const formatTimestamp = (timestamp: number) =>
                   new Date(timestamp).toLocaleString(undefined, {
-                    timeZone: "UTC",
-                  }) + " UTC";
+                    timeZone: 'UTC',
+                  }) + ' UTC';
                 if (csvMin < minTimestamp || csvMax > maxTimestamp) {
                   message = `Timestamp mismatch: CSV timestamps (${formatTimestamp(
                     csvMin
@@ -1068,10 +1077,10 @@ export function FileUploadCore({
               }
             }
             const hasData = csvData.data.length > 0;
-            const alertClass = hasData ? "alert-info" : "alert-danger";
+            const alertClass = hasData ? 'alert-info' : 'alert-danger';
             const displayMessage = hasData
               ? message
-              : "No matching GPS data for selected images.";
+              : 'No matching GPS data for selected images.';
             return (
               <div className={`alert ${alertClass} mb-0`}>{displayMessage}</div>
             );
@@ -1089,7 +1098,7 @@ export function FilesUploadForm(props: FilesUploadFormProps) {
 }
 
 export const formatFileSize = (bytes: number): string => {
-  const units = ["B", "KB", "MB", "GB", "TB"];
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let size = bytes;
   let unitIndex = 0;
 
@@ -1122,7 +1131,7 @@ export default function FilesUploadComponent({
       // Simplify return type to avoid complex union
       await (client.models.Project.update as any)({
         id: project.id,
-        status: "uploading",
+        status: 'uploading',
       });
 
       handleClose();
@@ -1132,17 +1141,17 @@ export default function FilesUploadComponent({
   };
 
   return (
-    <Modal show={show} onHide={handleClose} size="xl">
+    <Modal show={show} onHide={handleClose} size='xl'>
       <Modal.Header closeButton>
         <Modal.Title>
-          {fromStaleUpload ? "Resume upload: " : "Add files: "}
+          {fromStaleUpload ? 'Resume upload: ' : 'Add files: '}
           {project?.name}
         </Modal.Title>
       </Modal.Header>
       <Modal.Body>
         <Form>
           {fromStaleUpload && (
-            <p className="mb-2 text-warning">
+            <p className='mb-2 text-warning'>
               This survey&apos;s upload is stale.
               <br />
               Complete the form to continue - only the remaining images will be
@@ -1153,18 +1162,19 @@ export default function FilesUploadComponent({
             project={project}
             setOnSubmit={setUploadSubmitFn}
             setReadyToSubmit={setReadyToSubmit}
+            newProject={false}
           />
         </Form>
       </Modal.Body>
       <Modal.Footer>
         <Button
-          variant="primary"
+          variant='primary'
           disabled={!readyToSubmit}
           onClick={handleModalSubmit}
         >
           Submit
         </Button>
-        <Button variant="dark" onClick={handleClose}>
+        <Button variant='dark' onClick={handleClose}>
           Cancel
         </Button>
       </Modal.Footer>
