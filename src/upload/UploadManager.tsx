@@ -707,7 +707,7 @@ export default function UploadManager() {
         onClose={() => setShowConfirmationModal(false)}
         onConfirm={() => fileInputRef.current?.click()}
         title='Found interrupted uploads'
-        body={`Uploads were interrupted for ${pendingResumeProjectIdRef.current?.name}. Would you like to resume? After confirming, please select the files again. Only the files that were interrupted will be uploaded.`}
+        body={`Uploads were interrupted for ${pendingResumeProjectIdRef.current?.name}. Would you like to resume? After confirming, please select the files again. If the upload was started on this device you won't have to filter the data again. Only the files that were interrupted will be uploaded.`}
       />
       <ConfirmationModal
         show={showPauseConfirmationModal}
