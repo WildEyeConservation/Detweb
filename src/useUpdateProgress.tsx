@@ -94,6 +94,13 @@ export function useUpdateProgress({
 
         return newProgress;
       });
+    } else {
+      // Clear the progress entry when there is no progress to show
+      setProgress((progress) => {
+        const updated = { ...progress };
+        delete updated[taskId];
+        return updated;
+      });
     }
   }, [stepsCompleted, totalSteps, setProgress, taskId, determinateTaskName, indeterminateTaskName, startTime]);
 
