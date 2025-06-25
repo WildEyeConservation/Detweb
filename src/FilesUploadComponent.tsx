@@ -119,6 +119,89 @@ export function FileUploadCore({
     value: 'scoutbot',
   });
 
+  // State for user-defined column mapping phase
+  const [headerFields, setHeaderFields] = useState<string[] | null>(null);
+  const [columnMapping, setColumnMapping] = useState<{
+    timestamp?: string;
+    filepath?: string;
+    lat?: string;
+    lng?: string;
+    alt?: string;
+  }>({});
+  const [mappingConfirmed, setMappingConfirmed] = useState(false);
+  const [timestampInMs, setTimestampInMs] = useState(false);
+
+  // Handler to confirm column mapping before processing
+  const handleConfirmMapping = () => {
+    const {
+      timestamp: timestampCol,
+      filepath: filepathCol,
+      lat: latCol,
+      lng: lngCol,
+    } = columnMapping;
+    if (!latCol || !lngCol) {
+      alert('Please map the Latitude and Longitude columns.');
+      return;
+    }
+    if (!timestampCol && !filepathCol) {
+      alert('Please map at least Timestamp or FilePath column.');
+      return;
+    }
+    setMappingConfirmed(true);
+  };
+
+  // Extract CSV header fields on file selection or skip for GPX
+  useEffect(() => {
+    if (!file) return;
+    if (file.type === 'text/gpx' || file.name.toLowerCase().endsWith('.gpx')) {
+      // GPX files are processed without manual mapping
+      setHeaderFields(null);
+      setMappingConfirmed(true);
+    } else {
+      // CSV files: parse only header row to get column names
+      Papa.parse(file, {
+        header: true,
+        preview: 1,
+        skipEmptyLines: true,
+        complete: (results) => {
+          setHeaderFields(results.meta.fields || []);
+
+          const defaultMappings: {
+            timestamp?: string;
+            filepath?: string;
+            lat?: string;
+            lng?: string;
+            alt?: string;
+          } = {};
+
+          for (const field of results.meta.fields || []) {
+            switch (field.toLowerCase()) {
+              case 'timestamp':
+                defaultMappings.timestamp = field;
+                break;
+              case 'filepath':
+                defaultMappings.filepath = field;
+                break;
+              case 'latitude':
+                defaultMappings.lat = field;
+                break;
+              case 'longitude':
+                defaultMappings.lng = field;
+                break;
+              case 'altitude':
+                defaultMappings.alt = field;
+                break;
+            }
+          }
+          setColumnMapping(defaultMappings);
+          setMappingConfirmed(false);
+        },
+      });
+    }
+    // Clear any existing CSV data until mapping confirmed
+    setCsvData(undefined);
+  }, [file]);
+
   useEffect(() => {
     setFilteredImageSize(0);
     setFilteredImageFiles([]);
@@ -259,7 +342,6 @@ export function FileUploadCore({
         console.log(
           `Tag ${tag} has a description longer than 100 characters. Dropping it.`
         );
-        console.log(tags[tag].description);
         delete tags[tag];
       }
     }
@@ -554,6 +636,7 @@ export function FileUploadCore({
   }, [setOnSubmit, handleSubmit]);
 
   useEffect(() => {
+    if (!file || !mappingConfirmed) return;
     async function transformFile(file: File) {
       // Check for GPX files by both type and extension
       if (
@@ -653,6 +736,20 @@ export function FileUploadCore({
         header: true,
         skipEmptyLines: true,
         complete: function (results) {
+          // Apply user-defined column mapping
+          const mappedData = (results.data as any[]).map((row: any) => {
+            const newRow: any = { ...row };
+            if (columnMapping.timestamp)
+              newRow['Timestamp'] = row[columnMapping.timestamp];
+            if (columnMapping.filepath)
+              newRow['FilePath'] = row[columnMapping.filepath];
+            if (columnMapping.lat) newRow['Latitude'] = row[columnMapping.lat];
+            if (columnMapping.lng) newRow['Longitude'] = row[columnMapping.lng];
+            if (columnMapping.alt) newRow['Altitude'] = row[columnMapping.alt];
+            return newRow;
+          });
+          results.data = mappedData;
+
           const hasTimestamp = results.data.some(
             (row: any) => row['Timestamp']
           );
@@ -662,7 +759,11 @@ export function FileUploadCore({
           // Build raw CSV data
           const rawData = results.data
             .map((row: any) => ({
-              timestamp: hasTimestamp ? Number(row['Timestamp']) : undefined,
+              timestamp: hasTimestamp
+                ? timestampInMs
+                  ? Number(row['Timestamp'])
+                  : Number(row['Timestamp']) * 1000
+                : undefined,
               filepath: hasFilepath ? row['FilePath'] : undefined,
               lat: Number(row['Latitude']),
               lng: Number(row['Longitude']),
@@ -759,7 +860,7 @@ export function FileUploadCore({
     if (file) {
       transformFile(file);
     }
-  }, [file, associateByTimestamp]);
+  }, [file, mappingConfirmed]);
 
   // Update the time range for a given day.
   const updateTimeRange = (day: number, start: string, end: string) => {
@@ -945,6 +1046,154 @@ export function FileUploadCore({
           </FileInput>
         </Form.Group>
       ) : null}
+      {headerFields && !mappingConfirmed && (
+        <Form.Group className='mt-3'>
+          <Form.Label className='mb-0'>Confirm File Structure</Form.Label>
+          <p className='text-muted mb-1' style={{ fontSize: 12 }}>
+            Select which columns from your file correspond to the following
+            fields:
+          </p>
+          <div className='d-flex flex-column gap-2'>
+            <div className='d-flex flex-row gap-2 align-items-center'>
+              <div style={{ flex: 0.5 }}>
+                <Form.Label className='mb-0'>FilePath (optional)</Form.Label>
+                <Select
+                  options={[
+                    { label: 'None', value: '' },
+                    ...headerFields.map((f) => ({ label: f, value: f })),
+                  ]}
+                  value={
+                    columnMapping.filepath
+                      ? {
+                          label: columnMapping.filepath,
+                          value: columnMapping.filepath,
+                        }
+                      : { label: 'None', value: '' }
+                  }
+                  onChange={(opt) =>
+                    setColumnMapping({
+                      ...columnMapping,
+                      filepath: opt ? opt.value : undefined,
+                    })
+                  }
+                  placeholder='Select FilePath column'
+                  className='text-black'
+                />
+              </div>
+              <p
+                className='mb-0'
+                style={{ width: '50px', textAlign: 'center' }}
+              >
+                or
+              </p>
+              <div style={{ flex: 0.5 }}>
+                <div className='d-flex flex-row gap-2 align-items-center justify-content-between'>
+                  <Form.Label className='mb-0'>Timestamp (optional)</Form.Label>
+                  <div className='d-flex flex-row gap-2 align-items-center'>
+                    <label className='me-2'>ms</label>
+                    <Form.Check
+                      type='switch'
+                      id='timestamp-in-ms'
+                      checked={!timestampInMs}
+                      onChange={(e) => setTimestampInMs(!e.target.checked)}
+                    />
+                    <label>s</label>
+                  </div>
+                </div>
+                <Select
+                  options={[
+                    { label: 'None', value: '' },
+                    ...headerFields.map((f) => ({ label: f, value: f })),
+                  ]}
+                  value={
+                    columnMapping.timestamp
+                      ? {
+                          label: columnMapping.timestamp,
+                          value: columnMapping.timestamp,
+                        }
+                      : { label: 'None', value: '' }
+                  }
+                  onChange={(opt) =>
+                    setColumnMapping({
+                      ...columnMapping,
+                      timestamp: opt ? opt.value : undefined,
+                    })
+                  }
+                  placeholder='Select Timestamp column'
+                  className='text-black'
+                />
+              </div>
+            </div>
+            <div>
+              <Form.Label className='mb-0'>Latitude</Form.Label>
+              <Select
+                options={headerFields.map((f) => ({ label: f, value: f }))}
+                value={
+                  columnMapping.lat
+                    ? { label: columnMapping.lat, value: columnMapping.lat }
+                    : null
+                }
+                onChange={(opt) =>
+                  setColumnMapping({
+                    ...columnMapping,
+                    lat: opt ? opt.value : undefined,
+                  })
+                }
+                placeholder='Select Latitude column'
+                className='text-black'
+              />
+            </div>
+            <div>
+              <Form.Label className='mb-0'>Longitude</Form.Label>
+              <Select
+                options={headerFields.map((f) => ({ label: f, value: f }))}
+                value={
+                  columnMapping.lng
+                    ? { label: columnMapping.lng, value: columnMapping.lng }
+                    : null
+                }
+                onChange={(opt) =>
+                  setColumnMapping({
+                    ...columnMapping,
+                    lng: opt ? opt.value : undefined,
+                  })
+                }
+                placeholder='Select Longitude column'
+                className='text-black'
+              />
+            </div>
+            <div>
+              <Form.Label className='mb-0'>Altitude (optional)</Form.Label>
+              <Select
+                options={[
+                  { label: 'None', value: '' },
+                  ...headerFields.map((f) => ({ label: f, value: f })),
+                ]}
+                value={
+                  columnMapping.alt
+                    ? { label: columnMapping.alt, value: columnMapping.alt }
+                    : { label: 'None', value: '' }
+                }
+                onChange={(opt) =>
+                  setColumnMapping({
+                    ...columnMapping,
+                    alt: opt && opt.value ? opt.value : undefined,
+                  })
+                }
+                placeholder='Select Altitude column'
+                className='text-black'
+              />
+            </div>
+          </div>
+          <Button
+            variant='primary'
+            className='mt-2'
+            onClick={handleConfirmMapping}
+          >
+            Confirm File Structure
+          </Button>
+        </Form.Group>
+      )}
       {csvData && (
         <>
           <GPSSubset
