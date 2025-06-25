@@ -16,14 +16,27 @@ export type LaunchTaskOptions = {
   filterObserved: boolean;
   lowerLimit: number;
   upperLimit: number;
+  createQueue: (
+    name: string,
+    hidden: boolean,
+    fifo: boolean
+  ) => Promise<{ id: string; url: string; batchSize: number } | null>;
 };
 
 export type LaunchTaskArgs = {
   selectedTasks: string[];
-  queue: { id: string; url: string; batchSize: number };
-  secondaryQueue: { id: string; url: string; batchSize: number } | null;
   setStepsCompleted: (steps: number) => void;
   setTotalSteps: (steps: number) => void;
+  queueOptions: {
+    name: string;
+    hidden: boolean;
+    fifo: boolean;
+  };
+  secondaryQueueOptions?: {
+    name: string;
+    hidden: boolean;
+    fifo: boolean;
+  };
 };
 
 export function useLaunchTask(
@@ -148,10 +161,10 @@ export function useLaunchTask(
   const launchTask = useCallback(
     async ({
       selectedTasks,
-      queue,
-      secondaryQueue,
       setStepsCompleted,
       setTotalSteps,
+      queueOptions,
+      secondaryQueueOptions,
     }: LaunchTaskArgs) => {
       const allSeenLocations = options.filterObserved
         ? await queryObservations(options.annotationSetId, setStepsCompleted)
@@ -166,11 +179,35 @@ export function useLaunchTask(
 
       setStepsCompleted(0);
       setTotalSteps(allLocations.length);
-      if (!queue.url) {
-        throw new Error('Queue URL not found');
+
+      if (allLocations.length === 0) {
+        // Notify user when no unobserved locations (or no locations at all)
+        if (options.filterObserved) {
+          alert('No unobserved locations to launch');
+        } else {
+          alert('No locations to launch');
+        }
+        return;
       }
 
-      const queueType = await getQueueType(queue.url);
+      const mainQueue = await options.createQueue(
+        queueOptions.name,
+        queueOptions.hidden,
+        queueOptions.fifo
+      );
+      if (!mainQueue) {
+        throw new Error('Primary queue creation failed');
+      }
+
+      const secondaryQueue = secondaryQueueOptions
+        ? await options.createQueue(
+            secondaryQueueOptions.name,
+            secondaryQueueOptions.hidden,
+            secondaryQueueOptions.fifo
+          )
+        : null;
+
+      const queueType = await getQueueType(mainQueue.url);
       const groupId = crypto.randomUUID();
       const batchSize = 10;
       const batchPromises: Promise<any>[] = [];
@@ -213,7 +250,7 @@ export function useLaunchTask(
               .then((sqsClient) =>
                 sqsClient.send(
                   new SendMessageBatchCommand({
-                    QueueUrl: queue.url,
+                    QueueUrl: mainQueue.url,
                     Entries: batchEntries,
                   })
                 )
@@ -229,8 +266,8 @@ export function useLaunchTask(
       await Promise.all(batchPromises);
 
       await client.models.Queue.update({
-        id: queue.id,
-        totalBatches: Math.ceil(allLocations.length / queue.batchSize),
+        id: mainQueue.id,
+        totalBatches: Math.ceil(allLocations.length / mainQueue.batchSize),
       });
 
       for (const taskId of selectedTasks) {

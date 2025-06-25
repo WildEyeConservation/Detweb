@@ -77,31 +77,14 @@ export default function LaunchAnnotationSetModal({
   const [launching, setLaunching] = useState(false);
   const [modelGuided, setModelGuided] = useState<boolean>(true);
 
-  const launchTask = useLaunchTask({
-    allowOutside: allowAnnotationsOutsideLocationBoundaries,
-    filterObserved: viewUnobservedLocationsOnly,
-    lowerLimit: lowerLimit,
-    upperLimit: upperLimit,
-    skipLocationWithAnnotations: skipLocationsWithAnnotations,
-    taskTag: taskTag,
-    annotationSetId: annotationSet.id,
-  });
-
-  const [setLoadingLocations, setTotalLocations] = useUpdateProgress({
-    taskId: `Launch annotation set`,
-    indeterminateTaskName: `Loading locations`,
-    determinateTaskName: 'Processing locations',
-    stepFormatter: (count) => `${count} locations`,
-  });
-
+  // set up queue creation helper
   const { client } = useContext(GlobalContext)!;
   const { getSqsClient } = useContext(UserContext)!;
-
   const createQueue = async (
     name: string,
     hidden: boolean,
     fifo: boolean
-  ): Promise<{ id: string; url: string } | null> => {
+  ): Promise<{ id: string; url: string; batchSize: number } | null> => {
     const safeName =
       makeSafeQueueName(name + crypto.randomUUID()) + (fifo ? '.fifo' : '');
 
@@ -136,6 +119,24 @@ export default function LaunchAnnotationSetModal({
       });
   };
 
+  const launchTask = useLaunchTask({
+    allowOutside: allowAnnotationsOutsideLocationBoundaries,
+    filterObserved: viewUnobservedLocationsOnly,
+    lowerLimit: lowerLimit,
+    upperLimit: upperLimit,
+    skipLocationWithAnnotations: skipLocationsWithAnnotations,
+    taskTag: taskTag,
+    annotationSetId: annotationSet.id,
+    createQueue,
+  });
+
+  const [setLoadingLocations, setTotalLocations] = useUpdateProgress({
+    taskId: `Launch annotation set`,
+    indeterminateTaskName: `Loading locations`,
+    determinateTaskName: 'Processing locations',
+    stepFormatter: (count) => `${count} locations`,
+  });
+
   async function createTiledTask() {
     onClose();
 
@@ -148,22 +149,24 @@ export default function LaunchAnnotationSetModal({
       setLoadingLocations(0);
       setTotalLocations(0);
 
-      const queue = await createQueue('Tiled Annotation', false, false);
-
-      const secondaryQueue = sendDetectionsToSecondaryQueue
-        ? await createQueue('Tiled Annotation Secondary', true, false)
-        : null;
-
-      //push messages to queue
-      if (queue) {
-        await launchTask({
-          selectedTasks: [locationSetId],
-          queue: queue,
-          secondaryQueue: secondaryQueue,
-          setStepsCompleted: setLoadingLocations,
-          setTotalSteps: setTotalLocations,
-        });
-      }
+      // launch via hook (which will create queue only if there are locations)
+      await launchTask({
+        selectedTasks: [locationSetId],
+        setStepsCompleted: setLoadingLocations,
+        setTotalSteps: setTotalLocations,
+        queueOptions: {
+          name: 'Tiled Annotation',
+          hidden: hidden,
+          fifo: false,
+        },
+        secondaryQueueOptions: sendDetectionsToSecondaryQueue
+          ? {
+              name: 'Tiled Annotation Secondary',
+              hidden: true,
+              fifo: false,
+            }
+          : undefined,
+      });
     }
   }
 
@@ -186,19 +189,17 @@ export default function LaunchAnnotationSetModal({
       return;
     }
 
-    //create queue
-    const queue = await createQueue('Model Guided', false, false);
-
-    //push messages to queue
-    if (queue) {
-      await launchTask({
-        selectedTasks: modelGuidedLocationSets.map((ls) => ls.id),
-        queue: queue,
-        secondaryQueue: null,
-        setStepsCompleted: setLoadingLocations,
-        setTotalSteps: setTotalLocations,
-      });
-    }
+    // launch via hook (which will create queue only if there are locations)
+    await launchTask({
+      selectedTasks: modelGuidedLocationSets.map((ls) => ls.id),
+      setStepsCompleted: setLoadingLocations,
+      setTotalSteps: setTotalLocations,
+      queueOptions: {
+        name: 'Model Guided',
+        hidden: false,
+        fifo: false,
+      },
+    });
   }
 
   async function createAnnotationTask() {
