@@ -1198,6 +1198,7 @@ export function FileUploadCore({
         <>
           <GPSSubset
             gpsData={csvData.data}
+            imageFiles={imageFiles}
             onFilter={(filteredData) => {
               setCsvData((prevData) => ({ ...prevData, data: filteredData }));
             }}
