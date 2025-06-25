@@ -164,12 +164,11 @@ export default function NewSurveyModal({
       projectId: project.id,
     });
 
-    setLoading(false);
-    onClose();
-
     if (uploadSubmitFn) {
       await uploadSubmitFn(project.id);
     }
+    setLoading(false);
+    onClose();
   }
 
   useEffect(() => {

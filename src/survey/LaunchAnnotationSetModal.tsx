@@ -39,7 +39,7 @@ export default function LaunchAnnotationSetModal({
     setAllowAnnotationsOutsideLocationBoundaries,
   ] = useState<boolean>(true);
   const [viewUnobservedLocationsOnly, setViewUnobservedLocationsOnly] =
-    useState<boolean>(false);
+    useState<boolean>(true);
   const [manuallyDefineTileDimensions, setManuallyDefineTileDimensions] =
     useState<boolean>(false);
   const [taskTag, setTaskTag] = useState<string>(annotationSet.name);

@@ -105,6 +105,7 @@ export function Upload({ children }: { children: React.ReactNode }) {
     deleteId?: string;
     pauseId?: string;
     fromStaleUpload?: boolean;
+    newProject: boolean;
   }>({
     projectId: "",
     files: [],
@@ -113,6 +114,7 @@ export function Upload({ children }: { children: React.ReactNode }) {
     deleteId: undefined,
     pauseId: undefined,
     fromStaleUpload: false,
+    newProject: false,
   });
   const [progress, setProgress] = useState<{
     processed: number;

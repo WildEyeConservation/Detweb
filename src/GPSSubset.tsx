@@ -37,6 +37,7 @@ interface PolygonSubset {
 export interface GPSSubsetProps {
   gpsData: GPSData[];
   onFilter: (filteredData: GPSData[]) => void;
+  imageFiles?: File[];
 }
 
 // A helper component to fit the map view to the given GPS points
@@ -57,12 +58,30 @@ const FitBoundsToPoints: React.FC<{ points: GPSData[] }> = ({ points }) => {
 };
 
 // The main component
-const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter }) => {
+const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter, imageFiles }) => {
   const [polygons, setPolygons] = useState<PolygonSubset[]>([]);
   const featureGroupRef = useRef<L.FeatureGroup>(null);
   const [shapefileBuffer, setShapefileBuffer] = useState<
     ArrayBuffer | undefined
   >(undefined);
+
+  // Add object URL mapping for imageFiles to show thumbnails
+  const [objectUrlMap, setObjectUrlMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (imageFiles) {
+      const map: Record<string, string> = {};
+      imageFiles.forEach((file) => {
+        const relativePath = (file as any).webkitRelativePath as string;
+        if (relativePath) {
+          map[relativePath.toLowerCase()] = URL.createObjectURL(file);
+        }
+      });
+      setObjectUrlMap(map);
+      return () => {
+        Object.values(map).forEach((url) => URL.revokeObjectURL(url));
+      };
+    }
+  }, [imageFiles]);
 
   const validGpsData = gpsData.filter(
     (point) => Number.isFinite(point.lat) && Number.isFinite(point.lng)
@@ -382,6 +401,15 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter }) => {
                     <div>
                       <strong>Alt:</strong> {point.alt}
                     </div>
+                    {point.filepath && objectUrlMap[point.filepath.toLowerCase()] && (
+                      <div style={{ textAlign: 'center', margin: '8px 0' }}>
+                        <img
+                          src={objectUrlMap[point.filepath.toLowerCase()]}
+                          alt={point.filepath}
+                          style={{ maxWidth: '150px', maxHeight: '150px', objectFit: 'contain', display: 'block', margin: 'auto' }}
+                        />
+                      </div>
+                    )}
                     <Button
                       className="w-100 mt-2"
                       variant="danger"
