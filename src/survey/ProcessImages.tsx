@@ -30,7 +30,6 @@ export default function ProcessImages({
   >([]);
   const [imagesLoaded, setImagesLoaded] = useState<number | null>(null);
   const [locationsLoaded, setLocationsLoaded] = useState<number | null>(null);
-  const [imagesChecked, setImagesChecked] = useState<number | null>(null);
   const [scanned, setScanned] = useState(false);
   const isActiveRef = useRef(true);
 
@@ -84,7 +83,6 @@ export default function ProcessImages({
       nextToken = res.nextToken;
       locCount += res.data.length;
       setLocationsLoaded(locCount);
-      setImagesChecked((imagesChecked) => (imagesChecked ?? 0) + 1);
     } while (nextToken);
 
     if (!isActiveRef.current) {
@@ -215,11 +213,6 @@ export default function ProcessImages({
             <Spinner animation='border' role='status' />
             <p className='mb-0'>Determining images to process...</p>
             <p className='mb-1'>Found {imagesLoaded ?? 0} images</p>
-            {imagesChecked !== null && (
-              <p className='mb-0'>
-                Checked {imagesChecked} images for detections
-              </p>
-            )}
             {locationsLoaded !== null && (
               <>
                 <p className='mb-0'>Searching for detections on images...</p>

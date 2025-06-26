@@ -90,7 +90,7 @@ export const handler: Handler = async (event, context) => {
       "listQueues"
     );
 
-    const projectIds = allQueues.map((queue) => queue.projectId);
+    const deletedProjectIds = new Set<string>();
 
     for (const queue of allQueues) {
       if (!queue.url) {
@@ -129,7 +129,7 @@ export const handler: Handler = async (event, context) => {
         });
 
         await sqsClient.send(new DeleteQueueCommand({ QueueUrl: queue.url }));
-
+        deletedProjectIds.add(queue.projectId);
         continue;
       }
 
@@ -146,7 +146,7 @@ export const handler: Handler = async (event, context) => {
       });
     }
 
-    for (const projectId of projectIds) {
+    for (const projectId of deletedProjectIds) {
       const userMemberships = await fetchAllPages<
         UserProjectMembership,
         "listUserProjectMemberships"

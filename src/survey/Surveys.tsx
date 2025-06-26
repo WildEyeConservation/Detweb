@@ -111,22 +111,21 @@ export default function Surveys() {
   }, [myProjectsHook.data]);
 
   async function deleteProject(projectId: string) {
-    await client.models.Project.update({ id: projectId, status: 'deleted' });
-
-    const projectMemberships = await fetchAllPaginatedResults(
-      client.models.UserProjectMembership.userProjectMembershipsByProjectId,
-      {
-        projectId: projectId,
-      }
-    );
-
-    Promise.all(
-      projectMemberships.map(async (membership) => {
-        await client.models.UserProjectMembership.delete({
-          id: membership.id,
-        });
+    setProjects((projects) =>
+      projects.map((project) => {
+        if (project.id === projectId) {
+          return { ...project, status: 'deleting' };
+        }
+        return project;
       })
     );
+
+    await client.models.Project.update({
+      id: projectId,
+      status: 'deleting',
+    });
+
+    client.mutations.deleteProjectInFull({ projectId: projectId });
   }
 
   async function deleteAnnotationSet(
@@ -196,18 +195,23 @@ export default function Surveys() {
   const tableData = projects
     .filter(
       (project) =>
-        project.status !== 'deleted' &&
+        (project.status !== 'deleted' && project.status !== 'hidden') &&
         (project.name.toLowerCase().includes(search.toLowerCase()) ||
           project.organization.name
             .toLowerCase()
             .includes(search.toLowerCase()))
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     )
     .map((project) => {
       const disabled =
         project.status === 'uploading' ||
         project.status?.includes('processing') ||
         project.status === 'launching' ||
-        project.status === 'updating';
+        project.status === 'updating' ||
+        project.status === 'deleting';
 
       const hasJobs =
         project.queues.length > 0 ||
