@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { type GetQueueAttributesCommandInput } from '@aws-sdk/client-sqs';
 import { GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
 import ConfirmationModal from '../ConfirmationModal';
+import ProjectProgress from './ProjectProgress';
 
 type Project = {
   id: string;
@@ -273,19 +274,7 @@ export default function Jobs() {
                   className="d-flex flex-row gap-2 align-items-center"
                   style={{ maxWidth: '600px', width: '100%' }}
                 >
-                  {queue.batchSize && queue.batchSize > 0 ? (
-                    <div className="w-100">
-                      <p className="mb-0">{batchesRemaining} batches remaining</p>
-                      <ProgressBar
-                        now={queue.totalBatches - batchesRemaining}
-                        max={queue.totalBatches}
-                        animated
-                        className="w-100"
-                      />
-                    </div>
-                  ) : (
-                    <p className="mb-0">Jobs remaining: {numJobsRemaining}</p>
-                  )}
+                  <ProjectProgress projectId={project.id} />
                   <Button
                     className="ms-1"
                     variant="primary"

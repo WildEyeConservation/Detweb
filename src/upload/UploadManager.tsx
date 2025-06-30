@@ -314,7 +314,7 @@ export default function UploadManager() {
       });
 
       const { items } = await list({
-        path: `images/${imageSet.name}`, // image set name
+        path: `images/${imageSet.name}/`, // image set name
         options: { bucket: 'inputs', listAll: true },
       });
 

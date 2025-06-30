@@ -14,6 +14,7 @@ import { runImageRegistration } from '../functions/runImageRegistration/resource
 import { runScoutbot } from '../functions/runScoutbot/resource';
 import { runHeatmapper } from '../functions/runHeatmapper/resource';
 import { runPointFinder } from '../functions/runPointFinder/resource';
+import { deleteProject } from '../functions/deleteProject/resource';
 
 const schema = a
   .schema({
@@ -732,6 +733,14 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(runHeatmapper)),
+    deleteProjectInFull: a
+      .mutation()
+      .arguments({
+        projectId: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(deleteProject)),
   })
   .authorization((allow) => [
     allow.resource(getAnnotationCounts),
@@ -745,6 +754,7 @@ const schema = a
     allow.resource(runScoutbot),
     allow.resource(runHeatmapper),
     allow.resource(runPointFinder),
+    allow.resource(deleteProject),
   ]);
 
 export type Schema = ClientSchema<typeof schema>;
