@@ -384,7 +384,7 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter, imageFiles }) 
                   <div>
                     {point.timestamp && (
                       <div>
-                        <strong>Timestamp:</strong> {point.timestamp}
+                        <strong>Timestamp:</strong> {new Date(point.timestamp).toISOString()}
                       </div>
                     )}
                     {point.filepath && (

@@ -104,6 +104,7 @@ export function FileUploadCore({
   const [file, setFile] = useState<File | undefined>();
   const [scanningEXIF, setScanningEXIF] = useState(false);
   const [csvData, setCsvData] = useState<CsvData | undefined>(undefined);
+  const [fullCsvData, setFullCsvData] = useState<CsvFile | undefined>(undefined);
   const [listingS3Images, setListingS3Images] = useState(false);
   const [timeRanges, setTimeRanges] = useState<{
     [day: number]: { start: string; end: string };
@@ -292,6 +293,7 @@ export function FileUploadCore({
         setCsvData({
           data: gpsToCSVData,
         });
+        setFullCsvData(gpsToCSVData);
         setAssociateByTimestamp(true);
         setMinTimestamp(
           Math.min(...gpsToCSVData.map((row) => row.timestamp || 0))
@@ -705,6 +707,7 @@ export function FileUploadCore({
 
         // Update CSV data and bounds for images
         setCsvData({ data: imagePoints });
+        setFullCsvData(imagePoints);
         const imgTimestamps = imagePoints.map((pt) => pt.timestamp!);
         setMinTimestamp(Math.min(...imgTimestamps));
         setMaxTimestamp(Math.max(...imgTimestamps));
@@ -820,10 +823,28 @@ export function FileUploadCore({
               })
               .filter((pt) => pt !== null) as CsvFile;
             setCsvData({ data: imagePoints });
+            setFullCsvData(imagePoints);
             // Update bounds based on image points
             const imgTimestamps = imagePoints.map((pt) => pt.timestamp!);
             setMinTimestamp(Math.min(...imgTimestamps));
             setMaxTimestamp(Math.max(...imgTimestamps));
+
+            // Initialize time ranges based on image timestamps
+            const initialRanges: { [day: number]: { start: string; end: string } } = {};
+            imagePoints.forEach(({ timestamp }) => {
+              const date = new Date(timestamp!);
+              const day = date.getUTCDate();
+              const hours = date.getUTCHours().toString().padStart(2, '0');
+              const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+              const timeStr = `${hours}:${minutes}`;
+              if (!initialRanges[day]) {
+                initialRanges[day] = { start: timeStr, end: timeStr };
+              } else {
+                if (timeStr < initialRanges[day].start) initialRanges[day].start = timeStr;
+                if (timeStr > initialRanges[day].end) initialRanges[day].end = timeStr;
+              }
+            });
+            setTimeRanges(initialRanges);
           } else if (!hasTimestamp && hasFilepath) {
             // Georeference each image by matching CSV filepaths
             const imagePoints = filteredImageFiles
@@ -844,13 +865,33 @@ export function FileUploadCore({
               })
               .filter((pt) => pt !== null) as CsvFile;
             setCsvData({ data: imagePoints });
+            setFullCsvData(imagePoints);
           } else {
             // Use raw CSV data
             setCsvData({ data: rawData });
+            setFullCsvData(rawData);
             if (hasTimestamp) {
               const timestamps = rawData.map((r) => r.timestamp!);
               setMinTimestamp(Math.min(...timestamps));
               setMaxTimestamp(Math.max(...timestamps));
+
+              // Initialize time ranges based on CSV timestamps
+              const initialRanges: { [day: number]: { start: string; end: string } } = {};
+              rawData.forEach(({ timestamp }) => {
+                if (timestamp === undefined) return;
+                const date = new Date(timestamp!);
+                const day = date.getUTCDate();
+                const hours = date.getUTCHours().toString().padStart(2, '0');
+                const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+                const timeStr = `${hours}:${minutes}`;
+                if (!initialRanges[day]) {
+                  initialRanges[day] = { start: timeStr, end: timeStr };
+                } else {
+                  if (timeStr < initialRanges[day].start) initialRanges[day].start = timeStr;
+                  if (timeStr > initialRanges[day].end) initialRanges[day].end = timeStr;
+                }
+              });
+              setTimeRanges(initialRanges);
             }
           }
         },
@@ -878,22 +919,27 @@ export function FileUploadCore({
 
   // Filter csvData rows by each day's selected time range.
   const applyTimeFilter = () => {
-    setCsvData((prev) => {
-      if (!prev) return prev;
-      const filtered = prev.data.filter((row) => {
-        const date = new Date(row.timestamp!);
-        const day = date.getUTCDate();
-        if (timeRanges[day]) {
-          const rowMinutes = date.getUTCHours() * 60 + date.getUTCMinutes();
-          const startMinutes = timeToMinutes(timeRanges[day].start);
-          const endMinutes = timeToMinutes(timeRanges[day].end);
-          return rowMinutes >= startMinutes && rowMinutes <= endMinutes;
-        }
-        return true;
-      });
-      return { data: filtered };
+    if (!fullCsvData) return;
+    const filtered = fullCsvData.filter((row) => {
+      if (row.timestamp === undefined) return false;
+      const date = new Date(row.timestamp!);
+      const day = date.getUTCDate();
+      const start = timeRanges[day]?.start || '00:00';
+      const end = timeRanges[day]?.end || '23:59';
+      const rowMinutes = date.getUTCHours() * 60 + date.getUTCMinutes();
+      const startMinutes = timeToMinutes(start);
+      const endMinutes = timeToMinutes(end);
+      return rowMinutes >= startMinutes && rowMinutes <= endMinutes;
     });
+    setCsvData({ data: filtered });
   };
+
+  // Automatically re-filter when time ranges change
+  useEffect(() => {
+    if (associateByTimestamp) {
+      applyTimeFilter();
+    }
+  }, [timeRanges, fullCsvData, associateByTimestamp]);
 
   // Common UI elements shared between modal and form versions
   return (
@@ -1265,13 +1311,6 @@ export function FileUploadCore({
                     </div>
                   ))}
               </div>
-              <Button
-                variant='primary'
-                onClick={applyTimeFilter}
-                className='mt-2'
-              >
-                Filter Data
-              </Button>
             </Form.Group>
           )}
         </>
