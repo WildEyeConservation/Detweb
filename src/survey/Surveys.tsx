@@ -21,6 +21,8 @@ import { fetchAllPaginatedResults } from '../utils.tsx';
 import { Badge } from 'react-bootstrap';
 import { DeleteQueueCommand } from '@aws-sdk/client-sqs';
 import localforage from 'localforage';
+import UploadIntegrityChecker from '../upload/UploadIntegrityChecker.tsx';
+import ProjectProgress from '../user/ProjectProgress.tsx';
 
 const fileStoreUploaded = localforage.createInstance({
   name: 'fileStoreUploaded',
@@ -446,7 +448,8 @@ export default function Surveys() {
                 ))}
             </div>
             {hasJobs && (
-              <div className='d-flex flex-row gap-2'>
+              <div className='d-flex flex-row gap-2 w-100 align-items-center' style={{ maxWidth: '500px' }}>
+                <ProjectProgress projectId={project.id} />
                 <Button
                   className='flex align-items-center justify-content-center'
                   disabled={disabled}
@@ -521,6 +524,9 @@ export default function Surveys() {
             </Card.Footer>
           )}
         </Card>
+        {process.env.NODE_ENV === 'development' && (
+          <UploadIntegrityChecker />
+        )}
       </div>
       <NewSurveyModal
         show={modalToShow === 'newSurvey'}
