@@ -145,7 +145,7 @@ export const handler: Handler = async (event, context) => {
                   key: 'heatmaps/' + image.originalPath + '.h5',
                   width: 1024,
                   height: 1024,
-                  threshold: 1 - Math.pow(10, -5),
+                  threshold: 1 - Math.pow(10, -2),
                   bucket: env.OUTPUTS_BUCKET_NAME,
                   setId: locationSet.id,
                 }),

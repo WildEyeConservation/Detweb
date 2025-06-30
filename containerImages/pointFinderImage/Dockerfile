@@ -23,4 +23,4 @@ RUN pip install --user -r requirements.txt
 #ENV PATH="/home/myuser/.local/bin:${PATH}"
 #COPY --chown=myuser:myuser code code
 #WORKDIR /home/myuser/code
-CMD ["python3", "processSQS.py"]
+CMD ["python3", "-u", "processSQS.py"]
