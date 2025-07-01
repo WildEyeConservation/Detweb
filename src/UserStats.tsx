@@ -6,7 +6,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import type { UserStatsType } from "./schemaTypes";
 import exportFromJSON from "export-from-json";
-import { QueryCommand } from "@aws-sdk/client-dynamodb";
+import { QueryCommand, BatchGetItemCommand } from "@aws-sdk/client-dynamodb";
 import { unmarshall } from "@aws-sdk/util-dynamodb";
 import { useUsers } from "./apiInterface";
 import Select from "react-select";
@@ -46,6 +46,9 @@ export default function UserStats() {
       }[]
     | undefined
   >([]);
+
+  // State for export loading
+  const [exporting, setExporting] = useState(false);
 
   const startString = startDate
     ? `${startDate?.getFullYear()}-${String(startDate?.getMonth() + 1).padStart(
@@ -196,63 +199,92 @@ export default function UserStats() {
     { content: "Waiting time", style: undefined },
   ];
 
-  async function queryObservations(annotationSetId: string): Promise<string[]> {
+  async function queryObservations(annotationSetId: string): Promise<any[]> {
     const dynamoClient = await getDynamoClient();
-    const locationIds: string[] = [];
+    const observations: any[] = [];
     let lastEvaluatedKey: Record<string, any> | undefined = undefined;
+    // Fetch observation records
     do {
       const command = new QueryCommand({
         TableName: backend.custom.observationTable,
         IndexName: "observationsByAnnotationSetIdAndCreatedAt",
         KeyConditionExpression:
-          "annotationSetId  = :annotationSetId and createdAt BETWEEN :lowerLimit and :upperLimit",
+          "annotationSetId = :annotationSetId and createdAt BETWEEN :lowerLimit and :upperLimit",
         ExpressionAttributeValues: {
-          ":annotationSetId": {
-            S: annotationSetId,
-          },
-          ":lowerLimit": {
-            S: startString + "T00:00:00Z",
-          },
-          ":upperLimit": {
-            S: endString + "T23:59:59Z",
-          },
+          ":annotationSetId": { S: annotationSetId },
+          ":lowerLimit": { S: `${startString}T00:00:00Z` },
+          ":upperLimit": { S: `${endString}T23:59:59Z` },
         },
         ProjectionExpression:
-          "createdAt,annotationCount, timeTaken, waitingTime, #o",
+          "createdAt,annotationCount,timeTaken,waitingTime,#o,locationId",
         ExpressionAttributeNames: { "#o": "owner" },
         ExclusiveStartKey: lastEvaluatedKey,
-        // Increase page size for better throughput
         Limit: 1000,
       });
       try {
         const response = await dynamoClient.send(command);
-        // Extract imageIds from the response
-        locationIds.push(...response.Items.map((item) => unmarshall(item)));
-        lastEvaluatedKey = response.LastEvaluatedKey;
+        observations.push(...(response.Items || []).map((item) => unmarshall(item)));
+        lastEvaluatedKey = (response as any).LastEvaluatedKey;
       } catch (error) {
         console.error("Error querying DynamoDB:", error);
         throw error;
       }
     } while (lastEvaluatedKey);
-    return locationIds;
+
+    // Fetch location confidences
+    const locationIds = Array.from(new Set(observations.map((o) => o.locationId)));
+    const locMap: Record<string, number> = {};
+    for (let i = 0; i < locationIds.length; i += 100) {
+      const chunk = locationIds.slice(i, i + 100);
+      const batchGet = new BatchGetItemCommand({
+        RequestItems: {
+          [backend.custom.locationTable]: {
+            Keys: chunk.map((id) => ({ id: { S: id } })),
+            ProjectionExpression: "id,confidence",
+          },
+        },
+      });
+      const locResponse = await dynamoClient.send(batchGet);
+      const items = (locResponse as any).Responses?.[backend.custom.locationTable] || [];
+      for (const attr of items) {
+        const loc = unmarshall(attr);
+        locMap[loc.id] = loc.confidence;
+      }
+    }
+
+    // Enrich observations with confidence
+    return observations.map((o) => ({
+      ...o,
+      confidence: locMap[o.locationId] ?? null,
+    }));
   }
 
   const handleExportData = async () => {
-    //Create a lookup table for user names
-    const userLookup = new Map<string, string>();
-    allUsers.forEach((u) => userLookup.set(u.id + "::" + u.id, u.name));
-    for (const annotationSetId of selectedSets?.map((s) => s.value) || []) {
-      const observations = await queryObservations(annotationSetId);
-      const fileName = `DetWebObservations-${annotationSetId}`;
-      const exportType = exportFromJSON.types.csv;
-      exportFromJSON({
-        data: observations.map((o) => ({
-          ...o,
-          owner: userLookup.get(o.owner),
-        })),
-        fileName,
-        exportType,
-      });
+    // Start export loading
+    setExporting(true);
+    try {
+      const userLookup = new Map<string, string>();
+      allUsers.forEach((u) => userLookup.set(u.id + "::" + u.id, u.name));
+      for (const annotationSetId of selectedSets?.map((s) => s.value) || []) {
+        const observations = await queryObservations(annotationSetId);
+        const fileName = `${project?.label}_Observations_${startString}_${endString}`.replace(/ /g, "_");
+        const exportType = exportFromJSON.types.csv;
+        exportFromJSON({
+          data: observations.map((o) => {
+            const { confidence, ...rest } = o;
+            return {
+              ...rest,
+              owner: userLookup.get(o.owner),
+              locationConfidence: confidence,
+            };
+          }),
+          fileName,
+          exportType,
+        });
+      }
+    } finally {
+      // End export loading
+      setExporting(false);
     }
   };
 
@@ -371,8 +403,12 @@ export default function UserStats() {
           </div>
         </Card.Body>
         <Card.Footer className="d-flex justify-content-center">
-          <button onClick={handleExportData} className="btn btn-primary">
-            Export Raw Observation Data
+          <button
+            onClick={handleExportData}
+            className="btn btn-primary"
+            disabled={exporting}
+          >
+            {exporting ? "Loading..." : "Export Raw Observation Data"}
           </button>
         </Card.Footer>
       </Card>
