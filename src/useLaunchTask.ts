@@ -169,13 +169,26 @@ export function useLaunchTask(
       const allSeenLocations = options.filterObserved
         ? await queryObservations(options.annotationSetId, setStepsCompleted)
         : [];
-      const allLocations = (
+      let allLocations = (
         await Promise.all(
           selectedTasks.map((task) => queryLocations(task, setStepsCompleted))
         )
       )
         .flat()
         .filter((l) => !allSeenLocations.includes(l));
+      // Interleave locations in fixed chunks of 100 to keep users engaged
+      const chunkSize = 100;
+      const passes = Math.ceil(allLocations.length / chunkSize);
+      const interleavedLocations: string[] = [];
+      for (let i = 0; i < chunkSize; i++) {
+        for (let j = 0; j < passes; j++) {
+          const index = j * chunkSize + i;
+          if (index < allLocations.length) {
+            interleavedLocations.push(allLocations[index]);
+          }
+        }
+      }
+      allLocations = interleavedLocations.reverse();
 
       setStepsCompleted(0);
       setTotalSteps(allLocations.length);
