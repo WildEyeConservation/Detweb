@@ -311,9 +311,9 @@ export default function useTesting(useSecondaryCandidates: boolean = false) {
       message_id: id,
       location: {
         id: location.locationId,
-        annotationSetId: crypto.randomUUID(),
+        annotationSetId: location.annotationSetId,
       },
-      allowOutside: false,
+      allowOutside: true,
       taskTag: "",
       secondaryQueueUrl: undefined,
       skipLocationWithAnnotations: false,
@@ -321,6 +321,7 @@ export default function useTesting(useSecondaryCandidates: boolean = false) {
       ack: () => {
         console.log("Ack successful for test");
       },
+      isTest: true,
     };
     return body;
   }, [i, primaryCandidates, secondaryCandidates, zoom]);

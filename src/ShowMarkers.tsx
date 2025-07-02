@@ -27,10 +27,11 @@ import type { AnnotationsHook } from "./Context";
 import DetwebMarker from "./DetwebMarker";
 import { random } from "mathjs";
 import DummyMarkers from "./DummyMarkers";
+
 interface ShowMarkersProps {
   activeAnnotation?: AnnotationType;
-  // annotationsHook: AnnotationsHook;
-  annotationSetId: string;
+  annotationSetId: string;            // ID used to filter which annotations to show
+  realAnnotationSetId?: string;       // optional real ID used to filter categories
 }
 
 /* ShowMarkers uses a annotationHook that is passed as a parameter to display the annotations on the map and to allow for editing/deleting of annotations.
@@ -81,7 +82,9 @@ export function ShowMarkers(props: ShowMarkersProps) {
               key={annotation.id}
               annotation={{ ...annotation }}
               categories={categories?.filter(
-                (c) => c.annotationSetId === props.annotationSetId
+                (c) =>
+                  c.annotationSetId ===
+                  (props.realAnnotationSetId ?? props.annotationSetId)
               )}
               activeAnnotation={activeAnnotation}
               user={user}

@@ -28,6 +28,7 @@ export default function AnnotationImage(props: any) {
     allowOutside,
     zoom,
     hideNavButtons,
+    isTest,
   } = props;
   const { annotationSetId } = location;
   const { client } = useContext(GlobalContext)!;
@@ -36,17 +37,16 @@ export default function AnnotationImage(props: any) {
     useContext(UserContext)!;
   const navigate = useNavigate();
   const { surveyId } = useParams();
-  const subscriptionFilter = useMemo(
-    () => ({
-      filter: {
-        and: [
-          { setId: { eq: location.annotationSetId } },
-          { imageId: { eq: location.image.id } },
-        ],
-      },
-    }),
-    [annotationSetId, location.image.id]
-  );
+  const subscriptionFilter = useMemo(() => {
+    const conditions: any[] = [];
+    if (!isTest) {
+      // normal mode: only subscribe to this annotation set
+      conditions.push({ setId: { eq: annotationSetId } });
+    }
+    // always subscribe to changes for this image
+    conditions.push({ imageId: { eq: location.image.id } });
+    return { filter: { and: conditions } };
+  }, [annotationSetId, location.image.id, isTest]);
   const {
     categoriesHook: { data: categories },
   } = useContext(ProjectContext)!;
@@ -64,23 +64,24 @@ export default function AnnotationImage(props: any) {
   );
   const stats = useImageStats(annotationsHook);
   const memoizedChildren = useMemo(() => {
-    console.log('memoizing');
-    // non-existing setId for testing since annotations are recorded in context
-    const setId = isTesting ? '123' : annotationSetId;
     const source = props.taskTag ? `manual-${props.taskTag}` : 'manual';
     return [
       <CreateAnnotationOnClick
-        key="caok"
+        key='caok'
         allowOutside={allowOutside}
         location={location}
-        annotationSet={setId}
         source={source}
+        isTest={isTest}
       />,
-      <ShowMarkers key="showMarkers" annotationSetId={setId} />,
-      <Location key="location" {...location} />,
+      <ShowMarkers
+        key='showMarkers'
+        annotationSetId={isTest ? '123' : annotationSetId}
+        realAnnotationSetId={annotationSetId}
+      />,
+      <Location key='location' {...location} />,
       <MapLegend
-        key="legend"
-        position="bottomright"
+        key='legend'
+        position='bottomright'
         annotationSetId={annotationSetId}
       />,
     ].concat(
@@ -90,10 +91,11 @@ export default function AnnotationImage(props: any) {
           <CreateAnnotationOnHotKey
             key={category.id}
             hotkey={category.shortcutKey}
-            setId={setId}
+            setId={annotationSetId}
             category={category}
             imageId={location.image.id}
             source={source}
+            isTest={isTest}
           />
         ))
     );
@@ -126,7 +128,7 @@ export default function AnnotationImage(props: any) {
       secondaryQueueUrl={props.secondaryQueueUrl}
       taskTag={props.taskTag}
     >
-      <div className="d-flex flex-md-row flex-column justify-content-center w-100 h-100 gap-3 overflow-auto">
+      <div className='d-flex flex-md-row flex-column justify-content-center w-100 h-100 gap-3 overflow-auto'>
         <div
           className={`d-flex flex-column align-items-center w-100 h-100 gap-3`}
           style={{
@@ -134,24 +136,27 @@ export default function AnnotationImage(props: any) {
           }}
         >
           <div
-            className="d-flex flex-row justify-content-center align-items-center w-100 gap-3 overflow-hidden"
+            className='d-flex flex-row justify-content-center align-items-center w-100 gap-3 overflow-hidden'
             style={{ position: 'relative', height: '26px' }}
           >
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-              }}
-            >
-              <Share2
-                size={24}
-                onClick={handleShare}
-                style={{ cursor: 'pointer' }}
-              />
-            </div>
+            {!isTest && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                }}
+              >
+                <Share2
+                  size={24}
+                  onClick={handleShare}
+                  style={{ cursor: 'pointer' }}
+                />
+              </div>
+            )}
+
             {visible && (
-              <Badge bg="secondary">
+              <Badge bg='secondary'>
                 Working on:{' '}
                 {props.taskTag || currentTaskTag
                   ? `${props.taskTag || currentTaskTag}`
@@ -171,19 +176,20 @@ export default function AnnotationImage(props: any) {
             ack={ack}
             annotationSet={annotationSetId}
             hideNavButtons={hideNavButtons}
+            isTest={isTest}
           >
             {visible && memoizedChildren}
           </Image>
         </div>
-        <div className="d-flex flex-column align-items-center gap-3">
+        <div className='d-flex flex-column align-items-center gap-3'>
           <SideLegend annotationSetId={annotationSetId} />
           {isAnnotatePath && (
             <Button
-              variant="success"
+              variant='success'
               onClick={() => {
                 navigate('/jobs');
               }}
-              className="w-100"
+              className='w-100'
             >
               Save & Exit
             </Button>

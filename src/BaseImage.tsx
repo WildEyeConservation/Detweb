@@ -8,32 +8,32 @@ import React, {
   useMemo,
   useRef,
   useCallback,
-} from "react";
-import { MapContainer, LayersControl, LayerGroup } from "react-leaflet";
-import { NavButtons } from "./NavButtons";
-import * as L from "leaflet";
-import "leaflet-contextmenu";
-import "leaflet-contextmenu/dist/leaflet.contextmenu.css";
-import "./BaseImage.css";
-import { useHotkeys } from "react-hotkeys-hook";
+} from 'react';
+import { MapContainer, LayersControl, LayerGroup } from 'react-leaflet';
+import { NavButtons } from './NavButtons';
+import * as L from 'leaflet';
+import 'leaflet-contextmenu';
+import 'leaflet-contextmenu/dist/leaflet.contextmenu.css';
+import './BaseImage.css';
+import { useHotkeys } from 'react-hotkeys-hook';
 import {
   ImageType,
   ImageFileType,
   LocationType,
   AnnotationSetType,
-} from "./schemaTypes";
+} from './schemaTypes';
 import {
   GlobalContext,
   ImageContext,
   ManagementContext,
   UserContext,
   ProjectContext,
-} from "./Context";
-import { StorageLayer } from "./StorageLayer";
-import { getUrl } from "aws-amplify/storage";
-import ZoomTracker from "./ZoomTracker";
-import OverlapOutline from "./OverlapOutline";
-import { fetchAllPaginatedResults } from "./utils";
+} from './Context';
+import { StorageLayer } from './StorageLayer';
+import { getUrl } from 'aws-amplify/storage';
+import ZoomTracker from './ZoomTracker';
+import OverlapOutline from './OverlapOutline';
+import { fetchAllPaginatedResults } from './utils';
 
 export interface BaseImageProps {
   image: ImageType;
@@ -49,6 +49,7 @@ export interface BaseImageProps {
   annotationSet: AnnotationSetType;
   otherImageId?: string;
   hideNavButtons?: boolean;
+  isTest?: boolean;
 }
 
 const BaseImage: React.FC<BaseImageProps> = memo(
@@ -82,11 +83,11 @@ const BaseImage: React.FC<BaseImageProps> = memo(
       stats,
       otherImageId,
       hideNavButtons,
+      isTest,
     } = props;
     const { image } = location;
     const prevPropsRef = useRef(props);
-    const source = imageFiles.find((file) => file.type == "image/jpeg")?.key;
-    const [isTest, setIsTest] = useState(false);
+    const source = imageFiles.find((file) => file.type == 'image/jpeg')?.key;
     const belongsToCurrentProject = projectMemberships?.find(
       (pm) => pm.userId == user.userId && pm.projectId == project.id
     );
@@ -118,7 +119,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
         {
           imageId: location!.image.id,
           setId: { eq: location.annotationSetId },
-          selectionSet: ["categoryId", "x", "y"],
+          selectionSet: ['categoryId', 'x', 'y'],
         }
       );
 
@@ -166,7 +167,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
         }
       }
 
-      alert("Location added to test cases");
+      alert('Location added to test cases');
     }
 
     useEffect(() => {
@@ -174,7 +175,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
         setFullyLoadedTimestamp(Date.now());
         if (visible) {
           setTimeout(() => {
-            console.log("Setting can advance to true");
+            console.log('Setting can advance to true');
             setCanAdvance(true);
           }, 100);
         }
@@ -186,7 +187,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
         setVisibleTimestamp(Date.now());
         if (fullyLoaded) {
           setTimeout(() => {
-            console.log("Setting can advance to true");
+            console.log('Setting can advance to true');
             setCanAdvance(true);
           }, 100);
         }
@@ -215,12 +216,12 @@ const BaseImage: React.FC<BaseImageProps> = memo(
     }, [image]);
 
     useHotkeys(
-      "RightArrow",
+      'RightArrow',
       next ? next : () => {},
       { enabled: canAdvance && visible },
       [next]
     );
-    useHotkeys("LeftArrow", prev ? prev : () => {}, { enabled: visible }, [
+    useHotkeys('LeftArrow', prev ? prev : () => {}, { enabled: visible }, [
       prev,
     ]);
 
@@ -234,98 +235,19 @@ const BaseImage: React.FC<BaseImageProps> = memo(
               index: 0,
               callback: () => {
                 navigator.clipboard
-                  .writeText(source || "")
+                  .writeText(source || '')
                   .catch((err) =>
-                    console.error("Failed to copy to clipboard:", err)
+                    console.error('Failed to copy to clipboard:', err)
                   );
               },
             },
             {
-              text: "Copy permalink to this location",
-              disabled: !location?.id,
-              callback: () => {
-                const url = window.location.href;
-                // now replace the last part of the url with the location id
-                const newUrl = url.replace(
-                  /\/[^/]+\/?$/,
-                  `/location/${location?.id}/${location?.annotationSetId}`
-                );
-                navigator.clipboard
-                  .writeText(newUrl)
-                  .catch((err) =>
-                    console.error("Failed to copy to clipboard:", err)
-                  );
-              },
-            },
-            {
-              text: "Copy permalink to this image",
-              callback: () => {
-                const url = window.location.href;
-                // now replace the last part of the url with the location id
-                const newUrl = url.replace(
-                  /\/[^/]+\/?$/,
-                  `/image/${location.image.id}/${location?.annotationSetId}`
-                );
-                navigator.clipboard
-                  .writeText(newUrl)
-                  .catch((err) =>
-                    console.error("Failed to copy to clipboard:", err)
-                  );
-              },
-            },
-            {
-              text: "Display Image Statistics",
-              callback: () => {
-                alert(JSON.stringify(stats));
-              },
-            },
-            {
-              text: `Open previous image`,
-              callback: async () => {
-                const newUrl = window.location.href.replace(
-                  /^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/,
-                  `$1/image/${prevImages?.[0]?.image?.id}/${location?.annotationSetId}`
-                );
-                window.open(newUrl, "_blank");
-              },
-            },
-            {
-              text: `Open next image`,
-              callback: async () => {
-                const newUrl = window.location.href.replace(
-                  /^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/,
-                  `$1/image/${nextImages?.[0]?.image?.id}/${location?.annotationSetId}`
-                );
-                window.open(newUrl, "_blank");
-              },
-            },
-            {
-              text: `Register against previous image`,
-              callback: async () => {
-                const newUrl = window.location.href.replace(
-                  /^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/,
-                  `$1/register/${prevImages?.[0]?.image?.id}/${image.id}/${location?.annotationSetId}`
-                );
-                window.open(newUrl, "_blank");
-              },
-            },
-            {
-              text: `Register against next image`,
-              callback: async () => {
-                const newUrl = window.location.href.replace(
-                  /^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/,
-                  `$1/register/${image.id}/${nextImages?.[0]?.image?.id}/${location?.annotationSetId}`
-                );
-                window.open(newUrl, "_blank");
-              },
-            },
-            {
-              text: "Download this image",
+              text: 'Download this image',
               callback: () => {
                 getUrl({
-                  path: "images/" + source,
+                  path: 'images/' + source,
                   options: {
-                    bucket: "inputs",
+                    bucket: 'inputs',
                     validateObjectExistence: true,
                     expiresIn: 300,
                   },
@@ -340,9 +262,9 @@ const BaseImage: React.FC<BaseImageProps> = memo(
                   const objectUrl = window.URL.createObjectURL(blob);
 
                   // Setup download link
-                  const a = document.createElement("a");
+                  const a = document.createElement('a');
                   a.href = objectUrl;
-                  a.download = source.split("/").pop() || "image.jpg"; // Get filename from source
+                  a.download = source.split('/').pop() || 'image.jpg'; // Get filename from source
 
                   // Trigger download
                   document.body.appendChild(a);
@@ -356,12 +278,99 @@ const BaseImage: React.FC<BaseImageProps> = memo(
             },
           ]
         );
-        // if (belongsToCurrentProject?.isAdmin && location?.id) {
-        //   items.push({
-        //     text: "Use as test location",
-        //     callback: () => useForTestPreset(),
-        //   });
-        // }
+
+        if (belongsToCurrentProject?.isAdmin && location?.id && !isTest) {
+          items.push({
+            text: 'Use as test location',
+            callback: () => useForTestPreset(),
+          });
+        }
+
+        if (!isTest) {
+          items.push(
+            ...[
+              {
+                text: `Open previous image`,
+                callback: async () => {
+                  const newUrl = window.location.href.replace(
+                    /^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/,
+                    `$1/image/${prevImages?.[0]?.image?.id}/${location?.annotationSetId}`
+                  );
+                  window.open(newUrl, '_blank');
+                },
+              },
+              {
+                text: `Open next image`,
+                callback: async () => {
+                  const newUrl = window.location.href.replace(
+                    /^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/,
+                    `$1/image/${nextImages?.[0]?.image?.id}/${location?.annotationSetId}`
+                  );
+                  window.open(newUrl, '_blank');
+                },
+              },
+              {
+                text: `Register against previous image`,
+                callback: async () => {
+                  const newUrl = window.location.href.replace(
+                    /^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/,
+                    `$1/register/${prevImages?.[0]?.image?.id}/${image.id}/${location?.annotationSetId}`
+                  );
+                  window.open(newUrl, '_blank');
+                },
+              },
+              {
+                text: `Register against next image`,
+                callback: async () => {
+                  const newUrl = window.location.href.replace(
+                    /^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/,
+                    `$1/register/${image.id}/${nextImages?.[0]?.image?.id}/${location?.annotationSetId}`
+                  );
+                  window.open(newUrl, '_blank');
+                },
+              },
+              {
+                text: 'Display Image Statistics',
+                callback: () => {
+                  alert(JSON.stringify(stats));
+                },
+              },
+              {
+                text: 'Copy permalink to this location',
+                disabled: !location?.id,
+                callback: () => {
+                  const url = window.location.href;
+                  // now replace the last part of the url with the location id
+                  const newUrl = url.replace(
+                    /\/[^/]+\/?$/,
+                    `/location/${location?.id}/${location?.annotationSetId}`
+                  );
+                  navigator.clipboard
+                    .writeText(newUrl)
+                    .catch((err) =>
+                      console.error('Failed to copy to clipboard:', err)
+                    );
+                },
+              },
+              {
+                text: 'Copy permalink to this image',
+                callback: () => {
+                  const url = window.location.href;
+                  // now replace the last part of the url with the location id
+                  const newUrl = url.replace(
+                    /\/[^/]+\/?$/,
+                    `/image/${location.image.id}/${location?.annotationSetId}`
+                  );
+                  navigator.clipboard
+                    .writeText(newUrl)
+                    .catch((err) =>
+                      console.error('Failed to copy to clipboard:', err)
+                    );
+                },
+              },
+            ]
+          );
+        }
       }
 
       return items;
@@ -391,7 +400,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
     //     }
     //   }
     // });
-    const fullImageTypes = ["Complete JPG", "Complete TIFF", "Complete PNG"];
+    const fullImageTypes = ['Complete JPG', 'Complete TIFF', 'Complete PNG'];
     //If a location is provided, use the location bounds, otherwise use the image bounds
     const imageBounds = useMemo(
       () =>
@@ -403,13 +412,13 @@ const BaseImage: React.FC<BaseImageProps> = memo(
     );
     const style = useMemo(
       () => ({
-        width: String(containerwidth) || "100%",
-        height: String(containerheight) || "100%",
-        margin: "auto",
-        display: "flex",
-        justifyContent: "center",
+        width: String(containerwidth) || '100%',
+        height: String(containerheight) || '100%',
+        margin: 'auto',
+        display: 'flex',
+        justifyContent: 'center',
         borderRadius: 10,
-        alignItems: "center",
+        alignItems: 'center',
       }),
       [containerwidth, containerheight, fullyLoaded]
     );
@@ -438,12 +447,12 @@ const BaseImage: React.FC<BaseImageProps> = memo(
     );
     return useMemo(
       () => (
-        <div className="d-flex flex-column align-items-center w-100 h-100 gap-3">
+        <div className='d-flex flex-column align-items-center w-100 h-100 gap-3'>
           <div
-            className="d-flex flex-column align-items-center w-100 h-100"
+            className='d-flex flex-column align-items-center w-100 h-100'
             style={{
-              visibility: visible && fullyLoaded ? "visible" : "hidden",
-              position: "relative",
+              visibility: visible && fullyLoaded ? 'visible' : 'hidden',
+              position: 'relative',
             }}
           >
             {queriesComplete && (
@@ -461,7 +470,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
                 zoomDelta={1}
                 keyboardPanDelta={0}
               >
-                <LayersControl position="topright">
+                <LayersControl position='topright'>
                   {imageFiles.map((image) => (
                     <LayersControl.BaseLayer
                       key={image.id}
@@ -476,7 +485,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
                       <StorageLayer
                         eventHandlers={{
                           load: () => {
-                            console.log("All visible tiles have loaded");
+                            console.log('All visible tiles have loaded');
                             setFullyLoaded(true);
                           },
                         }}
@@ -488,34 +497,36 @@ const BaseImage: React.FC<BaseImageProps> = memo(
                       />
                     </LayersControl.BaseLayer>
                   ))}
-                  {!isAnnotatePath && prevImages?.toReversed()?.map((im, idx) => (
-                    <LayersControl.Overlay
-                      name={`Overlap ${im.image.originalPath}`}
-                      key={idx}
-                      checked={im.image.id == otherImageId}
-                    >
-                      <LayerGroup>
-                        <OverlapOutline
-                          transform={im.transform.bwd}
-                          image={im.image}
-                        />
-                      </LayerGroup>
-                    </LayersControl.Overlay>
-                  ))}
-                  {!isAnnotatePath && nextImages?.map((im, idx) => (
-                    <LayersControl.Overlay
-                      name={`Overlap ${im.image.originalPath}`}
-                      key={idx}
-                      checked={im.image.id == otherImageId}
-                    >
-                      <LayerGroup>
-                        <OverlapOutline
-                          transform={im.transform.bwd}
-                          image={im.image}
-                        />
-                      </LayerGroup>
-                    </LayersControl.Overlay>
-                  ))}
+                  {!isAnnotatePath &&
+                    prevImages?.toReversed()?.map((im, idx) => (
+                      <LayersControl.Overlay
+                        name={`Overlap ${im.image.originalPath}`}
+                        key={idx}
+                        checked={im.image.id == otherImageId}
+                      >
+                        <LayerGroup>
+                          <OverlapOutline
+                            transform={im.transform.bwd}
+                            image={im.image}
+                          />
+                        </LayerGroup>
+                      </LayersControl.Overlay>
+                    ))}
+                  {!isAnnotatePath &&
+                    nextImages?.map((im, idx) => (
+                      <LayersControl.Overlay
+                        name={`Overlap ${im.image.originalPath}`}
+                        key={idx}
+                        checked={im.image.id == otherImageId}
+                      >
+                        <LayerGroup>
+                          <OverlapOutline
+                            transform={im.transform.bwd}
+                            image={im.image}
+                          />
+                        </LayerGroup>
+                      </LayersControl.Overlay>
+                    ))}
                 </LayersControl>
                 {children}
                 <ZoomTracker />
