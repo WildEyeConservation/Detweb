@@ -37,6 +37,7 @@ export default function AnnotationImage(props: any) {
     useContext(UserContext)!;
   const navigate = useNavigate();
   const { surveyId } = useParams();
+  const testSetId = useMemo(() => (isTest ? crypto.randomUUID() : annotationSetId), [isTest, annotationSetId]);
   const subscriptionFilter = useMemo(() => {
     const conditions: any[] = [];
     if (!isTest) {
@@ -72,10 +73,11 @@ export default function AnnotationImage(props: any) {
         location={location}
         source={source}
         isTest={isTest}
+        setId={testSetId}
       />,
       <ShowMarkers
         key='showMarkers'
-        annotationSetId={isTest ? '123' : annotationSetId}
+        annotationSetId={testSetId}
         realAnnotationSetId={annotationSetId}
       />,
       <Location key='location' {...location} />,
@@ -91,7 +93,7 @@ export default function AnnotationImage(props: any) {
           <CreateAnnotationOnHotKey
             key={category.id}
             hotkey={category.shortcutKey}
-            setId={annotationSetId}
+            setId={testSetId}
             category={category}
             imageId={location.image.id}
             source={source}

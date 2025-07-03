@@ -10,10 +10,12 @@ export interface CreateAnnotationOnClickProps {
   annotationsHook: ReturnType<typeof useAnnotations>;
   source: string;
   isTest?: boolean;
+  setId: string;
+  allowOutside?: boolean;
 }
 
 export default function CreateAnnotationOnClick(props: CreateAnnotationOnClickProps) {
-  const { location, source, image, allowOutside, isTest } = props;
+  const { location, source, image, allowOutside, isTest, setId } = props;
   const { annotationsHook: { create: createAnnotation } } = useContext(ImageContext)!;
   const { latLng2xy } = useContext(ImageContext)!;
   const {project,currentCategory} = useContext(ProjectContext)!;
@@ -32,7 +34,7 @@ export default function CreateAnnotationOnClick(props: CreateAnnotationOnClickPr
         currentCategory && source && project &&
         createAnnotation({
           imageId: image?.id || location?.image.id,
-          setId: isTest ? '123' : location.annotationSetId,
+          setId,
           projectId: project.id,
           x: Math.round(xy.x),
           y: Math.round(xy.y),

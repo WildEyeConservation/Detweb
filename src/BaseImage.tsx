@@ -412,15 +412,15 @@ const BaseImage: React.FC<BaseImageProps> = memo(
     );
     const style = useMemo(
       () => ({
-        width: String(containerwidth) || '100%',
-        height: String(containerheight) || '100%',
+        width: '100%',
+        height: '100%',
         margin: 'auto',
         display: 'flex',
         justifyContent: 'center',
         borderRadius: 10,
         alignItems: 'center',
       }),
-      [containerwidth, containerheight, fullyLoaded]
+      [fullyLoaded]
     );
     const viewBounds = useMemo(
       () =>
@@ -445,6 +445,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
           : xy2latLng([image.width / 2, image.height / 2]),
       [location.x, location.y, image.width, image.height]
     );
+
     return useMemo(
       () => (
         <div className='d-flex flex-column align-items-center w-100 h-100 gap-3'>
@@ -457,8 +458,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
           >
             {queriesComplete && (
               <MapContainer
-                // id={id}
-                key={JSON.stringify(contextMenuItems)}
+                key={`${location.id}-${location.annotationSetId}-${visible}-${zoom}`}
                 style={style}
                 crs={L.CRS.Simple}
                 bounds={zoom ? undefined : viewBounds}

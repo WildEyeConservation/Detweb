@@ -27,8 +27,8 @@ export default function CreateAnnotationOnHotKey({
   const handleHotkey = useCallback(() => {
     createAnnotation({
       categoryId: category.id,
-      setId: isTest ? '123' : setId,
-      imageId: imageId,
+      setId,
+      imageId,
       x: Math.round(currentPosition.x),
       y: Math.round(currentPosition.y),
       projectId: project.id,
@@ -43,7 +43,6 @@ export default function CreateAnnotationOnHotKey({
     setId,
     project.id,
     source,
-    isTest,
   ]);
 
   useHotkeys(
