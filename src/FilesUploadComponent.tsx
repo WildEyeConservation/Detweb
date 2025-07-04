@@ -132,6 +132,10 @@ export function FileUploadCore({
   const [mappingConfirmed, setMappingConfirmed] = useState(false);
   const [timestampInMs, setTimestampInMs] = useState(false);
 
+  // State for scan count and total
+  const [scanCount, setScanCount] = useState(0);
+  const [scanTotal, setScanTotal] = useState(0);
+
   // Handler to confirm column mapping before processing
   const handleConfirmMapping = () => {
     const {
@@ -252,6 +256,8 @@ export function FileUploadCore({
       const gpsToCSVData: CsvFile = [];
       let missing = false;
 
+      setScanCount(0);
+      setScanTotal(mapFiles.length);
       setScanningEXIF(true);
 
       // Get EXIF metadata for each file
@@ -281,7 +287,7 @@ export function FileUploadCore({
               timestamp: updatedExif.timestamp,
             });
           }
-
+          setScanCount(prev => prev + 1);
           return updatedExif;
         })
       );
@@ -1061,10 +1067,10 @@ export function FileUploadCore({
         </div>
       </Form.Group>
       {scanningEXIF ? (
-        <p className='mt-3 mb-0'>
-          Scanning images for GPS data (this may take a while)...
-        </p>
-      ) : imageFiles.length > 0 ? (
+        <div className='mt-3 mb-0'>
+          <p className='mb-0'>Scanning images for GPS data: {`${scanCount}/${scanTotal}`}</p>
+        </div>
+      ) : Object.keys(exifData).length > 0 && imageFiles.length > 0 ? (
         <Form.Group className='mt-3 d-flex flex-column gap-2'>
           <div>
             <Form.Label className='mb-0'>
