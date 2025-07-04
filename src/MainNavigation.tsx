@@ -136,7 +136,6 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                   >
                     Permissions
                   </Nav.Link>
-                  {/* Testing has a few issues that need to be fixed before it can be used again */}
                   <Nav.Link
                     as={NavLink}
                     eventKey={`testing`}
@@ -206,12 +205,26 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
             </Card.Header>
             <Card.Body>
               <Card.Text>
-                You are not currently a member of any organisation. If your
-                organisation is already registered, please contact your
-                administrator to be invited to their organisation. You will
-                receive the invite in your notifications drawer. Click the bell
-                icon in the top right corner of the screen to view your
-                notifications.
+                You are not currently a member of any organisation.
+              </Card.Text>
+              <Card.Text>
+                Please take note of the following:
+                <ul>
+                  <li>
+                    If you are trying to join an organisation, please contact
+                    your administrator to be invited to their organisation.
+                    <br />
+                    You will receive the invite in your notifications drawer.
+                  </li>
+                  <li>
+                    If you have requested for an organisation to be created you
+                    will automatically gain access to the rest of SurveyScope
+                    once we've approved your request.
+                    <br />
+                    If your request is denied, you will receive an email from
+                    us.
+                  </li>
+                </ul>
               </Card.Text>
               <Card.Text>
                 If your organisation is not registered, please register an
