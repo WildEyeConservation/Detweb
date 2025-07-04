@@ -6,6 +6,7 @@ import { Button } from 'react-bootstrap';
 import { Plus, Settings2, Eye } from 'lucide-react';
 import ConfigModal from './ConfigModal';
 import EditLocationsModal from './EditLocationsModal';
+import AddLocationsModal from './AddLocationsModal';
 
 interface Option {
   label: string;
@@ -159,6 +160,12 @@ export default function Surveys() {
       };
     });
 
+  useEffect(() => {
+    if (!modalToShow && selectedSurvey) {
+      setSelectedSurvey(null);
+    }
+  }, [modalToShow]);
+
   return (
     <div className='d-flex flex-column gap-2 mt-3 w-100'>
       <h5 className='mb-0'>Surveys</h5>
@@ -189,6 +196,19 @@ export default function Surveys() {
         <EditLocationsModal
           key={selectedSurvey.value}
           show={modalToShow === 'editLocationPoolModal'}
+          onClose={() => showModal(null)}
+          preset={{
+            id: locationPools.find(
+              (pool) => pool.name === selectedSurvey.label
+            )!.id,
+            name: selectedSurvey.label,
+          }}
+          surveyId={selectedSurvey.value}
+        />
+      )}
+      {selectedSurvey && (
+        <AddLocationsModal
+          show={modalToShow === 'addLocationsToPoolModal'}
           onClose={() => showModal(null)}
           preset={{
             id: locationPools.find(
