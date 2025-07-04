@@ -25,6 +25,7 @@ import { Registration } from "./Registration";
 import { persistQueryClient } from '@tanstack/react-query-persist-client'
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 import Admin from './Admin';
+import { DevActions } from './DevActions';
 
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
@@ -141,6 +142,10 @@ const router = createBrowserRouter([
       {
         path: 'testing',
         element: <Testing />,
+      },
+      {
+        path: 'dev-actions',
+        element: <DevActions />,
       },
     ],
   },

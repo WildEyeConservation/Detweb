@@ -142,24 +142,23 @@ export default function NewSurveyModal({
       );
     }
 
-    //TODO: Implement with testing
-    // await client.models.ProjectTestConfig.create({
-    //   projectId: project.id,
-    //   testType: 'interval',
-    //   interval: 100,
-    //   accuracy: 50,
-    //   postTestConfirmation: false,
-    // });
+    await client.models.ProjectTestConfig.create({
+      projectId: project.id,
+      testType: 'interval',
+      interval: 50,
+      accuracy: 50,
+      postTestConfirmation: false,
+    });
 
-    // const { data: testPreset } = await client.models.TestPreset.create({
-    //   name: name,
-    //   organizationId: organization.value,
-    // });
+    const { data: testPreset } = await client.models.TestPreset.create({
+      name: name,
+      organizationId: organization.value,
+    });
 
-    // await client.models.TestPresetProject.create({
-    //   testPresetId: testPreset.id,
-    //   projectId: project.id,
-    // });
+    await client.models.TestPresetProject.create({
+      testPresetId: testPreset.id,
+      projectId: project.id,
+    });
 
     client.mutations.updateProjectMemberships({
       projectId: project.id,
