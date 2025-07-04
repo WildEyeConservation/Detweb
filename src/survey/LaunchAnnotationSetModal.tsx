@@ -482,7 +482,8 @@ export default function LaunchAnnotationSetModal({
                         }
                       />
                     </Form.Group>
-                    <Form.Group>
+                    {/* This will create a secondary queue but the cleanup lambda will clear it before it's used */}
+                    {/* <Form.Group>
                       <Form.Switch
                         label="Send Detections to Secondary Queue"
                         checked={sendDetectionsToSecondaryQueue}
@@ -492,7 +493,7 @@ export default function LaunchAnnotationSetModal({
                           )
                         }
                       />
-                    </Form.Group>
+                    </Form.Group> */}
                     <Form.Group>
                       <Form.Switch
                         label="Hide Job From Non-Admin Workers"
