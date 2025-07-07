@@ -247,53 +247,49 @@ export default function useTesting(useSecondaryCandidates: boolean = false) {
   }
 
   async function getTestLocation() {
-    const candidateEntries = [
-      ...primaryCandidates.current,
-      // ...secondaryCandidates.current
-    ];
-
-    let skip = true;
-    let index = i;
-    let result: {
-      locationId: string;
-      annotationSetId: string;
-      testPresetId: string;
-    } | null = null;
-    do {
-      // these are the categories that are present in the location
+    const candidateEntries = [...primaryCandidates.current];
+    if (candidateEntries.length === 0) {
+      throw new Error("No primary candidates available for testing");
+    }
+    console.log("candidates", candidateEntries);
+    const length = candidateEntries.length;
+    // Try each candidate once, wrapping around if necessary
+    for (let attempt = 0; attempt < length; attempt++) {
+      const currentIndex = (i + attempt) % length;
+      const entry = candidateEntries[currentIndex];
+      console.log(`entry ${currentIndex}`, entry);
       const categoryCounts = await fetchAllPaginatedResults(
         client.models.LocationAnnotationCount
           .categoryCountsByLocationIdAndAnnotationSetId,
         {
-          locationId: candidateEntries[index].locationId,
-          annotationSetId: { eq: candidateEntries[index].annotationSetId },
+          locationId: entry.locationId,
+          annotationSetId: { eq: entry.annotationSetId },
           selectionSet: ["category.name"],
         }
       );
-
       const testCategories = categoryCounts.map((c) =>
         c.category.name.toLowerCase()
       );
       const surveyCategories = categoriesHook.data?.map((c) =>
         c.name.toLowerCase()
       );
-
-      // check if there are categories that are present in the location but not in the survey
       const missingCategories = testCategories.filter(
         (c) => !surveyCategories?.includes(c)
       );
-
-      // this is a valid test location
-      if (missingCategories.length <= 0) {
-        skip = false;
-        result = candidateEntries[index];
+      // Return the first valid test location
+      if (missingCategories.length === 0) {
+        setI(currentIndex + 1);
+        return entry;
       }
-
-      index++;
-      setI((prev) => prev + 1);
-    } while (skip);
-
-    return result;
+    }
+    // If no valid candidate found, fallback to the next in sequence
+    const fallbackIndex = i % length;
+    console.warn(
+      "No valid test location found, defaulting to candidate",
+      candidateEntries[fallbackIndex]
+    );
+    setI(fallbackIndex + 1);
+    return candidateEntries[fallbackIndex];
   }
 
   const fetcher = useCallback(async (): Promise<Identifiable> => {

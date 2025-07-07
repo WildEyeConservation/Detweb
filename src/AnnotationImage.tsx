@@ -72,7 +72,6 @@ export default function AnnotationImage(props: any) {
         allowOutside={allowOutside}
         location={location}
         source={source}
-        isTest={isTest}
         setId={testSetId}
       />,
       <ShowMarkers
