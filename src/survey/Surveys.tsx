@@ -52,6 +52,7 @@ export default function Surveys() {
   const [hasUploadedFiles, setHasUploadedFiles] = useState<{
     [projectId: string]: boolean;
   }>({});
+  const [sortBy, setSortBy] = useState('createdAt');
 
   useEffect(() => {
     async function getProjects() {
@@ -86,6 +87,7 @@ export default function Surveys() {
                     'queues.url',
                     'status',
                     'updatedAt',
+                    'createdAt',
                   ],
                 }
               )
@@ -203,10 +205,21 @@ export default function Surveys() {
             .toLowerCase()
             .includes(search.toLowerCase()))
     )
-    .sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    )
+    .sort((a, b) => {
+      if (sortBy === 'createdAt') {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+      if (sortBy === 'createdAt-reverse') {
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
+      if (sortBy === 'name') {
+        return a.name.localeCompare(b.name);
+      }
+      if (sortBy === 'name-reverse') {
+        return b.name.localeCompare(a.name);
+      }
+      return 0;
+    })
     .map((project) => {
       const disabled =
         project.status === 'uploading' ||
@@ -491,8 +504,8 @@ export default function Surveys() {
         }}
       >
         <Card>
-          <Card.Header className='d-flex justify-content-between align-items-center'>
-            <Card.Title className='mb-0'>
+          <Card.Header className='d-flex justify-content-between align-items-center gap-2'>
+            <Card.Title className='mb-0 w-100' style={{ maxWidth: '300px' }}>
               <h4 className='mb-0'>Your Surveys</h4>
             </Card.Title>
             <Form.Control
@@ -503,6 +516,17 @@ export default function Surveys() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            <Form.Select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className='w-100'
+              style={{ maxWidth: '300px' }}
+            >
+              <option value='createdAt'>Created (newest first)</option>
+              <option value='createdAt-reverse'>Created (oldest first)</option>
+              <option value='name'>Name (A-Z)</option>
+              <option value='name-reverse'>Name (Z-A)</option>
+            </Form.Select>
           </Card.Header>
           <Card.Body className='overflow-x-auto overflow-y-visible'>
             <MyTable
