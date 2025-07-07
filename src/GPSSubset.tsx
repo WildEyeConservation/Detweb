@@ -53,7 +53,7 @@ const FitBoundsToPoints: React.FC<{ points: GPSData[] }> = ({ points }) => {
       );
       map.fitBounds(bounds);
     }
-  }, [points, map]);
+  }, []);
   return null;
 };
 
