@@ -4,5 +4,6 @@ export const handleNewUser = defineFunction({
     name: 'handleNewUser',
     environment:{
         GROUP: 'annotator'
-    }
+    },
+    runtime: 20,
 });
