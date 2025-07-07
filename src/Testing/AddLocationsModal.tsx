@@ -33,15 +33,21 @@ export default function AddLocationsModal({
     { annotationSetId: string; locationId: string }[]
   >([]);
   const [index, setIndex] = useState(0);
-  const candidatesRef = useRef<{
-    annotationSetId: string;
-    locationId: string;
-  }[]>([]);
+  const candidatesRef = useRef<
+    {
+      annotationSetId: string;
+      locationId: string;
+    }[]
+  >([]);
   const candidateIndexRef = useRef(0);
   const currentCandidate = candidates[index] ?? null;
   const [addedLocations, setAddedLocations] = useState<Record<string, boolean>>(
     {}
   );
+  const lastAddedRef = useRef<{
+    annotationSetId: string;
+    locationId: string;
+  } | null>(null);
 
   const Preloader = useMemo(() => PreloaderFactory(TaskSelector), []);
 
@@ -58,7 +64,7 @@ export default function AddLocationsModal({
 
   const refreshCandidates = useCallback(async () => {
     setLoading(true);
-    const existing = await fetchAllPaginatedResults(
+    const existing = (await fetchAllPaginatedResults(
       client.models.TestPresetLocation.locationsByTestPresetId,
       {
         testPresetId: preset.id,
@@ -68,21 +74,27 @@ export default function AddLocationsModal({
           'annotationSetId',
         ] as const,
       }
-    ) as { testPresetId: string; locationId: string; annotationSetId: string }[];
+    )) as {
+      testPresetId: string;
+      locationId: string;
+      annotationSetId: string;
+    }[];
     const presetKeys = new Set(
       existing.map((loc) => `${loc.annotationSetId}_${loc.locationId}`)
     );
 
-    const annotationSets = await fetchAllPaginatedResults(
+    // @ts-ignore: suppress complex union type
+    const annotationSets = (await fetchAllPaginatedResults(
       client.models.AnnotationSet.annotationSetsByProjectId,
       {
         projectId: surveyId,
         selectionSet: ['id'] as const,
       }
-    ) as { id: string }[];
+    )) as any[];
     const allCandidates: { annotationSetId: string; locationId: string }[] = [];
     for (const as of annotationSets) {
-      const observations = await fetchAllPaginatedResults(
+      // @ts-ignore: suppress complex union type
+      const observations = (await fetchAllPaginatedResults(
         client.models.Observation.observationsByAnnotationSetId,
         {
           annotationSetId: as.id,
@@ -91,7 +103,7 @@ export default function AddLocationsModal({
           },
           selectionSet: ['locationId', 'annotationSetId'] as const,
         }
-      ) as { locationId: string; annotationSetId: string }[];
+      )) as any[];
       for (const obs of observations) {
         const key = `${as.id}_${obs.locationId}`;
         if (!presetKeys.has(key)) {
@@ -103,7 +115,11 @@ export default function AddLocationsModal({
       }
     }
 
-    candidatesRef.current = allCandidates;
+    candidatesRef.current = allCandidates.filter(
+      (cand, i, arr) =>
+        arr.findIndex((c) => c.locationId === cand.locationId) === i
+    );
+
     setCandidates(allCandidates);
     candidateIndexRef.current = 0;
     setIndex(0);
@@ -120,21 +136,91 @@ export default function AddLocationsModal({
     }
   }, [show, preset.id, surveyId, refreshCandidates]);
 
+  async function saveAnnotations(cand: {
+    annotationSetId: string;
+    locationId: string;
+  }) {
+    // mirror EditLocationsModal saveAnnotations logic
+    // @ts-ignore
+    const { data: location } = await client.models.Location.get({
+      id: cand.locationId,
+      selectionSet: ['imageId', 'width', 'height', 'x', 'y'] as const,
+    } as any);
+    if (!location) return;
+    const annotations = (await fetchAllPaginatedResults(
+      // @ts-ignore
+      client.models.Annotation.annotationsByImageIdAndSetId,
+      {
+        imageId: location.imageId,
+        setId: { eq: cand.annotationSetId },
+        selectionSet: ['categoryId', 'x', 'y'] as const,
+      }
+    )) as any[];
+    const boundsxy: [number, number][] = [
+      [location.x - location.width / 2, location.y - location.height / 2],
+      [location.x + location.width / 2, location.y + location.height / 2],
+    ];
+    const annotationCounts: Record<string, number> = {};
+    for (const ann of annotations) {
+      if (
+        ann.x >= boundsxy[0][0] &&
+        ann.y >= boundsxy[0][1] &&
+        ann.x <= boundsxy[1][0] &&
+        ann.y <= boundsxy[1][1]
+      ) {
+        annotationCounts[ann.categoryId] =
+          (annotationCounts[ann.categoryId] || 0) + 1;
+      }
+    }
+    for (const [categoryId, count] of Object.entries(annotationCounts)) {
+      const { data: lac } = await client.models.LocationAnnotationCount.get({
+        locationId: cand.locationId,
+        categoryId,
+        annotationSetId: cand.annotationSetId,
+      });
+      if (lac) {
+        await client.models.LocationAnnotationCount.update({
+          locationId: cand.locationId,
+          categoryId,
+          annotationSetId: cand.annotationSetId,
+          count,
+        });
+      } else {
+        await client.models.LocationAnnotationCount.create({
+          locationId: cand.locationId,
+          categoryId,
+          annotationSetId: cand.annotationSetId,
+          count,
+        });
+      }
+    }
+  }
+
   async function handleAdd() {
     const cand = currentCandidate;
     if (!cand) return;
     setAdding(true);
+    // @ts-ignore
     await client.models.TestPresetLocation.create({
       testPresetId: preset.id,
       locationId: cand.locationId,
       annotationSetId: cand.annotationSetId,
-    } as any);
-    setAdding(false);
+    });
+    // mark for effect
+    lastAddedRef.current = cand;
     setAddedLocations((prev) => ({
       ...prev,
       [`${cand.annotationSetId}_${cand.locationId}`]: true,
     }));
+    setAdding(false);
   }
+
+  useEffect(() => {
+    if (lastAddedRef.current) {
+      saveAnnotations(lastAddedRef.current);
+      lastAddedRef.current = null;
+    }
+  }, [addedLocations]);
 
   return (
     <ProjectContext surveyId={surveyId}>
@@ -168,14 +254,18 @@ export default function AddLocationsModal({
                   adding ||
                   !currentCandidate ||
                   addedLocations[
-                    `${currentCandidate!.annotationSetId}_${currentCandidate!.locationId}`
+                    `${currentCandidate!.annotationSetId}_${
+                      currentCandidate!.locationId
+                    }`
                   ]
                 }
               >
                 {adding
                   ? 'Adding...'
                   : addedLocations[
-                      `${currentCandidate!.annotationSetId}_${currentCandidate!.locationId}`
+                      `${currentCandidate!.annotationSetId}_${
+                        currentCandidate!.locationId
+                      }`
                     ]
                   ? 'Added'
                   : 'Add to pool'}

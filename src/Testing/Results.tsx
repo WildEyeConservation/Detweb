@@ -247,18 +247,17 @@ export default function Results() {
       (result) => result.projectId === selectedProject?.value
     );
 
-    for (const result of filteredResults) {
-      await client.models.TestResult.delete({ id: result.id });
-
-      for (const categoryName of result.categoryCounts.map(
-        (category) => category.categoryName
-      )) {
-        await client.models.TestResultCategoryCount.delete({
+    const deletePromises = filteredResults.flatMap((result) => [
+      client.models.TestResult.delete({ id: result.id }),
+      ...result.categoryCounts.map((category) =>
+        client.models.TestResultCategoryCount.delete({
           testResultId: result.id,
-          categoryName: categoryName,
-        });
-      }
-    }
+          categoryName: category.categoryName,
+        })
+      ),
+    ]);
+
+    await Promise.all(deletePromises);
 
     setIsPurging(false);
   }
