@@ -1382,7 +1382,9 @@ export function FileUploadCore({
           })()}
         </div>
       )}
-      {filteredImageFiles.length > 0 && <ImageMaskEditor setMasks={setMasks} />}
+      {filteredImageFiles.length > 0 && csvData && (
+        <ImageMaskEditor setMasks={setMasks} />
+      )}
     </>
   );
 }
