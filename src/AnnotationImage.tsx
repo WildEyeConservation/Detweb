@@ -1,11 +1,16 @@
-import { useMemo, useContext, useCallback, useEffect, useState } from 'react';
+import { useMemo, useContext, useEffect, useState } from 'react';
 import BaseImage from './BaseImage';
 import { withAckOnTimeout } from './useAckOnTimeout';
 import { MapLegend, SideLegend } from './Legend';
 import Location from './Location';
 import { withCreateObservation } from './useCreateObservation';
 import CreateAnnotationOnClick from './CreateAnnotationOnClick';
-import { GlobalContext, ProjectContext, UserContext } from './Context';
+import {
+  GlobalContext,
+  ProjectContext,
+  UserContext,
+  ImageContext,
+} from './Context';
 import { ShowMarkers } from './ShowMarkers';
 import { useOptimisticUpdates } from './useOptimisticUpdates';
 import { ImageContextFromHook } from './ImageContext';
@@ -13,7 +18,7 @@ import CreateAnnotationOnHotKey from './CreateAnnotationOnHotKey';
 import { Schema } from '../amplify/data/resource';
 import useImageStats from './useImageStats';
 import { Badge, Button } from 'react-bootstrap';
-import { Share2 } from 'lucide-react';
+import { Share2, SearchCheck, RotateCcw } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 const Image = withCreateObservation(withAckOnTimeout(BaseImage));
 
@@ -33,11 +38,15 @@ export default function AnnotationImage(props: any) {
   const { annotationSetId } = location;
   const { client } = useContext(GlobalContext)!;
   //testing
-  const { currentTaskTag, isTesting, isAnnotatePath } =
+  const { currentTaskTag, isTesting, isAnnotatePath, myMembershipHook } =
     useContext(UserContext)!;
   const navigate = useNavigate();
   const { surveyId } = useParams();
-  const testSetId = useMemo(() => (isTest ? crypto.randomUUID() : annotationSetId), [isTest, annotationSetId]);
+  const [defaultZoom, setDefaultZoom] = useState<number | null>(zoom);
+  const testSetId = useMemo(
+    () => (isTest ? crypto.randomUUID() : annotationSetId),
+    [isTest, annotationSetId]
+  );
   const subscriptionFilter = useMemo(() => {
     const conditions: any[] = [];
     if (!isTest) {
@@ -157,12 +166,24 @@ export default function AnnotationImage(props: any) {
             )}
 
             {visible && (
-              <Badge bg='secondary'>
-                Working on:{' '}
-                {props.taskTag || currentTaskTag
-                  ? `${props.taskTag || currentTaskTag}`
-                  : 'Viewing image'}
-              </Badge>
+              <>
+                <Badge bg='secondary'>
+                  Working on:{' '}
+                  {props.taskTag || currentTaskTag
+                    ? `${props.taskTag || currentTaskTag}`
+                    : 'Viewing image'}
+                </Badge>
+                <SetDefaultZoom
+                  setDefaultZoom={setDefaultZoom}
+                  originalZoom={zoom}
+                  adminMemberships={myMembershipHook.data
+                    ?.filter((membership) => membership.isAdmin)
+                    .map((membership) => ({
+                      projectId: membership.projectId,
+                      queueId: membership.queueId!,
+                    }))}
+                />
+              </>
             )}
           </div>
           <Image
@@ -170,7 +191,7 @@ export default function AnnotationImage(props: any) {
             visible={visible}
             location={location}
             taskTag={props.taskTag}
-            zoom={zoom}
+            zoom={defaultZoom}
             id={id}
             prev={prev}
             next={next}
@@ -198,5 +219,86 @@ export default function AnnotationImage(props: any) {
         </div>
       </div>
     </ImageContextFromHook>
+  );
+}
+
+function SetDefaultZoom({
+  setDefaultZoom,
+  originalZoom,
+  adminMemberships,
+}: {
+  setDefaultZoom: (zoom: number | null) => void;
+  originalZoom: number | null;
+  adminMemberships: { projectId: string; queueId: string }[];
+}) {
+  const { zoom, setZoom } = useContext(ImageContext)!;
+  const { surveyId } = useParams();
+  const { client } = useContext(GlobalContext)!;
+  const [storedZoom, setStoredZoom] = useState<boolean>(false);
+
+  useEffect(() => {
+    const storedZoom = localStorage.getItem(`defaultZoom-${surveyId!}`);
+    if (storedZoom) {
+      setStoredZoom(true);
+      setDefaultZoom(Number(storedZoom));
+    }
+  }, [zoom]);
+
+  const saveDefaultZoom = async () => {
+    if (!storedZoom) {
+      const currentProjectMembership = adminMemberships.find(
+        (membership) => membership.projectId === surveyId!
+      );
+
+      if (currentProjectMembership) {
+        const result = window.prompt(
+          'Set as default zoom for all users on this job? (y/n)'
+        );
+
+        if (result === null) {
+          return;
+        }
+
+        if (result?.toLowerCase() === 'y') {
+          await client.models.Queue.update({
+            id: currentProjectMembership.queueId,
+            zoom: zoom,
+          });
+          alert(
+            'Please save this job and pick it up again for the default zoom to take effect.'
+          );
+          return;
+        }
+      }
+    }
+
+    if (storedZoom) {
+      localStorage.removeItem(`defaultZoom-${surveyId!}`);
+      setStoredZoom(false);
+      setDefaultZoom(originalZoom);
+      setZoom(originalZoom || 1);
+    } else {
+      localStorage.setItem(`defaultZoom-${surveyId!}`, zoom.toString());
+      setStoredZoom(true);
+      setDefaultZoom(zoom);
+      setZoom(zoom);
+    }
+  };
+
+  return (
+    <button
+      className='p-0 m-0 border-0 bg-transparent d-flex align-items-center text-white'
+      style={{
+        position: 'absolute',
+        top: 0,
+        right: 0,
+      }}
+      onClick={saveDefaultZoom}
+    >
+      {storedZoom ? <RotateCcw size={24} /> : <SearchCheck size={24} />}
+      <span className='ms-2 mb-0 d-none d-md-block'>
+        {storedZoom ? 'Reset zoom' : 'Set as default zoom'}
+      </span>
+    </button>
   );
 }
