@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
-import Button from "react-bootstrap/Button";
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import Button from 'react-bootstrap/Button';
 import {
   MapContainer,
   TileLayer,
@@ -7,16 +7,16 @@ import {
   CircleMarker,
   Popup,
   useMap,
-} from "react-leaflet";
-import { EditControl } from "react-leaflet-draw";
-import L from "leaflet";
-import * as turf from "@turf/turf";
-import "leaflet/dist/leaflet.css";
-import "leaflet-draw/dist/leaflet.draw.css";
-import { Form } from "react-bootstrap";
-import Shapefile from "./Shapefile";
-import shp from "shpjs";
-import FileInput from "./FileInput";
+} from 'react-leaflet';
+import { EditControl } from 'react-leaflet-draw';
+import L from 'leaflet';
+import * as turf from '@turf/turf';
+import 'leaflet/dist/leaflet.css';
+import 'leaflet-draw/dist/leaflet.draw.css';
+import { Form } from 'react-bootstrap';
+import Shapefile from './Shapefile';
+import shp from 'shpjs';
+import FileInput from './FileInput';
 
 // Define the GPS data structure
 export interface GPSData {
@@ -58,7 +58,11 @@ const FitBoundsToPoints: React.FC<{ points: GPSData[] }> = ({ points }) => {
 };
 
 // The main component
-const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter, imageFiles }) => {
+const GPSSubset: React.FC<GPSSubsetProps> = ({
+  gpsData,
+  onFilter,
+  imageFiles,
+}) => {
   const [polygons, setPolygons] = useState<PolygonSubset[]>([]);
   const featureGroupRef = useRef<L.FeatureGroup>(null);
   const [shapefileBuffer, setShapefileBuffer] = useState<
@@ -100,9 +104,9 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter, imageFiles }) 
         return Number.isFinite(coord[0]) && Number.isFinite(coord[1]);
       } else if (
         coord &&
-        typeof coord === "object" &&
-        "lat" in coord &&
-        "lng" in coord
+        typeof coord === 'object' &&
+        'lat' in coord &&
+        'lng' in coord
       ) {
         return Number.isFinite(coord.lat) && Number.isFinite(coord.lng);
       }
@@ -120,7 +124,7 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter, imageFiles }) 
       featureGroupRef.current.removeLayer(layer);
       const newLayer = L.polygon(newPolygon.coords);
       (newLayer as any).polygonId = newPolygon.id;
-      newLayer.bindTooltip("Polygon " + newPolygon.id, { permanent: false });
+      newLayer.bindTooltip('Polygon ' + newPolygon.id, { permanent: false });
       featureGroupRef.current.addLayer(newLayer);
     }
   }, []);
@@ -136,9 +140,9 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter, imageFiles }) 
             return Number.isFinite(coord[0]) && Number.isFinite(coord[1]);
           } else if (
             coord &&
-            typeof coord === "object" &&
-            "lat" in coord &&
-            "lng" in coord
+            typeof coord === 'object' &&
+            'lat' in coord &&
+            'lng' in coord
           ) {
             return Number.isFinite(coord.lat) && Number.isFinite(coord.lng);
           }
@@ -181,9 +185,9 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter, imageFiles }) 
               return [coord[1], coord[0]];
             } else if (
               coord &&
-              typeof coord === "object" &&
-              "lat" in coord &&
-              "lng" in coord
+              typeof coord === 'object' &&
+              'lat' in coord &&
+              'lng' in coord
             ) {
               return [coord.lng, coord.lat];
             }
@@ -254,23 +258,23 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter, imageFiles }) 
       shp(shapefileBuffer)
         .then((geojson: any) => {
           let allowedPolygons: any[] = [];
-          if (geojson.type === "FeatureCollection") {
+          if (geojson.type === 'FeatureCollection') {
             allowedPolygons = geojson.features.filter(
               (feature: any) =>
                 feature.geometry &&
-                (feature.geometry.type === "Polygon" ||
-                  feature.geometry.type === "MultiPolygon")
+                (feature.geometry.type === 'Polygon' ||
+                  feature.geometry.type === 'MultiPolygon')
             );
           } else if (
-            geojson.type === "Feature" &&
+            geojson.type === 'Feature' &&
             geojson.geometry &&
-            (geojson.geometry.type === "Polygon" ||
-              geojson.geometry.type === "MultiPolygon")
+            (geojson.geometry.type === 'Polygon' ||
+              geojson.geometry.type === 'MultiPolygon')
           ) {
             allowedPolygons = [geojson];
           }
           if (allowedPolygons.length === 0) {
-            console.warn("No valid polygon found in shapefile");
+            console.warn('No valid polygon found in shapefile');
             return;
           }
           const newFilteredPoints = validGpsData.filter((point) => {
@@ -283,82 +287,80 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter, imageFiles }) 
           onFilter(newFilteredPoints);
         })
         .catch((err: any) => {
-          console.error("Error parsing shapefile", err);
+          console.error('Error parsing shapefile', err);
         });
     }
   }, [shapefileBuffer]);
 
   return (
     <>
-      <Form.Group className="mt-3">
-        <Form.Label className="mb-0">Upload Shapefile (Optional)</Form.Label>
-        <Form.Text className="d-block mb-1 mt-0" style={{ fontSize: "12px" }}>
+      <Form.Group className='mt-3'>
+        <Form.Label className='mb-0'>Upload Shapefile (Optional)</Form.Label>
+        <Form.Text className='d-block mb-1 mt-0' style={{ fontSize: '12px' }}>
           If you have a zipped shapefile, you can upload it here. Uploading this
-          file will filter the GPS data to only include points within the
+          file will filter the GPS data to only include images within the
           shapefile.
         </Form.Text>
         <FileInput
-          id="shapefile-file"
-          fileType=".zip"
+          id='shapefile-file'
+          fileType='.zip'
           onFileChange={async (files) => {
             const buffer = await files[0].arrayBuffer();
             setShapefileBuffer(buffer);
           }}
         >
-          <p className="mb-0">Select Shapefile</p>
+          <p className='mb-0'>Select Shapefile</p>
         </FileInput>
       </Form.Group>
-      <Form.Group className="mt-3 d-flex flex-column gap-2">
+      <Form.Group className='mt-3 d-flex flex-column gap-2'>
         <div>
-          <Form.Label className="d-block mb-0">
+          <Form.Label className='d-block mb-0'>
             Filter Data by Polygon (Optional)
           </Form.Label>
-          <Form.Text style={{ fontSize: "12px" }}>
-            Use this tool to filter out points based on a polygon. Select the
-            polygon function in the top-right corner of the map. Click to draw a
-            polygon. Click "Include Points" to keep only the points within the
-            polygon. Click "Remove Points" to remove points outside the polygon.
-            Click "Undo" to reverse the last action.
+          <Form.Text className='d-block' style={{ fontSize: '12px' }}>
+            <b>These points represent your georeferenced images.</b>
           </Form.Text>
-        </div>
-        <div>
-          <Form.Text className="d-block" style={{ fontSize: "12px" }}>
-            Take note:
+          <Form.Text style={{ fontSize: '12px' }}>
+            Use this tool to filter out images based on a polygon.
             <ul>
               <li>
-                These points represent the GPS data. If your CSV uses filepaths
-                or the images contained sufficient EXIF metadata then these
-                should correspond to the images in your dataset.
+                Select the polygon function in the top-right corner of the map.
+              </li>
+              <li>Click to draw a polygon.</li>
+              <li>
+                Click "Include Images" to keep only the images within the
+                polygon.
               </li>
               <li>
-                If your data is timestamped then these points are an estimate of
-                what your images represent.
+                Click "Remove Images" to remove the images within the
+                polygon.
               </li>
+              <li>Click "Undo" to reverse the last action.</li>
             </ul>
           </Form.Text>
         </div>
-        <div style={{ height: "600px", width: "100%", position: "relative" }}>
+        <div style={{ height: '600px', width: '100%', position: 'relative' }}>
           <MapContainer
-            style={{ height: "100%", width: "100%" }}
+            style={{ height: '100%', width: '100%' }}
             center={[0, 0]}
             zoom={2}
           >
             <FitBoundsToPoints points={validGpsData} />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
             />
             {shapefileBuffer && <Shapefile buffer={shapefileBuffer} />}
             <FeatureGroup ref={featureGroupRef}>
               <EditControl
-                position="topright"
+                position='topright'
                 onCreated={handleCreated}
                 onEdited={handleEdited}
                 onDeleted={handleDeleted}
                 draw={{
                   polygon: {
                     allowIntersection: false,
-                    shapeOptions: { color: "#97009c" },
+                    shapeOptions: { color: '#97009c' },
                   },
                   rectangle: false,
                   circle: false,
@@ -378,13 +380,14 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter, imageFiles }) 
                 key={index}
                 center={[point.lat, point.lng]}
                 radius={3}
-                color="orange"
+                color='orange'
               >
                 <Popup>
                   <div>
                     {point.timestamp && (
                       <div>
-                        <strong>Timestamp:</strong> {new Date(point.timestamp).toISOString()}
+                        <strong>Timestamp:</strong>{' '}
+                        {new Date(point.timestamp).toISOString()}
                       </div>
                     )}
                     {point.filepath && (
@@ -401,19 +404,26 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter, imageFiles }) 
                     <div>
                       <strong>Alt:</strong> {point.alt}
                     </div>
-                    {point.filepath && objectUrlMap[point.filepath.toLowerCase()] && (
-                      <div style={{ textAlign: 'center', margin: '8px 0' }}>
-                        <img
-                          src={objectUrlMap[point.filepath.toLowerCase()]}
-                          alt={point.filepath}
-                          style={{ maxWidth: '150px', maxHeight: '150px', objectFit: 'contain', display: 'block', margin: 'auto' }}
-                        />
-                      </div>
-                    )}
+                    {point.filepath &&
+                      objectUrlMap[point.filepath.toLowerCase()] && (
+                        <div style={{ textAlign: 'center', margin: '8px 0' }}>
+                          <img
+                            src={objectUrlMap[point.filepath.toLowerCase()]}
+                            alt={point.filepath}
+                            style={{
+                              maxWidth: '150px',
+                              maxHeight: '150px',
+                              objectFit: 'contain',
+                              display: 'block',
+                              margin: 'auto',
+                            }}
+                          />
+                        </div>
+                      )}
                     <Button
-                      className="w-100 mt-2"
-                      variant="danger"
-                      size="sm"
+                      className='w-100 mt-2'
+                      variant='danger'
+                      size='sm'
                       onClick={() => handleRemovePoint(index)}
                     >
                       Remove
@@ -424,27 +434,27 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({ gpsData, onFilter, imageFiles }) 
             ))}
           </MapContainer>
           <div
-            className="d-flex flex-row gap-2 p-2"
+            className='d-flex flex-row gap-2 p-2'
             style={{
-              position: "absolute",
-              bottom: "10px",
-              left: "50%",
-              transform: "translateX(-50%)",
+              position: 'absolute',
+              bottom: '10px',
+              left: '50%',
+              transform: 'translateX(-50%)',
               zIndex: 1000,
-              backgroundColor: "rgba(255,255,255,0.8)",
-              border: "2px solid rgba(0, 0, 0, 0.28)",
-              borderRadius: "4px",
+              backgroundColor: 'rgba(255,255,255,0.8)',
+              border: '2px solid rgba(0, 0, 0, 0.28)',
+              borderRadius: '4px',
             }}
           >
-            <Button variant="info" onClick={() => handleFilterPoints(true)}>
-              Include Points
+            <Button variant='info' onClick={() => handleFilterPoints(true)}>
+              Include Images
             </Button>
-            <Button variant="danger" onClick={() => handleFilterPoints(false)}>
-              Remove Points
+            <Button variant='danger' onClick={() => handleFilterPoints(false)}>
+              Remove Images
             </Button>
             <Button
               disabled={deletedPointsStack.length === 0}
-              variant="outline-primary"
+              variant='outline-primary'
               onClick={handleUndo}
             >
               Undo
