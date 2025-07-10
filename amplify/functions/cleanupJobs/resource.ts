@@ -5,4 +5,5 @@ export const cleanupJobs = defineFunction({
   schedule: "every 1m",
   timeoutSeconds: 60,
   entry: "./handler.ts",
+  runtime: 20,
 });

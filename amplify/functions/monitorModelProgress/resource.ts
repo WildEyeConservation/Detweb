@@ -4,4 +4,5 @@ export const monitorModelProgress = defineFunction({
   name: 'monitorModelProgress',
   schedule: 'every 10m',
   timeoutSeconds: 600,
+  runtime: 20,
 });

@@ -7,5 +7,6 @@ export const processImages = defineFunction({
   entry: './handler.ts',
   environment: {
     API_KEY: secret('API_KEY'),
-  }
+  },
+  runtime: 20,
 });

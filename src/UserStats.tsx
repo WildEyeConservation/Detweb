@@ -319,6 +319,7 @@ export default function UserStats() {
                 endDate={endDate}
                 className="form-control"
                 isClearable
+                dateFormat="yyyy/MM/dd"
                 placeholderText="No start date"
               />
             </div>
@@ -336,6 +337,7 @@ export default function UserStats() {
                 endDate={endDate}
                 className="form-control"
                 isClearable
+                dateFormat="yyyy/MM/dd"
                 placeholderText="No end date"
               />
             </div>

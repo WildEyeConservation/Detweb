@@ -17,6 +17,7 @@ export default function ProjectProgress({ projectId }: ProjectProgressProps) {
     totalBatches: number;
   } | null>(null);
   const [jobsRemaining, setJobsRemaining] = useState<number>(0);
+  const [registering, setRegistering] = useState<boolean>(false);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -24,17 +25,30 @@ export default function ProjectProgress({ projectId }: ProjectProgressProps) {
 
     async function fetchQueueAndStartPolling() {
       setIsLoading(true);
-      const result = await client.models.Project.get(
+      const projectData = (await client.models.Project.get(
         { id: projectId },
         {
-          selectionSet: ['queues.url', 'queues.batchSize', 'queues.totalBatches'],
+          selectionSet: [
+            'queues.url',
+            'queues.batchSize',
+            'queues.totalBatches',
+            'annotationSets.register',
+          ],
         }
-      );
-      const projectData = (result as { data: any }).data;
+      )).data;
+
+      const register = projectData.annotationSets.some((set) => set.register);
+
+      setRegistering(register);
+      if (register) {
+        return;
+      }
+
       if (cancelled || !projectData?.queues?.length) {
         setIsLoading(false);
         return;
       }
+      
       const q = projectData.queues[0];
       const url = q.url || '';
       const batchSize = q.batchSize || 0;
@@ -48,7 +62,9 @@ export default function ProjectProgress({ projectId }: ProjectProgressProps) {
           QueueUrl: url,
           AttributeNames: ['ApproximateNumberOfMessages'] as const,
         };
-        const attrs = await sqsClient.send(new GetQueueAttributesCommand(params));
+        const attrs = await sqsClient.send(
+          new GetQueueAttributesCommand(params)
+        );
         if (cancelled) return;
         const num = attrs.Attributes?.ApproximateNumberOfMessages;
         setJobsRemaining(num ? Number(num) : 0);
@@ -66,6 +82,10 @@ export default function ProjectProgress({ projectId }: ProjectProgressProps) {
     };
   }, [projectId, client, getSqsClient]);
 
+  if (registering) {
+    return <p className='mb-0 w-100'>Registering</p>;
+  }
+
   if (isLoading || !queueInfo) {
     return <Spinner />;
   }
@@ -74,17 +94,17 @@ export default function ProjectProgress({ projectId }: ProjectProgressProps) {
   if (batchSize > 0) {
     const batchesRemaining = Math.ceil(jobsRemaining / batchSize);
     return (
-      <div className="d-flex flex-column w-100">
-        <p className="mb-0">{batchesRemaining} batches remaining</p>
+      <div className='d-flex flex-column w-100'>
+        <p className='mb-0'>{batchesRemaining} batches remaining</p>
         <ProgressBar
           now={totalBatches - batchesRemaining}
           max={totalBatches}
           animated
-          className="w-100"
+          className='w-100'
         />
       </div>
     );
   } else {
-    return <p className="mb-0">Jobs remaining: {jobsRemaining}</p>;
+    return <p className='mb-0'>Jobs remaining: {jobsRemaining}</p>;
   }
-} 
+}
