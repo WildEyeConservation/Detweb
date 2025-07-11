@@ -179,6 +179,48 @@ export default function Users({
     });
   }, []);
 
+  async function handleRemoveUser() {
+    const userProjectMemberships = await fetchAllPaginatedResults(
+      client.models.UserProjectMembership.userProjectMembershipsByUserId,
+      {
+        userId: userToEdit!.id,
+        selectionSet: ['id', 'projectId'],
+      }
+    );
+
+    const organizationProjects = await fetchAllPaginatedResults(
+      client.models.Project.list,
+      {
+        selectionSet: ['id'],
+        filter: {
+          organizationId: {
+            eq: organization.id,
+          },
+        },
+      }
+    );
+
+    const userOrganizationProjectMemberships = userProjectMemberships.filter(
+      (membership) =>
+        organizationProjects.some(
+          (project) => project.id === membership.projectId
+        )
+    );
+
+    await Promise.all(
+      userOrganizationProjectMemberships.map(async (membership) => {
+        await client.models.UserProjectMembership.delete({
+          id: membership.id,
+        });
+      })
+    );
+
+    hook.delete({
+      organizationId: organization.id,
+      userId: userToEdit!.id,
+    });
+  }
+
   return (
     <>
       <div className="d-flex flex-column gap-2 mt-3 w-100 overflow-x-auto overflow-y-visible">
@@ -214,12 +256,7 @@ export default function Users({
           showModal(null);
           setUserToEdit(null);
         }}
-        onConfirm={() => {
-          hook.delete({
-            organizationId: organization.id,
-            userId: userToEdit!.id,
-          });
-        }}
+        onConfirm={handleRemoveUser}
         title="Remove User"
         body="Are you sure you want to remove this user?"
       />
