@@ -37,9 +37,20 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
   const { project, categoriesHook, currentPM } = useContext(ProjectContext)!;
   const { client } = useContext(GlobalContext)!;
   const [acked, setAcked] = useState(false);
-  const { currentAnnoCount, setCurrentAnnoCount } = useContext(UserContext)!;
+  const {
+    currentAnnoCount,
+    setCurrentAnnoCount,
+    sessionTestsResults,
+    setSessionTestsResults,
+  } = useContext(UserContext)!;
 
   async function createTestResult() {
+    //check if the user already completed this test (in the case where the user accidentally skips over the animal and navigates back to the test)
+    const existingTestResult = sessionTestsResults.find(
+      (result) =>
+        result.locationId === id && result.annotationSetId === annotationSetId
+    );
+
     const userAnnotations = Object.entries(currentAnnoCount).filter(
       ([_, annotations]) => annotations.length > 0
     );
@@ -122,16 +133,31 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
       allUserCounts >= totalTestCounts * (requiredAccuracy / 100) &&
       allUserCounts <= totalTestCounts * (2 - requiredAccuracy / 100);
 
-    const { data: testResult } = await client.models.TestResult.create({
-      userId: currentPM.userId,
-      projectId: project.id,
-      testPresetId: testPresetId!,
-      locationId: id,
-      annotationSetId: annotationSetId,
-      testAnimals: totalTestCounts,
-      totalMissedAnimals: totalTestCounts - totalUserCounts,
-      passedOnTotal: passedOnTotal,
-    });
+    let testResult: Schema['TestResult']['type'];
+    if (existingTestResult) {
+      //update the test result
+      const { data: updatedTestResult } = await client.models.TestResult.update(
+        {
+          id: existingTestResult.id,
+          testAnimals: totalTestCounts,
+          totalMissedAnimals: totalTestCounts - totalUserCounts,
+          passedOnTotal: passedOnTotal,
+        }
+      );
+      testResult = updatedTestResult;
+    } else {
+      const { data: newTestResult } = await client.models.TestResult.create({
+        userId: currentPM.userId,
+        projectId: project.id,
+        testPresetId: testPresetId!,
+        locationId: id,
+        annotationSetId: annotationSetId,
+        testAnimals: totalTestCounts,
+        totalMissedAnimals: totalTestCounts - totalUserCounts,
+        passedOnTotal: passedOnTotal,
+      });
+      testResult = newTestResult;
+    }
 
     if (!testResult) {
       console.error('Failed to create TestResult');
@@ -150,23 +176,50 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
           continue;
         }
 
-        const { data: createdCategoryCount } = await client.models.TestResultCategoryCount.create({
-          testResultId: testResult.id,
-          categoryName: categoryName,
-          userCount: count,
-          testCount: category.count || 0,
-        });
+        if (existingTestResult) {
+          //update the test result category count
+          await client.models.TestResultCategoryCount.update({
+            testResultId: existingTestResult.id,
+            categoryName: categoryName,
+            userCount: count,
+            testCount: category.count || 0,
+          });
+        } else {
+          await client.models.TestResultCategoryCount.create({
+            testResultId: testResult.id,
+            categoryName: categoryName,
+            userCount: count,
+            testCount: category.count || 0,
+          });
+        }
       }
     } else {
       // User missed all animals; create entries with userCount = 0
       for (const categoryCount of categoryCounts) {
-        const { data: createdCategoryCount } = await client.models.TestResultCategoryCount.create({
-          testResultId: testResult.id,
-          categoryName: categoryCount.category.name,
-          userCount: 0,
-          testCount: categoryCount.count || 0,
-        });
+        if (existingTestResult) {
+          //update the test result category count
+          await client.models.TestResultCategoryCount.update({
+            testResultId: existingTestResult.id,
+            categoryName: categoryCount.category.name,
+            userCount: 0,
+            testCount: categoryCount.count || 0,
+          });
+        } else {
+          await client.models.TestResultCategoryCount.create({
+            testResultId: testResult.id,
+            categoryName: categoryCount.category.name,
+            userCount: 0,
+            testCount: categoryCount.count || 0,
+          });
+        }
       }
+    }
+
+    if (!existingTestResult) {
+      setSessionTestsResults((prev) => [
+        ...prev,
+        { id: testResult.id, locationId: id, annotationSetId: annotationSetId },
+      ]);
     }
   }
 
