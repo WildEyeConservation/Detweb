@@ -9,7 +9,6 @@ import { CreateQueueCommand } from '@aws-sdk/client-sqs';
 import { GlobalContext, UserContext } from '../Context';
 import LaunchRegistration from '../LaunchRegistration';
 import { useLaunchTask } from '../useLaunchTask';
-import { useUpdateProgress } from '../useUpdateProgress';
 import Select from 'react-select';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
 
@@ -75,6 +74,7 @@ export default function LaunchAnnotationSetModal({
   const [loadingLocationSets, setLoadingLocationSets] =
     useState<boolean>(false);
   const [launching, setLaunching] = useState(false);
+  const [progressMessage, setProgressMessage] = useState<string>('');
   const [modelGuided, setModelGuided] = useState<boolean>(true);
 
   // set up queue creation helper
@@ -130,30 +130,16 @@ export default function LaunchAnnotationSetModal({
     createQueue,
   });
 
-  const [setLoadingLocations, setTotalLocations] = useUpdateProgress({
-    taskId: `Launch annotation set`,
-    indeterminateTaskName: `Loading locations`,
-    determinateTaskName: 'Processing locations',
-    stepFormatter: (count) => `${count} locations`,
-  });
-
   async function createTiledTask() {
-    onClose();
-
     if (handleCreateTask) {
       const locationSetId = await handleCreateTask({
-        setLocationsCompleted: setLoadingLocations,
-        setTotalLocations: setTotalLocations,
+        setLocationsCompleted: () => {},
+        setTotalLocations: () => {},
       });
-
-      setLoadingLocations(0);
-      setTotalLocations(0);
-
-      // launch via hook (which will create queue only if there are locations)
+      setProgressMessage('Initializing launch...');
       await launchTask({
         selectedTasks: [locationSetId],
-        setStepsCompleted: setLoadingLocations,
-        setTotalSteps: setTotalLocations,
+        onProgress: setProgressMessage,
         queueOptions: {
           name: 'Tiled Annotation',
           hidden: hidden,
@@ -178,8 +164,6 @@ export default function LaunchAnnotationSetModal({
       return;
     }
 
-    onClose();
-
     const modelGuidedLocationSets = locationSets.filter((ls) =>
       ls.name.toLowerCase().includes(model?.value)
     );
@@ -189,11 +173,10 @@ export default function LaunchAnnotationSetModal({
       return;
     }
 
-    // launch via hook (which will create queue only if there are locations)
+    setProgressMessage('Initializing launch...');
     await launchTask({
       selectedTasks: modelGuidedLocationSets.map((ls) => ls.id),
-      setStepsCompleted: setLoadingLocations,
-      setTotalSteps: setTotalLocations,
+      onProgress: setProgressMessage,
       queueOptions: {
         name: 'Model Guided',
         hidden: false,
@@ -214,8 +197,6 @@ export default function LaunchAnnotationSetModal({
     //     await handleLaunchRegistration(queueUrl);
     //   }
     // }
-
-    onClose();
 
     // Display registration job
     await client.models.AnnotationSet.update({
@@ -259,6 +240,9 @@ export default function LaunchAnnotationSetModal({
     });
 
     setLaunching(false);
+    onClose();
+    setTaskType('species-labelling');
+    setProgressMessage('');
   }
 
   useEffect(() => {
@@ -310,10 +294,13 @@ export default function LaunchAnnotationSetModal({
       onHide={() => {
         onClose();
         setTaskType('species-labelling');
+        setProgressMessage('');
       }}
+      backdrop='static'
+      keyboard={false}
       size="lg"
     >
-      <Modal.Header closeButton>
+      <Modal.Header>
         <Modal.Title>Launch for Manual Annotation</Modal.Title>
       </Modal.Header>
       <Modal.Body>
@@ -563,12 +550,15 @@ export default function LaunchAnnotationSetModal({
             </Tab>
           </Tabs>
         </Form>
+        {progressMessage && (
+          <p className="mt-3 text-center text-muted">{progressMessage}</p>
+        )}
       </Modal.Body>
       <Modal.Footer>
         <Button variant="primary" disabled={launching} onClick={handleSubmit}>
           Launch
         </Button>
-        <Button variant="dark" onClick={onClose}>
+        <Button variant="dark" disabled={launching} onClick={onClose}>
           Close
         </Button>
       </Modal.Footer>

@@ -59,10 +59,7 @@ export default function NewSurveyModal({
   >({});
   const [loading, setLoading] = useState(false);
   const [uploadSubmitFn, setUploadSubmitFn] = useState<
-    | ((
-        projectId: string,
-      ) => Promise<void>)
-    | null
+    ((projectId: string) => Promise<void>) | null
   >(null);
   const [gpsReady, setGpsReady] = useState(false);
 
@@ -239,17 +236,23 @@ export default function NewSurveyModal({
   }, [show]);
 
   return (
-    <Modal show={show} onHide={onClose} size="xl">
-      <Modal.Header closeButton>
+    <Modal
+      show={show}
+      onHide={onClose}
+      backdrop='static'
+      keyboard={false}
+      size='xl'
+    >
+      <Modal.Header>
         <Modal.Title>New Survey</Modal.Title>
       </Modal.Header>
       <Modal.Body>
-        <Form className="d-flex flex-column gap-2">
+        <Form className='d-flex flex-column gap-2'>
           <Form.Group>
             <Form.Label>Name</Form.Label>
             <Form.Control
-              type="text"
-              placeholder="Enter a unique identifying name for the survey."
+              type='text'
+              placeholder='Enter a unique identifying name for the survey.'
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
@@ -257,7 +260,7 @@ export default function NewSurveyModal({
           <Form.Group>
             <Form.Label>Organisation</Form.Label>
             <Select
-              className="text-black"
+              className='text-black'
               value={organization}
               options={organizations}
               onChange={(e) => setOrganization(e)}
@@ -270,22 +273,22 @@ export default function NewSurveyModal({
             />
           </Form.Group>
           <Form.Group>
-            <Form.Label className="mb-0">Permissions</Form.Label>
+            <Form.Label className='mb-0'>Permissions</Form.Label>
             <span
-              className="text-muted d-block mb-1"
+              className='text-muted d-block mb-1'
               style={{ fontSize: 12, lineHeight: 1.2 }}
             >
               Select the user permissions for non-admin users for this survey
               excluding yourself.
             </span>
-            <div className="mb-2">
+            <div className='mb-2'>
               <Form.Label style={{ fontSize: 14 }}>
                 Annotation Access:
               </Form.Label>
               <Select
-                className="text-black"
+                className='text-black'
                 value={globalAnnotationAccess}
-                placeholder="Default (Yes)"
+                placeholder='Default (Yes)'
                 options={[
                   { value: 'Yes', label: 'Yes' },
                   { value: 'No', label: 'No' },
@@ -301,8 +304,8 @@ export default function NewSurveyModal({
             </div>
             <Form.Switch
               style={{ fontSize: 14 }}
-              id="addPermissionExceptions"
-              label="Add Permission Exceptions"
+              id='addPermissionExceptions'
+              label='Add Permission Exceptions'
               checked={addPermissionExceptions}
               onChange={(e) => {
                 if (!organization) {
@@ -327,7 +330,7 @@ export default function NewSurveyModal({
                     id: exception.user.id,
                     rowData: [
                       <Select
-                        className="text-black"
+                        className='text-black'
                         value={{
                           label: exception.user.name,
                           value: exception.user.id,
@@ -362,9 +365,9 @@ export default function NewSurveyModal({
                         }}
                       />,
                       <LabeledToggleSwitch
-                        className="mb-0"
-                        leftLabel="No"
-                        rightLabel="Yes"
+                        className='mb-0'
+                        leftLabel='No'
+                        rightLabel='Yes'
                         checked={exception.annotationAccess}
                         onChange={(checked) => {
                           setPermissionExceptions(
@@ -377,8 +380,8 @@ export default function NewSurveyModal({
                         }}
                       />,
                       <Button
-                        variant="danger"
-                        size="sm"
+                        variant='danger'
+                        size='sm'
                         onClick={() => {
                           setPermissionExceptions(
                             permissionExceptions.filter(
@@ -393,8 +396,8 @@ export default function NewSurveyModal({
                   }))}
                 />
                 <Button
-                  variant="info"
-                  size="sm"
+                  variant='info'
+                  size='sm'
                   onClick={() => {
                     if (permissionExceptions.some((e) => e.temp)) {
                       alert(
@@ -427,8 +430,8 @@ export default function NewSurveyModal({
           />
         </Form>
       </Modal.Body>
-      <div className="pb-2 pt-2 text-end border-top border-dark mx-3">
-        <ul className="list-unstyled mb-2">
+      <div className='pb-2 pt-2 text-end border-top border-dark mx-3'>
+        <ul className='list-unstyled mb-2'>
           <li style={{ color: name ? 'lime' : 'red' }}>
             Name: {name ? <Check /> : <X />}
           </li>
@@ -441,10 +444,10 @@ export default function NewSurveyModal({
         </ul>
       </div>
       <Modal.Footer>
-        <Button variant="primary" onClick={handleSave} disabled={!canSubmit}>
+        <Button variant='primary' onClick={handleSave} disabled={!canSubmit}>
           {loading ? 'Creating...' : 'Create'}
         </Button>
-        <Button variant="dark" onClick={onClose}>
+        <Button variant='dark' onClick={onClose}>
           Cancel
         </Button>
       </Modal.Footer>
