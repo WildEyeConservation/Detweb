@@ -18,7 +18,7 @@ interface Message {
   skipLocationWithAnnotations: boolean;
 }
 
-export default function SqsPreloader({ visible = true }: { visible: boolean }) {
+export default function SqsPreloader({ visible = true }: { visible?: boolean }) {
   const [index, setIndex] = useState(0);
   const { client } = useContext(GlobalContext)!;
 
@@ -64,7 +64,7 @@ export default function SqsPreloader({ visible = true }: { visible: boolean }) {
     return !isWithin;
   };
 
-  const { fetcher } = useSQS(filter);
+  const { fetcher } = useSQS(filter, true);
 
   const Preloader = useMemo(() => PreloaderFactory(TaskSelector), []);
 

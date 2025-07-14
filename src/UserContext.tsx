@@ -154,12 +154,16 @@ export function User({
   const [jobsCompleted, setJobsCompleted] = useState<number>(0);
   const [unannotatedJobs, setUnannotatedJobs] = useState<number>(0);
   const [currentTaskTag, setCurrentTaskTag] = useState<string>("");
-  const [isTesting, setIsTesting] = useState<boolean>(false);
   const [isRegistering, setIsRegistering] = useState<boolean>(false);
   const [currentAnnoCount, setCurrentAnnoCount] = useState<{
     [key: string]: number;
   }>({});
   const [isAnnotatePath, setIsAnnotatePath] = useState<boolean>(false);
+  const [sessionTestsResults, setSessionTestsResults] = useState<{
+    id: string;
+    locationId: string;
+    annotationSetId: string;
+  }[]>([]);
   const { client, region } = useContext(GlobalContext)!;
   //const { items: myMemberships } = useObserveQuery('UserProjectMembership', { filter: { userId: { eq: user!.username } } });
   // const { data: myMemberships } = useOptimisticUpdates(
@@ -261,8 +265,6 @@ export function User({
         setCurrentTaskTag,
         currentAnnoCount,
         setCurrentAnnoCount,
-        isTesting,
-        setIsTesting,
         isRegistering,
         setIsRegistering,
         myMembershipHook,
@@ -271,6 +273,8 @@ export function User({
         getDynamoClient,
         isAnnotatePath,
         setIsAnnotatePath,
+        sessionTestsResults,
+        setSessionTestsResults,
       }}
     >
       {children}

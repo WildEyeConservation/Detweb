@@ -33,12 +33,13 @@ export default function AnnotationImage(props: any) {
     allowOutside,
     zoom,
     hideNavButtons,
+    testPresetId,
     isTest,
   } = props;
   const { annotationSetId } = location;
   const { client } = useContext(GlobalContext)!;
   //testing
-  const { currentTaskTag, isTesting, isAnnotatePath, myMembershipHook } =
+  const { currentTaskTag, isAnnotatePath, myMembershipHook } =
     useContext(UserContext)!;
   const navigate = useNavigate();
   const { surveyId } = useParams();
@@ -66,10 +67,10 @@ export default function AnnotationImage(props: any) {
   >(
     'Annotation',
     async (nextToken) =>
-      client.models.Annotation.annotationsByImageIdAndSetId(
+      (client.models.Annotation.annotationsByImageIdAndSetId(
         { imageId: location.image.id, setId: { eq: location.annotationSetId } },
         { nextToken }
-      ),
+      ) as any),
     subscriptionFilter
   );
   const stats = useImageStats(annotationsHook);
@@ -109,7 +110,7 @@ export default function AnnotationImage(props: any) {
           />
         ))
     );
-  }, [props.taskTag, location.image.id, annotationSetId, isTesting]);
+  }, [props.taskTag, location.image.id, annotationSetId]);
 
   async function handleShare() {
     const windowUrl = new URL(window.location.href);
@@ -198,6 +199,7 @@ export default function AnnotationImage(props: any) {
             ack={ack}
             annotationSet={annotationSetId}
             hideNavButtons={hideNavButtons}
+            testPresetId={testPresetId}
             isTest={isTest}
           >
             {visible && memoizedChildren}

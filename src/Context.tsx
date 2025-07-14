@@ -1,25 +1,25 @@
-import { createContext, useState } from "react";
-import { Schema } from "../amplify/data/resource"; // Path to your backend resource definition
-import outputs from "../amplify_outputs.json";
-import { AuthUser } from "@aws-amplify/auth";
-import { SQSClient } from "@aws-sdk/client-sqs";
-import { V6Client } from "@aws-amplify/api-graphql";
-import { limitedClient } from "./limitedClient";
-import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { createContext, useState } from 'react';
+import { Schema } from '../amplify/data/resource'; // Path to your backend resource definition
+import outputs from '../amplify_outputs.json';
+import { AuthUser } from '@aws-amplify/auth';
+import { SQSClient } from '@aws-sdk/client-sqs';
+import { V6Client } from '@aws-amplify/api-graphql';
+import { limitedClient } from './limitedClient';
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 
 export interface ProgressType {
   [key: string]: { value?: number; detail: JSX.Element };
 }
 
 type ClientType = V6Client<Schema>;
-type ModelType = keyof ClientType["models"];
+type ModelType = keyof ClientType['models'];
 export type CRUDhook<T extends ModelType> = {
-  data: Schema[T]["type"][];
-  create: (arg: Parameters<ClientType["models"][T]["create"]>[0]) => string;
-  update: (arg: Parameters<ClientType["models"][T]["update"]>[0]) => void;
-  delete: (arg: Parameters<ClientType["models"][T]["delete"]>[0]) => void;
+  data: Schema[T]['type'][];
+  create: (arg: Parameters<ClientType['models'][T]['create']>[0]) => string;
+  update: (arg: Parameters<ClientType['models'][T]['update']>[0]) => void;
+  delete: (arg: Parameters<ClientType['models'][T]['delete']>[0]) => void;
 };
-export type AnnotationsHook = CRUDhook<"Annotation">;
+export type AnnotationsHook = CRUDhook<'Annotation'>;
 
 export interface GlobalContextType {
   client: V6Client<Schema>;
@@ -73,8 +73,8 @@ export interface UserContextType {
   getSqsClient: () => Promise<SQSClient>;
   getDynamoClient: () => Promise<DynamoDBDocumentClient>;
   cognitoGroups: string[];
-  myMembershipHook: CRUDhook<"UserProjectMembership">;
-  myOrganizationHook: CRUDhook<"OrganizationMembership">;
+  myMembershipHook: CRUDhook<'UserProjectMembership'>;
+  myOrganizationHook: CRUDhook<'OrganizationMembership'>;
   isOrganizationAdmin: boolean;
   jobsCompleted: number;
   setJobsCompleted: React.Dispatch<React.SetStateAction<number>>;
@@ -82,8 +82,6 @@ export interface UserContextType {
   setIsAnnotatePath: React.Dispatch<React.SetStateAction<boolean>>;
 
   // user testing - maybe move to own context
-  isTesting: boolean;
-  setIsTesting: React.Dispatch<React.SetStateAction<boolean>>;
   unannotatedJobs: number;
   setUnannotatedJobs: React.Dispatch<React.SetStateAction<number>>;
   currentTaskTag: string;
@@ -94,19 +92,29 @@ export interface UserContextType {
   >;
   isRegistering: boolean;
   setIsRegistering: React.Dispatch<React.SetStateAction<boolean>>;
+  sessionTestsResults: {
+    id: string;
+    locationId: string;
+    annotationSetId: string;
+  }[];
+  setSessionTestsResults: React.Dispatch<
+    React.SetStateAction<
+      { id: string; locationId: string; annotationSetId: string }[]
+    >
+  >;
 }
 
 export interface ManagementContextType {
-  allUsers: Schema["UserType"]["type"][];
-  projectMembershipHook: CRUDhook<"UserProjectMembership">;
-  annotationSetsHook: CRUDhook<"AnnotationSet">;
-  imageSetsHook: CRUDhook<"ImageSet">;
-  locationSetsHook: CRUDhook<"LocationSet">;
+  allUsers: Schema['UserType']['type'][];
+  projectMembershipHook: CRUDhook<'UserProjectMembership'>;
+  annotationSetsHook: CRUDhook<'AnnotationSet'>;
+  imageSetsHook: CRUDhook<'ImageSet'>;
+  locationSetsHook: CRUDhook<'LocationSet'>;
   queuesHook: {
-    data: Schema["Queue"]["type"][];
+    data: Schema['Queue']['type'][];
     create: (arg0: string) => string;
     update: (
-      arg: Parameters<ClientType["models"]["Queue"]["update"]>[0]
+      arg: Parameters<ClientType['models']['Queue']['update']>[0]
     ) => void;
     delete: (arg: { id: string }) => void;
   };
@@ -117,13 +125,13 @@ export interface ManagementContextType {
 // }
 
 export interface ProjectContextType {
-  currentPM: Schema["UserProjectMembership"]["type"];
-  annotationsHook: CRUDhook<"Annotation">;
-  project: Schema["Project"]["type"];
-  categoriesHook: CRUDhook<"Category">;
-  currentCategory: Schema["Category"]["type"];
+  currentPM: Schema['UserProjectMembership']['type'];
+  annotationsHook: CRUDhook<'Annotation'>;
+  project: Schema['Project']['type'];
+  categoriesHook: CRUDhook<'Category'>;
+  currentCategory: Schema['Category']['type'];
   setCurrentCategory: React.Dispatch<
-    React.SetStateAction<Schema["Category"]["type"]>
+    React.SetStateAction<Schema['Category']['type']>
   >;
   expandLegend: boolean;
   setExpandLegend: React.Dispatch<React.SetStateAction<boolean>>;
@@ -137,9 +145,9 @@ export interface ProgressContextType {
 // context used for setting up testing as an organization admin (this is not used for actual testing)
 export interface TestingContextType {
   organizationId: string;
-  organizationProjects: Schema["Project"]["type"][];
-  organizationTestPresets: Schema["TestPreset"]["type"][];
-  organizationMembershipsHook: CRUDhook<"OrganizationMembership">;
+  organizationProjects: Schema['Project']['type'][];
+  organizationTestPresets: Schema['TestPreset']['type'][];
+  organizationMembershipsHook: CRUDhook<'OrganizationMembership'>;
 }
 
 interface ImageContextType {
@@ -154,13 +162,13 @@ interface ImageContextType {
   setZoom: React.Dispatch<React.SetStateAction<number>>;
   prevImages:
     | {
-        image: Schema["ImageType"]["type"];
+        image: Schema['ImageType']['type'];
         transform: (c1: [number, number]) => [number, number];
       }[]
     | undefined;
   nextImages:
     | {
-        image: Schema["ImageType"]["type"];
+        image: Schema['ImageType']['type'];
         transform: (c1: [number, number]) => [number, number];
       }[]
     | undefined;
