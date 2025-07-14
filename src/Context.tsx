@@ -82,8 +82,6 @@ export interface UserContextType {
   setIsAnnotatePath: React.Dispatch<React.SetStateAction<boolean>>;
 
   // user testing - maybe move to own context
-  isTesting: boolean;
-  setIsTesting: React.Dispatch<React.SetStateAction<boolean>>;
   unannotatedJobs: number;
   setUnannotatedJobs: React.Dispatch<React.SetStateAction<number>>;
   currentTaskTag: string;

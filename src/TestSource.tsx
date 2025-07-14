@@ -314,6 +314,7 @@ export default function useTesting(useSecondaryCandidates: boolean = false) {
       secondaryQueueUrl: undefined,
       skipLocationWithAnnotations: false,
       zoom: zoom,
+      testPresetId: location.testPresetId,
       ack: () => {
         console.log("Ack successful for test");
       },

@@ -126,15 +126,16 @@ export default function Results() {
   const countsByCategory = results
     .flatMap((result) => result.categoryCounts)
     .reduce((acc, category) => {
-      if (!acc[category.categoryName]) {
-        acc[category.categoryName] = {
+      const key = category.categoryName.toLowerCase();
+      if (!acc[key]) {
+        acc[key] = {
           userCount: 0,
           testCount: 0,
-          name: category.categoryName,
+          name: key,
         };
       }
-      acc[category.categoryName].userCount += category.userCount;
-      acc[category.categoryName].testCount += category.testCount;
+      acc[key].userCount += category.userCount;
+      acc[key].testCount += category.testCount;
       return acc;
     }, {} as Record<string, { userCount: number; testCount: number; name: string }>);
 

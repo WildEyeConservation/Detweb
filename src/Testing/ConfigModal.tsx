@@ -57,8 +57,8 @@ export default function ConfigModal({
   }, [show]);
 
   async function handleSave() {
-    if (testType === "interval" && testInterval <= 0) {
-      alert("Test interval must be greater than 0");
+    if (testType === "interval" && testInterval < 10) {
+      alert("Test interval must be greater than 10");
       return;
     }
 
@@ -72,8 +72,8 @@ export default function ConfigModal({
         alert("Test chance must be between 0 and 100");
         return;
       }
-      if (deadzone <= 0) {
-        alert("Deadzone must be greater than 0");
+      if (deadzone < 10) {
+        alert("Deadzone must be greater than 10");
         return;
       }
     }
@@ -132,9 +132,9 @@ export default function ConfigModal({
                 type="number"
                 value={testInterval}
                 onChange={(e) =>
-                  setTestInterval(parseInt(e.target.value || "0"))
+                  setTestInterval(parseInt(e.target.value || "10"))
                 }
-                min={1}
+                min={10}
               />
             </Form.Group>
           )}
@@ -156,8 +156,8 @@ export default function ConfigModal({
               <Form.Control
                 type="number"
                 value={deadzone}
-                onChange={(e) => setDeadzone(parseInt(e.target.value || "0"))}
-                min={0}
+                onChange={(e) => setDeadzone(parseInt(e.target.value || "10"))}
+                min={10}
                 className="mb-2"
               />
               <Form.Label>Test probability (%)</Form.Label>
@@ -171,7 +171,7 @@ export default function ConfigModal({
             </Form.Group>
           )}
           <Form.Group className="mb-2">
-            <Form.Label>User accuracy (%)</Form.Label>
+            <Form.Label>Pass rate (%)</Form.Label>
             <Form.Control
               type="number"
               value={testAccuracy}

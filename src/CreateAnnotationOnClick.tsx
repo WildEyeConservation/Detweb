@@ -16,7 +16,10 @@ export default function CreateAnnotationOnClick(props: CreateAnnotationOnClickPr
   const { location, source, image, allowOutside, setId } = props;
   const { annotationsHook: { create: createAnnotation } } = useContext(ImageContext)!;
   const { latLng2xy } = useContext(ImageContext)!;
-  const {project,currentCategory} = useContext(ProjectContext)!;
+  // Bypass lazy-loader typing for category matching logic
+  const { project, currentCategory: ctxCategory, categoriesHook } = useContext(ProjectContext)!;
+  const currentCategory = ctxCategory as any;
+  const categories: any[] = categoriesHook.data || [];
 
   useMapEvents({
     click: (e: { latlng: any; }) => {
@@ -29,19 +32,41 @@ export default function CreateAnnotationOnClick(props: CreateAnnotationOnClickPr
           Math.abs(xy.y - location.y) < location.height! / 2)
       ) {
         console.log('yay')
-        currentCategory && source && project &&
+        if (currentCategory && source && project) {
+        // Map the current category to this annotation set or fall back to 'Unknown'
+        let categoryIdToUse = currentCategory.id;
+        const realSetId = location?.annotationSetId as string;
+        const currentCatSetId = (currentCategory as any).annotationSetId;
+        if (currentCatSetId !== realSetId) {
+          const sameName = categories.find(
+            (c) => c.annotationSetId === realSetId && c.name === currentCategory.name
+          );
+          if (sameName) {
+            categoryIdToUse = sameName.id;
+          } else {
+            const unknownCat = categories.find(
+              (c) =>
+                c.annotationSetId === realSetId &&
+                c.name.toLowerCase() === 'unknown'
+            );
+            if (unknownCat) {
+              categoryIdToUse = unknownCat.id;
+            }
+          }
+        }
         createAnnotation({
           imageId: image?.id || location?.image.id,
           setId,
           projectId: project.id,
           x: Math.round(xy.x),
           y: Math.round(xy.y),
-          categoryId: currentCategory.id,
+          categoryId: categoryIdToUse,
           source: source,
-          obscured: false
+          obscured: false,
         });
+        }
       }
-    },
+    }
   });
 
   return null; // Return null or a JSX element if needed

@@ -154,7 +154,6 @@ export function User({
   const [jobsCompleted, setJobsCompleted] = useState<number>(0);
   const [unannotatedJobs, setUnannotatedJobs] = useState<number>(0);
   const [currentTaskTag, setCurrentTaskTag] = useState<string>("");
-  const [isTesting, setIsTesting] = useState<boolean>(false);
   const [isRegistering, setIsRegistering] = useState<boolean>(false);
   const [currentAnnoCount, setCurrentAnnoCount] = useState<{
     [key: string]: number;
@@ -261,8 +260,6 @@ export function User({
         setCurrentTaskTag,
         currentAnnoCount,
         setCurrentAnnoCount,
-        isTesting,
-        setIsTesting,
         isRegistering,
         setIsRegistering,
         myMembershipHook,
