@@ -25,8 +25,7 @@ export type LaunchTaskOptions = {
 
 export type LaunchTaskArgs = {
   selectedTasks: string[];
-  setStepsCompleted: (steps: number) => void;
-  setTotalSteps: (steps: number) => void;
+  onProgress?: (message: string) => void;
   queueOptions: {
     name: string;
     hidden: boolean;
@@ -48,11 +47,12 @@ export function useLaunchTask(
 
   async function queryLocations(
     locationSetId: string,
-    setStepsCompleted: (steps: number) => void
+    onProgress?: (message: string) => void
   ): Promise<string[]> {
     const dynamoClient = await getDynamoClient();
     const locationIds: string[] = [];
     let lastEvaluatedKey: Record<string, any> | undefined = undefined;
+    onProgress?.(`Querying locations...`);
     do {
       const command = new QueryCommand({
         TableName: backend.custom.locationTable,
@@ -71,8 +71,6 @@ export function useLaunchTask(
       try {
         const response = await dynamoClient.send(command);
         const items = response.Items || [];
-        setStepsCompleted((s: number) => s + items.length);
-        // Filter out locations with zero values
         const pageLocationIds = items
           .filter((item: any) => {
             const x = parseFloat(item.x?.N || '0');
@@ -90,6 +88,7 @@ export function useLaunchTask(
           })
           .map((item: any) => item.id.S);
         locationIds.push(...pageLocationIds);
+        onProgress?.(`Loaded ${locationIds.length} locations`);
         lastEvaluatedKey = response.LastEvaluatedKey as
           | Record<string, any>
           | undefined;
@@ -103,11 +102,12 @@ export function useLaunchTask(
 
   async function queryObservations(
     annotationSetId: string,
-    setStepsCompleted: (steps: number) => void
+    onProgress?: (message: string) => void
   ): Promise<string[]> {
     const dynamoClient = await getDynamoClient();
     const locationIds: string[] = [];
     let lastEvaluatedKey: Record<string, any> | undefined = undefined;
+    onProgress?.(`Querying observations...`);
     do {
       const command = new QueryCommand({
         TableName: backend.custom.observationTable,
@@ -123,9 +123,9 @@ export function useLaunchTask(
       try {
         const response = await dynamoClient.send(command);
         const items = response.Items || [];
-        setStepsCompleted((s: number) => s + items.length);
         const pageLocationIds = items.map((item: any) => item.locationId.S);
         locationIds.push(...pageLocationIds);
+        onProgress?.(`Loaded ${locationIds.length} observations`);
         lastEvaluatedKey = response.LastEvaluatedKey as
           | Record<string, any>
           | undefined;
@@ -161,17 +161,17 @@ export function useLaunchTask(
   const launchTask = useCallback(
     async ({
       selectedTasks,
-      setStepsCompleted,
-      setTotalSteps,
+      onProgress,
       queueOptions,
       secondaryQueueOptions,
     }: LaunchTaskArgs) => {
+      onProgress?.('Launching tasks');
       const allSeenLocations = options.filterObserved
-        ? await queryObservations(options.annotationSetId, setStepsCompleted)
+        ? await queryObservations(options.annotationSetId, onProgress)
         : [];
       let allLocations = (
         await Promise.all(
-          selectedTasks.map((task) => queryLocations(task, setStepsCompleted))
+          selectedTasks.map((task) => queryLocations(task, onProgress))
         )
       )
         .flat()
@@ -189,9 +189,7 @@ export function useLaunchTask(
         }
       }
       allLocations = interleavedLocations.reverse();
-
-      setStepsCompleted(0);
-      setTotalSteps(allLocations.length);
+      onProgress?.(`Found ${allLocations.length} locations to launch`);
 
       if (allLocations.length === 0) {
         // Notify user when no unobserved locations (or no locations at all)
@@ -223,9 +221,13 @@ export function useLaunchTask(
       const queueType = await getQueueType(mainQueue.url);
       const groupId = crypto.randomUUID();
       const batchSize = 10;
+      // Compute number of SQS send chunks for progress
+      const progressChunks = Math.ceil(allLocations.length / batchSize);
+      onProgress?.(`Sending ${progressChunks} chunks`);
       const batchPromises: Promise<any>[] = [];
 
       for (let i = 0; i < allLocations.length; i += batchSize) {
+        const batchNumber = Math.floor(i / batchSize) + 1;
         const locationBatch = allLocations.slice(i, i + batchSize);
         const batchEntries: any[] = [];
         for (const locationId of locationBatch) {
@@ -269,7 +271,7 @@ export function useLaunchTask(
                 )
               )
               .then(() =>
-                setStepsCompleted((s: number) => s + batchEntries.length)
+                onProgress?.(`Sent chunk ${batchNumber} of ${progressChunks}`)
               )
           );
           batchPromises.push(sendTask);
@@ -277,7 +279,8 @@ export function useLaunchTask(
       }
 
       await Promise.all(batchPromises);
-
+      onProgress?.('All chunks sent');
+      // Update DB with total worker batches (based on UI batch size)
       await client.models.Queue.update({
         id: mainQueue.id,
         totalBatches: Math.ceil(allLocations.length / mainQueue.batchSize),
@@ -289,6 +292,7 @@ export function useLaunchTask(
           locationSetId: taskId,
         });
       }
+      onProgress?.('Launch complete');
     },
     [options, client, backend, getSqsClient, getDynamoClient, limitConnections]
   );
