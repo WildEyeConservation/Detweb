@@ -18,6 +18,7 @@ interface UseCreateObservationProps {
   isTest: boolean;
   config?: Schema['ProjectTestConfig']['type'];
   testPresetId?: string;
+  testSetId?: string;
 }
 
 export default function useCreateObservation(props: UseCreateObservationProps) {
@@ -27,7 +28,9 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     ack,
     config,
     testPresetId,
+    testSetId,
   } = props;
+  const annotationSetToUse = isTest && testSetId ? testSetId : annotationSetId;
   const {
     annoCount,
     startLoadingTimestamp,
@@ -48,7 +51,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     //check if the user already completed this test (in the case where the user accidentally skips over the animal and navigates back to the test)
     const existingTestResult = sessionTestsResults.find(
       (result) =>
-        result.locationId === id && result.annotationSetId === annotationSetId
+        result.locationId === id && result.annotationSetId === annotationSetToUse
     );
 
     const userAnnotations = Object.entries(currentAnnoCount).filter(
@@ -218,7 +221,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     if (!existingTestResult) {
       setSessionTestsResults((prev) => [
         ...prev,
-        { id: testResult.id, locationId: id, annotationSetId: annotationSetId },
+        { id: testResult.id, locationId: id, annotationSetId: annotationSetToUse },
       ]);
     }
   }
@@ -229,7 +232,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     const submittedTimestamp = Date.now() - 2000;
     if (!acked && location && annotationSetId && project) {
       client.models.Observation.create({
-        annotationSetId: annotationSetId,
+        annotationSetId: annotationSetToUse,
         annotationCount: annoCount,
         timeTaken: submittedTimestamp
           ? submittedTimestamp - visibleTimestamp
@@ -260,6 +263,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     fullyLoadedTimestamp,
     annoCount,
     isTest,
+    testSetId,
   ]);
 
   return newAck;
@@ -278,9 +282,9 @@ export function withCreateObservation<T extends CombinedProps>(
   WrappedComponent: React.ComponentType<T>
 ) {
   const WithCreateObservation: React.FC<T> = (props) => {
-    const { location, ack, isTest, config, testPresetId } = props;
+    const { location, ack, isTest, config, testPresetId, testSetId } = props;
     const newAck = location.id
-      ? useCreateObservation({ location, ack, isTest, config, testPresetId })
+      ? useCreateObservation({ location, ack, isTest, config, testPresetId, testSetId })
       : ack;
     return (
       <WrappedComponent {...props} location={{ ...location, ack: newAck }} />

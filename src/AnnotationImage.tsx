@@ -201,6 +201,7 @@ export default function AnnotationImage(props: any) {
             hideNavButtons={hideNavButtons}
             testPresetId={testPresetId}
             isTest={isTest}
+            testSetId={testSetId}
           >
             {visible && memoizedChildren}
           </Image>
