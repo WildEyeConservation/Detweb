@@ -207,9 +207,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
   }, [targetData, annotationsByImage, imageNeighbours, imageMetaData]);
 
   const nextPair = useCallback(() => {
-    if (pairToRegister) {
-      setActivePair(pairToRegister);
-    }
+    setActivePair(pairToRegister ?? null);
   }, [pairToRegister]);
 
   useEffect(() => {
@@ -217,6 +215,12 @@ export function Registration({ showAnnotationSetDropdown = true }) {
       setActivePair(pairToRegister);
     }
   }, [activePair, pairToRegister]);
+  // Clear activePair when no items left to register
+  useEffect(() => {
+    if (!pairToRegister) {
+      setActivePair(null);
+    }
+  }, [pairToRegister]);
 
   useEffect(() => {
     if (annotationSetId && !showAnnotationSetDropdown) {
@@ -333,7 +337,9 @@ export function Registration({ showAnnotationSetDropdown = true }) {
               of {imageMetaDataQueries.length} images loaded
             </div>
           ) : (
-            activePair && (
+            selectedCategories.length === 0 ? (
+              <div>No label selected</div>
+            ) : activePair ? (
               <RegisterPair
                 key={activePair.primary + activePair.secondary}
                 images={[
@@ -353,6 +359,8 @@ export function Registration({ showAnnotationSetDropdown = true }) {
                 visible={true}
                 ack={() => {}}
               />
+            ) : (
+              <div>No more items to register</div>
             )
           )}
         </div>
