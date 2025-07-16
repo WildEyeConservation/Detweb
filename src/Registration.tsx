@@ -222,6 +222,18 @@ export function Registration({ showAnnotationSetDropdown = true }) {
     }
   }, [pairToRegister]);
 
+  // Move to next pair when current pair is no longer valid
+  useEffect(() => {
+    if (
+      activePair &&
+      pairToRegister &&
+      (activePair.primary !== pairToRegister.primary ||
+        activePair.secondary !== pairToRegister.secondary)
+    ) {
+      nextPair();
+    }
+  }, [activePair, pairToRegister, nextPair]);
+
   useEffect(() => {
     if (annotationSetId && !showAnnotationSetDropdown) {
       setSelectedAnnotationSet(annotationSetId);
@@ -339,20 +351,20 @@ export function Registration({ showAnnotationSetDropdown = true }) {
           ) : (
             selectedCategories.length === 0 ? (
               <div>No label selected</div>
-            ) : activePair ? (
+            ) : activePair
+              && imageNeighbours[activePair.primary]?.[activePair.secondary]
+              && imageNeighbours[activePair.secondary]?.[activePair.primary] ? (
               <RegisterPair
                 key={activePair.primary + activePair.secondary}
                 images={[
-                  imageMetaData[activePair?.primary],
-                  imageMetaData[activePair?.secondary],
+                  imageMetaData[activePair.primary],
+                  imageMetaData[activePair.secondary],
                 ]}
                 selectedCategoryIDs={selectedCategoryIDs}
                 selectedSet={selectedAnnotationSet}
                 transforms={[
-                  imageNeighbours[activePair?.primary][activePair?.secondary]
-                    .tf,
-                  imageNeighbours[activePair?.secondary][activePair?.primary]
-                    .tf,
+                  imageNeighbours[activePair.primary]?.[activePair.secondary]?.tf,
+                  imageNeighbours[activePair.secondary]?.[activePair.primary]?.tf,
                 ]}
                 next={nextPair}
                 prev={() => {}}

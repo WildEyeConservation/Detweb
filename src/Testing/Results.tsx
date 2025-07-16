@@ -84,11 +84,11 @@ export default function Results() {
   ];
 
   const tableData = results.map((result) => {
-    const date = new Date(result.createdAt).toISOString().split('T');
+    const date = new Date(result.createdAt);
     return {
       id: result.id,
       rowData: [
-        `${date[0].replace(/-/g, '/')} - ${date[1].substring(0, 8)}`,
+        `${date.toISOString().split('T')[0].replace(/-/g, '/')} - ${date.toLocaleTimeString()}`,
         result.testPreset.name,
         result.testAnimals,
         result.totalMissedAnimals,

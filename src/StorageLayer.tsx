@@ -27,31 +27,9 @@ async function getTileBlob(path: string): Promise<Blob> {
     return cached;
   }
 
-  //* Hack for testing transfer speeds from Cape Town
-  let signedUrl: any;
-
-  if (!path.toLowerCase().includes('census_12_06_25_out')) {
-    // If not in cache or expired, fetch the image
-    signedUrl = await getUrl({
-      path,
-      options: {
-        bucket: {
-          bucketName: 'amplify-d1xnv4qbnjfbzf-maste-outputsbucket30eb72c2-jvtc8ylpftsk',
-          region: 'eu-west-1',
-        },
-      },
-    });
-  } else {
-    signedUrl = await getUrl({
-      path,
-      options: {
-        bucket: {
-          bucketName: 'surveyscope-testbucket',
-          region: 'af-south-1',
-        },
-      },
-    });
-  }
+  const signedUrl = await getUrl({
+    path,
+  });
 
   const response = await fetch(signedUrl.url.toString(), {
     cache: 'no-store', // Prevent browser from caching the response
