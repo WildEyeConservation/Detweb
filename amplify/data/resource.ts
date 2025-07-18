@@ -705,9 +705,8 @@ const schema = a
         projectId: a.string().required(),
         //imageId---originalPath---timestamp
         images: a.string().array(),
-        //JSON stringified array of masks
-        masks: a.string().required(),
-        // inputBucket: a.string().required(),
+        //JSON stringified metadata
+        metadata: a.string().required(),
         queueUrl: a.string().required(),
       })
       .returns(a.json())

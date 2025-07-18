@@ -369,9 +369,15 @@ export default function UploadManager() {
       const metadata = (await metadataStore.getItem(projectId)) as {
         model: string;
         masks: number[][][];
+        cameraSelection: [string, string[]];
+        overlaps: { cameraA: string; cameraB: string }[];
+        overlapInterval: number;
       };
       const model = metadata?.model ?? 'manual';
       const masks = metadata?.masks ?? [];
+      const cameraSelection = metadata?.cameraSelection ?? [];
+      const overlaps = metadata?.overlaps ?? [];
+      const overlapInterval = metadata?.overlapInterval || 1 ;
 
       const BATCH_SIZE = 500;
 
@@ -385,7 +391,12 @@ export default function UploadManager() {
         client.mutations.runImageRegistration({
           images: batchStrings,
           projectId: projectId,
-          masks: JSON.stringify(masks),
+          metadata: JSON.stringify({
+            masks: masks,
+            cameraSelection: cameraSelection,
+            overlaps: overlaps,
+            overlapInterval: overlapInterval,
+          }),
           queueUrl: backend.custom.lightglueTaskQueueUrl,
         });
       }

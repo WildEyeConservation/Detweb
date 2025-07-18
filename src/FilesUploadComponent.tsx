@@ -13,9 +13,11 @@ import Papa from 'papaparse';
 import GPSSubset from './GPSSubset';
 import { parseGPX } from '@we-gold/gpxjs';
 import FileInput from './FileInput';
+import FolderStructure from './FolderStructure';
 import ImageMaskEditor from './ImageMaskEditor.tsx';
 import Select from 'react-select';
 import localforage from 'localforage';
+import CameraOverlap from './CameraOverlap';
 
 // Configure a dedicated storage instance for file paths
 const fileStore = localforage.createInstance({
@@ -91,6 +93,9 @@ export function FileUploadCore({
   const [name, setName] = useState('');
   const { client } = useContext(GlobalContext)!;
   const [scannedFiles, setScannedFiles] = useState<File[]>([]);
+  const [cameraSelection, setCameraSelection] = useState<
+    [string, string[]] | null
+  >(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [filteredImageFiles, setFilteredImageFiles] = useState<File[]>([]);
   const { setTask } = useContext(UploadContext)!;
@@ -104,7 +109,9 @@ export function FileUploadCore({
   const [file, setFile] = useState<File | undefined>();
   const [scanningEXIF, setScanningEXIF] = useState(false);
   const [csvData, setCsvData] = useState<CsvData | undefined>(undefined);
-  const [fullCsvData, setFullCsvData] = useState<CsvFile | undefined>(undefined);
+  const [fullCsvData, setFullCsvData] = useState<CsvFile | undefined>(
+    undefined
+  );
   const [listingS3Images, setListingS3Images] = useState(false);
   const [timeRanges, setTimeRanges] = useState<{
     [day: number]: { start: string; end: string };
@@ -119,6 +126,10 @@ export function FileUploadCore({
     label: 'ScoutBot',
     value: 'scoutbot',
   });
+  const [overlapInterval, setOverlapInterval] = useState(0);
+  const [overlaps, setOverlaps] = useState<
+    { cameraA: string; cameraB: string }[]
+  >([]);
 
   // State for user-defined column mapping phase
   const [headerFields, setHeaderFields] = useState<string[] | null>(null);
@@ -287,7 +298,7 @@ export function FileUploadCore({
               timestamp: updatedExif.timestamp,
             });
           }
-          setScanCount(prev => prev + 1);
+          setScanCount((prev) => prev + 1);
           return updatedExif;
         })
       );
@@ -615,6 +626,9 @@ export function FileUploadCore({
       await metadataStore.setItem(projectId, {
         model: model.value,
         masks: masks,
+        cameraSelection: cameraSelection,
+        overlaps: overlaps,
+        overlapInterval: overlapInterval,
       });
 
       // push new task to upload manager
@@ -836,7 +850,9 @@ export function FileUploadCore({
             setMaxTimestamp(Math.max(...imgTimestamps));
 
             // Initialize time ranges based on image timestamps
-            const initialRanges: { [day: number]: { start: string; end: string } } = {};
+            const initialRanges: {
+              [day: number]: { start: string; end: string };
+            } = {};
             imagePoints.forEach(({ timestamp }) => {
               const date = new Date(timestamp!);
               const day = date.getUTCDate();
@@ -846,8 +862,10 @@ export function FileUploadCore({
               if (!initialRanges[day]) {
                 initialRanges[day] = { start: timeStr, end: timeStr };
               } else {
-                if (timeStr < initialRanges[day].start) initialRanges[day].start = timeStr;
-                if (timeStr > initialRanges[day].end) initialRanges[day].end = timeStr;
+                if (timeStr < initialRanges[day].start)
+                  initialRanges[day].start = timeStr;
+                if (timeStr > initialRanges[day].end)
+                  initialRanges[day].end = timeStr;
               }
             });
             setTimeRanges(initialRanges);
@@ -882,19 +900,26 @@ export function FileUploadCore({
               setMaxTimestamp(Math.max(...timestamps));
 
               // Initialize time ranges based on CSV timestamps
-              const initialRanges: { [day: number]: { start: string; end: string } } = {};
+              const initialRanges: {
+                [day: number]: { start: string; end: string };
+              } = {};
               rawData.forEach(({ timestamp }) => {
                 if (timestamp === undefined) return;
                 const date = new Date(timestamp!);
                 const day = date.getUTCDate();
                 const hours = date.getUTCHours().toString().padStart(2, '0');
-                const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+                const minutes = date
+                  .getUTCMinutes()
+                  .toString()
+                  .padStart(2, '0');
                 const timeStr = `${hours}:${minutes}`;
                 if (!initialRanges[day]) {
                   initialRanges[day] = { start: timeStr, end: timeStr };
                 } else {
-                  if (timeStr < initialRanges[day].start) initialRanges[day].start = timeStr;
-                  if (timeStr > initialRanges[day].end) initialRanges[day].end = timeStr;
+                  if (timeStr < initialRanges[day].start)
+                    initialRanges[day].start = timeStr;
+                  if (timeStr > initialRanges[day].end)
+                    initialRanges[day].end = timeStr;
                 }
               });
               setTimeRanges(initialRanges);
@@ -1068,7 +1093,9 @@ export function FileUploadCore({
       </Form.Group>
       {scanningEXIF ? (
         <div className='mt-3 mb-0'>
-          <p className='mb-0'>Scanning images for GPS data: {`${scanCount}/${scanTotal}`}</p>
+          <p className='mb-0'>
+            Scanning images for GPS data: {`${scanCount}/${scanTotal}`}
+          </p>
         </div>
       ) : Object.keys(exifData).length > 0 && imageFiles.length > 0 ? (
         <Form.Group className='mt-3 d-flex flex-column gap-2'>
@@ -1319,68 +1346,81 @@ export function FileUploadCore({
               </div>
             </Form.Group>
           )}
-        </>
-      )}
-      {csvData && (
-        <div className='mt-3'>
-          {(() => {
-            let message = '';
-            if (associateByTimestamp) {
-              const csvTimestamps = csvData.data.map(
-                (row) => row.timestamp || 0
-              );
-              const csvMin = csvTimestamps.length
-                ? Math.min(...csvTimestamps)
-                : 0;
-              const csvMax = csvTimestamps.length
-                ? Math.max(...csvTimestamps)
-                : 0;
-              if (csvTimestamps.length) {
-                const formatTimestamp = (timestamp: number) =>
-                  new Date(timestamp).toLocaleString(undefined, {
-                    timeZone: 'UTC',
-                  }) + ' UTC';
-                if (csvMin < minTimestamp || csvMax > maxTimestamp) {
-                  message = `Timestamp mismatch: CSV timestamps (${formatTimestamp(
-                    csvMin
-                  )} - ${formatTimestamp(
-                    csvMax
-                  )}) are outside the image timestamps range.`;
+          <div className='mt-3'>
+            {(() => {
+              let message = '';
+              if (associateByTimestamp) {
+                const csvTimestamps = csvData.data.map(
+                  (row) => row.timestamp || 0
+                );
+                const csvMin = csvTimestamps.length
+                  ? Math.min(...csvTimestamps)
+                  : 0;
+                const csvMax = csvTimestamps.length
+                  ? Math.max(...csvTimestamps)
+                  : 0;
+                if (csvTimestamps.length) {
+                  const formatTimestamp = (timestamp: number) =>
+                    new Date(timestamp).toLocaleString(undefined, {
+                      timeZone: 'UTC',
+                    }) + ' UTC';
+                  if (csvMin < minTimestamp || csvMax > maxTimestamp) {
+                    message = `Timestamp mismatch: CSV timestamps (${formatTimestamp(
+                      csvMin
+                    )} - ${formatTimestamp(
+                      csvMax
+                    )}) are outside the image timestamps range.`;
+                  } else {
+                    message = `Timestamp range valid: CSV timestamps (${formatTimestamp(
+                      csvMin
+                    )} - ${formatTimestamp(
+                      csvMax
+                    )}) are within the image timestamps range.`;
+                  }
+                }
+              } else {
+                const total = filteredImageFiles.length;
+                if (total > 0) {
+                  const matched = filteredImageFiles.filter((file) =>
+                    csvData.data.some(
+                      (row) =>
+                        row.filepath &&
+                        row.filepath.toLowerCase() ===
+                          file.webkitRelativePath.toLowerCase()
+                    )
+                  ).length;
+                  const percent = Math.round((matched / total) * 100);
+                  message = `${percent}% of image files have corresponding CSV file paths.`;
                 } else {
-                  message = `Timestamp range valid: CSV timestamps (${formatTimestamp(
-                    csvMin
-                  )} - ${formatTimestamp(
-                    csvMax
-                  )}) are within the image timestamps range.`;
+                  message = `No image files available for CSV file path matching.`;
                 }
               }
-            } else {
-              const total = filteredImageFiles.length;
-              if (total > 0) {
-                const matched = filteredImageFiles.filter((file) =>
-                  csvData.data.some(
-                    (row) =>
-                      row.filepath &&
-                      row.filepath.toLowerCase() ===
-                        file.webkitRelativePath.toLowerCase()
-                  )
-                ).length;
-                const percent = Math.round((matched / total) * 100);
-                message = `${percent}% of image files have corresponding CSV file paths.`;
-              } else {
-                message = `No image files available for CSV file path matching.`;
-              }
-            }
-            const hasData = csvData.data.length > 0;
-            const alertClass = hasData ? 'alert-info' : 'alert-danger';
-            const displayMessage = hasData
-              ? message
-              : 'No matching GPS data for selected images.';
-            return (
-              <div className={`alert ${alertClass} mb-0`}>{displayMessage}</div>
-            );
-          })()}
-        </div>
+              const hasData = csvData.data.length > 0;
+              const alertClass = hasData ? 'alert-info' : 'alert-danger';
+              const displayMessage = hasData
+                ? message
+                : 'No matching GPS data for selected images.';
+              return (
+                <div className={`alert ${alertClass} mb-0`}>
+                  {displayMessage}
+                </div>
+              );
+            })()}
+          </div>
+          <FolderStructure
+            files={scannedFiles}
+            onCameraLevelChange={setCameraSelection}
+          />
+          {cameraSelection && (
+            <CameraOverlap
+              cameraSelection={cameraSelection}
+              interval={overlapInterval}
+              setInterval={setOverlapInterval}
+              overlaps={overlaps}
+              setOverlaps={setOverlaps}
+            />
+          )}
+        </>
       )}
       {filteredImageFiles.length > 0 && csvData && (
         <ImageMaskEditor setMasks={setMasks} />
