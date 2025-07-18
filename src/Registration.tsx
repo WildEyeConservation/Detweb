@@ -1,17 +1,17 @@
-import { useState, useMemo, useContext, useCallback, useEffect } from "react";
-import { AnnotationSetDropdown } from "./AnnotationSetDropDown";
-import Select from "react-select";
-import { ProjectContext } from "./Context";
-import { useOptimisticUpdates } from "./useOptimisticUpdates";
-import { Schema } from "../amplify/data/resource";
-import { useQueries } from "@tanstack/react-query";
-import { makeTransform, array2Matrix } from "./utils";
-import { inv } from "mathjs";
-import { GlobalContext, ManagementContext } from "./Context";
-import { RegisterPair } from "./RegisterPair";
-import { Card, Button, Form } from "react-bootstrap";
-import { useNavigate, useParams } from "react-router-dom";
-import { PanelBottom } from "lucide-react";
+import { useState, useMemo, useContext, useCallback, useEffect } from 'react';
+import { AnnotationSetDropdown } from './AnnotationSetDropDown';
+import Select from 'react-select';
+import { ProjectContext } from './Context';
+import { useOptimisticUpdates } from './useOptimisticUpdates';
+import { Schema } from '../amplify/data/resource';
+import { useQueries } from '@tanstack/react-query';
+import { makeTransform, array2Matrix } from './utils';
+import { inv } from 'mathjs';
+import { GlobalContext, ManagementContext } from './Context';
+import { RegisterPair } from './RegisterPair';
+import { Card, Button, Form } from 'react-bootstrap';
+import { useNavigate, useParams } from 'react-router-dom';
+import { PanelBottom } from 'lucide-react';
 
 export function Registration({ showAnnotationSetDropdown = true }) {
   const { client } = useContext(GlobalContext)!;
@@ -19,7 +19,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
   const { annotationSetId } = useParams();
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedAnnotationSet, setSelectedAnnotationSet] =
-    useState<string>("");
+    useState<string>('');
   const {
     categoriesHook: { data: categories },
     project,
@@ -30,7 +30,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
   const [activePair, setActivePair] = useState<{
     primary: string;
     secondary: string;
-    annotations: Schema["Annotation"]["type"][];
+    annotations: Schema['Annotation']['type'][];
   } | null>(null);
   const [numLoaded, setNumLoaded] = useState(0);
   const [showFilters, setShowFilters] = useState(true);
@@ -40,10 +40,10 @@ export function Registration({ showAnnotationSetDropdown = true }) {
   );
   // annotations contains an array of annotations in the selected annotation set, that is kept updated.
   const annotationHook = useOptimisticUpdates<
-    Schema["Annotation"]["type"],
-    "Annotation"
+    Schema['Annotation']['type'],
+    'Annotation'
   >(
-    "Annotation",
+    'Annotation',
     async (nextToken) =>
       client.models.Annotation.annotationsByAnnotationSetId(
         { setId: selectedAnnotationSet },
@@ -75,7 +75,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
   // imageNeighboursQueries contains a list of queries that fetch the neighbours of each image represented in annotationsByImage.
   const imageNeighboursQueries = useQueries({
     queries: Object.keys(annotationsByImage || {}).map((imageId) => ({
-      queryKey: ["imageNeighbours", imageId],
+      queryKey: ['imageNeighbours', imageId],
       queryFn: async () => {
         const { data: n1 } =
           await client.models.ImageNeighbour.imageNeighboursByImage1key({
@@ -100,21 +100,25 @@ export function Registration({ showAnnotationSetDropdown = true }) {
       .filter((query) => query.isSuccess)
       .reduce((acc, query) => {
         const neighbours = query.data;
-        neighbours
-          .filter((n) => n?.homography?.length)
-          .forEach((n) => {
-            const acc2 = acc[n.image1Id] || {};
-            const M = array2Matrix(n.homography);
-            acc[n.image1Id] = {
-              ...acc2,
-              [n.image2Id]: { tf: makeTransform(M) },
-            };
-            const acc3 = acc[n.image2Id] || {};
-            acc[n.image2Id] = {
-              ...acc3,
-              [n.image1Id]: { tf: makeTransform(inv(M)) },
-            };
-          });
+        const defaultHomography = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+        neighbours.forEach((n) => {
+          // if no valid homography, use identity
+          const rawH =
+            n.homography?.length === 9 ? n.homography : defaultHomography;
+          const M = array2Matrix(rawH);
+
+          const acc2 = acc[n.image1Id] || {};
+          acc[n.image1Id] = {
+            ...acc2,
+            [n.image2Id]: { tf: makeTransform(M) },
+          };
+
+          const acc3 = acc[n.image2Id] || {};
+          acc[n.image2Id] = {
+            ...acc3,
+            [n.image1Id]: { tf: makeTransform(inv(M)) },
+          };
+        });
         return acc;
       }, {} as Record<string, Record<string, { tf: Transform }>>);
   }, [imageNeighboursQueries]);
@@ -122,7 +126,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
   // imageMetaDataQueries contains a list of queries that fetch the metadata of each relevant image (contains annotations or has overlap with an image that has annotations).
   const imageMetaDataQueries = useQueries({
     queries: Object.keys(imageNeighbours || {})?.map((imageId) => ({
-      queryKey: ["imageMetaData", imageId],
+      queryKey: ['imageMetaData', imageId],
       queryFn: () => {
         return client.models.Image.get({ id: imageId });
       },
@@ -243,48 +247,48 @@ export function Registration({ showAnnotationSetDropdown = true }) {
   return (
     <div
       style={{
-        width: "100%",
-        maxWidth: "1555px",
-        paddingTop: "16px",
-        paddingBottom: "16px",
-        height: "100%",
+        width: '100%',
+        maxWidth: '1555px',
+        paddingTop: '16px',
+        paddingBottom: '16px',
+        height: '100%',
       }}
     >
-      <div className="w-100 h-100 d-flex flex-column flex-md-row gap-3">
+      <div className='w-100 h-100 d-flex flex-column flex-md-row gap-3'>
         <div
-          className="d-flex flex-column gap-3 w-100"
-          style={{ maxWidth: "300px" }}
+          className='d-flex flex-column gap-3 w-100'
+          style={{ maxWidth: '300px' }}
         >
-          <Card className="d-sm-block d-none w-100">
+          <Card className='d-sm-block d-none w-100'>
             <Card.Header>
-              <Card.Title className="mb-0">Information</Card.Title>
+              <Card.Title className='mb-0'>Information</Card.Title>
             </Card.Header>
-            <Card.Body className="d-flex flex-column gap-2">
-              <InfoTag label="Survey" value={project.name} />
+            <Card.Body className='d-flex flex-column gap-2'>
+              <InfoTag label='Survey' value={project.name} />
               <InfoTag
-                label="Annotation Set"
+                label='Annotation Set'
                 value={
                   annotationSets?.find(
                     (set) => set.id === selectedAnnotationSet
-                  )?.name ?? "Unknown"
+                  )?.name ?? 'Unknown'
                 }
               />
             </Card.Body>
           </Card>
-          <Card className="w-100 flex-grow-1">
+          <Card className='w-100 flex-grow-1'>
             <Card.Header>
-              <Card.Title className="mb-0 d-flex align-items-center">
+              <Card.Title className='mb-0 d-flex align-items-center'>
                 <Button
-                  className="p-0 mb-0"
-                  variant="outline"
+                  className='p-0 mb-0'
+                  variant='outline'
                   onClick={() => setShowFilters(!showFilters)}
                 >
                   <PanelBottom
-                    className="d-sm-none"
+                    className='d-sm-none'
                     style={{
                       transform: showFilters
-                        ? "rotate(180deg)"
-                        : "rotate(0deg)",
+                        ? 'rotate(180deg)'
+                        : 'rotate(0deg)',
                     }}
                   />
                 </Button>
@@ -292,14 +296,14 @@ export function Registration({ showAnnotationSetDropdown = true }) {
               </Card.Title>
             </Card.Header>
             {showFilters && (
-              <Card.Body className="d-flex flex-column gap-2">
-                <div className="w-100">
+              <Card.Body className='d-flex flex-column gap-2'>
+                <div className='w-100'>
                   <Form.Label>Labels</Form.Label>
                   <Select
                     value={selectedCategories}
                     onChange={setSelectedCategories}
                     isMulti
-                    name="Labels to register"
+                    name='Labels to register'
                     options={categories
                       ?.filter(
                         (c) => c.annotationSetId === selectedAnnotationSet
@@ -308,7 +312,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
                         label: q.name,
                         value: q.id,
                       }))}
-                    className="text-black w-100"
+                    className='text-black w-100'
                     closeMenuOnSelect={false}
                   />
                 </div>
@@ -324,7 +328,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
             )}
           </Card>
         </div>
-        <div className="d-flex flex-column align-items-center h-100 w-100">
+        <div className='d-flex flex-column align-items-center h-100 w-100'>
           {annotationHook.meta?.isLoading ? (
             <div>
               Phase 1/3: Loading annotations... {numLoaded} annotations loaded
@@ -336,7 +340,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
               {imageNeighboursQueries.reduce(
                 (acc, q) => acc + (q.isSuccess ? 1 : 0),
                 0
-              )}{" "}
+              )}{' '}
               of {imageNeighboursQueries.length} neighbours loaded
             </div>
           ) : !imageMetaDataQueries.every((q) => q.isSuccess) ? (
@@ -345,35 +349,33 @@ export function Registration({ showAnnotationSetDropdown = true }) {
               {imageMetaDataQueries.reduce(
                 (acc, q) => acc + (q.isSuccess ? 1 : 0),
                 0
-              )}{" "}
+              )}{' '}
               of {imageMetaDataQueries.length} images loaded
             </div>
+          ) : selectedCategories.length === 0 ? (
+            <div>No label selected</div>
+          ) : activePair &&
+            imageNeighbours[activePair.primary]?.[activePair.secondary] &&
+            imageNeighbours[activePair.secondary]?.[activePair.primary] ? (
+            <RegisterPair
+              key={activePair.primary + activePair.secondary}
+              images={[
+                imageMetaData[activePair.primary],
+                imageMetaData[activePair.secondary],
+              ]}
+              selectedCategoryIDs={selectedCategoryIDs}
+              selectedSet={selectedAnnotationSet}
+              transforms={[
+                imageNeighbours[activePair.primary]?.[activePair.secondary]?.tf,
+                imageNeighbours[activePair.secondary]?.[activePair.primary]?.tf,
+              ]}
+              next={nextPair}
+              prev={() => {}}
+              visible={true}
+              ack={() => {}}
+            />
           ) : (
-            selectedCategories.length === 0 ? (
-              <div>No label selected</div>
-            ) : activePair
-              && imageNeighbours[activePair.primary]?.[activePair.secondary]
-              && imageNeighbours[activePair.secondary]?.[activePair.primary] ? (
-              <RegisterPair
-                key={activePair.primary + activePair.secondary}
-                images={[
-                  imageMetaData[activePair.primary],
-                  imageMetaData[activePair.secondary],
-                ]}
-                selectedCategoryIDs={selectedCategoryIDs}
-                selectedSet={selectedAnnotationSet}
-                transforms={[
-                  imageNeighbours[activePair.primary]?.[activePair.secondary]?.tf,
-                  imageNeighbours[activePair.secondary]?.[activePair.primary]?.tf,
-                ]}
-                next={nextPair}
-                prev={() => {}}
-                visible={true}
-                ack={() => {}}
-              />
-            ) : (
-              <div>No more items to register</div>
-            )
+            <div>No more items to register</div>
           )}
         </div>
       </div>
@@ -383,7 +385,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
 
 function InfoTag({ label, value }: { label: string; value: string }) {
   return (
-    <p className="mb-0 d-flex flex-row gap-2 justify-content-between">
+    <p className='mb-0 d-flex flex-row gap-2 justify-content-between'>
       <span>{label}:</span>
       <span>{value}</span>
     </p>

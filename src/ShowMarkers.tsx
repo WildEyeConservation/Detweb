@@ -32,6 +32,7 @@ interface ShowMarkersProps {
   activeAnnotation?: AnnotationType;
   annotationSetId: string;            // ID used to filter which annotations to show
   realAnnotationSetId?: string;       // optional real ID used to filter categories
+  onShadowDrag?: (id: string, x: number, y: number) => void; // callback to reposition shadow annotations
 }
 
 /* ShowMarkers uses a annotationHook that is passed as a parameter to display the annotations on the map and to allow for editing/deleting of annotations.
@@ -93,6 +94,7 @@ export function ShowMarkers(props: ShowMarkersProps) {
               latLng2xy={latLng2xy}
               xy2latLng={xy2latLng}
               getType={getType}
+              onShadowDrag={props.onShadowDrag}
             />
           ))}
         {/* {Array.from({ length: 500 }, (_, i) => (

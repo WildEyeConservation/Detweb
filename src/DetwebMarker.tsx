@@ -28,6 +28,7 @@ interface DetwebMarkerProps {
   xy2latLng: (
     input: L.Point | [number, number] | Array<L.Point | [number, number]>
   ) => L.LatLng | L.LatLng[];
+  onShadowDrag?: (id: string, x: number, y: number) => void;
 }
 
 function createIcon(
@@ -109,6 +110,7 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
       getType,
       latLng2xy,
       xy2latLng,
+      onShadowDrag,
     } = props;
     const { allUsers } = useContext(ManagementContext)!;
     const { client } = useContext(GlobalContext)!;
@@ -280,12 +282,14 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
           key={crypto.randomUUID()}
           eventHandlers={{
             dragend: (e) => {
-              let coords = latLng2xy(e.target.getLatLng());
-              updateAnnotation({
-                ...annotation,
-                y: Math.round(coords.y),
-                x: Math.round(coords.x),
-              });
+              const coords = latLng2xy(e.target.getLatLng()) as L.Point;
+              const x = Math.round(coords.x);
+              const y = Math.round(coords.y);
+              if (annotation.shadow && onShadowDrag) {
+                onShadowDrag(annotation.id, x, y);
+              } else {
+                updateAnnotation({ ...annotation, x, y });
+              }
             },
             mouseover: (e) => {
               //If the user hovers over the marker, move the input focus here.
