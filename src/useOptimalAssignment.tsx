@@ -201,6 +201,17 @@ export function useOptimalAssignment({
     }
   }, [annotations[0],annotations[1], transforms, dataLoaded,leniency]);
 
+  // Add repositionShadow callback to reposition shadow annotations in UI without creating new annotations
+  const repositionShadow = useCallback((index: number, id: string, x: number, y: number) => {
+    setEnhancedAnnotations(prev => {
+      const newEnhanced: [ExtendedAnnotationType[], ExtendedAnnotationType[]] = [...prev];
+      newEnhanced[index] = newEnhanced[index].map(anno =>
+        anno.id === id ? { ...anno, x, y } : anno
+      );
+      return newEnhanced;
+    });
+  }, []);
+
   return {
     enhancedAnnotationHooks: [0, 1].map(i => ({
       data: enhancedAnnotations[i],
@@ -220,6 +231,7 @@ export function useOptimalAssignment({
         }
       }, [annotationsHooks[i]]),
       delete: annotationsHooks[i].delete,
-    }))
+    })),
+    repositionShadow,
   }
 }

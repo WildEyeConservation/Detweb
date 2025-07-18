@@ -132,7 +132,7 @@ export function RegisterPair({
     [matchStatus]
   );
 
-  const { enhancedAnnotationHooks } = useOptimalAssignment({
+  const { enhancedAnnotationHooks, repositionShadow } = useOptimalAssignment({
     annotationsHooks,
     transforms: transforms,
     getMatchStatus,
@@ -250,6 +250,7 @@ export function RegisterPair({
                   <ShowMarkers
                     annotationSetId={selectedSet}
                     activeAnnotation={activeAnnotation}
+                    onShadowDrag={(id, x, y) => repositionShadow(i, id, x, y)}
                   />
                   {transforms && linkImages && (
                     <LinkMaps
