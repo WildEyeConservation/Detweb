@@ -85,7 +85,7 @@ def alignImages( body, img0, img1):
         masked=np.array([mask.contains(points) for mask in masks]).any(axis=(0,1))
         mkpts0=mkpts0[~masked]
         mkpts1=mkpts1[~masked]
-    _, inliers = cv2.findFundamentalMat(mkpts0, mkpts1, cv2.USAC_MAGSAC, max(img0_ratio,img1_ratio), 0.999, 100000)
+    _, inliers = cv2.findFundamentalMat(mkpts0, mkpts1, cv2.USAC_MAGSAC, max(img0_ratio,img1_ratio), 0.95, 100000)
     inliers = inliers > 0    
     M, mask = cv2.findHomography(mkpts0[inliers.squeeze(),:], mkpts1[inliers.squeeze(),:], cv2.USAC_MAGSAC,30.0)
     if sum(mask)>10:
