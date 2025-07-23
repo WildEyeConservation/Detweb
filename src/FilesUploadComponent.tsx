@@ -130,7 +130,16 @@ export function FileUploadCore({
   const [overlaps, setOverlaps] = useState<
     { cameraA: string; cameraB: string }[]
   >([]);
-
+  const [multipleCameras, setMultipleCameras] = useState(false);
+  const [altitudeType, setAltitudeType] = useState({
+    label: 'EGM96',
+    value: 'egm96',
+  });
+  const [altitudeTypeOptions, setAltitudeTypeOptions] = useState([
+    { label: 'EGM96', value: 'egm96' },
+    { label: 'WGS84', value: 'wgs84' },
+    { label: 'AGL', value: 'agl' },
+  ]);
   // State for user-defined column mapping phase
   const [headerFields, setHeaderFields] = useState<string[] | null>(null);
   const [columnMapping, setColumnMapping] = useState<{
@@ -238,6 +247,13 @@ export function FileUploadCore({
       filteredImageFiles.reduce((acc, file) => acc + file.size, 0)
     );
   }, [filteredImageFiles]);
+
+  useEffect(() => {
+    if (!multipleCameras) {
+      setOverlapInterval(0);
+      setOverlaps([]);
+    }
+  }, [multipleCameras]);
 
   useEffect(() => {
     async function getExistingFiles() {
@@ -617,7 +633,12 @@ export function FileUploadCore({
           originalPath: file.webkitRelativePath,
           latitude: gpsData ? gpsData.lat : undefined,
           longitude: gpsData ? gpsData.lng : undefined,
-          altitude_agl: gpsData ? gpsData.alt : undefined,
+          altitude_egm96:
+            gpsData && altitudeType.value === 'egm96' ? gpsData.alt : undefined,
+          altitude_wgs84:
+            gpsData && altitudeType.value === 'wgs84' ? gpsData.alt : undefined,
+          altitude_agl:
+            gpsData && altitudeType.value === 'agl' ? gpsData.alt : undefined,
         });
       }
 
@@ -1243,25 +1264,36 @@ export function FileUploadCore({
             </div>
             <div>
               <Form.Label className='mb-0'>Altitude (optional)</Form.Label>
-              <Select
-                options={[
-                  { label: 'None', value: '' },
-                  ...headerFields.map((f) => ({ label: f, value: f })),
-                ]}
-                value={
-                  columnMapping.alt
-                    ? { label: columnMapping.alt, value: columnMapping.alt }
-                    : { label: 'None', value: '' }
-                }
-                onChange={(opt) =>
-                  setColumnMapping({
-                    ...columnMapping,
-                    alt: opt && opt.value ? opt.value : undefined,
-                  })
-                }
-                placeholder='Select Altitude column'
-                className='text-black'
-              />
+              <div className='d-flex flex-row gap-2 align-items-center'>
+                <Select
+                  options={[
+                    { label: 'None', value: '' },
+                    ...headerFields.map((f) => ({ label: f, value: f })),
+                  ]}
+                  value={
+                    columnMapping.alt
+                      ? { label: columnMapping.alt, value: columnMapping.alt }
+                      : { label: 'None', value: '' }
+                  }
+                  onChange={(opt) =>
+                    setColumnMapping({
+                      ...columnMapping,
+                      alt: opt && opt.value ? opt.value : undefined,
+                    })
+                  }
+                  placeholder='Select Altitude column'
+                  className='text-black flex-grow-1'
+                />
+                <Select
+                  options={altitudeTypeOptions}
+                  value={altitudeType}
+                  onChange={(opt) =>
+                    setAltitudeType(opt ?? { label: 'EGM96', value: 'egm96' })
+                  }
+                  placeholder='Select Altitude Type'
+                  className='text-black'
+                />
+              </div>
             </div>
           </div>
           <Button
@@ -1407,18 +1439,29 @@ export function FileUploadCore({
               );
             })()}
           </div>
-          <FolderStructure
-            files={scannedFiles}
-            onCameraLevelChange={setCameraSelection}
-          />
-          {cameraSelection && (
-            <CameraOverlap
-              cameraSelection={cameraSelection}
-              interval={overlapInterval}
-              setInterval={setOverlapInterval}
-              overlaps={overlaps}
-              setOverlaps={setOverlaps}
+          <Form.Group className='mt-3'>
+            <Form.Switch
+              label='Multiple Cameras'
+              checked={multipleCameras}
+              onChange={(e) => setMultipleCameras(e.target.checked)}
             />
+          </Form.Group>
+          {multipleCameras && (
+            <>
+              <FolderStructure
+                files={scannedFiles}
+                onCameraLevelChange={setCameraSelection}
+              />
+              {cameraSelection && (
+                <CameraOverlap
+                  cameraSelection={cameraSelection}
+                  interval={overlapInterval}
+                  setInterval={setOverlapInterval}
+                  overlaps={overlaps}
+                  setOverlaps={setOverlaps}
+                />
+              )}
+            </>
           )}
         </>
       )}
