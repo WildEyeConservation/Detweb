@@ -4,6 +4,7 @@ import { Tabs, Tab } from "../Tabs";
 import { useState } from "react";
 import ProcessImages from "./ProcessImages";
 import CreateSubset from "../CreateSubset";
+import EditShapeFile from "./EditShapeFile";
 
 export default function EditSurveyModal({
   show,
@@ -33,8 +34,8 @@ export default function EditSurveyModal({
   }
 
   return (
-    <Modal show={show} onHide={onClose} size="xl">
-      <Modal.Header closeButton>
+    <Modal show={show} onHide={onClose} size="xl" backdrop="static">
+      <Modal.Header>
         <Modal.Title>Edit Survey: {project.name}</Modal.Title>
       </Modal.Header>
       <Modal.Body>
@@ -48,10 +49,7 @@ export default function EditSurveyModal({
                 label = "Process";
                 break;
               case 1:
-                label = "Transect Definition";
-                break;
-              case 2:
-                label = "Create Subsets";
+                label = "Save Shapefile";
                 break;
             }
             setButtonLabel(label);
@@ -62,6 +60,13 @@ export default function EditSurveyModal({
           <Tab label="Process Images">
             <ProcessImages
               onClose={onClose}
+              projectId={project.id}
+              setHandleSubmit={setHandleSubmit}
+              setSubmitDisabled={setSubmitDisabled}
+            />
+          </Tab>
+          <Tab label="Edit Shape File">
+            <EditShapeFile 
               projectId={project.id}
               setHandleSubmit={setHandleSubmit}
               setSubmitDisabled={setSubmitDisabled}

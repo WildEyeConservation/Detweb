@@ -44,11 +44,15 @@ const schema = a
           'AnnotationCountPerCategoryPerSet',
           'projectId'
         ),
+        shapefile: a.hasOne('Shapefile', 'projectId'),
         testConfig: a.hasOne('ProjectTestConfig', 'projectId'),
         testResults: a.hasMany('TestResult', 'projectId'),
         createdBy: a.string().required(),
         hidden: a.boolean().default(false),
         status: a.string().default('active'),
+        cameras: a.hasMany('Camera', 'projectId'),
+        transects: a.hasMany('Transect', 'projectId'),
+        strata: a.hasMany('Stratum', 'projectId'),
       })
       .authorization((allow) => [allow.authenticated()]),
     // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
@@ -104,6 +108,10 @@ const schema = a
         memberships: a.hasMany('ImageSetMembership', 'imageId'),
         leftNeighbours: a.hasMany('ImageNeighbour', 'image1Id'),
         rightNeighbours: a.hasMany('ImageNeighbour', 'image2Id'),
+        cameraId: a.id(),
+        camera: a.belongsTo('Camera', 'cameraId'),
+        transectId: a.id(),
+        transect: a.belongsTo('Transect', 'transectId'),
         // sets: [ImageSet] @manyToMany(relationName: "ImageSetMembership")
         //   leftNeighbours: [ImageNeighbour] @hasMany(indexName:"bySecondNeighbour",fields:["key"])
         //   rightNeighbours: [ImageNeighbour] @hasMany(indexName:"byFirstNeighbour",fields:["key"])
@@ -512,6 +520,56 @@ const schema = a
       .identifier(['testResultId', 'categoryName'])
       .secondaryIndexes((index) => [
         index('testResultId').queryField('categoryCountsByTestResultId'),
+      ]),
+    Shapefile: a
+      .model({
+        projectId: a.id().required(),
+        project: a.belongsTo('Project', 'projectId'),
+        //stores shape as poylgon to use with leaflet
+        coordinates: a.float().array(),
+      })
+      .authorization((allow) => [allow.authenticated()])
+      .secondaryIndexes((index) => [
+        index('projectId').queryField('shapefilesByProjectId'),
+      ]),
+    Camera: a
+      .model({
+        projectId: a.id().required(),
+        project: a.belongsTo('Project', 'projectId'),
+        name: a.string().required(),
+        focalLengthMm: a.float(),
+        sensorWidthMm: a.float(),
+        tiltDegrees: a.float(),
+        images: a.hasMany('Image', 'cameraId'),
+      })
+      .authorization((allow) => [allow.authenticated()])
+      .secondaryIndexes((index) => [
+        index('projectId').queryField('camerasByProjectId'),
+      ]),
+    Transect: a
+      .model({
+        projectId: a.id().required(),
+        project: a.belongsTo('Project', 'projectId'),
+        stratumId: a.id().required(),
+        stratum: a.belongsTo('Stratum', 'stratumId'),
+        images: a.hasMany('Image', 'transectId'),
+      })
+      .authorization((allow) => [allow.authenticated()])
+      .secondaryIndexes((index) => [
+        index('projectId').queryField('transectsByProjectId'),
+      ]),
+    Stratum: a
+      .model({
+        projectId: a.id().required(),
+        project: a.belongsTo('Project', 'projectId'),
+        name: a.string().required(),
+        transects: a.hasMany('Transect', 'stratumId'),
+        area: a.float(),
+        baselineLength: a.float(),
+      })
+      .authorization((allow) => [allow.authenticated()])
+      .secondaryIndexes((index) => [
+        index('projectId').queryField('strataByProjectId'),
       ]),
     addUserToGroup: a
       .mutation()
