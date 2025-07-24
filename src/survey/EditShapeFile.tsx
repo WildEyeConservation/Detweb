@@ -155,6 +155,21 @@ export default function EditShapeFile({
     setPolygonCoords(latlngs);
   }, []);
 
+  // handle polygon edits
+  const onEdited = useCallback((e: any) => {
+    e.layers.eachLayer((layer: any) => {
+      const latlngs = (layer.getLatLngs()[0] as L.LatLng[]).map(
+        ({ lat, lng }) => [lat, lng] as L.LatLngExpression
+      );
+      setPolygonCoords(latlngs);
+    });
+  }, []);
+
+  // handle polygon deletion
+  const onDeleted = useCallback((e: any) => {
+    setPolygonCoords(null);
+  }, []);
+
   // enable submit only when polygon defined
   useEffect(() => {
     setSubmitDisabled(!polygonCoords);
@@ -239,6 +254,8 @@ export default function EditShapeFile({
               <EditControl
                 position='topright'
                 onCreated={onCreated}
+                onEdited={onEdited}
+                onDeleted={onDeleted}
                 draw={{
                   polygon: {
                     allowIntersection: false,
