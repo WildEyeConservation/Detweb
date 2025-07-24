@@ -135,11 +135,11 @@ export function FileUploadCore({
     label: 'EGM96',
     value: 'egm96',
   });
-  const [altitudeTypeOptions, setAltitudeTypeOptions] = useState([
+  const altitudeTypeOptions = [
     { label: 'EGM96', value: 'egm96' },
     { label: 'WGS84', value: 'wgs84' },
     { label: 'AGL', value: 'agl' },
-  ]);
+  ];
   // State for user-defined column mapping phase
   const [headerFields, setHeaderFields] = useState<string[] | null>(null);
   const [columnMapping, setColumnMapping] = useState<{

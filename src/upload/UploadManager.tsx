@@ -288,6 +288,23 @@ export default function UploadManager() {
               }).result;
               uploadedFiles.push(image.originalPath);
               await fileStoreUploaded.setItem(projectId, uploadedFiles);
+
+              let elevation = 0;
+              if (
+                image.latitude &&
+                image.longitude &&
+                !image.altitude_agl
+              ) {
+                elevation =
+                  (await getElevationAtCoordinates(
+                    image.latitude,
+                    image.longitude
+                  )) ?? 0;
+              }
+
+              const altitude =
+                image.altitude_egm96 ?? image.altitude_wgs84;
+
               const { data: img } = await (client.models.Image.create as any)({
                 projectId,
                 width: image.width,
@@ -297,6 +314,13 @@ export default function UploadManager() {
                 originalPath: image.originalPath,
                 latitude: image.latitude,
                 longitude: image.longitude,
+                altitude_egm96: image.altitude_egm96,
+                altitude_wgs84: image.altitude_wgs84,
+                altitude_agl:
+                  image.altitude_agl ??
+                  (elevation > 0 && altitude
+                    ? altitude - elevation
+                    : undefined),
               });
               if (img) {
                 createdImages.push({
