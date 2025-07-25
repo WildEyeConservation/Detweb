@@ -37,6 +37,10 @@ export default function InviteUserModal({
     const userId = users?.find(
       (user) => user.name === username || user.email === username
     )?.id;
+    if (!userId) {
+      alert("User not found");
+      return;
+    }
 
     if (memberships?.some((membership) => membership.userId === userId)) {
       alert("User is already a member of the organisation");
@@ -45,7 +49,7 @@ export default function InviteUserModal({
 
     const { data: old } =
       await client.models.OrganizationInvite.organizationInvitesByUsername({
-        username: username,
+        username: userId,
       });
 
     if (
@@ -62,7 +66,7 @@ export default function InviteUserModal({
 
     const invite = await client.models.OrganizationInvite.create({
       organizationId: organization.id,
-      username: username,
+      username: userId,
       invitedBy: authUser.username,
     });
 
