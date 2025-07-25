@@ -3,7 +3,6 @@ import { GlobalContext, UserContext } from "../Context";
 import { useOptimisticUpdates } from "../useOptimisticUpdates";
 import { Schema } from "../../amplify/data/resource";
 import Button from "react-bootstrap/Button";
-import { useUsers } from "../apiInterface";
 import { fetchAllPaginatedResults } from "../utils";
 import { Bell, Check, X } from "lucide-react";
 import { Card } from "react-bootstrap";
@@ -12,9 +11,7 @@ export default function Notifications() {
   const [show, setShow] = useState(false);
   const [totalNotifications, setTotalNotifications] = useState(0);
   const { user } = useContext(UserContext)!;
-  const { users } = useUsers();
-
-  const username = users?.find((u) => u.id === user.username)?.name;
+  const username = user.username;
 
   return (
     <div className="position-relative">
@@ -120,11 +117,10 @@ function Inbox({
     "OrganizationInvite"
   >(
     "OrganizationInvite",
-    async (nextToken) =>
-      client.models.OrganizationInvite.organizationInvitesByUsername({
-        username: username,
-        nextToken,
-      }),
+    async (nextToken) => {
+      const result = await client.models.OrganizationInvite.organizationInvitesByUsername({ username });
+      return { data: result.data, nextToken: result.nextToken ?? undefined };
+    },
     subscriptionFilter
   );
 
