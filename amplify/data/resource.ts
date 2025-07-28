@@ -575,6 +575,7 @@ const schema = a
       .model({
         surveyId: a.id().required(),
         stratumId: a.id().required(),
+        annotationSetId: a.id().required(),
         animals: a.integer().required(),
         areaSurveyed: a.float().required(),
         estimate: a.integer().required(),
@@ -585,7 +586,7 @@ const schema = a
         lowerBound95: a.integer().required(),
         upperBound95: a.integer().required(),
       })
-      .identifier(['surveyId', 'stratumId'])
+      .identifier(['surveyId', 'stratumId', 'annotationSetId'])
       .authorization((allow) => [allow.authenticated()])
       .secondaryIndexes((index) => [
         index('surveyId').queryField('jollyResultsBySurveyId'),
