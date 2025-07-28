@@ -576,6 +576,7 @@ const schema = a
       .model({
         surveyId: a.id().required(),
         stratumId: a.id().required(),
+        annotationSetId: a.id().required(),
         animals: a.integer().required(),
         areaSurveyed: a.float().required(),
         estimate: a.integer().required(),
@@ -586,7 +587,7 @@ const schema = a
         lowerBound95: a.integer().required(),
         upperBound95: a.integer().required(),
       })
-      .identifier(['surveyId', 'stratumId'])
+      .identifier(['surveyId', 'stratumId', 'annotationSetId'])
       .authorization((allow) => [allow.authenticated()])
       .secondaryIndexes((index) => [
         index('surveyId').queryField('jollyResultsBySurveyId'),
@@ -823,6 +824,7 @@ const schema = a
       .mutation()
       .arguments({
         surveyId: a.string().required(),
+        annotationSetId: a.string().required(),
       })
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
@@ -841,6 +843,7 @@ const schema = a
     allow.resource(runHeatmapper),
     allow.resource(runPointFinder),
     allow.resource(deleteProject),
+    allow.resource(generateSurveyResults),
   ]);
 
 export type Schema = ClientSchema<typeof schema>;
