@@ -87,7 +87,7 @@ def alignImages( body, img0, img1):
         mkpts1=mkpts1[~masked]
     _, inliers = cv2.findFundamentalMat(mkpts0, mkpts1, cv2.USAC_MAGSAC, max(img0_ratio,img1_ratio), 0.999, 100000)
     inliers = inliers > 0    
-    M, mask = cv2.findHomography(mkpts0[inliers.squeeze(),:], mkpts1[inliers.squeeze(),:], cv2.USAC_MAGSAC,30.0)
+    M, mask = cv2.findHomography(mkpts0[inliers.squeeze(),:], mkpts1[inliers.squeeze(),:], cv2.RHO,max(img0_ratio,img1_ratio)*2)
     if sum(mask)>10:
         params = {'image1Id':body['image1Id'], 'image2Id':body['image2Id'], 'homography': M.reshape(-1).tolist()}
         resp = client.execute(updateN, variable_values=params)
