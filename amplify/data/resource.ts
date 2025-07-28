@@ -15,6 +15,7 @@ import { runScoutbot } from '../functions/runScoutbot/resource';
 import { runHeatmapper } from '../functions/runHeatmapper/resource';
 import { runPointFinder } from '../functions/runPointFinder/resource';
 import { deleteProject } from '../functions/deleteProject/resource';
+import { generateSurveyResults } from '../functions/generateSurveyResults/resource';
 
 const schema = a
   .schema({
@@ -571,6 +572,26 @@ const schema = a
       .secondaryIndexes((index) => [
         index('projectId').queryField('strataByProjectId'),
       ]),
+    JollyResult: a
+      .model({
+        surveyId: a.id().required(),
+        stratumId: a.id().required(),
+        animals: a.integer().required(),
+        areaSurveyed: a.float().required(),
+        estimate: a.integer().required(),
+        density: a.float().required(),
+        variance: a.float().required(),
+        standardError: a.float().required(),
+        numSamples: a.integer().required(),
+        lowerBound95: a.integer().required(),
+        upperBound95: a.integer().required(),
+      })
+      .identifier(['surveyId', 'stratumId'])
+      .authorization((allow) => [allow.authenticated()])
+      .secondaryIndexes((index) => [
+        index('surveyId').queryField('jollyResultsBySurveyId'),
+        index('stratumId').queryField('jollyResultsByStratumId'),
+      ]),
     addUserToGroup: a
       .mutation()
       .arguments({
@@ -798,6 +819,14 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(deleteProject)),
+    generateSurveyResults: a
+      .mutation()
+      .arguments({
+        surveyId: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(generateSurveyResults)),
   })
   .authorization((allow) => [
     allow.resource(getAnnotationCounts),
