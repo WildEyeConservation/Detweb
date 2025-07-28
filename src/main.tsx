@@ -26,6 +26,7 @@ import { persistQueryClient } from '@tanstack/react-query-persist-client'
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 import Admin from './Admin';
 import { DevActions } from './DevActions';
+import JollyResults from './JollyResults';
 
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
@@ -102,6 +103,10 @@ const router = createBrowserRouter([
           {
             path: 'register/:image1Id/:image2Id/:selectedSet',
             element: <PairLoader />,
+          },
+          {
+            path: 'set/:annotationSetId/jolly',
+            element: <JollyResults />,
           },
         ],
       },
