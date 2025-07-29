@@ -54,6 +54,10 @@ const schema = a
         cameras: a.hasMany('Camera', 'projectId'),
         transects: a.hasMany('Transect', 'projectId'),
         strata: a.hasMany('Stratum', 'projectId'),
+        jollyResultsMemberships: a.hasMany(
+          'JollyResultsMembership',
+          'surveyId'
+        ),
       })
       .authorization((allow) => [allow.authenticated()]),
     // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
@@ -770,6 +774,17 @@ const schema = a
       .authorization((allow) => [allow.authenticated()])
       .secondaryIndexes((index) => [
         index('status').queryField('organizationRegistrationsByStatus'),
+      ]),
+    JollyResultsMembership: a
+      .model({
+        surveyId: a.id().required(),
+        survey: a.belongsTo('Project', 'surveyId'),
+        userId: a.string().required(),
+      })
+      .identifier(['surveyId', 'userId'])
+      .authorization((allow) => [allow.authenticated()])
+      .secondaryIndexes((index) => [
+        index('surveyId').queryField('jollyResultsMembershipsBySurveyId'),
       ]),
     updateProjectMemberships: a
       .mutation()

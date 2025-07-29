@@ -156,7 +156,7 @@ export default function AnnotationSetResults({
 
   async function viewSurveyResults(annotationSetId: string) {
     onClose();
-    navigate(`/surveys/${surveyId}/set/${annotationSetId}/jolly`);
+    navigate(`/jolly/${surveyId}/${annotationSetId}`);
   }
 
   return (

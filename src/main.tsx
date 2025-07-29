@@ -21,16 +21,16 @@ import Jobs from './user/Jobs.tsx';
 import Surveys from './survey/Surveys.tsx';
 import Permissions from './Permissions.tsx';
 import Testing from './Testing/Testing';
-import { Registration } from "./Registration";
-import { persistQueryClient } from '@tanstack/react-query-persist-client'
-import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
+import { Registration } from './Registration';
+import { persistQueryClient } from '@tanstack/react-query-persist-client';
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import Admin from './Admin';
 import { DevActions } from './DevActions';
 import JollyResults from './JollyResults';
 
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
-})
+});
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,7 +43,7 @@ export const queryClient = new QueryClient({
 persistQueryClient({
   queryClient,
   persister,
-})
+});
 
 // Define global for browser environment
 window.global = window;
@@ -69,20 +69,24 @@ const router = createBrowserRouter([
         element: <Jobs />,
       },
       {
+        path: 'jolly/:surveyId/:annotationSetId',
+        element: <JollyResults />,
+      },
+      {
         path: 'surveys/:surveyId',
         element: <ProjectView />,
         children: [
           {
             path: 'annotate',
             element: <Annotate />,
-          }, 
+          },
           {
             path: 'review',
             element: <Review />,
           },
           {
-            path: "registration",
-            element: <Registration />
+            path: 'registration',
+            element: <Registration />,
           },
           {
             path: 'manage',
@@ -104,10 +108,6 @@ const router = createBrowserRouter([
             path: 'register/:image1Id/:image2Id/:selectedSet',
             element: <PairLoader />,
           },
-          {
-            path: 'set/:annotationSetId/jolly',
-            element: <JollyResults />,
-          },
         ],
       },
       {
@@ -119,8 +119,8 @@ const router = createBrowserRouter([
             element: <Review showAnnotationSetDropdown={false} />,
           },
           {
-            path: "registration",
-            element: <Registration showAnnotationSetDropdown={false}/>
+            path: 'registration',
+            element: <Registration showAnnotationSetDropdown={false} />,
           },
         ],
       },
