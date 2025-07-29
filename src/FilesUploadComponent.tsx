@@ -1439,13 +1439,14 @@ export function FileUploadCore({
               );
             })()}
           </div>
-          <Form.Group className='mt-3'>
+          {/* TODO: Add multiple camera support */}
+          {/* <Form.Group className='mt-3'>
             <Form.Switch
               label='Multiple Cameras'
               checked={multipleCameras}
               onChange={(e) => setMultipleCameras(e.target.checked)}
             />
-          </Form.Group>
+          </Form.Group> */}
           {multipleCameras && (
             <>
               <FolderStructure
