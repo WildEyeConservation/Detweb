@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
+import 'leaflet.heat';
 import { fetchAllPaginatedResults } from './utils';
 import { GlobalContext } from './Context';
 import {
@@ -12,6 +13,7 @@ import {
   adjectives,
   names,
 } from 'unique-names-generator';
+import LabeledToggleSwitch from './LabeledToggleSwitch';
 
 export default function DensityMap({
   annotationSetId,
@@ -24,6 +26,7 @@ export default function DensityMap({
   const [annotations, setAnnotations] = useState<any[]>([]);
   const [images, setImages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showHeatmap, setShowHeatmap] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -90,23 +93,56 @@ export default function DensityMap({
     return null;
   };
 
+  const HeatmapLayer: React.FC = () => {
+    const map = useMap();
+    useEffect(() => {
+      if (!map) return;
+      const latlngs = annotations
+        .map((a) => {
+          const img = images.find((img) => img.id === a.imageId);
+          if (!img || img.latitude == null || img.longitude == null)
+            return null;
+          return [img.latitude, img.longitude] as [number, number];
+        })
+        .filter((x): x is [number, number] => x !== null);
+      const heat = (L as any).heatLayer(latlngs, {
+        radius: 25,
+        blur: 15,
+        maxZoom: 17,
+      });
+      map.addLayer(heat);
+      return () => {
+        map.removeLayer(heat);
+      };
+    }, [map, annotations, images]);
+    return null;
+  };
+
   if (loading) {
     return <div>Loading...</div>;
   }
 
   return (
-    <div className='flex-grow-1 w-100 h-100'>
-      <MapContainer
-        style={{ height: '100%', width: '100%', position: 'relative' }}
-        center={[0, 0]}
-        zoom={2}
-      >
-        <TileLayer
-          attribution='&copy; OpenStreetMap contributors'
-          url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-        />
-        <ClusteredMarkers />
-      </MapContainer>
+    <div className='d-flex flex-column flex-grow-1 w-100 h-100'>
+      <LabeledToggleSwitch
+        leftLabel='Markers'
+        rightLabel='Heatmap'
+        checked={showHeatmap}
+        onChange={setShowHeatmap}
+      />
+      <div className='w-100 flex-grow-1'>
+        <MapContainer
+          style={{ height: '100%', width: '100%', position: 'relative' }}
+          center={[0, 0]}
+          zoom={2}
+        >
+          <TileLayer
+            attribution='&copy; OpenStreetMap contributors'
+            url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+          />
+          {showHeatmap ? <HeatmapLayer /> : <ClusteredMarkers />}
+        </MapContainer>
+      </div>
     </div>
   );
 }

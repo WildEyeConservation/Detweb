@@ -43,6 +43,7 @@
     "leaflet": "^1.9.4",
     "leaflet-contextmenu": "^1.4.0",
     "leaflet-draw": "^1.0.4",
+    "leaflet.heat": "^0.2.0",
     "leaflet.markercluster": "^1.5.3",
     "localforage": "^1.10.0",
     "lucide-react": "^0.475.0",
