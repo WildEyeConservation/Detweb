@@ -32,6 +32,7 @@ type RegisterPairProps = {
   visible: boolean; // Whether the component is visible
   ack: () => void; // Function to call to acknowledge the pair (mark it as completed). This will typically remove the underlying message from the task queue.
   selectedCategoryIDs?: string[]; // The ids of the selected categories
+  noHomography?: boolean; // Whether the images are not homographically linked
 };
 
 // Function to transform a point using a homography matrix
@@ -44,6 +45,7 @@ export function RegisterPair({
   visible,
   selectedCategoryIDs,
   ack,
+  noHomography,
 }: RegisterPairProps) {
   const [index, setIndex] = useState(-1);
   const [map1, setMap1] = useState<Map | null>(null);
@@ -285,8 +287,8 @@ export function RegisterPair({
           >
             <input
               type="checkbox"
-              checked={linkImages}
-              disabled={!transforms}
+              checked={noHomography ? false : linkImages}
+              disabled={noHomography || !transforms}
               onChange={(e) => setLinkImages(e.target.checked)}
             />
             Link Images according to linking transform

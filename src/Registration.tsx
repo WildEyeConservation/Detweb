@@ -102,6 +102,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
         const neighbours = query.data;
         const defaultHomography = [1, 0, 0, 0, 1, 0, 0, 0, 1];
         neighbours.forEach((n) => {
+          const isDefault = !(n.homography?.length === 9);
           // if no valid homography, use identity
           const rawH =
             n.homography?.length === 9 ? n.homography : defaultHomography;
@@ -110,17 +111,17 @@ export function Registration({ showAnnotationSetDropdown = true }) {
           const acc2 = acc[n.image1Id] || {};
           acc[n.image1Id] = {
             ...acc2,
-            [n.image2Id]: { tf: makeTransform(M) },
+            [n.image2Id]: { tf: makeTransform(M), noHomography: isDefault },
           };
 
           const acc3 = acc[n.image2Id] || {};
           acc[n.image2Id] = {
             ...acc3,
-            [n.image1Id]: { tf: makeTransform(inv(M)) },
+            [n.image1Id]: { tf: makeTransform(inv(M)), noHomography: isDefault },
           };
         });
         return acc;
-      }, {} as Record<string, Record<string, { tf: Transform }>>);
+      }, {} as Record<string, Record<string, { tf: Transform; noHomography: boolean }>>);
   }, [imageNeighboursQueries]);
 
   // imageMetaDataQueries contains a list of queries that fetch the metadata of each relevant image (contains annotations or has overlap with an image that has annotations).
@@ -373,6 +374,9 @@ export function Registration({ showAnnotationSetDropdown = true }) {
               prev={() => {}}
               visible={true}
               ack={() => {}}
+              noHomography={
+                imageNeighbours[activePair.primary]?.[activePair.secondary]?.noHomography ?? false
+              }
             />
           ) : (
             <div>No more items to register</div>
