@@ -15,6 +15,7 @@ import { runScoutbot } from '../functions/runScoutbot/resource';
 import { runHeatmapper } from '../functions/runHeatmapper/resource';
 import { runPointFinder } from '../functions/runPointFinder/resource';
 import { deleteProject } from '../functions/deleteProject/resource';
+import { generateSurveyResults } from '../functions/generateSurveyResults/resource';
 
 const schema = a
   .schema({
@@ -53,6 +54,10 @@ const schema = a
         cameras: a.hasMany('Camera', 'projectId'),
         transects: a.hasMany('Transect', 'projectId'),
         strata: a.hasMany('Stratum', 'projectId'),
+        jollyResultsMemberships: a.hasMany(
+          'JollyResultsMembership',
+          'surveyId'
+        ),
       })
       .authorization((allow) => [allow.authenticated()]),
     // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
@@ -770,6 +775,17 @@ const schema = a
       .secondaryIndexes((index) => [
         index('status').queryField('organizationRegistrationsByStatus'),
       ]),
+    JollyResultsMembership: a
+      .model({
+        surveyId: a.id().required(),
+        survey: a.belongsTo('Project', 'surveyId'),
+        userId: a.string().required(),
+      })
+      .identifier(['surveyId', 'userId'])
+      .authorization((allow) => [allow.authenticated()])
+      .secondaryIndexes((index) => [
+        index('surveyId').queryField('jollyResultsMembershipsBySurveyId'),
+      ]),
     updateProjectMemberships: a
       .mutation()
       .arguments({
@@ -784,9 +800,8 @@ const schema = a
         projectId: a.string().required(),
         //imageId---originalPath---timestamp
         images: a.string().array(),
-        //JSON stringified array of masks
-        masks: a.string().required(),
-        // inputBucket: a.string().required(),
+        //JSON stringified metadata
+        metadata: a.string().required(),
         queueUrl: a.string().required(),
       })
       .returns(a.json())
@@ -820,6 +835,15 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(deleteProject)),
+    generateSurveyResults: a
+      .mutation()
+      .arguments({
+        surveyId: a.string().required(),
+        annotationSetId: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(generateSurveyResults)),
   })
   .authorization((allow) => [
     allow.resource(getAnnotationCounts),
@@ -834,6 +858,7 @@ const schema = a
     allow.resource(runHeatmapper),
     allow.resource(runPointFinder),
     allow.resource(deleteProject),
+    allow.resource(generateSurveyResults),
   ]);
 
 export type Schema = ClientSchema<typeof schema>;

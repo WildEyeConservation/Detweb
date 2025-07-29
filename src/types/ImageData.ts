@@ -6,6 +6,8 @@ export interface ImageData {
   originalPath: string;
   latitude?: number;
   longitude?: number;
+  altitude_wgs84?: number;
+  altitude_egm96?: number;
   altitude_agl?: number;
 }
 

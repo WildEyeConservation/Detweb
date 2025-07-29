@@ -125,7 +125,6 @@ export default function NewSurveyModal({
     );
 
     if (
-      globalAnnotationAccess === null ||
       globalAnnotationAccess?.value === 'Yes'
     ) {
       await Promise.all(
@@ -226,6 +225,13 @@ export default function NewSurveyModal({
   }, [myOrganizationHook.data, allUsers]);
 
   useEffect(() => {
+    if (organization) {
+      setPermissionExceptions([]);
+      setAddPermissionExceptions(false);
+    }
+  }, [organization]);
+
+  useEffect(() => {
     if (!show) {
       setName('');
       setGlobalAnnotationAccess(null);
@@ -278,8 +284,8 @@ export default function NewSurveyModal({
               className='text-muted d-block mb-1'
               style={{ fontSize: 12, lineHeight: 1.2 }}
             >
-              Select the user permissions for non-admin users for this survey
-              excluding yourself.
+              Select the user permissions for all organisation members excluding
+              yourself and admins.
             </span>
             <div className='mb-2'>
               <Form.Label style={{ fontSize: 14 }}>
@@ -288,7 +294,7 @@ export default function NewSurveyModal({
               <Select
                 className='text-black'
                 value={globalAnnotationAccess}
-                placeholder='Default (Yes)'
+                placeholder='Default (No)'
                 options={[
                   { value: 'Yes', label: 'Yes' },
                   { value: 'No', label: 'No' },

@@ -1,7 +1,7 @@
 import localforage from 'localforage';
 import { UploadContext, GlobalContext, UserContext } from '../Context';
 import { useContext, useEffect, useRef, useState } from 'react';
-import { uploadData, list } from 'aws-amplify/storage';
+import { uploadData, list, getUrl } from 'aws-amplify/storage';
 import { CreatedImage, ImageData, UploadedFiles } from '../types/ImageData';
 import ConfirmationModal from '../ConfirmationModal';
 import { fetchAllPaginatedResults } from '../utils';
@@ -50,6 +50,9 @@ export default function UploadManager() {
   const [projectBackOff, setProjectBackOff] = useState<Record<string, number>>(
     {}
   );
+  const [tileBuffers, setTileBuffers] = useState<Record<string, ArrayBuffer>>(
+    {}
+  );
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [showDeleteConfirmationModal, setShowDeleteConfirmationModal] =
     useState(false);
@@ -58,6 +61,78 @@ export default function UploadManager() {
   const deletingRef = useRef<boolean>(false);
   const cancelledRef = useRef<boolean>(false);
   const pausedRef = useRef<boolean>(false);
+
+  function computeElevationFromBuffer(
+    buffer: ArrayBuffer,
+    lat: number,
+    lon: number
+  ): number {
+    const latFloor = Math.floor(lat);
+    const lonFloor = Math.floor(lon);
+    const samples = Math.sqrt(buffer.byteLength / 2);
+    if (!Number.isInteger(samples)) {
+      throw new Error(`Unsupported HGT size: ${buffer.byteLength} bytes`);
+    }
+    const dataView = new DataView(buffer);
+    const latOffset = lat - latFloor;
+    const lonOffset = lon - lonFloor;
+    const row = (1 - latOffset) * (samples - 1);
+    const col = lonOffset * (samples - 1);
+    const i1 = Math.min(Math.floor(row), samples - 2);
+    const j1 = Math.min(Math.floor(col), samples - 2);
+    const i2 = i1 + 1;
+    const j2 = j1 + 1;
+    const fx = col - j1;
+    const fy = row - i1;
+    function getSample(i: number, j: number): number {
+      const index = i * samples + j;
+      return dataView.getInt16(index * 2, false);
+    }
+    const q11 = getSample(i1, j1);
+    const q21 = getSample(i1, j2);
+    const q12 = getSample(i2, j1);
+    const q22 = getSample(i2, j2);
+    const interp =
+      (1 - fx) * (1 - fy) * q11 +
+      fx * (1 - fy) * q21 +
+      (1 - fx) * fy * q12 +
+      fx * fy * q22;
+    return Math.round(interp * 100) / 100;
+  }
+
+  async function getElevationAtCoordinates(
+    lat: number,
+    lon: number
+  ): Promise<number | null> {
+    if (isNaN(lat) || isNaN(lon)) {
+      return null;
+    }
+    const latFloor = Math.floor(lat);
+    const lonFloor = Math.floor(lon);
+    const latPrefix = latFloor >= 0 ? 'N' : 'S';
+    const lonPrefix = lonFloor >= 0 ? 'E' : 'W';
+    const latDeg = Math.abs(latFloor).toString().padStart(2, '0');
+    const lonDeg = Math.abs(lonFloor).toString().padStart(3, '0');
+    const tileName = `${latPrefix}${latDeg}${lonPrefix}${lonDeg}.hgt`;
+    const filePath = `SRTM/${latPrefix}${latDeg}/${tileName}`;
+    let buffer = tileBuffers[tileName];
+    if (!buffer) {
+      const urlResult = await getUrl({
+        path: filePath,
+        options: {
+          bucket: {
+            bucketName: backend.custom.generalBucketName,
+            region: 'eu-west-1',
+          },
+        },
+      });
+      const response = await fetch(urlResult.url.toString());
+      buffer = await response.arrayBuffer();
+      setTileBuffers((prev) => ({ ...prev, [tileName]: buffer }));
+    }
+    const elevation = computeElevationFromBuffer(buffer, lat, lon);
+    return elevation;
+  }
 
   async function uploadProject() {
     console.log('uploading project', projectId);
@@ -130,6 +205,23 @@ export default function UploadManager() {
               (f) => f.webkitRelativePath === originalPath
             );
             const fileType = fileObj?.type ?? 'application/octet-stream';
+
+            let elevation = 0;
+            if (
+              imageData.latitude &&
+              imageData.longitude &&
+              !imageData.altitude_agl
+            ) {
+              elevation =
+                (await getElevationAtCoordinates(
+                  imageData.latitude,
+                  imageData.longitude
+                )) ?? 0;
+            }
+
+            const altitude =
+              imageData.altitude_egm96 ?? imageData.altitude_wgs84;
+
             const { data: img } = await (client.models.Image.create as any)({
               projectId,
               width: imageData.width,
@@ -139,6 +231,11 @@ export default function UploadManager() {
               originalPath: imageData.originalPath,
               latitude: imageData.latitude,
               longitude: imageData.longitude,
+              altitude_egm96: imageData.altitude_egm96,
+              altitude_wgs84: imageData.altitude_wgs84,
+              altitude_agl:
+                imageData.altitude_agl ??
+                (elevation > 0 && altitude ? altitude - elevation : undefined),
             });
             if (img) {
               createdImages.push({
@@ -191,6 +288,23 @@ export default function UploadManager() {
               }).result;
               uploadedFiles.push(image.originalPath);
               await fileStoreUploaded.setItem(projectId, uploadedFiles);
+
+              let elevation = 0;
+              if (
+                image.latitude &&
+                image.longitude &&
+                !image.altitude_agl
+              ) {
+                elevation =
+                  (await getElevationAtCoordinates(
+                    image.latitude,
+                    image.longitude
+                  )) ?? 0;
+              }
+
+              const altitude =
+                image.altitude_egm96 ?? image.altitude_wgs84;
+
               const { data: img } = await (client.models.Image.create as any)({
                 projectId,
                 width: image.width,
@@ -200,6 +314,13 @@ export default function UploadManager() {
                 originalPath: image.originalPath,
                 latitude: image.latitude,
                 longitude: image.longitude,
+                altitude_egm96: image.altitude_egm96,
+                altitude_wgs84: image.altitude_wgs84,
+                altitude_agl:
+                  image.altitude_agl ??
+                  (elevation > 0 && altitude
+                    ? altitude - elevation
+                    : undefined),
               });
               if (img) {
                 createdImages.push({
@@ -369,9 +490,15 @@ export default function UploadManager() {
       const metadata = (await metadataStore.getItem(projectId)) as {
         model: string;
         masks: number[][][];
+        cameraSelection: [string, string[]];
+        overlaps: { cameraA: string; cameraB: string }[];
+        overlapInterval: number;
       };
       const model = metadata?.model ?? 'manual';
       const masks = metadata?.masks ?? [];
+      const cameraSelection = metadata?.cameraSelection ?? [];
+      const overlaps = metadata?.overlaps ?? [];
+      const overlapInterval = metadata?.overlapInterval || 1;
 
       const BATCH_SIZE = 500;
 
@@ -385,7 +512,12 @@ export default function UploadManager() {
         client.mutations.runImageRegistration({
           images: batchStrings,
           projectId: projectId,
-          masks: JSON.stringify(masks),
+          metadata: JSON.stringify({
+            masks: masks,
+            cameraSelection: cameraSelection,
+            overlaps: overlaps,
+            overlapInterval: overlapInterval,
+          }),
           queueUrl: backend.custom.lightglueTaskQueueUrl,
         });
       }
@@ -397,7 +529,9 @@ export default function UploadManager() {
         });
       }
 
-      const { data: locationSet } = await (client.models.LocationSet.create as any)({
+      const { data: locationSet } = await (
+        client.models.LocationSet.create as any
+      )({
         name: projectId + `_${model}`,
         projectId: projectId,
       });
@@ -560,10 +694,10 @@ export default function UploadManager() {
       setProgress((prev) => ({ ...prev, processed: 1, total: 3 }));
 
       // Delete the project memberships
-      const { data: memberships } =
-        await (client.models.UserProjectMembership.userProjectMembershipsByProjectId as any)(
-          { projectId: id }
-        );
+      const { data: memberships } = await (
+        client.models.UserProjectMembership
+          .userProjectMembershipsByProjectId as any
+      )({ projectId: id });
       await Promise.all(
         memberships.map((membership) =>
           client.models.UserProjectMembership.delete({ id: membership.id })

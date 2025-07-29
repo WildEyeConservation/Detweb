@@ -78,7 +78,7 @@ async function fetchAllPages<T, K extends string>(
 async function handlePair(
   image1: Image,
   image2: Image,
-  masks: string
+  masks: number[][][]
 ) {
   try {
     console.log(`Processing pair ${image1.id} and ${image2.id}`);
@@ -111,8 +111,6 @@ async function handlePair(
       });
     }
 
-    const arrMasks = JSON.parse(masks) as any[];
-
     // Return the message instead of sending it immediately
     return {
       Id: `${image1.id}-${image2.id}`, // Required unique ID for batch entries
@@ -121,7 +119,7 @@ async function handlePair(
         image2Id: image2.id,
         keys: [image1.originalPath, image2.originalPath],
         action: 'register',
-        masks: arrMasks.length > 0 ? arrMasks : undefined,
+        masks: masks.length > 0 ? masks : undefined,
       }),
     };
   } catch (error: any) {
@@ -135,6 +133,13 @@ export const handler: Handler = async (event, context) => {
     // projectId and optional images input
     const imagesFromEvent = event.arguments.images as string[] | undefined;
     const projectId = event.arguments.projectId as string;
+    const metadata = JSON.parse(event.arguments.metadata as string) as {
+      masks: number[][][];
+      cameraSelection: [string, string[]];
+      overlaps: { cameraA: string; cameraB: string }[];
+      overlapInterval: number;
+    };
+
     let originalEventImages = imagesFromEvent ?? [];
     if (originalEventImages.length === 0) {
       console.log(
@@ -161,69 +166,74 @@ export const handler: Handler = async (event, context) => {
         timestamp: Number(timestamp),
       };
     });
+
     imageObjects.sort((a, b) => a.timestamp - b.timestamp);
     const sortedImages = imageObjects.map(
       ({ id, originalPath, timestamp }) => ({ id, originalPath, timestamp })
     );
-    const sortedImageStrings = imageObjects.map(
-      ({ originalString }) => originalString
-    );
-    const masks = event.arguments.masks as string;
     const queueUrl = event.arguments.queueUrl as string;
 
-    const TIME_THRESHOLD_MS = 60000;
-    const pairPromises: Array<ReturnType<typeof handlePair>> = [];
-    for (let i = 0; i < sortedImages.length - 1; i++) {
-      const remaining = context.getRemainingTimeInMillis();
-      if (remaining < TIME_THRESHOLD_MS) {
-        console.log(
-          `Remaining time ${remaining}ms is less than threshold, re-invoking lambda with ${
-            sortedImageStrings.length - i
-          } remaining images`
-        );
-        const lambdaClient = new LambdaClient({
-          region: env.AWS_REGION,
-          credentials: {
-            accessKeyId: env.AWS_ACCESS_KEY_ID,
-            secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
-            sessionToken: env.AWS_SESSION_TOKEN,
-          },
-        });
-        const remainingImageStrings = sortedImageStrings.slice(i);
-        await lambdaClient.send(
-          new InvokeCommand({
-            FunctionName: process.env.AWS_LAMBDA_FUNCTION_NAME!,
-            InvocationType: 'Event',
-            Payload: Buffer.from(
-              JSON.stringify({
-                images: remainingImageStrings,
-                masks,
-                queueUrl,
-              })
-            ),
-          })
-        );
-        return {
-          statusCode: 200,
-          body: JSON.stringify({
-            message: 'Lambda re-invoked with remaining images',
-            remainingCount: remainingImageStrings.length,
-          }),
-        };
+    const selectionLevel = Number(metadata.cameraSelection[0]);
+    const cameraNames = metadata.cameraSelection[1];
+    const imagesByCamera: Record<string, Image[]> = {};
+    for (const img of sortedImages) {
+      const cameraName = img.originalPath.split('/')[selectionLevel];
+      if (!imagesByCamera[cameraName]) {
+        imagesByCamera[cameraName] = [];
       }
-      const image1 = sortedImages[i];
-      const image2 = sortedImages[i + 1];
-      if ((image2.timestamp ?? 0) - (image1.timestamp ?? 0) < 5) {
-        pairPromises.push(handlePair(image1, image2, masks));
-      } else {
-        console.log(
-          `Skipping pair ${image1.id} and ${image2.id} because the time difference is greater than 5 seconds`,
-          image1.timestamp,
-          image2.timestamp,
-          (image2.timestamp ?? 0) - (image1.timestamp ?? 0)
-        );
-      }
+      imagesByCamera[cameraName].push(img);
     }
+    cameraNames.forEach((cam) => {
+      if (imagesByCamera[cam]) {
+        imagesByCamera[cam].sort((a, b) => a.timestamp - b.timestamp);
+      } else {
+        imagesByCamera[cam] = [];
+      }
+    });
+    const pairSet = new Set<string>();
+    const pairPromises: Array<ReturnType<typeof handlePair>> = [];
+    const halfIntervalS = metadata.overlapInterval / 2;
+    const graceS = 1;
+    const windowS = halfIntervalS + graceS;
+    // Add window-based pairs for overlapping cameras
+    metadata.overlaps.forEach(({ cameraA, cameraB }) => {
+      [cameraA, cameraB].forEach((cam) => {
+        const imgs = imagesByCamera[cam] || [];
+        imgs.forEach((img) => {
+          const windowStart = img.timestamp - windowS;
+          const windowEnd = img.timestamp + windowS;
+          [cameraA, cameraB].forEach((otherCam) => {
+            const otherImgs = imagesByCamera[otherCam] || [];
+            otherImgs.forEach((otherImg) => {
+              if (otherImg.id === img.id) return;
+              if (
+                otherImg.timestamp >= windowStart &&
+                otherImg.timestamp <= windowEnd
+              ) {
+                const key = [img.id, otherImg.id].sort().join('-');
+                if (!pairSet.has(key)) {
+                  pairSet.add(key);
+                  pairPromises.push(handlePair(img, otherImg, metadata.masks));
+                }
+              }
+            });
+          });
+        });
+      });
+    });
+    // Add adjacent same-camera pairs to ensure direct neighbors
+    cameraNames.forEach((cam) => {
+      const imgs = imagesByCamera[cam] || [];
+      for (let i = 0; i < imgs.length - 1; i++) {
+        const img1 = imgs[i];
+        const img2 = imgs[i + 1];
+        const key = [img1.id, img2.id].sort().join('-');
+        if (!pairSet.has(key)) {
+          pairSet.add(key);
+          pairPromises.push(handlePair(img1, img2, metadata.masks));
+        }
+      }
+    });
 
     const messages = (await Promise.all(pairPromises)).filter(
       (msg): msg is NonNullable<typeof msg> => msg !== null
