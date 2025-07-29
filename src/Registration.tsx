@@ -113,7 +113,6 @@ export function Registration({ showAnnotationSetDropdown = true }) {
             ...acc2,
             [n.image2Id]: { tf: makeTransform(M), noHomography: isDefault },
           };
-
           const acc3 = acc[n.image2Id] || {};
           acc[n.image2Id] = {
             ...acc3,

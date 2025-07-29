@@ -27,9 +27,30 @@ async function getTileBlob(path: string): Promise<Blob> {
     return cached;
   }
 
-  const signedUrl = await getUrl({
-    path,
-  });
+  let signedUrl: any;
+
+  if (!path.toLowerCase().includes('census_12_06_25_out')) {
+    signedUrl = await getUrl({
+      path,
+      options: {
+        bucket: {
+          bucketName:
+            'amplify-d1xnv4qbnjfbzf-maste-outputsbucket30eb72c2-jvtc8ylpftsk',
+          region: 'eu-west-1',
+        },
+      },
+    });
+  } else {
+    signedUrl = await getUrl({
+      path,
+      options: {
+        bucket: {
+          bucketName: 'surveyscope-testbucket',
+          region: 'af-south-1',
+        },
+      },
+    });
+  }
 
   const response = await fetch(signedUrl.url.toString(), {
     cache: 'no-store', // Prevent browser from caching the response
