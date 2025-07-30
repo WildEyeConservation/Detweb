@@ -145,9 +145,15 @@ export default function DensityMap({
       };
       map.on('zoomend', onZoomEnd);
       map.on('moveend', onMoveEnd);
+      // call invalidateSize immediately and on container resize to avoid cutoff
+      map.invalidateSize();
+      const container = map.getContainer();
+      const resizeObserver = new ResizeObserver(() => map.invalidateSize());
+      resizeObserver.observe(container);
       return () => {
         map.off('zoomend', onZoomEnd);
         map.off('moveend', onMoveEnd);
+        resizeObserver.disconnect();
       };
     }, [map]);
     return null;
