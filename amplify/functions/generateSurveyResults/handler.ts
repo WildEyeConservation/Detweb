@@ -186,37 +186,40 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
         (byTransect[img.transectId] ||= []).push(img);
       }
 
-      // process each transect
-      const transectResults: any[] = [];
+      // compute survey-wide categories list
+      const allCategoryIds = Array.from(new Set(primaryAnnotations.map((a) => a.categoryId)));
+
+      // compute per-transect metrics
+      type TransMetrics = {
+        stratumId: string;
+        transectId: string;
+        distance: number;
+        widthAvg: number;
+        area_km2: number;
+        animalCounts: Record<string, number>;
+      };
+      const transMetricsList: TransMetrics[] = [];
       for (const [tid, imgs] of Object.entries(byTransect)) {
         imgs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
         const deltas = imgs
-          .map((_, i) =>
-            i > 0 ? imgs[i].timestamp! - imgs[i - 1].timestamp! : 0
-          )
+          .map((_, i) => (i > 0 ? imgs[i].timestamp! - imgs[i - 1].timestamp! : 0))
           .slice(1);
         const valid = deltas.filter((d) => d > 0);
         const meanDelta = valid.reduce((s, d) => s + d, 0) / valid.length;
         const sections: number[] = [];
         for (let i = 0; i < imgs.length; i++) {
-          if (i === 0) sections[i] = 0;
-          else
-            sections[i] =
-              sections[i - 1] + (deltas[i - 1] > 3 * meanDelta ? 1 : 0);
+          sections[i] = i === 0 ? 0 : sections[i - 1] + (deltas[i - 1] > 3 * meanDelta ? 1 : 0);
         }
         let distance = 0;
-        for (const sid of Array.from(new Set(sections))) {
-          const sec = imgs.filter((_, i) => sections[i] === sid);
-          const start = sec[0],
-            end = sec[sec.length - 1];
+        for (const secId of Array.from(new Set(sections))) {
+          const secImgs = imgs.filter((_, i) => sections[i] === secId);
+          const start = secImgs[0], end = secImgs[secImgs.length - 1];
           distance += haversineDistance(
             [start.latitude!, start.longitude!],
             [end.latitude!, end.longitude!]
           );
         }
         const stratumId = transectMap.get(tid)!;
-        const stratum = stratumMap.get(stratumId)!;
-        const animals = imgs.reduce((s, i) => s + (i.animals || 0), 0);
         const widths = imgs.map((i) => {
           const cam = cameraMap.get(i.cameraId!);
           return transect_width(
@@ -227,53 +230,38 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
           );
         });
         const widthAvg = widths.reduce((s, w) => s + w, 0) / widths.length;
-        const aglAvg =
-          imgs.reduce((s, i) => s + (i.altitude_agl || 0), 0) / imgs.length;
         const area_km2 = (distance * widthAvg) / 1e6;
-        // group transect results by category
-        const categories = Array.from(
-          new Set(imgs.flatMap((img) => Object.keys(img.categoryCounts)))
-        );
-        for (const categoryId of categories) {
-          const animals = imgs.reduce(
+        const animalCounts: Record<string, number> = {};
+        for (const categoryId of allCategoryIds) {
+          animalCounts[categoryId] = imgs.reduce(
             (s, img) => s + (img.categoryCounts[categoryId] || 0),
             0
           );
-          transectResults.push({
-            transectId: tid,
-            stratumId,
-            categoryId,
-            baselineLength: stratum.baselineLength!,
-            stratumArea: stratum.area!,
-            distance,
-            aglAvg,
-            animals,
-            widthAvg,
-            area_km2,
-          });
         }
+        transMetricsList.push({ stratumId, transectId: tid, distance, widthAvg, area_km2, animalCounts });
       }
 
-      // group by stratum and category
-      const byStratumCategory: Record<string, Record<string, typeof transectResults>> = {};
-      for (const tr of transectResults) {
-        (byStratumCategory[tr.stratumId] ||= {})[tr.categoryId] ||= [];
-        byStratumCategory[tr.stratumId][tr.categoryId].push(tr);
+      // group per stratum
+      const metricsByStratum: Record<string, TransMetrics[]> = {};
+      for (const m of transMetricsList) {
+        (metricsByStratum[m.stratumId] ||= []).push(m);
       }
+
       const results: any[] = [];
-      for (const [sid, categoryMap] of Object.entries(byStratumCategory)) {
+      for (const [sid, metrics] of Object.entries(metricsByStratum)) {
         const stratum = stratumMap.get(sid)!;
-        for (const [categoryId, trs] of Object.entries(categoryMap)) {
-          const areaSurveyed = trs.reduce((s, t) => s + t.area_km2, 0);
-          const animals = trs.reduce((s, t) => s + t.animals, 0);
-          const n = trs.length;
+        const n = metrics.length;
+        const areaSurveyed = metrics.reduce((s, m) => s + m.area_km2, 0);
+        const yArr = metrics.map((m) => m.area_km2);
+        const avgWidthAvg = metrics.reduce((s, m) => s + m.widthAvg, 0) / n;
+        const N = stratum.baselineLength! / avgWidthAvg;
+        for (const categoryId of allCategoryIds) {
+          const xArr = metrics.map((m) => m.animalCounts[categoryId] || 0);
+          const animals = xArr.reduce((s, a) => s + a, 0);
           const density = animals / areaSurveyed;
-          const xArr = trs.map((t) => t.animals);
-          const yArr = trs.map((t) => t.area_km2);
           const covAA = covariance(xArr, xArr);
           const covAB = covariance(xArr, yArr);
           const covBB = covariance(yArr, yArr);
-          const N = stratum.baselineLength! / trs[0].widthAvg;
           const popVar =
             n < 2
               ? 0
@@ -286,7 +274,6 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
           const upper95 = Math.round(popEst + tcrit * popSE);
           const estimate = Math.round(popEst);
           // persist via GraphQL mutation including categoryId
-          // @ts-ignore: include categoryId even though API input type isn't updated yet
           await client.graphql({
             query: createJollyResult,
             variables: {
@@ -294,7 +281,6 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
                 surveyId,
                 stratumId: sid,
                 annotationSetId,
-                // @ts-ignore: include categoryId even though API input type isn't updated yet
                 categoryId,
                 animals,
                 areaSurveyed,
@@ -324,11 +310,10 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
           });
         }
       }
+
       return {
         statusCode: 200,
-        body: JSON.stringify({
-          message: 'Survey results generated successfully',
-        }),
+        body: JSON.stringify({ message: 'Survey results generated successfully' }),
       };
     } catch (error: any) {
       console.error('Error details:', error);

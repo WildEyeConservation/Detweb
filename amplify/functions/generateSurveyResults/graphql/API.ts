@@ -253,6 +253,7 @@ export type Project = {
   imageFiles?: ModelImageFileConnection | null,
   imageSets?: ModelImageSetConnection | null,
   images?: ModelImageConnection | null,
+  jollyResultsMemberships?: ModelJollyResultsMembershipConnection | null,
   locationSets?: ModelLocationSetConnection | null,
   locations?: ModelLocationConnection | null,
   members?: ModelUserProjectMembershipConnection | null,
@@ -330,6 +331,21 @@ export type ImageSetMembership = {
   imageSet?: ImageSet | null,
   imageSetId: string,
   updatedAt: string,
+};
+
+export type ModelJollyResultsMembershipConnection = {
+  __typename: "ModelJollyResultsMembershipConnection",
+  items:  Array<JollyResultsMembership | null >,
+  nextToken?: string | null,
+};
+
+export type JollyResultsMembership = {
+  __typename: "JollyResultsMembership",
+  createdAt: string,
+  survey?: Project | null,
+  surveyId: string,
+  updatedAt: string,
+  userId: string,
 };
 
 export type ModelLocationSetConnection = {
@@ -877,6 +893,7 @@ export type JollyResult = {
   animals: number,
   annotationSetId: string,
   areaSurveyed: number,
+  categoryId: string,
   createdAt: string,
   density: number,
   estimate: number,
@@ -999,6 +1016,7 @@ export type ModelJollyResultFilterInput = {
   animals?: ModelIntInput | null,
   annotationSetId?: ModelIDInput | null,
   areaSurveyed?: ModelFloatInput | null,
+  categoryId?: ModelIDInput | null,
   createdAt?: ModelStringInput | null,
   density?: ModelFloatInput | null,
   estimate?: ModelIntInput | null,
@@ -1021,6 +1039,17 @@ export type ModelJollyResultConnection = {
   nextToken?: string | null,
 };
 
+export type ModelJollyResultsMembershipFilterInput = {
+  and?: Array< ModelJollyResultsMembershipFilterInput | null > | null,
+  createdAt?: ModelStringInput | null,
+  id?: ModelIDInput | null,
+  not?: ModelJollyResultsMembershipFilterInput | null,
+  or?: Array< ModelJollyResultsMembershipFilterInput | null > | null,
+  surveyId?: ModelIDInput | null,
+  updatedAt?: ModelStringInput | null,
+  userId?: ModelStringInput | null,
+};
+
 export type ModelJollyResultPrimaryCompositeKeyConditionInput = {
   beginsWith?: ModelJollyResultPrimaryCompositeKeyInput | null,
   between?: Array< ModelJollyResultPrimaryCompositeKeyInput | null > | null,
@@ -1033,7 +1062,18 @@ export type ModelJollyResultPrimaryCompositeKeyConditionInput = {
 
 export type ModelJollyResultPrimaryCompositeKeyInput = {
   annotationSetId?: string | null,
+  categoryId?: string | null,
   stratumId?: string | null,
+};
+
+export type ModelStringKeyConditionInput = {
+  beginsWith?: string | null,
+  between?: Array< string | null > | null,
+  eq?: string | null,
+  ge?: string | null,
+  gt?: string | null,
+  le?: string | null,
+  lt?: string | null,
 };
 
 export type ModelLocationAnnotationCountPrimaryCompositeKeyConditionInput = {
@@ -1144,16 +1184,6 @@ export type ModelOrganizationMembershipFilterInput = {
   organizationId?: ModelIDInput | null,
   updatedAt?: ModelStringInput | null,
   userId?: ModelStringInput | null,
-};
-
-export type ModelStringKeyConditionInput = {
-  beginsWith?: string | null,
-  between?: Array< string | null > | null,
-  eq?: string | null,
-  ge?: string | null,
-  gt?: string | null,
-  le?: string | null,
-  lt?: string | null,
 };
 
 export type ModelOrganizationRegistrationFilterInput = {
@@ -1695,6 +1725,7 @@ export type CreateJollyResultInput = {
   animals: number,
   annotationSetId: string,
   areaSurveyed: number,
+  categoryId: string,
   density: number,
   estimate: number,
   lowerBound95: number,
@@ -1704,6 +1735,19 @@ export type CreateJollyResultInput = {
   surveyId: string,
   upperBound95: number,
   variance: number,
+};
+
+export type ModelJollyResultsMembershipConditionInput = {
+  and?: Array< ModelJollyResultsMembershipConditionInput | null > | null,
+  createdAt?: ModelStringInput | null,
+  not?: ModelJollyResultsMembershipConditionInput | null,
+  or?: Array< ModelJollyResultsMembershipConditionInput | null > | null,
+  updatedAt?: ModelStringInput | null,
+};
+
+export type CreateJollyResultsMembershipInput = {
+  surveyId: string,
+  userId: string,
 };
 
 export type ModelLocationConditionInput = {
@@ -2231,8 +2275,14 @@ export type DeleteImageSetMembershipInput = {
 
 export type DeleteJollyResultInput = {
   annotationSetId: string,
+  categoryId: string,
   stratumId: string,
   surveyId: string,
+};
+
+export type DeleteJollyResultsMembershipInput = {
+  surveyId: string,
+  userId: string,
 };
 
 export type DeleteLocationInput = {
@@ -2447,6 +2497,7 @@ export type UpdateJollyResultInput = {
   animals?: number | null,
   annotationSetId: string,
   areaSurveyed?: number | null,
+  categoryId: string,
   density?: number | null,
   estimate?: number | null,
   lowerBound95?: number | null,
@@ -2456,6 +2507,11 @@ export type UpdateJollyResultInput = {
   surveyId: string,
   upperBound95?: number | null,
   variance?: number | null,
+};
+
+export type UpdateJollyResultsMembershipInput = {
+  surveyId: string,
+  userId: string,
 };
 
 export type UpdateLocationInput = {
@@ -2859,6 +2915,7 @@ export type ModelSubscriptionJollyResultFilterInput = {
   animals?: ModelSubscriptionIntInput | null,
   annotationSetId?: ModelSubscriptionIDInput | null,
   areaSurveyed?: ModelSubscriptionFloatInput | null,
+  categoryId?: ModelSubscriptionIDInput | null,
   createdAt?: ModelSubscriptionStringInput | null,
   density?: ModelSubscriptionFloatInput | null,
   estimate?: ModelSubscriptionIntInput | null,
@@ -2872,6 +2929,16 @@ export type ModelSubscriptionJollyResultFilterInput = {
   updatedAt?: ModelSubscriptionStringInput | null,
   upperBound95?: ModelSubscriptionIntInput | null,
   variance?: ModelSubscriptionFloatInput | null,
+};
+
+export type ModelSubscriptionJollyResultsMembershipFilterInput = {
+  and?: Array< ModelSubscriptionJollyResultsMembershipFilterInput | null > | null,
+  createdAt?: ModelSubscriptionStringInput | null,
+  id?: ModelSubscriptionIDInput | null,
+  or?: Array< ModelSubscriptionJollyResultsMembershipFilterInput | null > | null,
+  surveyId?: ModelSubscriptionIDInput | null,
+  updatedAt?: ModelSubscriptionStringInput | null,
+  userId?: ModelSubscriptionStringInput | null,
 };
 
 export type ModelSubscriptionLocationFilterInput = {
@@ -4051,6 +4118,7 @@ export type GetImageSetMembershipQuery = {
 
 export type GetJollyResultQueryVariables = {
   annotationSetId: string,
+  categoryId: string,
   stratumId: string,
   surveyId: string,
 };
@@ -4061,6 +4129,7 @@ export type GetJollyResultQuery = {
     animals: number,
     annotationSetId: string,
     areaSurveyed: number,
+    categoryId: string,
     createdAt: string,
     density: number,
     estimate: number,
@@ -4072,6 +4141,32 @@ export type GetJollyResultQuery = {
     updatedAt: string,
     upperBound95: number,
     variance: number,
+  } | null,
+};
+
+export type GetJollyResultsMembershipQueryVariables = {
+  surveyId: string,
+  userId: string,
+};
+
+export type GetJollyResultsMembershipQuery = {
+  getJollyResultsMembership?:  {
+    __typename: "JollyResultsMembership",
+    createdAt: string,
+    survey?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    surveyId: string,
+    updatedAt: string,
+    userId: string,
   } | null,
 };
 
@@ -4527,6 +4622,10 @@ export type GetProjectQuery = {
     } | null,
     images?:  {
       __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
       nextToken?: string | null,
     } | null,
     locationSets?:  {
@@ -5309,6 +5408,7 @@ export type JollyResultsByStratumIdQuery = {
       animals: number,
       annotationSetId: string,
       areaSurveyed: number,
+      categoryId: string,
       createdAt: string,
       density: number,
       estimate: number,
@@ -5341,6 +5441,7 @@ export type JollyResultsBySurveyIdQuery = {
       animals: number,
       annotationSetId: string,
       areaSurveyed: number,
+      categoryId: string,
       createdAt: string,
       density: number,
       estimate: number,
@@ -5352,6 +5453,28 @@ export type JollyResultsBySurveyIdQuery = {
       updatedAt: string,
       upperBound95: number,
       variance: number,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type JollyResultsMembershipsBySurveyIdQueryVariables = {
+  filter?: ModelJollyResultsMembershipFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  sortDirection?: ModelSortDirection | null,
+  surveyId: string,
+};
+
+export type JollyResultsMembershipsBySurveyIdQuery = {
+  jollyResultsMembershipsBySurveyId?:  {
+    __typename: "ModelJollyResultsMembershipConnection",
+    items:  Array< {
+      __typename: "JollyResultsMembership",
+      createdAt: string,
+      surveyId: string,
+      updatedAt: string,
+      userId: string,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -5624,7 +5747,7 @@ export type ListJollyResultsQueryVariables = {
   limit?: number | null,
   nextToken?: string | null,
   sortDirection?: ModelSortDirection | null,
-  stratumIdAnnotationSetId?: ModelJollyResultPrimaryCompositeKeyConditionInput | null,
+  stratumIdAnnotationSetIdCategoryId?: ModelJollyResultPrimaryCompositeKeyConditionInput | null,
   surveyId?: string | null,
 };
 
@@ -5636,6 +5759,7 @@ export type ListJollyResultsQuery = {
       animals: number,
       annotationSetId: string,
       areaSurveyed: number,
+      categoryId: string,
       createdAt: string,
       density: number,
       estimate: number,
@@ -5647,6 +5771,29 @@ export type ListJollyResultsQuery = {
       updatedAt: string,
       upperBound95: number,
       variance: number,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type ListJollyResultsMembershipsQueryVariables = {
+  filter?: ModelJollyResultsMembershipFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  sortDirection?: ModelSortDirection | null,
+  surveyId?: string | null,
+  userId?: ModelStringKeyConditionInput | null,
+};
+
+export type ListJollyResultsMembershipsQuery = {
+  listJollyResultsMemberships?:  {
+    __typename: "ModelJollyResultsMembershipConnection",
+    items:  Array< {
+      __typename: "JollyResultsMembership",
+      createdAt: string,
+      surveyId: string,
+      updatedAt: string,
+      userId: string,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -7476,6 +7623,7 @@ export type CreateJollyResultMutation = {
     animals: number,
     annotationSetId: string,
     areaSurveyed: number,
+    categoryId: string,
     createdAt: string,
     density: number,
     estimate: number,
@@ -7487,6 +7635,32 @@ export type CreateJollyResultMutation = {
     updatedAt: string,
     upperBound95: number,
     variance: number,
+  } | null,
+};
+
+export type CreateJollyResultsMembershipMutationVariables = {
+  condition?: ModelJollyResultsMembershipConditionInput | null,
+  input: CreateJollyResultsMembershipInput,
+};
+
+export type CreateJollyResultsMembershipMutation = {
+  createJollyResultsMembership?:  {
+    __typename: "JollyResultsMembership",
+    createdAt: string,
+    survey?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    surveyId: string,
+    updatedAt: string,
+    userId: string,
   } | null,
 };
 
@@ -7950,6 +8124,10 @@ export type CreateProjectMutation = {
     } | null,
     images?:  {
       __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
       nextToken?: string | null,
     } | null,
     locationSets?:  {
@@ -9109,6 +9287,7 @@ export type DeleteJollyResultMutation = {
     animals: number,
     annotationSetId: string,
     areaSurveyed: number,
+    categoryId: string,
     createdAt: string,
     density: number,
     estimate: number,
@@ -9120,6 +9299,32 @@ export type DeleteJollyResultMutation = {
     updatedAt: string,
     upperBound95: number,
     variance: number,
+  } | null,
+};
+
+export type DeleteJollyResultsMembershipMutationVariables = {
+  condition?: ModelJollyResultsMembershipConditionInput | null,
+  input: DeleteJollyResultsMembershipInput,
+};
+
+export type DeleteJollyResultsMembershipMutation = {
+  deleteJollyResultsMembership?:  {
+    __typename: "JollyResultsMembership",
+    createdAt: string,
+    survey?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    surveyId: string,
+    updatedAt: string,
+    userId: string,
   } | null,
 };
 
@@ -9583,6 +9788,10 @@ export type DeleteProjectMutation = {
     } | null,
     images?:  {
       __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
       nextToken?: string | null,
     } | null,
     locationSets?:  {
@@ -10180,6 +10389,15 @@ export type DeleteUserStatsMutation = {
   } | null,
 };
 
+export type GenerateSurveyResultsMutationVariables = {
+  annotationSetId: string,
+  surveyId: string,
+};
+
+export type GenerateSurveyResultsMutation = {
+  generateSurveyResults?: string | null,
+};
+
 export type ProcessImagesMutationVariables = {
   model: string,
   s3key: string,
@@ -10222,7 +10440,7 @@ export type RunHeatmapperMutation = {
 
 export type RunImageRegistrationMutationVariables = {
   images?: Array< string | null > | null,
-  masks: string,
+  metadata: string,
   projectId: string,
   queueUrl: string,
 };
@@ -10813,6 +11031,7 @@ export type UpdateJollyResultMutation = {
     animals: number,
     annotationSetId: string,
     areaSurveyed: number,
+    categoryId: string,
     createdAt: string,
     density: number,
     estimate: number,
@@ -10824,6 +11043,32 @@ export type UpdateJollyResultMutation = {
     updatedAt: string,
     upperBound95: number,
     variance: number,
+  } | null,
+};
+
+export type UpdateJollyResultsMembershipMutationVariables = {
+  condition?: ModelJollyResultsMembershipConditionInput | null,
+  input: UpdateJollyResultsMembershipInput,
+};
+
+export type UpdateJollyResultsMembershipMutation = {
+  updateJollyResultsMembership?:  {
+    __typename: "JollyResultsMembership",
+    createdAt: string,
+    survey?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    surveyId: string,
+    updatedAt: string,
+    userId: string,
   } | null,
 };
 
@@ -11287,6 +11532,10 @@ export type UpdateProjectMutation = {
     } | null,
     images?:  {
       __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
       nextToken?: string | null,
     } | null,
     locationSets?:  {
@@ -12444,6 +12693,7 @@ export type OnCreateJollyResultSubscription = {
     animals: number,
     annotationSetId: string,
     areaSurveyed: number,
+    categoryId: string,
     createdAt: string,
     density: number,
     estimate: number,
@@ -12455,6 +12705,31 @@ export type OnCreateJollyResultSubscription = {
     updatedAt: string,
     upperBound95: number,
     variance: number,
+  } | null,
+};
+
+export type OnCreateJollyResultsMembershipSubscriptionVariables = {
+  filter?: ModelSubscriptionJollyResultsMembershipFilterInput | null,
+};
+
+export type OnCreateJollyResultsMembershipSubscription = {
+  onCreateJollyResultsMembership?:  {
+    __typename: "JollyResultsMembership",
+    createdAt: string,
+    survey?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    surveyId: string,
+    updatedAt: string,
+    userId: string,
   } | null,
 };
 
@@ -12908,6 +13183,10 @@ export type OnCreateProjectSubscription = {
     } | null,
     images?:  {
       __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
       nextToken?: string | null,
     } | null,
     locationSets?:  {
@@ -14044,6 +14323,7 @@ export type OnDeleteJollyResultSubscription = {
     animals: number,
     annotationSetId: string,
     areaSurveyed: number,
+    categoryId: string,
     createdAt: string,
     density: number,
     estimate: number,
@@ -14055,6 +14335,31 @@ export type OnDeleteJollyResultSubscription = {
     updatedAt: string,
     upperBound95: number,
     variance: number,
+  } | null,
+};
+
+export type OnDeleteJollyResultsMembershipSubscriptionVariables = {
+  filter?: ModelSubscriptionJollyResultsMembershipFilterInput | null,
+};
+
+export type OnDeleteJollyResultsMembershipSubscription = {
+  onDeleteJollyResultsMembership?:  {
+    __typename: "JollyResultsMembership",
+    createdAt: string,
+    survey?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    surveyId: string,
+    updatedAt: string,
+    userId: string,
   } | null,
 };
 
@@ -14508,6 +14813,10 @@ export type OnDeleteProjectSubscription = {
     } | null,
     images?:  {
       __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
       nextToken?: string | null,
     } | null,
     locationSets?:  {
@@ -15644,6 +15953,7 @@ export type OnUpdateJollyResultSubscription = {
     animals: number,
     annotationSetId: string,
     areaSurveyed: number,
+    categoryId: string,
     createdAt: string,
     density: number,
     estimate: number,
@@ -15655,6 +15965,31 @@ export type OnUpdateJollyResultSubscription = {
     updatedAt: string,
     upperBound95: number,
     variance: number,
+  } | null,
+};
+
+export type OnUpdateJollyResultsMembershipSubscriptionVariables = {
+  filter?: ModelSubscriptionJollyResultsMembershipFilterInput | null,
+};
+
+export type OnUpdateJollyResultsMembershipSubscription = {
+  onUpdateJollyResultsMembership?:  {
+    __typename: "JollyResultsMembership",
+    createdAt: string,
+    survey?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    surveyId: string,
+    updatedAt: string,
+    userId: string,
   } | null,
 };
 
@@ -16108,6 +16443,10 @@ export type OnUpdateProjectSubscription = {
     } | null,
     images?:  {
       __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
       nextToken?: string | null,
     } | null,
     locationSets?:  {

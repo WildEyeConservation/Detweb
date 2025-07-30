@@ -159,8 +159,8 @@ export default function JollyResults() {
           setAnnotationSetName(annotationSet.name);
 
           const { data: categories } =
-            await client.models.Category.categoriesByProjectId({
-              projectId: surveyId,
+            await client.models.Category.categoriesByAnnotationSetId({
+              annotationSetId,
             });
 
           const catOptions = categories.map((c) => ({
@@ -210,7 +210,7 @@ export default function JollyResults() {
   }
 
   const tableHeadings = [
-    { content: 'Stratum ID', sort: true },
+    { content: 'Stratum', sort: true },
     { content: 'Label', sort: true },
     { content: 'Animals', sort: true },
     { content: 'Area Surveyed', sort: true },

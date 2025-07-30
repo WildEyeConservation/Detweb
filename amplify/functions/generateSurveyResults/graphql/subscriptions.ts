@@ -565,6 +565,7 @@ export const onCreateJollyResult = /* GraphQL */ `subscription OnCreateJollyResu
     animals
     annotationSetId
     areaSurveyed
+    categoryId
     createdAt
     density
     estimate
@@ -582,6 +583,32 @@ export const onCreateJollyResult = /* GraphQL */ `subscription OnCreateJollyResu
 ` as GeneratedSubscription<
   APITypes.OnCreateJollyResultSubscriptionVariables,
   APITypes.OnCreateJollyResultSubscription
+>;
+export const onCreateJollyResultsMembership = /* GraphQL */ `subscription OnCreateJollyResultsMembership(
+  $filter: ModelSubscriptionJollyResultsMembershipFilterInput
+) {
+  onCreateJollyResultsMembership(filter: $filter) {
+    createdAt
+    survey {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    surveyId
+    updatedAt
+    userId
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnCreateJollyResultsMembershipSubscriptionVariables,
+  APITypes.OnCreateJollyResultsMembershipSubscription
 >;
 export const onCreateLocation = /* GraphQL */ `subscription OnCreateLocation($filter: ModelSubscriptionLocationFilterInput) {
   onCreateLocation(filter: $filter) {
@@ -1033,6 +1060,10 @@ export const onCreateProject = /* GraphQL */ `subscription OnCreateProject($filt
       __typename
     }
     images {
+      nextToken
+      __typename
+    }
+    jollyResultsMemberships {
       nextToken
       __typename
     }
@@ -2174,6 +2205,7 @@ export const onDeleteJollyResult = /* GraphQL */ `subscription OnDeleteJollyResu
     animals
     annotationSetId
     areaSurveyed
+    categoryId
     createdAt
     density
     estimate
@@ -2191,6 +2223,32 @@ export const onDeleteJollyResult = /* GraphQL */ `subscription OnDeleteJollyResu
 ` as GeneratedSubscription<
   APITypes.OnDeleteJollyResultSubscriptionVariables,
   APITypes.OnDeleteJollyResultSubscription
+>;
+export const onDeleteJollyResultsMembership = /* GraphQL */ `subscription OnDeleteJollyResultsMembership(
+  $filter: ModelSubscriptionJollyResultsMembershipFilterInput
+) {
+  onDeleteJollyResultsMembership(filter: $filter) {
+    createdAt
+    survey {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    surveyId
+    updatedAt
+    userId
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnDeleteJollyResultsMembershipSubscriptionVariables,
+  APITypes.OnDeleteJollyResultsMembershipSubscription
 >;
 export const onDeleteLocation = /* GraphQL */ `subscription OnDeleteLocation($filter: ModelSubscriptionLocationFilterInput) {
   onDeleteLocation(filter: $filter) {
@@ -2642,6 +2700,10 @@ export const onDeleteProject = /* GraphQL */ `subscription OnDeleteProject($filt
       __typename
     }
     images {
+      nextToken
+      __typename
+    }
+    jollyResultsMemberships {
       nextToken
       __typename
     }
@@ -3783,6 +3845,7 @@ export const onUpdateJollyResult = /* GraphQL */ `subscription OnUpdateJollyResu
     animals
     annotationSetId
     areaSurveyed
+    categoryId
     createdAt
     density
     estimate
@@ -3800,6 +3863,32 @@ export const onUpdateJollyResult = /* GraphQL */ `subscription OnUpdateJollyResu
 ` as GeneratedSubscription<
   APITypes.OnUpdateJollyResultSubscriptionVariables,
   APITypes.OnUpdateJollyResultSubscription
+>;
+export const onUpdateJollyResultsMembership = /* GraphQL */ `subscription OnUpdateJollyResultsMembership(
+  $filter: ModelSubscriptionJollyResultsMembershipFilterInput
+) {
+  onUpdateJollyResultsMembership(filter: $filter) {
+    createdAt
+    survey {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    surveyId
+    updatedAt
+    userId
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnUpdateJollyResultsMembershipSubscriptionVariables,
+  APITypes.OnUpdateJollyResultsMembershipSubscription
 >;
 export const onUpdateLocation = /* GraphQL */ `subscription OnUpdateLocation($filter: ModelSubscriptionLocationFilterInput) {
   onUpdateLocation(filter: $filter) {
@@ -4251,6 +4340,10 @@ export const onUpdateProject = /* GraphQL */ `subscription OnUpdateProject($filt
       __typename
     }
     images {
+      nextToken
+      __typename
+    }
+    jollyResultsMemberships {
       nextToken
       __typename
     }
