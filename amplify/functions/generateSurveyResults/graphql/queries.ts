@@ -947,15 +947,22 @@ export const getImageSetMembership = /* GraphQL */ `query GetImageSetMembership(
   APITypes.GetImageSetMembershipQueryVariables,
   APITypes.GetImageSetMembershipQuery
 >;
-export const getJollyResult = /* GraphQL */ `query GetJollyResult($annotationSetId: ID!, $stratumId: ID!, $surveyId: ID!) {
+export const getJollyResult = /* GraphQL */ `query GetJollyResult(
+  $annotationSetId: ID!
+  $categoryId: ID!
+  $stratumId: ID!
+  $surveyId: ID!
+) {
   getJollyResult(
     annotationSetId: $annotationSetId
+    categoryId: $categoryId
     stratumId: $stratumId
     surveyId: $surveyId
   ) {
     animals
     annotationSetId
     areaSurveyed
+    categoryId
     createdAt
     density
     estimate
@@ -973,6 +980,30 @@ export const getJollyResult = /* GraphQL */ `query GetJollyResult($annotationSet
 ` as GeneratedQuery<
   APITypes.GetJollyResultQueryVariables,
   APITypes.GetJollyResultQuery
+>;
+export const getJollyResultsMembership = /* GraphQL */ `query GetJollyResultsMembership($surveyId: ID!, $userId: String!) {
+  getJollyResultsMembership(surveyId: $surveyId, userId: $userId) {
+    createdAt
+    survey {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    surveyId
+    updatedAt
+    userId
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.GetJollyResultsMembershipQueryVariables,
+  APITypes.GetJollyResultsMembershipQuery
 >;
 export const getLocation = /* GraphQL */ `query GetLocation($id: ID!) {
   getLocation(id: $id) {
@@ -1412,6 +1443,10 @@ export const getProject = /* GraphQL */ `query GetProject($id: ID!) {
       __typename
     }
     images {
+      nextToken
+      __typename
+    }
+    jollyResultsMemberships {
       nextToken
       __typename
     }
@@ -2248,6 +2283,7 @@ export const jollyResultsByStratumId = /* GraphQL */ `query JollyResultsByStratu
       animals
       annotationSetId
       areaSurveyed
+      categoryId
       createdAt
       density
       estimate
@@ -2287,6 +2323,7 @@ export const jollyResultsBySurveyId = /* GraphQL */ `query JollyResultsBySurveyI
       animals
       annotationSetId
       areaSurveyed
+      categoryId
       createdAt
       density
       estimate
@@ -2307,6 +2344,35 @@ export const jollyResultsBySurveyId = /* GraphQL */ `query JollyResultsBySurveyI
 ` as GeneratedQuery<
   APITypes.JollyResultsBySurveyIdQueryVariables,
   APITypes.JollyResultsBySurveyIdQuery
+>;
+export const jollyResultsMembershipsBySurveyId = /* GraphQL */ `query JollyResultsMembershipsBySurveyId(
+  $filter: ModelJollyResultsMembershipFilterInput
+  $limit: Int
+  $nextToken: String
+  $sortDirection: ModelSortDirection
+  $surveyId: ID!
+) {
+  jollyResultsMembershipsBySurveyId(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    sortDirection: $sortDirection
+    surveyId: $surveyId
+  ) {
+    items {
+      createdAt
+      surveyId
+      updatedAt
+      userId
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.JollyResultsMembershipsBySurveyIdQueryVariables,
+  APITypes.JollyResultsMembershipsBySurveyIdQuery
 >;
 export const listAnnotationCountPerCategoryPerSets = /* GraphQL */ `query ListAnnotationCountPerCategoryPerSets(
   $annotationSetId: ID
@@ -2601,7 +2667,7 @@ export const listJollyResults = /* GraphQL */ `query ListJollyResults(
   $limit: Int
   $nextToken: String
   $sortDirection: ModelSortDirection
-  $stratumIdAnnotationSetId: ModelJollyResultPrimaryCompositeKeyConditionInput
+  $stratumIdAnnotationSetIdCategoryId: ModelJollyResultPrimaryCompositeKeyConditionInput
   $surveyId: ID
 ) {
   listJollyResults(
@@ -2609,13 +2675,14 @@ export const listJollyResults = /* GraphQL */ `query ListJollyResults(
     limit: $limit
     nextToken: $nextToken
     sortDirection: $sortDirection
-    stratumIdAnnotationSetId: $stratumIdAnnotationSetId
+    stratumIdAnnotationSetIdCategoryId: $stratumIdAnnotationSetIdCategoryId
     surveyId: $surveyId
   ) {
     items {
       animals
       annotationSetId
       areaSurveyed
+      categoryId
       createdAt
       density
       estimate
@@ -2636,6 +2703,37 @@ export const listJollyResults = /* GraphQL */ `query ListJollyResults(
 ` as GeneratedQuery<
   APITypes.ListJollyResultsQueryVariables,
   APITypes.ListJollyResultsQuery
+>;
+export const listJollyResultsMemberships = /* GraphQL */ `query ListJollyResultsMemberships(
+  $filter: ModelJollyResultsMembershipFilterInput
+  $limit: Int
+  $nextToken: String
+  $sortDirection: ModelSortDirection
+  $surveyId: ID
+  $userId: ModelStringKeyConditionInput
+) {
+  listJollyResultsMemberships(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    sortDirection: $sortDirection
+    surveyId: $surveyId
+    userId: $userId
+  ) {
+    items {
+      createdAt
+      surveyId
+      updatedAt
+      userId
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ListJollyResultsMembershipsQueryVariables,
+  APITypes.ListJollyResultsMembershipsQuery
 >;
 export const listLocationAnnotationCounts = /* GraphQL */ `query ListLocationAnnotationCounts(
   $categoryIdAnnotationSetId: ModelLocationAnnotationCountPrimaryCompositeKeyConditionInput

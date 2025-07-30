@@ -599,6 +599,7 @@ export const createJollyResult = /* GraphQL */ `mutation CreateJollyResult(
     animals
     annotationSetId
     areaSurveyed
+    categoryId
     createdAt
     density
     estimate
@@ -616,6 +617,33 @@ export const createJollyResult = /* GraphQL */ `mutation CreateJollyResult(
 ` as GeneratedMutation<
   APITypes.CreateJollyResultMutationVariables,
   APITypes.CreateJollyResultMutation
+>;
+export const createJollyResultsMembership = /* GraphQL */ `mutation CreateJollyResultsMembership(
+  $condition: ModelJollyResultsMembershipConditionInput
+  $input: CreateJollyResultsMembershipInput!
+) {
+  createJollyResultsMembership(condition: $condition, input: $input) {
+    createdAt
+    survey {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    surveyId
+    updatedAt
+    userId
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.CreateJollyResultsMembershipMutationVariables,
+  APITypes.CreateJollyResultsMembershipMutation
 >;
 export const createLocation = /* GraphQL */ `mutation CreateLocation(
   $condition: ModelLocationConditionInput
@@ -1083,6 +1111,10 @@ export const createProject = /* GraphQL */ `mutation CreateProject(
       __typename
     }
     images {
+      nextToken
+      __typename
+    }
+    jollyResultsMemberships {
       nextToken
       __typename
     }
@@ -2267,6 +2299,7 @@ export const deleteJollyResult = /* GraphQL */ `mutation DeleteJollyResult(
     animals
     annotationSetId
     areaSurveyed
+    categoryId
     createdAt
     density
     estimate
@@ -2284,6 +2317,33 @@ export const deleteJollyResult = /* GraphQL */ `mutation DeleteJollyResult(
 ` as GeneratedMutation<
   APITypes.DeleteJollyResultMutationVariables,
   APITypes.DeleteJollyResultMutation
+>;
+export const deleteJollyResultsMembership = /* GraphQL */ `mutation DeleteJollyResultsMembership(
+  $condition: ModelJollyResultsMembershipConditionInput
+  $input: DeleteJollyResultsMembershipInput!
+) {
+  deleteJollyResultsMembership(condition: $condition, input: $input) {
+    createdAt
+    survey {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    surveyId
+    updatedAt
+    userId
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.DeleteJollyResultsMembershipMutationVariables,
+  APITypes.DeleteJollyResultsMembershipMutation
 >;
 export const deleteLocation = /* GraphQL */ `mutation DeleteLocation(
   $condition: ModelLocationConditionInput
@@ -2751,6 +2811,10 @@ export const deleteProject = /* GraphQL */ `mutation DeleteProject(
       __typename
     }
     images {
+      nextToken
+      __typename
+    }
+    jollyResultsMemberships {
       nextToken
       __typename
     }
@@ -3365,6 +3429,13 @@ export const deleteUserStats = /* GraphQL */ `mutation DeleteUserStats(
   APITypes.DeleteUserStatsMutationVariables,
   APITypes.DeleteUserStatsMutation
 >;
+export const generateSurveyResults = /* GraphQL */ `mutation GenerateSurveyResults($annotationSetId: String!, $surveyId: String!) {
+  generateSurveyResults(annotationSetId: $annotationSetId, surveyId: $surveyId)
+}
+` as GeneratedMutation<
+  APITypes.GenerateSurveyResultsMutationVariables,
+  APITypes.GenerateSurveyResultsMutation
+>;
 export const processImages = /* GraphQL */ `mutation ProcessImages($model: String!, $s3key: String!, $threshold: Float) {
   processImages(model: $model, s3key: $s3key, threshold: $threshold)
 }
@@ -3399,13 +3470,13 @@ export const runHeatmapper = /* GraphQL */ `mutation RunHeatmapper($images: [Str
 >;
 export const runImageRegistration = /* GraphQL */ `mutation RunImageRegistration(
   $images: [String]
-  $masks: String!
+  $metadata: String!
   $projectId: String!
   $queueUrl: String!
 ) {
   runImageRegistration(
     images: $images
-    masks: $masks
+    metadata: $metadata
     projectId: $projectId
     queueUrl: $queueUrl
   )
@@ -4010,6 +4081,7 @@ export const updateJollyResult = /* GraphQL */ `mutation UpdateJollyResult(
     animals
     annotationSetId
     areaSurveyed
+    categoryId
     createdAt
     density
     estimate
@@ -4027,6 +4099,33 @@ export const updateJollyResult = /* GraphQL */ `mutation UpdateJollyResult(
 ` as GeneratedMutation<
   APITypes.UpdateJollyResultMutationVariables,
   APITypes.UpdateJollyResultMutation
+>;
+export const updateJollyResultsMembership = /* GraphQL */ `mutation UpdateJollyResultsMembership(
+  $condition: ModelJollyResultsMembershipConditionInput
+  $input: UpdateJollyResultsMembershipInput!
+) {
+  updateJollyResultsMembership(condition: $condition, input: $input) {
+    createdAt
+    survey {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    surveyId
+    updatedAt
+    userId
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.UpdateJollyResultsMembershipMutationVariables,
+  APITypes.UpdateJollyResultsMembershipMutation
 >;
 export const updateLocation = /* GraphQL */ `mutation UpdateLocation(
   $condition: ModelLocationConditionInput
@@ -4494,6 +4593,10 @@ export const updateProject = /* GraphQL */ `mutation UpdateProject(
       __typename
     }
     images {
+      nextToken
+      __typename
+    }
+    jollyResultsMemberships {
       nextToken
       __typename
     }

@@ -286,7 +286,6 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
           const upper95 = Math.round(popEst + tcrit * popSE);
           const estimate = Math.round(popEst);
           // persist via GraphQL mutation including categoryId
-          // @ts-ignore: include categoryId even though API input type isn't updated yet
           await client.graphql({
             query: createJollyResult,
             variables: {
@@ -294,7 +293,6 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
                 surveyId,
                 stratumId: sid,
                 annotationSetId,
-                // @ts-ignore: include categoryId even though API input type isn't updated yet
                 categoryId,
                 animals,
                 areaSurveyed,
