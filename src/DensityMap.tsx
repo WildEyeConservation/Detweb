@@ -18,9 +18,11 @@ import LabeledToggleSwitch from './LabeledToggleSwitch';
 export default function DensityMap({
   annotationSetId,
   surveyId,
+  categoryIds = [],
 }: {
   annotationSetId: string;
   surveyId: string;
+  categoryIds?: string[];
 }) {
   const { client } = useContext(GlobalContext)!;
   const [annotations, setAnnotations] = useState<any[]>([]);
@@ -37,7 +39,7 @@ export default function DensityMap({
           {
             setId: annotationSetId,
             limit: 1000,
-            selectionSet: ['id', 'imageId', 'category.name', 'objectId'],
+            selectionSet: ['id', 'imageId', 'category.name', 'category.id', 'objectId'],
           } as any
         ),
         fetchAllPaginatedResults<any, any>(
@@ -73,7 +75,9 @@ export default function DensityMap({
     useEffect(() => {
       if (!map) return;
       const group = (L as any).markerClusterGroup();
-      annotations.forEach((a) => {
+      annotations
+        .filter((a) => categoryIds.length === 0 || categoryIds.includes(a.category.id))
+        .forEach((a) => {
         const img = images.find((img) => img.id === a.imageId);
         if (!img || img.latitude == null || img.longitude == null) return;
         const marker = L.circleMarker([img.latitude, img.longitude], {
@@ -89,7 +93,7 @@ export default function DensityMap({
       return () => {
         map.removeLayer(group);
       };
-    }, [map, annotations, images]);
+    }, [map, annotations, images, categoryIds]);
     return null;
   };
 
@@ -98,6 +102,7 @@ export default function DensityMap({
     useEffect(() => {
       if (!map) return;
       const latlngs = annotations
+        .filter((a) => categoryIds.length === 0 || categoryIds.includes(a.category.id))
         .map((a) => {
           const img = images.find((img) => img.id === a.imageId);
           if (!img || img.latitude == null || img.longitude == null)
@@ -114,7 +119,7 @@ export default function DensityMap({
       return () => {
         map.removeLayer(heat);
       };
-    }, [map, annotations, images]);
+    }, [map, annotations, images, categoryIds]);
     return null;
   };
 

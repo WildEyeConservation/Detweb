@@ -167,15 +167,16 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
       );
       // only keep primary annotations (objectId === id)
       const primaryAnnotations = annotations.filter((a) => a.id === a.objectId);
-      const annotCountByImage: Record<string, number> = {};
+      // count annotations per image per category
+      const annotCountByImageByCategory: Record<string, Record<string, number>> = {};
       for (const a of primaryAnnotations) {
-        annotCountByImage[a.imageId] = (annotCountByImage[a.imageId] || 0) + 1;
+        (annotCountByImageByCategory[a.imageId] ||= {})[a.categoryId] =
+          (annotCountByImageByCategory[a.imageId][a.categoryId] || 0) + 1;
       }
-
-      // enrich images with counts
+      // enrich images with per-category counts
       const imagesWithCounts = images.map((img) => ({
         ...img,
-        animals: annotCountByImage[img.id] || 0,
+        categoryCounts: annotCountByImageByCategory[img.id] || {},
       }));
 
       // group by transect
@@ -229,81 +230,99 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
         const aglAvg =
           imgs.reduce((s, i) => s + (i.altitude_agl || 0), 0) / imgs.length;
         const area_km2 = (distance * widthAvg) / 1e6;
-        transectResults.push({
-          transectId: tid,
-          stratumId,
-          baselineLength: stratum.baselineLength!,
-          stratumArea: stratum.area!,
-          distance,
-          aglAvg,
-          animals,
-          widthAvg,
-          area_km2,
-        });
+        // group transect results by category
+        const categories = Array.from(
+          new Set(imgs.flatMap((img) => Object.keys(img.categoryCounts)))
+        );
+        for (const categoryId of categories) {
+          const animals = imgs.reduce(
+            (s, img) => s + (img.categoryCounts[categoryId] || 0),
+            0
+          );
+          transectResults.push({
+            transectId: tid,
+            stratumId,
+            categoryId,
+            baselineLength: stratum.baselineLength!,
+            stratumArea: stratum.area!,
+            distance,
+            aglAvg,
+            animals,
+            widthAvg,
+            area_km2,
+          });
+        }
       }
 
-      // group by stratum and compute Jolly 2 results
-      const byStratum: Record<string, typeof transectResults> = {};
+      // group by stratum and category
+      const byStratumCategory: Record<string, Record<string, typeof transectResults>> = {};
       for (const tr of transectResults) {
-        (byStratum[tr.stratumId] ||= []).push(tr);
+        (byStratumCategory[tr.stratumId] ||= {})[tr.categoryId] ||= [];
+        byStratumCategory[tr.stratumId][tr.categoryId].push(tr);
       }
       const results: any[] = [];
-      for (const [sid, trs] of Object.entries(byStratum)) {
+      for (const [sid, categoryMap] of Object.entries(byStratumCategory)) {
         const stratum = stratumMap.get(sid)!;
-        const areaSurveyed = trs.reduce((s, t) => s + t.area_km2, 0);
-        const animals = trs.reduce((s, t) => s + t.animals, 0);
-        const n = trs.length;
-        const density = animals / areaSurveyed;
-        const xArr = trs.map((t) => t.animals);
-        const yArr = trs.map((t) => t.area_km2);
-        const covAA = covariance(xArr, xArr);
-        const covAB = covariance(xArr, yArr);
-        const covBB = covariance(yArr, yArr);
-        const N = stratum.baselineLength! / trs[0].widthAvg;
-        const popVar =
-          n < 2
-            ? 0
-            : ((N * (N - n)) / n) *
-              (covAA - 2 * density * covAB + density * density * covBB);
-        const popSE = Math.sqrt(popVar);
-        const tcrit = 1.96;
-        const popEst = density * stratum.area!;
-        const lower95 = Math.round(popEst - tcrit * popSE);
-        const upper95 = Math.round(popEst + tcrit * popSE);
-        const estimate = Math.round(popEst);
-        // persist via GraphQL mutation
-        await client.graphql({
-          query: createJollyResult,
-          variables: {
-            input: {
-              surveyId,
-              stratumId: sid,
-              annotationSetId,
-              animals,
-              areaSurveyed,
-              density,
-              variance: popVar,
-              standardError: popSE,
-              numSamples: n,
-              estimate,
-              lowerBound95: lower95,
-              upperBound95: upper95,
+        for (const [categoryId, trs] of Object.entries(categoryMap)) {
+          const areaSurveyed = trs.reduce((s, t) => s + t.area_km2, 0);
+          const animals = trs.reduce((s, t) => s + t.animals, 0);
+          const n = trs.length;
+          const density = animals / areaSurveyed;
+          const xArr = trs.map((t) => t.animals);
+          const yArr = trs.map((t) => t.area_km2);
+          const covAA = covariance(xArr, xArr);
+          const covAB = covariance(xArr, yArr);
+          const covBB = covariance(yArr, yArr);
+          const N = stratum.baselineLength! / trs[0].widthAvg;
+          const popVar =
+            n < 2
+              ? 0
+              : ((N * (N - n)) / n) *
+                (covAA - 2 * density * covAB + density * density * covBB);
+          const popSE = Math.sqrt(popVar);
+          const tcrit = 1.96;
+          const popEst = density * stratum.area!;
+          const lower95 = Math.round(popEst - tcrit * popSE);
+          const upper95 = Math.round(popEst + tcrit * popSE);
+          const estimate = Math.round(popEst);
+          // persist via GraphQL mutation including categoryId
+          // @ts-ignore: include categoryId even though API input type isn't updated yet
+          await client.graphql({
+            query: createJollyResult,
+            variables: {
+              input: {
+                surveyId,
+                stratumId: sid,
+                annotationSetId,
+                // @ts-ignore: include categoryId even though API input type isn't updated yet
+                categoryId,
+                animals,
+                areaSurveyed,
+                density,
+                variance: popVar,
+                standardError: popSE,
+                numSamples: n,
+                estimate,
+                lowerBound95: lower95,
+                upperBound95: upper95,
+              },
             },
-          },
-        });
-        results.push({
-          stratumId: sid,
-          annotationSetId,
-          animals,
-          areaSurveyed,
-          density,
-          variance: popVar,
-          standardError: popSE,
-          numSamples: n,
-          estimate,
-          lowerBound95: lower95,
-          upperBound95: upper95,
-        });
+          });
+          results.push({
+            stratumId: sid,
+            categoryId,
+            annotationSetId,
+            animals,
+            areaSurveyed,
+            density,
+            variance: popVar,
+            standardError: popSE,
+            numSamples: n,
+            estimate,
+            lowerBound95: lower95,
+            upperBound95: upper95,
+          });
+        }
       }
       return {
         statusCode: 200,

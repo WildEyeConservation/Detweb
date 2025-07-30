@@ -1,4 +1,5 @@
 import { useState, useEffect, useContext } from 'react';
+import Select from 'react-select';
 import { useParams } from 'react-router-dom';
 import { GlobalContext, UserContext } from './Context.tsx';
 import { fetchAllPaginatedResults } from './utils.tsx';
@@ -22,6 +23,12 @@ export default function JollyResults() {
   const [surveyName, setSurveyName] = useState('');
   const [annotationSetName, setAnnotationSetName] = useState('');
   const [resultsMemberships, setResultsMemberships] = useState<any[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<
+    { label: string; value: string }[]
+  >([]);
+  const [selectedCategories, setSelectedCategories] = useState<
+    { label: string; value: string }[]
+  >([]);
   const [shareWith, setShareWith] = useState('');
   const { users } = useUsers();
 
@@ -109,6 +116,7 @@ export default function JollyResults() {
               'surveyId',
               'stratumId',
               'annotationSetId',
+              'categoryId',
               'animals',
               'areaSurveyed',
               'estimate',
@@ -149,6 +157,18 @@ export default function JollyResults() {
             }
           );
           setAnnotationSetName(annotationSet.name);
+
+          const { data: categories } =
+            await client.models.Category.categoriesByProjectId({
+              projectId: surveyId,
+            });
+
+          const catOptions = categories.map((c) => ({
+            label: c.name,
+            value: c.id,
+          }));
+
+          setCategoryOptions(catOptions);
 
           setResults(resultsWithStratumName);
 
@@ -191,6 +211,7 @@ export default function JollyResults() {
 
   const tableHeadings = [
     { content: 'Stratum ID', sort: true },
+    { content: 'Label', sort: true },
     { content: 'Animals', sort: true },
     { content: 'Area Surveyed', sort: true },
     { content: 'Estimate', sort: true },
@@ -201,11 +222,16 @@ export default function JollyResults() {
     { content: 'Lower 95', sort: true },
     { content: 'Upper 95', sort: true },
   ];
+  const categoryIds = selectedCategories.map((c) => c.value);
+  const filteredResults = categoryIds.length
+    ? results.filter((r) => categoryIds.includes(r.categoryId))
+    : results;
 
-  const tableData = results.map((r) => ({
+  const tableData = filteredResults.map((r) => ({
     id: r.stratumId,
     rowData: [
       r.stratumName,
+      categoryOptions.find((c) => c.value === r.categoryId)?.label,
       String(r.animals),
       String(Number(r.areaSurveyed).toFixed(2)),
       String(r.estimate),
@@ -251,8 +277,13 @@ export default function JollyResults() {
               </Card.Title>
             </Card.Header>
             <Card.Body>
-              {/* TODO: implement filter */}
-              Coming soon. Results are for all labels.
+              <Select
+                isMulti
+                placeholder='Select labels'
+                options={categoryOptions}
+                onChange={(e) => setSelectedCategories(e)}
+                className='text-black'
+              />
             </Card.Body>
           </Card>
           <Card className='flex-grow-1'>
@@ -344,6 +375,7 @@ export default function JollyResults() {
               <DensityMap
                 surveyId={surveyId}
                 annotationSetId={annotationSetId}
+                categoryIds={categoryIds}
               />
             </Card.Body>
           </Card>
