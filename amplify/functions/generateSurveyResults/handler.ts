@@ -165,8 +165,10 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
           }),
         'annotationsByAnnotationSetId'
       );
+      // only keep primary annotations (objectId === id)
+      const primaryAnnotations = annotations.filter((a) => a.id === a.objectId);
       const annotCountByImage: Record<string, number> = {};
-      for (const a of annotations) {
+      for (const a of primaryAnnotations) {
         annotCountByImage[a.imageId] = (annotCountByImage[a.imageId] || 0) + 1;
       }
 

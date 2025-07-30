@@ -244,6 +244,17 @@ export default function JollyResults() {
               </p>
             </Card.Body>
           </Card>
+          <Card>
+            <Card.Header>
+              <Card.Title>
+                <h4 className='mb-0'>Filter</h4>
+              </Card.Title>
+            </Card.Header>
+            <Card.Body>
+              {/* TODO: implement filter */}
+              Coming soon. Results are for all labels.
+            </Card.Body>
+          </Card>
           <Card className='flex-grow-1'>
             <Card.Header>
               <Card.Title>

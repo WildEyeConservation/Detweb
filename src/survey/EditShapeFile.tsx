@@ -39,7 +39,23 @@ export default function EditShapeFile({
   const featureGroupRef = useRef<L.FeatureGroup>(null);
   const [shapefileBuffer, setShapefileBuffer] = useState<ArrayBuffer>();
 
-  const TOLERANCE = 0.002;
+  // Adaptive simplification: if polygon has <=1000 points, keep raw; else increase tolerance until between 1000–1500 pts
+  const simplifyToRange = (raw: [number, number][]): [number, number][] => {
+    const minPoints = 1000;
+    const maxPoints = 1500;
+    if (raw.length <= minPoints) return raw;
+    let tolerance = 1e-6;
+    let coords: [number, number][];
+    while (true) {
+      const simplified = turf.simplify(turf.polygon([raw]), { tolerance });
+      coords = simplified.geometry.coordinates[0] as [number, number][];
+      if (coords.length <= maxPoints || tolerance > 1) {
+        break;
+      }
+      tolerance *= 2;
+    }
+    return coords!;
+  };
 
   // Fit map bounds to images
   const FitBoundsToPoints: React.FC<{ points: any[] }> = ({ points }) => {
@@ -123,12 +139,10 @@ export default function EditShapeFile({
             ) {
               rawLonLat.push(rawLonLat[0]);
             }
-            // simplify polygon
-            const turfPoly = turf.polygon([rawLonLat]);
-            const simplified = turf.simplify(turfPoly, { tolerance: TOLERANCE });
-            const simpleCoords = simplified.geometry.coordinates[0] as number[][];
+            // adaptive simplify polygon
+            const rawSimpleCoords = simplifyToRange(rawLonLat);
             // map back to [lat, lng] for Leaflet
-            const simplifiedLatlngs: L.LatLngExpression[] = simpleCoords.map(
+            const simplifiedLatlngs: L.LatLngExpression[] = rawSimpleCoords.map(
               ([lng, lat]) => [lat, lng] as L.LatLngExpression
             );
             setPolygonCoords(simplifiedLatlngs);
@@ -166,7 +180,7 @@ export default function EditShapeFile({
   }, []);
 
   // handle polygon deletion
-  const onDeleted = useCallback((e: any) => {
+  const onDeleted = useCallback(() => {
     setPolygonCoords(null);
   }, []);
 
@@ -192,15 +206,9 @@ export default function EditShapeFile({
       ) {
         rawLonLat.push(rawLonLat[0]);
       }
-      // create Turf polygon and simplify
-      const turfPoly = turf.polygon([rawLonLat]);
-      // simplify more aggressively
-      const simplified = turf.simplify(turfPoly, { tolerance: TOLERANCE});
-      // extract and re-map coords into strict two-element tuples
-      const rawSimple = simplified.geometry.coordinates[0] as number[][];
-      const simpleCoords: [number, number][] = rawSimple.map(
-        ([lng, lat]) => [lng, lat]
-      );
+      // adaptive simplify to desired point count range
+      const rawSimple: [number, number][] = simplifyToRange(rawLonLat);
+      const simpleCoords: [number, number][] = rawSimple;
       // flatten simplified coords back to [lat, lng]
       const flattened: number[] = [];
       simpleCoords.forEach(([lng, lat]) => {
@@ -212,9 +220,9 @@ export default function EditShapeFile({
       )({ projectId })) as any;
       const existing = updateResult.data as Array<{ id: string }>;
       if (existing.length > 0) {
-        await client.models.Shapefile.update({ id: existing[0].id, coordinates: flattened });
+        await (client.models.Shapefile.update as any)({ id: existing[0].id, coordinates: flattened });
       } else {
-        await client.models.Shapefile.create({ projectId, coordinates: flattened });
+        await (client.models.Shapefile.create as any)({ projectId, coordinates: flattened });
       }
       setSubmitDisabled(false);
     });
@@ -267,7 +275,7 @@ export default function EditShapeFile({
                   marker: false,
                   polyline: false,
                 }}
-                edit={{ featureGroup: featureGroupRef.current! }}
+                edit={ { featureGroup: featureGroupRef.current! } as any }
               />
             </FeatureGroup>
             {!loadingImages &&
