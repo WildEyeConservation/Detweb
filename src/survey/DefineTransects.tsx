@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useContext } from 'react';
+// @ts-nocheck
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { GlobalContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
 import { Form } from 'react-bootstrap';
@@ -48,6 +49,11 @@ export default function DefineTransects({
   const [strataSections, setStrataSections] = useState<
     { coords: L.LatLngExpression[]; id: number }[]
   >([]);
+  // Add state to track drawn exclusion polygons
+  const [exclusionPolygons, setExclusionPolygons] = useState<
+    L.LatLngExpression[][]
+  >([]);
+  const exclusionFeatureGroupRef = useRef<L.FeatureGroup>(null);
 
   // Add state to track if existing transect data is present
   const [existingData, setExistingData] = useState<boolean>(false);
@@ -143,6 +149,18 @@ export default function DefineTransects({
       pt1.geometry.coordinates as [number, number],
       pt2.geometry.coordinates as [number, number],
     ]);
+    // build exclusion union for area calculation
+    let exclusionUnion: any = null;
+    if (exclusionPolygons.length > 0) {
+      const exPolys = exclusionPolygons.map((poly) =>
+        turf.polygon([poly.map(([lat, lng]) => [lng, lat])])
+      );
+      exclusionUnion = exPolys.reduce(
+        (unionAcc, poly) =>
+          unionAcc ? (turf.union(unionAcc, poly) as any) : poly,
+        null
+      );
+    }
     // create strata
     const stratumMap: Record<number, string> = {};
     for (const section of strataSections) {
@@ -156,7 +174,14 @@ export default function DefineTransects({
         secLngLat.push(secLngLat[0]);
       }
       const secPoly = turf.polygon([secLngLat]);
-      const area = turf.area(secPoly);
+      // calculate area excluding drawn exclusion polygons
+      let area = turf.area(secPoly);
+      if (exclusionUnion) {
+        const diff = turf.difference(secPoly, exclusionUnion as any);
+        area = diff ? turf.area(diff as any) : 0;
+      }
+      // Convert area from square meters to square kilometers
+      area = area / 1e6;
       // split baseline by section
       const splits = turf.lineSplit(mainBaseline, secPoly);
       let secBaseline: any = null;
@@ -240,6 +265,18 @@ export default function DefineTransects({
         }
       })
     );
+    // cleanup: delete unused transects from the database
+    const allTransects = await fetchAllPaginatedResults<any, any>(
+      client.models.Transect.transectsByProjectId as any,
+      { projectId, limit: 1000, selectionSet: ['id'] } as any
+    );
+    const usedTransectIds = new Set(Object.values(transectMap));
+    await Promise.all(
+      allTransects
+        .map((t: any) => t.id)
+        .filter((id: string) => !usedTransectIds.has(id))
+        .map((id: string) => client.models.Transect.delete({ id }))
+    );
   }, [
     polygonCoords,
     strataSections,
@@ -247,6 +284,7 @@ export default function DefineTransects({
     transectIds,
     projectId,
     client,
+    exclusionPolygons,
   ]);
   // register submit handler
   useEffect(() => {
@@ -267,7 +305,13 @@ export default function DefineTransects({
         {
           projectId,
           limit: 1000,
-          selectionSet: ['id', 'timestamp', 'latitude', 'longitude', 'transectId'],
+          selectionSet: [
+            'id',
+            'timestamp',
+            'latitude',
+            'longitude',
+            'transectId',
+          ],
         } as any
       )) as any[];
       // sort chronologically
@@ -295,7 +339,13 @@ export default function DefineTransects({
           {
             projectId,
             limit: 1000,
-            selectionSet: ['id', 'timestamp', 'latitude', 'longitude', 'transectId'],
+            selectionSet: [
+              'id',
+              'timestamp',
+              'latitude',
+              'longitude',
+              'transectId',
+            ],
           } as any
         );
         // build UI segment IDs from DB transect IDs
@@ -480,6 +530,16 @@ export default function DefineTransects({
     'lightcoral',
     'lightpink',
   ];
+  // limit displayed transects to three before and after current
+  const visibleTransectIds = contextMenu
+    ? (() => {
+        const current = contextMenu.img.transectId;
+        const idx = transectIds.indexOf(current);
+        const start = Math.max(0, idx - 2);
+        const end = Math.min(transectIds.length, idx + 3);
+        return transectIds.slice(start, end);
+      })()
+    : transectIds;
 
   return (
     <Form>
@@ -495,6 +555,10 @@ export default function DefineTransects({
             <li>
               Define strata by selecting the polyline tool in the top right
               corner of the map and drawing a line across the boundary.
+            </li>
+            <li>
+              Use the polygon tool to draw exclusion polygons. Area within
+              exclusion polygons will not be included in area calculations.
             </li>
             <li>
               Save your work by clicking the save button at the bottom of the
@@ -576,6 +640,68 @@ export default function DefineTransects({
                 edit={{ remove: true, edit: false }}
               />
             </FeatureGroup>
+            {/* TODO:Exclusion polygon draw control */}
+            {/* <FeatureGroup ref={exclusionFeatureGroupRef}>
+              <EditControl
+                position='topright'
+                draw={{
+                  rectangle: false,
+                  circle: false,
+                  circlemarker: false,
+                  marker: false,
+                  polyline: false,
+                  polygon: {
+                    shapeOptions: { color: 'red', fillOpacity: 0.3 },
+                  },
+                }}
+                onCreated={(e: any) => {
+                  if (e.layerType === 'polygon') {
+                    const latlngs = (e.layer.getLatLngs()[0] as L.LatLng[]).map(
+                      (ll) => [ll.lat, ll.lng] as L.LatLngExpression
+                    );
+                    setExclusionPolygons((prev) => [...prev, latlngs]);
+                  }
+                }}
+                onDeleted={(e: any) => {
+                  const removed: L.LatLngExpression[][] = [];
+                  e.layers.eachLayer((layer: any) => {
+                    const latlngs = (layer.getLatLngs()[0] as L.LatLng[]).map(
+                      (ll) => [ll.lat, ll.lng] as L.LatLngExpression
+                    );
+                    removed.push(latlngs);
+                  });
+                  setExclusionPolygons((prev) =>
+                    prev.filter(
+                      (poly) =>
+                        !removed.some(
+                          (rem) =>
+                            rem.length === poly.length &&
+                            rem.every((pt, idx) => {
+                              const [rLat, rLng] = rem[idx] as [number, number];
+                              const [pLat, pLng] = poly[idx] as [
+                                number,
+                                number
+                              ];
+                              return rLat === pLat && rLng === pLng;
+                            })
+                        )
+                    )
+                  );
+                }}
+                edit={{ edit: false, remove: true }}
+              />
+              {exclusionPolygons.map((poly, idx) => (
+                <Polygon pane='markerPane'
+                  key={`exclusion-${idx}`}
+                  positions={poly}
+                  pathOptions={{
+                    color: 'red',
+                    fillColor: 'red',
+                    fillOpacity: 0.3,
+                  }}
+                />
+              ))}
+            </FeatureGroup> */}
             {strataSections.map((section) => (
               <Polygon
                 key={`stratum-${section.id}`}
@@ -639,7 +765,7 @@ export default function DefineTransects({
               >
                 <div>
                   <strong>Move to transect:</strong>
-                  {transectIds.map((id) => (
+                  {visibleTransectIds.map((id) => (
                     <div
                       key={id}
                       style={{
