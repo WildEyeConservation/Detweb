@@ -29,6 +29,10 @@ export default function DensityMap({
   const [images, setImages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showHeatmap, setShowHeatmap] = useState(false);
+  // add zoom level state
+  const [zoomLevel, setZoomLevel] = useState(2);
+  // add map center state
+  const [mapCenter, setMapCenter] = useState<[number, number]>([0, 0]);
 
   useEffect(() => {
     async function loadData() {
@@ -127,6 +131,28 @@ export default function DensityMap({
     return <div>Loading...</div>;
   }
 
+  // Add mapKey to force remount on category change without refetching data
+  const mapKey = categoryIds.length > 0 ? categoryIds.join(',') : 'all';
+
+  // Add MapEvents to capture zoom and move changes
+  const MapEvents: React.FC = () => {
+    const map = useMap();
+    useEffect(() => {
+      const onZoomEnd = () => setZoomLevel(map.getZoom());
+      const onMoveEnd = () => {
+        const center = map.getCenter();
+        setMapCenter([center.lat, center.lng]);
+      };
+      map.on('zoomend', onZoomEnd);
+      map.on('moveend', onMoveEnd);
+      return () => {
+        map.off('zoomend', onZoomEnd);
+        map.off('moveend', onMoveEnd);
+      };
+    }, [map]);
+    return null;
+  };
+
   return (
     <div className='d-flex flex-column flex-grow-1 w-100 h-100'>
       <LabeledToggleSwitch
@@ -136,15 +162,16 @@ export default function DensityMap({
         onChange={setShowHeatmap}
       />
       <div className='w-100 flex-grow-1'>
-        <MapContainer
+        <MapContainer key={mapKey}
           style={{ height: '100%', width: '100%', position: 'relative' }}
-          center={[0, 0]}
-          zoom={2}
+          center={mapCenter}
+          zoom={zoomLevel}
         >
           <TileLayer
             attribution='&copy; OpenStreetMap contributors'
             url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
           />
+          <MapEvents />
           {showHeatmap ? <HeatmapLayer /> : <ClusteredMarkers />}
         </MapContainer>
       </div>

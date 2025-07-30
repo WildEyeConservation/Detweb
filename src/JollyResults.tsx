@@ -86,6 +86,7 @@ export default function JollyResults() {
     exportFromJSON({
       data: results.map((r) => ({
         stratumName: r.stratumName,
+        label: categoryOptions.find((c) => c.value === r.categoryId)?.label,
         animals: r.animals,
         areaSurveyed: r.areaSurveyed,
         estimate: r.estimate,
