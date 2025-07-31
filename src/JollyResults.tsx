@@ -229,7 +229,7 @@ export default function JollyResults() {
     : results;
 
   const tableData = filteredResults.map((r) => ({
-    id: r.stratumId,
+    id: `${r.stratumId}-${r.categoryId}`,
     rowData: [
       r.stratumName,
       categoryOptions.find((c) => c.value === r.categoryId)?.label,
@@ -296,15 +296,17 @@ export default function JollyResults() {
             <Card.Body className='d-flex flex-column justify-content-between'>
               {isProjectAdmin && (
                 <div className='d-flex flex-column gap-3'>
-                  <Button
-                    variant='link'
-                    className='p-0 text-white'
-                    onClick={handleShare}
-                    style={{ fontSize: '14px', textAlign: 'left' }}
-                  >
-                    <Clipboard size={16} className='me-1' />
-                    Copy Link
-                  </Button>
+                  {resultsMemberships.length > 0 && (
+                    <Button
+                      variant='link'
+                      className='p-0 text-white'
+                      onClick={handleShare}
+                      style={{ fontSize: '14px', textAlign: 'left' }}
+                    >
+                      <Clipboard size={16} className='me-1' />
+                      Copy Link
+                    </Button>
+                  )}
                   <Form.Group>
                     <Form.Label className='m-0'>Share with:</Form.Label>
                     <Form.Control

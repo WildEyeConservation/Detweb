@@ -58,6 +58,7 @@ const schema = a
           'JollyResultsMembership',
           'surveyId'
         ),
+        shapefileExclusions: a.hasMany('ShapefileExclusions', 'projectId'),
       })
       .authorization((allow) => [allow.authenticated()]),
     // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
@@ -537,6 +538,19 @@ const schema = a
       .secondaryIndexes((index) => [
         index('projectId').queryField('shapefilesByProjectId'),
       ]),
+
+    ShapefileExclusions: a
+      .model({
+        projectId: a.id().required(),
+        project: a.belongsTo('Project', 'projectId'),
+        // stores exclusion polygons as flattened lat,lng pairs
+        coordinates: a.float().array(),
+      })
+      .authorization((allow) => [allow.authenticated()])
+      .secondaryIndexes((index) => [
+        index('projectId').queryField('shapefileExclusionsByProjectId'),
+      ]),
+
     Camera: a
       .model({
         projectId: a.id().required(),

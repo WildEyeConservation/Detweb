@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { GlobalContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
-import { Form } from 'react-bootstrap';
+import { Form, Spinner } from 'react-bootstrap';
 import {
   MapContainer,
   TileLayer,
@@ -21,20 +21,24 @@ import 'leaflet-draw/dist/leaflet.draw.css';
 // tolerance in degrees for simplifying the transect line
 const SIMPLIFY_TOLERANCE = 0.002;
 
+// define transects and strata
 export default function DefineTransects({
   projectId,
   setHandleSubmit,
   setSubmitDisabled,
+  setCloseDisabled,
 }: {
   projectId: string;
   setHandleSubmit: React.Dispatch<
     React.SetStateAction<(() => Promise<void>) | null>
   >;
   setSubmitDisabled: React.Dispatch<React.SetStateAction<boolean>>;
+  setCloseDisabled: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const { client } = useContext(GlobalContext)!;
   const [images, setImages] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [partsLoading, setPartsLoading] = useState<null | number>(0);
+  const [saving, setSaving] = useState(false);
   const [polygonCoords, setPolygonCoords] = useState<
     L.LatLngExpression[] | null
   >(null);
@@ -49,14 +53,13 @@ export default function DefineTransects({
   const [strataSections, setStrataSections] = useState<
     { coords: L.LatLngExpression[]; id: number }[]
   >([]);
-  // Add state to track drawn exclusion polygons
-  const [exclusionPolygons, setExclusionPolygons] = useState<
-    L.LatLngExpression[][]
-  >([]);
-  const exclusionFeatureGroupRef = useRef<L.FeatureGroup>(null);
 
   // Add state to track if existing transect data is present
   const [existingData, setExistingData] = useState<boolean>(false);
+  // Add state for shapefile exclusion polygons
+  const [exclusionCoords, setExclusionCoords] = useState<
+    L.LatLngExpression[][]
+  >([]);
   const transectIds = React.useMemo(() => {
     const ids = segmentedImages.map((img) => img.transectId);
     return Array.from(new Set(ids)).sort((a, b) => a - b);
@@ -149,18 +152,6 @@ export default function DefineTransects({
       pt1.geometry.coordinates as [number, number],
       pt2.geometry.coordinates as [number, number],
     ]);
-    // build exclusion union for area calculation
-    let exclusionUnion: any = null;
-    if (exclusionPolygons.length > 0) {
-      const exPolys = exclusionPolygons.map((poly) =>
-        turf.polygon([poly.map(([lat, lng]) => [lng, lat])])
-      );
-      exclusionUnion = exPolys.reduce(
-        (unionAcc, poly) =>
-          unionAcc ? (turf.union(unionAcc, poly) as any) : poly,
-        null
-      );
-    }
     // create strata
     const stratumMap: Record<number, string> = {};
     for (const section of strataSections) {
@@ -174,14 +165,36 @@ export default function DefineTransects({
         secLngLat.push(secLngLat[0]);
       }
       const secPoly = turf.polygon([secLngLat]);
-      // calculate area excluding drawn exclusion polygons
-      let area = turf.area(secPoly);
-      if (exclusionUnion) {
-        const diff = turf.difference(secPoly, exclusionUnion as any);
-        area = diff ? turf.area(diff as any) : 0;
-      }
-      // Convert area from square meters to square kilometers
-      area = area / 1e6;
+      // calculate raw area of section polygon
+      const rawArea = turf.area(secPoly);
+      // subtract exclusion polygons entirely if they intersect
+      let exclusionAreaSqm = 0;
+      exclusionCoords.forEach((coords) => {
+        if (coords.length < 3) return;
+        const excCoordsLngLat = coords.map(
+          ([lat, lng]) => [lng, lat] as [number, number]
+        );
+        // ensure closure
+        if (
+          excCoordsLngLat[0][0] !==
+            excCoordsLngLat[excCoordsLngLat.length - 1][0] ||
+          excCoordsLngLat[0][1] !==
+            excCoordsLngLat[excCoordsLngLat.length - 1][1]
+        ) {
+          excCoordsLngLat.push(excCoordsLngLat[0]);
+        }
+        const exclusionPoly = turf.polygon([excCoordsLngLat]);
+        // if exclusion overlaps this section, subtract full exclusion area
+        if (turf.booleanIntersects(secPoly, exclusionPoly)) {
+          exclusionAreaSqm += turf.area(exclusionPoly);
+        }
+      });
+      // compute net area and convert to km²
+      const netAreaSqm = rawArea - exclusionAreaSqm;
+      const rawAreaKm = rawArea / 1e6;
+      const exclusionAreaKm = exclusionAreaSqm / 1e6;
+      const netAreaKm = netAreaSqm / 1e6;
+      const area = netAreaKm;
       // split baseline by section
       const splits = turf.lineSplit(mainBaseline, secPoly);
       let secBaseline: any = null;
@@ -284,14 +297,20 @@ export default function DefineTransects({
     transectIds,
     projectId,
     client,
-    exclusionPolygons,
+    exclusionCoords,
   ]);
   // register submit handler
   useEffect(() => {
     setHandleSubmit(() => async () => {
       setSubmitDisabled(true);
+      setCloseDisabled(true);
+      setSaving(true);
+
       await handleSubmit();
+
+      setSaving(false);
       setSubmitDisabled(false);
+      setCloseDisabled(false);
     });
     setSubmitDisabled(strataSections.length === 0);
   }, [strataSections, handleSubmit, setHandleSubmit, setSubmitDisabled]);
@@ -299,7 +318,6 @@ export default function DefineTransects({
   // fetch images for project
   useEffect(() => {
     async function loadImages() {
-      setLoading(true);
       const imgs = (await fetchAllPaginatedResults<any, any>(
         client.models.Image.imagesByProjectId as any,
         {
@@ -320,7 +338,7 @@ export default function DefineTransects({
           new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
       );
       setImages(imgs);
-      setLoading(false);
+      setPartsLoading((l) => (l === null ? 1 : l + 1));
     }
     loadImages();
   }, [client, projectId]);
@@ -374,8 +392,49 @@ export default function DefineTransects({
         }));
         setSegmentedImages(segImgs);
       }
+
+      setPartsLoading((l) => (l === null ? 1 : l + 1));
     }
     loadExistingData();
+  }, [client, projectId]);
+
+  // Add effect to load shapefile exclusion polygons
+  useEffect(() => {
+    async function loadExclusions() {
+      const result = (await (
+        client.models.ShapefileExclusions.shapefileExclusionsByProjectId as any
+      )({ projectId })) as any;
+      const data = result.data as Array<{ coordinates: (number | null)[] }>;
+      const polys: L.LatLngExpression[][] = [];
+      data.forEach((ex, idx) => {
+        if (ex.coordinates) {
+          const coordsArr = ex.coordinates.filter(
+            (n): n is number => n != null
+          );
+          const latlngs: L.LatLngExpression[] = [];
+          for (let i = 0; i < coordsArr.length; i += 2) {
+            latlngs.push([coordsArr[i], coordsArr[i + 1]]);
+          }
+          // Log exclusion polygon area
+          const excCoordsLngLat = latlngs.map(
+            ([lat, lng]) => [lng, lat] as [number, number]
+          );
+          if (
+            excCoordsLngLat[0][0] !==
+              excCoordsLngLat[excCoordsLngLat.length - 1][0] ||
+            excCoordsLngLat[0][1] !==
+              excCoordsLngLat[excCoordsLngLat.length - 1][1]
+          ) {
+            excCoordsLngLat.push(excCoordsLngLat[0]);
+          }
+          polys.push(latlngs);
+        }
+      });
+      setExclusionCoords(polys);
+
+      setPartsLoading((l) => (l === null ? 1 : l + 1));
+    }
+    loadExclusions();
   }, [client, projectId]);
 
   // fetch existing shapefile polygon
@@ -393,8 +452,21 @@ export default function DefineTransects({
         for (let i = 0; i < coordsArr.length; i += 2) {
           latlngs.push([coordsArr[i], coordsArr[i + 1]]);
         }
+        // Log shapefile boundary area
+        const boundaryLngLat = latlngs.map(
+          ([lat, lng]) => [lng, lat] as [number, number]
+        );
+        if (
+          boundaryLngLat[0][0] !==
+            boundaryLngLat[boundaryLngLat.length - 1][0] ||
+          boundaryLngLat[0][1] !== boundaryLngLat[boundaryLngLat.length - 1][1]
+        ) {
+          boundaryLngLat.push(boundaryLngLat[0]);
+        }
         setPolygonCoords(latlngs);
       }
+
+      setPartsLoading((l) => (l === null ? 1 : l + 1));
     }
     loadShapefile();
   }, [client, projectId]);
@@ -402,7 +474,7 @@ export default function DefineTransects({
   // Modify segmentation to skip calculation if existing data loaded
   useEffect(() => {
     if (existingData) return;
-    if (!loading && images.length > 1) {
+    if (partsLoading === null && images.length > 1) {
       // build lineString in [lng,lat]
       const coords = images.map(
         (img) => [img.longitude, img.latitude] as [number, number]
@@ -431,7 +503,7 @@ export default function DefineTransects({
       });
       setSegmentedImages(segImgs);
     }
-  }, [images, loading, existingData]);
+  }, [images, partsLoading, existingData]);
 
   // manual polygon splitting using Sutherland-Hodgman half-plane clipping
   const splitPolygon = (
@@ -509,6 +581,13 @@ export default function DefineTransects({
     return null;
   };
 
+  useEffect(() => {
+    if (partsLoading === null) return;
+    if (partsLoading === 4) {
+      setPartsLoading(null);
+    }
+  }, [partsLoading]);
+
   // a simple palette for transect colors
   const transectColors = [
     'red',
@@ -557,253 +636,215 @@ export default function DefineTransects({
               corner of the map and drawing a line across the boundary.
             </li>
             <li>
-              Use the polygon tool to draw exclusion polygons. Area within
-              exclusion polygons will not be included in area calculations.
-            </li>
-            <li>
               Save your work by clicking the save button at the bottom of the
               page.
             </li>
           </ul>
         </span>
         <div style={{ height: '600px', width: '100%', position: 'relative' }}>
-          <MapContainer
-            style={{ height: '100%', width: '100%' }}
-            center={[0, 0]}
-            zoom={2}
-          >
-            <FitBounds points={images} />
-            <TileLayer
-              attribution='&copy; OpenStreetMap contributors'
-              url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-            />
-            {polygonCoords && (
-              <Polygon
-                positions={polygonCoords}
-                pathOptions={{ fill: false, color: '#97009c' }}
+          {partsLoading !== null ? (
+            <div className='d-flex justify-content-center align-items-center mt-3'>
+              <Spinner animation='border' />
+              <span className='ms-2'>Loading data</span>
+            </div>
+          ) : (
+            <MapContainer
+              style={{ height: '100%', width: '100%' }}
+              center={[0, 0]}
+              zoom={2}
+            >
+              <FitBounds points={images} />
+              <TileLayer
+                attribution='&copy; OpenStreetMap contributors'
+                url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
               />
-            )}
-            <FeatureGroup>
-              <EditControl
-                position='topright'
-                draw={{
-                  rectangle: false,
-                  circle: false,
-                  circlemarker: false,
-                  marker: false,
-                  polygon: false,
-                  polyline: {
-                    shapeOptions: { color: 'black' },
-                    maxPoints: 2,
-                  },
-                }}
-                onCreated={(e: any) => {
-                  if (e.layerType === 'polyline') {
-                    const latlngs = e.layer
-                      .getLatLngs()
-                      .map(
-                        (ll: L.LatLng) => [ll.lat, ll.lng] as L.LatLngExpression
-                      );
-                    setStrataLines((prev) => [...prev, latlngs]);
-                  }
-                }}
-                onDeleted={(e: any) => {
-                  // Remove deleted polylines from state
-                  const layers = e.layers;
-                  const removed: L.LatLngExpression[][] = [];
-                  layers.eachLayer((layer: any) => {
-                    const latlngs = layer
-                      .getLatLngs()
-                      .map(
-                        (ll: L.LatLng) => [ll.lat, ll.lng] as L.LatLngExpression
-                      );
-                    removed.push(latlngs);
-                  });
-                  setStrataLines((prev) =>
-                    prev.filter(
-                      (line) =>
-                        !removed.some(
-                          (r) =>
-                            r.length === line.length &&
-                            r.every((pt, idx) => {
-                              const [rLat, rLng] = pt as [number, number];
-                              const [lLat, lLng] = line[idx] as [
-                                number,
-                                number
-                              ];
-                              return rLat === lLat && rLng === lLng;
-                            })
-                        )
-                    )
-                  );
-                }}
-                edit={{ remove: true, edit: false }}
-              />
-            </FeatureGroup>
-            {/* TODO:Exclusion polygon draw control */}
-            {/* <FeatureGroup ref={exclusionFeatureGroupRef}>
-              <EditControl
-                position='topright'
-                draw={{
-                  rectangle: false,
-                  circle: false,
-                  circlemarker: false,
-                  marker: false,
-                  polyline: false,
-                  polygon: {
-                    shapeOptions: { color: 'red', fillOpacity: 0.3 },
-                  },
-                }}
-                onCreated={(e: any) => {
-                  if (e.layerType === 'polygon') {
-                    const latlngs = (e.layer.getLatLngs()[0] as L.LatLng[]).map(
-                      (ll) => [ll.lat, ll.lng] as L.LatLngExpression
-                    );
-                    setExclusionPolygons((prev) => [...prev, latlngs]);
-                  }
-                }}
-                onDeleted={(e: any) => {
-                  const removed: L.LatLngExpression[][] = [];
-                  e.layers.eachLayer((layer: any) => {
-                    const latlngs = (layer.getLatLngs()[0] as L.LatLng[]).map(
-                      (ll) => [ll.lat, ll.lng] as L.LatLngExpression
-                    );
-                    removed.push(latlngs);
-                  });
-                  setExclusionPolygons((prev) =>
-                    prev.filter(
-                      (poly) =>
-                        !removed.some(
-                          (rem) =>
-                            rem.length === poly.length &&
-                            rem.every((pt, idx) => {
-                              const [rLat, rLng] = rem[idx] as [number, number];
-                              const [pLat, pLng] = poly[idx] as [
-                                number,
-                                number
-                              ];
-                              return rLat === pLat && rLng === pLng;
-                            })
-                        )
-                    )
-                  );
-                }}
-                edit={{ edit: false, remove: true }}
-              />
-              {exclusionPolygons.map((poly, idx) => (
-                <Polygon pane='markerPane'
-                  key={`exclusion-${idx}`}
-                  positions={poly}
+              {polygonCoords && (
+                <Polygon
+                  positions={polygonCoords}
+                  pathOptions={{ fill: false, color: '#97009c' }}
+                />
+              )}
+              {exclusionCoords.map((coords, idx) => (
+                <Polygon
+                  key={'exclusion-' + idx}
+                  positions={coords}
                   pathOptions={{
                     color: 'red',
                     fillColor: 'red',
-                    fillOpacity: 0.3,
+                    fillOpacity: 0.2,
                   }}
                 />
               ))}
-            </FeatureGroup> */}
-            {strataSections.map((section) => (
-              <Polygon
-                key={`stratum-${section.id}`}
-                positions={section.coords}
-                pathOptions={{
-                  fillColor: strataColors[section.id % strataColors.length],
-                  color: strataColors[section.id % strataColors.length],
-                  fillOpacity: 0.3,
-                }}
-              >
-                <Popup>
-                  <div>
-                    <strong>Stratum:</strong> {section.id}
-                  </div>
-                </Popup>
-              </Polygon>
-            ))}
-            {!loading &&
-              segmentedImages.map((img, idx) => (
-                <CircleMarker
-                  pane='markerPane'
-                  key={img.id}
-                  center={[img.latitude, img.longitude]}
-                  radius={5}
-                  pathOptions={{
-                    color:
-                      transectColors[img.transectId % transectColors.length],
-                    fillColor:
-                      transectColors[img.transectId % transectColors.length],
-                    fillOpacity: 1,
-                  }}
-                  eventHandlers={{
-                    contextmenu: (e) => {
-                      setContextMenu({ position: e.latlng, img });
+              <FeatureGroup>
+                <EditControl
+                  position='topright'
+                  draw={{
+                    rectangle: false,
+                    circle: false,
+                    circlemarker: false,
+                    marker: false,
+                    polygon: false,
+                    polyline: {
+                      shapeOptions: { color: 'black' },
+                      maxPoints: 2,
                     },
+                  }}
+                  onCreated={(e: any) => {
+                    if (e.layerType === 'polyline') {
+                      const latlngs = e.layer
+                        .getLatLngs()
+                        .map(
+                          (ll: L.LatLng) =>
+                            [ll.lat, ll.lng] as L.LatLngExpression
+                        );
+                      setStrataLines((prev) => [...prev, latlngs]);
+                    }
+                  }}
+                  onDeleted={(e: any) => {
+                    // Remove deleted polylines from state
+                    const layers = e.layers;
+                    const removed: L.LatLngExpression[][] = [];
+                    layers.eachLayer((layer: any) => {
+                      const latlngs = layer
+                        .getLatLngs()
+                        .map(
+                          (ll: L.LatLng) =>
+                            [ll.lat, ll.lng] as L.LatLngExpression
+                        );
+                      removed.push(latlngs);
+                    });
+                    setStrataLines((prev) =>
+                      prev.filter(
+                        (line) =>
+                          !removed.some(
+                            (r) =>
+                              r.length === line.length &&
+                              r.every((pt, idx) => {
+                                const [rLat, rLng] = pt as [number, number];
+                                const [lLat, lLng] = line[idx] as [
+                                  number,
+                                  number
+                                ];
+                                return rLat === lLat && rLng === lLng;
+                              })
+                          )
+                      )
+                    );
+                  }}
+                  edit={{ remove: true, edit: false }}
+                />
+              </FeatureGroup>
+              {strataSections.map((section) => (
+                <Polygon
+                  key={`stratum-${section.id}`}
+                  positions={section.coords}
+                  pathOptions={{
+                    fillColor: strataColors[section.id % strataColors.length],
+                    color: strataColors[section.id % strataColors.length],
+                    fillOpacity: 0.3,
                   }}
                 >
                   <Popup>
                     <div>
-                      <strong>Transect:</strong> {img.transectId}
-                    </div>
-                    {img.timestamp && (
-                      <div>
-                        <strong>Timestamp:</strong>{' '}
-                        {new Date(img.timestamp).toISOString()}
-                      </div>
-                    )}
-                    <div>
-                      <strong>Lat:</strong> {img.latitude}
-                    </div>
-                    <div>
-                      <strong>Lng:</strong> {img.longitude}
+                      <strong>Stratum:</strong> {section.id}
                     </div>
                   </Popup>
-                </CircleMarker>
+                </Polygon>
               ))}
-            {contextMenu && (
-              <Popup
-                position={contextMenu.position}
-                eventHandlers={{ remove: () => setContextMenu(null) }}
-              >
-                <div>
-                  <strong>Move to transect:</strong>
-                  {visibleTransectIds.map((id) => (
+              {partsLoading === null &&
+                segmentedImages.map((img, idx) => (
+                  <CircleMarker
+                    pane='markerPane'
+                    key={img.id}
+                    center={[img.latitude, img.longitude]}
+                    radius={5}
+                    pathOptions={{
+                      color:
+                        transectColors[img.transectId % transectColors.length],
+                      fillColor:
+                        transectColors[img.transectId % transectColors.length],
+                      fillOpacity: 1,
+                    }}
+                    eventHandlers={{
+                      contextmenu: (e) => {
+                        setContextMenu({ position: e.latlng, img });
+                      },
+                    }}
+                  >
+                    <Popup>
+                      <div>
+                        <strong>Transect:</strong> {img.transectId}
+                      </div>
+                      {img.timestamp && (
+                        <div>
+                          <strong>Timestamp:</strong>{' '}
+                          {new Date(img.timestamp).toISOString()}
+                        </div>
+                      )}
+                      <div>
+                        <strong>Lat:</strong> {img.latitude}
+                      </div>
+                      <div>
+                        <strong>Lng:</strong> {img.longitude}
+                      </div>
+                    </Popup>
+                  </CircleMarker>
+                ))}
+              {contextMenu && (
+                <Popup
+                  position={contextMenu.position}
+                  eventHandlers={{ remove: () => setContextMenu(null) }}
+                >
+                  <div>
+                    <strong>Move to transect:</strong>
+                    {visibleTransectIds.map((id) => (
+                      <div
+                        key={id}
+                        style={{
+                          cursor: 'pointer',
+                          color: transectColors[id % transectColors.length],
+                          margin: '4px 0',
+                        }}
+                        onClick={() => {
+                          handleMove(contextMenu.img.id, id);
+                          setContextMenu(null);
+                        }}
+                      >
+                        Transect {id}
+                      </div>
+                    ))}
                     <div
-                      key={id}
                       style={{
                         cursor: 'pointer',
-                        color: transectColors[id % transectColors.length],
                         margin: '4px 0',
+                        color: 'black',
+                        fontStyle: 'italic',
                       }}
                       onClick={() => {
-                        handleMove(contextMenu.img.id, id);
+                        const nextId =
+                          transectIds.length > 0
+                            ? transectIds[transectIds.length - 1] + 1
+                            : 0;
+                        handleMove(contextMenu.img.id, nextId);
                         setContextMenu(null);
                       }}
                     >
-                      Transect {id}
+                      + New Transect
                     </div>
-                  ))}
-                  <div
-                    style={{
-                      cursor: 'pointer',
-                      margin: '4px 0',
-                      color: 'black',
-                      fontStyle: 'italic',
-                    }}
-                    onClick={() => {
-                      const nextId =
-                        transectIds.length > 0
-                          ? transectIds[transectIds.length - 1] + 1
-                          : 0;
-                      handleMove(contextMenu.img.id, nextId);
-                      setContextMenu(null);
-                    }}
-                  >
-                    + New Transect
                   </div>
-                </div>
-              </Popup>
-            )}
-          </MapContainer>
+                </Popup>
+              )}
+            </MapContainer>
+          )}
         </div>
+        {saving && (
+          <div className='d-flex justify-content-center align-items-center mt-3'>
+            <Spinner animation='border' />
+            <span className='ms-2'>
+              Saving, please do not close this window
+            </span>
+          </div>
+        )}
       </Form.Group>
     </Form>
   );

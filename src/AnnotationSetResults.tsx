@@ -126,7 +126,7 @@ export default function AnnotationSetResults({
     try {
       const existingResults = await fetchAllPaginatedResults(
         client.models.JollyResult.jollyResultsBySurveyId,
-        { surveyId, selectionSet: ['surveyId', 'annotationSetId', 'stratumId'] }
+        { surveyId }
       );
       const toDelete = existingResults.filter(
         (r) => r.annotationSetId === annotationSetId
@@ -137,6 +137,7 @@ export default function AnnotationSetResults({
             surveyId: r.surveyId,
             stratumId: r.stratumId,
             annotationSetId: r.annotationSetId,
+            categoryId: r.categoryId,
           });
         })
       );
@@ -144,14 +145,27 @@ export default function AnnotationSetResults({
       console.error('Error deleting existing Jolly results:', error);
     }
 
-    const result = await client.mutations.generateSurveyResults({
+    const data = await client.mutations.generateSurveyResults({
       surveyId,
       annotationSetId,
     });
 
-    if (result.data) {
+    const result = JSON.parse(data.data) as {
+      statusCode: number;
+      body: string;
+    };
+
+    if (result?.statusCode === 200) {
       viewSurveyResults(annotationSetId);
+    } else {
+      const body = JSON.parse(result?.body) as {
+        message: string;
+        error: string;
+      };
+      alert(`${body.message}: ${body.error}`);
     }
+
+    setLoading(false);
   }
 
   async function viewSurveyResults(annotationSetId: string) {
