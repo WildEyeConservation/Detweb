@@ -855,6 +855,7 @@ const schema = a
       .arguments({
         surveyId: a.string().required(),
         annotationSetId: a.string().required(),
+        categoryIds: a.string().array().required(),
       })
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])

@@ -105,6 +105,7 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
     const surveyId = event.arguments.surveyId;
     const projectId = surveyId;
     const annotationSetId = event.arguments.annotationSetId;
+    const categoryIds = event.arguments.categoryIds;
 
     try {
       // fetch project cameras
@@ -197,8 +198,10 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
         throw new Error('No annotations found for survey');
       }
 
-      // only keep primary annotations (objectId === id)
-      const primaryAnnotations = annotations.filter((a) => a.id === a.objectId);
+      // only keep primary annotations (objectId === id) and filter to only include those in the categoryIds list
+      const primaryAnnotations = annotations.filter(
+        (a) => a.id === a.objectId && categoryIds.includes(a.categoryId)
+      );
       // count annotations per image per category
       const annotCountByImageByCategory: Record<
         string,
