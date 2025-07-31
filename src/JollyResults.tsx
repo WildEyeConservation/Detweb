@@ -169,7 +169,15 @@ export default function JollyResults() {
             value: c.id,
           }));
 
-          setCategoryOptions(catOptions);
+          const resultCategories = resultsWithStratumName.map(
+            (r) => r.categoryId
+          );
+
+          const filterOptions = catOptions.filter((c) =>
+            resultCategories.includes(c.value)
+          );
+
+          setCategoryOptions(filterOptions);
 
           setResults(resultsWithStratumName);
 
@@ -378,7 +386,11 @@ export default function JollyResults() {
               <DensityMap
                 surveyId={surveyId}
                 annotationSetId={annotationSetId}
-                categoryIds={categoryIds}
+                categoryIds={
+                  selectedCategories.length > 0
+                    ? categoryIds
+                    : categoryOptions.map((c) => c.value)
+                }
               />
             </Card.Body>
           </Card>
