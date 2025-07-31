@@ -10,6 +10,7 @@ import {
 } from './graphql/queries';
 import { createJollyResult } from './graphql/mutations';
 import { generateClient, GraphQLResult } from 'aws-amplify/data';
+import { jStat } from 'jstat';
 
 Amplify.configure(
   {
@@ -321,7 +322,8 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
               : ((N * (N - n)) / n) *
                 (covAA - 2 * density * covAB + density * density * covBB);
           const popSE = Math.sqrt(popVar);
-          const tcrit = 1.96;
+          const df = n - 1;
+          const tcrit = jStat.studentt.inv(0.975, df);
           const popEst = density * stratum.area!;
           const lower95 = Math.round(popEst - tcrit * popSE);
           const upper95 = Math.round(popEst + tcrit * popSE);
