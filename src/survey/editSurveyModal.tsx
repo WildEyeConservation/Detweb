@@ -1,11 +1,11 @@
-import { Modal, Button } from "react-bootstrap";
-import { Schema } from "../../amplify/data/resource";
-import { Tabs, Tab } from "../Tabs";
-import { useState } from "react";
-import ProcessImages from "./ProcessImages";
-import CreateSubset from "../CreateSubset";
-import EditShapeFile from "./EditShapeFile";
-import DefineTransects from "./DefineTransects";
+import { Modal, Button } from 'react-bootstrap';
+import { Schema } from '../../amplify/data/resource';
+import { Tabs, Tab } from '../Tabs';
+import { useState } from 'react';
+import ProcessImages from './ProcessImages';
+import CreateSubset from '../CreateSubset';
+import EditShapeFile from './EditShapeFile';
+import DefineTransects from './DefineTransects';
 
 export default function EditSurveyModal({
   show,
@@ -15,7 +15,7 @@ export default function EditSurveyModal({
 }: {
   show: boolean;
   onClose: () => void;
-  project: Schema["Project"]["type"];
+  project: Schema['Project']['type'];
   openTab?: number;
   setSelectedSets: (sets: string[]) => void;
 }) {
@@ -23,10 +23,10 @@ export default function EditSurveyModal({
     (() => Promise<void>) | null
   >(null);
   const [tab, setTab] = useState(openTab || 0);
-  const [loading, setLoading] = useState(false);
-  const [prevButtonLabel, setPrevButtonLabel] = useState("Process");
-  const [buttonLabel, setButtonLabel] = useState("Process");
+  const [prevButtonLabel, setPrevButtonLabel] = useState('Process');
+  const [buttonLabel, setButtonLabel] = useState('Process');
   const [submitDisabled, setSubmitDisabled] = useState(false);
+  const [closeDisabled, setCloseDisabled] = useState(false);
 
   function handleOnClick() {
     if (handleSubmit) {
@@ -35,7 +35,7 @@ export default function EditSurveyModal({
   }
 
   return (
-    <Modal show={show} onHide={onClose} size="xl" backdrop="static">
+    <Modal show={show} onHide={onClose} size='xl' backdrop='static'>
       <Modal.Header>
         <Modal.Title>Edit Survey: {project.name}</Modal.Title>
       </Modal.Header>
@@ -44,24 +44,24 @@ export default function EditSurveyModal({
           defaultTab={openTab || 0}
           onTabChange={(tab) => {
             setTab(tab);
-            let label = "";
+            let label = '';
             switch (tab) {
               case 0:
-                label = "Process";
+                label = 'Process';
                 break;
               case 1:
-                label = "Save Shapefile";
+                label = 'Save Shapefile';
                 break;
               case 2:
-                label = "Save Work";
+                label = 'Save Work';
                 break;
             }
             setButtonLabel(label);
             setPrevButtonLabel(label);
           }}
-          className="mb-2"
+          className='mb-2'
         >
-          <Tab label="Process Images">
+          <Tab label='Process Images'>
             <ProcessImages
               key={project.id}
               onClose={onClose}
@@ -70,33 +70,35 @@ export default function EditSurveyModal({
               setSubmitDisabled={setSubmitDisabled}
             />
           </Tab>
-          <Tab label="Edit Shape File">
-            <EditShapeFile 
+          <Tab label='Edit Shape File'>
+            <EditShapeFile
               key={project.id}
               projectId={project.id}
               setHandleSubmit={setHandleSubmit}
               setSubmitDisabled={setSubmitDisabled}
+              setCloseDisabled={setCloseDisabled}
             />
           </Tab>
-          <Tab label="Define Transects & Strata">
+          <Tab label='Define Transects & Strata'>
             <DefineTransects
               key={project.id}
               projectId={project.id}
               setHandleSubmit={setHandleSubmit}
               setSubmitDisabled={setSubmitDisabled}
+              setCloseDisabled={setCloseDisabled}
             />
           </Tab>
         </Tabs>
       </Modal.Body>
       <Modal.Footer>
         <Button
-          variant="primary"
+          variant='primary'
           disabled={submitDisabled}
           onClick={handleOnClick}
         >
           {buttonLabel}
         </Button>
-        <Button variant="dark" onClick={onClose}>
+        <Button variant='dark' onClick={onClose} disabled={closeDisabled}>
           Close
         </Button>
       </Modal.Footer>

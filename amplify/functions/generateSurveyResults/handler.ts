@@ -6,7 +6,7 @@ import {
   strataByProjectId,
   transectsByProjectId,
   imagesByProjectId,
-  annotationsByAnnotationSetId
+  annotationsByAnnotationSetId,
 } from './graphql/queries';
 import { createJollyResult } from './graphql/mutations';
 import { generateClient, GraphQLResult } from 'aws-amplify/data';
@@ -165,10 +165,45 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
           }),
         'annotationsByAnnotationSetId'
       );
+
+      // validate input
+      if (cameras.length === 0) {
+        throw new Error('No cameras found for survey');
+      }
+      if (strataList.length === 0) {
+        throw new Error('No strata found for survey');
+      }
+      if (transectsList.length === 0) {
+        throw new Error('No transects found for survey');
+      }
+      if (images.length === 0) {
+        throw new Error('No images found for survey');
+      }
+      if (
+        images.some(
+          (img) =>
+            !img.transectId ||
+            !img.cameraId ||
+            !img.latitude ||
+            !img.longitude ||
+            !img.altitude_agl ||
+            !img.width ||
+            !img.height
+        )
+      ) {
+        throw new Error('Image data is missing required fields');
+      }
+      if (annotations.length === 0) {
+        throw new Error('No annotations found for survey');
+      }
+
       // only keep primary annotations (objectId === id)
       const primaryAnnotations = annotations.filter((a) => a.id === a.objectId);
       // count annotations per image per category
-      const annotCountByImageByCategory: Record<string, Record<string, number>> = {};
+      const annotCountByImageByCategory: Record<
+        string,
+        Record<string, number>
+      > = {};
       for (const a of primaryAnnotations) {
         (annotCountByImageByCategory[a.imageId] ||= {})[a.categoryId] =
           (annotCountByImageByCategory[a.imageId][a.categoryId] || 0) + 1;
@@ -187,7 +222,9 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
       }
 
       // compute survey-wide categories list
-      const allCategoryIds = Array.from(new Set(primaryAnnotations.map((a) => a.categoryId)));
+      const allCategoryIds = Array.from(
+        new Set(primaryAnnotations.map((a) => a.categoryId))
+      );
 
       // compute per-transect metrics
       type TransMetrics = {
@@ -202,18 +239,24 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
       for (const [tid, imgs] of Object.entries(byTransect)) {
         imgs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
         const deltas = imgs
-          .map((_, i) => (i > 0 ? imgs[i].timestamp! - imgs[i - 1].timestamp! : 0))
+          .map((_, i) =>
+            i > 0 ? imgs[i].timestamp! - imgs[i - 1].timestamp! : 0
+          )
           .slice(1);
         const valid = deltas.filter((d) => d > 0);
         const meanDelta = valid.reduce((s, d) => s + d, 0) / valid.length;
         const sections: number[] = [];
         for (let i = 0; i < imgs.length; i++) {
-          sections[i] = i === 0 ? 0 : sections[i - 1] + (deltas[i - 1] > 3 * meanDelta ? 1 : 0);
+          sections[i] =
+            i === 0
+              ? 0
+              : sections[i - 1] + (deltas[i - 1] > 3 * meanDelta ? 1 : 0);
         }
         let distance = 0;
         for (const secId of Array.from(new Set(sections))) {
           const secImgs = imgs.filter((_, i) => sections[i] === secId);
-          const start = secImgs[0], end = secImgs[secImgs.length - 1];
+          const start = secImgs[0],
+            end = secImgs[secImgs.length - 1];
           distance += haversineDistance(
             [start.latitude!, start.longitude!],
             [end.latitude!, end.longitude!]
@@ -238,7 +281,14 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
             0
           );
         }
-        transMetricsList.push({ stratumId, transectId: tid, distance, widthAvg, area_km2, animalCounts });
+        transMetricsList.push({
+          stratumId,
+          transectId: tid,
+          distance,
+          widthAvg,
+          area_km2,
+          animalCounts,
+        });
       }
 
       // group per stratum
@@ -313,7 +363,9 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
 
       return {
         statusCode: 200,
-        body: JSON.stringify({ message: 'Survey results generated successfully' }),
+        body: JSON.stringify({
+          message: 'Survey results generated successfully',
+        }),
       };
     } catch (error: any) {
       console.error('Error details:', error);

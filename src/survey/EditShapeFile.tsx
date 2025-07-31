@@ -12,7 +12,7 @@ import { EditControl } from 'react-leaflet-draw';
 import L from 'leaflet';
 import shp from 'shpjs';
 import * as turf from '@turf/turf';
-import { Form } from 'react-bootstrap';
+import { Form, Spinner } from 'react-bootstrap';
 import FileInput from '../FileInput';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
@@ -21,12 +21,14 @@ export default function EditShapeFile({
   projectId,
   setHandleSubmit,
   setSubmitDisabled,
+  setCloseDisabled,
 }: {
   projectId: string;
   setHandleSubmit: React.Dispatch<
     React.SetStateAction<(() => Promise<void>) | null>
   >;
   setSubmitDisabled: React.Dispatch<React.SetStateAction<boolean>>;
+  setCloseDisabled: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const { client } = useContext(GlobalContext)!;
   const [polygonCoords, setPolygonCoords] = useState<
@@ -38,6 +40,8 @@ export default function EditShapeFile({
     [number, number][][]
   >([]);
   const exclusionFeatureGroupRef = useRef<L.FeatureGroup>(null);
+  const [saving, setSaving] = useState(false);
+  const [loadingShapefile, setLoadingShapefile] = useState(false);
 
   // Adaptive simplification: if polygon has <=1000 points, keep raw; else increase tolerance until between 1000–1500 pts
   const simplifyToRange = (raw: [number, number][]): [number, number][] => {
@@ -71,9 +75,10 @@ export default function EditShapeFile({
     return null;
   };
 
+  // fetch existing shapefile if any
   useEffect(() => {
-    // fetch existing shapefile if any
     async function loadShapefile() {
+      setLoadingShapefile(true);
       // load existing shapefile (cast query function to any)
       const result = (await (
         client.models.Shapefile.shapefilesByProjectId as any
@@ -90,6 +95,7 @@ export default function EditShapeFile({
         }
         setPolygonCoords(coords);
       }
+      setLoadingShapefile(false);
     }
     loadShapefile();
   }, [client, projectId]);
@@ -200,6 +206,9 @@ export default function EditShapeFile({
   useEffect(() => {
     setHandleSubmit(() => async () => {
       setSubmitDisabled(true);
+      setCloseDisabled(true);
+      setSaving(true);
+
       if (!polygonCoords) return;
       // simplify polygon to reduce number of vertices
       // convert LatLngExpression ([lat,lng] or {lat,lng}) to [lng, lat]
@@ -294,6 +303,8 @@ export default function EditShapeFile({
       );
 
       setSubmitDisabled(false);
+      setCloseDisabled(false);
+      setSaving(false);
     });
   }, [
     client,
@@ -302,6 +313,7 @@ export default function EditShapeFile({
     exclusionPolygons,
     setHandleSubmit,
     setSubmitDisabled,
+    setCloseDisabled,
   ]);
 
   return (
@@ -323,6 +335,12 @@ export default function EditShapeFile({
           <p className='mb-0'>Select Shapefile (optional)</p>
         </FileInput>
       </Form.Group>
+      {loadingShapefile && (
+        <div className='d-flex justify-content-center align-items-center mt-3'>
+          <Spinner animation='border' />
+          <span className='ms-2'>Loading shapefile</span>
+        </div>
+      )}
       <Form.Group className='mt-3'>
         <div style={{ height: '600px', width: '100%', position: 'relative' }}>
           <MapContainer
@@ -467,6 +485,14 @@ export default function EditShapeFile({
             </FeatureGroup>
           </MapContainer>
         </div>
+        {saving && (
+          <div className='d-flex justify-content-center align-items-center mt-3'>
+            <Spinner animation='border' />
+            <span className='ms-2'>
+              Saving, please do not close this window
+            </span>
+          </div>
+        )}
       </Form.Group>
     </Form>
   );
