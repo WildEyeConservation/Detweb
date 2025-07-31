@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useContext } from 'react';
 import { GlobalContext } from '../Context';
-import { fetchAllPaginatedResults } from '../utils';
 import {
   MapContainer,
   TileLayer,
   FeatureGroup,
-  CircleMarker,
-  Popup,
   useMap,
+  Polygon,
 } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
 import L from 'leaflet';
@@ -31,13 +29,15 @@ export default function EditShapeFile({
   setSubmitDisabled: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const { client } = useContext(GlobalContext)!;
-  const [images, setImages] = useState<any[]>([]);
-  const [loadingImages, setLoadingImages] = useState(true);
   const [polygonCoords, setPolygonCoords] = useState<
     L.LatLngExpression[] | null
   >(null);
   const featureGroupRef = useRef<L.FeatureGroup>(null);
   const [shapefileBuffer, setShapefileBuffer] = useState<ArrayBuffer>();
+  const [exclusionPolygons, setExclusionPolygons] = useState<
+    [number, number][][]
+  >([]);
+  const exclusionFeatureGroupRef = useRef<L.FeatureGroup>(null);
 
   // Adaptive simplification: if polygon has <=1000 points, keep raw; else increase tolerance until between 1000–1500 pts
   const simplifyToRange = (raw: [number, number][]): [number, number][] => {
@@ -57,40 +57,19 @@ export default function EditShapeFile({
     return coords!;
   };
 
-  // Fit map bounds to images
-  const FitBoundsToPoints: React.FC<{ points: any[] }> = ({ points }) => {
+  // Fit map bounds to polygon coordinates
+  const FitBoundsToCoords: React.FC<{ coords: L.LatLngExpression[] }> = ({
+    coords,
+  }) => {
     const map = useMap();
     useEffect(() => {
-      const valid = points.filter(
-        (p) => p.latitude != null && p.longitude != null
-      );
-      if (valid.length) {
-        const bounds = L.latLngBounds(
-          valid.map((p) => [p.latitude, p.longitude] as [number, number])
-        );
+      if (coords && coords.length) {
+        const bounds = L.latLngBounds(coords as [number, number][]);
         map.fitBounds(bounds);
       }
-    }, [points]);
+    }, [coords, map]);
     return null;
   };
-
-  useEffect(() => {
-    // fetch images for project
-    async function loadImages() {
-      setLoadingImages(true);
-      // fetch images (cast query function to any to avoid complex types)
-      const imgs = (await fetchAllPaginatedResults<any, any>(
-        client.models.Image.imagesByProjectId as any,
-        { projectId, limit: 1000, selectionSet: [
-            'id', 'originalPath', 'timestamp', 'latitude', 'longitude',
-            'altitude_wgs84','altitude_egm96','altitude_agl'
-          ] } as any
-      )) as any[];
-      setImages(imgs);
-      setLoadingImages(false);
-    }
-    loadImages();
-  }, [client, projectId]);
 
   useEffect(() => {
     // fetch existing shapefile if any
@@ -102,7 +81,9 @@ export default function EditShapeFile({
       const data = result.data as Array<{ coordinates: (number | null)[] }>;
       if (data.length > 0 && data[0].coordinates) {
         // filter out any null entries
-        const coordsArr = data[0].coordinates.filter((n): n is number => n != null);
+        const coordsArr = data[0].coordinates.filter(
+          (n): n is number => n != null
+        );
         const coords: L.LatLngExpression[] = [];
         for (let i = 0; i < coordsArr.length; i += 2) {
           coords.push([coordsArr[i], coordsArr[i + 1]]);
@@ -111,6 +92,31 @@ export default function EditShapeFile({
       }
     }
     loadShapefile();
+  }, [client, projectId]);
+
+  // fetch existing exclusion polygons if any
+  useEffect(() => {
+    async function loadExclusions() {
+      const result = (await (
+        client.models.ShapefileExclusions.shapefileExclusionsByProjectId as any
+      )({ projectId })) as any;
+      const data = result.data as Array<{ coordinates: (number | null)[] }>;
+      const loadedPolys: [number, number][][] = [];
+      data.forEach((item) => {
+        if (item.coordinates) {
+          const coordsArr = item.coordinates.filter(
+            (n): n is number => n != null
+          );
+          const poly: [number, number][] = [];
+          for (let i = 0; i < coordsArr.length; i += 2) {
+            poly.push([coordsArr[i], coordsArr[i + 1]]);
+          }
+          loadedPolys.push(poly);
+        }
+      });
+      setExclusionPolygons(loadedPolys);
+    }
+    loadExclusions();
   }, [client, projectId]);
 
   // parse and simplify shapefile upload into polygon coords
@@ -128,7 +134,8 @@ export default function EditShapeFile({
           if (poly) {
             // extract raw [lng, lat] pairs
             let coordsList: [number, number][] = [];
-            if (poly.geometry.type === 'Polygon') coordsList = poly.geometry.coordinates[0];
+            if (poly.geometry.type === 'Polygon')
+              coordsList = poly.geometry.coordinates[0];
             else coordsList = poly.geometry.coordinates[0][0];
             // ensure ring is closed
             const rawLonLat = [...coordsList];
@@ -170,8 +177,8 @@ export default function EditShapeFile({
   }, []);
 
   // handle polygon edits
-  const onEdited = useCallback((e: any) => {
-    e.layers.eachLayer((layer: any) => {
+  const onEdited = useCallback((_e: any) => {
+    _e.layers.eachLayer((layer: any) => {
       const latlngs = (layer.getLatLngs()[0] as L.LatLng[]).map(
         ({ lat, lng }) => [lat, lng] as L.LatLngExpression
       );
@@ -202,7 +209,8 @@ export default function EditShapeFile({
       // ensure ring is closed
       if (
         rawLonLat.length &&
-        (rawLonLat[0][0] !== rawLonLat[rawLonLat.length - 1][0] || rawLonLat[0][1] !== rawLonLat[rawLonLat.length - 1][1])
+        (rawLonLat[0][0] !== rawLonLat[rawLonLat.length - 1][0] ||
+          rawLonLat[0][1] !== rawLonLat[rawLonLat.length - 1][1])
       ) {
         rawLonLat.push(rawLonLat[0]);
       }
@@ -220,20 +228,89 @@ export default function EditShapeFile({
       )({ projectId })) as any;
       const existing = updateResult.data as Array<{ id: string }>;
       if (existing.length > 0) {
-        await (client.models.Shapefile.update as any)({ id: existing[0].id, coordinates: flattened });
+        await (client.models.Shapefile.update as any)({
+          id: existing[0].id,
+          coordinates: flattened,
+        });
       } else {
-        await (client.models.Shapefile.create as any)({ projectId, coordinates: flattened });
+        await (client.models.Shapefile.create as any)({
+          projectId,
+          coordinates: flattened,
+        });
       }
+      // save exclusion polygons
+      const exResult = (await (
+        client.models.ShapefileExclusions.shapefileExclusionsByProjectId as any
+      )({ projectId })) as any;
+      const existingExclusions = exResult.data as Array<{ id: string }>;
+      // delete old exclusions
+      await Promise.all(
+        existingExclusions.map((ex: any) =>
+          (client.models.ShapefileExclusions.delete as any)({ id: ex.id })
+        )
+      );
+      // create new exclusions
+      await Promise.all(
+        exclusionPolygons.map((poly) => {
+          const flatEx: number[] = [];
+          poly.forEach((pt) => {
+            const [lat, lng] = pt;
+            flatEx.push(lat, lng);
+          });
+          return (client.models.ShapefileExclusions.create as any)({
+            projectId,
+            coordinates: flatEx,
+          });
+        })
+      );
+
+      // delete strata information and jolly results
+      const { data: strata } = await client.models.Stratum.strataByProjectId({
+        projectId,
+      });
+      const { data: jollyResults } =
+        await client.models.JollyResult.jollyResultsBySurveyId({
+          surveyId: projectId,
+        });
+
+      await Promise.all(
+        strata.map((s: any) =>
+          client.models.Stratum.update({ id: s.id, area: 0, baselineLength: 0 })
+        )
+      );
+      await Promise.all(
+        jollyResults.map((r: any) =>
+          client.models.JollyResult.delete({
+            surveyId: projectId,
+            stratumId: r.stratumId,
+            annotationSetId: r.annotationSetId,
+            categoryId: r.categoryId,
+          })
+        )
+      );
+
+      alert(
+        'You have successfully updated the shapefile. Please review your strata and transects on the next tab and save your work whether you made any changes or not.'
+      );
+
       setSubmitDisabled(false);
     });
-  }, [client, projectId, polygonCoords, setHandleSubmit, setSubmitDisabled]);
+  }, [
+    client,
+    projectId,
+    polygonCoords,
+    exclusionPolygons,
+    setHandleSubmit,
+    setSubmitDisabled,
+  ]);
 
   return (
     <Form>
       <Form.Group className='d-flex flex-column'>
         <Form.Label className='mb-0'>Upload or Draw Shapefile</Form.Label>
         <span className='text-muted mb-2' style={{ fontSize: '14px' }}>
-          Select a shapefile to overlay on the map or draw a new one. Press "Save Shapefile" at the bottom of the page to save.
+          Select a shapefile to overlay on the map or draw a new one. Press
+          "Save Shapefile" at the bottom of the page to save.
         </span>
         <FileInput
           id='shapefile-file'
@@ -253,7 +330,6 @@ export default function EditShapeFile({
             center={[0, 0]}
             zoom={2}
           >
-            <FitBoundsToPoints points={images} />
             <TileLayer
               attribution='&copy; OpenStreetMap contributors'
               url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
@@ -275,50 +351,120 @@ export default function EditShapeFile({
                   marker: false,
                   polyline: false,
                 }}
-                edit={ { featureGroup: featureGroupRef.current! } as any }
+                edit={{ featureGroup: featureGroupRef.current! } as any}
               />
+              {polygonCoords && <FitBoundsToCoords coords={polygonCoords} />}
             </FeatureGroup>
-            {!loadingImages &&
-              images.map((img, index) => (
-                <CircleMarker
-                  key={index}
-                  center={[img.latitude, img.longitude]}
-                  radius={3}
-                  color='orange'
-                >
-                  <Popup>
-                    {img.timestamp && (
-                      <div>
-                        <strong>Timestamp:</strong>{' '}
-                        {new Date(img.timestamp).toISOString()}
-                      </div>
-                    )}
-                    <div>
-                      <strong>Lat:</strong> {img.latitude}
-                    </div>
-                    <div>
-                      <strong>Lng:</strong> {img.longitude}
-                    </div>
-                    <div className='d-flex flex-column'>
-                      {img.altitude_wgs84 && (
-                        <div>
-                          <strong>Alt (WGS84):</strong> {img.altitude_wgs84}
-                        </div>
-                      )}
-                      {img.altitude_egm96 && (
-                        <div>
-                          <strong>Alt (EGM96):</strong> {img.altitude_egm96}
-                        </div>
-                      )}
-                      {img.altitude_agl && (
-                        <div>
-                          <strong>Alt (AGL):</strong> {img.altitude_agl}
-                        </div>
-                      )}
-                    </div>
-                  </Popup>
-                </CircleMarker>
+          </MapContainer>
+        </div>
+        <Form.Group className='d-flex flex-column mt-3'>
+          <Form.Label className='mb-0'>Exclusion Zones</Form.Label>
+          <span className='text-muted mb-2' style={{ fontSize: '14px' }}>
+            Use the polygon tool to draw exclusion zones within the boundary.
+            These zones will be deducted from the total area of the shapefile
+            when computing Jolly 2 results.
+          </span>
+        </Form.Group>
+        {/* Second map for drawing exclusion polygons */}
+        <div
+          style={{
+            height: '600px',
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          <MapContainer
+            style={{ height: '100%', width: '100%' }}
+            center={[0, 0]}
+            zoom={2}
+          >
+            {polygonCoords && <FitBoundsToCoords coords={polygonCoords} />}
+            <TileLayer
+              attribution='&copy; OpenStreetMap contributors'
+              url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+            />
+            {polygonCoords && (
+              <Polygon
+                positions={polygonCoords}
+                pathOptions={{ fill: false, color: '#97009c' }}
+              />
+            )}
+            <FeatureGroup ref={exclusionFeatureGroupRef}>
+              <EditControl
+                position='topright'
+                draw={{
+                  rectangle: false,
+                  circle: false,
+                  circlemarker: false,
+                  marker: false,
+                  polyline: false,
+                  polygon: { shapeOptions: { color: 'red', fillOpacity: 0.3 } },
+                }}
+                onCreated={(e: any) => {
+                  if (e.layerType === 'polygon') {
+                    const latlngs = (e.layer.getLatLngs()[0] as L.LatLng[]).map(
+                      ({ lat, lng }) => [lat, lng] as [number, number]
+                    );
+                    setExclusionPolygons((prev) => [...prev, latlngs]);
+                    // remove the default drawn layer to avoid duplicate polygon
+                    if (exclusionFeatureGroupRef.current) {
+                      exclusionFeatureGroupRef.current.removeLayer(e.layer);
+                    }
+                  }
+                }}
+                onEdited={() => {
+                  if (exclusionFeatureGroupRef.current) {
+                    const layers = exclusionFeatureGroupRef.current.getLayers();
+                    const newPolys: [number, number][][] = layers.map(
+                      (layer: any) => {
+                        const latlngs = (
+                          layer.getLatLngs()[0] as L.LatLng[]
+                        ).map(({ lat, lng }) => [lat, lng] as [number, number]);
+                        return latlngs;
+                      }
+                    );
+                    setExclusionPolygons(newPolys);
+                  }
+                }}
+                onDeleted={(e: any) => {
+                  const removed: [number, number][][] = [];
+                  e.layers.eachLayer((layer: any) => {
+                    const latlngs = (layer.getLatLngs()[0] as L.LatLng[]).map(
+                      (ll) => [ll.lat, ll.lng] as [number, number]
+                    );
+                    removed.push(latlngs);
+                  });
+                  setExclusionPolygons((prev) =>
+                    prev.filter(
+                      (poly) =>
+                        !removed.some(
+                          (rem) =>
+                            rem.length === poly.length &&
+                            rem.every(([rLat, rLng], _idx) => {
+                              const [pLat, pLng] = poly[_idx];
+                              return rLat === pLat && rLng === pLng;
+                            })
+                        )
+                    )
+                  );
+                }}
+                edit={
+                  { featureGroup: exclusionFeatureGroupRef.current! } as any
+                }
+              />
+              {exclusionPolygons.map((poly) => (
+                <Polygon
+                  pane='markerPane'
+                  key={`excl-${JSON.stringify(poly)}`}
+                  positions={poly}
+                  pathOptions={{
+                    color: 'red',
+                    fillColor: 'red',
+                    fillOpacity: 0.3,
+                  }}
+                />
               ))}
+            </FeatureGroup>
           </MapContainer>
         </div>
       </Form.Group>

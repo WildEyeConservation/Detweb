@@ -21,6 +21,7 @@ import 'leaflet-draw/dist/leaflet.draw.css';
 // tolerance in degrees for simplifying the transect line
 const SIMPLIFY_TOLERANCE = 0.002;
 
+// define transects and strata
 export default function DefineTransects({
   projectId,
   setHandleSubmit,
@@ -49,14 +50,13 @@ export default function DefineTransects({
   const [strataSections, setStrataSections] = useState<
     { coords: L.LatLngExpression[]; id: number }[]
   >([]);
-  // Add state to track drawn exclusion polygons
-  const [exclusionPolygons, setExclusionPolygons] = useState<
-    L.LatLngExpression[][]
-  >([]);
-  const exclusionFeatureGroupRef = useRef<L.FeatureGroup>(null);
 
   // Add state to track if existing transect data is present
   const [existingData, setExistingData] = useState<boolean>(false);
+  // Add state for shapefile exclusion polygons
+  const [exclusionCoords, setExclusionCoords] = useState<
+    L.LatLngExpression[][]
+  >([]);
   const transectIds = React.useMemo(() => {
     const ids = segmentedImages.map((img) => img.transectId);
     return Array.from(new Set(ids)).sort((a, b) => a - b);
@@ -149,18 +149,6 @@ export default function DefineTransects({
       pt1.geometry.coordinates as [number, number],
       pt2.geometry.coordinates as [number, number],
     ]);
-    // build exclusion union for area calculation
-    let exclusionUnion: any = null;
-    if (exclusionPolygons.length > 0) {
-      const exPolys = exclusionPolygons.map((poly) =>
-        turf.polygon([poly.map(([lat, lng]) => [lng, lat])])
-      );
-      exclusionUnion = exPolys.reduce(
-        (unionAcc, poly) =>
-          unionAcc ? (turf.union(unionAcc, poly) as any) : poly,
-        null
-      );
-    }
     // create strata
     const stratumMap: Record<number, string> = {};
     for (const section of strataSections) {
@@ -174,14 +162,34 @@ export default function DefineTransects({
         secLngLat.push(secLngLat[0]);
       }
       const secPoly = turf.polygon([secLngLat]);
-      // calculate area excluding drawn exclusion polygons
-      let area = turf.area(secPoly);
-      if (exclusionUnion) {
-        const diff = turf.difference(secPoly, exclusionUnion as any);
-        area = diff ? turf.area(diff as any) : 0;
-      }
-      // Convert area from square meters to square kilometers
-      area = area / 1e6;
+      // calculate raw area of section polygon
+      const rawArea = turf.area(secPoly);
+      // subtract exclusion polygons entirely if they intersect
+      let exclusionAreaSqm = 0;
+      exclusionCoords.forEach((coords) => {
+        if (coords.length < 3) return;
+        const excCoordsLngLat = coords.map(
+          ([lat, lng]) => [lng, lat] as [number, number]
+        );
+        // ensure closure
+        if (
+          excCoordsLngLat[0][0] !== excCoordsLngLat[excCoordsLngLat.length - 1][0] ||
+          excCoordsLngLat[0][1] !== excCoordsLngLat[excCoordsLngLat.length - 1][1]
+        ) {
+          excCoordsLngLat.push(excCoordsLngLat[0]);
+        }
+        const exclusionPoly = turf.polygon([excCoordsLngLat]);
+        // if exclusion overlaps this section, subtract full exclusion area
+        if (turf.booleanIntersects(secPoly, exclusionPoly)) {
+          exclusionAreaSqm += turf.area(exclusionPoly);
+        }
+      });
+      // compute net area and convert to km²
+      const netAreaSqm = rawArea - exclusionAreaSqm;
+      const rawAreaKm = rawArea / 1e6;
+      const exclusionAreaKm = exclusionAreaSqm / 1e6;
+      const netAreaKm = netAreaSqm / 1e6;
+      const area = netAreaKm;
       // split baseline by section
       const splits = turf.lineSplit(mainBaseline, secPoly);
       let secBaseline: any = null;
@@ -284,7 +292,7 @@ export default function DefineTransects({
     transectIds,
     projectId,
     client,
-    exclusionPolygons,
+    exclusionCoords,
   ]);
   // register submit handler
   useEffect(() => {
@@ -378,6 +386,39 @@ export default function DefineTransects({
     loadExistingData();
   }, [client, projectId]);
 
+  // Add effect to load shapefile exclusion polygons
+  useEffect(() => {
+    async function loadExclusions() {
+      const result = (await (
+        client.models.ShapefileExclusions.shapefileExclusionsByProjectId as any
+      )({ projectId })) as any;
+      const data = result.data as Array<{ coordinates: (number | null)[] }>;
+      const polys: L.LatLngExpression[][] = [];
+      data.forEach((ex, idx) => {
+        if (ex.coordinates) {
+          const coordsArr = ex.coordinates.filter(
+            (n): n is number => n != null
+          );
+          const latlngs: L.LatLngExpression[] = [];
+          for (let i = 0; i < coordsArr.length; i += 2) {
+            latlngs.push([coordsArr[i], coordsArr[i + 1]]);
+          }
+          // Log exclusion polygon area
+          const excCoordsLngLat = latlngs.map(([lat, lng]) => [lng, lat] as [number, number]);
+          if (
+            excCoordsLngLat[0][0] !== excCoordsLngLat[excCoordsLngLat.length - 1][0] ||
+            excCoordsLngLat[0][1] !== excCoordsLngLat[excCoordsLngLat.length - 1][1]
+          ) {
+            excCoordsLngLat.push(excCoordsLngLat[0]);
+          }
+          polys.push(latlngs);
+        }
+      });
+      setExclusionCoords(polys);
+    }
+    loadExclusions();
+  }, [client, projectId]);
+
   // fetch existing shapefile polygon
   useEffect(() => {
     async function loadShapefile() {
@@ -392,6 +433,14 @@ export default function DefineTransects({
         const latlngs: L.LatLngExpression[] = [];
         for (let i = 0; i < coordsArr.length; i += 2) {
           latlngs.push([coordsArr[i], coordsArr[i + 1]]);
+        }
+        // Log shapefile boundary area
+        const boundaryLngLat = latlngs.map(([lat, lng]) => [lng, lat] as [number, number]);
+        if (
+          boundaryLngLat[0][0] !== boundaryLngLat[boundaryLngLat.length - 1][0] ||
+          boundaryLngLat[0][1] !== boundaryLngLat[boundaryLngLat.length - 1][1]
+        ) {
+          boundaryLngLat.push(boundaryLngLat[0]);
         }
         setPolygonCoords(latlngs);
       }
@@ -557,10 +606,6 @@ export default function DefineTransects({
               corner of the map and drawing a line across the boundary.
             </li>
             <li>
-              Use the polygon tool to draw exclusion polygons. Area within
-              exclusion polygons will not be included in area calculations.
-            </li>
-            <li>
               Save your work by clicking the save button at the bottom of the
               page.
             </li>
@@ -583,6 +628,17 @@ export default function DefineTransects({
                 pathOptions={{ fill: false, color: '#97009c' }}
               />
             )}
+            {exclusionCoords.map((coords, idx) => (
+              <Polygon
+                key={'exclusion-' + idx}
+                positions={coords}
+                pathOptions={{
+                  color: 'red',
+                  fillColor: 'red',
+                  fillOpacity: 0.2,
+                }}
+              />
+            ))}
             <FeatureGroup>
               <EditControl
                 position='topright'
@@ -640,68 +696,6 @@ export default function DefineTransects({
                 edit={{ remove: true, edit: false }}
               />
             </FeatureGroup>
-            {/* TODO:Exclusion polygon draw control */}
-            {/* <FeatureGroup ref={exclusionFeatureGroupRef}>
-              <EditControl
-                position='topright'
-                draw={{
-                  rectangle: false,
-                  circle: false,
-                  circlemarker: false,
-                  marker: false,
-                  polyline: false,
-                  polygon: {
-                    shapeOptions: { color: 'red', fillOpacity: 0.3 },
-                  },
-                }}
-                onCreated={(e: any) => {
-                  if (e.layerType === 'polygon') {
-                    const latlngs = (e.layer.getLatLngs()[0] as L.LatLng[]).map(
-                      (ll) => [ll.lat, ll.lng] as L.LatLngExpression
-                    );
-                    setExclusionPolygons((prev) => [...prev, latlngs]);
-                  }
-                }}
-                onDeleted={(e: any) => {
-                  const removed: L.LatLngExpression[][] = [];
-                  e.layers.eachLayer((layer: any) => {
-                    const latlngs = (layer.getLatLngs()[0] as L.LatLng[]).map(
-                      (ll) => [ll.lat, ll.lng] as L.LatLngExpression
-                    );
-                    removed.push(latlngs);
-                  });
-                  setExclusionPolygons((prev) =>
-                    prev.filter(
-                      (poly) =>
-                        !removed.some(
-                          (rem) =>
-                            rem.length === poly.length &&
-                            rem.every((pt, idx) => {
-                              const [rLat, rLng] = rem[idx] as [number, number];
-                              const [pLat, pLng] = poly[idx] as [
-                                number,
-                                number
-                              ];
-                              return rLat === pLat && rLng === pLng;
-                            })
-                        )
-                    )
-                  );
-                }}
-                edit={{ edit: false, remove: true }}
-              />
-              {exclusionPolygons.map((poly, idx) => (
-                <Polygon pane='markerPane'
-                  key={`exclusion-${idx}`}
-                  positions={poly}
-                  pathOptions={{
-                    color: 'red',
-                    fillColor: 'red',
-                    fillOpacity: 0.3,
-                  }}
-                />
-              ))}
-            </FeatureGroup> */}
             {strataSections.map((section) => (
               <Polygon
                 key={`stratum-${section.id}`}
