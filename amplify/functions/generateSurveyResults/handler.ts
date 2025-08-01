@@ -398,9 +398,9 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
           const df = n - 1;
           const tcrit = jStat.studentt.inv(0.975, df);
           const popEst = density * stratum.area!;
-          const lower95 = Math.round(popEst - tcrit * popSE);
-          const upper95 = Math.round(popEst + tcrit * popSE);
-          const estimate = Math.round(popEst);
+          const lower95 = popEst - tcrit * popSE;
+          const upper95 = popEst + tcrit * popSE;
+          const estimate = popEst;
           // persist via GraphQL mutation including categoryId
           await client.graphql({
             query: createJollyResult,

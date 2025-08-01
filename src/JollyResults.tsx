@@ -239,9 +239,18 @@ export default function JollyResults() {
     : results;
 
   // Add totals calculation for multiple strata
-  const totalEstimate = filteredResults.reduce((sum, r) => sum + Number(r.estimate), 0);
-  const totalVariance = filteredResults.reduce((sum, r) => sum + Number(r.variance), 0);
-  const totalSamples = filteredResults.reduce((sum, r) => sum + Number(r.numSamples), 0);
+  const totalEstimate = filteredResults.reduce(
+    (sum, r) => sum + Number(r.estimate),
+    0
+  );
+  const totalVariance = filteredResults.reduce(
+    (sum, r) => sum + Number(r.variance),
+    0
+  );
+  const totalSamples = filteredResults.reduce(
+    (sum, r) => sum + Number(r.numSamples),
+    0
+  );
   const totalStdError = Math.sqrt(totalVariance);
   const tValue = getTValue(totalSamples);
   const totalLower95 = totalEstimate - tValue * totalStdError;
@@ -253,14 +262,14 @@ export default function JollyResults() {
       r.stratumName,
       categoryOptions.find((c) => c.value === r.categoryId)?.label,
       String(r.animals),
-      String(Number(r.areaSurveyed).toFixed(2)),
-      String(r.estimate),
-      String(Number(r.density).toFixed(2)),
-      String(Number(r.variance).toFixed(2)),
-      String(Number(r.standardError).toFixed(2)),
+      String(r.areaSurveyed.toFixed(2)),
+      String(Math.round(r.estimate)),
+      String(r.density.toFixed(2)),
+      String(r.variance.toFixed(2)),
+      String(r.standardError.toFixed(2)),
       String(r.numSamples),
-      String(r.lowerBound95),
-      String(r.upperBound95),
+      String(Math.round(r.lowerBound95)),
+      String(Math.round(r.upperBound95)),
     ],
   }));
 
@@ -421,12 +430,25 @@ export default function JollyResults() {
               <div className='mt-3 p-2 border-top'>
                 <h5>Totals</h5>
                 <div className='d-flex flex-wrap gap-4'>
-                  <div><strong>Estimate:</strong> {totalEstimate.toFixed(0)}</div>
-                  <div><strong>Variance:</strong> {totalVariance.toFixed(2)}</div>
-                  <div><strong>Std Error:</strong> {totalStdError.toFixed(2)}</div>
-                  <div><strong>t Value (n={totalSamples}):</strong> {tValue.toFixed(3)}</div>
-                  <div><strong>Lower 95:</strong> {totalLower95.toFixed(2)}</div>
-                  <div><strong>Upper 95:</strong> {totalUpper95.toFixed(2)}</div>
+                  <div>
+                    <strong>Estimate:</strong> {Math.round(totalEstimate)}
+                  </div>
+                  <div>
+                    <strong>Variance:</strong> {totalVariance.toFixed(2)}
+                  </div>
+                  <div>
+                    <strong>Std Error:</strong> {totalStdError.toFixed(2)}
+                  </div>
+                  <div>
+                    <strong>t Value (n={totalSamples}):</strong>{' '}
+                    {tValue.toFixed(3)}
+                  </div>
+                  <div>
+                    <strong>Lower 95:</strong> {Math.round(totalLower95)}
+                  </div>
+                  <div>
+                    <strong>Upper 95:</strong> {Math.round(totalUpper95)}
+                  </div>
                 </div>
               </div>
             </Card.Body>
