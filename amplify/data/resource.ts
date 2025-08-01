@@ -585,6 +585,8 @@ const schema = a
         transects: a.hasMany('Transect', 'stratumId'),
         area: a.float(),
         baselineLength: a.float(),
+        // store polygon coordinates as flattened [lat, lng, ...]
+        coordinates: a.float().array(),
       })
       .authorization((allow) => [allow.authenticated()])
       .secondaryIndexes((index) => [
