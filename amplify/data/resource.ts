@@ -600,13 +600,13 @@ const schema = a
         categoryId: a.id().required(),
         animals: a.integer().required(),
         areaSurveyed: a.float().required(),
-        estimate: a.integer().required(),
+        estimate: a.float().required(),
         density: a.float().required(),
         variance: a.float().required(),
         standardError: a.float().required(),
         numSamples: a.integer().required(),
-        lowerBound95: a.integer().required(),
-        upperBound95: a.integer().required(),
+        lowerBound95: a.float().required(),
+        upperBound95: a.float().required(),
       })
       .identifier(['surveyId', 'stratumId', 'annotationSetId', 'categoryId'])
       .authorization((allow) => [allow.authenticated()])
