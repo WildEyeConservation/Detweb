@@ -396,7 +396,7 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
                 (covAA - 2 * density * covAB + density * density * covBB);
           const popSE = Math.sqrt(popVar);
           const df = n - 1;
-          const tcrit = jStat.studentt.inv(0.95, df);
+          const tcrit = jStat.studentt.inv(0.975, df);
           const popEst = density * stratum.area!;
           const lower95 = Math.round(popEst - tcrit * popSE);
           const upper95 = Math.round(popEst + tcrit * popSE);
