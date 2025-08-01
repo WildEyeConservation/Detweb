@@ -76,19 +76,89 @@ function transect_width(
   return agl_m * (Math.tan(angle_b) - Math.tan(angle_a));
 }
 
-// Haversine distance (meters)
-function haversineDistance(
-  [lat1, lon1]: [number, number],
-  [lat2, lon2]: [number, number]
+// Function to convert degrees to radians
+function toRad(deg: number) {
+  return (deg * Math.PI) / 180;
+}
+
+// More accurate ellipsoidal estimate of distance based on the WGS84 model
+function vincentyDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
 ) {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const R = 6371000;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+  // WGS-84 ellipsiod parameters
+  const a = 6378137;
+  const b = 6356752.314245;
+  const f = 1 / 298.257223563;
+
+  const L = toRad(lon2 - lon1);
+  const U1 = Math.atan((1 - f) * Math.tan(toRad(lat1)));
+  const U2 = Math.atan((1 - f) * Math.tan(toRad(lat2)));
+
+  const sinU1 = Math.sin(U1),
+    cosU1 = Math.cos(U1);
+  const sinU2 = Math.sin(U2),
+    cosU2 = Math.cos(U2);
+
+  let λ = L;
+  let λP,
+    iterLimit = 100;
+  let cosSqAlpha, sinSigma, cos2SigmaM, cosSigma, sigma;
+
+  do {
+    const sinλ = Math.sin(λ),
+      cosλ = Math.cos(λ);
+    sinSigma = Math.sqrt(
+      cosU2 * sinλ * (cosU2 * sinλ) +
+        (cosU1 * sinU2 - sinU1 * cosU2 * cosλ) *
+          (cosU1 * sinU2 - sinU1 * cosU2 * cosλ)
+    );
+
+    if (sinSigma === 0) return 0; // co-incident points
+
+    cosSigma = sinU1 * sinU2 + cosU1 * cosU2 * cosλ;
+    sigma = Math.atan2(sinSigma, cosSigma);
+    const sinAlpha = (cosU1 * cosU2 * sinλ) / sinSigma;
+    cosSqAlpha = 1 - sinAlpha * sinAlpha;
+    cos2SigmaM = cosSigma - (2 * sinU1 * sinU2) / cosSqAlpha;
+
+    if (isNaN(cos2SigmaM)) cos2SigmaM = 0; // equatorial line
+
+    const C = (f / 16) * cosSqAlpha * (4 + f * (4 - 3 * cosSqAlpha));
+    λP = λ;
+    λ =
+      L +
+      (1 - C) *
+        f *
+        sinAlpha *
+        (sigma +
+          C *
+            sinSigma *
+            (cos2SigmaM + C * cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM)));
+  } while (Math.abs(λ - λP) > 1e-12 && --iterLimit > 0);
+
+  if (iterLimit === 0) return NaN; // formula failed to converge
+
+  const uSq = (cosSqAlpha * (a * a - b * b)) / (b * b);
+  const A = 1 + (uSq / 16384) * (4096 + uSq * (-768 + uSq * (320 - 175 * uSq)));
+  const B = (uSq / 1024) * (256 + uSq * (-128 + uSq * (74 - 47 * uSq)));
+
+  const deltaSigma =
+    B *
+    sinSigma *
+    (cos2SigmaM +
+      (B / 4) *
+        (cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM) -
+          (B / 6) *
+            cos2SigmaM *
+            (-3 + 4 * sinSigma * sinSigma) *
+            (-3 + 4 * cos2SigmaM * cos2SigmaM)));
+
+  const s = b * A * (sigma - deltaSigma);
+
+  return s; // distance in meters
 }
 
 // sample covariance
@@ -262,9 +332,11 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
           const secImgs = imgs.filter((_, i) => sections[i] === secId);
           const start = secImgs[0],
             end = secImgs[secImgs.length - 1];
-          distance += haversineDistance(
-            [start.latitude!, start.longitude!],
-            [end.latitude!, end.longitude!]
+          distance += vincentyDistance(
+            start.latitude!,
+            start.longitude!,
+            end.latitude!,
+            end.longitude!
           );
         }
         const stratumId = transectMap.get(tid)!;
@@ -324,7 +396,7 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
                 (covAA - 2 * density * covAB + density * density * covBB);
           const popSE = Math.sqrt(popVar);
           const df = n - 1;
-          const tcrit = jStat.studentt.inv(0.975, df);
+          const tcrit = jStat.studentt.inv(0.95, df);
           const popEst = density * stratum.area!;
           const lower95 = Math.round(popEst - tcrit * popSE);
           const upper95 = Math.round(popEst + tcrit * popSE);
