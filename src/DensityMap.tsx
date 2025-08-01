@@ -29,6 +29,8 @@ export default function DensityMap({
   const [images, setImages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showHeatmap, setShowHeatmap] = useState(false);
+  // Add state for strata
+  const [strata, setStrata] = useState<any[]>([]);
   // add zoom level state
   const [zoomLevel, setZoomLevel] = useState(2);
   // add map center state
@@ -37,7 +39,7 @@ export default function DensityMap({
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const [anns, imgs] = await Promise.all([
+      const [anns, imgs, str] = await Promise.all([
         fetchAllPaginatedResults<any, any>(
           client.models.Annotation.annotationsByAnnotationSetId as any,
           {
@@ -54,6 +56,14 @@ export default function DensityMap({
             selectionSet: ['id', 'latitude', 'longitude'],
           } as any
         ),
+        fetchAllPaginatedResults<any, any>(
+          client.models.Stratum.strataByProjectId as any,
+          {
+            projectId: surveyId,
+            limit: 1000,
+            selectionSet: ['id', 'name', 'coordinates'],
+          } as any
+        ),
       ]);
       // keep only primary annotations
       const primary = anns.filter((a) => a.id === a.objectId);
@@ -68,6 +78,8 @@ export default function DensityMap({
       });
       setAnnotations(primary);
       setImages(imgs);
+      // Add setting strata state
+      setStrata(str);
       setLoading(false);
     }
     loadData();
@@ -127,6 +139,37 @@ export default function DensityMap({
     return null;
   };
 
+  // Add StrataLayer to render stratum boundaries
+  const StrataLayer: React.FC = () => {
+    const map = useMap();
+    useEffect(() => {
+      if (!map) return;
+      // define a color palette for strata boundaries
+      const colors = ['#FF5733', '#33FF57', '#3357FF', '#F333FF', '#FF33A8', '#33FFF8'];
+      const group = L.layerGroup();
+      strata.forEach((s, idx) => {
+        const coords = s.coordinates;
+        if (!coords || coords.length < 4) return;
+        const latlngs: [number, number][] = [];
+        for (let i = 0; i < coords.length; i += 2) {
+          latlngs.push([coords[i], coords[i + 1]]);
+        }
+        // pick color based on stratum index
+        const color = colors[idx % colors.length];
+        const polygon = L.polygon(latlngs, { color, fillOpacity: 0 });
+        polygon.bindPopup(`<div><strong>Stratum:</strong> ${s.name}</div>`);
+        // finish building the strata layer group
+        group.addLayer(polygon);
+      });
+      map.addLayer(group);
+      return () => {
+        map.removeLayer(group);
+      };
+    }, [map, strata]);
+    return null;
+  };
+
+  // handle loading and render main map
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -178,6 +221,7 @@ export default function DensityMap({
             url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
           />
           <MapEvents />
+          <StrataLayer />
           {showHeatmap ? <HeatmapLayer /> : <ClusteredMarkers />}
         </MapContainer>
       </div>

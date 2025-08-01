@@ -9,6 +9,7 @@ import DensityMap from './DensityMap.tsx';
 import exportFromJSON from 'export-from-json';
 import { useUsers } from './apiInterface';
 import { X, Clipboard } from 'lucide-react';
+import * as jStat from 'jstat';
 
 export default function JollyResults() {
   const { surveyId, annotationSetId } = useParams<{
@@ -236,6 +237,15 @@ export default function JollyResults() {
     ? results.filter((r) => categoryIds.includes(r.categoryId))
     : results;
 
+  // Add totals calculation for multiple strata
+  const totalEstimate = filteredResults.reduce((sum, r) => sum + Number(r.estimate), 0);
+  const totalVariance = filteredResults.reduce((sum, r) => sum + Number(r.variance), 0);
+  const totalSamples = filteredResults.reduce((sum, r) => sum + Number(r.numSamples), 0);
+  const totalStdError = Math.sqrt(totalVariance);
+  const tValue = getTValue(totalSamples);
+  const totalLower95 = totalEstimate - tValue * totalStdError;
+  const totalUpper95 = totalEstimate + tValue * totalStdError;
+
   const tableData = filteredResults.map((r) => ({
     id: `${r.stratumId}-${r.categoryId}`,
     rowData: [
@@ -290,7 +300,7 @@ export default function JollyResults() {
                 isMulti
                 placeholder='Select labels'
                 options={categoryOptions}
-                onChange={(e) => setSelectedCategories(e)}
+                onChange={(e) => setSelectedCategories([...e])}
                 className='text-black'
               />
             </Card.Body>
@@ -407,10 +417,28 @@ export default function JollyResults() {
                 pagination={false}
                 emptyMessage='No Jolly results found.'
               />
+              <div className='mt-3 p-2 border-top'>
+                <h5>Totals</h5>
+                <div className='d-flex flex-wrap gap-4'>
+                  <div><strong>Estimate:</strong> {totalEstimate.toFixed(0)}</div>
+                  <div><strong>Variance:</strong> {totalVariance.toFixed(2)}</div>
+                  <div><strong>Std Error:</strong> {totalStdError.toFixed(2)}</div>
+                  <div><strong>t Value (n={totalSamples}):</strong> {tValue.toFixed(3)}</div>
+                  <div><strong>Lower 95:</strong> {totalLower95.toFixed(2)}</div>
+                  <div><strong>Upper 95:</strong> {totalUpper95.toFixed(2)}</div>
+                </div>
+              </div>
             </Card.Body>
           </Card>
         </div>
       </div>
     </div>
   );
+}
+
+// Compute critical t-value for 95% CI using jStat
+function getTValue(n: number): number {
+  const df = n - 1;
+  if (df <= 0) return NaN;
+  return jStat.studentt.inv(0.975, df);
 }
