@@ -10,7 +10,8 @@ import {
 } from './graphql/queries';
 import { createJollyResult } from './graphql/mutations';
 import { generateClient, GraphQLResult } from 'aws-amplify/data';
-import { jStat } from 'jstat';
+// @ts-ignore
+import * as jStat from 'jstat';
 
 Amplify.configure(
   {

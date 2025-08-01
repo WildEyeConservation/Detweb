@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { GlobalContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
-import { Form, Spinner } from 'react-bootstrap';
+import { Form, Spinner, Button } from 'react-bootstrap';
 import {
   MapContainer,
   TileLayer,
@@ -71,23 +71,26 @@ export default function DefineTransects({
       )
     );
   };
+  const clearStrata = () => {
+    setExistingData(false);
+    setStrataSections([]);
+    setStrataLines([]);
+  };
 
   // submit handler: creates strata, transects, and assigns images
   const handleSubmit = React.useCallback(async () => {
     if (!polygonCoords) return;
 
-    // fetch existing strata to avoid duplicates
+    // delete all existing strata so we can recreate them fresh
     const existingStrata = await fetchAllPaginatedResults<any, any>(
       client.models.Stratum.strataByProjectId as any,
-      { projectId, limit: 1000, selectionSet: ['id', 'name'] } as any
+      { projectId, limit: 1000, selectionSet: ['id'] } as any
     );
-    const existingStratumMap: Record<number, string> = {};
-    existingStrata.forEach((st: any) => {
-      const match = /^Stratum (\d+)$/.exec(st.name);
-      if (match) {
-        existingStratumMap[parseInt(match[1], 10)] = st.id;
-      }
-    });
+    await Promise.all(
+      existingStrata.map((st: any) =>
+        client.models.Stratum.delete({ id: st.id })
+      )
+    );
 
     // boundary polygon
     const boundaryLngLat = polygonCoords.map(
@@ -212,28 +215,18 @@ export default function DefineTransects({
         ? turf.length(secBaseline, { units: 'meters' })
         : 0;
       const secName = `Stratum ${section.id}`;
-      let sid: string;
-      if (existingStratumMap[section.id]) {
-        sid = existingStratumMap[section.id];
-        await client.models.Stratum.update({
-          id: sid,
-          projectId,
-          name: secName,
-          area,
-          baselineLength,
-        });
-      } else {
-        const {
-          data: { id: newSid },
-        } = await client.models.Stratum.create({
-          projectId,
-          name: secName,
-          area,
-          baselineLength,
-        });
-        sid = newSid;
-      }
-      stratumMap[section.id] = sid;
+      // create new stratum with polygon coordinates
+      const flatCoords = section.coords.flat();
+      const {
+        data: { id: newSid },
+      } = await client.models.Stratum.create({
+        projectId,
+        name: secName,
+        area,
+        baselineLength,
+        coordinates: flatCoords,
+      });
+      stratumMap[section.id] = newSid;
     }
     // create transects
     const transectMap: Record<number, string> = {};
@@ -289,6 +282,32 @@ export default function DefineTransects({
         .map((t: any) => t.id)
         .filter((id: string) => !usedTransectIds.has(id))
         .map((id: string) => client.models.Transect.delete({ id }))
+    );
+
+    //clear jolly results
+    const jollyResults = await fetchAllPaginatedResults<any, any>(
+      client.models.JollyResult.jollyResultsBySurveyId as any,
+      {
+        surveyId: projectId,
+        limit: 1000,
+        selectionSet: [
+          'surveyId',
+          'stratumId',
+          'annotationSetId',
+          'categoryId',
+        ],
+      } as any
+    );
+
+    await Promise.all(
+      jollyResults.map((jr: any) =>
+        client.models.JollyResult.delete({
+          surveyId: jr.surveyId,
+          stratumId: jr.stratumId,
+          annotationSetId: jr.annotationSetId,
+          categoryId: jr.categoryId,
+        })
+      )
     );
   }, [
     polygonCoords,
@@ -348,7 +367,11 @@ export default function DefineTransects({
     async function loadExistingData() {
       const existingStrata = await fetchAllPaginatedResults<any, any>(
         client.models.Stratum.strataByProjectId as any,
-        { projectId, limit: 1000, selectionSet: ['id'] } as any
+        {
+          projectId,
+          limit: 1000,
+          selectionSet: ['id', 'coordinates', 'name'],
+        } as any
       );
       if (existingStrata.length > 0) {
         setExistingData(true);
@@ -391,6 +414,18 @@ export default function DefineTransects({
           transectId: img.transectId ? dbToUI[img.transectId] : 0,
         }));
         setSegmentedImages(segImgs);
+        // load existing strata polygons into state
+        const loadedSections = existingStrata.map((st: any) => {
+          const flat = st.coordinates || [];
+          const coords: L.LatLngExpression[] = [];
+          for (let i = 0; i < flat.length; i += 2) {
+            coords.push([flat[i], flat[i + 1]]);
+          }
+          const match = /^Stratum (\d+)$/.exec(st.name);
+          const id = match ? parseInt(match[1], 10) : 0;
+          return { coords, id };
+        });
+        setStrataSections(loadedSections);
       }
 
       setPartsLoading((l) => (l === null ? 1 : l + 1));
@@ -474,7 +509,12 @@ export default function DefineTransects({
   // Modify segmentation to skip calculation if existing data loaded
   useEffect(() => {
     if (existingData) return;
-    if (partsLoading === null && images.length > 1) {
+    // only run segmentation once when no segments exist
+    if (
+      partsLoading === null &&
+      images.length > 1 &&
+      segmentedImages.length === 0
+    ) {
       // build lineString in [lng,lat]
       const coords = images.map(
         (img) => [img.longitude, img.latitude] as [number, number]
@@ -503,7 +543,7 @@ export default function DefineTransects({
       });
       setSegmentedImages(segImgs);
     }
-  }, [images, partsLoading, existingData]);
+  }, [images, partsLoading, existingData, segmentedImages]);
 
   // manual polygon splitting using Sutherland-Hodgman half-plane clipping
   const splitPolygon = (
@@ -550,6 +590,7 @@ export default function DefineTransects({
 
   // compute strata sections when boundary or lines change
   useEffect(() => {
+    if (existingData) return;
     if (!polygonCoords) return;
     let regions: L.LatLngExpression[][] = [polygonCoords];
     strataLines.forEach((line) => {
@@ -562,7 +603,7 @@ export default function DefineTransects({
       regions = newRegions;
     });
     setStrataSections(regions.map((coords, i) => ({ coords, id: i + 1 })));
-  }, [polygonCoords, strataLines]);
+  }, [polygonCoords, strataLines, existingData]);
 
   // component to fit map bounds to points
   const FitBounds: React.FC<{ points: any[] }> = ({ points }) => {
@@ -639,8 +680,23 @@ export default function DefineTransects({
               Save your work by clicking the save button at the bottom of the
               page.
             </li>
+            {existingData && (
+              <li>
+                To make changes to strata, clear strata and redraw the strata
+                lines.
+              </li>
+            )}
           </ul>
         </span>
+        {existingData && (
+          <Button
+            variant='outline-primary'
+            className='mb-2'
+            onClick={clearStrata}
+          >
+            Clear Strata
+          </Button>
+        )}
         <div style={{ height: '600px', width: '100%', position: 'relative' }}>
           {partsLoading !== null ? (
             <div className='d-flex justify-content-center align-items-center mt-3'>
@@ -675,65 +731,67 @@ export default function DefineTransects({
                   }}
                 />
               ))}
-              <FeatureGroup>
-                <EditControl
-                  position='topright'
-                  draw={{
-                    rectangle: false,
-                    circle: false,
-                    circlemarker: false,
-                    marker: false,
-                    polygon: false,
-                    polyline: {
-                      shapeOptions: { color: 'black' },
-                      maxPoints: 2,
-                    },
-                  }}
-                  onCreated={(e: any) => {
-                    if (e.layerType === 'polyline') {
-                      const latlngs = e.layer
-                        .getLatLngs()
-                        .map(
-                          (ll: L.LatLng) =>
-                            [ll.lat, ll.lng] as L.LatLngExpression
-                        );
-                      setStrataLines((prev) => [...prev, latlngs]);
-                    }
-                  }}
-                  onDeleted={(e: any) => {
-                    // Remove deleted polylines from state
-                    const layers = e.layers;
-                    const removed: L.LatLngExpression[][] = [];
-                    layers.eachLayer((layer: any) => {
-                      const latlngs = layer
-                        .getLatLngs()
-                        .map(
-                          (ll: L.LatLng) =>
-                            [ll.lat, ll.lng] as L.LatLngExpression
-                        );
-                      removed.push(latlngs);
-                    });
-                    setStrataLines((prev) =>
-                      prev.filter(
-                        (line) =>
-                          !removed.some(
-                            (r) =>
-                              r.length === line.length &&
-                              r.every((pt, idx) => {
-                                const [rLat, rLng] = pt as [number, number];
-                                const [lLat, lLng] = line[idx] as [
-                                  number,
-                                  number
-                                ];
-                                return rLat === lLat && rLng === lLng;
-                              })
-                          )
-                      )
-                    );
-                  }}
-                  edit={{ remove: true, edit: false }}
-                />
-              </FeatureGroup>
+              {!existingData && (
+                <FeatureGroup>
+                  <EditControl
+                    position='topright'
+                    draw={{
+                      rectangle: false,
+                      circle: false,
+                      circlemarker: false,
+                      marker: false,
+                      polygon: false,
+                      polyline: {
+                        shapeOptions: { color: 'black' },
+                        maxPoints: 2,
+                      },
+                    }}
+                    onCreated={(e: any) => {
+                      if (e.layerType === 'polyline') {
+                        const latlngs = e.layer
+                          .getLatLngs()
+                          .map(
+                            (ll: L.LatLng) =>
+                              [ll.lat, ll.lng] as L.LatLngExpression
+                          );
+                        setStrataLines((prev) => [...prev, latlngs]);
+                      }
+                    }}
+                    onDeleted={(e: any) => {
+                      // Remove deleted polylines from state
+                      const layers = e.layers;
+                      const removed: L.LatLngExpression[][] = [];
+                      layers.eachLayer((layer: any) => {
+                        const latlngs = layer
+                          .getLatLngs()
+                          .map(
+                            (ll: L.LatLng) =>
+                              [ll.lat, ll.lng] as L.LatLngExpression
+                          );
+                        removed.push(latlngs);
+                      });
+                      setStrataLines((prev) =>
+                        prev.filter(
+                          (line) =>
+                            !removed.some(
+                              (r) =>
+                                r.length === line.length &&
+                                r.every((pt, idx) => {
+                                  const [rLat, rLng] = pt as [number, number];
+                                  const [lLat, lLng] = line[idx] as [
+                                    number,
+                                    number
+                                  ];
+                                  return rLat === lLat && rLng === lLng;
+                                })
+                            )
+                        )
+                      );
+                    }}
+                    edit={{ remove: true, edit: false }}
+                  />
+                </FeatureGroup>
+              )}
               {strataSections.map((section) => (
                 <Polygon
                   key={`stratum-${section.id}`}
