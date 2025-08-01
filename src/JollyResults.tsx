@@ -441,5 +441,5 @@ export default function JollyResults() {
 function getTValue(n: number): number {
   const df = n - 1;
   if (df <= 0) return NaN;
-  return jStat.studentt.inv(0.95, df);
+  return jStat.studentt.inv(0.975, df);
 }
