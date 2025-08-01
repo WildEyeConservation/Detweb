@@ -9,6 +9,7 @@ import DensityMap from './DensityMap.tsx';
 import exportFromJSON from 'export-from-json';
 import { useUsers } from './apiInterface';
 import { X, Clipboard } from 'lucide-react';
+// @ts-ignore
 import * as jStat from 'jstat';
 
 export default function JollyResults() {
@@ -440,5 +441,5 @@ export default function JollyResults() {
 function getTValue(n: number): number {
   const df = n - 1;
   if (df <= 0) return NaN;
-  return jStat.studentt.inv(0.975, df);
+  return jStat.studentt.inv(0.95, df);
 }
