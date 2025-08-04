@@ -101,7 +101,7 @@ export default function DensityMap({
           radius: 5,
         });
         marker.bindPopup(
-          `<div><strong>Name:</strong> ${a.name}</div><div><strong>Category:</strong> ${a.category.name}</div>`
+          `<div><strong>Name:</strong> ${a.name}</div><div><strong>Label:</strong> ${a.category.name}</div>`
         );
         group.addLayer(marker);
       });

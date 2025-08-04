@@ -27,6 +27,7 @@ import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persist
 import Admin from './Admin';
 import { DevActions } from './DevActions';
 import JollyResults from './JollyResults';
+import SharedResults from './SharedResults.tsx';
 
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
@@ -71,6 +72,10 @@ const router = createBrowserRouter([
       {
         path: 'jolly/:surveyId/:annotationSetId',
         element: <JollyResults />,
+      },
+      {
+        path: 'shared-results',
+        element: <SharedResults />,
       },
       {
         path: 'surveys/:surveyId',
