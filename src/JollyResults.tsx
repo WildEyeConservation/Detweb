@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useMemo } from 'react';
 import Select from 'react-select';
 import { useParams } from 'react-router-dom';
 import { GlobalContext, UserContext } from './Context.tsx';
@@ -8,15 +8,19 @@ import { Button, Card, Form } from 'react-bootstrap';
 import DensityMap from './DensityMap.tsx';
 import exportFromJSON from 'export-from-json';
 import { useUsers } from './apiInterface';
-import { X, Clipboard } from 'lucide-react';
+import { X } from 'lucide-react';
+import { createToken, verifyToken } from './utils/jwt';
+import { DateTime } from 'luxon';
+import { useOptimisticUpdates } from './useOptimisticUpdates.tsx';
+import { Schema } from '../amplify/data/resource.ts';
 // @ts-ignore
 import * as jStat from 'jstat';
 
 export default function JollyResults() {
-  const { surveyId, annotationSetId } = useParams<{
+  const { surveyId, annotationSetId } = useParams() as {
     surveyId: string;
     annotationSetId: string;
-  }>();
+  };
   const { client } = useContext(GlobalContext)!;
   const { myMembershipHook: myProjectsHook, user: authUser } =
     useContext(UserContext)!;
@@ -31,15 +35,111 @@ export default function JollyResults() {
   const [selectedCategories, setSelectedCategories] = useState<
     { label: string; value: string }[]
   >([]);
-  const [shareWith, setShareWith] = useState('');
+  const [currentToken, setCurrentToken] = useState<string | null>(null);
+  const [tokenExpiry, setTokenExpiry] = useState<Date | null>(null);
+  const [expiration, setExpiration] = useState(
+    DateTime.now().plus({ days: 1 }).toMillis()
+  );
+  const [isCopying, setIsCopying] = useState(false);
+  const [moreInfo, setMoreInfo] = useState(false);
   const { users } = useUsers();
-
   const adminProjects = myProjectsHook.data?.filter((p) => p.isAdmin);
   const isProjectAdmin = adminProjects?.some((p) => p.projectId === surveyId);
 
+  const subscriptionFilter = useMemo(
+    () => ({
+      filter: {
+        surveyId: { eq: surveyId },
+        annotationSetId: { eq: annotationSetId },
+      },
+    }),
+    [surveyId, annotationSetId]
+  );
+
+  const sharedResultsHook = useOptimisticUpdates<
+    Schema['JollyResultsMembership']['type'],
+    'JollyResultsMembership'
+  >(
+    'JollyResultsMembership',
+    async (nextToken) => {
+      const result = await client.models.JollyResultsMembership.list({
+        filter: {
+          surveyId: { eq: surveyId },
+          annotationSetId: { eq: annotationSetId },
+        },
+      });
+      return { data: result.data, nextToken: result.nextToken ?? undefined };
+    },
+    subscriptionFilter
+  );
+
+  useEffect(() => {
+    if (sharedResultsHook.data) {
+      setResultsMemberships(sharedResultsHook.data);
+    }
+  }, [sharedResultsHook.data]);
+
   async function handleShare() {
+    if (
+      expiration < DateTime.now().toMillis() ||
+      expiration > DateTime.now().plus({ months: 1 }).toMillis()
+    ) {
+      alert('Expiration must be in the future and less than 1 month from now');
+      return;
+    }
+
+    setIsCopying(true);
+
+    //if token is still valid, copy link
+    if (tokenExpiry && tokenExpiry > DateTime.now().toJSDate()) {
+      handleCopyLink(currentToken!);
+      setIsCopying(false);
+      return;
+    }
+
+    //if token exists and is not valid, delete it
+    if (currentToken) {
+      await client.models.ResultSharingToken.delete({
+        surveyId,
+        annotationSetId,
+      });
+    }
+
+    const payload = {
+      type: 'jolly',
+      surveyId,
+      annotationSetId,
+    };
+
+    const { data: secret } = await client.mutations.getJwtSecret();
+
+    if (!secret) {
+      alert('Error generating link');
+      return;
+    }
+
+    const token = await createToken(
+      payload,
+      DateTime.fromMillis(expiration).toJSDate(),
+      secret
+    );
+
+    await client.models.ResultSharingToken.create({
+      surveyId,
+      annotationSetId,
+      jwt: token,
+    });
+
+    setCurrentToken(token);
+    setTokenExpiry(DateTime.fromMillis(expiration).toJSDate());
+
+    handleCopyLink(token);
+    setIsCopying(false);
+  }
+
+  async function handleCopyLink(token: string) {
     const windowUrl = new URL(window.location.href);
-    let url = `${windowUrl.origin}/jolly/${surveyId}/${annotationSetId}`;
+    let url = `${windowUrl.origin}?t=${token}`;
 
     try {
       await navigator.share({ url: url });
@@ -48,45 +148,24 @@ export default function JollyResults() {
     }
   }
 
-  async function addResultsMembership() {
-    if (!shareWith) return;
-
-    const userId = users?.find(
-      (user) => user.name === shareWith || user.email === shareWith
-    )?.id;
-
-    if (!userId) {
-      alert('User not found');
-      return;
-    }
-
-    setShareWith('');
-
-    if (resultsMemberships.some((m) => m.userId === userId)) {
-      alert('User already has access to this survey');
-      return;
-    }
-
-    const { data: newMembership } =
-      await client.models.JollyResultsMembership.create({
-        surveyId,
-        userId,
-      });
-    setResultsMemberships([...resultsMemberships, newMembership]);
-  }
-
   async function removeResultsMembership(userId: string) {
     await client.models.JollyResultsMembership.delete({
       surveyId,
+      annotationSetId,
       userId,
     });
     setResultsMemberships(
       resultsMemberships.filter((m) => m.userId !== userId)
     );
   }
+
   async function exportResultsAsCSV() {
+    const filteredResults = categoryIds.length
+      ? results.filter((r) => categoryIds.includes(r.categoryId))
+      : results;
+
     exportFromJSON({
-      data: results.map((r) => ({
+      data: filteredResults.map((r) => ({
         stratumName: r.stratumName,
         label: categoryOptions.find((c) => c.value === r.categoryId)?.label,
         animals: r.animals,
@@ -183,15 +262,22 @@ export default function JollyResults() {
 
           setResults(resultsWithStratumName);
 
-          const resultsMemberships = await fetchAllPaginatedResults(
-            client.models.JollyResultsMembership
-              .jollyResultsMembershipsBySurveyId,
-            {
+          const { data: sharingLink } =
+            await client.models.ResultSharingToken.get({
               surveyId,
-              selectionSet: ['userId', 'surveyId'],
+              annotationSetId,
+            });
+
+          if (sharingLink) {
+            const { data: secret } = await client.mutations.getJwtSecret();
+            if (!secret) {
+              console.error('Error getting JWT secret');
+              return;
             }
-          );
-          setResultsMemberships(resultsMemberships);
+            setCurrentToken(sharingLink.jwt);
+            const { exp } = await verifyToken(sharingLink.jwt, secret);
+            setTokenExpiry(DateTime.fromMillis(exp * 1000).toJSDate());
+          }
         }
       } catch (error) {
         console.error('Error fetching Jolly results:', error);
@@ -315,7 +401,7 @@ export default function JollyResults() {
               />
             </Card.Body>
           </Card>
-          <Card className='flex-grow-1'>
+          <Card className='flex-grow-1 overflow-auto'>
             <Card.Header>
               <Card.Title>
                 <h4 className='mb-0'>Sharing</h4>
@@ -324,31 +410,66 @@ export default function JollyResults() {
             <Card.Body className='d-flex flex-column justify-content-between'>
               {isProjectAdmin && (
                 <div className='d-flex flex-column gap-3'>
-                  {resultsMemberships.length > 0 && (
+                  <Form.Group>
                     <Button
                       variant='link'
-                      className='p-0 text-white'
-                      onClick={handleShare}
-                      style={{ fontSize: '14px', textAlign: 'left' }}
+                      className='p-0 mb-1'
+                      onClick={() => setMoreInfo(!moreInfo)}
                     >
-                      <Clipboard size={16} className='me-1' />
-                      Copy Link
+                      {moreInfo ? 'Less Info' : 'Click for more info...'}
                     </Button>
-                  )}
-                  <Form.Group>
-                    <Form.Label className='m-0'>Share with:</Form.Label>
+                    {moreInfo && (
+                      <span
+                        className='text-muted d-block mb-2 mt-0'
+                        style={{ fontSize: '14px' }}
+                      >
+                        After copying the link, it will remain valid until the
+                        expiration date. Any user who clicks the link will be
+                        required to sign in. These users will be granted access
+                        to this results page. You can revoke access by removing
+                        them from the list below. You must wait for the link to
+                        expire before creating a new one. As a safety measure,
+                        choose the shortest expiration date possible.
+                      </span>
+                    )}
+                    <Form.Label className='mb-0 d-block'>
+                      Expiration Date:
+                    </Form.Label>
+                    {tokenExpiry && (
+                      <span
+                        className='text-muted d-block mb-2 mt-0'
+                        style={{ fontSize: '14px' }}
+                      >
+                        Link still valid until{' '}
+                        {new Date(tokenExpiry).toLocaleDateString()}
+                      </span>
+                    )}
                     <Form.Control
-                      type='text'
-                      placeholder='Email or Username'
-                      value={shareWith}
-                      onChange={(e) => setShareWith(e.target.value)}
+                      type='date'
+                      disabled={
+                        tokenExpiry && tokenExpiry > DateTime.now().toJSDate()
+                      }
+                      placeholder='Expiration'
+                      value={DateTime.fromMillis(expiration).toFormat(
+                        'yyyy-MM-dd'
+                      )}
+                      onChange={(e) =>
+                        setExpiration(
+                          DateTime.fromFormat(
+                            e.target.value,
+                            'yyyy-MM-dd'
+                          ).toMillis()
+                        )
+                      }
+                      min={DateTime.now().toFormat('yyyy-MM-dd')}
                     />
                     <Button
-                      onClick={addResultsMembership}
-                      disabled={!shareWith}
-                      className='mt-2'
+                      variant='outline-primary'
+                      className='mt-2 w-100'
+                      onClick={handleShare}
+                      disabled={isCopying}
                     >
-                      Add
+                      {isCopying ? 'Copying...' : 'Copy Link'}
                     </Button>
                   </Form.Group>
                   <Form.Group>
@@ -367,7 +488,8 @@ export default function JollyResults() {
                           key={m.userId}
                         >
                           <span className='m-0'>
-                            {users?.find((u) => u.id === m.userId)?.name}
+                            {users?.find((u) => u.id === m.userId)?.name ||
+                              'New User'}
                           </span>
                           <Button
                             variant='danger'

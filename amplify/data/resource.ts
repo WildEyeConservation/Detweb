@@ -16,6 +16,7 @@ import { runHeatmapper } from '../functions/runHeatmapper/resource';
 import { runPointFinder } from '../functions/runPointFinder/resource';
 import { deleteProject } from '../functions/deleteProject/resource';
 import { generateSurveyResults } from '../functions/generateSurveyResults/resource';
+import { getJwtSecret } from '../functions/getJwtSecret/resource';
 
 const schema = a
   .schema({
@@ -165,6 +166,10 @@ const schema = a
         testResults: a.hasMany('TestResult', 'annotationSetId'),
         categories: a.hasMany('Category', 'annotationSetId'),
         register: a.boolean().default(false),
+        jollyResultsMemberships: a.hasMany(
+          'JollyResultsMembership',
+          'annotationSetId'
+        ),
       })
       .authorization((allow) => [allow.authenticated()])
       // .authorization(allow => [allow.groupDefinedIn('projectId')])
@@ -792,16 +797,28 @@ const schema = a
       .secondaryIndexes((index) => [
         index('status').queryField('organizationRegistrationsByStatus'),
       ]),
+    ResultSharingToken: a
+      .model({
+        surveyId: a.id().required(),
+        annotationSetId: a.id().required(),
+        jwt: a.string().required(),
+      })
+      .identifier(['surveyId', 'annotationSetId'])
+      .authorization((allow) => [allow.authenticated()]),
     JollyResultsMembership: a
       .model({
         surveyId: a.id().required(),
+        annotationSetId: a.id().required(),
         survey: a.belongsTo('Project', 'surveyId'),
+        annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
         userId: a.string().required(),
       })
-      .identifier(['surveyId', 'userId'])
+      .identifier(['surveyId', 'annotationSetId', 'userId'])
       .authorization((allow) => [allow.authenticated()])
       .secondaryIndexes((index) => [
-        index('surveyId').queryField('jollyResultsMembershipsBySurveyId'),
+        index('surveyId')
+          .queryField('jollyResultsMembershipsBySurveyId')
+          .sortKeys(['annotationSetId']),
       ]),
     updateProjectMemberships: a
       .mutation()
@@ -862,6 +879,11 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(generateSurveyResults)),
+    getJwtSecret: a
+      .mutation()
+      .returns(a.string())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(getJwtSecret)),
   })
   .authorization((allow) => [
     allow.resource(getAnnotationCounts),
@@ -877,6 +899,7 @@ const schema = a
     allow.resource(runPointFinder),
     allow.resource(deleteProject),
     allow.resource(generateSurveyResults),
+    allow.resource(getJwtSecret),
   ]);
 
 export type Schema = ClientSchema<typeof schema>;
