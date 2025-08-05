@@ -283,9 +283,7 @@ export default function EditShapeFile({
         });
 
       await Promise.all(
-        strata.map((s: any) =>
-          client.models.Stratum.update({ id: s.id, area: 0, baselineLength: 0 })
-        )
+        strata.map((s: any) => client.models.Stratum.delete({ id: s.id }))
       );
       await Promise.all(
         jollyResults.map((r: any) =>
