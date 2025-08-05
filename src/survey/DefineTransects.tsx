@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { GlobalContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
@@ -14,12 +13,126 @@ import {
 } from 'react-leaflet';
 import L from 'leaflet';
 import * as turf from '@turf/turf';
+import type {
+  Feature as GeoJSONFeature,
+  Polygon as GeoJSONPolygon,
+  LineString as GeoJSONLineString,
+} from 'geojson';
 import 'leaflet/dist/leaflet.css';
 import { EditControl } from 'react-leaflet-draw';
 import 'leaflet-draw/dist/leaflet.draw.css';
+import proj4 from 'proj4';
 
 // tolerance in degrees for simplifying the transect line
 const SIMPLIFY_TOLERANCE = 0.002;
+
+// Finds the UTM projection for the given coordinates
+function getUTMProjection(lon: number, lat: number) {
+  const zone = Math.floor((lon + 180) / 6) + 1;
+  const hemisphere = lat >= 0 ? 'north' : 'south';
+  const projStr = `+proj=utm +zone=${zone} +datum=WGS84 +units=m +no_defs ${
+    hemisphere === 'south' ? '+south' : ''
+  }`;
+  return projStr;
+}
+
+// generates the baseline and its length
+function getProjectedDirectionalBaseline(
+  polygon: GeoJSONFeature<GeoJSONPolygon>,
+  bearing: number
+): { baseline: GeoJSONFeature<GeoJSONLineString>; length: number } {
+  
+  // project everything to UTM to do this accurately
+  // because we are going use treat the coords as cartesian coords - which falls apart quickly in normal WGS84
+  const center = turf.centerOfMass(polygon).geometry.coordinates;
+  const projStr = getUTMProjection(center[0], center[1]);
+  const coords = turf.getCoords(polygon)[0] as [number, number][];
+  const projected: [number, number][] = coords.map((pt) => {
+    const [lon, lat] = pt;
+    return proj4('WGS84', projStr, [lon, lat]) as [number, number];
+  });
+  const centerXY = proj4('WGS84', projStr, center);
+
+  // Rotate all points into bearing-aligned frame
+  const theta = (bearing * Math.PI) / 180;
+  const rotated = projected.map(([x, y]) => {
+    const dx = x - centerXY[0];
+    const dy = y - centerXY[1];
+    const xRot = dx * Math.cos(theta) - dy * Math.sin(theta);
+    const yRot = dx * Math.sin(theta) + dy * Math.cos(theta);
+    return [xRot, yRot];
+  });
+
+  // Now find min/max along the aligned axis (which is yRot)
+  const yVals = rotated.map(([_, y]) => y);
+  const minY = Math.min(...yVals);
+  const maxY = Math.max(...yVals);
+
+  // Project these max distances along the original baseline
+  const pt1XY = [
+    centerXY[0] + minY * Math.sin(theta),
+    centerXY[1] + minY * Math.cos(theta),
+  ];
+  const pt2XY = [
+    centerXY[0] + maxY * Math.sin(theta),
+    centerXY[1] + maxY * Math.cos(theta),
+  ];
+
+  //convert back to WGS84 coords
+  const pt1LL = proj4(projStr, 'WGS84', pt1XY);
+  const pt2LL = proj4(projStr, 'WGS84', pt2XY);
+
+  //create a line and calc its length
+  const baseline = turf.lineString([pt1LL, pt2LL]);
+  const length = turf.length(baseline, { units: 'meters' });
+
+  return { baseline, length };
+}
+
+// finds the average transect heading and returns the orthogonal baseline heading
+function getBaselineBearing(
+  transectIds: number[],
+  segmentedImages: Array<{
+    longitude: number;
+    latitude: number;
+    transectId: number;
+  }>
+): number {
+  // average transect heading
+  const headings: number[] = [];
+  transectIds.forEach((id) => {
+    const imgs = segmentedImages.filter((si) => si.transectId === id);
+    if (imgs.length >= 2) {
+      const start = imgs[0];
+      const end = imgs[imgs.length - 1];
+      headings.push(
+        turf.bearing(
+          [start.longitude, start.latitude],
+          [end.longitude, end.latitude]
+        )
+      );
+    }
+  });
+
+  // average the headings - accounting for sign changes
+  let avgHeading = 0;
+  if (headings.length) {
+    let sumX = 0,
+      sumY = 0;
+    headings.forEach((h) => {
+      const rad = (h * Math.PI) / 180;
+      sumX += Math.cos(rad);
+      sumY += Math.sin(rad);
+    });
+    const avgRad = Math.atan2(sumY, sumX);
+    avgHeading = (avgRad * 180) / Math.PI;
+  }
+
+  // baseline is orthogonal to the average
+  const baselineBearing = (avgHeading + 90) % 360;
+
+  return baselineBearing;
+}
 
 // define transects and strata
 export default function DefineTransects({
@@ -92,75 +205,14 @@ export default function DefineTransects({
       )
     );
 
-    // boundary polygon
-    const boundaryLngLat = polygonCoords.map(
-      ([lat, lng]) => [lng, lat] as [number, number]
-    );
-    if (
-      boundaryLngLat[0][0] !== boundaryLngLat[boundaryLngLat.length - 1][0] ||
-      boundaryLngLat[0][1] !== boundaryLngLat[boundaryLngLat.length - 1][1]
-    ) {
-      boundaryLngLat.push(boundaryLngLat[0]);
-    }
-    const boundaryPoly = turf.polygon([boundaryLngLat]);
-    // average transect heading
-    const headings: number[] = [];
-    transectIds.forEach((id) => {
-      const imgs = segmentedImages.filter((si) => si.transectId === id);
-      if (imgs.length >= 2) {
-        const start = imgs[0];
-        const end = imgs[imgs.length - 1];
-        headings.push(
-          turf.bearing(
-            [start.longitude, start.latitude],
-            [end.longitude, end.latitude]
-          )
-        );
-      }
-    });
-    let avgHeading = 0;
-    if (headings.length) {
-      let sumX = 0,
-        sumY = 0;
-      headings.forEach((h) => {
-        const rad = (h * Math.PI) / 180;
-        sumX += Math.cos(rad);
-        sumY += Math.sin(rad);
-      });
-      const avgRad = Math.atan2(sumY, sumX);
-      avgHeading = (avgRad * 180) / Math.PI;
-    }
-    const baselineBearing = (avgHeading + 90) % 360;
-    // extend baseline beyond boundary
-    const bbox = turf.bbox(boundaryPoly);
-    const diag = turf.length(
-      turf.lineString([
-        [bbox[0], bbox[1]],
-        [bbox[2], bbox[3]],
-      ]),
-      { units: 'kilometers' }
-    );
-    const halfLen = diag;
-    const centroid = turf.centroid(boundaryPoly);
-    const pt1 = turf.destination(centroid, halfLen, baselineBearing, {
-      units: 'kilometers',
-    });
-    const pt2 = turf.destination(
-      centroid,
-      halfLen,
-      (baselineBearing + 180) % 360,
-      { units: 'kilometers' }
-    );
-    const mainBaseline = turf.lineString([
-      pt1.geometry.coordinates as [number, number],
-      pt2.geometry.coordinates as [number, number],
-    ]);
-    // create strata
-    const stratumMap: Record<number, string> = {};
+    // generate strata polys
+    const stratumPolys: Record<number, GeoJSONFeature<GeoJSONPolygon>> = {};
+    const stratumTransects: Record<number, number[]> = {};
     for (const section of strataSections) {
-      const secLngLat = section.coords.map(
-        ([lat, lng]) => [lng, lat] as [number, number]
-      );
+      const secLngLat = section.coords.map((coord) => {
+        const [lat, lng] = coord as [number, number];
+        return [lng, lat] as [number, number];
+      });
       if (
         secLngLat[0][0] !== secLngLat[secLngLat.length - 1][0] ||
         secLngLat[0][1] !== secLngLat[secLngLat.length - 1][1]
@@ -168,8 +220,36 @@ export default function DefineTransects({
         secLngLat.push(secLngLat[0]);
       }
       const secPoly = turf.polygon([secLngLat]);
+      stratumPolys[section.id] = secPoly;
+      stratumTransects[section.id] = [];
+    }
+
+    // stratify transects
+    for (const tid of transectIds) {
+      const imgs = segmentedImages.filter((si) => si.transectId === tid);
+      if (!imgs.length) continue;
+      const rep = imgs[0];
+      const repPt = turf.point([rep.longitude, rep.latitude]);
+      let assigned: number | null = null;
+      for (const section of strataSections) {
+        const secPoly = stratumPolys[section.id];
+        if (turf.booleanPointInPolygon(repPt, secPoly)) {
+          assigned = section.id;
+          break;
+        }
+      }
+      if (assigned === null) continue;
+      stratumTransects[assigned].push(tid);
+    }
+
+    // create strata
+    const stratumMap: Record<number, string> = {};
+    for (const section of strataSections) {
+      const secPoly = stratumPolys[section.id];
+
       // calculate raw area of section polygon
       const rawArea = turf.area(secPoly);
+
       // subtract exclusion polygons entirely if they intersect
       let exclusionAreaSqm = 0;
       exclusionCoords.forEach((coords) => {
@@ -192,66 +272,52 @@ export default function DefineTransects({
           exclusionAreaSqm += turf.area(exclusionPoly);
         }
       });
+
       // compute net area and convert to km²
       const netAreaSqm = rawArea - exclusionAreaSqm;
       const rawAreaKm = rawArea / 1e6;
       const exclusionAreaKm = exclusionAreaSqm / 1e6;
       const netAreaKm = netAreaSqm / 1e6;
       const area = netAreaKm;
-      // split baseline by section
-      const splits = turf.lineSplit(mainBaseline, secPoly);
-      let secBaseline: any = null;
-      for (const seg of splits.features) {
-        const mid = turf.midpoint(
-          seg.geometry.coordinates[0] as [number, number],
-          seg.geometry.coordinates[1] as [number, number]
-        );
-        if (turf.booleanPointInPolygon(mid, secPoly)) {
-          secBaseline = seg;
-          break;
-        }
-      }
-      const baselineLength = secBaseline
-        ? turf.length(secBaseline, { units: 'meters' })
-        : 0;
-      const secName = `Stratum ${section.id}`;
+
+      // compute baseline length
+      const baselineBearing = getBaselineBearing(
+        stratumTransects[section.id],
+        segmentedImages
+      );
+      const { baseline, length } = getProjectedDirectionalBaseline(
+        secPoly,
+        baselineBearing
+      );
+
       // create new stratum with polygon coordinates
-      const flatCoords = section.coords.flat();
+      const secName = `Stratum ${section.id}`;
+      const flatCoords = section.coords.flatMap(
+        (coord) => coord as [number, number]
+      );
       const {
         data: { id: newSid },
       } = await client.models.Stratum.create({
         projectId,
         name: secName,
         area,
-        baselineLength,
+        baselineLength: length,
         coordinates: flatCoords,
       });
       stratumMap[section.id] = newSid;
     }
+
     // create transects
     const transectMap: Record<number, string> = {};
     for (const tid of transectIds) {
-      const imgs = segmentedImages.filter((si) => si.transectId === tid);
-      if (!imgs.length) continue;
-      const rep = imgs[0];
-      const repPt = turf.point([rep.longitude, rep.latitude]);
       let assigned: number | null = null;
       for (const section of strataSections) {
-        const secLngLat = section.coords.map(
-          ([lat, lng]) => [lng, lat] as [number, number]
-        );
-        if (
-          secLngLat[0][0] !== secLngLat[secLngLat.length - 1][0] ||
-          secLngLat[0][1] !== secLngLat[secLngLat.length - 1][1]
-        ) {
-          secLngLat.push(secLngLat[0]);
-        }
-        const secPoly = turf.polygon([secLngLat]);
-        if (turf.booleanPointInPolygon(repPt, secPoly)) {
+        if (stratumTransects[section.id].includes(tid)) {
           assigned = section.id;
           break;
         }
       }
+
       if (assigned === null) continue;
       const strId = stratumMap[assigned];
       const {
@@ -262,6 +328,7 @@ export default function DefineTransects({
       });
       transectMap[tid] = trId;
     }
+
     // update images
     await Promise.all(
       segmentedImages.map(async (img) => {
