@@ -41,7 +41,6 @@ function getProjectedDirectionalBaseline(
   polygon: GeoJSONFeature<GeoJSONPolygon>,
   bearing: number
 ): { baseline: GeoJSONFeature<GeoJSONLineString>; length: number } {
-  
   // project everything to UTM to do this accurately
   // because we are going use treat the coords as cartesian coords - which falls apart quickly in normal WGS84
   const center = turf.centerOfMass(polygon).geometry.coordinates;
@@ -132,6 +131,53 @@ function getBaselineBearing(
   const baselineBearing = (avgHeading + 90) % 360;
 
   return baselineBearing;
+}
+
+// merges small segments into closest neighbor based on first/last image GPS
+function mergeSmallSegmentsByBoundary(
+  segImgs: Array<any & { transectId: number }>,
+  threshold: number
+): Array<any & { transectId: number }> {
+  const counts: Record<number, number> = segImgs.reduce((acc, img) => {
+    acc[img.transectId] = (acc[img.transectId] || 0) + 1;
+    return acc;
+  }, {} as Record<number, number>);
+  const segmentGroups: Record<number, typeof segImgs> = {};
+  segImgs.forEach((img) => {
+    segmentGroups[img.transectId] = segmentGroups[img.transectId] || [];
+    segmentGroups[img.transectId].push(img);
+  });
+  Object.entries(counts).forEach(([key, count]) => {
+    const id = Number(key);
+    if (count > threshold) return;
+    const group = segmentGroups[id];
+    if (!group) return;
+    const boundary = [group[0], group[group.length - 1]];
+    const neighbors = [id - 1, id + 1].filter((nbr) => segmentGroups[nbr]);
+    if (neighbors.length === 0) return;
+    const neighborDist = (nbr: number): number => {
+      let minDist = Infinity;
+      segmentGroups[nbr].forEach((nbrImg) => {
+        boundary.forEach((b) => {
+          const d = turf.distance(
+            turf.point([b.longitude, b.latitude]),
+            turf.point([nbrImg.longitude, nbrImg.latitude]),
+            { units: 'kilometers' }
+          );
+          if (d < minDist) minDist = d;
+        });
+      });
+      return minDist;
+    };
+    let bestNeighbor = neighbors.reduce(
+      (best, nbr) => (neighborDist(nbr) < neighborDist(best) ? nbr : best),
+      neighbors[0]
+    );
+    segImgs.forEach((img) => {
+      if (img.transectId === id) img.transectId = bestNeighbor;
+    });
+  });
+  return segImgs;
 }
 
 // define transects and strata
@@ -456,6 +502,11 @@ export default function DefineTransects({
             ],
           } as any
         );
+        // Sort the loaded images by timestamp to preserve chronological order for baseline calculation
+        imgsWithTx.sort(
+          (a, b) =>
+            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        );
         // build UI segment IDs from DB transect IDs
         const uniqueDbIds = Array.from(
           new Set(
@@ -608,7 +659,21 @@ export default function DefineTransects({
         }
         return { ...img, transectId: segId };
       });
-      setSegmentedImages(segImgs);
+      const mergedSegImgs = mergeSmallSegmentsByBoundary(segImgs, 5);
+      // compact transect ids to be sequential
+      const uniqueIds: number[] = Array.from(
+        new Set(mergedSegImgs.map((img: any) => img.transectId))
+      ).sort((a: number, b: number) => a - b);
+      const idMap: Record<number, number> = uniqueIds.reduce<
+        Record<number, number>
+      >((acc, oldId, index) => {
+        acc[oldId] = index;
+        return acc;
+      }, {});
+      mergedSegImgs.forEach((img: any) => {
+        img.transectId = idMap[img.transectId];
+      });
+      setSegmentedImages(mergedSegImgs);
     }
   }, [images, partsLoading, existingData, segmentedImages]);
 
