@@ -143,6 +143,17 @@ export default function AppWithAuthenticator() {
     },
   };
 
+  useEffect(() => {
+    //read query param "t"
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get("t");
+
+    if (token) {
+      //save token to local storage
+      localStorage.setItem("jwt", token);
+    }
+  }, []);
+
   return (
     <Authenticator components={components} variation="modal">
       {({ signOut, user }) => <App signOut={signOut} user={user} />}

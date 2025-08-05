@@ -6,10 +6,12 @@ import { ProgressIndicators } from './ProgressIndicators.jsx';
 import { Outlet } from 'react-router-dom';
 import Container from 'react-bootstrap/Container';
 import Notifications from './user/Notifications.tsx';
-import { UserContext } from './Context.tsx';
+import { UserContext, GlobalContext } from './Context.tsx';
 import Settings from './user/Settings.tsx';
 import { Card, Button } from 'react-bootstrap';
 import UploadProgress from './upload/UploadProgress.tsx';
+import { verifyToken } from './utils/jwt.ts';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function MainNavigation({ signOut }: { signOut: () => void }) {
   const {
@@ -19,7 +21,12 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
     myMembershipHook: myProjectsHook,
     isAnnotatePath,
     setIsAnnotatePath,
+    user,
   } = useContext(UserContext)!;
+  const queryClient = useQueryClient();
+
+  const { client } = useContext(GlobalContext)!;
+  const [checkingToken, setCheckingToken] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -50,6 +57,66 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
       );
     }
   }, [isOrganizationAdmin, myAdminProjects.length, belongsToOrganization]);
+
+  useEffect(() => {
+    async function checkToken() {
+      setCheckingToken(true);
+      try {
+        const token = localStorage.getItem('jwt');
+        if (token) {
+          localStorage.removeItem('jwt');
+
+          const { data: secret } = await client.mutations.getJwtSecret();
+          if (!secret) {
+            console.error('Error getting JWT secret');
+            return;
+          }
+
+          const payload = (await verifyToken(token, secret)) as {
+            type: string;
+            surveyId: string;
+            annotationSetId: string;
+            exp: number;
+          };
+
+          if (payload.exp < Date.now() / 1000) {
+            alert('Results link expired');
+            return;
+          }
+
+          if (payload.type === 'jolly') {
+            const { data: jollyResultsMembership } =
+              await client.models.JollyResultsMembership.get({
+                surveyId: payload.surveyId,
+                annotationSetId: payload.annotationSetId,
+                userId: user.userId,
+              });
+
+            if (!jollyResultsMembership) {
+              await client.models.JollyResultsMembership.create({
+                surveyId: payload.surveyId,
+                annotationSetId: payload.annotationSetId,
+                userId: user.userId,
+              });
+            }
+
+            queryClient.invalidateQueries({
+              queryKey: ['JollyResultsMembership'],
+            });
+
+            navigate(`/jolly/${payload.surveyId}/${payload.annotationSetId}`);
+          }
+        }
+      } catch (error) {
+        console.error(error);
+        localStorage.removeItem('jwt');
+      } finally {
+        setCheckingToken(false);
+      }
+    }
+
+    checkToken();
+  }, []);
 
   useEffect(() => {
     if (isOrganizationAdmin && location.pathname === '/jobs') {
@@ -168,6 +235,14 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                   )}
                 </>
               )}
+              <Nav.Link
+                as={NavLink}
+                eventKey={`shared-results`}
+                to={`shared-results`}
+                className='px-2'
+              >
+                Shared Results
+              </Nav.Link>
             </Nav>
           )}
           <div className='d-flex flex-column flex-lg-row flex-grow-1 align-items-center justify-content-end gap-3 gap-lg-0 mt-2 mt-lg-0'>
@@ -185,6 +260,8 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
         {(!belongsToOrganization &&
           location.pathname === '/SSRegisterOrganization') ||
         belongsToOrganization ||
+        location.pathname.startsWith('/jolly') ||
+        location.pathname.startsWith('/shared-results') ||
         (cognitoGroups.includes('sysadmin') &&
           location.pathname === '/SSAdmin') ? (
           <Outlet />
@@ -232,6 +309,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
               </Card.Text>
               <Button
                 variant='primary'
+                disabled={checkingToken}
                 onClick={() => navigate('/SSRegisterOrganization')}
               >
                 Register Organisation
