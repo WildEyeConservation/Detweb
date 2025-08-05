@@ -41,7 +41,9 @@ function getProjectedDirectionalBaseline(
   polygon: GeoJSONFeature<GeoJSONPolygon>,
   bearing: number
 ): { baseline: GeoJSONFeature<GeoJSONLineString>; length: number } {
+  
   // project everything to UTM to do this accurately
+  // because we are going use treat the coords as cartesian coords - which falls apart quickly in normal WGS84
   const center = turf.centerOfMass(polygon).geometry.coordinates;
   const projStr = getUTMProjection(center[0], center[1]);
   const coords = turf.getCoords(polygon)[0] as [number, number][];
@@ -49,32 +51,38 @@ function getProjectedDirectionalBaseline(
     const [lon, lat] = pt;
     return proj4('WGS84', projStr, [lon, lat]) as [number, number];
   });
-
-  // generate normal baseline vector
-  const angleRad = (bearing * Math.PI) / 180;
-  const dir = [Math.cos(angleRad), Math.sin(angleRad)];
-
-  // project all vertices to the baseline and find the two most extreme distance values
-  const projections = projected.map(([x, y]) => x * dir[0] + y * dir[1]);
-  const minProj = Math.min(...projections);
-  const maxProj = Math.max(...projections);
-
-  // project the distances to points on the baseline
   const centerXY = proj4('WGS84', projStr, center);
+
+  // Rotate all points into bearing-aligned frame
+  const theta = (bearing * Math.PI) / 180;
+  const rotated = projected.map(([x, y]) => {
+    const dx = x - centerXY[0];
+    const dy = y - centerXY[1];
+    const xRot = dx * Math.cos(theta) - dy * Math.sin(theta);
+    const yRot = dx * Math.sin(theta) + dy * Math.cos(theta);
+    return [xRot, yRot];
+  });
+
+  // Now find min/max along the aligned axis (which is yRot)
+  const yVals = rotated.map(([_, y]) => y);
+  const minY = Math.min(...yVals);
+  const maxY = Math.max(...yVals);
+
+  // Project these max distances along the original baseline
   const pt1XY = [
-    centerXY[0] + minProj * dir[0],
-    centerXY[1] + minProj * dir[1],
+    centerXY[0] + minY * Math.sin(theta),
+    centerXY[1] + minY * Math.cos(theta),
   ];
   const pt2XY = [
-    centerXY[0] + maxProj * dir[0],
-    centerXY[1] + maxProj * dir[1],
+    centerXY[0] + maxY * Math.sin(theta),
+    centerXY[1] + maxY * Math.cos(theta),
   ];
 
-  // transform back to coords
+  //convert back to WGS84 coords
   const pt1LL = proj4(projStr, 'WGS84', pt1XY);
   const pt2LL = proj4(projStr, 'WGS84', pt2XY);
 
-  // create a line and measure it
+  //create a line and calc its length
   const baseline = turf.lineString([pt1LL, pt2LL]);
   const length = turf.length(baseline, { units: 'meters' });
 
