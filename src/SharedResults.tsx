@@ -1,9 +1,8 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { GlobalContext, UserContext } from './Context.tsx';
-import { useOptimisticUpdates } from './useOptimisticUpdates.tsx';
-import { Schema } from '../amplify/data/resource.ts';
 import { Card, Button } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
+import { fetchAllPaginatedResults } from './utils.tsx';
 
 export default function SharedResults() {
   const { client } = useContext(GlobalContext)!;
@@ -13,33 +12,14 @@ export default function SharedResults() {
     { id: string; name: string; projectId: string; projectName: string }[]
   >([]);
 
-  const subscriptionFilter = useMemo(
-    () => ({
-      filter: { userId: { eq: user?.userId } },
-    }),
-    [user?.userId]
-  );
-
-  const sharedResultsHook = useOptimisticUpdates<
-    Schema['JollyResultsMembership']['type'],
-    'JollyResultsMembership'
-  >(
-    'JollyResultsMembership',
-    async (nextToken) => {
-      const result = await client.models.JollyResultsMembership.list({
-        filter: {
-          userId: { eq: user?.userId },
-        },
-      });
-      return { data: result.data, nextToken: result.nextToken ?? undefined };
-    },
-    subscriptionFilter
-  );
-
   useEffect(() => {
     async function fetchAnnotationSets() {
+      const jollyResultsMemberships = await fetchAllPaginatedResults<any, any>(
+        client.models.JollyResultsMembership.list as any,
+        { filter: { userId: { eq: user?.userId } }, limit: 1000 } as any
+      );
       const annotationSets = await Promise.all(
-        sharedResultsHook.data?.map(async (result) => {
+        jollyResultsMemberships.map(async (result) => {
           const { data: annotationSet } = await client.models.AnnotationSet.get(
             { id: result.annotationSetId },
             {
@@ -62,7 +42,7 @@ export default function SharedResults() {
     }
 
     fetchAnnotationSets();
-  }, [sharedResultsHook.data]);
+  }, []);
 
   return (
     <div
