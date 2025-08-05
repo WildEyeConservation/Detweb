@@ -45,6 +45,15 @@ const client = generateClient({
   authMode: 'iam',
 });
 
+// trims the outliers before calculating the mean
+function trimmedMean(values: number[], trimRatio: number = 0.2): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const n = sorted.length;
+  const trimCount = Math.floor(n * trimRatio);
+  const trimmed = sorted.slice(trimCount, n - trimCount);
+  return trimmed.reduce((sum, val) => sum + val, 0) / trimmed.length;
+}
+
 // Helper to handle pagination for GraphQL queries
 async function fetchAllPages<T>(
   queryFn: (nextToken?: string) => Promise<GraphQLResult<any>>,
@@ -319,7 +328,7 @@ export const handler: Schema['generateSurveyResults']['functionHandler'] =
           )
           .slice(1);
         const valid = deltas.filter((d) => d > 0);
-        const meanDelta = valid.reduce((s, d) => s + d, 0) / valid.length;
+        const meanDelta = trimmedMean(valid, 0.2);
         const sections: number[] = [];
         for (let i = 0; i < imgs.length; i++) {
           sections[i] =
