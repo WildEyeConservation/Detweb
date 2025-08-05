@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { GlobalContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
@@ -14,6 +13,11 @@ import {
 } from 'react-leaflet';
 import L from 'leaflet';
 import * as turf from '@turf/turf';
+import type {
+  Feature as GeoJSONFeature,
+  Polygon as GeoJSONPolygon,
+  LineString as GeoJSONLineString,
+} from 'geojson';
 import 'leaflet/dist/leaflet.css';
 import { EditControl } from 'react-leaflet-draw';
 import 'leaflet-draw/dist/leaflet.draw.css';
@@ -26,20 +30,25 @@ const SIMPLIFY_TOLERANCE = 0.002;
 function getUTMProjection(lon: number, lat: number) {
   const zone = Math.floor((lon + 180) / 6) + 1;
   const hemisphere = lat >= 0 ? 'north' : 'south';
-  const projStr = `+proj=utm +zone=${zone} +datum=WGS84 +units=m +no_defs ${hemisphere === 'south' ? '+south' : ''}`;
+  const projStr = `+proj=utm +zone=${zone} +datum=WGS84 +units=m +no_defs ${
+    hemisphere === 'south' ? '+south' : ''
+  }`;
   return projStr;
 }
 
 // generates the baseline and its length
-function getProjectedDirectionalBaseline(polygon: turf.Feature<turf.Polygon>, bearing: number): {
-  baseline: turf.Feature<turf.LineString>,
-  length: number
-} {
+function getProjectedDirectionalBaseline(
+  polygon: GeoJSONFeature<GeoJSONPolygon>,
+  bearing: number
+): { baseline: GeoJSONFeature<GeoJSONLineString>; length: number } {
   // project everything to UTM to do this accurately
   const center = turf.centerOfMass(polygon).geometry.coordinates;
   const projStr = getUTMProjection(center[0], center[1]);
-  const coords = getCoords(polygon)[0];
-  const projected = coords.map(([lon, lat]) => proj4('WGS84', projStr, [lon, lat]));
+  const coords = turf.getCoords(polygon)[0] as [number, number][];
+  const projected: [number, number][] = coords.map((pt) => {
+    const [lon, lat] = pt;
+    return proj4('WGS84', projStr, [lon, lat]) as [number, number];
+  });
 
   // generate normal baseline vector
   const angleRad = (bearing * Math.PI) / 180;
@@ -52,23 +61,35 @@ function getProjectedDirectionalBaseline(polygon: turf.Feature<turf.Polygon>, be
 
   // project the distances to points on the baseline
   const centerXY = proj4('WGS84', projStr, center);
-  const pt1XY = [centerXY[0] + minProj * dir[0], centerXY[1] + minProj * dir[1]];
-  const pt2XY = [centerXY[0] + maxProj * dir[0], centerXY[1] + maxProj * dir[1]];
+  const pt1XY = [
+    centerXY[0] + minProj * dir[0],
+    centerXY[1] + minProj * dir[1],
+  ];
+  const pt2XY = [
+    centerXY[0] + maxProj * dir[0],
+    centerXY[1] + maxProj * dir[1],
+  ];
 
   // transform back to coords
   const pt1LL = proj4(projStr, 'WGS84', pt1XY);
   const pt2LL = proj4(projStr, 'WGS84', pt2XY);
 
   // create a line and measure it
-  const baseline = lineString([pt1LL, pt2LL]);
+  const baseline = turf.lineString([pt1LL, pt2LL]);
   const length = turf.length(baseline, { units: 'meters' });
 
   return { baseline, length };
 }
 
 // finds the average transect heading and returns the orthogonal baseline heading
-function getBaselineBearing(transectIds,segmentedImages) {
-  
+function getBaselineBearing(
+  transectIds: number[],
+  segmentedImages: Array<{
+    longitude: number;
+    latitude: number;
+    transectId: number;
+  }>
+): number {
   // average transect heading
   const headings: number[] = [];
   transectIds.forEach((id) => {
@@ -98,11 +119,11 @@ function getBaselineBearing(transectIds,segmentedImages) {
     const avgRad = Math.atan2(sumY, sumX);
     avgHeading = (avgRad * 180) / Math.PI;
   }
-  
+
   // baseline is orthogonal to the average
   const baselineBearing = (avgHeading + 90) % 360;
 
-  return baselineBearing
+  return baselineBearing;
 }
 
 // define transects and strata
@@ -177,12 +198,13 @@ export default function DefineTransects({
     );
 
     // generate strata polys
-    const stratumPolys: Record<number, turf.Feature<turf.Polygon>> = {};
-    const stratumTransects: Record<number, array> = {};
+    const stratumPolys: Record<number, GeoJSONFeature<GeoJSONPolygon>> = {};
+    const stratumTransects: Record<number, number[]> = {};
     for (const section of strataSections) {
-      const secLngLat = section.coords.map(
-        ([lat, lng]) => [lng, lat] as [number, number]
-      );
+      const secLngLat = section.coords.map((coord) => {
+        const [lat, lng] = coord as [number, number];
+        return [lng, lat] as [number, number];
+      });
       if (
         secLngLat[0][0] !== secLngLat[secLngLat.length - 1][0] ||
         secLngLat[0][1] !== secLngLat[secLngLat.length - 1][1]
@@ -193,7 +215,7 @@ export default function DefineTransects({
       stratumPolys[section.id] = secPoly;
       stratumTransects[section.id] = [];
     }
-    
+
     // stratify transects
     for (const tid of transectIds) {
       const imgs = segmentedImages.filter((si) => si.transectId === tid);
@@ -209,14 +231,14 @@ export default function DefineTransects({
         }
       }
       if (assigned === null) continue;
-      stratumTransects[assigned].push(tid)
+      stratumTransects[assigned].push(tid);
     }
 
     // create strata
     const stratumMap: Record<number, string> = {};
     for (const section of strataSections) {
       const secPoly = stratumPolys[section.id];
-      
+
       // calculate raw area of section polygon
       const rawArea = turf.area(secPoly);
 
@@ -251,19 +273,27 @@ export default function DefineTransects({
       const area = netAreaKm;
 
       // compute baseline length
-      const baselineBearing = getBaselineBearing(stratumTransects[section.id],segmentedImages)
-      const { baseline, baselineLength } = getProjectedDirectionalBaseline(secPoly, baselineBearing);
-      
+      const baselineBearing = getBaselineBearing(
+        stratumTransects[section.id],
+        segmentedImages
+      );
+      const { baseline, length } = getProjectedDirectionalBaseline(
+        secPoly,
+        baselineBearing
+      );
+
       // create new stratum with polygon coordinates
       const secName = `Stratum ${section.id}`;
-      const flatCoords = section.coords.flat();
+      const flatCoords = section.coords.flatMap(
+        (coord) => coord as [number, number]
+      );
       const {
         data: { id: newSid },
       } = await client.models.Stratum.create({
         projectId,
         name: secName,
         area,
-        baselineLength,
+        baselineLength: length,
         coordinates: flatCoords,
       });
       stratumMap[section.id] = newSid;
@@ -272,10 +302,9 @@ export default function DefineTransects({
     // create transects
     const transectMap: Record<number, string> = {};
     for (const tid of transectIds) {
-      
       let assigned: number | null = null;
       for (const section of strataSections) {
-        if (stratumTransects[section.id].contains(tid)) {
+        if (stratumTransects[section.id].includes(tid)) {
           assigned = section.id;
           break;
         }
