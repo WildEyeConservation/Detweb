@@ -40,6 +40,7 @@
     "export-from-json": "^1.7.4",
     "graphql-request": "^7.1.0",
     "h5js": "^0.0.1",
+    "html2canvas": "^1.4.1",
     "humanize-duration": "^3.32.1",
     "jdenticon": "^3.3.0",
     "jose": "^6.0.12",
