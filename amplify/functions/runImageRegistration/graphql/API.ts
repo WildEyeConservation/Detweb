@@ -193,6 +193,8 @@ export type Image = {
   altitude_egm96?: number | null,
   altitude_wgs84?: number | null,
   annotations?: ModelAnnotationConnection | null,
+  camera?: Camera | null,
+  cameraId?: string | null,
   cameraSerial?: string | null,
   createdAt: string,
   exifData?: string | null,
@@ -211,9 +213,69 @@ export type Image = {
   rightNeighbours?: ModelImageNeighbourConnection | null,
   roll?: number | null,
   timestamp?: number | null,
+  transect?: Transect | null,
+  transectId?: string | null,
   updatedAt: string,
   width: number,
   yaw?: number | null,
+};
+
+export type Camera = {
+  __typename: "Camera",
+  createdAt: string,
+  focalLengthMm?: number | null,
+  id: string,
+  images?: ModelImageConnection | null,
+  name: string,
+  project?: Project | null,
+  projectId: string,
+  sensorWidthMm?: number | null,
+  tiltDegrees?: number | null,
+  updatedAt: string,
+};
+
+export type ModelImageConnection = {
+  __typename: "ModelImageConnection",
+  items:  Array<Image | null >,
+  nextToken?: string | null,
+};
+
+export type Project = {
+  __typename: "Project",
+  annotationCountsPerCategoryPerSet?: ModelAnnotationCountPerCategoryPerSetConnection | null,
+  annotationSets?: ModelAnnotationSetConnection | null,
+  annotations?: ModelAnnotationConnection | null,
+  cameras?: ModelCameraConnection | null,
+  createdAt: string,
+  createdBy: string,
+  hidden?: boolean | null,
+  id: string,
+  imageFiles?: ModelImageFileConnection | null,
+  imageSets?: ModelImageSetConnection | null,
+  images?: ModelImageConnection | null,
+  jollyResultsMemberships?: ModelJollyResultsMembershipConnection | null,
+  locationSets?: ModelLocationSetConnection | null,
+  locations?: ModelLocationConnection | null,
+  members?: ModelUserProjectMembershipConnection | null,
+  name: string,
+  objects?: ModelObjectConnection | null,
+  observations?: ModelObservationConnection | null,
+  organization?: Organization | null,
+  organizationId: string,
+  queues?: ModelQueueConnection | null,
+  shapefile?: Shapefile | null,
+  status?: string | null,
+  strata?: ModelStratumConnection | null,
+  testConfig?: ProjectTestConfig | null,
+  testResults?: ModelTestResultConnection | null,
+  transects?: ModelTransectConnection | null,
+  updatedAt: string,
+};
+
+export type ModelCameraConnection = {
+  __typename: "ModelCameraConnection",
+  items:  Array<Camera | null >,
+  nextToken?: string | null,
 };
 
 export type ModelImageFileConnection = {
@@ -233,33 +295,6 @@ export type ImageFile = {
   project?: Project | null,
   projectId: string,
   type: string,
-  updatedAt: string,
-};
-
-export type Project = {
-  __typename: "Project",
-  annotationCountsPerCategoryPerSet?: ModelAnnotationCountPerCategoryPerSetConnection | null,
-  annotationSets?: ModelAnnotationSetConnection | null,
-  annotations?: ModelAnnotationConnection | null,
-  createdAt: string,
-  createdBy: string,
-  hidden?: boolean | null,
-  id: string,
-  imageFiles?: ModelImageFileConnection | null,
-  imageSets?: ModelImageSetConnection | null,
-  images?: ModelImageConnection | null,
-  locationSets?: ModelLocationSetConnection | null,
-  locations?: ModelLocationConnection | null,
-  members?: ModelUserProjectMembershipConnection | null,
-  name: string,
-  objects?: ModelObjectConnection | null,
-  observations?: ModelObservationConnection | null,
-  organization?: Organization | null,
-  organizationId: string,
-  queues?: ModelQueueConnection | null,
-  status?: string | null,
-  testConfig?: ProjectTestConfig | null,
-  testResults?: ModelTestResultConnection | null,
   updatedAt: string,
 };
 
@@ -298,10 +333,19 @@ export type ImageSetMembership = {
   updatedAt: string,
 };
 
-export type ModelImageConnection = {
-  __typename: "ModelImageConnection",
-  items:  Array<Image | null >,
+export type ModelJollyResultsMembershipConnection = {
+  __typename: "ModelJollyResultsMembershipConnection",
+  items:  Array<JollyResultsMembership | null >,
   nextToken?: string | null,
+};
+
+export type JollyResultsMembership = {
+  __typename: "JollyResultsMembership",
+  createdAt: string,
+  survey?: Project | null,
+  surveyId: string,
+  updatedAt: string,
+  userId: string,
 };
 
 export type ModelLocationSetConnection = {
@@ -628,6 +672,7 @@ export type Queue = {
   name: string,
   project?: Project | null,
   projectId: string,
+  totalBatches?: number | null,
   updatedAt: string,
   url?: string | null,
   users?: ModelUserProjectMembershipConnection | null,
@@ -656,6 +701,53 @@ export type ModelQueueConnection = {
   __typename: "ModelQueueConnection",
   items:  Array<Queue | null >,
   nextToken?: string | null,
+};
+
+export type Shapefile = {
+  __typename: "Shapefile",
+  coordinates?: Array< number | null > | null,
+  createdAt: string,
+  id: string,
+  project?: Project | null,
+  projectId: string,
+  updatedAt: string,
+};
+
+export type ModelStratumConnection = {
+  __typename: "ModelStratumConnection",
+  items:  Array<Stratum | null >,
+  nextToken?: string | null,
+};
+
+export type Stratum = {
+  __typename: "Stratum",
+  area?: number | null,
+  baselineLength?: number | null,
+  createdAt: string,
+  id: string,
+  name: string,
+  project?: Project | null,
+  projectId: string,
+  transects?: ModelTransectConnection | null,
+  updatedAt: string,
+};
+
+export type ModelTransectConnection = {
+  __typename: "ModelTransectConnection",
+  items:  Array<Transect | null >,
+  nextToken?: string | null,
+};
+
+export type Transect = {
+  __typename: "Transect",
+  createdAt: string,
+  id: string,
+  images?: ModelImageConnection | null,
+  project?: Project | null,
+  projectId: string,
+  stratum?: Stratum | null,
+  stratumId: string,
+  updatedAt: string,
 };
 
 export type ModelImageNeighbourConnection = {
@@ -708,6 +800,32 @@ export type ModelIDKeyConditionInput = {
   gt?: string | null,
   le?: string | null,
   lt?: string | null,
+};
+
+export type ModelCameraFilterInput = {
+  and?: Array< ModelCameraFilterInput | null > | null,
+  createdAt?: ModelStringInput | null,
+  focalLengthMm?: ModelFloatInput | null,
+  id?: ModelIDInput | null,
+  name?: ModelStringInput | null,
+  not?: ModelCameraFilterInput | null,
+  or?: Array< ModelCameraFilterInput | null > | null,
+  projectId?: ModelIDInput | null,
+  sensorWidthMm?: ModelFloatInput | null,
+  tiltDegrees?: ModelFloatInput | null,
+  updatedAt?: ModelStringInput | null,
+};
+
+export type ModelFloatInput = {
+  attributeExists?: boolean | null,
+  attributeType?: ModelAttributeTypes | null,
+  between?: Array< number | null > | null,
+  eq?: number | null,
+  ge?: number | null,
+  gt?: number | null,
+  le?: number | null,
+  lt?: number | null,
+  ne?: number | null,
 };
 
 export type ModelCategoryFilterInput = {
@@ -770,6 +888,25 @@ export type GetImageCountsReturnType = {
   nextToken?: string | null,
 };
 
+export type JollyResult = {
+  __typename: "JollyResult",
+  animals: number,
+  annotationSetId: string,
+  areaSurveyed: number,
+  categoryId: string,
+  createdAt: string,
+  density: number,
+  estimate: number,
+  lowerBound95: number,
+  numSamples: number,
+  standardError: number,
+  stratumId: string,
+  surveyId: string,
+  updatedAt: string,
+  upperBound95: number,
+  variance: number,
+};
+
 export type OrganizationRegistration = {
   __typename: "OrganizationRegistration",
   briefDescription: string,
@@ -809,18 +946,6 @@ export type ModelImageNeighbourFilterInput = {
   not?: ModelImageNeighbourFilterInput | null,
   or?: Array< ModelImageNeighbourFilterInput | null > | null,
   updatedAt?: ModelStringInput | null,
-};
-
-export type ModelFloatInput = {
-  attributeExists?: boolean | null,
-  attributeType?: ModelAttributeTypes | null,
-  between?: Array< number | null > | null,
-  eq?: number | null,
-  ge?: number | null,
-  gt?: number | null,
-  le?: number | null,
-  lt?: number | null,
-  ne?: number | null,
 };
 
 export type ModelImageSetMembershipFilterInput = {
@@ -865,6 +990,7 @@ export type ModelImageFilterInput = {
   altitude_egm96?: ModelFloatInput | null,
   altitude_wgs84?: ModelFloatInput | null,
   and?: Array< ModelImageFilterInput | null > | null,
+  cameraId?: ModelIDInput | null,
   cameraSerial?: ModelStringInput | null,
   createdAt?: ModelStringInput | null,
   exifData?: ModelStringInput | null,
@@ -879,9 +1005,75 @@ export type ModelImageFilterInput = {
   projectId?: ModelIDInput | null,
   roll?: ModelFloatInput | null,
   timestamp?: ModelIntInput | null,
+  transectId?: ModelIDInput | null,
   updatedAt?: ModelStringInput | null,
   width?: ModelIntInput | null,
   yaw?: ModelFloatInput | null,
+};
+
+export type ModelJollyResultFilterInput = {
+  and?: Array< ModelJollyResultFilterInput | null > | null,
+  animals?: ModelIntInput | null,
+  annotationSetId?: ModelIDInput | null,
+  areaSurveyed?: ModelFloatInput | null,
+  categoryId?: ModelIDInput | null,
+  createdAt?: ModelStringInput | null,
+  density?: ModelFloatInput | null,
+  estimate?: ModelIntInput | null,
+  id?: ModelIDInput | null,
+  lowerBound95?: ModelIntInput | null,
+  not?: ModelJollyResultFilterInput | null,
+  numSamples?: ModelIntInput | null,
+  or?: Array< ModelJollyResultFilterInput | null > | null,
+  standardError?: ModelFloatInput | null,
+  stratumId?: ModelIDInput | null,
+  surveyId?: ModelIDInput | null,
+  updatedAt?: ModelStringInput | null,
+  upperBound95?: ModelIntInput | null,
+  variance?: ModelFloatInput | null,
+};
+
+export type ModelJollyResultConnection = {
+  __typename: "ModelJollyResultConnection",
+  items:  Array<JollyResult | null >,
+  nextToken?: string | null,
+};
+
+export type ModelJollyResultsMembershipFilterInput = {
+  and?: Array< ModelJollyResultsMembershipFilterInput | null > | null,
+  createdAt?: ModelStringInput | null,
+  id?: ModelIDInput | null,
+  not?: ModelJollyResultsMembershipFilterInput | null,
+  or?: Array< ModelJollyResultsMembershipFilterInput | null > | null,
+  surveyId?: ModelIDInput | null,
+  updatedAt?: ModelStringInput | null,
+  userId?: ModelStringInput | null,
+};
+
+export type ModelJollyResultPrimaryCompositeKeyConditionInput = {
+  beginsWith?: ModelJollyResultPrimaryCompositeKeyInput | null,
+  between?: Array< ModelJollyResultPrimaryCompositeKeyInput | null > | null,
+  eq?: ModelJollyResultPrimaryCompositeKeyInput | null,
+  ge?: ModelJollyResultPrimaryCompositeKeyInput | null,
+  gt?: ModelJollyResultPrimaryCompositeKeyInput | null,
+  le?: ModelJollyResultPrimaryCompositeKeyInput | null,
+  lt?: ModelJollyResultPrimaryCompositeKeyInput | null,
+};
+
+export type ModelJollyResultPrimaryCompositeKeyInput = {
+  annotationSetId?: string | null,
+  categoryId?: string | null,
+  stratumId?: string | null,
+};
+
+export type ModelStringKeyConditionInput = {
+  beginsWith?: string | null,
+  between?: Array< string | null > | null,
+  eq?: string | null,
+  ge?: string | null,
+  gt?: string | null,
+  le?: string | null,
+  lt?: string | null,
 };
 
 export type ModelLocationAnnotationCountPrimaryCompositeKeyConditionInput = {
@@ -994,16 +1186,6 @@ export type ModelOrganizationMembershipFilterInput = {
   userId?: ModelStringInput | null,
 };
 
-export type ModelStringKeyConditionInput = {
-  beginsWith?: string | null,
-  between?: Array< string | null > | null,
-  eq?: string | null,
-  ge?: string | null,
-  gt?: string | null,
-  le?: string | null,
-  lt?: string | null,
-};
-
 export type ModelOrganizationRegistrationFilterInput = {
   and?: Array< ModelOrganizationRegistrationFilterInput | null > | null,
   briefDescription?: ModelStringInput | null,
@@ -1087,9 +1269,40 @@ export type ModelQueueFilterInput = {
   not?: ModelQueueFilterInput | null,
   or?: Array< ModelQueueFilterInput | null > | null,
   projectId?: ModelIDInput | null,
+  totalBatches?: ModelIntInput | null,
   updatedAt?: ModelStringInput | null,
   url?: ModelStringInput | null,
   zoom?: ModelIntInput | null,
+};
+
+export type ModelShapefileFilterInput = {
+  and?: Array< ModelShapefileFilterInput | null > | null,
+  coordinates?: ModelFloatInput | null,
+  createdAt?: ModelStringInput | null,
+  id?: ModelIDInput | null,
+  not?: ModelShapefileFilterInput | null,
+  or?: Array< ModelShapefileFilterInput | null > | null,
+  projectId?: ModelIDInput | null,
+  updatedAt?: ModelStringInput | null,
+};
+
+export type ModelShapefileConnection = {
+  __typename: "ModelShapefileConnection",
+  items:  Array<Shapefile | null >,
+  nextToken?: string | null,
+};
+
+export type ModelStratumFilterInput = {
+  and?: Array< ModelStratumFilterInput | null > | null,
+  area?: ModelFloatInput | null,
+  baselineLength?: ModelFloatInput | null,
+  createdAt?: ModelStringInput | null,
+  id?: ModelIDInput | null,
+  name?: ModelStringInput | null,
+  not?: ModelStratumFilterInput | null,
+  or?: Array< ModelStratumFilterInput | null > | null,
+  projectId?: ModelIDInput | null,
+  updatedAt?: ModelStringInput | null,
 };
 
 export type ModelTasksOnAnnotationSetFilterInput = {
@@ -1167,6 +1380,17 @@ export type ModelTestResultFilterInput = {
   totalMissedAnimals?: ModelIntInput | null,
   updatedAt?: ModelStringInput | null,
   userId?: ModelIDInput | null,
+};
+
+export type ModelTransectFilterInput = {
+  and?: Array< ModelTransectFilterInput | null > | null,
+  createdAt?: ModelStringInput | null,
+  id?: ModelIDInput | null,
+  not?: ModelTransectFilterInput | null,
+  or?: Array< ModelTransectFilterInput | null > | null,
+  projectId?: ModelIDInput | null,
+  stratumId?: ModelIDInput | null,
+  updatedAt?: ModelStringInput | null,
 };
 
 export type ModelUserProjectMembershipFilterInput = {
@@ -1317,6 +1541,28 @@ export type CreateAnnotationSetInput = {
   register?: boolean | null,
 };
 
+export type ModelCameraConditionInput = {
+  and?: Array< ModelCameraConditionInput | null > | null,
+  createdAt?: ModelStringInput | null,
+  focalLengthMm?: ModelFloatInput | null,
+  name?: ModelStringInput | null,
+  not?: ModelCameraConditionInput | null,
+  or?: Array< ModelCameraConditionInput | null > | null,
+  projectId?: ModelIDInput | null,
+  sensorWidthMm?: ModelFloatInput | null,
+  tiltDegrees?: ModelFloatInput | null,
+  updatedAt?: ModelStringInput | null,
+};
+
+export type CreateCameraInput = {
+  focalLengthMm?: number | null,
+  id?: string | null,
+  name: string,
+  projectId: string,
+  sensorWidthMm?: number | null,
+  tiltDegrees?: number | null,
+};
+
 export type ModelCategoryConditionInput = {
   and?: Array< ModelCategoryConditionInput | null > | null,
   annotationCount?: ModelIntInput | null,
@@ -1346,6 +1592,7 @@ export type ModelImageConditionInput = {
   altitude_egm96?: ModelFloatInput | null,
   altitude_wgs84?: ModelFloatInput | null,
   and?: Array< ModelImageConditionInput | null > | null,
+  cameraId?: ModelIDInput | null,
   cameraSerial?: ModelStringInput | null,
   createdAt?: ModelStringInput | null,
   exifData?: ModelStringInput | null,
@@ -1359,6 +1606,7 @@ export type ModelImageConditionInput = {
   projectId?: ModelIDInput | null,
   roll?: ModelFloatInput | null,
   timestamp?: ModelIntInput | null,
+  transectId?: ModelIDInput | null,
   updatedAt?: ModelStringInput | null,
   width?: ModelIntInput | null,
   yaw?: ModelFloatInput | null,
@@ -1368,6 +1616,7 @@ export type CreateImageInput = {
   altitude_agl?: number | null,
   altitude_egm96?: number | null,
   altitude_wgs84?: number | null,
+  cameraId?: string | null,
   cameraSerial?: string | null,
   exifData?: string | null,
   height: number,
@@ -1379,6 +1628,7 @@ export type CreateImageInput = {
   projectId: string,
   roll?: number | null,
   timestamp?: number | null,
+  transectId?: string | null,
   width: number,
   yaw?: number | null,
 };
@@ -1452,6 +1702,52 @@ export type CreateImageSetMembershipInput = {
   id?: string | null,
   imageId: string,
   imageSetId: string,
+};
+
+export type ModelJollyResultConditionInput = {
+  and?: Array< ModelJollyResultConditionInput | null > | null,
+  animals?: ModelIntInput | null,
+  areaSurveyed?: ModelFloatInput | null,
+  createdAt?: ModelStringInput | null,
+  density?: ModelFloatInput | null,
+  estimate?: ModelIntInput | null,
+  lowerBound95?: ModelIntInput | null,
+  not?: ModelJollyResultConditionInput | null,
+  numSamples?: ModelIntInput | null,
+  or?: Array< ModelJollyResultConditionInput | null > | null,
+  standardError?: ModelFloatInput | null,
+  updatedAt?: ModelStringInput | null,
+  upperBound95?: ModelIntInput | null,
+  variance?: ModelFloatInput | null,
+};
+
+export type CreateJollyResultInput = {
+  animals: number,
+  annotationSetId: string,
+  areaSurveyed: number,
+  categoryId: string,
+  density: number,
+  estimate: number,
+  lowerBound95: number,
+  numSamples: number,
+  standardError: number,
+  stratumId: string,
+  surveyId: string,
+  upperBound95: number,
+  variance: number,
+};
+
+export type ModelJollyResultsMembershipConditionInput = {
+  and?: Array< ModelJollyResultsMembershipConditionInput | null > | null,
+  createdAt?: ModelStringInput | null,
+  not?: ModelJollyResultsMembershipConditionInput | null,
+  or?: Array< ModelJollyResultsMembershipConditionInput | null > | null,
+  updatedAt?: ModelStringInput | null,
+};
+
+export type CreateJollyResultsMembershipInput = {
+  surveyId: string,
+  userId: string,
 };
 
 export type ModelLocationConditionInput = {
@@ -1708,6 +2004,7 @@ export type ModelQueueConditionInput = {
   not?: ModelQueueConditionInput | null,
   or?: Array< ModelQueueConditionInput | null > | null,
   projectId?: ModelIDInput | null,
+  totalBatches?: ModelIntInput | null,
   updatedAt?: ModelStringInput | null,
   url?: ModelStringInput | null,
   zoom?: ModelIntInput | null,
@@ -1720,8 +2017,45 @@ export type CreateQueueInput = {
   id?: string | null,
   name: string,
   projectId: string,
+  totalBatches?: number | null,
   url?: string | null,
   zoom?: number | null,
+};
+
+export type ModelShapefileConditionInput = {
+  and?: Array< ModelShapefileConditionInput | null > | null,
+  coordinates?: ModelFloatInput | null,
+  createdAt?: ModelStringInput | null,
+  not?: ModelShapefileConditionInput | null,
+  or?: Array< ModelShapefileConditionInput | null > | null,
+  projectId?: ModelIDInput | null,
+  updatedAt?: ModelStringInput | null,
+};
+
+export type CreateShapefileInput = {
+  coordinates?: Array< number | null > | null,
+  id?: string | null,
+  projectId: string,
+};
+
+export type ModelStratumConditionInput = {
+  and?: Array< ModelStratumConditionInput | null > | null,
+  area?: ModelFloatInput | null,
+  baselineLength?: ModelFloatInput | null,
+  createdAt?: ModelStringInput | null,
+  name?: ModelStringInput | null,
+  not?: ModelStratumConditionInput | null,
+  or?: Array< ModelStratumConditionInput | null > | null,
+  projectId?: ModelIDInput | null,
+  updatedAt?: ModelStringInput | null,
+};
+
+export type CreateStratumInput = {
+  area?: number | null,
+  baselineLength?: number | null,
+  id?: string | null,
+  name: string,
+  projectId: string,
 };
 
 export type ModelTasksOnAnnotationSetConditionInput = {
@@ -1828,6 +2162,22 @@ export type CreateTestResultCategoryCountInput = {
   userCount: number,
 };
 
+export type ModelTransectConditionInput = {
+  and?: Array< ModelTransectConditionInput | null > | null,
+  createdAt?: ModelStringInput | null,
+  not?: ModelTransectConditionInput | null,
+  or?: Array< ModelTransectConditionInput | null > | null,
+  projectId?: ModelIDInput | null,
+  stratumId?: ModelIDInput | null,
+  updatedAt?: ModelStringInput | null,
+};
+
+export type CreateTransectInput = {
+  id?: string | null,
+  projectId: string,
+  stratumId: string,
+};
+
 export type ModelUserProjectMembershipConditionInput = {
   and?: Array< ModelUserProjectMembershipConditionInput | null > | null,
   backupQueueId?: ModelIDInput | null,
@@ -1894,6 +2244,10 @@ export type DeleteAnnotationSetInput = {
   id: string,
 };
 
+export type DeleteCameraInput = {
+  id: string,
+};
+
 export type DeleteCategoryInput = {
   id: string,
 };
@@ -1917,6 +2271,18 @@ export type DeleteImageSetInput = {
 
 export type DeleteImageSetMembershipInput = {
   id: string,
+};
+
+export type DeleteJollyResultInput = {
+  annotationSetId: string,
+  categoryId: string,
+  stratumId: string,
+  surveyId: string,
+};
+
+export type DeleteJollyResultsMembershipInput = {
+  surveyId: string,
+  userId: string,
 };
 
 export type DeleteLocationInput = {
@@ -1974,6 +2340,14 @@ export type DeleteQueueInput = {
   id: string,
 };
 
+export type DeleteShapefileInput = {
+  id: string,
+};
+
+export type DeleteStratumInput = {
+  id: string,
+};
+
 export type DeleteTasksOnAnnotationSetInput = {
   id: string,
 };
@@ -2000,6 +2374,10 @@ export type DeleteTestResultInput = {
 export type DeleteTestResultCategoryCountInput = {
   categoryName: string,
   testResultId: string,
+};
+
+export type DeleteTransectInput = {
+  id: string,
 };
 
 export type DeleteUserProjectMembershipInput = {
@@ -2047,6 +2425,15 @@ export type UpdateAnnotationSetInput = {
   register?: boolean | null,
 };
 
+export type UpdateCameraInput = {
+  focalLengthMm?: number | null,
+  id: string,
+  name?: string | null,
+  projectId?: string | null,
+  sensorWidthMm?: number | null,
+  tiltDegrees?: number | null,
+};
+
 export type UpdateCategoryInput = {
   annotationCount?: number | null,
   annotationSetId?: string | null,
@@ -2061,6 +2448,7 @@ export type UpdateImageInput = {
   altitude_agl?: number | null,
   altitude_egm96?: number | null,
   altitude_wgs84?: number | null,
+  cameraId?: string | null,
   cameraSerial?: string | null,
   exifData?: string | null,
   height?: number | null,
@@ -2072,6 +2460,7 @@ export type UpdateImageInput = {
   projectId?: string | null,
   roll?: number | null,
   timestamp?: number | null,
+  transectId?: string | null,
   width?: number | null,
   yaw?: number | null,
 };
@@ -2102,6 +2491,27 @@ export type UpdateImageSetMembershipInput = {
   id: string,
   imageId?: string | null,
   imageSetId?: string | null,
+};
+
+export type UpdateJollyResultInput = {
+  animals?: number | null,
+  annotationSetId: string,
+  areaSurveyed?: number | null,
+  categoryId: string,
+  density?: number | null,
+  estimate?: number | null,
+  lowerBound95?: number | null,
+  numSamples?: number | null,
+  standardError?: number | null,
+  stratumId: string,
+  surveyId: string,
+  upperBound95?: number | null,
+  variance?: number | null,
+};
+
+export type UpdateJollyResultsMembershipInput = {
+  surveyId: string,
+  userId: string,
 };
 
 export type UpdateLocationInput = {
@@ -2211,8 +2621,23 @@ export type UpdateQueueInput = {
   id: string,
   name?: string | null,
   projectId?: string | null,
+  totalBatches?: number | null,
   url?: string | null,
   zoom?: number | null,
+};
+
+export type UpdateShapefileInput = {
+  coordinates?: Array< number | null > | null,
+  id: string,
+  projectId?: string | null,
+};
+
+export type UpdateStratumInput = {
+  area?: number | null,
+  baselineLength?: number | null,
+  id: string,
+  name?: string | null,
+  projectId?: string | null,
 };
 
 export type UpdateTasksOnAnnotationSetInput = {
@@ -2255,6 +2680,12 @@ export type UpdateTestResultCategoryCountInput = {
   testCount?: number | null,
   testResultId: string,
   userCount?: number | null,
+};
+
+export type UpdateTransectInput = {
+  id: string,
+  projectId?: string | null,
+  stratumId?: string | null,
 };
 
 export type UpdateUserProjectMembershipInput = {
@@ -2370,6 +2801,31 @@ export type ModelSubscriptionAnnotationSetFilterInput = {
   updatedAt?: ModelSubscriptionStringInput | null,
 };
 
+export type ModelSubscriptionCameraFilterInput = {
+  and?: Array< ModelSubscriptionCameraFilterInput | null > | null,
+  createdAt?: ModelSubscriptionStringInput | null,
+  focalLengthMm?: ModelSubscriptionFloatInput | null,
+  id?: ModelSubscriptionIDInput | null,
+  name?: ModelSubscriptionStringInput | null,
+  or?: Array< ModelSubscriptionCameraFilterInput | null > | null,
+  projectId?: ModelSubscriptionIDInput | null,
+  sensorWidthMm?: ModelSubscriptionFloatInput | null,
+  tiltDegrees?: ModelSubscriptionFloatInput | null,
+  updatedAt?: ModelSubscriptionStringInput | null,
+};
+
+export type ModelSubscriptionFloatInput = {
+  between?: Array< number | null > | null,
+  eq?: number | null,
+  ge?: number | null,
+  gt?: number | null,
+  in?: Array< number | null > | null,
+  le?: number | null,
+  lt?: number | null,
+  ne?: number | null,
+  notIn?: Array< number | null > | null,
+};
+
 export type ModelSubscriptionCategoryFilterInput = {
   and?: Array< ModelSubscriptionCategoryFilterInput | null > | null,
   annotationCount?: ModelSubscriptionIntInput | null,
@@ -2389,6 +2845,7 @@ export type ModelSubscriptionImageFilterInput = {
   altitude_egm96?: ModelSubscriptionFloatInput | null,
   altitude_wgs84?: ModelSubscriptionFloatInput | null,
   and?: Array< ModelSubscriptionImageFilterInput | null > | null,
+  cameraId?: ModelSubscriptionIDInput | null,
   cameraSerial?: ModelSubscriptionStringInput | null,
   createdAt?: ModelSubscriptionStringInput | null,
   exifData?: ModelSubscriptionStringInput | null,
@@ -2402,21 +2859,10 @@ export type ModelSubscriptionImageFilterInput = {
   projectId?: ModelSubscriptionIDInput | null,
   roll?: ModelSubscriptionFloatInput | null,
   timestamp?: ModelSubscriptionIntInput | null,
+  transectId?: ModelSubscriptionIDInput | null,
   updatedAt?: ModelSubscriptionStringInput | null,
   width?: ModelSubscriptionIntInput | null,
   yaw?: ModelSubscriptionFloatInput | null,
-};
-
-export type ModelSubscriptionFloatInput = {
-  between?: Array< number | null > | null,
-  eq?: number | null,
-  ge?: number | null,
-  gt?: number | null,
-  in?: Array< number | null > | null,
-  le?: number | null,
-  lt?: number | null,
-  ne?: number | null,
-  notIn?: Array< number | null > | null,
 };
 
 export type ModelSubscriptionImageFileFilterInput = {
@@ -2462,6 +2908,37 @@ export type ModelSubscriptionImageSetMembershipFilterInput = {
   imageSetId?: ModelSubscriptionIDInput | null,
   or?: Array< ModelSubscriptionImageSetMembershipFilterInput | null > | null,
   updatedAt?: ModelSubscriptionStringInput | null,
+};
+
+export type ModelSubscriptionJollyResultFilterInput = {
+  and?: Array< ModelSubscriptionJollyResultFilterInput | null > | null,
+  animals?: ModelSubscriptionIntInput | null,
+  annotationSetId?: ModelSubscriptionIDInput | null,
+  areaSurveyed?: ModelSubscriptionFloatInput | null,
+  categoryId?: ModelSubscriptionIDInput | null,
+  createdAt?: ModelSubscriptionStringInput | null,
+  density?: ModelSubscriptionFloatInput | null,
+  estimate?: ModelSubscriptionIntInput | null,
+  id?: ModelSubscriptionIDInput | null,
+  lowerBound95?: ModelSubscriptionIntInput | null,
+  numSamples?: ModelSubscriptionIntInput | null,
+  or?: Array< ModelSubscriptionJollyResultFilterInput | null > | null,
+  standardError?: ModelSubscriptionFloatInput | null,
+  stratumId?: ModelSubscriptionIDInput | null,
+  surveyId?: ModelSubscriptionIDInput | null,
+  updatedAt?: ModelSubscriptionStringInput | null,
+  upperBound95?: ModelSubscriptionIntInput | null,
+  variance?: ModelSubscriptionFloatInput | null,
+};
+
+export type ModelSubscriptionJollyResultsMembershipFilterInput = {
+  and?: Array< ModelSubscriptionJollyResultsMembershipFilterInput | null > | null,
+  createdAt?: ModelSubscriptionStringInput | null,
+  id?: ModelSubscriptionIDInput | null,
+  or?: Array< ModelSubscriptionJollyResultsMembershipFilterInput | null > | null,
+  surveyId?: ModelSubscriptionIDInput | null,
+  updatedAt?: ModelSubscriptionStringInput | null,
+  userId?: ModelSubscriptionStringInput | null,
 };
 
 export type ModelSubscriptionLocationFilterInput = {
@@ -2624,9 +3101,32 @@ export type ModelSubscriptionQueueFilterInput = {
   name?: ModelSubscriptionStringInput | null,
   or?: Array< ModelSubscriptionQueueFilterInput | null > | null,
   projectId?: ModelSubscriptionIDInput | null,
+  totalBatches?: ModelSubscriptionIntInput | null,
   updatedAt?: ModelSubscriptionStringInput | null,
   url?: ModelSubscriptionStringInput | null,
   zoom?: ModelSubscriptionIntInput | null,
+};
+
+export type ModelSubscriptionShapefileFilterInput = {
+  and?: Array< ModelSubscriptionShapefileFilterInput | null > | null,
+  coordinates?: ModelSubscriptionFloatInput | null,
+  createdAt?: ModelSubscriptionStringInput | null,
+  id?: ModelSubscriptionIDInput | null,
+  or?: Array< ModelSubscriptionShapefileFilterInput | null > | null,
+  projectId?: ModelSubscriptionIDInput | null,
+  updatedAt?: ModelSubscriptionStringInput | null,
+};
+
+export type ModelSubscriptionStratumFilterInput = {
+  and?: Array< ModelSubscriptionStratumFilterInput | null > | null,
+  area?: ModelSubscriptionFloatInput | null,
+  baselineLength?: ModelSubscriptionFloatInput | null,
+  createdAt?: ModelSubscriptionStringInput | null,
+  id?: ModelSubscriptionIDInput | null,
+  name?: ModelSubscriptionStringInput | null,
+  or?: Array< ModelSubscriptionStratumFilterInput | null > | null,
+  projectId?: ModelSubscriptionIDInput | null,
+  updatedAt?: ModelSubscriptionStringInput | null,
 };
 
 export type ModelSubscriptionTasksOnAnnotationSetFilterInput = {
@@ -2696,6 +3196,16 @@ export type ModelSubscriptionTestResultCategoryCountFilterInput = {
   testResultId?: ModelSubscriptionIDInput | null,
   updatedAt?: ModelSubscriptionStringInput | null,
   userCount?: ModelSubscriptionIntInput | null,
+};
+
+export type ModelSubscriptionTransectFilterInput = {
+  and?: Array< ModelSubscriptionTransectFilterInput | null > | null,
+  createdAt?: ModelSubscriptionStringInput | null,
+  id?: ModelSubscriptionIDInput | null,
+  or?: Array< ModelSubscriptionTransectFilterInput | null > | null,
+  projectId?: ModelSubscriptionIDInput | null,
+  stratumId?: ModelSubscriptionIDInput | null,
+  updatedAt?: ModelSubscriptionStringInput | null,
 };
 
 export type ModelSubscriptionUserProjectMembershipFilterInput = {
@@ -2881,6 +3391,32 @@ export type AnnotationsByObjectIdQuery = {
   } | null,
 };
 
+export type CamerasByProjectIdQueryVariables = {
+  filter?: ModelCameraFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  projectId: string,
+  sortDirection?: ModelSortDirection | null,
+};
+
+export type CamerasByProjectIdQuery = {
+  camerasByProjectId?:  {
+    __typename: "ModelCameraConnection",
+    items:  Array< {
+      __typename: "Camera",
+      createdAt: string,
+      focalLengthMm?: number | null,
+      id: string,
+      name: string,
+      projectId: string,
+      sensorWidthMm?: number | null,
+      tiltDegrees?: number | null,
+      updatedAt: string,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
 export type CategoriesByAnnotationSetIdQueryVariables = {
   annotationSetId: string,
   filter?: ModelCategoryFilterInput | null,
@@ -3035,6 +3571,7 @@ export type GetAnnotationQuery = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -3047,6 +3584,7 @@ export type GetAnnotationQuery = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -3211,6 +3749,39 @@ export type GetAnnotationSetQuery = {
   } | null,
 };
 
+export type GetCameraQueryVariables = {
+  id: string,
+};
+
+export type GetCameraQuery = {
+  getCamera?:  {
+    __typename: "Camera",
+    createdAt: string,
+    focalLengthMm?: number | null,
+    id: string,
+    images?:  {
+      __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    name: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    sensorWidthMm?: number | null,
+    tiltDegrees?: number | null,
+    updatedAt: string,
+  } | null,
+};
+
 export type GetCategoryQueryVariables = {
   id: string,
 };
@@ -3270,6 +3841,18 @@ export type GetImageQuery = {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
     } | null,
+    camera?:  {
+      __typename: "Camera",
+      createdAt: string,
+      focalLengthMm?: number | null,
+      id: string,
+      name: string,
+      projectId: string,
+      sensorWidthMm?: number | null,
+      tiltDegrees?: number | null,
+      updatedAt: string,
+    } | null,
+    cameraId?: string | null,
     cameraSerial?: string | null,
     createdAt: string,
     exifData?: string | null,
@@ -3313,6 +3896,15 @@ export type GetImageQuery = {
     } | null,
     roll?: number | null,
     timestamp?: number | null,
+    transect?:  {
+      __typename: "Transect",
+      createdAt: string,
+      id: string,
+      projectId: string,
+      stratumId: string,
+      updatedAt: string,
+    } | null,
+    transectId?: string | null,
     updatedAt: string,
     width: number,
     yaw?: number | null,
@@ -3346,6 +3938,7 @@ export type GetImageFileQuery = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -3358,6 +3951,7 @@ export type GetImageFileQuery = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -3397,6 +3991,7 @@ export type GetImageNeighbourQuery = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -3409,6 +4004,7 @@ export type GetImageNeighbourQuery = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -3419,6 +4015,7 @@ export type GetImageNeighbourQuery = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -3431,6 +4028,7 @@ export type GetImageNeighbourQuery = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -3485,6 +4083,7 @@ export type GetImageSetMembershipQuery = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -3497,6 +4096,7 @@ export type GetImageSetMembershipQuery = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -3513,6 +4113,60 @@ export type GetImageSetMembershipQuery = {
     } | null,
     imageSetId: string,
     updatedAt: string,
+  } | null,
+};
+
+export type GetJollyResultQueryVariables = {
+  annotationSetId: string,
+  categoryId: string,
+  stratumId: string,
+  surveyId: string,
+};
+
+export type GetJollyResultQuery = {
+  getJollyResult?:  {
+    __typename: "JollyResult",
+    animals: number,
+    annotationSetId: string,
+    areaSurveyed: number,
+    categoryId: string,
+    createdAt: string,
+    density: number,
+    estimate: number,
+    lowerBound95: number,
+    numSamples: number,
+    standardError: number,
+    stratumId: string,
+    surveyId: string,
+    updatedAt: string,
+    upperBound95: number,
+    variance: number,
+  } | null,
+};
+
+export type GetJollyResultsMembershipQueryVariables = {
+  surveyId: string,
+  userId: string,
+};
+
+export type GetJollyResultsMembershipQuery = {
+  getJollyResultsMembership?:  {
+    __typename: "JollyResultsMembership",
+    createdAt: string,
+    survey?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    surveyId: string,
+    updatedAt: string,
+    userId: string,
   } | null,
 };
 
@@ -3536,6 +4190,7 @@ export type GetLocationQuery = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -3548,6 +4203,7 @@ export type GetLocationQuery = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -3948,6 +4604,10 @@ export type GetProjectQuery = {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
     } | null,
+    cameras?:  {
+      __typename: "ModelCameraConnection",
+      nextToken?: string | null,
+    } | null,
     createdAt: string,
     createdBy: string,
     hidden?: boolean | null,
@@ -3962,6 +4622,10 @@ export type GetProjectQuery = {
     } | null,
     images?:  {
       __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
       nextToken?: string | null,
     } | null,
     locationSets?:  {
@@ -3998,7 +4662,19 @@ export type GetProjectQuery = {
       __typename: "ModelQueueConnection",
       nextToken?: string | null,
     } | null,
+    shapefile?:  {
+      __typename: "Shapefile",
+      coordinates?: Array< number | null > | null,
+      createdAt: string,
+      id: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
     status?: string | null,
+    strata?:  {
+      __typename: "ModelStratumConnection",
+      nextToken?: string | null,
+    } | null,
     testConfig?:  {
       __typename: "ProjectTestConfig",
       accuracy: number,
@@ -4013,6 +4689,10 @@ export type GetProjectQuery = {
     } | null,
     testResults?:  {
       __typename: "ModelTestResultConnection",
+      nextToken?: string | null,
+    } | null,
+    transects?:  {
+      __typename: "ModelTransectConnection",
       nextToken?: string | null,
     } | null,
     updatedAt: string,
@@ -4082,6 +4762,7 @@ export type GetQueueQuery = {
       updatedAt: string,
     } | null,
     projectId: string,
+    totalBatches?: number | null,
     updatedAt: string,
     url?: string | null,
     users?:  {
@@ -4089,6 +4770,64 @@ export type GetQueueQuery = {
       nextToken?: string | null,
     } | null,
     zoom?: number | null,
+  } | null,
+};
+
+export type GetShapefileQueryVariables = {
+  id: string,
+};
+
+export type GetShapefileQuery = {
+  getShapefile?:  {
+    __typename: "Shapefile",
+    coordinates?: Array< number | null > | null,
+    createdAt: string,
+    id: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
+export type GetStratumQueryVariables = {
+  id: string,
+};
+
+export type GetStratumQuery = {
+  getStratum?:  {
+    __typename: "Stratum",
+    area?: number | null,
+    baselineLength?: number | null,
+    createdAt: string,
+    id: string,
+    name: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    transects?:  {
+      __typename: "ModelTransectConnection",
+      nextToken?: string | null,
+    } | null,
+    updatedAt: string,
   } | null,
 };
 
@@ -4346,6 +5085,46 @@ export type GetTestResultCategoryCountQuery = {
   } | null,
 };
 
+export type GetTransectQueryVariables = {
+  id: string,
+};
+
+export type GetTransectQuery = {
+  getTransect?:  {
+    __typename: "Transect",
+    createdAt: string,
+    id: string,
+    images?:  {
+      __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    stratum?:  {
+      __typename: "Stratum",
+      area?: number | null,
+      baselineLength?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    stratumId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type GetUserProjectMembershipQueryVariables = {
   id: string,
 };
@@ -4362,6 +5141,7 @@ export type GetUserProjectMembershipQuery = {
       id: string,
       name: string,
       projectId: string,
+      totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,
@@ -4391,6 +5171,7 @@ export type GetUserProjectMembershipQuery = {
       id: string,
       name: string,
       projectId: string,
+      totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,
@@ -4563,6 +5344,7 @@ export type ImagesByProjectIdQuery = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -4575,6 +5357,7 @@ export type ImagesByProjectIdQuery = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -4604,6 +5387,94 @@ export type ImagesByimageIdQuery = {
       projectId: string,
       type: string,
       updatedAt: string,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type JollyResultsByStratumIdQueryVariables = {
+  filter?: ModelJollyResultFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  sortDirection?: ModelSortDirection | null,
+  stratumId: string,
+};
+
+export type JollyResultsByStratumIdQuery = {
+  jollyResultsByStratumId?:  {
+    __typename: "ModelJollyResultConnection",
+    items:  Array< {
+      __typename: "JollyResult",
+      animals: number,
+      annotationSetId: string,
+      areaSurveyed: number,
+      categoryId: string,
+      createdAt: string,
+      density: number,
+      estimate: number,
+      lowerBound95: number,
+      numSamples: number,
+      standardError: number,
+      stratumId: string,
+      surveyId: string,
+      updatedAt: string,
+      upperBound95: number,
+      variance: number,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type JollyResultsBySurveyIdQueryVariables = {
+  filter?: ModelJollyResultFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  sortDirection?: ModelSortDirection | null,
+  surveyId: string,
+};
+
+export type JollyResultsBySurveyIdQuery = {
+  jollyResultsBySurveyId?:  {
+    __typename: "ModelJollyResultConnection",
+    items:  Array< {
+      __typename: "JollyResult",
+      animals: number,
+      annotationSetId: string,
+      areaSurveyed: number,
+      categoryId: string,
+      createdAt: string,
+      density: number,
+      estimate: number,
+      lowerBound95: number,
+      numSamples: number,
+      standardError: number,
+      stratumId: string,
+      surveyId: string,
+      updatedAt: string,
+      upperBound95: number,
+      variance: number,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type JollyResultsMembershipsBySurveyIdQueryVariables = {
+  filter?: ModelJollyResultsMembershipFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  sortDirection?: ModelSortDirection | null,
+  surveyId: string,
+};
+
+export type JollyResultsMembershipsBySurveyIdQuery = {
+  jollyResultsMembershipsBySurveyId?:  {
+    __typename: "ModelJollyResultsMembershipConnection",
+    items:  Array< {
+      __typename: "JollyResultsMembership",
+      createdAt: string,
+      surveyId: string,
+      updatedAt: string,
+      userId: string,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -4681,6 +5552,30 @@ export type ListAnnotationsQuery = {
       updatedAt: string,
       x: number,
       y: number,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type ListCamerasQueryVariables = {
+  filter?: ModelCameraFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+};
+
+export type ListCamerasQuery = {
+  listCameras?:  {
+    __typename: "ModelCameraConnection",
+    items:  Array< {
+      __typename: "Camera",
+      createdAt: string,
+      focalLengthMm?: number | null,
+      id: string,
+      name: string,
+      projectId: string,
+      sensorWidthMm?: number | null,
+      tiltDegrees?: number | null,
+      updatedAt: string,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -4825,6 +5720,7 @@ export type ListImagesQuery = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -4837,9 +5733,67 @@ export type ListImagesQuery = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type ListJollyResultsQueryVariables = {
+  filter?: ModelJollyResultFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  sortDirection?: ModelSortDirection | null,
+  stratumIdAnnotationSetIdCategoryId?: ModelJollyResultPrimaryCompositeKeyConditionInput | null,
+  surveyId?: string | null,
+};
+
+export type ListJollyResultsQuery = {
+  listJollyResults?:  {
+    __typename: "ModelJollyResultConnection",
+    items:  Array< {
+      __typename: "JollyResult",
+      animals: number,
+      annotationSetId: string,
+      areaSurveyed: number,
+      categoryId: string,
+      createdAt: string,
+      density: number,
+      estimate: number,
+      lowerBound95: number,
+      numSamples: number,
+      standardError: number,
+      stratumId: string,
+      surveyId: string,
+      updatedAt: string,
+      upperBound95: number,
+      variance: number,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type ListJollyResultsMembershipsQueryVariables = {
+  filter?: ModelJollyResultsMembershipFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  sortDirection?: ModelSortDirection | null,
+  surveyId?: string | null,
+  userId?: ModelStringKeyConditionInput | null,
+};
+
+export type ListJollyResultsMembershipsQuery = {
+  listJollyResultsMemberships?:  {
+    __typename: "ModelJollyResultsMembershipConnection",
+    items:  Array< {
+      __typename: "JollyResultsMembership",
+      createdAt: string,
+      surveyId: string,
+      updatedAt: string,
+      userId: string,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -5150,9 +6104,54 @@ export type ListQueuesQuery = {
       id: string,
       name: string,
       projectId: string,
+      totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type ListShapefilesQueryVariables = {
+  filter?: ModelShapefileFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+};
+
+export type ListShapefilesQuery = {
+  listShapefiles?:  {
+    __typename: "ModelShapefileConnection",
+    items:  Array< {
+      __typename: "Shapefile",
+      coordinates?: Array< number | null > | null,
+      createdAt: string,
+      id: string,
+      projectId: string,
+      updatedAt: string,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type ListStrataQueryVariables = {
+  filter?: ModelStratumFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+};
+
+export type ListStrataQuery = {
+  listStrata?:  {
+    __typename: "ModelStratumConnection",
+    items:  Array< {
+      __typename: "Stratum",
+      area?: number | null,
+      baselineLength?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -5294,6 +6293,27 @@ export type ListTestResultsQuery = {
       totalMissedAnimals: number,
       updatedAt: string,
       userId: string,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type ListTransectsQueryVariables = {
+  filter?: ModelTransectFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+};
+
+export type ListTransectsQuery = {
+  listTransects?:  {
+    __typename: "ModelTransectConnection",
+    items:  Array< {
+      __typename: "Transect",
+      createdAt: string,
+      id: string,
+      projectId: string,
+      stratumId: string,
+      updatedAt: string,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -5735,9 +6755,58 @@ export type QueuesByProjectIdQuery = {
       id: string,
       name: string,
       projectId: string,
+      totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type ShapefilesByProjectIdQueryVariables = {
+  filter?: ModelShapefileFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  projectId: string,
+  sortDirection?: ModelSortDirection | null,
+};
+
+export type ShapefilesByProjectIdQuery = {
+  shapefilesByProjectId?:  {
+    __typename: "ModelShapefileConnection",
+    items:  Array< {
+      __typename: "Shapefile",
+      coordinates?: Array< number | null > | null,
+      createdAt: string,
+      id: string,
+      projectId: string,
+      updatedAt: string,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type StrataByProjectIdQueryVariables = {
+  filter?: ModelStratumFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  projectId: string,
+  sortDirection?: ModelSortDirection | null,
+};
+
+export type StrataByProjectIdQuery = {
+  strataByProjectId?:  {
+    __typename: "ModelStratumConnection",
+    items:  Array< {
+      __typename: "Stratum",
+      area?: number | null,
+      baselineLength?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -5892,6 +6961,29 @@ export type TestResultsByUserIdQuery = {
   } | null,
 };
 
+export type TransectsByProjectIdQueryVariables = {
+  filter?: ModelTransectFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  projectId: string,
+  sortDirection?: ModelSortDirection | null,
+};
+
+export type TransectsByProjectIdQuery = {
+  transectsByProjectId?:  {
+    __typename: "ModelTransectConnection",
+    items:  Array< {
+      __typename: "Transect",
+      createdAt: string,
+      id: string,
+      projectId: string,
+      stratumId: string,
+      updatedAt: string,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
 export type UserProjectMembershipsByProjectIdQueryVariables = {
   filter?: ModelUserProjectMembershipFilterInput | null,
   limit?: number | null,
@@ -5981,6 +7073,7 @@ export type CreateAnnotationMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -5993,6 +7086,7 @@ export type CreateAnnotationMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -6150,6 +7244,40 @@ export type CreateAnnotationSetMutation = {
   } | null,
 };
 
+export type CreateCameraMutationVariables = {
+  condition?: ModelCameraConditionInput | null,
+  input: CreateCameraInput,
+};
+
+export type CreateCameraMutation = {
+  createCamera?:  {
+    __typename: "Camera",
+    createdAt: string,
+    focalLengthMm?: number | null,
+    id: string,
+    images?:  {
+      __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    name: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    sensorWidthMm?: number | null,
+    tiltDegrees?: number | null,
+    updatedAt: string,
+  } | null,
+};
+
 export type CreateCategoryMutationVariables = {
   condition?: ModelCategoryConditionInput | null,
   input: CreateCategoryInput,
@@ -6219,6 +7347,18 @@ export type CreateImageMutation = {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
     } | null,
+    camera?:  {
+      __typename: "Camera",
+      createdAt: string,
+      focalLengthMm?: number | null,
+      id: string,
+      name: string,
+      projectId: string,
+      sensorWidthMm?: number | null,
+      tiltDegrees?: number | null,
+      updatedAt: string,
+    } | null,
+    cameraId?: string | null,
     cameraSerial?: string | null,
     createdAt: string,
     exifData?: string | null,
@@ -6262,6 +7402,15 @@ export type CreateImageMutation = {
     } | null,
     roll?: number | null,
     timestamp?: number | null,
+    transect?:  {
+      __typename: "Transect",
+      createdAt: string,
+      id: string,
+      projectId: string,
+      stratumId: string,
+      updatedAt: string,
+    } | null,
+    transectId?: string | null,
     updatedAt: string,
     width: number,
     yaw?: number | null,
@@ -6283,6 +7432,7 @@ export type CreateImageFileMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -6295,6 +7445,7 @@ export type CreateImageFileMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -6334,6 +7485,7 @@ export type CreateImageNeighbourMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -6346,6 +7498,7 @@ export type CreateImageNeighbourMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -6356,6 +7509,7 @@ export type CreateImageNeighbourMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -6368,6 +7522,7 @@ export type CreateImageNeighbourMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -6424,6 +7579,7 @@ export type CreateImageSetMembershipMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -6436,6 +7592,7 @@ export type CreateImageSetMembershipMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -6452,6 +7609,58 @@ export type CreateImageSetMembershipMutation = {
     } | null,
     imageSetId: string,
     updatedAt: string,
+  } | null,
+};
+
+export type CreateJollyResultMutationVariables = {
+  condition?: ModelJollyResultConditionInput | null,
+  input: CreateJollyResultInput,
+};
+
+export type CreateJollyResultMutation = {
+  createJollyResult?:  {
+    __typename: "JollyResult",
+    animals: number,
+    annotationSetId: string,
+    areaSurveyed: number,
+    categoryId: string,
+    createdAt: string,
+    density: number,
+    estimate: number,
+    lowerBound95: number,
+    numSamples: number,
+    standardError: number,
+    stratumId: string,
+    surveyId: string,
+    updatedAt: string,
+    upperBound95: number,
+    variance: number,
+  } | null,
+};
+
+export type CreateJollyResultsMembershipMutationVariables = {
+  condition?: ModelJollyResultsMembershipConditionInput | null,
+  input: CreateJollyResultsMembershipInput,
+};
+
+export type CreateJollyResultsMembershipMutation = {
+  createJollyResultsMembership?:  {
+    __typename: "JollyResultsMembership",
+    createdAt: string,
+    survey?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    surveyId: string,
+    updatedAt: string,
+    userId: string,
   } | null,
 };
 
@@ -6476,6 +7685,7 @@ export type CreateLocationMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -6488,6 +7698,7 @@ export type CreateLocationMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -6895,6 +8106,10 @@ export type CreateProjectMutation = {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
     } | null,
+    cameras?:  {
+      __typename: "ModelCameraConnection",
+      nextToken?: string | null,
+    } | null,
     createdAt: string,
     createdBy: string,
     hidden?: boolean | null,
@@ -6909,6 +8124,10 @@ export type CreateProjectMutation = {
     } | null,
     images?:  {
       __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
       nextToken?: string | null,
     } | null,
     locationSets?:  {
@@ -6945,7 +8164,19 @@ export type CreateProjectMutation = {
       __typename: "ModelQueueConnection",
       nextToken?: string | null,
     } | null,
+    shapefile?:  {
+      __typename: "Shapefile",
+      coordinates?: Array< number | null > | null,
+      createdAt: string,
+      id: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
     status?: string | null,
+    strata?:  {
+      __typename: "ModelStratumConnection",
+      nextToken?: string | null,
+    } | null,
     testConfig?:  {
       __typename: "ProjectTestConfig",
       accuracy: number,
@@ -6960,6 +8191,10 @@ export type CreateProjectMutation = {
     } | null,
     testResults?:  {
       __typename: "ModelTestResultConnection",
+      nextToken?: string | null,
+    } | null,
+    transects?:  {
+      __typename: "ModelTransectConnection",
       nextToken?: string | null,
     } | null,
     updatedAt: string,
@@ -7031,6 +8266,7 @@ export type CreateQueueMutation = {
       updatedAt: string,
     } | null,
     projectId: string,
+    totalBatches?: number | null,
     updatedAt: string,
     url?: string | null,
     users?:  {
@@ -7038,6 +8274,66 @@ export type CreateQueueMutation = {
       nextToken?: string | null,
     } | null,
     zoom?: number | null,
+  } | null,
+};
+
+export type CreateShapefileMutationVariables = {
+  condition?: ModelShapefileConditionInput | null,
+  input: CreateShapefileInput,
+};
+
+export type CreateShapefileMutation = {
+  createShapefile?:  {
+    __typename: "Shapefile",
+    coordinates?: Array< number | null > | null,
+    createdAt: string,
+    id: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
+export type CreateStratumMutationVariables = {
+  condition?: ModelStratumConditionInput | null,
+  input: CreateStratumInput,
+};
+
+export type CreateStratumMutation = {
+  createStratum?:  {
+    __typename: "Stratum",
+    area?: number | null,
+    baselineLength?: number | null,
+    createdAt: string,
+    id: string,
+    name: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    transects?:  {
+      __typename: "ModelTransectConnection",
+      nextToken?: string | null,
+    } | null,
+    updatedAt: string,
   } | null,
 };
 
@@ -7297,6 +8593,47 @@ export type CreateTestResultCategoryCountMutation = {
   } | null,
 };
 
+export type CreateTransectMutationVariables = {
+  condition?: ModelTransectConditionInput | null,
+  input: CreateTransectInput,
+};
+
+export type CreateTransectMutation = {
+  createTransect?:  {
+    __typename: "Transect",
+    createdAt: string,
+    id: string,
+    images?:  {
+      __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    stratum?:  {
+      __typename: "Stratum",
+      area?: number | null,
+      baselineLength?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    stratumId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type CreateUserProjectMembershipMutationVariables = {
   condition?: ModelUserProjectMembershipConditionInput | null,
   input: CreateUserProjectMembershipInput,
@@ -7314,6 +8651,7 @@ export type CreateUserProjectMembershipMutation = {
       id: string,
       name: string,
       projectId: string,
+      totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,
@@ -7343,6 +8681,7 @@ export type CreateUserProjectMembershipMutation = {
       id: string,
       name: string,
       projectId: string,
+      totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,
@@ -7406,6 +8745,7 @@ export type DeleteAnnotationMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -7418,6 +8758,7 @@ export type DeleteAnnotationMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -7575,6 +8916,40 @@ export type DeleteAnnotationSetMutation = {
   } | null,
 };
 
+export type DeleteCameraMutationVariables = {
+  condition?: ModelCameraConditionInput | null,
+  input: DeleteCameraInput,
+};
+
+export type DeleteCameraMutation = {
+  deleteCamera?:  {
+    __typename: "Camera",
+    createdAt: string,
+    focalLengthMm?: number | null,
+    id: string,
+    images?:  {
+      __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    name: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    sensorWidthMm?: number | null,
+    tiltDegrees?: number | null,
+    updatedAt: string,
+  } | null,
+};
+
 export type DeleteCategoryMutationVariables = {
   condition?: ModelCategoryConditionInput | null,
   input: DeleteCategoryInput,
@@ -7636,6 +9011,18 @@ export type DeleteImageMutation = {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
     } | null,
+    camera?:  {
+      __typename: "Camera",
+      createdAt: string,
+      focalLengthMm?: number | null,
+      id: string,
+      name: string,
+      projectId: string,
+      sensorWidthMm?: number | null,
+      tiltDegrees?: number | null,
+      updatedAt: string,
+    } | null,
+    cameraId?: string | null,
     cameraSerial?: string | null,
     createdAt: string,
     exifData?: string | null,
@@ -7679,6 +9066,15 @@ export type DeleteImageMutation = {
     } | null,
     roll?: number | null,
     timestamp?: number | null,
+    transect?:  {
+      __typename: "Transect",
+      createdAt: string,
+      id: string,
+      projectId: string,
+      stratumId: string,
+      updatedAt: string,
+    } | null,
+    transectId?: string | null,
     updatedAt: string,
     width: number,
     yaw?: number | null,
@@ -7700,6 +9096,7 @@ export type DeleteImageFileMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -7712,6 +9109,7 @@ export type DeleteImageFileMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -7751,6 +9149,7 @@ export type DeleteImageNeighbourMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -7763,6 +9162,7 @@ export type DeleteImageNeighbourMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -7773,6 +9173,7 @@ export type DeleteImageNeighbourMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -7785,6 +9186,7 @@ export type DeleteImageNeighbourMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -7841,6 +9243,7 @@ export type DeleteImageSetMembershipMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -7853,6 +9256,7 @@ export type DeleteImageSetMembershipMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -7869,6 +9273,58 @@ export type DeleteImageSetMembershipMutation = {
     } | null,
     imageSetId: string,
     updatedAt: string,
+  } | null,
+};
+
+export type DeleteJollyResultMutationVariables = {
+  condition?: ModelJollyResultConditionInput | null,
+  input: DeleteJollyResultInput,
+};
+
+export type DeleteJollyResultMutation = {
+  deleteJollyResult?:  {
+    __typename: "JollyResult",
+    animals: number,
+    annotationSetId: string,
+    areaSurveyed: number,
+    categoryId: string,
+    createdAt: string,
+    density: number,
+    estimate: number,
+    lowerBound95: number,
+    numSamples: number,
+    standardError: number,
+    stratumId: string,
+    surveyId: string,
+    updatedAt: string,
+    upperBound95: number,
+    variance: number,
+  } | null,
+};
+
+export type DeleteJollyResultsMembershipMutationVariables = {
+  condition?: ModelJollyResultsMembershipConditionInput | null,
+  input: DeleteJollyResultsMembershipInput,
+};
+
+export type DeleteJollyResultsMembershipMutation = {
+  deleteJollyResultsMembership?:  {
+    __typename: "JollyResultsMembership",
+    createdAt: string,
+    survey?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    surveyId: string,
+    updatedAt: string,
+    userId: string,
   } | null,
 };
 
@@ -7893,6 +9349,7 @@ export type DeleteLocationMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -7905,6 +9362,7 @@ export type DeleteLocationMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -8312,6 +9770,10 @@ export type DeleteProjectMutation = {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
     } | null,
+    cameras?:  {
+      __typename: "ModelCameraConnection",
+      nextToken?: string | null,
+    } | null,
     createdAt: string,
     createdBy: string,
     hidden?: boolean | null,
@@ -8326,6 +9788,10 @@ export type DeleteProjectMutation = {
     } | null,
     images?:  {
       __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
       nextToken?: string | null,
     } | null,
     locationSets?:  {
@@ -8362,7 +9828,19 @@ export type DeleteProjectMutation = {
       __typename: "ModelQueueConnection",
       nextToken?: string | null,
     } | null,
+    shapefile?:  {
+      __typename: "Shapefile",
+      coordinates?: Array< number | null > | null,
+      createdAt: string,
+      id: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
     status?: string | null,
+    strata?:  {
+      __typename: "ModelStratumConnection",
+      nextToken?: string | null,
+    } | null,
     testConfig?:  {
       __typename: "ProjectTestConfig",
       accuracy: number,
@@ -8379,8 +9857,20 @@ export type DeleteProjectMutation = {
       __typename: "ModelTestResultConnection",
       nextToken?: string | null,
     } | null,
+    transects?:  {
+      __typename: "ModelTransectConnection",
+      nextToken?: string | null,
+    } | null,
     updatedAt: string,
   } | null,
+};
+
+export type DeleteProjectInFullMutationVariables = {
+  projectId: string,
+};
+
+export type DeleteProjectInFullMutation = {
+  deleteProjectInFull?: string | null,
 };
 
 export type DeleteProjectTestConfigMutationVariables = {
@@ -8448,6 +9938,7 @@ export type DeleteQueueMutation = {
       updatedAt: string,
     } | null,
     projectId: string,
+    totalBatches?: number | null,
     updatedAt: string,
     url?: string | null,
     users?:  {
@@ -8455,6 +9946,66 @@ export type DeleteQueueMutation = {
       nextToken?: string | null,
     } | null,
     zoom?: number | null,
+  } | null,
+};
+
+export type DeleteShapefileMutationVariables = {
+  condition?: ModelShapefileConditionInput | null,
+  input: DeleteShapefileInput,
+};
+
+export type DeleteShapefileMutation = {
+  deleteShapefile?:  {
+    __typename: "Shapefile",
+    coordinates?: Array< number | null > | null,
+    createdAt: string,
+    id: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
+export type DeleteStratumMutationVariables = {
+  condition?: ModelStratumConditionInput | null,
+  input: DeleteStratumInput,
+};
+
+export type DeleteStratumMutation = {
+  deleteStratum?:  {
+    __typename: "Stratum",
+    area?: number | null,
+    baselineLength?: number | null,
+    createdAt: string,
+    id: string,
+    name: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    transects?:  {
+      __typename: "ModelTransectConnection",
+      nextToken?: string | null,
+    } | null,
+    updatedAt: string,
   } | null,
 };
 
@@ -8714,6 +10265,47 @@ export type DeleteTestResultCategoryCountMutation = {
   } | null,
 };
 
+export type DeleteTransectMutationVariables = {
+  condition?: ModelTransectConditionInput | null,
+  input: DeleteTransectInput,
+};
+
+export type DeleteTransectMutation = {
+  deleteTransect?:  {
+    __typename: "Transect",
+    createdAt: string,
+    id: string,
+    images?:  {
+      __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    stratum?:  {
+      __typename: "Stratum",
+      area?: number | null,
+      baselineLength?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    stratumId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type DeleteUserProjectMembershipMutationVariables = {
   condition?: ModelUserProjectMembershipConditionInput | null,
   input: DeleteUserProjectMembershipInput,
@@ -8731,6 +10323,7 @@ export type DeleteUserProjectMembershipMutation = {
       id: string,
       name: string,
       projectId: string,
+      totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,
@@ -8760,6 +10353,7 @@ export type DeleteUserProjectMembershipMutation = {
       id: string,
       name: string,
       projectId: string,
+      totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,
@@ -8795,6 +10389,15 @@ export type DeleteUserStatsMutation = {
   } | null,
 };
 
+export type GenerateSurveyResultsMutationVariables = {
+  annotationSetId: string,
+  surveyId: string,
+};
+
+export type GenerateSurveyResultsMutation = {
+  generateSurveyResults?: string | null,
+};
+
 export type ProcessImagesMutationVariables = {
   model: string,
   s3key: string,
@@ -8827,6 +10430,37 @@ export type RemoveUserFromGroupMutation = {
   removeUserFromGroup?: string | null,
 };
 
+export type RunHeatmapperMutationVariables = {
+  images?: Array< string | null > | null,
+};
+
+export type RunHeatmapperMutation = {
+  runHeatmapper?: string | null,
+};
+
+export type RunImageRegistrationMutationVariables = {
+  images?: Array< string | null > | null,
+  metadata: string,
+  projectId: string,
+  queueUrl: string,
+};
+
+export type RunImageRegistrationMutation = {
+  runImageRegistration?: string | null,
+};
+
+export type RunScoutbotMutationVariables = {
+  bucket: string,
+  images?: Array< string | null > | null,
+  projectId: string,
+  queueUrl: string,
+  setId: string,
+};
+
+export type RunScoutbotMutation = {
+  runScoutbot?: string | null,
+};
+
 export type UpdateAnnotationMutationVariables = {
   condition?: ModelAnnotationConditionInput | null,
   input: UpdateAnnotationInput,
@@ -8855,6 +10489,7 @@ export type UpdateAnnotationMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -8867,6 +10502,7 @@ export type UpdateAnnotationMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -9024,6 +10660,40 @@ export type UpdateAnnotationSetMutation = {
   } | null,
 };
 
+export type UpdateCameraMutationVariables = {
+  condition?: ModelCameraConditionInput | null,
+  input: UpdateCameraInput,
+};
+
+export type UpdateCameraMutation = {
+  updateCamera?:  {
+    __typename: "Camera",
+    createdAt: string,
+    focalLengthMm?: number | null,
+    id: string,
+    images?:  {
+      __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    name: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    sensorWidthMm?: number | null,
+    tiltDegrees?: number | null,
+    updatedAt: string,
+  } | null,
+};
+
 export type UpdateCategoryMutationVariables = {
   condition?: ModelCategoryConditionInput | null,
   input: UpdateCategoryInput,
@@ -9085,6 +10755,18 @@ export type UpdateImageMutation = {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
     } | null,
+    camera?:  {
+      __typename: "Camera",
+      createdAt: string,
+      focalLengthMm?: number | null,
+      id: string,
+      name: string,
+      projectId: string,
+      sensorWidthMm?: number | null,
+      tiltDegrees?: number | null,
+      updatedAt: string,
+    } | null,
+    cameraId?: string | null,
     cameraSerial?: string | null,
     createdAt: string,
     exifData?: string | null,
@@ -9128,6 +10810,15 @@ export type UpdateImageMutation = {
     } | null,
     roll?: number | null,
     timestamp?: number | null,
+    transect?:  {
+      __typename: "Transect",
+      createdAt: string,
+      id: string,
+      projectId: string,
+      stratumId: string,
+      updatedAt: string,
+    } | null,
+    transectId?: string | null,
     updatedAt: string,
     width: number,
     yaw?: number | null,
@@ -9149,6 +10840,7 @@ export type UpdateImageFileMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -9161,6 +10853,7 @@ export type UpdateImageFileMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -9200,6 +10893,7 @@ export type UpdateImageNeighbourMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -9212,6 +10906,7 @@ export type UpdateImageNeighbourMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -9222,6 +10917,7 @@ export type UpdateImageNeighbourMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -9234,6 +10930,7 @@ export type UpdateImageNeighbourMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -9290,6 +10987,7 @@ export type UpdateImageSetMembershipMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -9302,6 +11000,7 @@ export type UpdateImageSetMembershipMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -9318,6 +11017,58 @@ export type UpdateImageSetMembershipMutation = {
     } | null,
     imageSetId: string,
     updatedAt: string,
+  } | null,
+};
+
+export type UpdateJollyResultMutationVariables = {
+  condition?: ModelJollyResultConditionInput | null,
+  input: UpdateJollyResultInput,
+};
+
+export type UpdateJollyResultMutation = {
+  updateJollyResult?:  {
+    __typename: "JollyResult",
+    animals: number,
+    annotationSetId: string,
+    areaSurveyed: number,
+    categoryId: string,
+    createdAt: string,
+    density: number,
+    estimate: number,
+    lowerBound95: number,
+    numSamples: number,
+    standardError: number,
+    stratumId: string,
+    surveyId: string,
+    updatedAt: string,
+    upperBound95: number,
+    variance: number,
+  } | null,
+};
+
+export type UpdateJollyResultsMembershipMutationVariables = {
+  condition?: ModelJollyResultsMembershipConditionInput | null,
+  input: UpdateJollyResultsMembershipInput,
+};
+
+export type UpdateJollyResultsMembershipMutation = {
+  updateJollyResultsMembership?:  {
+    __typename: "JollyResultsMembership",
+    createdAt: string,
+    survey?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    surveyId: string,
+    updatedAt: string,
+    userId: string,
   } | null,
 };
 
@@ -9342,6 +11093,7 @@ export type UpdateLocationMutation = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -9354,6 +11106,7 @@ export type UpdateLocationMutation = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -9761,6 +11514,10 @@ export type UpdateProjectMutation = {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
     } | null,
+    cameras?:  {
+      __typename: "ModelCameraConnection",
+      nextToken?: string | null,
+    } | null,
     createdAt: string,
     createdBy: string,
     hidden?: boolean | null,
@@ -9775,6 +11532,10 @@ export type UpdateProjectMutation = {
     } | null,
     images?:  {
       __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
       nextToken?: string | null,
     } | null,
     locationSets?:  {
@@ -9811,7 +11572,19 @@ export type UpdateProjectMutation = {
       __typename: "ModelQueueConnection",
       nextToken?: string | null,
     } | null,
+    shapefile?:  {
+      __typename: "Shapefile",
+      coordinates?: Array< number | null > | null,
+      createdAt: string,
+      id: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
     status?: string | null,
+    strata?:  {
+      __typename: "ModelStratumConnection",
+      nextToken?: string | null,
+    } | null,
     testConfig?:  {
       __typename: "ProjectTestConfig",
       accuracy: number,
@@ -9826,6 +11599,10 @@ export type UpdateProjectMutation = {
     } | null,
     testResults?:  {
       __typename: "ModelTestResultConnection",
+      nextToken?: string | null,
+    } | null,
+    transects?:  {
+      __typename: "ModelTransectConnection",
       nextToken?: string | null,
     } | null,
     updatedAt: string,
@@ -9905,6 +11682,7 @@ export type UpdateQueueMutation = {
       updatedAt: string,
     } | null,
     projectId: string,
+    totalBatches?: number | null,
     updatedAt: string,
     url?: string | null,
     users?:  {
@@ -9912,6 +11690,66 @@ export type UpdateQueueMutation = {
       nextToken?: string | null,
     } | null,
     zoom?: number | null,
+  } | null,
+};
+
+export type UpdateShapefileMutationVariables = {
+  condition?: ModelShapefileConditionInput | null,
+  input: UpdateShapefileInput,
+};
+
+export type UpdateShapefileMutation = {
+  updateShapefile?:  {
+    __typename: "Shapefile",
+    coordinates?: Array< number | null > | null,
+    createdAt: string,
+    id: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
+export type UpdateStratumMutationVariables = {
+  condition?: ModelStratumConditionInput | null,
+  input: UpdateStratumInput,
+};
+
+export type UpdateStratumMutation = {
+  updateStratum?:  {
+    __typename: "Stratum",
+    area?: number | null,
+    baselineLength?: number | null,
+    createdAt: string,
+    id: string,
+    name: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    transects?:  {
+      __typename: "ModelTransectConnection",
+      nextToken?: string | null,
+    } | null,
+    updatedAt: string,
   } | null,
 };
 
@@ -10171,6 +12009,47 @@ export type UpdateTestResultCategoryCountMutation = {
   } | null,
 };
 
+export type UpdateTransectMutationVariables = {
+  condition?: ModelTransectConditionInput | null,
+  input: UpdateTransectInput,
+};
+
+export type UpdateTransectMutation = {
+  updateTransect?:  {
+    __typename: "Transect",
+    createdAt: string,
+    id: string,
+    images?:  {
+      __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    stratum?:  {
+      __typename: "Stratum",
+      area?: number | null,
+      baselineLength?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    stratumId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type UpdateUserProjectMembershipMutationVariables = {
   condition?: ModelUserProjectMembershipConditionInput | null,
   input: UpdateUserProjectMembershipInput,
@@ -10188,6 +12067,7 @@ export type UpdateUserProjectMembershipMutation = {
       id: string,
       name: string,
       projectId: string,
+      totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,
@@ -10217,6 +12097,7 @@ export type UpdateUserProjectMembershipMutation = {
       id: string,
       name: string,
       projectId: string,
+      totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,
@@ -10280,6 +12161,7 @@ export type OnCreateAnnotationSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -10292,6 +12174,7 @@ export type OnCreateAnnotationSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -10447,6 +12330,39 @@ export type OnCreateAnnotationSetSubscription = {
   } | null,
 };
 
+export type OnCreateCameraSubscriptionVariables = {
+  filter?: ModelSubscriptionCameraFilterInput | null,
+};
+
+export type OnCreateCameraSubscription = {
+  onCreateCamera?:  {
+    __typename: "Camera",
+    createdAt: string,
+    focalLengthMm?: number | null,
+    id: string,
+    images?:  {
+      __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    name: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    sensorWidthMm?: number | null,
+    tiltDegrees?: number | null,
+    updatedAt: string,
+  } | null,
+};
+
 export type OnCreateCategorySubscriptionVariables = {
   filter?: ModelSubscriptionCategoryFilterInput | null,
 };
@@ -10506,6 +12422,18 @@ export type OnCreateImageSubscription = {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
     } | null,
+    camera?:  {
+      __typename: "Camera",
+      createdAt: string,
+      focalLengthMm?: number | null,
+      id: string,
+      name: string,
+      projectId: string,
+      sensorWidthMm?: number | null,
+      tiltDegrees?: number | null,
+      updatedAt: string,
+    } | null,
+    cameraId?: string | null,
     cameraSerial?: string | null,
     createdAt: string,
     exifData?: string | null,
@@ -10549,6 +12477,15 @@ export type OnCreateImageSubscription = {
     } | null,
     roll?: number | null,
     timestamp?: number | null,
+    transect?:  {
+      __typename: "Transect",
+      createdAt: string,
+      id: string,
+      projectId: string,
+      stratumId: string,
+      updatedAt: string,
+    } | null,
+    transectId?: string | null,
     updatedAt: string,
     width: number,
     yaw?: number | null,
@@ -10569,6 +12506,7 @@ export type OnCreateImageFileSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -10581,6 +12519,7 @@ export type OnCreateImageFileSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -10619,6 +12558,7 @@ export type OnCreateImageNeighbourSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -10631,6 +12571,7 @@ export type OnCreateImageNeighbourSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -10641,6 +12582,7 @@ export type OnCreateImageNeighbourSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -10653,6 +12595,7 @@ export type OnCreateImageNeighbourSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -10707,6 +12650,7 @@ export type OnCreateImageSetMembershipSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -10719,6 +12663,7 @@ export type OnCreateImageSetMembershipSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -10735,6 +12680,56 @@ export type OnCreateImageSetMembershipSubscription = {
     } | null,
     imageSetId: string,
     updatedAt: string,
+  } | null,
+};
+
+export type OnCreateJollyResultSubscriptionVariables = {
+  filter?: ModelSubscriptionJollyResultFilterInput | null,
+};
+
+export type OnCreateJollyResultSubscription = {
+  onCreateJollyResult?:  {
+    __typename: "JollyResult",
+    animals: number,
+    annotationSetId: string,
+    areaSurveyed: number,
+    categoryId: string,
+    createdAt: string,
+    density: number,
+    estimate: number,
+    lowerBound95: number,
+    numSamples: number,
+    standardError: number,
+    stratumId: string,
+    surveyId: string,
+    updatedAt: string,
+    upperBound95: number,
+    variance: number,
+  } | null,
+};
+
+export type OnCreateJollyResultsMembershipSubscriptionVariables = {
+  filter?: ModelSubscriptionJollyResultsMembershipFilterInput | null,
+};
+
+export type OnCreateJollyResultsMembershipSubscription = {
+  onCreateJollyResultsMembership?:  {
+    __typename: "JollyResultsMembership",
+    createdAt: string,
+    survey?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    surveyId: string,
+    updatedAt: string,
+    userId: string,
   } | null,
 };
 
@@ -10758,6 +12753,7 @@ export type OnCreateLocationSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -10770,6 +12766,7 @@ export type OnCreateLocationSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -11168,6 +13165,10 @@ export type OnCreateProjectSubscription = {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
     } | null,
+    cameras?:  {
+      __typename: "ModelCameraConnection",
+      nextToken?: string | null,
+    } | null,
     createdAt: string,
     createdBy: string,
     hidden?: boolean | null,
@@ -11182,6 +13183,10 @@ export type OnCreateProjectSubscription = {
     } | null,
     images?:  {
       __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
       nextToken?: string | null,
     } | null,
     locationSets?:  {
@@ -11218,7 +13223,19 @@ export type OnCreateProjectSubscription = {
       __typename: "ModelQueueConnection",
       nextToken?: string | null,
     } | null,
+    shapefile?:  {
+      __typename: "Shapefile",
+      coordinates?: Array< number | null > | null,
+      createdAt: string,
+      id: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
     status?: string | null,
+    strata?:  {
+      __typename: "ModelStratumConnection",
+      nextToken?: string | null,
+    } | null,
     testConfig?:  {
       __typename: "ProjectTestConfig",
       accuracy: number,
@@ -11233,6 +13250,10 @@ export type OnCreateProjectSubscription = {
     } | null,
     testResults?:  {
       __typename: "ModelTestResultConnection",
+      nextToken?: string | null,
+    } | null,
+    transects?:  {
+      __typename: "ModelTransectConnection",
       nextToken?: string | null,
     } | null,
     updatedAt: string,
@@ -11302,6 +13323,7 @@ export type OnCreateQueueSubscription = {
       updatedAt: string,
     } | null,
     projectId: string,
+    totalBatches?: number | null,
     updatedAt: string,
     url?: string | null,
     users?:  {
@@ -11309,6 +13331,64 @@ export type OnCreateQueueSubscription = {
       nextToken?: string | null,
     } | null,
     zoom?: number | null,
+  } | null,
+};
+
+export type OnCreateShapefileSubscriptionVariables = {
+  filter?: ModelSubscriptionShapefileFilterInput | null,
+};
+
+export type OnCreateShapefileSubscription = {
+  onCreateShapefile?:  {
+    __typename: "Shapefile",
+    coordinates?: Array< number | null > | null,
+    createdAt: string,
+    id: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
+export type OnCreateStratumSubscriptionVariables = {
+  filter?: ModelSubscriptionStratumFilterInput | null,
+};
+
+export type OnCreateStratumSubscription = {
+  onCreateStratum?:  {
+    __typename: "Stratum",
+    area?: number | null,
+    baselineLength?: number | null,
+    createdAt: string,
+    id: string,
+    name: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    transects?:  {
+      __typename: "ModelTransectConnection",
+      nextToken?: string | null,
+    } | null,
+    updatedAt: string,
   } | null,
 };
 
@@ -11562,6 +13642,46 @@ export type OnCreateTestResultCategoryCountSubscription = {
   } | null,
 };
 
+export type OnCreateTransectSubscriptionVariables = {
+  filter?: ModelSubscriptionTransectFilterInput | null,
+};
+
+export type OnCreateTransectSubscription = {
+  onCreateTransect?:  {
+    __typename: "Transect",
+    createdAt: string,
+    id: string,
+    images?:  {
+      __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    stratum?:  {
+      __typename: "Stratum",
+      area?: number | null,
+      baselineLength?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    stratumId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type OnCreateUserProjectMembershipSubscriptionVariables = {
   filter?: ModelSubscriptionUserProjectMembershipFilterInput | null,
 };
@@ -11578,6 +13698,7 @@ export type OnCreateUserProjectMembershipSubscription = {
       id: string,
       name: string,
       projectId: string,
+      totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,
@@ -11607,6 +13728,7 @@ export type OnCreateUserProjectMembershipSubscription = {
       id: string,
       name: string,
       projectId: string,
+      totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,
@@ -11669,6 +13791,7 @@ export type OnDeleteAnnotationSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -11681,6 +13804,7 @@ export type OnDeleteAnnotationSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -11836,6 +13960,39 @@ export type OnDeleteAnnotationSetSubscription = {
   } | null,
 };
 
+export type OnDeleteCameraSubscriptionVariables = {
+  filter?: ModelSubscriptionCameraFilterInput | null,
+};
+
+export type OnDeleteCameraSubscription = {
+  onDeleteCamera?:  {
+    __typename: "Camera",
+    createdAt: string,
+    focalLengthMm?: number | null,
+    id: string,
+    images?:  {
+      __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    name: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    sensorWidthMm?: number | null,
+    tiltDegrees?: number | null,
+    updatedAt: string,
+  } | null,
+};
+
 export type OnDeleteCategorySubscriptionVariables = {
   filter?: ModelSubscriptionCategoryFilterInput | null,
 };
@@ -11895,6 +14052,18 @@ export type OnDeleteImageSubscription = {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
     } | null,
+    camera?:  {
+      __typename: "Camera",
+      createdAt: string,
+      focalLengthMm?: number | null,
+      id: string,
+      name: string,
+      projectId: string,
+      sensorWidthMm?: number | null,
+      tiltDegrees?: number | null,
+      updatedAt: string,
+    } | null,
+    cameraId?: string | null,
     cameraSerial?: string | null,
     createdAt: string,
     exifData?: string | null,
@@ -11938,6 +14107,15 @@ export type OnDeleteImageSubscription = {
     } | null,
     roll?: number | null,
     timestamp?: number | null,
+    transect?:  {
+      __typename: "Transect",
+      createdAt: string,
+      id: string,
+      projectId: string,
+      stratumId: string,
+      updatedAt: string,
+    } | null,
+    transectId?: string | null,
     updatedAt: string,
     width: number,
     yaw?: number | null,
@@ -11958,6 +14136,7 @@ export type OnDeleteImageFileSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -11970,6 +14149,7 @@ export type OnDeleteImageFileSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -12008,6 +14188,7 @@ export type OnDeleteImageNeighbourSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -12020,6 +14201,7 @@ export type OnDeleteImageNeighbourSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -12030,6 +14212,7 @@ export type OnDeleteImageNeighbourSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -12042,6 +14225,7 @@ export type OnDeleteImageNeighbourSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -12096,6 +14280,7 @@ export type OnDeleteImageSetMembershipSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -12108,6 +14293,7 @@ export type OnDeleteImageSetMembershipSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -12124,6 +14310,56 @@ export type OnDeleteImageSetMembershipSubscription = {
     } | null,
     imageSetId: string,
     updatedAt: string,
+  } | null,
+};
+
+export type OnDeleteJollyResultSubscriptionVariables = {
+  filter?: ModelSubscriptionJollyResultFilterInput | null,
+};
+
+export type OnDeleteJollyResultSubscription = {
+  onDeleteJollyResult?:  {
+    __typename: "JollyResult",
+    animals: number,
+    annotationSetId: string,
+    areaSurveyed: number,
+    categoryId: string,
+    createdAt: string,
+    density: number,
+    estimate: number,
+    lowerBound95: number,
+    numSamples: number,
+    standardError: number,
+    stratumId: string,
+    surveyId: string,
+    updatedAt: string,
+    upperBound95: number,
+    variance: number,
+  } | null,
+};
+
+export type OnDeleteJollyResultsMembershipSubscriptionVariables = {
+  filter?: ModelSubscriptionJollyResultsMembershipFilterInput | null,
+};
+
+export type OnDeleteJollyResultsMembershipSubscription = {
+  onDeleteJollyResultsMembership?:  {
+    __typename: "JollyResultsMembership",
+    createdAt: string,
+    survey?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    surveyId: string,
+    updatedAt: string,
+    userId: string,
   } | null,
 };
 
@@ -12147,6 +14383,7 @@ export type OnDeleteLocationSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -12159,6 +14396,7 @@ export type OnDeleteLocationSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -12557,6 +14795,10 @@ export type OnDeleteProjectSubscription = {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
     } | null,
+    cameras?:  {
+      __typename: "ModelCameraConnection",
+      nextToken?: string | null,
+    } | null,
     createdAt: string,
     createdBy: string,
     hidden?: boolean | null,
@@ -12571,6 +14813,10 @@ export type OnDeleteProjectSubscription = {
     } | null,
     images?:  {
       __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
       nextToken?: string | null,
     } | null,
     locationSets?:  {
@@ -12607,7 +14853,19 @@ export type OnDeleteProjectSubscription = {
       __typename: "ModelQueueConnection",
       nextToken?: string | null,
     } | null,
+    shapefile?:  {
+      __typename: "Shapefile",
+      coordinates?: Array< number | null > | null,
+      createdAt: string,
+      id: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
     status?: string | null,
+    strata?:  {
+      __typename: "ModelStratumConnection",
+      nextToken?: string | null,
+    } | null,
     testConfig?:  {
       __typename: "ProjectTestConfig",
       accuracy: number,
@@ -12622,6 +14880,10 @@ export type OnDeleteProjectSubscription = {
     } | null,
     testResults?:  {
       __typename: "ModelTestResultConnection",
+      nextToken?: string | null,
+    } | null,
+    transects?:  {
+      __typename: "ModelTransectConnection",
       nextToken?: string | null,
     } | null,
     updatedAt: string,
@@ -12691,6 +14953,7 @@ export type OnDeleteQueueSubscription = {
       updatedAt: string,
     } | null,
     projectId: string,
+    totalBatches?: number | null,
     updatedAt: string,
     url?: string | null,
     users?:  {
@@ -12698,6 +14961,64 @@ export type OnDeleteQueueSubscription = {
       nextToken?: string | null,
     } | null,
     zoom?: number | null,
+  } | null,
+};
+
+export type OnDeleteShapefileSubscriptionVariables = {
+  filter?: ModelSubscriptionShapefileFilterInput | null,
+};
+
+export type OnDeleteShapefileSubscription = {
+  onDeleteShapefile?:  {
+    __typename: "Shapefile",
+    coordinates?: Array< number | null > | null,
+    createdAt: string,
+    id: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
+export type OnDeleteStratumSubscriptionVariables = {
+  filter?: ModelSubscriptionStratumFilterInput | null,
+};
+
+export type OnDeleteStratumSubscription = {
+  onDeleteStratum?:  {
+    __typename: "Stratum",
+    area?: number | null,
+    baselineLength?: number | null,
+    createdAt: string,
+    id: string,
+    name: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    transects?:  {
+      __typename: "ModelTransectConnection",
+      nextToken?: string | null,
+    } | null,
+    updatedAt: string,
   } | null,
 };
 
@@ -12951,6 +15272,46 @@ export type OnDeleteTestResultCategoryCountSubscription = {
   } | null,
 };
 
+export type OnDeleteTransectSubscriptionVariables = {
+  filter?: ModelSubscriptionTransectFilterInput | null,
+};
+
+export type OnDeleteTransectSubscription = {
+  onDeleteTransect?:  {
+    __typename: "Transect",
+    createdAt: string,
+    id: string,
+    images?:  {
+      __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    stratum?:  {
+      __typename: "Stratum",
+      area?: number | null,
+      baselineLength?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    stratumId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type OnDeleteUserProjectMembershipSubscriptionVariables = {
   filter?: ModelSubscriptionUserProjectMembershipFilterInput | null,
 };
@@ -12967,6 +15328,7 @@ export type OnDeleteUserProjectMembershipSubscription = {
       id: string,
       name: string,
       projectId: string,
+      totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,
@@ -12996,6 +15358,7 @@ export type OnDeleteUserProjectMembershipSubscription = {
       id: string,
       name: string,
       projectId: string,
+      totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,
@@ -13058,6 +15421,7 @@ export type OnUpdateAnnotationSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -13070,6 +15434,7 @@ export type OnUpdateAnnotationSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -13225,6 +15590,39 @@ export type OnUpdateAnnotationSetSubscription = {
   } | null,
 };
 
+export type OnUpdateCameraSubscriptionVariables = {
+  filter?: ModelSubscriptionCameraFilterInput | null,
+};
+
+export type OnUpdateCameraSubscription = {
+  onUpdateCamera?:  {
+    __typename: "Camera",
+    createdAt: string,
+    focalLengthMm?: number | null,
+    id: string,
+    images?:  {
+      __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    name: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    sensorWidthMm?: number | null,
+    tiltDegrees?: number | null,
+    updatedAt: string,
+  } | null,
+};
+
 export type OnUpdateCategorySubscriptionVariables = {
   filter?: ModelSubscriptionCategoryFilterInput | null,
 };
@@ -13284,6 +15682,18 @@ export type OnUpdateImageSubscription = {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
     } | null,
+    camera?:  {
+      __typename: "Camera",
+      createdAt: string,
+      focalLengthMm?: number | null,
+      id: string,
+      name: string,
+      projectId: string,
+      sensorWidthMm?: number | null,
+      tiltDegrees?: number | null,
+      updatedAt: string,
+    } | null,
+    cameraId?: string | null,
     cameraSerial?: string | null,
     createdAt: string,
     exifData?: string | null,
@@ -13327,6 +15737,15 @@ export type OnUpdateImageSubscription = {
     } | null,
     roll?: number | null,
     timestamp?: number | null,
+    transect?:  {
+      __typename: "Transect",
+      createdAt: string,
+      id: string,
+      projectId: string,
+      stratumId: string,
+      updatedAt: string,
+    } | null,
+    transectId?: string | null,
     updatedAt: string,
     width: number,
     yaw?: number | null,
@@ -13347,6 +15766,7 @@ export type OnUpdateImageFileSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -13359,6 +15779,7 @@ export type OnUpdateImageFileSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -13397,6 +15818,7 @@ export type OnUpdateImageNeighbourSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -13409,6 +15831,7 @@ export type OnUpdateImageNeighbourSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -13419,6 +15842,7 @@ export type OnUpdateImageNeighbourSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -13431,6 +15855,7 @@ export type OnUpdateImageNeighbourSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -13485,6 +15910,7 @@ export type OnUpdateImageSetMembershipSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -13497,6 +15923,7 @@ export type OnUpdateImageSetMembershipSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -13513,6 +15940,56 @@ export type OnUpdateImageSetMembershipSubscription = {
     } | null,
     imageSetId: string,
     updatedAt: string,
+  } | null,
+};
+
+export type OnUpdateJollyResultSubscriptionVariables = {
+  filter?: ModelSubscriptionJollyResultFilterInput | null,
+};
+
+export type OnUpdateJollyResultSubscription = {
+  onUpdateJollyResult?:  {
+    __typename: "JollyResult",
+    animals: number,
+    annotationSetId: string,
+    areaSurveyed: number,
+    categoryId: string,
+    createdAt: string,
+    density: number,
+    estimate: number,
+    lowerBound95: number,
+    numSamples: number,
+    standardError: number,
+    stratumId: string,
+    surveyId: string,
+    updatedAt: string,
+    upperBound95: number,
+    variance: number,
+  } | null,
+};
+
+export type OnUpdateJollyResultsMembershipSubscriptionVariables = {
+  filter?: ModelSubscriptionJollyResultsMembershipFilterInput | null,
+};
+
+export type OnUpdateJollyResultsMembershipSubscription = {
+  onUpdateJollyResultsMembership?:  {
+    __typename: "JollyResultsMembership",
+    createdAt: string,
+    survey?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    surveyId: string,
+    updatedAt: string,
+    userId: string,
   } | null,
 };
 
@@ -13536,6 +16013,7 @@ export type OnUpdateLocationSubscription = {
       altitude_agl?: number | null,
       altitude_egm96?: number | null,
       altitude_wgs84?: number | null,
+      cameraId?: string | null,
       cameraSerial?: string | null,
       createdAt: string,
       exifData?: string | null,
@@ -13548,6 +16026,7 @@ export type OnUpdateLocationSubscription = {
       projectId: string,
       roll?: number | null,
       timestamp?: number | null,
+      transectId?: string | null,
       updatedAt: string,
       width: number,
       yaw?: number | null,
@@ -13946,6 +16425,10 @@ export type OnUpdateProjectSubscription = {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
     } | null,
+    cameras?:  {
+      __typename: "ModelCameraConnection",
+      nextToken?: string | null,
+    } | null,
     createdAt: string,
     createdBy: string,
     hidden?: boolean | null,
@@ -13960,6 +16443,10 @@ export type OnUpdateProjectSubscription = {
     } | null,
     images?:  {
       __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
       nextToken?: string | null,
     } | null,
     locationSets?:  {
@@ -13996,7 +16483,19 @@ export type OnUpdateProjectSubscription = {
       __typename: "ModelQueueConnection",
       nextToken?: string | null,
     } | null,
+    shapefile?:  {
+      __typename: "Shapefile",
+      coordinates?: Array< number | null > | null,
+      createdAt: string,
+      id: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
     status?: string | null,
+    strata?:  {
+      __typename: "ModelStratumConnection",
+      nextToken?: string | null,
+    } | null,
     testConfig?:  {
       __typename: "ProjectTestConfig",
       accuracy: number,
@@ -14011,6 +16510,10 @@ export type OnUpdateProjectSubscription = {
     } | null,
     testResults?:  {
       __typename: "ModelTestResultConnection",
+      nextToken?: string | null,
+    } | null,
+    transects?:  {
+      __typename: "ModelTransectConnection",
       nextToken?: string | null,
     } | null,
     updatedAt: string,
@@ -14080,6 +16583,7 @@ export type OnUpdateQueueSubscription = {
       updatedAt: string,
     } | null,
     projectId: string,
+    totalBatches?: number | null,
     updatedAt: string,
     url?: string | null,
     users?:  {
@@ -14087,6 +16591,64 @@ export type OnUpdateQueueSubscription = {
       nextToken?: string | null,
     } | null,
     zoom?: number | null,
+  } | null,
+};
+
+export type OnUpdateShapefileSubscriptionVariables = {
+  filter?: ModelSubscriptionShapefileFilterInput | null,
+};
+
+export type OnUpdateShapefileSubscription = {
+  onUpdateShapefile?:  {
+    __typename: "Shapefile",
+    coordinates?: Array< number | null > | null,
+    createdAt: string,
+    id: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
+export type OnUpdateStratumSubscriptionVariables = {
+  filter?: ModelSubscriptionStratumFilterInput | null,
+};
+
+export type OnUpdateStratumSubscription = {
+  onUpdateStratum?:  {
+    __typename: "Stratum",
+    area?: number | null,
+    baselineLength?: number | null,
+    createdAt: string,
+    id: string,
+    name: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    transects?:  {
+      __typename: "ModelTransectConnection",
+      nextToken?: string | null,
+    } | null,
+    updatedAt: string,
   } | null,
 };
 
@@ -14340,6 +16902,46 @@ export type OnUpdateTestResultCategoryCountSubscription = {
   } | null,
 };
 
+export type OnUpdateTransectSubscriptionVariables = {
+  filter?: ModelSubscriptionTransectFilterInput | null,
+};
+
+export type OnUpdateTransectSubscription = {
+  onUpdateTransect?:  {
+    __typename: "Transect",
+    createdAt: string,
+    id: string,
+    images?:  {
+      __typename: "ModelImageConnection",
+      nextToken?: string | null,
+    } | null,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    stratum?:  {
+      __typename: "Stratum",
+      area?: number | null,
+      baselineLength?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      updatedAt: string,
+    } | null,
+    stratumId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type OnUpdateUserProjectMembershipSubscriptionVariables = {
   filter?: ModelSubscriptionUserProjectMembershipFilterInput | null,
 };
@@ -14356,6 +16958,7 @@ export type OnUpdateUserProjectMembershipSubscription = {
       id: string,
       name: string,
       projectId: string,
+      totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,
@@ -14385,6 +16988,7 @@ export type OnUpdateUserProjectMembershipSubscription = {
       id: string,
       name: string,
       projectId: string,
+      totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,

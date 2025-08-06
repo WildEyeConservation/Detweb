@@ -290,11 +290,7 @@ export default function UploadManager() {
               await fileStoreUploaded.setItem(projectId, uploadedFiles);
 
               let elevation = 0;
-              if (
-                image.latitude &&
-                image.longitude &&
-                !image.altitude_agl
-              ) {
+              if (image.latitude && image.longitude && !image.altitude_agl) {
                 elevation =
                   (await getElevationAtCoordinates(
                     image.latitude,
@@ -302,8 +298,7 @@ export default function UploadManager() {
                   )) ?? 0;
               }
 
-              const altitude =
-                image.altitude_egm96 ?? image.altitude_wgs84;
+              const altitude = image.altitude_egm96 ?? image.altitude_wgs84;
 
               const { data: img } = await (client.models.Image.create as any)({
                 projectId,
@@ -490,15 +485,9 @@ export default function UploadManager() {
       const metadata = (await metadataStore.getItem(projectId)) as {
         model: string;
         masks: number[][][];
-        cameraSelection: [string, string[]];
-        overlaps: { cameraA: string; cameraB: string }[];
-        overlapInterval: number;
       };
       const model = metadata?.model ?? 'manual';
       const masks = metadata?.masks ?? [];
-      const cameraSelection = metadata?.cameraSelection ?? [];
-      const overlaps = metadata?.overlaps ?? [];
-      const overlapInterval = metadata?.overlapInterval || 1;
 
       const BATCH_SIZE = 500;
 
@@ -510,13 +499,9 @@ export default function UploadManager() {
 
         // kick off image registration
         client.mutations.runImageRegistration({
-          images: batchStrings,
           projectId: projectId,
           metadata: JSON.stringify({
             masks: masks,
-            cameraSelection: cameraSelection,
-            overlaps: overlaps,
-            overlapInterval: overlapInterval,
           }),
           queueUrl: backend.custom.lightglueTaskQueueUrl,
         });

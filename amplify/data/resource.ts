@@ -59,6 +59,7 @@ const schema = a
           'JollyResultsMembership',
           'surveyId'
         ),
+        cameraOverlaps: a.hasMany('CameraOverlap', 'projectId'),
         shapefileExclusions: a.hasMany('ShapefileExclusions', 'projectId'),
       })
       .authorization((allow) => [allow.authenticated()]),
@@ -555,7 +556,6 @@ const schema = a
       .secondaryIndexes((index) => [
         index('projectId').queryField('shapefileExclusionsByProjectId'),
       ]),
-
     Camera: a
       .model({
         projectId: a.id().required(),
@@ -569,6 +569,18 @@ const schema = a
       .authorization((allow) => [allow.authenticated()])
       .secondaryIndexes((index) => [
         index('projectId').queryField('camerasByProjectId'),
+      ]),
+    CameraOverlap: a
+      .model({
+        projectId: a.id().required(),
+        project: a.belongsTo('Project', 'projectId'),
+        cameraAId: a.id().required(),
+        cameraBId: a.id().required(),
+      })
+      .authorization((allow) => [allow.authenticated()])
+      .identifier(['cameraAId', 'cameraBId'])
+      .secondaryIndexes((index) => [
+        index('projectId').queryField('cameraOverlapsByProjectId'),
       ]),
     Transect: a
       .model({
@@ -832,8 +844,6 @@ const schema = a
       .mutation()
       .arguments({
         projectId: a.string().required(),
-        //imageId---originalPath---timestamp
-        images: a.string().array(),
         //JSON stringified metadata
         metadata: a.string().required(),
         queueUrl: a.string().required(),
