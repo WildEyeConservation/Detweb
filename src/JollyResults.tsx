@@ -15,6 +15,7 @@ import { useOptimisticUpdates } from './useOptimisticUpdates.tsx';
 import { Schema } from '../amplify/data/resource.ts';
 // @ts-ignore
 import * as jStat from 'jstat';
+import { useNavigate } from 'react-router-dom';
 
 export default function JollyResults() {
   const { surveyId, annotationSetId } = useParams() as {
@@ -45,6 +46,7 @@ export default function JollyResults() {
   const { users } = useUsers();
   const adminProjects = myProjectsHook.data?.filter((p) => p.isAdmin);
   const isProjectAdmin = adminProjects?.some((p) => p.projectId === surveyId);
+  const navigate = useNavigate();
 
   const subscriptionFilter = useMemo(
     () => ({
@@ -215,6 +217,12 @@ export default function JollyResults() {
           const filtered = data.filter(
             (r) => r.annotationSetId === annotationSetId
           );
+
+          if (filtered.length === 0) {
+            navigate('/');
+            return;
+          }
+
           //fetch stratum name and insert into results
           const stratumNames = await fetchAllPaginatedResults(
             client.models.Stratum.strataByProjectId,
