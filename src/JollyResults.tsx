@@ -143,10 +143,21 @@ export default function JollyResults() {
     const windowUrl = new URL(window.location.href);
     let url = `${windowUrl.origin}?t=${token}`;
 
+    // First, attempt to use the native share API if available
+    if (navigator.share) {
+      try {
+        await navigator.share({ url });
+        return;
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    // Fallback: copy the link to the clipboard
     try {
-      await navigator.share({ url: url });
-    } catch (error) {
-      console.error(error);
+      await navigator.clipboard.writeText(url);
+      console.log('Link copied to clipboard');
+    } catch (err) {
+      console.error('Failed to copy link to clipboard', err);
     }
   }
 
