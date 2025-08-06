@@ -6,6 +6,7 @@ import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import 'leaflet.heat';
+import html2canvas from 'html2canvas';
 import { fetchAllPaginatedResults } from './utils';
 import { GlobalContext } from './Context';
 import {
@@ -202,6 +203,35 @@ export default function DensityMap({
     return null;
   };
 
+  // Add FullscreenControl to toggle map fullscreen
+  const FullscreenControl: React.FC = () => {
+    const map = useMap();
+    useEffect(() => {
+      const control = (L as any).control({ position: 'topright' });
+      control.onAdd = () => {
+        const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+        container.style.backgroundColor = 'white';
+        const button = L.DomUtil.create('button', 'btn text-black', container) as HTMLButtonElement;
+        button.innerHTML = '⛶';
+        button.style.cursor = 'pointer';
+        L.DomEvent.on(button, 'click', () => {
+          const mapContainer = map.getContainer();
+          if (!document.fullscreenElement) {
+            mapContainer.requestFullscreen?.();
+          } else {
+            document.exitFullscreen?.();
+          }
+        });
+        return container;
+      };
+      control.addTo(map);
+      return () => {
+        control.remove();
+      };
+    }, [map]);
+    return null;
+  };
+
   return (
     <div className='d-flex flex-column flex-grow-1 w-100 h-100'>
       <LabeledToggleSwitch
@@ -219,10 +249,12 @@ export default function DensityMap({
           <TileLayer
             attribution='&copy; OpenStreetMap contributors'
             url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+            crossOrigin='anonymous'
           />
           <MapEvents />
           <StrataLayer />
           {showHeatmap ? <HeatmapLayer /> : <ClusteredMarkers />}
+          <FullscreenControl />
         </MapContainer>
       </div>
     </div>
