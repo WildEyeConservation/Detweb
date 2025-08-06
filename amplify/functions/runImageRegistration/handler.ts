@@ -5,17 +5,12 @@ import { generateClient } from 'aws-amplify/data';
 import { SendMessageBatchCommand, SQSClient } from '@aws-sdk/client-sqs';
 import type { GraphQLResult } from '@aws-amplify/api-graphql';
 import {
-  //@ts-ignore (TODO)
   cameraOverlapsByProjectId,
   getImageNeighbour,
   imagesByProjectId,
 } from './graphql/queries';
 import { createImageNeighbour } from './graphql/mutations';
-import {
-  //@ts-ignore (TODO)
-  CameraOverlap,
-  Image,
-} from '../runImageRegistration/graphql/API';
+import { CameraOverlap, Image } from '../runImageRegistration/graphql/API';
 
 Amplify.configure(
   {
@@ -44,11 +39,6 @@ Amplify.configure(
     },
   }
 );
-
-interface CameraOverlap {
-  cameraAId: string;
-  cameraBId: string;
-}
 
 const client = generateClient({
   authMode: 'iam',
@@ -213,7 +203,7 @@ export const handler: Handler = async (event, context) => {
         acc[cameraId] = [];
       }
       acc[cameraId].push(image);
-      
+
       return acc;
     }, {} as Record<string, Image[]>);
 
@@ -222,6 +212,20 @@ export const handler: Handler = async (event, context) => {
     // process images by camera
     Object.entries(imagesByCamera).forEach(([_, images]) => {
       const camPairPromises = processImages(images, masks);
+      pairPromises.push(...camPairPromises);
+    });
+
+    // process images from overlapping cameras
+    cameraOverlaps.forEach((overlap) => {
+      const imgsA = imagesByCamera[overlap.cameraAId];
+      const imgsB = imagesByCamera[overlap.cameraBId];
+
+      // interleave images from the two cameras
+      const mergedImages = [...imgsA, ...imgsB].sort(
+        (a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0)
+      );
+
+      const camPairPromises = processImages(mergedImages, masks);
       pairPromises.push(...camPairPromises);
     });
 

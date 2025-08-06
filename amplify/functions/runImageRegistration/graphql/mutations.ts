@@ -175,6 +175,10 @@ export const createAnnotationSet = /* GraphQL */ `mutation CreateAnnotationSet(
     }
     createdAt
     id
+    jollyResultsMemberships {
+      nextToken
+      __typename
+    }
     locationAnnotationCounts {
       nextToken
       __typename
@@ -251,6 +255,34 @@ export const createCamera = /* GraphQL */ `mutation CreateCamera(
 ` as GeneratedMutation<
   APITypes.CreateCameraMutationVariables,
   APITypes.CreateCameraMutation
+>;
+export const createCameraOverlap = /* GraphQL */ `mutation CreateCameraOverlap(
+  $condition: ModelCameraOverlapConditionInput
+  $input: CreateCameraOverlapInput!
+) {
+  createCameraOverlap(condition: $condition, input: $input) {
+    cameraAId
+    cameraBId
+    createdAt
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.CreateCameraOverlapMutationVariables,
+  APITypes.CreateCameraOverlapMutation
 >;
 export const createCategory = /* GraphQL */ `mutation CreateCategory(
   $condition: ModelCategoryConditionInput
@@ -623,6 +655,17 @@ export const createJollyResultsMembership = /* GraphQL */ `mutation CreateJollyR
   $input: CreateJollyResultsMembershipInput!
 ) {
   createJollyResultsMembership(condition: $condition, input: $input) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      register
+      updatedAt
+      __typename
+    }
+    annotationSetId
     createdAt
     survey {
       createdAt
@@ -1094,6 +1137,10 @@ export const createProject = /* GraphQL */ `mutation CreateProject(
       nextToken
       __typename
     }
+    cameraOverlaps {
+      nextToken
+      __typename
+    }
     cameras {
       nextToken
       __typename
@@ -1158,6 +1205,10 @@ export const createProject = /* GraphQL */ `mutation CreateProject(
       id
       projectId
       updatedAt
+      __typename
+    }
+    shapefileExclusions {
+      nextToken
       __typename
     }
     status
@@ -1271,6 +1322,23 @@ export const createQueue = /* GraphQL */ `mutation CreateQueue(
   APITypes.CreateQueueMutationVariables,
   APITypes.CreateQueueMutation
 >;
+export const createResultSharingToken = /* GraphQL */ `mutation CreateResultSharingToken(
+  $condition: ModelResultSharingTokenConditionInput
+  $input: CreateResultSharingTokenInput!
+) {
+  createResultSharingToken(condition: $condition, input: $input) {
+    annotationSetId
+    createdAt
+    jwt
+    surveyId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.CreateResultSharingTokenMutationVariables,
+  APITypes.CreateResultSharingTokenMutation
+>;
 export const createShapefile = /* GraphQL */ `mutation CreateShapefile(
   $condition: ModelShapefileConditionInput
   $input: CreateShapefileInput!
@@ -1299,6 +1367,34 @@ export const createShapefile = /* GraphQL */ `mutation CreateShapefile(
   APITypes.CreateShapefileMutationVariables,
   APITypes.CreateShapefileMutation
 >;
+export const createShapefileExclusions = /* GraphQL */ `mutation CreateShapefileExclusions(
+  $condition: ModelShapefileExclusionsConditionInput
+  $input: CreateShapefileExclusionsInput!
+) {
+  createShapefileExclusions(condition: $condition, input: $input) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.CreateShapefileExclusionsMutationVariables,
+  APITypes.CreateShapefileExclusionsMutation
+>;
 export const createStratum = /* GraphQL */ `mutation CreateStratum(
   $condition: ModelStratumConditionInput
   $input: CreateStratumInput!
@@ -1306,6 +1402,7 @@ export const createStratum = /* GraphQL */ `mutation CreateStratum(
   createStratum(condition: $condition, input: $input) {
     area
     baselineLength
+    coordinates
     createdAt
     id
     name
@@ -1621,6 +1718,7 @@ export const createTransect = /* GraphQL */ `mutation CreateTransect(
     stratum {
       area
       baselineLength
+      coordinates
       createdAt
       id
       name
@@ -1882,6 +1980,10 @@ export const deleteAnnotationSet = /* GraphQL */ `mutation DeleteAnnotationSet(
     }
     createdAt
     id
+    jollyResultsMemberships {
+      nextToken
+      __typename
+    }
     locationAnnotationCounts {
       nextToken
       __typename
@@ -1958,6 +2060,34 @@ export const deleteCamera = /* GraphQL */ `mutation DeleteCamera(
 ` as GeneratedMutation<
   APITypes.DeleteCameraMutationVariables,
   APITypes.DeleteCameraMutation
+>;
+export const deleteCameraOverlap = /* GraphQL */ `mutation DeleteCameraOverlap(
+  $condition: ModelCameraOverlapConditionInput
+  $input: DeleteCameraOverlapInput!
+) {
+  deleteCameraOverlap(condition: $condition, input: $input) {
+    cameraAId
+    cameraBId
+    createdAt
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.DeleteCameraOverlapMutationVariables,
+  APITypes.DeleteCameraOverlapMutation
 >;
 export const deleteCategory = /* GraphQL */ `mutation DeleteCategory(
   $condition: ModelCategoryConditionInput
@@ -2323,6 +2453,17 @@ export const deleteJollyResultsMembership = /* GraphQL */ `mutation DeleteJollyR
   $input: DeleteJollyResultsMembershipInput!
 ) {
   deleteJollyResultsMembership(condition: $condition, input: $input) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      register
+      updatedAt
+      __typename
+    }
+    annotationSetId
     createdAt
     survey {
       createdAt
@@ -2794,6 +2935,10 @@ export const deleteProject = /* GraphQL */ `mutation DeleteProject(
       nextToken
       __typename
     }
+    cameraOverlaps {
+      nextToken
+      __typename
+    }
     cameras {
       nextToken
       __typename
@@ -2858,6 +3003,10 @@ export const deleteProject = /* GraphQL */ `mutation DeleteProject(
       id
       projectId
       updatedAt
+      __typename
+    }
+    shapefileExclusions {
+      nextToken
       __typename
     }
     status
@@ -2978,6 +3127,23 @@ export const deleteQueue = /* GraphQL */ `mutation DeleteQueue(
   APITypes.DeleteQueueMutationVariables,
   APITypes.DeleteQueueMutation
 >;
+export const deleteResultSharingToken = /* GraphQL */ `mutation DeleteResultSharingToken(
+  $condition: ModelResultSharingTokenConditionInput
+  $input: DeleteResultSharingTokenInput!
+) {
+  deleteResultSharingToken(condition: $condition, input: $input) {
+    annotationSetId
+    createdAt
+    jwt
+    surveyId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.DeleteResultSharingTokenMutationVariables,
+  APITypes.DeleteResultSharingTokenMutation
+>;
 export const deleteShapefile = /* GraphQL */ `mutation DeleteShapefile(
   $condition: ModelShapefileConditionInput
   $input: DeleteShapefileInput!
@@ -3006,6 +3172,34 @@ export const deleteShapefile = /* GraphQL */ `mutation DeleteShapefile(
   APITypes.DeleteShapefileMutationVariables,
   APITypes.DeleteShapefileMutation
 >;
+export const deleteShapefileExclusions = /* GraphQL */ `mutation DeleteShapefileExclusions(
+  $condition: ModelShapefileExclusionsConditionInput
+  $input: DeleteShapefileExclusionsInput!
+) {
+  deleteShapefileExclusions(condition: $condition, input: $input) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.DeleteShapefileExclusionsMutationVariables,
+  APITypes.DeleteShapefileExclusionsMutation
+>;
 export const deleteStratum = /* GraphQL */ `mutation DeleteStratum(
   $condition: ModelStratumConditionInput
   $input: DeleteStratumInput!
@@ -3013,6 +3207,7 @@ export const deleteStratum = /* GraphQL */ `mutation DeleteStratum(
   deleteStratum(condition: $condition, input: $input) {
     area
     baselineLength
+    coordinates
     createdAt
     id
     name
@@ -3328,6 +3523,7 @@ export const deleteTransect = /* GraphQL */ `mutation DeleteTransect(
     stratum {
       area
       baselineLength
+      coordinates
       createdAt
       id
       name
@@ -3429,12 +3625,27 @@ export const deleteUserStats = /* GraphQL */ `mutation DeleteUserStats(
   APITypes.DeleteUserStatsMutationVariables,
   APITypes.DeleteUserStatsMutation
 >;
-export const generateSurveyResults = /* GraphQL */ `mutation GenerateSurveyResults($annotationSetId: String!, $surveyId: String!) {
-  generateSurveyResults(annotationSetId: $annotationSetId, surveyId: $surveyId)
+export const generateSurveyResults = /* GraphQL */ `mutation GenerateSurveyResults(
+  $annotationSetId: String!
+  $categoryIds: [String]!
+  $surveyId: String!
+) {
+  generateSurveyResults(
+    annotationSetId: $annotationSetId
+    categoryIds: $categoryIds
+    surveyId: $surveyId
+  )
 }
 ` as GeneratedMutation<
   APITypes.GenerateSurveyResultsMutationVariables,
   APITypes.GenerateSurveyResultsMutation
+>;
+export const getJwtSecret = /* GraphQL */ `mutation GetJwtSecret {
+  getJwtSecret
+}
+` as GeneratedMutation<
+  APITypes.GetJwtSecretMutationVariables,
+  APITypes.GetJwtSecretMutation
 >;
 export const processImages = /* GraphQL */ `mutation ProcessImages($model: String!, $s3key: String!, $threshold: Float) {
   processImages(model: $model, s3key: $s3key, threshold: $threshold)
@@ -3469,13 +3680,11 @@ export const runHeatmapper = /* GraphQL */ `mutation RunHeatmapper($images: [Str
   APITypes.RunHeatmapperMutation
 >;
 export const runImageRegistration = /* GraphQL */ `mutation RunImageRegistration(
-  $images: [String]
   $metadata: String!
   $projectId: String!
   $queueUrl: String!
 ) {
   runImageRegistration(
-    images: $images
     metadata: $metadata
     projectId: $projectId
     queueUrl: $queueUrl
@@ -3664,6 +3873,10 @@ export const updateAnnotationSet = /* GraphQL */ `mutation UpdateAnnotationSet(
     }
     createdAt
     id
+    jollyResultsMemberships {
+      nextToken
+      __typename
+    }
     locationAnnotationCounts {
       nextToken
       __typename
@@ -3740,6 +3953,34 @@ export const updateCamera = /* GraphQL */ `mutation UpdateCamera(
 ` as GeneratedMutation<
   APITypes.UpdateCameraMutationVariables,
   APITypes.UpdateCameraMutation
+>;
+export const updateCameraOverlap = /* GraphQL */ `mutation UpdateCameraOverlap(
+  $condition: ModelCameraOverlapConditionInput
+  $input: UpdateCameraOverlapInput!
+) {
+  updateCameraOverlap(condition: $condition, input: $input) {
+    cameraAId
+    cameraBId
+    createdAt
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.UpdateCameraOverlapMutationVariables,
+  APITypes.UpdateCameraOverlapMutation
 >;
 export const updateCategory = /* GraphQL */ `mutation UpdateCategory(
   $condition: ModelCategoryConditionInput
@@ -4105,6 +4346,17 @@ export const updateJollyResultsMembership = /* GraphQL */ `mutation UpdateJollyR
   $input: UpdateJollyResultsMembershipInput!
 ) {
   updateJollyResultsMembership(condition: $condition, input: $input) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      register
+      updatedAt
+      __typename
+    }
+    annotationSetId
     createdAt
     survey {
       createdAt
@@ -4576,6 +4828,10 @@ export const updateProject = /* GraphQL */ `mutation UpdateProject(
       nextToken
       __typename
     }
+    cameraOverlaps {
+      nextToken
+      __typename
+    }
     cameras {
       nextToken
       __typename
@@ -4640,6 +4896,10 @@ export const updateProject = /* GraphQL */ `mutation UpdateProject(
       id
       projectId
       updatedAt
+      __typename
+    }
+    shapefileExclusions {
+      nextToken
       __typename
     }
     status
@@ -4760,6 +5020,23 @@ export const updateQueue = /* GraphQL */ `mutation UpdateQueue(
   APITypes.UpdateQueueMutationVariables,
   APITypes.UpdateQueueMutation
 >;
+export const updateResultSharingToken = /* GraphQL */ `mutation UpdateResultSharingToken(
+  $condition: ModelResultSharingTokenConditionInput
+  $input: UpdateResultSharingTokenInput!
+) {
+  updateResultSharingToken(condition: $condition, input: $input) {
+    annotationSetId
+    createdAt
+    jwt
+    surveyId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.UpdateResultSharingTokenMutationVariables,
+  APITypes.UpdateResultSharingTokenMutation
+>;
 export const updateShapefile = /* GraphQL */ `mutation UpdateShapefile(
   $condition: ModelShapefileConditionInput
   $input: UpdateShapefileInput!
@@ -4788,6 +5065,34 @@ export const updateShapefile = /* GraphQL */ `mutation UpdateShapefile(
   APITypes.UpdateShapefileMutationVariables,
   APITypes.UpdateShapefileMutation
 >;
+export const updateShapefileExclusions = /* GraphQL */ `mutation UpdateShapefileExclusions(
+  $condition: ModelShapefileExclusionsConditionInput
+  $input: UpdateShapefileExclusionsInput!
+) {
+  updateShapefileExclusions(condition: $condition, input: $input) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.UpdateShapefileExclusionsMutationVariables,
+  APITypes.UpdateShapefileExclusionsMutation
+>;
 export const updateStratum = /* GraphQL */ `mutation UpdateStratum(
   $condition: ModelStratumConditionInput
   $input: UpdateStratumInput!
@@ -4795,6 +5100,7 @@ export const updateStratum = /* GraphQL */ `mutation UpdateStratum(
   updateStratum(condition: $condition, input: $input) {
     area
     baselineLength
+    coordinates
     createdAt
     id
     name
@@ -5110,6 +5416,7 @@ export const updateTransect = /* GraphQL */ `mutation UpdateTransect(
     stratum {
       area
       baselineLength
+      coordinates
       createdAt
       id
       name

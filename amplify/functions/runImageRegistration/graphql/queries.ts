@@ -194,6 +194,36 @@ export const annotationsByObjectId = /* GraphQL */ `query AnnotationsByObjectId(
   APITypes.AnnotationsByObjectIdQueryVariables,
   APITypes.AnnotationsByObjectIdQuery
 >;
+export const cameraOverlapsByProjectId = /* GraphQL */ `query CameraOverlapsByProjectId(
+  $filter: ModelCameraOverlapFilterInput
+  $limit: Int
+  $nextToken: String
+  $projectId: ID!
+  $sortDirection: ModelSortDirection
+) {
+  cameraOverlapsByProjectId(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    projectId: $projectId
+    sortDirection: $sortDirection
+  ) {
+    items {
+      cameraAId
+      cameraBId
+      createdAt
+      projectId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.CameraOverlapsByProjectIdQueryVariables,
+  APITypes.CameraOverlapsByProjectIdQuery
+>;
 export const camerasByProjectId = /* GraphQL */ `query CamerasByProjectId(
   $filter: ModelCameraFilterInput
   $limit: Int
@@ -554,6 +584,10 @@ export const getAnnotationSet = /* GraphQL */ `query GetAnnotationSet($id: ID!) 
     }
     createdAt
     id
+    jollyResultsMemberships {
+      nextToken
+      __typename
+    }
     locationAnnotationCounts {
       nextToken
       __typename
@@ -625,6 +659,31 @@ export const getCamera = /* GraphQL */ `query GetCamera($id: ID!) {
   }
 }
 ` as GeneratedQuery<APITypes.GetCameraQueryVariables, APITypes.GetCameraQuery>;
+export const getCameraOverlap = /* GraphQL */ `query GetCameraOverlap($cameraAId: ID!, $cameraBId: ID!) {
+  getCameraOverlap(cameraAId: $cameraAId, cameraBId: $cameraBId) {
+    cameraAId
+    cameraBId
+    createdAt
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.GetCameraOverlapQueryVariables,
+  APITypes.GetCameraOverlapQuery
+>;
 export const getCategory = /* GraphQL */ `query GetCategory($id: ID!) {
   getCategory(id: $id) {
     annotationCount
@@ -981,8 +1040,27 @@ export const getJollyResult = /* GraphQL */ `query GetJollyResult(
   APITypes.GetJollyResultQueryVariables,
   APITypes.GetJollyResultQuery
 >;
-export const getJollyResultsMembership = /* GraphQL */ `query GetJollyResultsMembership($surveyId: ID!, $userId: String!) {
-  getJollyResultsMembership(surveyId: $surveyId, userId: $userId) {
+export const getJollyResultsMembership = /* GraphQL */ `query GetJollyResultsMembership(
+  $annotationSetId: ID!
+  $surveyId: ID!
+  $userId: String!
+) {
+  getJollyResultsMembership(
+    annotationSetId: $annotationSetId
+    surveyId: $surveyId
+    userId: $userId
+  ) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      register
+      updatedAt
+      __typename
+    }
+    annotationSetId
     createdAt
     survey {
       createdAt
@@ -1426,6 +1504,10 @@ export const getProject = /* GraphQL */ `query GetProject($id: ID!) {
       nextToken
       __typename
     }
+    cameraOverlaps {
+      nextToken
+      __typename
+    }
     cameras {
       nextToken
       __typename
@@ -1490,6 +1572,10 @@ export const getProject = /* GraphQL */ `query GetProject($id: ID!) {
       id
       projectId
       updatedAt
+      __typename
+    }
+    shapefileExclusions {
+      nextToken
       __typename
     }
     status
@@ -1594,6 +1680,23 @@ export const getQueue = /* GraphQL */ `query GetQueue($id: ID!) {
   }
 }
 ` as GeneratedQuery<APITypes.GetQueueQueryVariables, APITypes.GetQueueQuery>;
+export const getResultSharingToken = /* GraphQL */ `query GetResultSharingToken($annotationSetId: ID!, $surveyId: ID!) {
+  getResultSharingToken(
+    annotationSetId: $annotationSetId
+    surveyId: $surveyId
+  ) {
+    annotationSetId
+    createdAt
+    jwt
+    surveyId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.GetResultSharingTokenQueryVariables,
+  APITypes.GetResultSharingTokenQuery
+>;
 export const getShapefile = /* GraphQL */ `query GetShapefile($id: ID!) {
   getShapefile(id: $id) {
     coordinates
@@ -1619,10 +1722,36 @@ export const getShapefile = /* GraphQL */ `query GetShapefile($id: ID!) {
   APITypes.GetShapefileQueryVariables,
   APITypes.GetShapefileQuery
 >;
+export const getShapefileExclusions = /* GraphQL */ `query GetShapefileExclusions($id: ID!) {
+  getShapefileExclusions(id: $id) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.GetShapefileExclusionsQueryVariables,
+  APITypes.GetShapefileExclusionsQuery
+>;
 export const getStratum = /* GraphQL */ `query GetStratum($id: ID!) {
   getStratum(id: $id) {
     area
     baselineLength
+    coordinates
     createdAt
     id
     name
@@ -1928,6 +2057,7 @@ export const getTransect = /* GraphQL */ `query GetTransect($id: ID!) {
     stratum {
       area
       baselineLength
+      coordinates
       createdAt
       id
       name
@@ -2346,6 +2476,7 @@ export const jollyResultsBySurveyId = /* GraphQL */ `query JollyResultsBySurveyI
   APITypes.JollyResultsBySurveyIdQuery
 >;
 export const jollyResultsMembershipsBySurveyId = /* GraphQL */ `query JollyResultsMembershipsBySurveyId(
+  $annotationSetId: ModelIDKeyConditionInput
   $filter: ModelJollyResultsMembershipFilterInput
   $limit: Int
   $nextToken: String
@@ -2353,6 +2484,7 @@ export const jollyResultsMembershipsBySurveyId = /* GraphQL */ `query JollyResul
   $surveyId: ID!
 ) {
   jollyResultsMembershipsBySurveyId(
+    annotationSetId: $annotationSetId
     filter: $filter
     limit: $limit
     nextToken: $nextToken
@@ -2360,6 +2492,7 @@ export const jollyResultsMembershipsBySurveyId = /* GraphQL */ `query JollyResul
     surveyId: $surveyId
   ) {
     items {
+      annotationSetId
       createdAt
       surveyId
       updatedAt
@@ -2460,6 +2593,38 @@ export const listAnnotations = /* GraphQL */ `query ListAnnotations(
 ` as GeneratedQuery<
   APITypes.ListAnnotationsQueryVariables,
   APITypes.ListAnnotationsQuery
+>;
+export const listCameraOverlaps = /* GraphQL */ `query ListCameraOverlaps(
+  $cameraAId: ID
+  $cameraBId: ModelIDKeyConditionInput
+  $filter: ModelCameraOverlapFilterInput
+  $limit: Int
+  $nextToken: String
+  $sortDirection: ModelSortDirection
+) {
+  listCameraOverlaps(
+    cameraAId: $cameraAId
+    cameraBId: $cameraBId
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    sortDirection: $sortDirection
+  ) {
+    items {
+      cameraAId
+      cameraBId
+      createdAt
+      projectId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ListCameraOverlapsQueryVariables,
+  APITypes.ListCameraOverlapsQuery
 >;
 export const listCameras = /* GraphQL */ `query ListCameras(
   $filter: ModelCameraFilterInput
@@ -2705,22 +2870,23 @@ export const listJollyResults = /* GraphQL */ `query ListJollyResults(
   APITypes.ListJollyResultsQuery
 >;
 export const listJollyResultsMemberships = /* GraphQL */ `query ListJollyResultsMemberships(
+  $annotationSetIdUserId: ModelJollyResultsMembershipPrimaryCompositeKeyConditionInput
   $filter: ModelJollyResultsMembershipFilterInput
   $limit: Int
   $nextToken: String
   $sortDirection: ModelSortDirection
   $surveyId: ID
-  $userId: ModelStringKeyConditionInput
 ) {
   listJollyResultsMemberships(
+    annotationSetIdUserId: $annotationSetIdUserId
     filter: $filter
     limit: $limit
     nextToken: $nextToken
     sortDirection: $sortDirection
     surveyId: $surveyId
-    userId: $userId
   ) {
     items {
+      annotationSetId
       createdAt
       surveyId
       updatedAt
@@ -3094,6 +3260,64 @@ export const listQueues = /* GraphQL */ `query ListQueues(
   APITypes.ListQueuesQueryVariables,
   APITypes.ListQueuesQuery
 >;
+export const listResultSharingTokens = /* GraphQL */ `query ListResultSharingTokens(
+  $annotationSetId: ModelIDKeyConditionInput
+  $filter: ModelResultSharingTokenFilterInput
+  $limit: Int
+  $nextToken: String
+  $sortDirection: ModelSortDirection
+  $surveyId: ID
+) {
+  listResultSharingTokens(
+    annotationSetId: $annotationSetId
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    sortDirection: $sortDirection
+    surveyId: $surveyId
+  ) {
+    items {
+      annotationSetId
+      createdAt
+      jwt
+      surveyId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ListResultSharingTokensQueryVariables,
+  APITypes.ListResultSharingTokensQuery
+>;
+export const listShapefileExclusions = /* GraphQL */ `query ListShapefileExclusions(
+  $filter: ModelShapefileExclusionsFilterInput
+  $limit: Int
+  $nextToken: String
+) {
+  listShapefileExclusions(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+  ) {
+    items {
+      coordinates
+      createdAt
+      id
+      projectId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ListShapefileExclusionsQueryVariables,
+  APITypes.ListShapefileExclusionsQuery
+>;
 export const listShapefiles = /* GraphQL */ `query ListShapefiles(
   $filter: ModelShapefileFilterInput
   $limit: Int
@@ -3125,6 +3349,7 @@ export const listStrata = /* GraphQL */ `query ListStrata(
     items {
       area
       baselineLength
+      coordinates
       createdAt
       id
       name
@@ -3889,6 +4114,36 @@ export const queuesByProjectId = /* GraphQL */ `query QueuesByProjectId(
   APITypes.QueuesByProjectIdQueryVariables,
   APITypes.QueuesByProjectIdQuery
 >;
+export const shapefileExclusionsByProjectId = /* GraphQL */ `query ShapefileExclusionsByProjectId(
+  $filter: ModelShapefileExclusionsFilterInput
+  $limit: Int
+  $nextToken: String
+  $projectId: ID!
+  $sortDirection: ModelSortDirection
+) {
+  shapefileExclusionsByProjectId(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    projectId: $projectId
+    sortDirection: $sortDirection
+  ) {
+    items {
+      coordinates
+      createdAt
+      id
+      projectId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ShapefileExclusionsByProjectIdQueryVariables,
+  APITypes.ShapefileExclusionsByProjectIdQuery
+>;
 export const shapefilesByProjectId = /* GraphQL */ `query ShapefilesByProjectId(
   $filter: ModelShapefileFilterInput
   $limit: Int
@@ -3936,6 +4191,7 @@ export const strataByProjectId = /* GraphQL */ `query StrataByProjectId(
     items {
       area
       baselineLength
+      coordinates
       createdAt
       id
       name
