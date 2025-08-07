@@ -7,6 +7,7 @@ interface LabeledToggleSwitchProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
   className?: string;
+  disabled?: boolean;
 }
 
 const LabeledToggleSwitch: React.FC<LabeledToggleSwitchProps> = ({
@@ -15,6 +16,7 @@ const LabeledToggleSwitch: React.FC<LabeledToggleSwitchProps> = ({
   checked,
   onChange,
   className,
+  disabled,
 }) => {
   return (
     <Form.Group as={Row} className={`${className || 'mb-3 align-items-center'}`}>
@@ -27,6 +29,7 @@ const LabeledToggleSwitch: React.FC<LabeledToggleSwitchProps> = ({
           id="custom-switch"
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
+          disabled={disabled}
         />
       </Col>
       <Col xs={4}>

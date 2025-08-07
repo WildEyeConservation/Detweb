@@ -76,6 +76,8 @@ export default function LaunchAnnotationSetModal({
   const [launching, setLaunching] = useState(false);
   const [progressMessage, setProgressMessage] = useState<string>('');
   const [modelGuided, setModelGuided] = useState<boolean>(true);
+  const [launchDisabled, setLaunchDisabled] =
+    useState<boolean>(false);
 
   // set up queue creation helper
   const { client } = useContext(GlobalContext)!;
@@ -285,8 +287,17 @@ export default function LaunchAnnotationSetModal({
       setModelOptions(modelOptions);
       setLoadingLocationSets(false);
     }
+    
     fetchLocationSets();
   }, [project.id]);
+
+  useEffect(() => {
+    if (loadingLocationSets) {
+      setLaunchDisabled(true);
+    } else {
+      setLaunchDisabled(false);
+    }
+  }, [loadingLocationSets]);
 
   return (
     <Modal
@@ -542,6 +553,7 @@ export default function LaunchAnnotationSetModal({
                   labels={annotationSet.categories}
                   setHandleCreateTask={setHandleCreateTask}
                   projectId={project.id}
+                  setLaunchDisabled={setLaunchDisabled}
                 />
               )}
             </Tab>
@@ -555,7 +567,7 @@ export default function LaunchAnnotationSetModal({
         )}
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="primary" disabled={launching} onClick={handleSubmit}>
+        <Button variant="primary" disabled={launchDisabled || launching} onClick={handleSubmit}>
           Launch
         </Button>
         <Button variant="dark" disabled={launching} onClick={onClose}>
