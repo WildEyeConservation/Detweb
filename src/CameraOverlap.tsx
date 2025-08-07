@@ -1,16 +1,12 @@
 import { Form, Button } from 'react-bootstrap';
-import { useState, useMemo, useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 
 export default function CameraOverlap({
   cameraSelection,
-  interval,
-  setInterval,
   overlaps,
   setOverlaps,
 }: {
   cameraSelection: [string, string[]];
-  interval: number;
-  setInterval: (interval: number) => void;
   overlaps: { cameraA: string; cameraB: string }[];
   setOverlaps: (overlaps: { cameraA: string; cameraB: string }[]) => void;
 }) {
@@ -19,13 +15,12 @@ export default function CameraOverlap({
   useEffect(() => {
     if (cameraSelection) {
       setOverlaps([]);
-      setInterval(0);
     }
   }, [cameraSelection]);
 
   return (
     <div>
-      <Form.Group className='mt-2'>
+      <Form.Group className='mt-3'>
         <Form.Label className='mb-0'>Define Overlap Between Cameras</Form.Label>
         <span className='text-muted d-block mb-2' style={{ fontSize: '12px' }}>
           Leave blank if cameras are not overlapping.
@@ -109,27 +104,6 @@ export default function CameraOverlap({
           Add Overlap
         </Button>
       </Form.Group>
-      {overlaps.length > 0 && (
-        <Form.Group className='mt-2'>
-          <Form.Label className='mb-0'>Overlap Window</Form.Label>
-          <span
-            className='text-muted d-block mb-2'
-            style={{ fontSize: '12px' }}
-          >
-            Define the time taken from the first image a location was captured
-            to the last image it was captured in seconds. (Leave blank if the
-            cameras capture the same location within a second of each other.)
-          </span>
-          <Form.Control
-            type='number'
-            placeholder='Enter overlap window in seconds'
-            value={interval}
-            onChange={(e) => {
-              setInterval(Number(e.target.value));
-            }}
-          />
-        </Form.Group>
-      )}
     </div>
   );
 }

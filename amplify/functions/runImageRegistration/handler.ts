@@ -3,10 +3,14 @@ import { env } from '$amplify/env/runImageRegistration';
 import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 import { SendMessageBatchCommand, SQSClient } from '@aws-sdk/client-sqs';
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import type { GraphQLResult } from '@aws-amplify/api-graphql';
-import { getImageNeighbour, imagesByProjectId } from './graphql/queries';
+import {
+  cameraOverlapsByProjectId,
+  getImageNeighbour,
+  imagesByProjectId,
+} from './graphql/queries';
 import { createImageNeighbour } from './graphql/mutations';
+import { CameraOverlap, Image } from '../runImageRegistration/graphql/API';
 
 Amplify.configure(
   {
@@ -35,12 +39,6 @@ Amplify.configure(
     },
   }
 );
-
-interface Image {
-  id: string;
-  originalPath: string;
-  timestamp: number;
-}
 
 const client = generateClient({
   authMode: 'iam',
@@ -75,13 +73,17 @@ async function fetchAllPages<T, K extends string>(
   return allItems;
 }
 
-async function handlePair(
-  image1: Image,
-  image2: Image,
-  masks: number[][][]
-) {
+async function handlePair(image1: Image, image2: Image, masks: number[][][]) {
   try {
     console.log(`Processing pair ${image1.id} and ${image2.id}`);
+
+    if (!image1 || !image2) {
+      console.log(
+        `Skipping pair ${image1.id} and ${image2.id} because one of the images is null`
+      );
+      return null;
+    }
+
     const {
       data: { getImageNeighbour: existingNeighbour },
     } = await client.graphql({
@@ -123,117 +125,113 @@ async function handlePair(
       }),
     };
   } catch (error: any) {
-    console.error(`Error in handlePair for ${image1.id} and ${image2.id}:`, error);
+    console.error(
+      `Error in handlePair for ${image1.id} and ${image2.id}:`,
+      error
+    );
     return null;
   }
 }
 
+function processImages(images: Image[], masks: number[][][]) {
+  const pairPromises: Array<ReturnType<typeof handlePair>> = [];
+
+  for (let i = 0; i < images.length - 1; i++) {
+    const image1 = images[i];
+    const image2 = images[i + 1];
+    if ((image2.timestamp ?? 0) - (image1.timestamp ?? 0) < 5) {
+      pairPromises.push(handlePair(image1, image2, masks));
+    } else {
+      console.log(
+        `Skipping pair ${image1.id} and ${image2.id} because the time difference is greater than 5 seconds`,
+        (image2.timestamp ?? 0) - (image1.timestamp ?? 0)
+      );
+    }
+  }
+
+  return pairPromises.filter((promise) => promise !== null);
+}
+
 export const handler: Handler = async (event, context) => {
   try {
-    // projectId and optional images input
-    const imagesFromEvent = event.arguments.images as string[] | undefined;
     const projectId = event.arguments.projectId as string;
-    const metadata = JSON.parse(event.arguments.metadata as string) as {
+    const metadata = JSON.parse(event.arguments.metadata) as {
       masks: number[][][];
-      cameraSelection: [string, string[]];
-      overlaps: { cameraA: string; cameraB: string }[];
-      overlapInterval: number;
     };
-
-    let originalEventImages = imagesFromEvent ?? [];
-    if (originalEventImages.length === 0) {
-      console.log(
-        `No images provided, fetching images for project ${projectId}`
-      );
-      const fetchedItems = await fetchAllPages<Image, 'imagesByProjectId'>(
-        (nextToken) =>
-          client.graphql({
-            query: imagesByProjectId,
-            variables: { projectId, nextToken },
-          }) as Promise<GraphQLResult<{ imagesByProjectId: PagedList<Image> }>>,
-        'imagesByProjectId'
-      );
-      originalEventImages = fetchedItems.map(
-        (item) => `${item.id}---${item.originalPath}---${item.timestamp}`
-      );
-    }
-    const imageObjects = originalEventImages.map((imageStr) => {
-      const [id, originalPath, timestamp] = imageStr.split('---');
-      return {
-        originalString: imageStr,
-        id,
-        originalPath,
-        timestamp: Number(timestamp),
-      };
-    });
-
-    imageObjects.sort((a, b) => a.timestamp - b.timestamp);
-    const sortedImages = imageObjects.map(
-      ({ id, originalPath, timestamp }) => ({ id, originalPath, timestamp })
-    );
+    const masks = metadata.masks;
     const queueUrl = event.arguments.queueUrl as string;
 
-    const selectionLevel = Number(metadata.cameraSelection[0]);
-    const cameraNames = metadata.cameraSelection[1];
-    const imagesByCamera: Record<string, Image[]> = {};
-    for (const img of sortedImages) {
-      const cameraName = img.originalPath.split('/')[selectionLevel];
-      if (!imagesByCamera[cameraName]) {
-        imagesByCamera[cameraName] = [];
+    const images = await fetchAllPages<Image, 'imagesByProjectId'>(
+      (nextToken) =>
+        client.graphql({
+          query: imagesByProjectId,
+          variables: { projectId, nextToken, limit: 1000 },
+        }) as Promise<GraphQLResult<{ imagesByProjectId: PagedList<Image> }>>,
+      'imagesByProjectId'
+    );
+
+    const sortedImages = images.sort(
+      (a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0)
+    );
+
+    const cameraOverlaps = await fetchAllPages<
+      CameraOverlap,
+      'cameraOverlapsByProjectId'
+    >(
+      (nextToken) =>
+        client.graphql({
+          query: cameraOverlapsByProjectId,
+          variables: { projectId, nextToken, limit: 1000 },
+        }) as Promise<
+          GraphQLResult<{ cameraOverlapsByProjectId: PagedList<CameraOverlap> }>
+        >,
+      'cameraOverlapsByProjectId'
+    );
+
+    // keep track of images with no camera information (this should never happen but just in case)
+    const noCamImgs: Image[] = [];
+
+    // group images by camera
+    const imagesByCamera = sortedImages.reduce((acc, image) => {
+      if (!image.cameraId) {
+        noCamImgs.push(image);
+        return acc;
       }
-      imagesByCamera[cameraName].push(img);
-    }
-    cameraNames.forEach((cam) => {
-      if (imagesByCamera[cam]) {
-        imagesByCamera[cam].sort((a, b) => a.timestamp - b.timestamp);
-      } else {
-        imagesByCamera[cam] = [];
+
+      const cameraId = image.cameraId;
+      if (!acc[cameraId]) {
+        acc[cameraId] = [];
       }
-    });
-    const pairSet = new Set<string>();
+      acc[cameraId].push(image);
+
+      return acc;
+    }, {} as Record<string, Image[]>);
+
     const pairPromises: Array<ReturnType<typeof handlePair>> = [];
-    const halfIntervalS = metadata.overlapInterval / 2;
-    const graceS = 1;
-    const windowS = halfIntervalS + graceS;
-    // Add window-based pairs for overlapping cameras
-    metadata.overlaps.forEach(({ cameraA, cameraB }) => {
-      [cameraA, cameraB].forEach((cam) => {
-        const imgs = imagesByCamera[cam] || [];
-        imgs.forEach((img) => {
-          const windowStart = img.timestamp - windowS;
-          const windowEnd = img.timestamp + windowS;
-          [cameraA, cameraB].forEach((otherCam) => {
-            const otherImgs = imagesByCamera[otherCam] || [];
-            otherImgs.forEach((otherImg) => {
-              if (otherImg.id === img.id) return;
-              if (
-                otherImg.timestamp >= windowStart &&
-                otherImg.timestamp <= windowEnd
-              ) {
-                const key = [img.id, otherImg.id].sort().join('-');
-                if (!pairSet.has(key)) {
-                  pairSet.add(key);
-                  pairPromises.push(handlePair(img, otherImg, metadata.masks));
-                }
-              }
-            });
-          });
-        });
-      });
+
+    // process images by camera
+    Object.entries(imagesByCamera).forEach(([_, images]) => {
+      const camPairPromises = processImages(images, masks);
+      pairPromises.push(...camPairPromises);
     });
-    // Add adjacent same-camera pairs to ensure direct neighbors
-    cameraNames.forEach((cam) => {
-      const imgs = imagesByCamera[cam] || [];
-      for (let i = 0; i < imgs.length - 1; i++) {
-        const img1 = imgs[i];
-        const img2 = imgs[i + 1];
-        const key = [img1.id, img2.id].sort().join('-');
-        if (!pairSet.has(key)) {
-          pairSet.add(key);
-          pairPromises.push(handlePair(img1, img2, metadata.masks));
-        }
-      }
+
+    // process images from overlapping cameras
+    cameraOverlaps.forEach((overlap) => {
+      const imgsA = imagesByCamera[overlap.cameraAId];
+      const imgsB = imagesByCamera[overlap.cameraBId];
+
+      // interleave images from the two cameras
+      const mergedImages = [...imgsA, ...imgsB].sort(
+        (a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0)
+      );
+
+      const camPairPromises = processImages(mergedImages, masks);
+      pairPromises.push(...camPairPromises);
     });
+
+    // process images with no camera
+    const noCamPairPromises = processImages(noCamImgs, masks);
+    pairPromises.push(...noCamPairPromises);
 
     const messages = (await Promise.all(pairPromises)).filter(
       (msg): msg is NonNullable<typeof msg> => msg !== null
@@ -276,6 +274,7 @@ export const handler: Handler = async (event, context) => {
       stack: error.stack,
       name: error.name,
     });
+
     return {
       statusCode: 500,
       body: JSON.stringify({

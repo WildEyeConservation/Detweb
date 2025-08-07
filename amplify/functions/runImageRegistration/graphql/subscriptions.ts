@@ -32,6 +32,7 @@ export const onCreateAnnotation = /* GraphQL */ `subscription OnCreateAnnotation
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -44,6 +45,7 @@ export const onCreateAnnotation = /* GraphQL */ `subscription OnCreateAnnotation
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -164,6 +166,10 @@ export const onCreateAnnotationSet = /* GraphQL */ `subscription OnCreateAnnotat
     }
     createdAt
     id
+    jollyResultsMemberships {
+      nextToken
+      __typename
+    }
     locationAnnotationCounts {
       nextToken
       __typename
@@ -205,6 +211,65 @@ export const onCreateAnnotationSet = /* GraphQL */ `subscription OnCreateAnnotat
 ` as GeneratedSubscription<
   APITypes.OnCreateAnnotationSetSubscriptionVariables,
   APITypes.OnCreateAnnotationSetSubscription
+>;
+export const onCreateCamera = /* GraphQL */ `subscription OnCreateCamera($filter: ModelSubscriptionCameraFilterInput) {
+  onCreateCamera(filter: $filter) {
+    createdAt
+    focalLengthMm
+    id
+    images {
+      nextToken
+      __typename
+    }
+    name
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    sensorWidthMm
+    tiltDegrees
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnCreateCameraSubscriptionVariables,
+  APITypes.OnCreateCameraSubscription
+>;
+export const onCreateCameraOverlap = /* GraphQL */ `subscription OnCreateCameraOverlap(
+  $filter: ModelSubscriptionCameraOverlapFilterInput
+) {
+  onCreateCameraOverlap(filter: $filter) {
+    cameraAId
+    cameraBId
+    createdAt
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnCreateCameraOverlapSubscriptionVariables,
+  APITypes.OnCreateCameraOverlapSubscription
 >;
 export const onCreateCategory = /* GraphQL */ `subscription OnCreateCategory($filter: ModelSubscriptionCategoryFilterInput) {
   onCreateCategory(filter: $filter) {
@@ -259,6 +324,18 @@ export const onCreateImage = /* GraphQL */ `subscription OnCreateImage($filter: 
       nextToken
       __typename
     }
+    camera {
+      createdAt
+      focalLengthMm
+      id
+      name
+      projectId
+      sensorWidthMm
+      tiltDegrees
+      updatedAt
+      __typename
+    }
+    cameraId
     cameraSerial
     createdAt
     exifData
@@ -302,6 +379,15 @@ export const onCreateImage = /* GraphQL */ `subscription OnCreateImage($filter: 
     }
     roll
     timestamp
+    transect {
+      createdAt
+      id
+      projectId
+      stratumId
+      updatedAt
+      __typename
+    }
+    transectId
     updatedAt
     width
     yaw
@@ -320,6 +406,7 @@ export const onCreateImageFile = /* GraphQL */ `subscription OnCreateImageFile($
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -332,6 +419,7 @@ export const onCreateImageFile = /* GraphQL */ `subscription OnCreateImageFile($
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -371,6 +459,7 @@ export const onCreateImageNeighbour = /* GraphQL */ `subscription OnCreateImageN
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -383,6 +472,7 @@ export const onCreateImageNeighbour = /* GraphQL */ `subscription OnCreateImageN
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -393,6 +483,7 @@ export const onCreateImageNeighbour = /* GraphQL */ `subscription OnCreateImageN
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -405,6 +496,7 @@ export const onCreateImageNeighbour = /* GraphQL */ `subscription OnCreateImageN
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -459,6 +551,7 @@ export const onCreateImageSetMembership = /* GraphQL */ `subscription OnCreateIm
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -471,6 +564,7 @@ export const onCreateImageSetMembership = /* GraphQL */ `subscription OnCreateIm
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -495,6 +589,69 @@ export const onCreateImageSetMembership = /* GraphQL */ `subscription OnCreateIm
   APITypes.OnCreateImageSetMembershipSubscriptionVariables,
   APITypes.OnCreateImageSetMembershipSubscription
 >;
+export const onCreateJollyResult = /* GraphQL */ `subscription OnCreateJollyResult(
+  $filter: ModelSubscriptionJollyResultFilterInput
+) {
+  onCreateJollyResult(filter: $filter) {
+    animals
+    annotationSetId
+    areaSurveyed
+    categoryId
+    createdAt
+    density
+    estimate
+    lowerBound95
+    numSamples
+    standardError
+    stratumId
+    surveyId
+    updatedAt
+    upperBound95
+    variance
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnCreateJollyResultSubscriptionVariables,
+  APITypes.OnCreateJollyResultSubscription
+>;
+export const onCreateJollyResultsMembership = /* GraphQL */ `subscription OnCreateJollyResultsMembership(
+  $filter: ModelSubscriptionJollyResultsMembershipFilterInput
+) {
+  onCreateJollyResultsMembership(filter: $filter) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      register
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    createdAt
+    survey {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    surveyId
+    updatedAt
+    userId
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnCreateJollyResultsMembershipSubscriptionVariables,
+  APITypes.OnCreateJollyResultsMembershipSubscription
+>;
 export const onCreateLocation = /* GraphQL */ `subscription OnCreateLocation($filter: ModelSubscriptionLocationFilterInput) {
   onCreateLocation(filter: $filter) {
     annotationCounts {
@@ -509,6 +666,7 @@ export const onCreateLocation = /* GraphQL */ `subscription OnCreateLocation($fi
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -521,6 +679,7 @@ export const onCreateLocation = /* GraphQL */ `subscription OnCreateLocation($fi
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -926,6 +1085,14 @@ export const onCreateProject = /* GraphQL */ `subscription OnCreateProject($filt
       nextToken
       __typename
     }
+    cameraOverlaps {
+      nextToken
+      __typename
+    }
+    cameras {
+      nextToken
+      __typename
+    }
     createdAt
     createdBy
     hidden
@@ -939,6 +1106,10 @@ export const onCreateProject = /* GraphQL */ `subscription OnCreateProject($filt
       __typename
     }
     images {
+      nextToken
+      __typename
+    }
+    jollyResultsMemberships {
       nextToken
       __typename
     }
@@ -976,7 +1147,23 @@ export const onCreateProject = /* GraphQL */ `subscription OnCreateProject($filt
       nextToken
       __typename
     }
+    shapefile {
+      coordinates
+      createdAt
+      id
+      projectId
+      updatedAt
+      __typename
+    }
+    shapefileExclusions {
+      nextToken
+      __typename
+    }
     status
+    strata {
+      nextToken
+      __typename
+    }
     testConfig {
       accuracy
       createdAt
@@ -990,6 +1177,10 @@ export const onCreateProject = /* GraphQL */ `subscription OnCreateProject($filt
       __typename
     }
     testResults {
+      nextToken
+      __typename
+    }
+    transects {
       nextToken
       __typename
     }
@@ -1060,6 +1251,7 @@ export const onCreateQueue = /* GraphQL */ `subscription OnCreateQueue($filter: 
       __typename
     }
     projectId
+    totalBatches
     updatedAt
     url
     users {
@@ -1073,6 +1265,106 @@ export const onCreateQueue = /* GraphQL */ `subscription OnCreateQueue($filter: 
 ` as GeneratedSubscription<
   APITypes.OnCreateQueueSubscriptionVariables,
   APITypes.OnCreateQueueSubscription
+>;
+export const onCreateResultSharingToken = /* GraphQL */ `subscription OnCreateResultSharingToken(
+  $filter: ModelSubscriptionResultSharingTokenFilterInput
+) {
+  onCreateResultSharingToken(filter: $filter) {
+    annotationSetId
+    createdAt
+    jwt
+    surveyId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnCreateResultSharingTokenSubscriptionVariables,
+  APITypes.OnCreateResultSharingTokenSubscription
+>;
+export const onCreateShapefile = /* GraphQL */ `subscription OnCreateShapefile($filter: ModelSubscriptionShapefileFilterInput) {
+  onCreateShapefile(filter: $filter) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnCreateShapefileSubscriptionVariables,
+  APITypes.OnCreateShapefileSubscription
+>;
+export const onCreateShapefileExclusions = /* GraphQL */ `subscription OnCreateShapefileExclusions(
+  $filter: ModelSubscriptionShapefileExclusionsFilterInput
+) {
+  onCreateShapefileExclusions(filter: $filter) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnCreateShapefileExclusionsSubscriptionVariables,
+  APITypes.OnCreateShapefileExclusionsSubscription
+>;
+export const onCreateStratum = /* GraphQL */ `subscription OnCreateStratum($filter: ModelSubscriptionStratumFilterInput) {
+  onCreateStratum(filter: $filter) {
+    area
+    baselineLength
+    coordinates
+    createdAt
+    id
+    name
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    transects {
+      nextToken
+      __typename
+    }
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnCreateStratumSubscriptionVariables,
+  APITypes.OnCreateStratumSubscription
 >;
 export const onCreateTasksOnAnnotationSet = /* GraphQL */ `subscription OnCreateTasksOnAnnotationSet(
   $filter: ModelSubscriptionTasksOnAnnotationSetFilterInput
@@ -1330,6 +1622,46 @@ export const onCreateTestResultCategoryCount = /* GraphQL */ `subscription OnCre
   APITypes.OnCreateTestResultCategoryCountSubscriptionVariables,
   APITypes.OnCreateTestResultCategoryCountSubscription
 >;
+export const onCreateTransect = /* GraphQL */ `subscription OnCreateTransect($filter: ModelSubscriptionTransectFilterInput) {
+  onCreateTransect(filter: $filter) {
+    createdAt
+    id
+    images {
+      nextToken
+      __typename
+    }
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    stratum {
+      area
+      baselineLength
+      coordinates
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    stratumId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnCreateTransectSubscriptionVariables,
+  APITypes.OnCreateTransectSubscription
+>;
 export const onCreateUserProjectMembership = /* GraphQL */ `subscription OnCreateUserProjectMembership(
   $filter: ModelSubscriptionUserProjectMembershipFilterInput
 ) {
@@ -1342,6 +1674,7 @@ export const onCreateUserProjectMembership = /* GraphQL */ `subscription OnCreat
       id
       name
       projectId
+      totalBatches
       updatedAt
       url
       zoom
@@ -1371,6 +1704,7 @@ export const onCreateUserProjectMembership = /* GraphQL */ `subscription OnCreat
       id
       name
       projectId
+      totalBatches
       updatedAt
       url
       zoom
@@ -1433,6 +1767,7 @@ export const onDeleteAnnotation = /* GraphQL */ `subscription OnDeleteAnnotation
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -1445,6 +1780,7 @@ export const onDeleteAnnotation = /* GraphQL */ `subscription OnDeleteAnnotation
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -1565,6 +1901,10 @@ export const onDeleteAnnotationSet = /* GraphQL */ `subscription OnDeleteAnnotat
     }
     createdAt
     id
+    jollyResultsMemberships {
+      nextToken
+      __typename
+    }
     locationAnnotationCounts {
       nextToken
       __typename
@@ -1606,6 +1946,65 @@ export const onDeleteAnnotationSet = /* GraphQL */ `subscription OnDeleteAnnotat
 ` as GeneratedSubscription<
   APITypes.OnDeleteAnnotationSetSubscriptionVariables,
   APITypes.OnDeleteAnnotationSetSubscription
+>;
+export const onDeleteCamera = /* GraphQL */ `subscription OnDeleteCamera($filter: ModelSubscriptionCameraFilterInput) {
+  onDeleteCamera(filter: $filter) {
+    createdAt
+    focalLengthMm
+    id
+    images {
+      nextToken
+      __typename
+    }
+    name
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    sensorWidthMm
+    tiltDegrees
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnDeleteCameraSubscriptionVariables,
+  APITypes.OnDeleteCameraSubscription
+>;
+export const onDeleteCameraOverlap = /* GraphQL */ `subscription OnDeleteCameraOverlap(
+  $filter: ModelSubscriptionCameraOverlapFilterInput
+) {
+  onDeleteCameraOverlap(filter: $filter) {
+    cameraAId
+    cameraBId
+    createdAt
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnDeleteCameraOverlapSubscriptionVariables,
+  APITypes.OnDeleteCameraOverlapSubscription
 >;
 export const onDeleteCategory = /* GraphQL */ `subscription OnDeleteCategory($filter: ModelSubscriptionCategoryFilterInput) {
   onDeleteCategory(filter: $filter) {
@@ -1660,6 +2059,18 @@ export const onDeleteImage = /* GraphQL */ `subscription OnDeleteImage($filter: 
       nextToken
       __typename
     }
+    camera {
+      createdAt
+      focalLengthMm
+      id
+      name
+      projectId
+      sensorWidthMm
+      tiltDegrees
+      updatedAt
+      __typename
+    }
+    cameraId
     cameraSerial
     createdAt
     exifData
@@ -1703,6 +2114,15 @@ export const onDeleteImage = /* GraphQL */ `subscription OnDeleteImage($filter: 
     }
     roll
     timestamp
+    transect {
+      createdAt
+      id
+      projectId
+      stratumId
+      updatedAt
+      __typename
+    }
+    transectId
     updatedAt
     width
     yaw
@@ -1721,6 +2141,7 @@ export const onDeleteImageFile = /* GraphQL */ `subscription OnDeleteImageFile($
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -1733,6 +2154,7 @@ export const onDeleteImageFile = /* GraphQL */ `subscription OnDeleteImageFile($
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -1772,6 +2194,7 @@ export const onDeleteImageNeighbour = /* GraphQL */ `subscription OnDeleteImageN
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -1784,6 +2207,7 @@ export const onDeleteImageNeighbour = /* GraphQL */ `subscription OnDeleteImageN
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -1794,6 +2218,7 @@ export const onDeleteImageNeighbour = /* GraphQL */ `subscription OnDeleteImageN
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -1806,6 +2231,7 @@ export const onDeleteImageNeighbour = /* GraphQL */ `subscription OnDeleteImageN
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -1860,6 +2286,7 @@ export const onDeleteImageSetMembership = /* GraphQL */ `subscription OnDeleteIm
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -1872,6 +2299,7 @@ export const onDeleteImageSetMembership = /* GraphQL */ `subscription OnDeleteIm
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -1896,6 +2324,69 @@ export const onDeleteImageSetMembership = /* GraphQL */ `subscription OnDeleteIm
   APITypes.OnDeleteImageSetMembershipSubscriptionVariables,
   APITypes.OnDeleteImageSetMembershipSubscription
 >;
+export const onDeleteJollyResult = /* GraphQL */ `subscription OnDeleteJollyResult(
+  $filter: ModelSubscriptionJollyResultFilterInput
+) {
+  onDeleteJollyResult(filter: $filter) {
+    animals
+    annotationSetId
+    areaSurveyed
+    categoryId
+    createdAt
+    density
+    estimate
+    lowerBound95
+    numSamples
+    standardError
+    stratumId
+    surveyId
+    updatedAt
+    upperBound95
+    variance
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnDeleteJollyResultSubscriptionVariables,
+  APITypes.OnDeleteJollyResultSubscription
+>;
+export const onDeleteJollyResultsMembership = /* GraphQL */ `subscription OnDeleteJollyResultsMembership(
+  $filter: ModelSubscriptionJollyResultsMembershipFilterInput
+) {
+  onDeleteJollyResultsMembership(filter: $filter) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      register
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    createdAt
+    survey {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    surveyId
+    updatedAt
+    userId
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnDeleteJollyResultsMembershipSubscriptionVariables,
+  APITypes.OnDeleteJollyResultsMembershipSubscription
+>;
 export const onDeleteLocation = /* GraphQL */ `subscription OnDeleteLocation($filter: ModelSubscriptionLocationFilterInput) {
   onDeleteLocation(filter: $filter) {
     annotationCounts {
@@ -1910,6 +2401,7 @@ export const onDeleteLocation = /* GraphQL */ `subscription OnDeleteLocation($fi
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -1922,6 +2414,7 @@ export const onDeleteLocation = /* GraphQL */ `subscription OnDeleteLocation($fi
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -2327,6 +2820,14 @@ export const onDeleteProject = /* GraphQL */ `subscription OnDeleteProject($filt
       nextToken
       __typename
     }
+    cameraOverlaps {
+      nextToken
+      __typename
+    }
+    cameras {
+      nextToken
+      __typename
+    }
     createdAt
     createdBy
     hidden
@@ -2340,6 +2841,10 @@ export const onDeleteProject = /* GraphQL */ `subscription OnDeleteProject($filt
       __typename
     }
     images {
+      nextToken
+      __typename
+    }
+    jollyResultsMemberships {
       nextToken
       __typename
     }
@@ -2377,7 +2882,23 @@ export const onDeleteProject = /* GraphQL */ `subscription OnDeleteProject($filt
       nextToken
       __typename
     }
+    shapefile {
+      coordinates
+      createdAt
+      id
+      projectId
+      updatedAt
+      __typename
+    }
+    shapefileExclusions {
+      nextToken
+      __typename
+    }
     status
+    strata {
+      nextToken
+      __typename
+    }
     testConfig {
       accuracy
       createdAt
@@ -2391,6 +2912,10 @@ export const onDeleteProject = /* GraphQL */ `subscription OnDeleteProject($filt
       __typename
     }
     testResults {
+      nextToken
+      __typename
+    }
+    transects {
       nextToken
       __typename
     }
@@ -2461,6 +2986,7 @@ export const onDeleteQueue = /* GraphQL */ `subscription OnDeleteQueue($filter: 
       __typename
     }
     projectId
+    totalBatches
     updatedAt
     url
     users {
@@ -2474,6 +3000,106 @@ export const onDeleteQueue = /* GraphQL */ `subscription OnDeleteQueue($filter: 
 ` as GeneratedSubscription<
   APITypes.OnDeleteQueueSubscriptionVariables,
   APITypes.OnDeleteQueueSubscription
+>;
+export const onDeleteResultSharingToken = /* GraphQL */ `subscription OnDeleteResultSharingToken(
+  $filter: ModelSubscriptionResultSharingTokenFilterInput
+) {
+  onDeleteResultSharingToken(filter: $filter) {
+    annotationSetId
+    createdAt
+    jwt
+    surveyId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnDeleteResultSharingTokenSubscriptionVariables,
+  APITypes.OnDeleteResultSharingTokenSubscription
+>;
+export const onDeleteShapefile = /* GraphQL */ `subscription OnDeleteShapefile($filter: ModelSubscriptionShapefileFilterInput) {
+  onDeleteShapefile(filter: $filter) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnDeleteShapefileSubscriptionVariables,
+  APITypes.OnDeleteShapefileSubscription
+>;
+export const onDeleteShapefileExclusions = /* GraphQL */ `subscription OnDeleteShapefileExclusions(
+  $filter: ModelSubscriptionShapefileExclusionsFilterInput
+) {
+  onDeleteShapefileExclusions(filter: $filter) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnDeleteShapefileExclusionsSubscriptionVariables,
+  APITypes.OnDeleteShapefileExclusionsSubscription
+>;
+export const onDeleteStratum = /* GraphQL */ `subscription OnDeleteStratum($filter: ModelSubscriptionStratumFilterInput) {
+  onDeleteStratum(filter: $filter) {
+    area
+    baselineLength
+    coordinates
+    createdAt
+    id
+    name
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    transects {
+      nextToken
+      __typename
+    }
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnDeleteStratumSubscriptionVariables,
+  APITypes.OnDeleteStratumSubscription
 >;
 export const onDeleteTasksOnAnnotationSet = /* GraphQL */ `subscription OnDeleteTasksOnAnnotationSet(
   $filter: ModelSubscriptionTasksOnAnnotationSetFilterInput
@@ -2731,6 +3357,46 @@ export const onDeleteTestResultCategoryCount = /* GraphQL */ `subscription OnDel
   APITypes.OnDeleteTestResultCategoryCountSubscriptionVariables,
   APITypes.OnDeleteTestResultCategoryCountSubscription
 >;
+export const onDeleteTransect = /* GraphQL */ `subscription OnDeleteTransect($filter: ModelSubscriptionTransectFilterInput) {
+  onDeleteTransect(filter: $filter) {
+    createdAt
+    id
+    images {
+      nextToken
+      __typename
+    }
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    stratum {
+      area
+      baselineLength
+      coordinates
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    stratumId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnDeleteTransectSubscriptionVariables,
+  APITypes.OnDeleteTransectSubscription
+>;
 export const onDeleteUserProjectMembership = /* GraphQL */ `subscription OnDeleteUserProjectMembership(
   $filter: ModelSubscriptionUserProjectMembershipFilterInput
 ) {
@@ -2743,6 +3409,7 @@ export const onDeleteUserProjectMembership = /* GraphQL */ `subscription OnDelet
       id
       name
       projectId
+      totalBatches
       updatedAt
       url
       zoom
@@ -2772,6 +3439,7 @@ export const onDeleteUserProjectMembership = /* GraphQL */ `subscription OnDelet
       id
       name
       projectId
+      totalBatches
       updatedAt
       url
       zoom
@@ -2834,6 +3502,7 @@ export const onUpdateAnnotation = /* GraphQL */ `subscription OnUpdateAnnotation
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -2846,6 +3515,7 @@ export const onUpdateAnnotation = /* GraphQL */ `subscription OnUpdateAnnotation
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -2966,6 +3636,10 @@ export const onUpdateAnnotationSet = /* GraphQL */ `subscription OnUpdateAnnotat
     }
     createdAt
     id
+    jollyResultsMemberships {
+      nextToken
+      __typename
+    }
     locationAnnotationCounts {
       nextToken
       __typename
@@ -3007,6 +3681,65 @@ export const onUpdateAnnotationSet = /* GraphQL */ `subscription OnUpdateAnnotat
 ` as GeneratedSubscription<
   APITypes.OnUpdateAnnotationSetSubscriptionVariables,
   APITypes.OnUpdateAnnotationSetSubscription
+>;
+export const onUpdateCamera = /* GraphQL */ `subscription OnUpdateCamera($filter: ModelSubscriptionCameraFilterInput) {
+  onUpdateCamera(filter: $filter) {
+    createdAt
+    focalLengthMm
+    id
+    images {
+      nextToken
+      __typename
+    }
+    name
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    sensorWidthMm
+    tiltDegrees
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnUpdateCameraSubscriptionVariables,
+  APITypes.OnUpdateCameraSubscription
+>;
+export const onUpdateCameraOverlap = /* GraphQL */ `subscription OnUpdateCameraOverlap(
+  $filter: ModelSubscriptionCameraOverlapFilterInput
+) {
+  onUpdateCameraOverlap(filter: $filter) {
+    cameraAId
+    cameraBId
+    createdAt
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnUpdateCameraOverlapSubscriptionVariables,
+  APITypes.OnUpdateCameraOverlapSubscription
 >;
 export const onUpdateCategory = /* GraphQL */ `subscription OnUpdateCategory($filter: ModelSubscriptionCategoryFilterInput) {
   onUpdateCategory(filter: $filter) {
@@ -3061,6 +3794,18 @@ export const onUpdateImage = /* GraphQL */ `subscription OnUpdateImage($filter: 
       nextToken
       __typename
     }
+    camera {
+      createdAt
+      focalLengthMm
+      id
+      name
+      projectId
+      sensorWidthMm
+      tiltDegrees
+      updatedAt
+      __typename
+    }
+    cameraId
     cameraSerial
     createdAt
     exifData
@@ -3104,6 +3849,15 @@ export const onUpdateImage = /* GraphQL */ `subscription OnUpdateImage($filter: 
     }
     roll
     timestamp
+    transect {
+      createdAt
+      id
+      projectId
+      stratumId
+      updatedAt
+      __typename
+    }
+    transectId
     updatedAt
     width
     yaw
@@ -3122,6 +3876,7 @@ export const onUpdateImageFile = /* GraphQL */ `subscription OnUpdateImageFile($
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -3134,6 +3889,7 @@ export const onUpdateImageFile = /* GraphQL */ `subscription OnUpdateImageFile($
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -3173,6 +3929,7 @@ export const onUpdateImageNeighbour = /* GraphQL */ `subscription OnUpdateImageN
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -3185,6 +3942,7 @@ export const onUpdateImageNeighbour = /* GraphQL */ `subscription OnUpdateImageN
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -3195,6 +3953,7 @@ export const onUpdateImageNeighbour = /* GraphQL */ `subscription OnUpdateImageN
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -3207,6 +3966,7 @@ export const onUpdateImageNeighbour = /* GraphQL */ `subscription OnUpdateImageN
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -3261,6 +4021,7 @@ export const onUpdateImageSetMembership = /* GraphQL */ `subscription OnUpdateIm
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -3273,6 +4034,7 @@ export const onUpdateImageSetMembership = /* GraphQL */ `subscription OnUpdateIm
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -3297,6 +4059,69 @@ export const onUpdateImageSetMembership = /* GraphQL */ `subscription OnUpdateIm
   APITypes.OnUpdateImageSetMembershipSubscriptionVariables,
   APITypes.OnUpdateImageSetMembershipSubscription
 >;
+export const onUpdateJollyResult = /* GraphQL */ `subscription OnUpdateJollyResult(
+  $filter: ModelSubscriptionJollyResultFilterInput
+) {
+  onUpdateJollyResult(filter: $filter) {
+    animals
+    annotationSetId
+    areaSurveyed
+    categoryId
+    createdAt
+    density
+    estimate
+    lowerBound95
+    numSamples
+    standardError
+    stratumId
+    surveyId
+    updatedAt
+    upperBound95
+    variance
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnUpdateJollyResultSubscriptionVariables,
+  APITypes.OnUpdateJollyResultSubscription
+>;
+export const onUpdateJollyResultsMembership = /* GraphQL */ `subscription OnUpdateJollyResultsMembership(
+  $filter: ModelSubscriptionJollyResultsMembershipFilterInput
+) {
+  onUpdateJollyResultsMembership(filter: $filter) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      register
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    createdAt
+    survey {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    surveyId
+    updatedAt
+    userId
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnUpdateJollyResultsMembershipSubscriptionVariables,
+  APITypes.OnUpdateJollyResultsMembershipSubscription
+>;
 export const onUpdateLocation = /* GraphQL */ `subscription OnUpdateLocation($filter: ModelSubscriptionLocationFilterInput) {
   onUpdateLocation(filter: $filter) {
     annotationCounts {
@@ -3311,6 +4136,7 @@ export const onUpdateLocation = /* GraphQL */ `subscription OnUpdateLocation($fi
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -3323,6 +4149,7 @@ export const onUpdateLocation = /* GraphQL */ `subscription OnUpdateLocation($fi
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -3728,6 +4555,14 @@ export const onUpdateProject = /* GraphQL */ `subscription OnUpdateProject($filt
       nextToken
       __typename
     }
+    cameraOverlaps {
+      nextToken
+      __typename
+    }
+    cameras {
+      nextToken
+      __typename
+    }
     createdAt
     createdBy
     hidden
@@ -3741,6 +4576,10 @@ export const onUpdateProject = /* GraphQL */ `subscription OnUpdateProject($filt
       __typename
     }
     images {
+      nextToken
+      __typename
+    }
+    jollyResultsMemberships {
       nextToken
       __typename
     }
@@ -3778,7 +4617,23 @@ export const onUpdateProject = /* GraphQL */ `subscription OnUpdateProject($filt
       nextToken
       __typename
     }
+    shapefile {
+      coordinates
+      createdAt
+      id
+      projectId
+      updatedAt
+      __typename
+    }
+    shapefileExclusions {
+      nextToken
+      __typename
+    }
     status
+    strata {
+      nextToken
+      __typename
+    }
     testConfig {
       accuracy
       createdAt
@@ -3792,6 +4647,10 @@ export const onUpdateProject = /* GraphQL */ `subscription OnUpdateProject($filt
       __typename
     }
     testResults {
+      nextToken
+      __typename
+    }
+    transects {
       nextToken
       __typename
     }
@@ -3862,6 +4721,7 @@ export const onUpdateQueue = /* GraphQL */ `subscription OnUpdateQueue($filter: 
       __typename
     }
     projectId
+    totalBatches
     updatedAt
     url
     users {
@@ -3875,6 +4735,106 @@ export const onUpdateQueue = /* GraphQL */ `subscription OnUpdateQueue($filter: 
 ` as GeneratedSubscription<
   APITypes.OnUpdateQueueSubscriptionVariables,
   APITypes.OnUpdateQueueSubscription
+>;
+export const onUpdateResultSharingToken = /* GraphQL */ `subscription OnUpdateResultSharingToken(
+  $filter: ModelSubscriptionResultSharingTokenFilterInput
+) {
+  onUpdateResultSharingToken(filter: $filter) {
+    annotationSetId
+    createdAt
+    jwt
+    surveyId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnUpdateResultSharingTokenSubscriptionVariables,
+  APITypes.OnUpdateResultSharingTokenSubscription
+>;
+export const onUpdateShapefile = /* GraphQL */ `subscription OnUpdateShapefile($filter: ModelSubscriptionShapefileFilterInput) {
+  onUpdateShapefile(filter: $filter) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnUpdateShapefileSubscriptionVariables,
+  APITypes.OnUpdateShapefileSubscription
+>;
+export const onUpdateShapefileExclusions = /* GraphQL */ `subscription OnUpdateShapefileExclusions(
+  $filter: ModelSubscriptionShapefileExclusionsFilterInput
+) {
+  onUpdateShapefileExclusions(filter: $filter) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnUpdateShapefileExclusionsSubscriptionVariables,
+  APITypes.OnUpdateShapefileExclusionsSubscription
+>;
+export const onUpdateStratum = /* GraphQL */ `subscription OnUpdateStratum($filter: ModelSubscriptionStratumFilterInput) {
+  onUpdateStratum(filter: $filter) {
+    area
+    baselineLength
+    coordinates
+    createdAt
+    id
+    name
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    transects {
+      nextToken
+      __typename
+    }
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnUpdateStratumSubscriptionVariables,
+  APITypes.OnUpdateStratumSubscription
 >;
 export const onUpdateTasksOnAnnotationSet = /* GraphQL */ `subscription OnUpdateTasksOnAnnotationSet(
   $filter: ModelSubscriptionTasksOnAnnotationSetFilterInput
@@ -4132,6 +5092,46 @@ export const onUpdateTestResultCategoryCount = /* GraphQL */ `subscription OnUpd
   APITypes.OnUpdateTestResultCategoryCountSubscriptionVariables,
   APITypes.OnUpdateTestResultCategoryCountSubscription
 >;
+export const onUpdateTransect = /* GraphQL */ `subscription OnUpdateTransect($filter: ModelSubscriptionTransectFilterInput) {
+  onUpdateTransect(filter: $filter) {
+    createdAt
+    id
+    images {
+      nextToken
+      __typename
+    }
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    stratum {
+      area
+      baselineLength
+      coordinates
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    stratumId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedSubscription<
+  APITypes.OnUpdateTransectSubscriptionVariables,
+  APITypes.OnUpdateTransectSubscription
+>;
 export const onUpdateUserProjectMembership = /* GraphQL */ `subscription OnUpdateUserProjectMembership(
   $filter: ModelSubscriptionUserProjectMembershipFilterInput
 ) {
@@ -4144,6 +5144,7 @@ export const onUpdateUserProjectMembership = /* GraphQL */ `subscription OnUpdat
       id
       name
       projectId
+      totalBatches
       updatedAt
       url
       zoom
@@ -4173,6 +5174,7 @@ export const onUpdateUserProjectMembership = /* GraphQL */ `subscription OnUpdat
       id
       name
       projectId
+      totalBatches
       updatedAt
       url
       zoom

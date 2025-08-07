@@ -18,6 +18,9 @@ import ImageMaskEditor from './ImageMaskEditor.tsx';
 import Select from 'react-select';
 import localforage from 'localforage';
 import CameraOverlap from './CameraOverlap';
+import CameraSpecification from './CameraSpecification';
+import LabeledToggleSwitch from './LabeledToggleSwitch.tsx';
+import { Schema } from '../amplify/data/resource.ts';
 
 // Configure a dedicated storage instance for file paths
 const fileStore = localforage.createInstance({
@@ -52,6 +55,12 @@ interface FilesUploadBaseProps {
 
 // Props for form-compatible version
 interface FilesUploadFormProps extends FilesUploadBaseProps {}
+
+export type CameraSpec = {
+  focalLengthMm: number;
+  sensorWidthMm: number;
+  tiltDegrees: number;
+};
 
 type GpsData = {
   lat: number | undefined;
@@ -116,6 +125,9 @@ export function FileUploadCore({
   const [timeRanges, setTimeRanges] = useState<{
     [day: number]: { start: string; end: string };
   }>({});
+  const [cameraSpecs, setCameraSpecs] = useState<Record<string, CameraSpec>>(
+    {}
+  );
   const [masks, setMasks] = useState<number[][][]>([]);
   const [toUploadFiles, setToUploadFiles] = useState<File[]>([]);
   const [toUploadSize, setToUploadSize] = useState(0);
@@ -126,7 +138,6 @@ export function FileUploadCore({
     label: 'ScoutBot',
     value: 'scoutbot',
   });
-  const [overlapInterval, setOverlapInterval] = useState(0);
   const [overlaps, setOverlaps] = useState<
     { cameraA: string; cameraB: string }[]
   >([]);
@@ -250,7 +261,6 @@ export function FileUploadCore({
 
   useEffect(() => {
     if (!multipleCameras) {
-      setOverlapInterval(0);
       setOverlaps([]);
     }
   }, [multipleCameras]);
@@ -357,6 +367,13 @@ export function FileUploadCore({
       );
     }
   }, [filteredImageFiles, missingGpsData, csvData, setGpsDataReady]);
+
+  useEffect(() => {
+    if (!multipleCameras) {
+      setCameraSelection(['Survey Level', ['Survey Camera']]);
+      setOverlaps([]);
+    }
+  }, [multipleCameras]);
 
   const handleFileInputChange = (files: File[]) => {
     if (files) {
@@ -500,6 +517,68 @@ export function FileUploadCore({
       if (!csvData) {
         alert('GPS metadata is required');
         return;
+      }
+
+      const allCameras: Schema['Camera']['type'][] = [];
+
+      const { data: existingCameras } =
+        await client.models.Camera.camerasByProjectId({
+          projectId,
+        });
+
+      for (const camera of existingCameras) {
+        allCameras.push(camera);
+      }
+
+      Object.entries(cameraSpecs).forEach(async ([name, spec]) => {
+        const existingCamera = existingCameras.find((c) => c.name === name);
+
+        if (existingCamera) {
+          await client.models.Camera.update({
+            id: existingCamera.id,
+            name: name,
+            focalLengthMm: spec.focalLengthMm || 0,
+            sensorWidthMm: spec.sensorWidthMm || 0,
+            tiltDegrees: spec.tiltDegrees || 0,
+          });
+        } else {
+          const { data: newCamera } = await client.models.Camera.create({
+            name: name,
+            projectId: projectId,
+            focalLengthMm: spec.focalLengthMm || 0,
+            sensorWidthMm: spec.sensorWidthMm || 0,
+            tiltDegrees: spec.tiltDegrees || 0,
+          });
+          if (newCamera) {
+            allCameras.push(newCamera);
+          }
+        }
+      });
+
+      for (const overlap of overlaps) {
+        const cameraA = allCameras.find(
+          (c) => c.name === overlap.cameraA
+        );
+
+        const cameraB = allCameras.find(
+          (c) => c.name === overlap.cameraB
+        );
+
+        if (cameraA && cameraB) {
+          const { data: existingOverlap } =
+            await client.models.CameraOverlap.get({
+              cameraAId: cameraA.id,
+              cameraBId: cameraB.id,
+            });
+
+          if (!existingOverlap) {
+            await client.models.CameraOverlap.create({
+              cameraAId: cameraA.id,
+              cameraBId: cameraB.id,
+              projectId: projectId,
+            });
+          }
+        }
       }
 
       // Simplify return type to avoid complex union
@@ -647,9 +726,6 @@ export function FileUploadCore({
       await metadataStore.setItem(projectId, {
         model: model.value,
         masks: masks,
-        cameraSelection: cameraSelection,
-        overlaps: overlaps,
-        overlapInterval: overlapInterval,
       });
 
       // push new task to upload manager
@@ -661,7 +737,7 @@ export function FileUploadCore({
         retryDelay: 0,
       });
     },
-    [upload, filteredImageFiles, name, client, filteredImageSize, csvData]
+    [upload, filteredImageFiles, name, client, filteredImageSize, csvData, cameraSpecs, overlaps]
   );
 
   useEffect(() => {
@@ -1153,7 +1229,10 @@ export function FileUploadCore({
             Select which columns from your file correspond to the following
             fields:
           </p>
-          <div className='d-flex flex-column gap-2'>
+          <div
+            className='d-flex flex-column gap-2 border border-dark p-2 shadow-sm'
+            style={{ backgroundColor: '#697582' }}
+          >
             <div className='d-flex flex-row gap-2 align-items-center'>
               <div style={{ flex: 0.5 }}>
                 <Form.Label className='mb-0'>FilePath (optional)</Form.Label>
@@ -1439,31 +1518,37 @@ export function FileUploadCore({
               );
             })()}
           </div>
-          {/* TODO: Add multiple camera support */}
-          {/* <Form.Group className='mt-3'>
-            <Form.Switch
-              label='Multiple Cameras'
+          <Form.Group className='mt-3'>
+            <Form.Label className='mb-0'>Camera Definition</Form.Label>
+            <LabeledToggleSwitch
+              leftLabel='Single Camera'
+              rightLabel='Multiple Cameras'
               checked={multipleCameras}
-              onChange={(e) => setMultipleCameras(e.target.checked)}
+              onChange={(e) => setMultipleCameras(e)}
             />
-          </Form.Group> */}
-          {multipleCameras && (
-            <>
-              <FolderStructure
-                files={scannedFiles}
-                onCameraLevelChange={setCameraSelection}
-              />
-              {cameraSelection && (
-                <CameraOverlap
-                  cameraSelection={cameraSelection}
-                  interval={overlapInterval}
-                  setInterval={setOverlapInterval}
-                  overlaps={overlaps}
-                  setOverlaps={setOverlaps}
+            {multipleCameras && (
+              <>
+                <FolderStructure
+                  files={scannedFiles}
+                  onCameraLevelChange={setCameraSelection}
                 />
-              )}
-            </>
-          )}
+                {cameraSelection && (
+                  <CameraOverlap
+                    cameraSelection={cameraSelection}
+                    overlaps={overlaps}
+                    setOverlaps={setOverlaps}
+                  />
+                )}
+              </>
+            )}
+            <CameraSpecification
+              cameraSelection={
+                cameraSelection || ['Survey Level', ['Survey Camera']]
+              }
+              cameraSpecs={cameraSpecs}
+              setCameraSpecs={setCameraSpecs}
+            />
+          </Form.Group>
         </>
       )}
       {filteredImageFiles.length > 0 && csvData && (
