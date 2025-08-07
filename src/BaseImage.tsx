@@ -201,13 +201,6 @@ const BaseImage: React.FC<BaseImageProps> = memo(
           ]
         );
 
-        if (belongsToCurrentProject?.isAdmin && location?.id && !isTest) {
-          items.push({
-            text: 'Use as test location',
-            callback: () => useForTestPreset(),
-          });
-        }
-
         if (!isTest) {
           items.push(
             ...[
