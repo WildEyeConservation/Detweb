@@ -295,21 +295,20 @@ function CreateTask({
 
   useEffect(() => {
     async function getAllImages() {
-      let nextToken: string | undefined = undefined;
-      let acc = {
-        minWidth: Infinity,
-        maxWidth: -Infinity,
-        minHeight: Infinity,
-        maxHeight: -Infinity,
-      };
-      setAllImages([]);
+      // Gather all images across image sets
+      const imagesArr: {
+        timestamp: Nullable<number>;
+        width: number;
+        height: number;
+        id: string;
+        originalPath: string;
+      }[] = [];
       for (const imageSetId of imageSets) {
+        let nextToken: string | undefined = undefined;
         do {
           const { data: images, nextToken: nextNextToken } =
             await client.models.ImageSetMembership.imageSetMembershipsByImageSetId(
-              {
-                imageSetId,
-              },
+              { imageSetId },
               {
                 selectionSet: [
                   "image.width",
@@ -322,27 +321,38 @@ function CreateTask({
               }
             );
           nextToken = nextNextToken ?? undefined;
-          setAllImages((x) => x.concat(images.map(({ image }) => image)));
-          acc = images.reduce((acc, x) => {
-            acc.minWidth = Math.min(acc.minWidth, x.image.width);
-            acc.maxWidth = Math.max(acc.maxWidth, x.image.width);
-            acc.minHeight = Math.min(acc.minHeight, x.image.height);
-            acc.maxHeight = Math.max(acc.maxHeight, x.image.height);
-            return acc;
-          }, acc);
-          if (acc.minWidth != acc.maxWidth || acc.minHeight != acc.maxHeight) {
-            console.log(`Inconsistent image sizes in image set ${imageSetId}`);
-            setImageWidth(undefined);
-            setImageHeight(undefined);
-            setMaxX(undefined);
-            setMaxY(undefined);
-          } else {
-            setImageWidth(acc.maxWidth);
-            setImageHeight(acc.maxHeight);
-            setMaxX(acc.maxWidth);
-            setMaxY(acc.maxHeight);
-          }
+          imagesArr.push(...images.map(({ image }) => image));
         } while (nextToken);
+      }
+      // Update state with all images
+      setAllImages(imagesArr);
+
+      if (imagesArr.length === 0) {
+        return;
+      }
+      // Use first image dimensions as reference
+      const firstWidth = imagesArr[0].width;
+      const firstHeight = imagesArr[0].height;
+      // Ensure all images match either orientation of first image
+      const allMatch = imagesArr.every(
+        (img) =>
+          (img.width === firstWidth && img.height === firstHeight) ||
+          (img.width === firstHeight && img.height === firstWidth)
+      );
+      if (!allMatch) {
+        console.log("Inconsistent image sizes detected");
+        setImageWidth(undefined);
+        setImageHeight(undefined);
+        setMaxX(undefined);
+        setMaxY(undefined);
+      } else {
+        // Use first image dimensions for overlap calculations
+        setImageWidth(firstWidth);
+        setImageHeight(firstHeight);
+        setMinX(0);
+        setMinY(0);
+        setMaxX(firstWidth);
+        setMaxY(firstHeight);
       }
     }
 
@@ -478,18 +488,20 @@ function CreateTask({
         case "tiled":
           setTotalLocations(allImages.length * horizontalTiles * verticalTiles);
           const promises: Promise<void>[] = [];
-          for (const { id } of allImages) {
+          for (const { id, width: imgWidth, height: imgHeight } of allImages) {
+            const effW = imgWidth;
+            const effH = imgHeight;
             const xStepSize =
-              (effectiveImageWidth - width) / (horizontalTiles - 1);
+              (effW - width) / (horizontalTiles - 1);
             const yStepSize =
-              (effectiveImageHeight - height) / (verticalTiles - 1);
-            for (var xStep = 0; xStep < horizontalTiles; xStep++) {
-              for (var yStep = 0; yStep < verticalTiles; yStep++) {
+              (effH - height) / (verticalTiles - 1);
+            for (let xStep = 0; xStep < horizontalTiles; xStep++) {
+              for (let yStep = 0; yStep < verticalTiles; yStep++) {
                 const x = Math.round(
-                  xStep * (xStepSize ? xStepSize : 0) + minX + width / 2
+                  (xStepSize ? xStep * xStepSize : 0) + width / 2
                 );
                 const y = Math.round(
-                  yStep * (yStepSize ? yStepSize : 0) + minY + height / 2
+                  (yStepSize ? yStep * yStepSize : 0) + height / 2
                 );
                 promises.push(
                   client.models.Location.create({
@@ -498,11 +510,11 @@ function CreateTask({
                     width,
                     height,
                     imageId: id,
-                    projectId: projectId,
+                    projectId,
                     confidence: 1,
                     source: "manual",
                     setId: locationSetId,
-                  }).then(() => setLocationsCompleted((fc: any) => fc + 1))
+                  }).then(() => setLocationsCompleted((s: number) => s + 1))
                 );
               }
             }
