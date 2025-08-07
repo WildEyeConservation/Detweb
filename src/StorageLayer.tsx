@@ -32,13 +32,6 @@ async function getTileBlob(path: string): Promise<Blob> {
   if (!path.toLowerCase().includes('census_12_06_25_out')) {
     signedUrl = await getUrl({
       path,
-      options: {
-        bucket: {
-          bucketName:
-            'amplify-d1xnv4qbnjfbzf-maste-outputsbucket30eb72c2-jvtc8ylpftsk',
-          region: 'eu-west-1',
-        },
-      },
     });
   } else {
     signedUrl = await getUrl({

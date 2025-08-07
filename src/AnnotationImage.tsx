@@ -35,6 +35,7 @@ export default function AnnotationImage(props: any) {
     hideNavButtons,
     testPresetId,
     isTest,
+    config,
   } = props;
   const { annotationSetId } = location;
   const { client } = useContext(GlobalContext)!;
@@ -202,6 +203,7 @@ export default function AnnotationImage(props: any) {
             testPresetId={testPresetId}
             isTest={isTest}
             testSetId={testSetId}
+            config={config}
           >
             {visible && memoizedChildren}
           </Image>
