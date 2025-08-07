@@ -737,7 +737,7 @@ export function FileUploadCore({
         retryDelay: 0,
       });
     },
-    [upload, filteredImageFiles, name, client, filteredImageSize, csvData]
+    [upload, filteredImageFiles, name, client, filteredImageSize, csvData, cameraSpecs, overlaps]
   );
 
   useEffect(() => {

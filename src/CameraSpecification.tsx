@@ -1,5 +1,5 @@
 import { Form } from 'react-bootstrap';
-import { useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import { CameraSpec } from './FilesUploadComponent';
 
 export default function CameraSpecification({
@@ -31,10 +31,6 @@ export default function CameraSpecification({
     });
   }
 
-  useEffect(() => {
-    console.log(cameraSpecs);
-  }, [cameraSpecs]);
-
   return (
     <div>
       <Form.Group className='mt-3'>
@@ -57,7 +53,7 @@ export default function CameraSpecification({
                 <Form.Control
                   type='number'
                   placeholder='Focal Length (mm)'
-                  value={cameraSpecs[camera]?.focalLengthMm}
+                  value={cameraSpecs[camera]?.focalLengthMm ?? 0}
                   onChange={(e) =>
                     handleCameraSpecChange(
                       camera,
@@ -65,6 +61,7 @@ export default function CameraSpecification({
                       Number(e.target.value)
                     )
                   }
+                  step='0.01'
                 />
               </Form.Group>
               <Form.Group>
@@ -72,7 +69,7 @@ export default function CameraSpecification({
                 <Form.Control
                   type='number'
                   placeholder='Sensor Width (mm)'
-                  value={cameraSpecs[camera]?.sensorWidthMm}
+                  value={cameraSpecs[camera]?.sensorWidthMm ?? 0}
                   onChange={(e) =>
                     handleCameraSpecChange(
                       camera,
@@ -80,6 +77,7 @@ export default function CameraSpecification({
                       Number(e.target.value)
                     )
                   }
+                  step='0.01'
                 />
               </Form.Group>
               <Form.Group>
@@ -87,7 +85,7 @@ export default function CameraSpecification({
                 <Form.Control
                   type='number'
                   placeholder='Tilt (degrees)'
-                  value={cameraSpecs[camera]?.tiltDegrees}
+                  value={cameraSpecs[camera]?.tiltDegrees ?? 0}
                   onChange={(e) =>
                     handleCameraSpecChange(
                       camera,
@@ -95,6 +93,7 @@ export default function CameraSpecification({
                       Number(e.target.value)
                     )
                   }
+                  step='0.01'
                 />
               </Form.Group>
             </Form.Group>
