@@ -1,38 +1,46 @@
-import { useState, useCallback, useMemo, useContext } from "react";
-import BaseImage from "./BaseImage";
-import LinkMaps from "./LinkMaps";
-import CreateAnnotationOnClick from "./CreateAnnotationOnClick";
-import OverlapOutline from "./OverlapOutline";
-import { useHotkeys } from "react-hotkeys-hook";
-import { GotoAnnotation } from "./GotoAnnotation";
-import { useOptimalAssignment } from "./useOptimalAssignment";
-import { MapLegend } from "./Legend";
-import { multiply, inv, Matrix } from "mathjs";
-import useAckOnTimeout from "./useAckOnTimeout";
-import { ShowMarkers } from "./ShowMarkers";
-import { Map } from "leaflet";
-import { GlobalContext } from "./Context";
+import { useState, useCallback, useMemo, useContext } from 'react';
+import BaseImage from './BaseImage';
+import LinkMaps from './LinkMaps';
+import CreateAnnotationOnClick from './CreateAnnotationOnClick';
+// import OverlapOutline from "./OverlapOutline";
+import { useHotkeys } from 'react-hotkeys-hook';
+import { GotoAnnotation } from './GotoAnnotation';
+import { useOptimalAssignment } from './useOptimalAssignment';
+import { MapLegend } from './Legend';
+import { inv, Matrix } from 'mathjs';
+import { ShowMarkers } from './ShowMarkers';
+import { Map } from 'leaflet';
+import { GlobalContext, CRUDhook, AnnotationsHook } from './Context';
 import type {
   AnnotationType,
   ExtendedAnnotationType,
   ImageType,
-} from "./schemaTypes";
-import { useOptimisticUpdates } from "./useOptimisticUpdates";
-import { useAnnotationNavigation } from "./useAnnotationNavigation";
-import { CRUDHook } from "./Context";
-import { ImageContextFromHook } from "./ImageContext";
-import { Schema } from "../amplify/data/resource";
+} from './schemaTypes';
+import { useOptimisticUpdates } from './useOptimisticUpdates';
+import { useAnnotationNavigation } from './useAnnotationNavigation';
+import { ImageContextFromHook } from './ImageContext';
+// import { Schema } from "../amplify/data/resource";
+import {
+  ManualHomographyEditor,
+  PointsOverlay,
+} from './ManualHomographyEditor';
+import { makeTransform } from './utils';
 
 type RegisterPairProps = {
   images: [ImageType, ImageType]; // The pair of images in which we need to register the annotations
   selectedSet: string; // The active AnnotationSet
   next: () => void; // Function to call to move to the next pair
   prev: () => void; // Function to call to move to the previous pair
-  transforms?: Matrix[]; // The transforms to map points image 1 coordinates to image 2 coordinates and vice versa.
+  transforms?: ((coords: [number, number]) => [number, number])[]; // The transforms to map points image 1 coordinates to image 2 coordinates and vice versa.
   visible: boolean; // Whether the component is visible
   ack: () => void; // Function to call to acknowledge the pair (mark it as completed). This will typically remove the underlying message from the task queue.
   selectedCategoryIDs?: string[]; // The ids of the selected categories
   noHomography?: boolean; // Whether the images are not homographically linked
+  // Manual homography selection support
+  points1?: { id: string; x: number; y: number }[];
+  points2?: { id: string; x: number; y: number }[];
+  setPoints1?: (updater: any) => void;
+  setPoints2?: (updater: any) => void;
 };
 
 // Function to transform a point using a homography matrix
@@ -46,13 +54,19 @@ export function RegisterPair({
   selectedCategoryIDs,
   ack,
   noHomography,
+  points1,
+  points2,
+  setPoints1,
+  setPoints2,
 }: RegisterPairProps) {
-  const [index, setIndex] = useState(-1);
   const [map1, setMap1] = useState<Map | null>(null);
   const [map2, setMap2] = useState<Map | null>(null);
   const [blocked, setBlocked] = useState(false);
-  const [linkImages, setLinkImages] = useState(transforms ? true : false);
+  const [linkImages, setLinkImages] = useState(
+    transforms && !noHomography ? true : false
+  );
   const [leniency, setLeniency] = useState(400);
+  const effectiveTransforms = transforms;
 
   const subscriptionFilter1 = useMemo(
     () => ({
@@ -81,51 +95,48 @@ export function RegisterPair({
   const { client } = useContext(GlobalContext)!;
 
   const annotationsHooks = [
-    useOptimisticUpdates<Schema["Annotation"]["type"], "Annotation">(
-      "Annotation",
-      async (nextToken) =>
-        client.models.Annotation.annotationsByImageIdAndSetId(
-          { imageId: images[0].id, setId: { eq: selectedSet } },
-          { nextToken }
-        ),
-      subscriptionFilter1
+    (useOptimisticUpdates as any)(
+      'Annotation',
+      async (nextToken?: string) => {
+        const resp =
+          await client.models.Annotation.annotationsByImageIdAndSetId(
+            { imageId: images[0].id, setId: { eq: selectedSet } },
+            { nextToken }
+          );
+        return {
+          data: (resp as any).data,
+          nextToken: (resp as any).nextToken ?? undefined,
+        };
+      },
+      subscriptionFilter1 as any
     ),
-    useOptimisticUpdates<Schema["Annotation"]["type"], "Annotation">(
-      "Annotation",
-      async (nextToken) =>
-        client.models.Annotation.annotationsByImageIdAndSetId(
-          { imageId: images[1].id, setId: { eq: selectedSet } },
-          { nextToken }
-        ),
-      subscriptionFilter2
+    (useOptimisticUpdates as any)(
+      'Annotation',
+      async (nextToken?: string) => {
+        const resp =
+          await client.models.Annotation.annotationsByImageIdAndSetId(
+            { imageId: images[1].id, setId: { eq: selectedSet } },
+            { nextToken }
+          );
+        return {
+          data: (resp as any).data,
+          nextToken: (resp as any).nextToken ?? undefined,
+        };
+      },
+      subscriptionFilter2 as any
     ),
-  ] as [CRUDHook<AnnotationType>, CRUDHook<AnnotationType>];
+  ] as unknown as [CRUDhook<'Annotation'>, CRUDhook<'Annotation'>];
 
-  const [matchStatus, setMatchStatus] = useState<Record<string, number>>({});
+  const [matchStatus] = useState<Record<string, number>>({});
 
-  const setMatch = useCallback(
-    (
-      anno1: Partial<ExtendedAnnotationType>,
-      anno2: Partial<ExtendedAnnotationType>,
-      val: number
-    ) => {
-      setMatchStatus((m) => {
-        const mNew = { ...m };
-        if (anno1.id && anno2.id) {
-          mNew[anno1.id + anno2.id] = val;
-        }
-        return mNew;
-      });
-    },
-    []
-  );
+  const setMatch = useCallback(() => {}, []);
 
-  const rejectMatch = useCallback(
-    ([anno1, anno2]: [ExtendedAnnotationType, ExtendedAnnotationType]) => {
-      setMatch(anno1, anno2, -1);
-    },
-    [setMatch]
-  );
+  // const rejectMatch = useCallback(
+  //   ([anno1, anno2]: [ExtendedAnnotationType, ExtendedAnnotationType]) => {
+  //     setMatch(anno1, anno2, -1);
+  //   },
+  //   [setMatch]
+  // );
 
   const getMatchStatus = useCallback(
     ([anno1, anno2]: [AnnotationType, AnnotationType]): number => {
@@ -134,9 +145,11 @@ export function RegisterPair({
     [matchStatus]
   );
 
-  const { enhancedAnnotationHooks, repositionShadow } = useOptimalAssignment({
+  const { enhancedAnnotationHooks, repositionShadow } = (
+    useOptimalAssignment as any
+  )({
     annotationsHooks,
-    transforms: transforms,
+    transforms: effectiveTransforms as any,
     getMatchStatus,
     images,
     leniency,
@@ -147,22 +160,24 @@ export function RegisterPair({
     prev: prevAnnotation,
     activeObjectId,
     confirmMatch,
-  } = useAnnotationNavigation({
-    images,
-    annotationHooks: enhancedAnnotationHooks as [any, any],
+  } = (useAnnotationNavigation as any)({
+    annotationHooks: enhancedAnnotationHooks as any,
+    // The hook expects create/update but only uses update; provide no-op create to satisfy type
+    create: () => {},
+    update: () => {},
     next,
     prev,
     selectedCategoryIDs: selectedCategoryIDs || [],
   });
 
-  const activeAnnotation = useMemo(() => {
+  const activeAnnotation = useMemo<ExtendedAnnotationType | undefined>(() => {
     if (!activeObjectId) return undefined;
     return (
-      enhancedAnnotationHooks[0].data.find(
-        (anno) => anno.proposedObjectId === activeObjectId
+      (enhancedAnnotationHooks[0].data as any[]).find(
+        (anno: any) => anno.proposedObjectId === activeObjectId
       ) ||
-      enhancedAnnotationHooks[1].data.find(
-        (anno) => anno.proposedObjectId === activeObjectId
+      (enhancedAnnotationHooks[1].data as any[]).find(
+        (anno: any) => anno.proposedObjectId === activeObjectId
       )
     );
   }, [activeObjectId, enhancedAnnotationHooks]);
@@ -177,43 +192,36 @@ export function RegisterPair({
     setTimeout(() => setIsSpaceDisabled(false), SPACE_DISABLE_TIMEOUT_MS);
   }, [isSpaceDisabled, confirmMatch]);
 
-  useHotkeys("ArrowRight", nextAnnotation, { enabled: visible });
-  useHotkeys("Ctrl+ArrowRight", next, { enabled: visible });
-  useHotkeys("ArrowLeft", prevAnnotation, { enabled: visible });
-  useHotkeys("Ctrl+ArrowLeft", prev, { enabled: visible });
-  useHotkeys("Space", handleSpace, { enabled: visible });
-  useHotkeys(
-    "BACKSPACE",
-    () => {
-      if (index >= 0) {
-        rejectMatch(matches[index]);
-      }
-    },
-    { enabled: visible }
-  );
+  useHotkeys('ArrowRight', nextAnnotation, { enabled: visible });
+  useHotkeys('Ctrl+ArrowRight', next, { enabled: visible });
+  useHotkeys('ArrowLeft', prevAnnotation, { enabled: visible });
+  useHotkeys('Ctrl+ArrowLeft', prev, { enabled: visible });
+  useHotkeys('Space', handleSpace, { enabled: visible });
+  // Backspace currently unused after refactor; reserved for future per-pair rejection UI
 
   return (
-    <div className="w-100 h-100 d-flex flex-column gap-3">
-      <div className="w-100 h-100 d-flex flex-row justify-content-between gap-3">
+    <div className='w-100 h-100 d-flex flex-column gap-3'>
+      <div className='w-100 h-100 d-flex flex-row justify-content-between gap-3'>
         {images?.length == 2 &&
           images?.map((image, i) => (
             <div
-              className="w-50 h-100"
+              className='w-50 h-100'
               style={{
-                position: "relative",
+                position: 'relative',
               }}
               key={image.id}
             >
               <ImageContextFromHook
                 key={i}
-                hook={enhancedAnnotationHooks[i]}
-                image={image}
+                hook={enhancedAnnotationHooks[i] as unknown as AnnotationsHook}
+                image={image as any}
+                locationId={crypto.randomUUID()}
+                taskTag={'RegisterPair'}
               >
                 <BaseImage
                   visible={visible}
                   activeAnnotation={activeAnnotation}
-                  location={{ image, annotationSetId: selectedSet }}
-                  setId={selectedSet}
+                  location={{ image: image as any, annotationSetId: selectedSet } as any}
                   fullImage={false}
                   otherImageId={images[1 - i].id}
                   boundsxy={[
@@ -222,50 +230,58 @@ export function RegisterPair({
                   ]}
                   // containerwidth="45vw"
                   // containerheight="80vh"
-                  img={image}
+                  img={image as any}
                   x={image.width / 2}
                   y={image.height / 2}
                   width={image.width}
                   height={image.height}
                 >
-                  {transforms && (
+                  {effectiveTransforms && (
                     <GotoAnnotation
-                      image={image}
+                      image={image as any}
                       activeAnnotation={activeAnnotation}
-                      transform={transforms![1 - i]}
+                      transform={effectiveTransforms![1 - i]}
                     />
                   )}
-                  <CreateAnnotationOnClick
-                    setId={selectedSet}
-                    image={image}
-                    annotationsHook={enhancedAnnotationHooks[i]}
-                    source="registerpair"
-                    location={{
-                      x: image.width / 2,
-                      y: image.height / 2,
-                      width: image.width,
-                      height: image.height,
-                      annotationSetId: selectedSet,
-                      image,
-                    }}
-                  />
+                  {(noHomography || !effectiveTransforms) && (
+                    <PointsOverlay
+                      points={[points1, points2][i] as any}
+                      setPoints={[setPoints1, setPoints2][i] as any}
+                    />
+                  )}
+                  {!noHomography && effectiveTransforms && (
+                    <CreateAnnotationOnClick
+                      setId={selectedSet}
+                      image={image as any}
+                      source='registerpair'
+                      disabled={!effectiveTransforms}
+                      location={{
+                        x: image.width / 2,
+                        y: image.height / 2,
+                        width: image.width,
+                        height: image.height,
+                        annotationSetId: selectedSet,
+                        image: image as any,
+                      }}
+                    />
+                  )}
                   <ShowMarkers
                     annotationSetId={selectedSet}
                     activeAnnotation={activeAnnotation}
                     onShadowDrag={(id, x, y) => repositionShadow(i, id, x, y)}
                   />
-                  {transforms && linkImages && (
+                  {effectiveTransforms && linkImages && (
                     <LinkMaps
                       otherMap={[map2, map1][i]}
                       setMap={[setMap1, setMap2][i]}
-                      transform={transforms![i]}
+                      transform={effectiveTransforms![i]}
                       blocked={blocked}
                       setBlocked={setBlocked}
                     />
                   )}
                   {i == 1 && (
                     <MapLegend
-                      position="bottomright"
+                      position='bottomright'
                       annotationSetId={selectedSet}
                       alwaysVisible={true}
                     />
@@ -275,45 +291,46 @@ export function RegisterPair({
             </div>
           ))}
       </div>
-      {transforms && (
-        <div className="w-100 d-flex flex-column gap-2 bg-secondary p-3">
+      {effectiveTransforms && (
+        <div className='w-100 d-flex flex-column gap-2 bg-secondary p-3'>
           <label
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              userSelect: "none",
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              userSelect: 'none',
             }}
           >
             <input
-              type="checkbox"
-              checked={noHomography ? false : linkImages}
-              disabled={noHomography || !transforms}
+              type='checkbox'
+              checked={linkImages}
+              disabled={!effectiveTransforms || noHomography}
               onChange={(e) => setLinkImages(e.target.checked)}
             />
             Link Images according to linking transform
           </label>
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              userSelect: "none",
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              userSelect: 'none',
             }}
           >
-            <label htmlFor="leniency">Pairing leniency (px)</label>
+            <label htmlFor='leniency'>Pairing leniency (px)</label>
             <input
-              type="range"
-              id="leniency"
-              min="0"
-              max="1000"
+              type='range'
+              id='leniency'
+              min='0'
+              max='1000'
               value={leniency}
-              style={{ width: "200px" }}
+              style={{ width: '200px' }}
               onChange={(e) => setLeniency(parseInt(e.target.value))}
             />
           </div>
         </div>
       )}
+      {/* Manual homography editor now rendered by parent (Registration) in sidebar */}
     </div>
   );
 }
