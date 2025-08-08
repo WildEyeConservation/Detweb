@@ -10,10 +10,11 @@ export interface CreateAnnotationOnClickProps {
   source: string;
   setId: string;
   allowOutside?: boolean;
+  disabled?: boolean;
 }
 
 export default function CreateAnnotationOnClick(props: CreateAnnotationOnClickProps) {
-  const { location, source, image, allowOutside, setId } = props;
+  const { location, source, image, allowOutside, setId, disabled } = props;
   const { annotationsHook: { create: createAnnotation } } = useContext(ImageContext)!;
   const { latLng2xy } = useContext(ImageContext)!;
   // Bypass lazy-loader typing for category matching logic
@@ -23,6 +24,7 @@ export default function CreateAnnotationOnClick(props: CreateAnnotationOnClickPr
 
   useMapEvents({
     click: (e: { latlng: any; }) => {
+      if (disabled) return;
       const xyResult = latLng2xy(e.latlng);
       const xy = Array.isArray(xyResult) ? xyResult[0] : xyResult;
 

@@ -68,10 +68,10 @@ export default function AnnotationImage(props: any) {
   >(
     'Annotation',
     async (nextToken) =>
-      (client.models.Annotation.annotationsByImageIdAndSetId(
+      client.models.Annotation.annotationsByImageIdAndSetId(
         { imageId: location.image.id, setId: { eq: location.annotationSetId } },
         { nextToken }
-      ) as any),
+      ) as any,
     subscriptionFilter
   );
   const stats = useImageStats(annotationsHook);
@@ -125,10 +125,20 @@ export default function AnnotationImage(props: any) {
       return;
     }
 
-    try {
-      await navigator.share({ url: url });
-    } catch (error) {
-      console.error(error);
+    if (navigator.share) {
+      try {
+        await navigator.share({ url: url });
+      } catch (error) {
+        console.error(error);
+      }
+    } else {
+      //write to clipboard
+      try {
+        await navigator.clipboard.writeText(url);
+        alert('Link copied to clipboard');
+      } catch (error) {
+        console.error(error);
+      }
     }
   }
 

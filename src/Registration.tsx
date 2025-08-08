@@ -12,6 +12,7 @@ import { RegisterPair } from './RegisterPair';
 import { Card, Button, Form } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PanelBottom } from 'lucide-react';
+import { ManualHomographyEditor } from './ManualHomographyEditor';
 
 export function Registration({ showAnnotationSetDropdown = true }) {
   const { client } = useContext(GlobalContext)!;
@@ -34,6 +35,15 @@ export function Registration({ showAnnotationSetDropdown = true }) {
   } | null>(null);
   const [numLoaded, setNumLoaded] = useState(0);
   const [showFilters, setShowFilters] = useState(true);
+  const [points1, setPoints1] = useState<{ id: string; x: number; y: number }[]>(
+    []
+  );
+  const [points2, setPoints2] = useState<{ id: string; x: number; y: number }[]>(
+    []
+  );
+  const [localTransforms, setLocalTransforms] = useState<
+    Record<string, ((c: [number, number]) => [number, number])[]>
+  >({});
   const subscriptionFilter = useMemo(
     () => ({ filter: { setId: { eq: selectedAnnotationSet } } }),
     [selectedAnnotationSet]
@@ -244,6 +254,16 @@ export function Registration({ showAnnotationSetDropdown = true }) {
     }
   }, [annotationSetId]);
 
+  // Reset manual points when pair changes
+  useEffect(() => {
+    setPoints1([]);
+    setPoints2([]);
+  }, [activePair?.primary, activePair?.secondary]);
+
+  const pairKey = activePair
+    ? `${activePair.primary}::${activePair.secondary}`
+    : '';
+
   return (
     <div
       style={{
@@ -255,78 +275,99 @@ export function Registration({ showAnnotationSetDropdown = true }) {
       }}
     >
       <div className='w-100 h-100 d-flex flex-column flex-md-row gap-3'>
-        <div
-          className='d-flex flex-column gap-3 w-100'
-          style={{ maxWidth: '300px' }}
-        >
-          <Card className='d-sm-block d-none w-100'>
-            <Card.Header>
-              <Card.Title className='mb-0'>Information</Card.Title>
-            </Card.Header>
-            <Card.Body className='d-flex flex-column gap-2'>
-              <InfoTag label='Survey' value={project.name} />
-              <InfoTag
-                label='Annotation Set'
-                value={
-                  annotationSets?.find(
-                    (set) => set.id === selectedAnnotationSet
-                  )?.name ?? 'Unknown'
-                }
+        <div className='d-flex flex-column gap-3 w-100' style={{ maxWidth: '360px' }}>
+          {activePair && imageNeighbours[activePair.primary]?.[activePair.secondary]?.noHomography &&
+          !localTransforms[pairKey] ? (
+            <div className='w-100'>
+              <ManualHomographyEditor
+                images={[
+                  imageMetaData[activePair.primary],
+                  imageMetaData[activePair.secondary],
+                ]}
+                points1={points1}
+                points2={points2}
+                setPoints1={setPoints1}
+                setPoints2={setPoints2}
+                onSaved={(H) => {
+                  // Optimistically enable linking with local transforms
+                  const fwd = makeTransform(H as any);
+                  const bwd = makeTransform(inv(H as any) as any);
+                  setLocalTransforms((old) => ({ ...old, [pairKey]: [fwd, bwd] }));
+                }}
               />
-            </Card.Body>
-          </Card>
-          <Card className='w-100 flex-grow-1'>
-            <Card.Header>
-              <Card.Title className='mb-0 d-flex align-items-center'>
-                <Button
-                  className='p-0 mb-0'
-                  variant='outline'
-                  onClick={() => setShowFilters(!showFilters)}
-                >
-                  <PanelBottom
-                    className='d-sm-none'
-                    style={{
-                      transform: showFilters
-                        ? 'rotate(180deg)'
-                        : 'rotate(0deg)',
-                    }}
+            </div>
+          ) : (
+            <>
+              <Card className='d-sm-block d-none w-100'>
+                <Card.Header>
+                  <Card.Title className='mb-0'>Information</Card.Title>
+                </Card.Header>
+                <Card.Body className='d-flex flex-column gap-2'>
+                  <InfoTag label='Survey' value={project.name} />
+                  <InfoTag
+                    label='Annotation Set'
+                    value={
+                      annotationSets?.find(
+                        (set) => set.id === selectedAnnotationSet
+                      )?.name ?? 'Unknown'
+                    }
                   />
-                </Button>
-                Filters
-              </Card.Title>
-            </Card.Header>
-            {showFilters && (
-              <Card.Body className='d-flex flex-column gap-2'>
-                <div className='w-100'>
-                  <Form.Label>Labels</Form.Label>
-                  <Select
-                    value={selectedCategories}
-                    onChange={setSelectedCategories}
-                    isMulti
-                    name='Labels to register'
-                    options={categories
-                      ?.filter(
-                        (c) => c.annotationSetId === selectedAnnotationSet
-                      )
-                      .map((q) => ({
-                        label: q.name,
-                        value: q.id,
-                      }))}
-                    className='text-black w-100'
-                    closeMenuOnSelect={false}
-                  />
-                </div>
+                </Card.Body>
+              </Card>
+              <Card className='w-100 flex-grow-1'>
+                <Card.Header>
+                  <Card.Title className='mb-0 d-flex align-items-center'>
+                    <Button
+                      className='p-0 mb-0'
+                      variant='outline'
+                      onClick={() => setShowFilters(!showFilters)}
+                    >
+                      <PanelBottom
+                        className='d-sm-none'
+                        style={{
+                          transform: showFilters
+                            ? 'rotate(180deg)'
+                            : 'rotate(0deg)',
+                        }}
+                      />
+                    </Button>
+                    Filters
+                  </Card.Title>
+                </Card.Header>
+                {showFilters && (
+                  <Card.Body className='d-flex flex-column gap-2'>
+                    <div className='w-100'>
+                      <Form.Label>Labels</Form.Label>
+                      <Select
+                        value={selectedCategories}
+                        onChange={setSelectedCategories}
+                        isMulti
+                        name='Labels to register'
+                        options={categories
+                          ?.filter(
+                            (c) => c.annotationSetId === selectedAnnotationSet
+                          )
+                          .map((q) => ({
+                            label: q.name,
+                            value: q.id,
+                          }))}
+                        className='text-black w-100'
+                        closeMenuOnSelect={false}
+                      />
+                    </div>
 
-                {showAnnotationSetDropdown && (
-                  <AnnotationSetDropdown
-                    selectedSet={selectedAnnotationSet}
-                    setAnnotationSet={setSelectedAnnotationSet}
-                    canCreate={false}
-                  />
+                    {showAnnotationSetDropdown && (
+                      <AnnotationSetDropdown
+                        selectedSet={selectedAnnotationSet}
+                        setAnnotationSet={setSelectedAnnotationSet}
+                        canCreate={false}
+                      />
+                    )}
+                  </Card.Body>
                 )}
-              </Card.Body>
-            )}
-          </Card>
+              </Card>
+            </>
+          )}
         </div>
         <div className='d-flex flex-column align-items-center h-100 w-100'>
           {annotationHook.meta?.isLoading ? (
@@ -365,17 +406,24 @@ export function Registration({ showAnnotationSetDropdown = true }) {
               ]}
               selectedCategoryIDs={selectedCategoryIDs}
               selectedSet={selectedAnnotationSet}
-              transforms={[
-                imageNeighbours[activePair.primary]?.[activePair.secondary]?.tf,
-                imageNeighbours[activePair.secondary]?.[activePair.primary]?.tf,
-              ]}
+              transforms={
+                localTransforms[pairKey] || [
+                  imageNeighbours[activePair.primary]?.[activePair.secondary]?.tf,
+                  imageNeighbours[activePair.secondary]?.[activePair.primary]?.tf,
+                ]
+              }
               next={nextPair}
               prev={() => {}}
               visible={true}
               ack={() => {}}
               noHomography={
-                imageNeighbours[activePair.primary]?.[activePair.secondary]?.noHomography ?? false
+                (imageNeighbours[activePair.primary]?.[activePair.secondary]?.noHomography ??
+                  false) && !localTransforms[pairKey]
               }
+              points1={points1}
+              points2={points2}
+              setPoints1={setPoints1}
+              setPoints2={setPoints2}
             />
           ) : (
             <div>No more items to register</div>

@@ -2,8 +2,8 @@ import { useContext, useState, useEffect } from "react";
 import AnnotationImage from "./AnnotationImage";
 import { RegisterPair } from "./RegisterPair";
 import { GlobalContext, UserContext } from "./Context";
-import { data } from "../amplify/data/resource";
-import { array2Matrix } from "./utils";
+import { array2Matrix, makeTransform } from "./utils";
+import { inv } from "mathjs";
 
 /* 
   In the current implementation, we can push both registration and annotation tasks to the same queue.
@@ -57,13 +57,11 @@ export function TaskSelector(props: TaskSelectorProps) {
         { image1Id: props.images[0], image2Id: props.images[1] },
         { selectionSet: ["homography", "image1.*", "image2.*"] }
       ).then(({ data: { homography, image1, image2 } }) => {
-        setElement(
-          <RegisterPair
-            {...props}
-            homography={array2Matrix(homography)}
-            images={[image1, image2]}
-          />
-        );
+        const H = array2Matrix(homography);
+        const transforms = H
+          ? [makeTransform(H), makeTransform(inv(H))]
+          : undefined;
+        setElement(<RegisterPair {...props} transforms={transforms} images={[image1, image2]} />);
       });
     }
   }, [props]);
