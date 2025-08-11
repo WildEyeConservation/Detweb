@@ -80,6 +80,9 @@ function CreateTask({
       width: number;
       height: number;
       id: string;
+      transectId: Nullable<string>;
+      latitude: Nullable<number>;
+      longitude: Nullable<number>;
       originalPath: string;
     }[]
   >([]);
@@ -96,6 +99,180 @@ function CreateTask({
     MultiValue<CategoryOption> | SingleValue<CategoryOption>
   >([]);
   const [loadingImages, setLoadingImages] = useState<boolean>(false);
+
+  // Dev-only: per-transect subsetting based on geo + timestamps
+  const hasDevGeoTransect = useMemo(() => {
+    if (process.env.NODE_ENV !== 'development') return false;
+    if (!allImages || allImages.length === 0) return false;
+    return allImages.every(
+      (img) =>
+        img != null &&
+        img.timestamp != null &&
+        img.transectId != null &&
+        img.latitude != null &&
+        img.longitude != null
+    );
+  }, [allImages]);
+
+  // Function to convert degrees to radians
+  function toRad(deg: number) {
+    return (deg * Math.PI) / 180;
+  }
+
+  // More accurate ellipsoidal estimate of distance based on the WGS84 model
+  function vincentyDistanceKm(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ) {
+    // WGS-84 ellipsiod parameters
+    const a = 6378137;
+    const b = 6356752.314245;
+    const f = 1 / 298.257223563;
+
+    const L = toRad(lon2 - lon1);
+    const U1 = Math.atan((1 - f) * Math.tan(toRad(lat1)));
+    const U2 = Math.atan((1 - f) * Math.tan(toRad(lat2)));
+
+    const sinU1 = Math.sin(U1),
+      cosU1 = Math.cos(U1);
+    const sinU2 = Math.sin(U2),
+      cosU2 = Math.cos(U2);
+
+    let λ = L;
+    let λP,
+      iterLimit = 100;
+    let cosSqAlpha, sinSigma, cos2SigmaM, cosSigma, sigma;
+
+    do {
+      const sinλ = Math.sin(λ),
+        cosλ = Math.cos(λ);
+      sinSigma = Math.sqrt(
+        cosU2 * sinλ * (cosU2 * sinλ) +
+          (cosU1 * sinU2 - sinU1 * cosU2 * cosλ) *
+            (cosU1 * sinU2 - sinU1 * cosU2 * cosλ)
+      );
+
+      if (sinSigma === 0) return 0; // co-incident points
+
+      cosSigma = sinU1 * sinU2 + cosU1 * cosU2 * cosλ;
+      sigma = Math.atan2(sinSigma, cosSigma);
+      const sinAlpha = (cosU1 * cosU2 * sinλ) / sinSigma;
+      cosSqAlpha = 1 - sinAlpha * sinAlpha;
+      cos2SigmaM = cosSigma - (2 * sinU1 * sinU2) / cosSqAlpha;
+
+      if (isNaN(cos2SigmaM)) cos2SigmaM = 0; // equatorial line
+
+      const C = (f / 16) * cosSqAlpha * (4 + f * (4 - 3 * cosSqAlpha));
+      λP = λ;
+      λ =
+        L +
+        (1 - C) *
+          f *
+          sinAlpha *
+          (sigma +
+            C *
+              sinSigma *
+              (cos2SigmaM + C * cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM)));
+    } while (Math.abs(λ - λP) > 1e-12 && --iterLimit > 0);
+
+    if (iterLimit === 0) return NaN; // formula failed to converge
+
+    const uSq = (cosSqAlpha * (a * a - b * b)) / (b * b);
+    const A =
+      1 + (uSq / 16384) * (4096 + uSq * (-768 + uSq * (320 - 175 * uSq)));
+    const B = (uSq / 1024) * (256 + uSq * (-128 + uSq * (74 - 47 * uSq)));
+
+    const deltaSigma =
+      B *
+      sinSigma *
+      (cos2SigmaM +
+        (B / 4) *
+          (cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM) -
+            (B / 6) *
+              cos2SigmaM *
+              (-3 + 4 * sinSigma * sinSigma) *
+              (-3 + 4 * cos2SigmaM * cos2SigmaM)));
+
+    const s = b * A * (sigma - deltaSigma);
+
+    return s / 1000; // distance in kilometers
+  }
+
+  const transectGroupStats = useMemo(() => {
+    if (!hasDevGeoTransect) return [] as any[];
+
+    // Group images by transectId
+    const groups: Record<string, any[]> = {};
+    for (const img of allImages) {
+      const tId = String(img.transectId);
+      if (!groups[tId]) groups[tId] = [];
+      groups[tId].push(img);
+    }
+
+    // Compute distance and speed for each transect
+    const results = Object.entries(groups).map(([transectId, imgs]) => {
+      const sorted = imgs
+        .slice()
+        .sort((a, b) => (a.timestamp as number) - (b.timestamp as number));
+      const first = sorted[0];
+      const last = sorted[sorted.length - 1];
+      const distanceKm = vincentyDistanceKm(
+        first.latitude as number,
+        first.longitude as number,
+        last.latitude as number,
+        last.longitude as number
+      );
+      const timeSeconds = Math.abs(
+        (last.timestamp as number) - (first.timestamp as number)
+      );
+      const speedKmh = timeSeconds > 0 ? distanceKm / (timeSeconds / 3600) : 0;
+      return {
+        transectId,
+        images: sorted,
+        imageCount: sorted.length,
+        distanceKm,
+        speedKmh,
+      };
+    });
+    return results;
+  }, [hasDevGeoTransect, allImages]);
+
+  const [transectSubsetSteps, setTransectSubsetSteps] = useState<
+    Record<string, number>
+  >({});
+
+  useEffect(() => {
+    if (!hasDevGeoTransect) return;
+
+    // Set the subset step for each transect
+    setTransectSubsetSteps((prev) => {
+      const next = { ...prev };
+      for (const g of transectGroupStats as any[]) {
+        if (next[g.transectId] == null) next[g.transectId] = 1;
+      }
+      return next;
+    });
+  }, [hasDevGeoTransect, transectGroupStats]);
+
+  // Compute the expected number of images for each transect
+  const expectedCounts = useMemo(() => {
+    if (!hasDevGeoTransect)
+      return { per: {} as Record<string, number>, total: 0 };
+    const per: Record<string, number> = {};
+    let total = 0;
+    for (const g of transectGroupStats as any[]) {
+      const step = Math.max(
+        1,
+        Number(transectSubsetSteps[g.transectId] ?? 1) || 1
+      );
+      const count = Math.floor((g.imageCount as number) / step);
+      per[g.transectId] = count;
+      total += count;
+    }
+    return { per, total };
+  }, [hasDevGeoTransect, transectGroupStats, transectSubsetSteps]);
 
   const getImageId = useMemo(() => {
     const cache: { [path: string]: string } = {};
@@ -321,6 +498,9 @@ function CreateTask({
                   'image.id',
                   'image.timestamp',
                   'image.originalPath',
+                  'image.transectId',
+                  'image.latitude',
+                  'image.longitude',
                 ],
                 nextToken,
                 limit: 1000,
@@ -396,22 +576,35 @@ function CreateTask({
       setLocationsCompleted: (steps: number) => void;
       setTotalLocations: (steps: number) => void;
     }) => {
-      // Development mode: subset images based on step n
+      // Development mode: subset images globally or per-transect with geo data
       let imagesToUse = allImages;
-      if (process.env.NODE_ENV === 'development' && subsetN > 1) {
-        const sortedImages = [...allImages].sort((a, b) => {
-          if (a.timestamp != null && b.timestamp != null) {
-            return a.timestamp - b.timestamp;
-          } else if (a.timestamp != null) {
-            return -1;
-          } else if (b.timestamp != null) {
-            return 1;
+      if (process.env.NODE_ENV === 'development') {
+        if (hasDevGeoTransect) {
+          const selected: typeof allImages = [];
+          for (const g of transectGroupStats as any[]) {
+            const stepRaw = transectSubsetSteps[g.transectId];
+            const step = Math.max(1, Number(stepRaw) || 1);
+            const subset = (g.images as any[]).filter(
+              (_: any, idx: number) => (idx + 1) % step === 0
+            );
+            selected.push(...subset);
           }
-          return 0;
-        });
-        imagesToUse = sortedImages.filter(
-          (_, idx) => (idx + 1) % subsetN === 0
-        );
+          imagesToUse = selected;
+        } else if (subsetN > 1) {
+          const sortedImages = [...allImages].sort((a, b) => {
+            if (a.timestamp != null && b.timestamp != null) {
+              return (a.timestamp as number) - (b.timestamp as number);
+            } else if (a.timestamp != null) {
+              return -1;
+            } else if (b.timestamp != null) {
+              return 1;
+            }
+            return 0;
+          });
+          imagesToUse = sortedImages.filter(
+            (_, idx) => (idx + 1) % subsetN === 0
+          );
+        }
       }
 
       const {
@@ -692,20 +885,83 @@ function CreateTask({
                 className='p-2 border border-dark mb-2 shadow-sm'
                 style={{ backgroundColor: '#697582' }}
               >
-                <Form.Label className='mb-0'>Image Subset Step (n)</Form.Label>
-                <span
-                  className='d-block text-muted mb-2'
-                  style={{ fontSize: '12px' }}
-                >
-                  1-based indexing
-                </span>
-                <Form.Control
-                  type='number'
-                  value={subsetN}
-                  onChange={({ target: { value } }) =>
-                    setSubsetN(Number(value))
-                  }
-                />
+                {hasDevGeoTransect ? (
+                  <>
+                    <Form.Label className='mb-0'>
+                      Per-transect subset steps
+                    </Form.Label>
+                    <span
+                      className='d-block text-muted mb-2'
+                      style={{ fontSize: '12px' }}
+                    >
+                      Computed distance (vincenty) and speed are based on the
+                      first and last image of each transect. Steps use 1-based
+                      indexing.
+                    </span>
+                    {transectGroupStats.map((g: any, idx: number) => (
+                      <div
+                        key={g.transectId}
+                        className='d-flex align-items-center justify-content-between mb-2'
+                      >
+                        <div
+                          className='me-3 text-white'
+                          style={{ fontSize: '14px' }}
+                        >
+                          Transect {idx + 1}: {g.imageCount} images -{' '}
+                          {g.distanceKm.toFixed(2)} km - {g.speedKmh.toFixed(2)}{' '}
+                          km/h
+                        </div>
+                        <Form.Control
+                          type='number'
+                          style={{ maxWidth: 120 }}
+                          value={transectSubsetSteps[g.transectId] ?? 1}
+                          onChange={(e) =>
+                            setTransectSubsetSteps((prev) => ({
+                              ...prev,
+                              [g.transectId]: Number(
+                                (e.target as HTMLInputElement).value
+                              ),
+                            }))
+                          }
+                        />
+                      </div>
+                    ))}
+                    <div
+                      className='mt-2 text-white border-top border-dark pt-2'
+                      style={{ fontSize: '12px' }}
+                    >
+                      {transectGroupStats.map((g: any, idx: number) => (
+                        <div key={`exp-${g.transectId}`}>
+                          Transect {idx + 1} expected images:{' '}
+                          {expectedCounts.per[g.transectId] ?? 0}
+                        </div>
+                      ))}
+                      <div className='fw-bold'>
+                        Total expected images: {expectedCounts.total}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <Form.Label className='mb-0'>
+                      Image Subset Step (n)
+                    </Form.Label>
+                    <span
+                      className='d-block text-muted mb-2'
+                      style={{ fontSize: '12px' }}
+                    >
+                      1-based indexing
+                    </span>
+                    <Form.Control
+                      type='number'
+                      value={subsetN}
+                      disabled={loadingImages}
+                      onChange={({ target: { value } }) =>
+                        setSubsetN(Number(value))
+                      }
+                    />
+                  </>
+                )}
               </Form.Group>
             )}
           </Form.Group>
@@ -715,7 +971,8 @@ function CreateTask({
           >
             {loadingImages ? (
               <div className='d-flex justify-content-center align-items-center text-white'>
-                <Spinner animation='border' size='sm' className='me-2' /> Loading images...
+                <Spinner animation='border' size='sm' className='me-2' />{' '}
+                Loading images...
               </div>
             ) : (
               <Form.Label
