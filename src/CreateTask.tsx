@@ -99,6 +99,7 @@ function CreateTask({
     MultiValue<CategoryOption> | SingleValue<CategoryOption>
   >([]);
   const [loadingImages, setLoadingImages] = useState<boolean>(false);
+  const [launching, setLaunching] = useState<boolean>(false);
 
   // Dev-only: per-transect subsetting based on geo + timestamps
   const hasDevGeoTransect = useMemo(() => {
@@ -576,6 +577,8 @@ function CreateTask({
       setLocationsCompleted: (steps: number) => void;
       setTotalLocations: (steps: number) => void;
     }) => {
+      setLaunching(true);
+
       // Development mode: subset images globally or per-transect with geo data
       let imagesToUse = allImages;
       if (process.env.NODE_ENV === 'development') {
@@ -840,6 +843,8 @@ function CreateTask({
           break;
       }
 
+      setLaunching(false);
+
       return locationSetId;
     },
     [
@@ -851,6 +856,7 @@ function CreateTask({
       effectiveImageWidth,
       getImageId,
       getSqsClient,
+      hasDevGeoTransect,
       height,
       horizontalTiles,
       minX,
@@ -862,6 +868,8 @@ function CreateTask({
       selectedCategories,
       setImagesCompleted,
       taskType,
+      transectGroupStats,
+      transectSubsetSteps,
       threshold,
       verticalTiles,
       width,
@@ -1167,6 +1175,12 @@ function CreateTask({
                 </>
               )}
             </Form.Group>
+            {launching && (
+              <div className='d-flex justify-content-center align-items-center'>
+                <Spinner animation='border' size='sm' className='me-2' />
+                Preparing task...
+              </div>
+            )}
           </Form.Group>
         </>
       );
@@ -1258,20 +1272,39 @@ function InputBox({
 }: {
   label: string;
   enabled: boolean;
-  getter: () => number;
+  getter: () => number | string;
   setter?: (x: number) => void;
 }) {
+  const [isFocused, setIsFocused] = useState(false);
+  const [tempValue, setTempValue] = useState<string>('');
+
+  const current = getter();
+
   return (
     <div className='col-md-3'>
       <Form.Group>
         <Form.Label>{label}</Form.Label>
         <Form.Control
           type='number'
-          value={getter()}
-          onChange={({ target: { value } }) => {
-            if (enabled && setter) {
-              setter(Number(value));
+          value={isFocused ? tempValue : current ?? ''}
+          onFocus={() => {
+            setIsFocused(true);
+            setTempValue(current == null ? '' : String(current));
+          }}
+          onChange={(e) => {
+            const value = (e.target as HTMLInputElement).value;
+            setTempValue(value);
+            if (!enabled || !setter) return;
+            if (value === '') return; // allow empty while typing
+            const parsed = Number(value);
+            if (!Number.isNaN(parsed)) {
+              setter(parsed);
             }
+          }}
+          onBlur={() => {
+            setIsFocused(false);
+            // Reset temp view to current external value on blur
+            setTempValue('');
           }}
           disabled={!enabled}
         />
