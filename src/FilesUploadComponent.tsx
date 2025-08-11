@@ -415,9 +415,13 @@ export function FileUploadCore({
 
     // Parse EXIF original timestamp, fallback to file.lastModified
     let timestamp: number;
-    const dateStr = tags.DateTimeOriginal?.description;
-    if (typeof dateStr === 'string') {
-      const dt = DateTime.fromFormat(dateStr, 'yyyy:MM:dd HH:mm:ss');
+    const dateStr = tags.DateTimeOriginal?.description; // eg "2025:08:11 10:00:00"
+    const timeZone = tags.OffsetTimeOriginal?.description; // eg "+02:00"
+    if (dateStr) {
+      let dt = DateTime.fromFormat(dateStr, 'yyyy:MM:dd HH:mm:ss', {
+        zone: timeZone,
+      });
+
       if (dt.isValid) {
         timestamp = dt.toMillis();
       } else {
@@ -556,13 +560,9 @@ export function FileUploadCore({
       });
 
       for (const overlap of overlaps) {
-        const cameraA = allCameras.find(
-          (c) => c.name === overlap.cameraA
-        );
+        const cameraA = allCameras.find((c) => c.name === overlap.cameraA);
 
-        const cameraB = allCameras.find(
-          (c) => c.name === overlap.cameraB
-        );
+        const cameraB = allCameras.find((c) => c.name === overlap.cameraB);
 
         if (cameraA && cameraB) {
           const { data: existingOverlap } =
@@ -737,7 +737,16 @@ export function FileUploadCore({
         retryDelay: 0,
       });
     },
-    [upload, filteredImageFiles, name, client, filteredImageSize, csvData, cameraSpecs, overlaps]
+    [
+      upload,
+      filteredImageFiles,
+      name,
+      client,
+      filteredImageSize,
+      csvData,
+      cameraSpecs,
+      overlaps,
+    ]
   );
 
   useEffect(() => {
