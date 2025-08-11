@@ -243,6 +243,9 @@ function CreateTask({
   const [transectSubsetSteps, setTransectSubsetSteps] = useState<
     Record<string, number>
   >({});
+  const [transectSubsetOffsets, setTransectSubsetOffsets] = useState<
+    Record<string, number>
+  >({});
 
   useEffect(() => {
     if (!hasDevGeoTransect) return;
@@ -252,6 +255,14 @@ function CreateTask({
       const next = { ...prev };
       for (const g of transectGroupStats as any[]) {
         if (next[g.transectId] == null) next[g.transectId] = 1;
+      }
+      return next;
+    });
+    // Set the subset offset for each transect
+    setTransectSubsetOffsets((prev) => {
+      const next = { ...prev };
+      for (const g of transectGroupStats as any[]) {
+        if (next[g.transectId] == null) next[g.transectId] = 0;
       }
       return next;
     });
@@ -268,12 +279,17 @@ function CreateTask({
         1,
         Number(transectSubsetSteps[g.transectId] ?? 1) || 1
       );
-      const count = Math.floor((g.imageCount as number) / step);
+      const offset = Math.max(
+        0,
+        Number(transectSubsetOffsets[g.transectId] ?? 0) || 0
+      );
+      const available = Math.max(0, (g.imageCount as number) - offset);
+      const count = Math.floor(available / step);
       per[g.transectId] = count;
       total += count;
     }
     return { per, total };
-  }, [hasDevGeoTransect, transectGroupStats, transectSubsetSteps]);
+  }, [hasDevGeoTransect, transectGroupStats, transectSubsetSteps, transectSubsetOffsets]);
 
   const getImageId = useMemo(() => {
     const cache: { [path: string]: string } = {};
@@ -587,9 +603,13 @@ function CreateTask({
           for (const g of transectGroupStats as any[]) {
             const stepRaw = transectSubsetSteps[g.transectId];
             const step = Math.max(1, Number(stepRaw) || 1);
-            const subset = (g.images as any[]).filter(
-              (_: any, idx: number) => (idx + 1) % step === 0
-            );
+            const offsetRaw = transectSubsetOffsets[g.transectId];
+            const offset = Math.max(0, Number(offsetRaw) || 0);
+            const subset = (g.images as any[]).filter((_: any, idx: number) => {
+              const pos = idx + 1; // 1-based indexing
+              if (pos <= offset) return false;
+              return (pos - offset) % step === 0;
+            });
             selected.push(...subset);
           }
           imagesToUse = selected;
@@ -870,6 +890,7 @@ function CreateTask({
       taskType,
       transectGroupStats,
       transectSubsetSteps,
+      transectSubsetOffsets,
       threshold,
       verticalTiles,
       width,
@@ -919,19 +940,44 @@ function CreateTask({
                           {g.distanceKm.toFixed(2)} km - {g.speedKmh.toFixed(2)}{' '}
                           km/h
                         </div>
-                        <Form.Control
-                          type='number'
-                          style={{ maxWidth: 120 }}
-                          value={transectSubsetSteps[g.transectId] ?? 1}
-                          onChange={(e) =>
-                            setTransectSubsetSteps((prev) => ({
-                              ...prev,
-                              [g.transectId]: Number(
-                                (e.target as HTMLInputElement).value
-                              ),
-                            }))
-                          }
-                        />
+                        <div className='d-flex align-items-center gap-2'>
+                          <div className='d-flex align-items-center'>
+                            <span className='me-2 text-white' style={{ fontSize: '12px' }}>
+                              Step
+                            </span>
+                            <Form.Control
+                              type='number'
+                              style={{ maxWidth: 100 }}
+                              value={transectSubsetSteps[g.transectId] ?? 1}
+                              onChange={(e) =>
+                                setTransectSubsetSteps((prev) => ({
+                                  ...prev,
+                                  [g.transectId]: Number(
+                                    (e.target as HTMLInputElement).value
+                                  ),
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className='d-flex align-items-center'>
+                            <span className='me-2 text-white' style={{ fontSize: '12px' }}>
+                              Offset
+                            </span>
+                            <Form.Control
+                              type='number'
+                              style={{ maxWidth: 100 }}
+                              value={transectSubsetOffsets[g.transectId] ?? 0}
+                              onChange={(e) =>
+                                setTransectSubsetOffsets((prev) => ({
+                                  ...prev,
+                                  [g.transectId]: Number(
+                                    (e.target as HTMLInputElement).value
+                                  ),
+                                }))
+                              }
+                            />
+                          </div>
+                        </div>
                       </div>
                     ))}
                     <div
