@@ -27,37 +27,40 @@ async function getTileBlob(path: string): Promise<Blob> {
     return cached;
   }
 
-  let signedUrl: any;
+  const prefersTestBucket = path.toLowerCase().includes('12_06_25');
 
-  if (!path.toLowerCase().includes('census_12_06_25_out')) {
-    signedUrl = await getUrl({
-      path,
+  const attemptFetch = async (getUrlArgs: any): Promise<Blob> => {
+    const signedUrl = await getUrl(getUrlArgs);
+    const response = await fetch(signedUrl.url.toString(), {
+      cache: 'no-store',
     });
-  } else {
-    signedUrl = await getUrl({
-      path,
-      options: {
-        bucket: {
-          bucketName: 'surveyscope-testbucket',
-          region: 'af-south-1',
+    if (!response.ok) {
+      throw new Error(`Failed to fetch tile: ${response.status} ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    await tileCache.setItem(path, blob);
+    return blob;
+  };
+
+  if (prefersTestBucket) {
+    try {
+      return await attemptFetch({
+        path,
+        options: {
+          bucket: {
+            bucketName: 'surveyscope-testbucket',
+            region: 'af-south-1',
+          },
         },
-      },
-    });
+      });
+    } catch (_) {
+      // Fall back to default bucket
+      return await attemptFetch({ path });
+    }
   }
 
-  const response = await fetch(signedUrl.url.toString(), {
-    cache: 'no-store', // Prevent browser from caching the response
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch tile: ${response.statusText}`);
-  }
-
-  const blob = await response.blob();
-
-  // Store in persistent cache
-  await tileCache.setItem(path, blob);
-  return blob;
+  // Default path (no special bucket)
+  return await attemptFetch({ path });
 }
 
 // Add this type declaration before the extension
@@ -100,7 +103,10 @@ L.GridLayer.Storage = L.GridLayer.extend({
   },
 });
 
-function createStorageLayer(props, context) {
+function createStorageLayer(
+  props: L.GridLayerOptions & { source: string },
+  context: any
+) {
   const layer = new L.GridLayer.Storage(props);
   return createElementObject(
     layer,

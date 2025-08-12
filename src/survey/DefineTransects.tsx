@@ -236,6 +236,41 @@ export default function DefineTransects({
     setStrataLines([]);
   };
 
+  // Jitter duplicate coordinates slightly so overlapping markers are visible
+  const adjustedPositions = React.useMemo(() => {
+    const byCoordKey: Record<string, (any & { transectId: number })[]> = {};
+    const adjusted: Record<string, { latitude: number; longitude: number }> = {};
+    const keyFor = (lat: number, lng: number) => `${lat},${lng}`;
+
+    segmentedImages.forEach((img) => {
+      const key = keyFor(img.latitude, img.longitude);
+      (byCoordKey[key] = byCoordKey[key] || []).push(img);
+    });
+
+    Object.values(byCoordKey).forEach((group) => {
+      if (group.length === 1) {
+        const img = group[0];
+        adjusted[img.id] = { latitude: img.latitude, longitude: img.longitude };
+        return;
+      }
+
+      // Spread duplicates around a small circle (~5m radius)
+      group.forEach((img, index) => {
+        const latRad = (img.latitude * Math.PI) / 180;
+        const radiusDeg = 0.00005; // ~5.5m in latitude
+        const angle = (2 * Math.PI * index) / group.length;
+        const dLat = radiusDeg * Math.sin(angle);
+        const dLng = (radiusDeg * Math.cos(angle)) / Math.max(Math.cos(latRad), 1e-6);
+        adjusted[img.id] = {
+          latitude: img.latitude + dLat,
+          longitude: img.longitude + dLng,
+        };
+      });
+    });
+
+    return adjusted;
+  }, [segmentedImages]);
+
   // submit handler: creates strata, transects, and assigns images
   const handleSubmit = React.useCallback(async () => {
     if (!polygonCoords) return;
@@ -946,7 +981,10 @@ export default function DefineTransects({
                   <CircleMarker
                     pane='markerPane'
                     key={img.id}
-                    center={[img.latitude, img.longitude]}
+                    center={[
+                      adjustedPositions[img.id]?.latitude ?? img.latitude,
+                      adjustedPositions[img.id]?.longitude ?? img.longitude,
+                    ]}
                     radius={5}
                     pathOptions={{
                       color:

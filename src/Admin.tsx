@@ -3,6 +3,7 @@ import { UserContext } from "./Context";
 import { Tabs, Tab } from "./Tabs";
 import { Card } from "react-bootstrap";
 import PendingOrganizations from "./PendingOrganizations";
+import ClientLogs from "./ClientLogs";
 
 export default function Admin() {
   const { cognitoGroups } = useContext(UserContext)!;
@@ -29,6 +30,11 @@ export default function Admin() {
           <Tabs>
             <Tab label="Pending Organisations">
               <PendingOrganizations />
+            </Tab>
+            <Tab label="Client Logs">
+              <div className="m-2">
+                <ClientLogs />
+              </div>
             </Tab>
             <Tab label="Statistics">
               <div className="m-2">
