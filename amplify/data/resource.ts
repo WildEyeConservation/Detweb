@@ -17,6 +17,7 @@ import { runPointFinder } from '../functions/runPointFinder/resource';
 import { deleteProject } from '../functions/deleteProject/resource';
 import { generateSurveyResults } from '../functions/generateSurveyResults/resource';
 import { getJwtSecret } from '../functions/getJwtSecret/resource';
+// import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
   .schema({
@@ -832,6 +833,21 @@ const schema = a
           .queryField('jollyResultsMembershipsBySurveyId')
           .sortKeys(['annotationSetId']),
       ]),
+    ClientLog: a
+      .model({
+        userId: a.string().required(),
+        ipAddress: a.string(),
+        userAgent: a.string(),
+        deviceType: a.string(),
+        os: a.string(),
+        connectionType: a.string(),
+        downlink: a.float(),
+        rtt: a.float(),
+      })
+      .authorization((allow) => [allow.authenticated()])
+      .secondaryIndexes((index) => [
+        index('userId').queryField('clientLogsByUserId'),
+      ]),
     updateProjectMemberships: a
       .mutation()
       .arguments({
@@ -910,6 +926,7 @@ const schema = a
     allow.resource(deleteProject),
     allow.resource(generateSurveyResults),
     allow.resource(getJwtSecret),
+    // allow.resource(consolidateUserStats),
   ]);
 
 export type Schema = ClientSchema<typeof schema>;
