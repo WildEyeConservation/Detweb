@@ -2,7 +2,6 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import BaseImage from '../BaseImage';
 import { ImageContextFromHook } from '../ImageContext';
 import { GlobalContext } from '../Context';
-import { SideLegend } from '../Legend';
 import { useOptimisticUpdates } from '../useOptimisticUpdates';
 // no local marker types needed here
 import { ShowMarkers } from '../ShowMarkers';
@@ -73,19 +72,19 @@ export default function LightAddLocationView({
     };
   }, [locationRef?.id, locationRef?.annotationSetId]);
 
-   const subscriptionFilter = useMemo(() => {
-     if (!loaded) return undefined;
-     return {
-       filter: {
-         and: [
-           { setId: { eq: (loaded as any).annotationSetId } },
-           { imageId: { eq: (loaded as any).image.id } },
-         ],
-       },
-     } as any;
-   }, [loaded?.annotationSetId, loaded?.image?.id]);
+  const subscriptionFilter = useMemo(() => {
+    if (!loaded) return undefined;
+    return {
+      filter: {
+        and: [
+          { setId: { eq: (loaded as any).annotationSetId } },
+          { imageId: { eq: (loaded as any).image.id } },
+        ],
+      },
+    } as any;
+  }, [loaded?.annotationSetId, loaded?.image?.id]);
 
-   const annotationsHook = (useOptimisticUpdates as any)(
+  const annotationsHook = (useOptimisticUpdates as any)(
     'Annotation',
     async (nextToken: any) => {
       const imageId = (loaded as any)?.image?.id as string | undefined;
@@ -96,7 +95,7 @@ export default function LightAddLocationView({
         { nextToken }
       ) as any;
     },
-     subscriptionFilter
+    subscriptionFilter
   ) as any;
 
   return (
@@ -112,12 +111,12 @@ export default function LightAddLocationView({
             locationId={loaded.id}
             image={loaded.image as any}
             taskTag={'add-locations'}
-            >
-             {/* @ts-ignore - BaseImageProps typing requires image, but component uses location.image */}
-             <BaseImage
+          >
+            {/* @ts-ignore - BaseImageProps typing requires image, but component uses location.image */}
+            <BaseImage
               visible={visible}
               location={loaded as any}
-               image={loaded.image as any}
+              image={loaded.image as any}
               next={next}
               prev={prev}
               annotationSet={loaded.annotationSetId as any}
@@ -129,11 +128,6 @@ export default function LightAddLocationView({
             </BaseImage>
           </ImageContextFromHook>
         )}
-      </div>
-
-      {/* Right legend */}
-      <div className='d-flex flex-column align-items-center gap-3'>
-        <SideLegend annotationSetId={locationRef.annotationSetId} />
       </div>
     </div>
   );

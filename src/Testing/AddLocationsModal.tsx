@@ -12,6 +12,7 @@ import { fetchAllPaginatedResults } from '../utils';
 import { FetcherType, PreloaderFactory } from '../Preloader';
 import LightAddLocationView from './LightAddLocationView';
 import ProjectContext from './ProjectContext';
+import { useNavigate } from 'react-router-dom';
 
 type Props = {
   show: boolean;
@@ -26,6 +27,7 @@ export default function AddLocationsModal({
   preset,
   surveyId,
 }: Props) {
+  const navigate = useNavigate();
   const { client } = useContext(GlobalContext)!;
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -86,7 +88,7 @@ export default function AddLocationsModal({
             'locationId',
             'annotationSetId',
           ] as const,
-          limit: 1000,  
+          limit: 1000,
         }
       );
       const existing = existingRaw as {
@@ -380,29 +382,42 @@ export default function AddLocationsModal({
                   historyN={5}
                 />
               </Form.Group>
-              <Button
-                variant='success'
-                onClick={handleAdd}
-                disabled={
-                  adding ||
-                  !currentCandidate ||
-                  addedLocations[
-                    `${currentCandidate!.annotationSetId}_${
+              <div className='d-flex flex-column w-100 gap-2'>
+                {currentCandidate && (
+                  <a
+                    className='btn btn-outline-info'
+                    target='_blank'
+                    href={`/surveys/${surveyId}/location/${
                       currentCandidate!.locationId
-                    }`
-                  ]
-                }
-              >
-                {adding
-                  ? 'Adding...'
-                  : addedLocations[
+                    }/${currentCandidate!.annotationSetId}`}
+                  >
+                    Edit Location
+                  </a>
+                )}
+                <Button
+                  variant='success'
+                  onClick={handleAdd}
+                  disabled={
+                    adding ||
+                    !currentCandidate ||
+                    addedLocations[
                       `${currentCandidate!.annotationSetId}_${
                         currentCandidate!.locationId
                       }`
                     ]
-                  ? 'Added'
-                  : 'Add to pool'}
-              </Button>
+                  }
+                >
+                  {adding
+                    ? 'Adding...'
+                    : addedLocations[
+                        `${currentCandidate!.annotationSetId}_${
+                          currentCandidate!.locationId
+                        }`
+                      ]
+                    ? 'Added'
+                    : 'Add to pool'}
+                </Button>
+              </div>
             </>
           )}
         </Modal.Body>
