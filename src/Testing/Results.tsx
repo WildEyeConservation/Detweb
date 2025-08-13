@@ -76,7 +76,7 @@ export default function Results() {
 
   const headings = [
     { content: 'Date', sort: true },
-    { content: 'Preset', sort: true },
+    { content: 'Pool', sort: true },
     { content: 'Test Animals', sort: true },
     { content: 'Missed Animals', sort: true },
     { content: 'Passed on Total', sort: true },
@@ -85,16 +85,26 @@ export default function Results() {
 
   const tableData = results.map((result) => {
     const date = new Date(result.createdAt);
+    const pool = result.testPreset.name
+    let surveyId = selectedProject?.value
+
+    if (pool !== selectedProject?.label) {
+      const project = organizationProjects.find((p) => p.name === pool);
+      if (project) {
+        surveyId = project.id;
+      }
+    }
+
     return {
       id: result.id,
       rowData: [
         `${date.toISOString().split('T')[0].replace(/-/g, '/')} - ${date.toLocaleTimeString()}`,
-        result.testPreset.name,
+        pool,
         result.testAnimals,
         result.totalMissedAnimals,
         result.passedOnTotal ? 'Yes' : 'No',
         <a
-          href={`/surveys/${selectedProject?.value}/location/${result.locationId}/${result.annotationSetId}`}
+          href={`/surveys/${surveyId}/location/${result.locationId}/${result.annotationSetId}`}
           target="_blank"
         >
           Link

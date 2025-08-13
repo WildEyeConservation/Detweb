@@ -1,23 +1,19 @@
 import { useContext, useCallback, useState, useEffect, useRef } from "react";
 import { ProjectContext, GlobalContext, UserContext } from "./Context";
 import { fetchAllPaginatedResults } from "./utils";
-import { QueryCommand } from "@aws-sdk/client-dynamodb";
 
-export default function useTesting(useSecondaryCandidates: boolean = false) {
+export default function useTesting() {
   const { currentPM, project, categoriesHook } = useContext(ProjectContext)!;
-  const { client, backend } = useContext(GlobalContext)!;
-  const { getDynamoClient } = useContext(UserContext)!;
+  const { client } = useContext(GlobalContext)!;
 
   const [i, setI] = useState(0);
   const [zoom, setZoom] = useState<number | undefined>(undefined);
   const [hasPrimaryCandidates, setHasPrimaryCandidates] = useState(false);
-  const [hasSecondaryCandidates, setHasSecondaryCandidates] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const primaryCandidates = useRef<
     { locationId: string; annotationSetId: string; testPresetId: string }[]
   >([]);
-  const secondaryCandidates = useRef<string[]>([]);
   const currentLocation = useRef<{
     locationId: string;
     annotationSetId: string;
@@ -41,6 +37,7 @@ export default function useTesting(useSecondaryCandidates: boolean = false) {
       });
 
       if (!config) {
+        setLoading(false);
         return;
       }
 
@@ -59,31 +56,6 @@ export default function useTesting(useSecondaryCandidates: boolean = false) {
 
     setup();
   }, [currentPM]);
-
-  async function executeQueryAndPushResults<T>(
-    command: QueryCommand
-  ): Promise<T[]> {
-    const dynamoClient = await getDynamoClient();
-    let lastEvaluatedKey: any;
-    const resultsArray: T[] = [];
-
-    do {
-      command.input.ExclusiveStartKey = lastEvaluatedKey;
-
-      try {
-        const response = await dynamoClient.send(command);
-        if (response.Items) {
-          resultsArray.push(...(response.Items as T[]));
-        }
-        lastEvaluatedKey = response.LastEvaluatedKey;
-      } catch (error) {
-        console.error("Error querying DynamoDB:", error);
-        throw error;
-      }
-    } while (lastEvaluatedKey);
-
-    return resultsArray;
-  }
 
   async function fetchPrimaryLocations(presets: { testPresetId: string }[]) {
     const testedLocations = await fetchAllPaginatedResults(
@@ -134,6 +106,11 @@ export default function useTesting(useSecondaryCandidates: boolean = false) {
       );
     }
 
+    // Lookup of valid current test preset-location pairs
+    const testKeys = new Set(
+      testLocations.map((l) => `${l.testPresetId}:${l.locationId}`)
+    );
+
     // newest test locations, that have not yet been seen, are first up in the array
     const locations = testLocations
       .filter(
@@ -146,14 +123,17 @@ export default function useTesting(useSecondaryCandidates: boolean = false) {
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
 
-    // add seen locations to the end of the array as backup
+    // add seen locations to the end of the array as backup (only if still part of current test presets)
     for (const seenLocation of seenLocations) {
-      locations.push({
-        locationId: seenLocation.locationId,
-        createdAt: seenLocation.createdAt,
-        annotationSetId: seenLocation.annotationSetId,
-        testPresetId: seenLocation.testPresetId,
-      });
+      const key = `${seenLocation.testPresetId}:${seenLocation.locationId}`;
+      if (testKeys.has(key)) {
+        locations.push({
+          locationId: seenLocation.locationId,
+          createdAt: seenLocation.createdAt,
+          annotationSetId: seenLocation.annotationSetId,
+          testPresetId: seenLocation.testPresetId,
+        });
+      }
     }
 
     primaryCandidates.current = locations.map((l) => ({
@@ -162,88 +142,7 @@ export default function useTesting(useSecondaryCandidates: boolean = false) {
       testPresetId: l.testPresetId,
     }));
 
-    if (primaryCandidates.current.length > 3) {
-      setHasPrimaryCandidates(true);
-    }
-
-    // aim to have at least 100 candidates (not handled by test preloader for now)
-    if (useSecondaryCandidates && primaryCandidates.current.length < 100) {
-      fetchSecondaryLocations(100 - primaryCandidates.current.length);
-    }
-  }
-
-  // Not handled by test preloader for now
-  async function fetchSecondaryLocations(amount: number) {
-    const locationSets = await fetchAllPaginatedResults(
-      client.models.LocationSet.locationSetsByProjectId,
-      {
-        projectId: currentPM.projectId,
-        selectionSet: ["id"] as const,
-      }
-    );
-
-    for (const set of locationSets) {
-      const locationsQuery = new QueryCommand({
-        TableName: backend.custom.locationTable,
-        IndexName: "locationsBySetIdAndConfidence",
-        KeyConditionExpression: "setId = :locationSetId",
-        ExpressionAttributeValues: {
-          ":locationSetId": {
-            S: set.id,
-          },
-        },
-        ProjectionExpression: "id",
-        Limit: 1000,
-      });
-
-      const locations = await executeQueryAndPushResults(locationsQuery);
-
-      for (const location of locations) {
-        const observationsQuery = new QueryCommand({
-          TableName: backend.custom.observationTable,
-          IndexName: "observationsByLocationId",
-          KeyConditionExpression: "locationId = :locationId",
-          ExpressionAttributeValues: {
-            ":locationId": {
-              S: location.id.S!,
-            },
-          },
-          ProjectionExpression: "id, #owner, createdAt, annotationCount",
-          ExpressionAttributeNames: {
-            "#owner": "owner",
-          },
-          Limit: 1000,
-        });
-
-        const observations = await executeQueryAndPushResults(
-          observationsQuery
-        );
-
-        const annotatedObservations = observations.filter(
-          (o) => o.annotationCount.N! > 0
-        );
-
-        const userObservations = observations.filter((o) =>
-          o.owner.S!.includes(currentPM.userId)
-        );
-
-        if (annotatedObservations.length > 0) {
-          if (userObservations.length === 0) {
-            secondaryCandidates.current.unshift(location.id.S!);
-          } else {
-            secondaryCandidates.current.push(location.id.S!);
-          }
-        }
-
-        if (secondaryCandidates.current.length > 3) {
-          setHasSecondaryCandidates(true);
-        }
-
-        if (secondaryCandidates.current.length >= amount) {
-          break;
-        }
-      }
-    }
+    setHasPrimaryCandidates(primaryCandidates.current.length > 0);
   }
 
   async function getTestLocation() {
@@ -321,11 +220,11 @@ export default function useTesting(useSecondaryCandidates: boolean = false) {
       isTest: true,
     };
     return body;
-  }, [i, primaryCandidates, secondaryCandidates, zoom]);
+  }, [i, primaryCandidates, zoom]);
 
   return {
     fetcher:
-      !loading && (hasPrimaryCandidates || hasSecondaryCandidates)
+      !loading && hasPrimaryCandidates
         ? fetcher
         : undefined,
     fetchedLocation: currentLocation.current,

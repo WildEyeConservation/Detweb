@@ -113,7 +113,6 @@ export default function Surveys() {
               value: pool.id,
             }))}
             onChange={(e) => handlePoolsChange(survey.id, e)}
-            isDisabled={true}
           />,
           <Button
             variant='success'

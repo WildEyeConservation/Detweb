@@ -60,8 +60,50 @@ export default function AnnotationImage(props: any) {
     return { filter: { and: conditions } };
   }, [annotationSetId, location.image.id, isTest]);
   const {
-    categoriesHook: { data: categories },
+    categoriesHook: { data: projectCategories },
   } = useContext(ProjectContext)!;
+  const [externalCategories, setExternalCategories] = useState<any[] | null>(null);
+  const [legendCategories, setLegendCategories] = useState<any[] | null>(null);
+
+  // If the annotation set on the test belongs to a different project than the current one,
+  // fetch its categories directly by annotation set id so legend, hotkeys and icons work.
+  useEffect(() => {
+    let cancelled = false;
+    async function ensureCategories() {
+      try {
+        // Fetch the annotation set to discover its project id
+        const { data: annSet } = await client.models.AnnotationSet.get({ id: annotationSetId });
+        if (!annSet) {
+          setExternalCategories(null);
+          setLegendCategories(projectCategories ?? null);
+          return;
+        }
+        // If the set's project matches the current survey, use project categories; else, fetch by set id
+        if (annSet.projectId === (surveyId as string)) {
+          if (!cancelled) {
+            setExternalCategories(null);
+            setLegendCategories(projectCategories ?? null);
+          }
+        } else {
+          const { data: cats } = await client.models.Category.categoriesByAnnotationSetId({ annotationSetId });
+          if (!cancelled) {
+            setExternalCategories(cats ?? []);
+            setLegendCategories(cats ?? []);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to ensure categories for annotation set', annotationSetId, e);
+        if (!cancelled) {
+          setExternalCategories(null);
+          setLegendCategories(projectCategories ?? null);
+        }
+      }
+    }
+    ensureCategories();
+    return () => {
+      cancelled = true;
+    };
+  }, [client, annotationSetId, surveyId, projectCategories]);
   const annotationsHook = useOptimisticUpdates<
     Schema['Annotation']['type'],
     'Annotation'
@@ -89,15 +131,17 @@ export default function AnnotationImage(props: any) {
         key='showMarkers'
         annotationSetId={testSetId}
         realAnnotationSetId={annotationSetId}
+        categoriesOverride={legendCategories ?? undefined}
       />,
       <Location key='location' {...location} />,
       <MapLegend
         key='legend'
         position='bottomright'
         annotationSetId={annotationSetId}
+        categoriesOverride={legendCategories ?? undefined}
       />,
     ].concat(
-      categories
+      (legendCategories ?? projectCategories)
         ?.filter((c) => c.annotationSetId == annotationSetId)
         ?.map((category) => (
           <CreateAnnotationOnHotKey
@@ -111,7 +155,7 @@ export default function AnnotationImage(props: any) {
           />
         ))
     );
-  }, [props.taskTag, location.image.id, annotationSetId]);
+  }, [props.taskTag, location.image.id, annotationSetId, legendCategories, projectCategories]);
 
   async function handleShare() {
     const windowUrl = new URL(window.location.href);
@@ -161,7 +205,6 @@ export default function AnnotationImage(props: any) {
             className='d-flex flex-row justify-content-center align-items-center w-100 gap-3 overflow-hidden'
             style={{ position: 'relative', height: '26px' }}
           >
-            {!isTest && (
               <div
                 style={{
                   position: 'absolute',
@@ -171,12 +214,10 @@ export default function AnnotationImage(props: any) {
               >
                 <Share2
                   size={24}
-                  onClick={handleShare}
+                  onClick={!isTest ? handleShare : undefined}
                   style={{ cursor: 'pointer' }}
                 />
               </div>
-            )}
-
             {visible && (
               <>
                 <Badge bg='secondary'>
@@ -219,7 +260,10 @@ export default function AnnotationImage(props: any) {
           </Image>
         </div>
         <div className='d-flex flex-column align-items-center gap-3'>
-          <SideLegend annotationSetId={annotationSetId} />
+          <SideLegend
+            annotationSetId={annotationSetId}
+            categoriesOverride={legendCategories ?? undefined}
+          />
           {isAnnotatePath && (
             <Button
               variant='success'

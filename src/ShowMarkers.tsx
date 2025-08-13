@@ -33,6 +33,8 @@ interface ShowMarkersProps {
   annotationSetId: string;            // ID used to filter which annotations to show
   realAnnotationSetId?: string;       // optional real ID used to filter categories
   onShadowDrag?: (id: string, x: number, y: number) => void; // callback to reposition shadow annotations
+  // Optional categories list to use instead of the current project's categories
+  categoriesOverride?: CategoryType[];
 }
 
 /* ShowMarkers uses a annotationHook that is passed as a parameter to display the annotations on the map and to allow for editing/deleting of annotations.
@@ -48,6 +50,7 @@ export function ShowMarkers(props: ShowMarkersProps) {
   const {
     categoriesHook: { data: categories },
   } = useContext(ProjectContext)!;
+  const effectiveCategories = props.categoriesOverride ?? categories;
   const [enabled, setEnabled] = useState(true);
   const { annotationsHook, latLng2xy, xy2latLng } = useContext(ImageContext)!;
   const {
@@ -68,9 +71,9 @@ export function ShowMarkers(props: ShowMarkersProps) {
 
   const getType = useCallback(
     (annotation) =>
-      categories?.find((category) => category.id === annotation.categoryId)
+      effectiveCategories?.find((category) => category.id === annotation.categoryId)
         ?.name ?? "Unknown",
-    [categories]
+    [effectiveCategories]
   );
 
   if (enabled)
@@ -82,7 +85,7 @@ export function ShowMarkers(props: ShowMarkersProps) {
             <DetwebMarker
               key={annotation.id}
               annotation={{ ...annotation }}
-              categories={categories?.filter(
+              categories={effectiveCategories?.filter(
                 (c) =>
                   c.annotationSetId ===
                   (props.realAnnotationSetId ?? props.annotationSetId)
