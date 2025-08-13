@@ -30,14 +30,17 @@ interface LegendProps {
   setHideLegend?: VoidFunction;
   annotationSetId?: string;
   alwaysVisible?: boolean;
+  // Optional: provide categories explicitly (e.g., when the annotation set is from another project)
+  categoriesOverride?: any[];
 }
 
-export function SideLegend({ annotationSetId }: LegendProps) {
+export function SideLegend({ annotationSetId, categoriesOverride }: LegendProps) {
   const {
     categoriesHook: { data: categories },
     currentCategory,
     setCurrentCategory,
   } = useContext(ProjectContext)!;
+  const cats = categoriesOverride ?? categories;
 
   return (
     <Card className="d-none d-md-flex flex-column h-100 overflow-hidden">
@@ -50,7 +53,7 @@ export function SideLegend({ annotationSetId }: LegendProps) {
         </span>
       </Card.Header>
       <Card.Body className="d-flex flex-column gap-2 overflow-auto">
-        {categories
+        {cats
           ?.filter((c) => c.annotationSetId === annotationSetId)
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((category) => (
@@ -79,12 +82,14 @@ export function MapLegend({
   position,
   annotationSetId,
   alwaysVisible = false,
+  categoriesOverride,
 }: LegendProps) {
   const {
     categoriesHook: { data: categories },
     setCurrentCategory,
     currentCategory,
   } = useContext(ProjectContext)!;
+  const cats = categoriesOverride ?? categories;
   const divRef = useRef<HTMLDivElement | null>(null);
   const positionClass =
     (position && POSITION_CLASSES[position]) || POSITION_CLASSES.bottomright;
@@ -111,7 +116,7 @@ export function MapLegend({
         >
           <div className="d-flex flex-column">
             {expanded
-              ? categories
+              ? cats
                   ?.filter((c) => c.annotationSetId === annotationSetId)
                   .sort((a, b) => a.name.localeCompare(b.name))
                   .map((item, index) => {
