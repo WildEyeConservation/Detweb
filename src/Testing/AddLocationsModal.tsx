@@ -6,11 +6,11 @@ import {
   useRef,
   useCallback,
 } from 'react';
-import { Modal, Button, Form } from 'react-bootstrap';
+import { Modal, Button, Form, Spinner } from 'react-bootstrap';
 import { GlobalContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
 import { FetcherType, PreloaderFactory } from '../Preloader';
-import { TaskSelector } from '../TaskSelector';
+import LightAddLocationView from './LightAddLocationView';
 import ProjectContext from './ProjectContext';
 
 type Props = {
@@ -33,6 +33,13 @@ export default function AddLocationsModal({
     { annotationSetId: string; locationId: string }[]
   >([]);
   const [index, setIndex] = useState(0);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+  const [maxAnnotations, setMaxAnnotations] = useState<number | ''>('');
+  const [pendingCategoryId, setPendingCategoryId] = useState<string>('');
+  const [pendingMaxAnnotations, setPendingMaxAnnotations] = useState<
+    number | ''
+  >('');
+  const [loadedCount, setLoadedCount] = useState(0);
   const candidatesRef = useRef<
     {
       annotationSetId: string;
@@ -49,7 +56,7 @@ export default function AddLocationsModal({
     locationId: string;
   } | null>(null);
 
-  const Preloader = useMemo(() => PreloaderFactory(TaskSelector), []);
+  const Preloader = useMemo(() => PreloaderFactory(LightAddLocationView), []);
 
   const fetcher: FetcherType = useCallback(async () => {
     const cand = candidatesRef.current[candidateIndexRef.current];
@@ -62,79 +69,149 @@ export default function AddLocationsModal({
     };
   }, []);
 
-  const refreshCandidates = useCallback(async () => {
-    setLoading(true);
-    const existing = (await fetchAllPaginatedResults(
-      client.models.TestPresetLocation.locationsByTestPresetId,
-      {
-        testPresetId: preset.id,
-        selectionSet: [
-          'testPresetId',
-          'locationId',
-          'annotationSetId',
-        ] as const,
-      }
-    )) as {
-      testPresetId: string;
-      locationId: string;
-      annotationSetId: string;
-    }[];
-    const presetKeys = new Set(
-      existing.map((loc) => `${loc.annotationSetId}_${loc.locationId}`)
-    );
-
-    // @ts-ignore: suppress complex union type
-    const annotationSets = (await fetchAllPaginatedResults(
-      client.models.AnnotationSet.annotationSetsByProjectId,
-      {
-        projectId: surveyId,
-        selectionSet: ['id'] as const,
-      }
-    )) as any[];
-    const allCandidates: { annotationSetId: string; locationId: string }[] = [];
-    for (const as of annotationSets) {
-      // @ts-ignore: suppress complex union type
-      const observations = (await fetchAllPaginatedResults(
-        client.models.Observation.observationsByAnnotationSetId,
+  const refreshCandidates = useCallback<
+    (categoryId: string, maxAnn: number | '') => Promise<void>
+  >(
+    async (categoryId: string, maxAnn: number | '') => {
+      setLoading(true);
+      setLoadedCount(0);
+      // @ts-ignore: fetchAllPaginatedResults generic inference too complex here
+      const existingRaw: any[] = await (fetchAllPaginatedResults as any)(
+        // @ts-ignore: complex union types from generated client
+        (client as any).models.TestPresetLocation.locationsByTestPresetId,
         {
-          annotationSetId: as.id,
-          filter: {
-            annotationCount: { gt: 0 },
-          },
-          selectionSet: ['locationId', 'annotationSetId'] as const,
+          testPresetId: preset.id,
+          selectionSet: [
+            'testPresetId',
+            'locationId',
+            'annotationSetId',
+          ] as const,
+          limit: 1000,  
+        }
+      );
+      const existing = existingRaw as {
+        testPresetId: string;
+        locationId: string;
+        annotationSetId: string;
+      }[];
+      const presetKeys = new Set(
+        existing.map((loc) => `${loc.annotationSetId}_${loc.locationId}`)
+      );
+
+      // @ts-ignore: fetchAllPaginatedResults generic inference too complex here
+      const annotationSets = (await fetchAllPaginatedResults(
+        // @ts-ignore: complex union types from generated client
+        (client as any).models.AnnotationSet.annotationSetsByProjectId,
+        {
+          projectId: surveyId,
+          selectionSet: ['id'] as const,
         }
       )) as any[];
-      for (const obs of observations) {
-        const key = `${as.id}_${obs.locationId}`;
-        if (!presetKeys.has(key)) {
-          allCandidates.push({
+      const allCandidates: { annotationSetId: string; locationId: string }[] =
+        [];
+      const uniqueLocationIds = new Set<string>();
+      for (const as of annotationSets) {
+        // @ts-ignore: fetchAllPaginatedResults generic inference too complex here
+        const observations = (await fetchAllPaginatedResults(
+          // @ts-ignore: complex union types from generated client
+          (client as any).models.Observation.observationsByAnnotationSetId,
+          {
             annotationSetId: as.id,
-            locationId: obs.locationId,
-          });
+            filter: {
+              annotationCount: { gt: 0 },
+            },
+            selectionSet: [
+              'locationId',
+              'annotationSetId',
+              'location.id',
+              'location.imageId',
+              'location.width',
+              'location.height',
+              'location.x',
+              'location.y',
+            ] as const,
+            limit: 1000,
+          }
+        )) as any[];
+        for (const obs of observations) {
+          const key = `${as.id}_${obs.locationId}`;
+          if (presetKeys.has(key)) continue;
+          // Verify there is at least one annotation inside the location bounds
+          if (!obs.location) continue;
+          const location = obs.location;
+          if (location.width == null || location.height == null) continue;
+          const anns = (await fetchAllPaginatedResults(
+            // @ts-ignore: complex union types from generated client
+            (client as any).models.Annotation.annotationsByImageIdAndSetId,
+            {
+              imageId: location.imageId,
+              setId: { eq: as.id },
+              selectionSet: ['x', 'y', 'categoryId'] as const,
+            }
+          )) as any[];
+          const minX = location.x - (location.width as number) / 2;
+          const minY = location.y - (location.height as number) / 2;
+          const maxX = location.x + (location.width as number) / 2;
+          const maxY = location.y + (location.height as number) / 2;
+          const inside = anns.filter(
+            (ann) =>
+              ann.x >= minX && ann.y >= minY && ann.x <= maxX && ann.y <= maxY
+          );
+          if (categoryId && !inside.some((a) => a.categoryId === categoryId)) {
+            continue;
+          }
+          const limit = maxAnn === '' ? null : Number(maxAnn);
+          if (limit != null && inside.length > limit) {
+            continue;
+          }
+          if (inside.length > 0) {
+            allCandidates.push({
+              annotationSetId: as.id,
+              locationId: obs.locationId,
+            });
+            if (!uniqueLocationIds.has(obs.locationId)) {
+              uniqueLocationIds.add(obs.locationId);
+              setLoadedCount(uniqueLocationIds.size);
+            }
+          }
         }
       }
-    }
 
-    candidatesRef.current = allCandidates.filter(
-      (cand, i, arr) =>
-        arr.findIndex((c) => c.locationId === cand.locationId) === i
-    );
+      candidatesRef.current = allCandidates.filter(
+        (cand, i, arr) =>
+          arr.findIndex((c) => c.locationId === cand.locationId) === i
+      );
 
-    setCandidates(allCandidates);
-    candidateIndexRef.current = 0;
-    setIndex(0);
-    setLoading(false);
-  }, [client, preset.id, surveyId]);
+      setCandidates(allCandidates);
+      candidateIndexRef.current = 0;
+      setIndex(0);
+      setLoading(false);
+    },
+    [client, preset.id, surveyId]
+  );
 
   useEffect(() => {
     if (show) {
-      refreshCandidates();
+      refreshCandidates(selectedCategoryId, maxAnnotations);
     } else {
       candidatesRef.current = [];
       setCandidates([]);
       setIndex(0);
     }
-  }, [show, preset.id, surveyId, refreshCandidates]);
+  }, [show, preset.id, surveyId]);
+
+  useEffect(() => {
+    if (show) {
+      setPendingCategoryId(selectedCategoryId);
+      setPendingMaxAnnotations(maxAnnotations);
+    }
+  }, [show]);
+
+  const applyFilters = useCallback(() => {
+    setSelectedCategoryId(pendingCategoryId);
+    setMaxAnnotations(pendingMaxAnnotations || '');
+    refreshCandidates(pendingCategoryId, pendingMaxAnnotations);
+  }, [pendingCategoryId, pendingMaxAnnotations, refreshCandidates]);
 
   async function saveAnnotations(cand: {
     annotationSetId: string;
@@ -148,17 +225,24 @@ export default function AddLocationsModal({
     } as any);
     if (!location) return;
     const annotations = (await fetchAllPaginatedResults(
-      // @ts-ignore
-      client.models.Annotation.annotationsByImageIdAndSetId,
+      // @ts-ignore: complex union types from generated client
+      (client as any).models.Annotation.annotationsByImageIdAndSetId,
       {
         imageId: location.imageId,
         setId: { eq: cand.annotationSetId },
         selectionSet: ['categoryId', 'x', 'y'] as const,
       }
     )) as any[];
+    if (location.width == null || location.height == null) return;
     const boundsxy: [number, number][] = [
-      [location.x - location.width / 2, location.y - location.height / 2],
-      [location.x + location.width / 2, location.y + location.height / 2],
+      [
+        location.x - (location.width as number) / 2,
+        location.y - (location.height as number) / 2,
+      ],
+      [
+        location.x + (location.width as number) / 2,
+        location.y + (location.height as number) / 2,
+      ],
     ];
     const annotationCounts: Record<string, number> = {};
     for (const ann of annotations) {
@@ -173,20 +257,25 @@ export default function AddLocationsModal({
       }
     }
     for (const [categoryId, count] of Object.entries(annotationCounts)) {
-      const { data: lac } = await client.models.LocationAnnotationCount.get({
+      // @ts-ignore: complex union types from generated client
+      const { data: lac } = await (
+        client as any
+      ).models.LocationAnnotationCount.get({
         locationId: cand.locationId,
         categoryId,
         annotationSetId: cand.annotationSetId,
       });
       if (lac) {
-        await client.models.LocationAnnotationCount.update({
+        // @ts-ignore: complex union types from generated client
+        await (client as any).models.LocationAnnotationCount.update({
           locationId: cand.locationId,
           categoryId,
           annotationSetId: cand.annotationSetId,
           count,
         });
       } else {
-        await client.models.LocationAnnotationCount.create({
+        // @ts-ignore: complex union types from generated client
+        await (client as any).models.LocationAnnotationCount.create({
           locationId: cand.locationId,
           categoryId,
           annotationSetId: cand.annotationSetId,
@@ -233,18 +322,62 @@ export default function AddLocationsModal({
           style={{ height: '75vh' }}
         >
           {loading ? (
-            <p>Loading locations...</p>
+            <p className='d-flex align-items-center gap-2 p-2'>
+              <Spinner animation='border' size='sm' /> {loadedCount} locations
+              loaded
+            </p>
           ) : candidates.length === 0 ? (
             <p>No available locations to add.</p>
           ) : (
             <>
+              <Form.Group className='d-flex flex-row align-items-end gap-3 border-bottom pb-3 border-dark pt-2'>
+                <Form.Group>
+                  <Form.Label className='mb-0'>Label filter</Form.Label>
+                  <Form.Select
+                    value={pendingCategoryId}
+                    onChange={(e) => setPendingCategoryId(e.target.value)}
+                  >
+                    <option value=''>All labels</option>
+                    {/* options loaded lazily below via current candidate's annotationSetId */}
+                    {currentCandidate && (
+                      // @ts-ignore: will be re-evaluated as index changes
+                      <CategoryOptions
+                        annotationSetId={currentCandidate.annotationSetId}
+                      />
+                    )}
+                  </Form.Select>
+                </Form.Group>
+                <Form.Group>
+                  <Form.Label className='mb-0'>Max annotations</Form.Label>
+                  <Form.Control
+                    type='number'
+                    min={0}
+                    placeholder='No limit'
+                    value={pendingMaxAnnotations}
+                    onChange={(e) =>
+                      setPendingMaxAnnotations(
+                        e.target.value === ''
+                          ? ''
+                          : Number(e.target.value) || ''
+                      )
+                    }
+                  />
+                </Form.Group>
+                <Button
+                  variant='primary'
+                  onClick={applyFilters}
+                  disabled={loading}
+                >
+                  Filter
+                </Button>
+              </Form.Group>
               <Form.Group className='mt-3 h-100 w-100'>
                 <Preloader
                   index={index}
                   setIndex={setIndex}
                   fetcher={fetcher}
-                  preloadN={2}
-                  historyN={2}
+                  preloadN={5}
+                  historyN={5}
                 />
               </Form.Group>
               <Button
@@ -280,5 +413,42 @@ export default function AddLocationsModal({
         </Modal.Footer>
       </Modal>
     </ProjectContext>
+  );
+}
+
+function CategoryOptions({ annotationSetId }: { annotationSetId: string }) {
+  const { client } = useContext(GlobalContext)!;
+  const [cats, setCats] = useState<any[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const categories = (await fetchAllPaginatedResults(
+        // @ts-ignore: complex union types from generated client
+        (client as any).models.Category.categoriesByAnnotationSetId,
+        {
+          annotationSetId,
+          selectionSet: ['id', 'name', 'annotationSetId'] as const,
+        }
+      )) as any[];
+      if (!cancelled) {
+        setCats(
+          categories
+            ?.filter((c: any) => c.annotationSetId === annotationSetId)
+            ?.sort((a: any, b: any) => a.name.localeCompare(b.name)) || []
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [annotationSetId]);
+  return (
+    <>
+      {(Array.isArray(cats) ? (cats as any[]) : []).map((c: any) => (
+        <option key={c.id} value={c.id}>
+          {c.name}
+        </option>
+      ))}
+    </>
   );
 }
