@@ -411,6 +411,7 @@ const schema = a
         hidden: a.boolean().default(false),
         // used in conjuction with the cleanupJobs function (every 15m) to determine if the queue is still active
         approximateSize: a.integer(),
+        tag: a.string(),
       })
       .authorization((allow) => [allow.authenticated()])
       //.authorization(allow => [allow.groupDefinedIn('projectId')])
