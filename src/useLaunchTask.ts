@@ -19,7 +19,8 @@ export type LaunchTaskOptions = {
   createQueue: (
     name: string,
     hidden: boolean,
-    fifo: boolean
+    fifo: boolean,
+    taskTag: string
   ) => Promise<{ id: string; url: string; batchSize: number } | null>;
 };
 
@@ -204,7 +205,8 @@ export function useLaunchTask(
       const mainQueue = await options.createQueue(
         queueOptions.name,
         queueOptions.hidden,
-        queueOptions.fifo
+        queueOptions.fifo,
+        options.taskTag
       );
       if (!mainQueue) {
         throw new Error('Primary queue creation failed');
@@ -214,7 +216,8 @@ export function useLaunchTask(
         ? await options.createQueue(
             secondaryQueueOptions.name,
             secondaryQueueOptions.hidden,
-            secondaryQueueOptions.fifo
+            secondaryQueueOptions.fifo,
+            options.taskTag
           )
         : null;
 

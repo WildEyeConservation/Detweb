@@ -76,8 +76,7 @@ export default function LaunchAnnotationSetModal({
   const [launching, setLaunching] = useState(false);
   const [progressMessage, setProgressMessage] = useState<string>('');
   const [modelGuided, setModelGuided] = useState<boolean>(true);
-  const [launchDisabled, setLaunchDisabled] =
-    useState<boolean>(false);
+  const [launchDisabled, setLaunchDisabled] = useState<boolean>(false);
 
   // set up queue creation helper
   const { client } = useContext(GlobalContext)!;
@@ -85,7 +84,8 @@ export default function LaunchAnnotationSetModal({
   const createQueue = async (
     name: string,
     hidden: boolean,
-    fifo: boolean
+    fifo: boolean,
+    taskTag: string
   ): Promise<{ id: string; url: string; batchSize: number } | null> => {
     const safeName =
       makeSafeQueueName(name + crypto.randomUUID()) + (fifo ? '.fifo' : '');
@@ -111,6 +111,8 @@ export default function LaunchAnnotationSetModal({
             batchSize: batchSize,
             hidden: hidden,
             zoom: zoom,
+            tag: taskTag,
+            approximateSize: 1, // spoof so that the queue is not deleted while populating
           });
 
           if (queue) {
@@ -287,7 +289,7 @@ export default function LaunchAnnotationSetModal({
       setModelOptions(modelOptions);
       setLoadingLocationSets(false);
     }
-    
+
     fetchLocationSets();
   }, [project.id]);
 
@@ -309,7 +311,7 @@ export default function LaunchAnnotationSetModal({
       }}
       backdrop='static'
       keyboard={false}
-      size="lg"
+      size='lg'
     >
       <Modal.Header>
         <Modal.Title>Launch for Manual Annotation</Modal.Title>
@@ -330,9 +332,9 @@ export default function LaunchAnnotationSetModal({
               }
             }}
             sharedChild={
-              <div className="">
+              <div className=''>
                 {hasStandardOptions && (
-                  <div className="d-flex flex-column gap-3 mt-2">
+                  <div className='d-flex flex-column gap-3 mt-2'>
                     <ImageSetDropdown
                       imageSets={imageSets}
                       selectedImageSets={selectedImageSets}
@@ -340,16 +342,16 @@ export default function LaunchAnnotationSetModal({
                       hideIfOneImageSet
                     />
                     <Form.Group>
-                      <Form.Label className="mb-0">Batch Size</Form.Label>
+                      <Form.Label className='mb-0'>Batch Size</Form.Label>
                       <span
-                        className="text-muted d-block mb-1"
+                        className='text-muted d-block mb-1'
                         style={{ fontSize: '12px' }}
                       >
                         The number of annotation jobs a user can pick up at a
                         time.
                       </span>
                       <Form.Control
-                        type="number"
+                        type='number'
                         value={batchSize}
                         onChange={(e) => setBatchSize(Number(e.target.value))}
                       />
@@ -357,10 +359,10 @@ export default function LaunchAnnotationSetModal({
                   </div>
                 )}
                 {hasAdvancedOptions && (
-                  <div className="d-flex flex-column mt-2">
+                  <div className='d-flex flex-column mt-2'>
                     <Form.Group>
                       <Form.Switch
-                        label="Show Advanced Options"
+                        label='Show Advanced Options'
                         checked={showAdvancedOptions}
                         onChange={() =>
                           setShowAdvancedOptions(!showAdvancedOptions)
@@ -370,25 +372,26 @@ export default function LaunchAnnotationSetModal({
                   </div>
                 )}
                 {hasAdvancedOptions && showAdvancedOptions && (
-                  <div className="d-flex flex-column gap-3 border border-dark shadow-sm p-2">
+                  <div className='d-flex flex-column gap-3 border border-dark shadow-sm p-2'>
                     <Form.Group>
-                      <Form.Label className="mb-0">Task Tag</Form.Label>
+                      <Form.Label className='mb-0'>Job Name</Form.Label>
                       <span
-                        className="text-muted d-block mb-1"
+                        className='text-muted d-block mb-1'
                         style={{ fontSize: '12px' }}
                       >
-                        This tag will be added to all locations in the task.
+                        Modify this to display a different name for the job in
+                        the jobs page.
                       </span>
                       <Form.Control
-                        type="text"
+                        type='text'
                         value={taskTag}
                         onChange={(e) => setTaskTag(e.target.value)}
                       />
                     </Form.Group>
                     <Form.Group>
-                      <Form.Label className="mb-0">Zoom Level</Form.Label>
+                      <Form.Label className='mb-0'>Zoom Level</Form.Label>
                       <span
-                        className="text-muted d-block mb-1"
+                        className='text-muted d-block mb-1'
                         style={{ fontSize: '12px' }}
                       >
                         Select the default zoom level for images.
@@ -403,7 +406,7 @@ export default function LaunchAnnotationSetModal({
                           )
                         }
                       >
-                        <option value="auto">Auto</option>
+                        <option value='auto'>Auto</option>
                         {[...Array(13)].map((_, i) => (
                           <option key={i} value={i}>
                             Level {i}
@@ -412,18 +415,18 @@ export default function LaunchAnnotationSetModal({
                       </Form.Select>
                     </Form.Group>
                     <Form.Group>
-                      <Form.Label className="mb-0">
+                      <Form.Label className='mb-0'>
                         Filter by confidence value:
                       </Form.Label>
                       <span
-                        className="text-muted d-block mb-1"
+                        className='text-muted d-block mb-1'
                         style={{ fontSize: '12px' }}
                       >
                         Filter images by confidence value.
                       </span>
-                      <div className="d-flex align-items-center gap-2">
+                      <div className='d-flex align-items-center gap-2'>
                         <Form.Control
-                          type="number"
+                          type='number'
                           min={0}
                           max={1}
                           step={0.01}
@@ -435,7 +438,7 @@ export default function LaunchAnnotationSetModal({
                         />
                         <span>to</span>
                         <Form.Control
-                          type="number"
+                          type='number'
                           min={0}
                           max={1}
                           step={0.01}
@@ -449,7 +452,7 @@ export default function LaunchAnnotationSetModal({
                     </Form.Group>
                     <Form.Group>
                       <Form.Switch
-                        label="Skip Locations With Annotations"
+                        label='Skip Locations With Annotations'
                         checked={skipLocationsWithAnnotations}
                         onChange={() =>
                           setSkipLocationsWithAnnotations(
@@ -460,7 +463,7 @@ export default function LaunchAnnotationSetModal({
                     </Form.Group>
                     <Form.Group>
                       <Form.Switch
-                        label="Allow Annotations Outside Location Boundaries"
+                        label='Allow Annotations Outside Location Boundaries'
                         checked={allowAnnotationsOutsideLocationBoundaries}
                         onChange={() =>
                           setAllowAnnotationsOutsideLocationBoundaries(
@@ -471,7 +474,7 @@ export default function LaunchAnnotationSetModal({
                     </Form.Group>
                     <Form.Group>
                       <Form.Switch
-                        label="View Unobserved Locations Only"
+                        label='View Unobserved Locations Only'
                         checked={viewUnobservedLocationsOnly}
                         onChange={() =>
                           setViewUnobservedLocationsOnly(
@@ -494,7 +497,7 @@ export default function LaunchAnnotationSetModal({
                     </Form.Group> */}
                     <Form.Group>
                       <Form.Switch
-                        label="Hide Job From Non-Admin Workers"
+                        label='Hide Job From Non-Admin Workers'
                         checked={hidden}
                         onChange={() => setHidden(!hidden)}
                       />
@@ -504,11 +507,11 @@ export default function LaunchAnnotationSetModal({
               </div>
             }
           >
-            <Tab label="Species Labelling">
+            <Tab label='Species Labelling'>
               <LabeledToggleSwitch
-                className="m-0 border-top pt-2 mt-2 border-dark"
-                leftLabel="Model Guided"
-                rightLabel="Tiled Annotation"
+                className='m-0 border-top pt-2 mt-2 border-dark'
+                leftLabel='Model Guided'
+                rightLabel='Tiled Annotation'
                 checked={!modelGuided}
                 onChange={(checked) => {
                   setModelGuided(!checked);
@@ -518,26 +521,26 @@ export default function LaunchAnnotationSetModal({
               {modelGuided ? (
                 loadingLocationSets ? (
                   <p
-                    className="text-muted mb-0 mt-2 text-center"
+                    className='text-muted mb-0 mt-2 text-center'
                     style={{ fontSize: '12px' }}
                   >
                     Loading models...
                   </p>
                 ) : modelOptions.length > 1 ? (
                   <Form.Group>
-                    <Form.Label className="mb-0">Model</Form.Label>
+                    <Form.Label className='mb-0'>Model</Form.Label>
                     <Select
                       value={model}
                       onChange={(m) => setModel(m)}
                       options={modelOptions}
-                      placeholder="Select a model"
-                      className="text-black"
+                      placeholder='Select a model'
+                      className='text-black'
                     />
                   </Form.Group>
                 ) : (
                   modelOptions.length === 0 && (
                     <p
-                      className="text-muted mb-0 mt-2 text-center"
+                      className='text-muted mb-0 mt-2 text-center'
                       style={{ fontSize: '12px' }}
                     >
                       You must first process your images before launching a
@@ -557,20 +560,24 @@ export default function LaunchAnnotationSetModal({
                 />
               )}
             </Tab>
-            <Tab label="Registration" className="mt-1">
+            <Tab label='Registration' className='mt-1'>
               <></>
             </Tab>
           </Tabs>
         </Form>
         {progressMessage && (
-          <p className="mt-3 text-center text-muted">{progressMessage}</p>
+          <p className='mt-3 text-center text-muted'>{progressMessage}</p>
         )}
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="primary" disabled={launchDisabled || launching} onClick={handleSubmit}>
+        <Button
+          variant='primary'
+          disabled={launchDisabled || launching}
+          onClick={handleSubmit}
+        >
           Launch
         </Button>
-        <Button variant="dark" disabled={launching} onClick={onClose}>
+        <Button variant='dark' disabled={launching} onClick={onClose}>
           Close
         </Button>
       </Modal.Footer>
@@ -592,7 +599,7 @@ function StandardOptions({
   setBatchSize: (batchSize: number) => void;
 }) {
   return (
-    <div className="d-flex flex-column gap-3 mt-2">
+    <div className='d-flex flex-column gap-3 mt-2'>
       <ImageSetDropdown
         imageSets={imageSets}
         selectedImageSets={selectedImageSets}
@@ -600,12 +607,12 @@ function StandardOptions({
         hideIfOneImageSet
       />
       <Form.Group>
-        <Form.Label className="mb-0">Batch Size</Form.Label>
-        <span className="text-muted d-block mb-1" style={{ fontSize: '12px' }}>
+        <Form.Label className='mb-0'>Batch Size</Form.Label>
+        <span className='text-muted d-block mb-1' style={{ fontSize: '12px' }}>
           The number of clusters in each unit of work collected by workers.
         </span>
         <Form.Control
-          type="number"
+          type='number'
           value={batchSize}
           onChange={(e) => setBatchSize(Number(e.target.value))}
         />

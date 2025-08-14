@@ -132,23 +132,14 @@ export default function Jobs() {
         setJobsRemaining(jobsRemaining);
 
         // check if registration jobs are available
-        const registrationJobs = await Promise.all(
-          validProjects.flatMap((project) =>
-            project.annotationSets.map(async (set) => {
-              const { data } = await client.models.AnnotationSet.get(
-                { id: set.id },
-                {
-                  selectionSet: ['register'],
-                }
-              );
-
-              return {
-                id: set.id,
-                projectId: project.id,
-                register: data?.register || false,
-              };
-            })
-          )
+        const registrationJobs = validProjects.flatMap((project) =>
+          project.annotationSets.map((set) => {
+            return {
+              id: set.id,
+              projectId: project.id,
+              register: set.register || false,
+            };
+          })
         );
 
         setRegistrationJobs(registrationJobs.filter((job) => job.register));
@@ -238,12 +229,12 @@ export default function Jobs() {
             id: queue.id,
             rowData: [
               <div
-                className="d-flex justify-content-between align-items-center p-2"
+                className='d-flex justify-content-between align-items-center p-2'
                 key={queue.id}
               >
-                <div className="d-flex flex-row gap-3 align-items-center">
+                <div className='d-flex flex-row gap-3 align-items-center'>
                   <div>
-                    <h5 className="mb-0">{project.name}</h5>
+                    <h5 className='mb-0'>{queue.tag || project.name}</h5>
                     <i style={{ fontSize: '14px', display: 'block' }}>
                       {project.organization.name}
                     </i>
@@ -263,7 +254,7 @@ export default function Jobs() {
                   )?.isAdmin &&
                     queue.hidden && (
                       <span
-                        className="badge bg-secondary"
+                        className='badge bg-secondary'
                         style={{ fontSize: '14px' }}
                       >
                         Hidden
@@ -271,13 +262,13 @@ export default function Jobs() {
                     )}
                 </div>
                 <div
-                  className="d-flex flex-row gap-2 align-items-center"
+                  className='d-flex flex-row gap-2 align-items-center'
                   style={{ maxWidth: '600px', width: '100%' }}
                 >
                   <ProjectProgress projectId={project.id} />
                   <Button
-                    className="ms-1"
-                    variant="primary"
+                    className='ms-1'
+                    variant='primary'
                     disabled={
                       takingJob || deletingJob || numJobsRemaining === 0
                     }
@@ -311,12 +302,12 @@ export default function Jobs() {
         id: job.id,
         rowData: [
           <div
-            className="d-flex justify-content-between align-items-center p-2"
+            className='d-flex justify-content-between align-items-center p-2'
             key={job.id}
           >
-            <div className="d-flex flex-row gap-3 align-items-center">
+            <div className='d-flex flex-row gap-3 align-items-center'>
               <div>
-                <h5 className="mb-0">{project.name}</h5>
+                <h5 className='mb-0'>{project.name}</h5>
                 <i style={{ fontSize: '14px', display: 'block' }}>
                   {project.organization.name}
                 </i>
@@ -332,8 +323,8 @@ export default function Jobs() {
               </div>
             </div>
             <Button
-              className="ms-1"
-              variant="primary"
+              className='ms-1'
+              variant='primary'
               onClick={() =>
                 navigate(`/surveys/${project.id}/set/${job.id}/registration`)
               }
@@ -357,11 +348,11 @@ export default function Jobs() {
     >
       <Card>
         <Card.Header>
-          <Card.Title className="mb-0">
-            <h4 className="mb-0">Jobs Available</h4>
+          <Card.Title className='mb-0'>
+            <h4 className='mb-0'>Jobs Available</h4>
           </Card.Title>
         </Card.Header>
-        <Card.Body className="overflow-x-auto">
+        <Card.Body className='overflow-x-auto'>
           {isLoading ? (
             <Spinner />
           ) : (
@@ -369,7 +360,7 @@ export default function Jobs() {
               tableData={tableData}
               pagination={true}
               itemsPerPage={5}
-              emptyMessage="No jobs available"
+              emptyMessage='No jobs available'
             />
           )}
         </Card.Body>
@@ -377,14 +368,14 @@ export default function Jobs() {
       {jobToDelete && (
         <ConfirmationModal
           show={modalToShow === 'deleteJob'}
-          title="Delete Job"
+          title='Delete Job'
           onClose={() => {
             showModal(null);
             setJobToDelete(null);
           }}
           onConfirm={() => handleDeleteJob(jobToDelete)}
           body={
-            <p className="mb-0">
+            <p className='mb-0'>
               Are you sure you want to delete the job <b>{jobToDelete.name}</b>{' '}
               on survey{' '}
               <b>
