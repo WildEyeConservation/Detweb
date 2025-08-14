@@ -6,6 +6,7 @@ import ProcessImages from './ProcessImages';
 import CreateSubset from '../CreateSubset';
 import EditShapeFile from './EditShapeFile';
 import DefineTransects from './DefineTransects';
+import EditInformation from './EditInformation';
 
 export default function EditSurveyModal({
   show,
@@ -23,8 +24,8 @@ export default function EditSurveyModal({
     (() => Promise<void>) | null
   >(null);
   const [tab, setTab] = useState(openTab || 0);
-  const [prevButtonLabel, setPrevButtonLabel] = useState('Process');
-  const [buttonLabel, setButtonLabel] = useState('Process');
+  const [prevButtonLabel, setPrevButtonLabel] = useState('Save');
+  const [buttonLabel, setButtonLabel] = useState('Save');
   const [submitDisabled, setSubmitDisabled] = useState(false);
   const [closeDisabled, setCloseDisabled] = useState(false);
 
@@ -47,12 +48,15 @@ export default function EditSurveyModal({
             let label = '';
             switch (tab) {
               case 0:
-                label = 'Process';
+                label = 'Save';
                 break;
               case 1:
-                label = 'Save Shapefile';
+                label = 'Process';
                 break;
               case 2:
+                label = 'Save Shapefile';
+                break;
+              case 3:
                 label = 'Save Work';
                 break;
             }
@@ -61,6 +65,15 @@ export default function EditSurveyModal({
           }}
           className='mb-2'
         >
+          <Tab label='Information'>
+            <EditInformation
+              key={project.id}
+              projectId={project.id}
+              setHandleSubmit={setHandleSubmit}
+              setSubmitDisabled={setSubmitDisabled}
+              setCloseDisabled={setCloseDisabled}
+            />
+          </Tab>
           <Tab label='Process Images'>
             <ProcessImages
               key={project.id}
