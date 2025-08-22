@@ -51,6 +51,7 @@ interface FilesUploadBaseProps {
   setReadyToSubmit: React.Dispatch<React.SetStateAction<boolean>>;
   setGpsDataReady?: React.Dispatch<React.SetStateAction<boolean>>;
   newProject?: boolean;
+  onShapefileParsed?: (latLngs: [number, number][]) => void;
 }
 
 // Props for form-compatible version
@@ -97,6 +98,7 @@ export function FileUploadCore({
   setReadyToSubmit,
   setGpsDataReady,
   newProject = true,
+  onShapefileParsed,
 }: FilesUploadBaseProps) {
   const [upload, setUpload] = useState(true);
   const [name, setName] = useState('');
@@ -1401,6 +1403,7 @@ export function FileUploadCore({
             onFilter={(filteredData) => {
               setCsvData((prevData) => ({ ...prevData, data: filteredData }));
             }}
+            onShapefileParsed={onShapefileParsed}
           />
           {associateByTimestamp && (
             <Form.Group>

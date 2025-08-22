@@ -40,8 +40,6 @@ const ClientLogger = ({ userId }: { userId: string }) => {
           downlink,
           rtt,
         });
-
-        console.log('Client log saved successfully');
       } catch (error) {
         console.error('Error logging client data:', error);
       }

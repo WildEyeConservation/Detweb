@@ -10,8 +10,7 @@ import {
 } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
 import L from 'leaflet';
-import shp from 'shpjs';
-import * as turf from '@turf/turf';
+import { parseShapefileToLatLngs, saveShapefileForProject } from '../utils/shapefileUtils';
 import { Form, Spinner } from 'react-bootstrap';
 import FileInput from '../FileInput';
 import 'leaflet/dist/leaflet.css';
@@ -43,23 +42,7 @@ export default function EditShapeFile({
   const [saving, setSaving] = useState(false);
   const [loadingShapefile, setLoadingShapefile] = useState(false);
 
-  // Adaptive simplification: if polygon has <=1000 points, keep raw; else increase tolerance until between 1000–1500 pts
-  const simplifyToRange = (raw: [number, number][]): [number, number][] => {
-    const minPoints = 1000;
-    const maxPoints = 1500;
-    if (raw.length <= minPoints) return raw;
-    let tolerance = 1e-6;
-    let coords: [number, number][];
-    while (true) {
-      const simplified = turf.simplify(turf.polygon([raw]), { tolerance });
-      coords = simplified.geometry.coordinates[0] as [number, number][];
-      if (coords.length <= maxPoints || tolerance > 1) {
-        break;
-      }
-      tolerance *= 2;
-    }
-    return coords!;
-  };
+  // Adaptive simplification shared utility is imported as simplifyPolygonToRange
 
   // Fit map bounds to polygon coordinates
   const FitBoundsToCoords: React.FC<{ coords: L.LatLngExpression[] }> = ({
@@ -128,38 +111,9 @@ export default function EditShapeFile({
   // parse and simplify shapefile upload into polygon coords
   useEffect(() => {
     if (shapefileBuffer) {
-      shp(shapefileBuffer)
-        .then((geojson: any) => {
-          const features =
-            geojson.features || (geojson.type === 'Feature' ? [geojson] : []);
-          const poly = features.find(
-            (f: any) =>
-              f.geometry?.type === 'Polygon' ||
-              f.geometry?.type === 'MultiPolygon'
-          );
-          if (poly) {
-            // extract raw [lng, lat] pairs
-            let coordsList: [number, number][] = [];
-            if (poly.geometry.type === 'Polygon')
-              coordsList = poly.geometry.coordinates[0];
-            else coordsList = poly.geometry.coordinates[0][0];
-            // ensure ring is closed
-            const rawLonLat = [...coordsList];
-            if (
-              rawLonLat.length &&
-              (rawLonLat[0][0] !== rawLonLat[rawLonLat.length - 1][0] ||
-                rawLonLat[0][1] !== rawLonLat[rawLonLat.length - 1][1])
-            ) {
-              rawLonLat.push(rawLonLat[0]);
-            }
-            // adaptive simplify polygon
-            const rawSimpleCoords = simplifyToRange(rawLonLat);
-            // map back to [lat, lng] for Leaflet
-            const simplifiedLatlngs: L.LatLngExpression[] = rawSimpleCoords.map(
-              ([lng, lat]) => [lat, lng] as L.LatLngExpression
-            );
-            setPolygonCoords(simplifiedLatlngs);
-          }
+      parseShapefileToLatLngs(shapefileBuffer)
+        .then((latLngs) => {
+          if (latLngs) setPolygonCoords(latLngs as unknown as L.LatLngExpression[]);
         })
         .catch(console.error);
     }
@@ -210,43 +164,12 @@ export default function EditShapeFile({
       setSaving(true);
 
       if (!polygonCoords) return;
-      // simplify polygon to reduce number of vertices
-      // convert LatLngExpression ([lat,lng] or {lat,lng}) to [lng, lat]
-      const rawLonLat: [number, number][] = polygonCoords.map((pt) =>
-        Array.isArray(pt) ? [pt[1], pt[0]] : [pt.lng, pt.lat]
+      const latLngs: [number, number][] = polygonCoords.map((pt) =>
+        Array.isArray(pt)
+          ? [pt[0] as number, pt[1] as number]
+          : [pt.lat as number, pt.lng as number]
       );
-      // ensure ring is closed
-      if (
-        rawLonLat.length &&
-        (rawLonLat[0][0] !== rawLonLat[rawLonLat.length - 1][0] ||
-          rawLonLat[0][1] !== rawLonLat[rawLonLat.length - 1][1])
-      ) {
-        rawLonLat.push(rawLonLat[0]);
-      }
-      // adaptive simplify to desired point count range
-      const rawSimple: [number, number][] = simplifyToRange(rawLonLat);
-      const simpleCoords: [number, number][] = rawSimple;
-      // flatten simplified coords back to [lat, lng]
-      const flattened: number[] = [];
-      simpleCoords.forEach(([lng, lat]) => {
-        flattened.push(lat, lng);
-      });
-      // query Shapefile once to decide create vs update (cast function to any)
-      const updateResult = (await (
-        client.models.Shapefile.shapefilesByProjectId as any
-      )({ projectId })) as any;
-      const existing = updateResult.data as Array<{ id: string }>;
-      if (existing.length > 0) {
-        await (client.models.Shapefile.update as any)({
-          id: existing[0].id,
-          coordinates: flattened,
-        });
-      } else {
-        await (client.models.Shapefile.create as any)({
-          projectId,
-          coordinates: flattened,
-        });
-      }
+      await saveShapefileForProject(client, projectId, latLngs as [number, number][]);
       // save exclusion polygons
       const exResult = (await (
         client.models.ShapefileExclusions.shapefileExclusionsByProjectId as any
@@ -274,13 +197,15 @@ export default function EditShapeFile({
       );
 
       // delete strata information and jolly results
-      const { data: strata } = await client.models.Stratum.strataByProjectId({
+      const { data: strata } = await (client.models.Stratum
+        .strataByProjectId as any)({
         projectId,
       });
-      const { data: jollyResults } =
-        await client.models.JollyResult.jollyResultsBySurveyId({
-          surveyId: projectId,
-        });
+      const { data: jollyResults } = await (
+        client.models.JollyResult.jollyResultsBySurveyId as any
+      )({
+        surveyId: projectId,
+      });
 
       await Promise.all(
         strata.map((s: any) => client.models.Stratum.delete({ id: s.id }))

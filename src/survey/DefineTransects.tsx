@@ -26,6 +26,13 @@ import proj4 from 'proj4';
 // tolerance in degrees for simplifying the transect line
 const SIMPLIFY_TOLERANCE = 0.002;
 
+// Normalize mixed timestamp units to milliseconds since epoch
+function normalizeToMillis(ts: any): number {
+  const n = typeof ts === 'string' ? Number(ts) : ts ?? 0;
+  // If value looks like seconds (10 digits) convert to ms
+  return n > 0 && n < 1e12 ? n * 1000 : n;
+}
+
 // Finds the UTM projection for the given coordinates
 function getUTMProjection(lon: number, lat: number) {
   const zone = Math.floor((lon + 180) / 6) + 1;
@@ -239,7 +246,8 @@ export default function DefineTransects({
   // Jitter duplicate coordinates slightly so overlapping markers are visible
   const adjustedPositions = React.useMemo(() => {
     const byCoordKey: Record<string, (any & { transectId: number })[]> = {};
-    const adjusted: Record<string, { latitude: number; longitude: number }> = {};
+    const adjusted: Record<string, { latitude: number; longitude: number }> =
+      {};
     const keyFor = (lat: number, lng: number) => `${lat},${lng}`;
 
     segmentedImages.forEach((img) => {
@@ -260,7 +268,8 @@ export default function DefineTransects({
         const radiusDeg = 0.00005; // ~5.5m in latitude
         const angle = (2 * Math.PI * index) / group.length;
         const dLat = radiusDeg * Math.sin(angle);
-        const dLng = (radiusDeg * Math.cos(angle)) / Math.max(Math.cos(latRad), 1e-6);
+        const dLng =
+          (radiusDeg * Math.cos(angle)) / Math.max(Math.cos(latRad), 1e-6);
         adjusted[img.id] = {
           latitude: img.latitude + dLat,
           longitude: img.longitude + dLng,
@@ -356,8 +365,6 @@ export default function DefineTransects({
 
       // compute net area and convert to km²
       const netAreaSqm = rawArea - exclusionAreaSqm;
-      const rawAreaKm = rawArea / 1e6;
-      const exclusionAreaKm = exclusionAreaSqm / 1e6;
       const netAreaKm = netAreaSqm / 1e6;
       const area = netAreaKm;
 
@@ -366,7 +373,7 @@ export default function DefineTransects({
         stratumTransects[section.id],
         segmentedImages
       );
-      const { baseline, length } = getProjectedDirectionalBaseline(
+      const { length } = getProjectedDirectionalBaseline(
         secPoly,
         baselineBearing
       );
@@ -499,6 +506,10 @@ export default function DefineTransects({
           ],
         } as any
       )) as any[];
+      // normalize timestamp unit
+      imgs.forEach((img) => {
+        img.timestamp = normalizeToMillis(img.timestamp);
+      });
       // sort chronologically
       imgs.sort(
         (a, b) =>
@@ -537,7 +548,10 @@ export default function DefineTransects({
             ],
           } as any
         );
-        // Sort the loaded images by timestamp to preserve chronological order for baseline calculation
+        // Normalize and sort the loaded images by timestamp to preserve chronological order for baseline calculation
+        imgsWithTx.forEach((img) => {
+          img.timestamp = normalizeToMillis(img.timestamp);
+        });
         imgsWithTx.sort(
           (a, b) =>
             new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
