@@ -160,7 +160,7 @@ export default function ClientLogs() {
   });
 
   return (
-    <div className="m-2">
+    <div className="mt-2">
       <h5>Client Logs</h5>
       <div className="d-flex gap-2 align-items-end flex-wrap mb-3">
         <div style={{ minWidth: 300 }}>

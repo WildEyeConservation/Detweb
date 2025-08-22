@@ -8,6 +8,7 @@ import MyTable from '../Table';
 import { useUsers } from '../apiInterface';
 import { fetchAllPaginatedResults } from '../utils';
 import { FilesUploadForm, formatFileSize } from '../FilesUploadComponent';
+import { saveShapefileForProject } from '../utils/shapefileUtils';
 import { useUpdateProgress } from '../useUpdateProgress';
 import { X, Check } from 'lucide-react';
 
@@ -62,6 +63,7 @@ export default function NewSurveyModal({
     ((projectId: string) => Promise<void>) | null
   >(null);
   const [gpsReady, setGpsReady] = useState(false);
+  const [shapefileLatLngs, setShapefileLatLngs] = useState<[number, number][]>();
 
   const canSubmit = !loading && filesReady && name && organization && gpsReady;
 
@@ -162,6 +164,11 @@ export default function NewSurveyModal({
 
     if (uploadSubmitFn) {
       await uploadSubmitFn(project.id);
+    }
+
+    // If a shapefile was provided during upload, save it to the project now
+    if (shapefileLatLngs && shapefileLatLngs.length > 0) {
+      await saveShapefileForProject(client, project.id, shapefileLatLngs);
     }
     setLoading(false);
     onClose();
@@ -433,6 +440,7 @@ export default function NewSurveyModal({
             setOnSubmit={setUploadSubmitFn}
             setReadyToSubmit={setFilesReady}
             setGpsDataReady={setGpsReady}
+            onShapefileParsed={(latLngs) => setShapefileLatLngs(latLngs)}
           />
         </Form>
       </Modal.Body>

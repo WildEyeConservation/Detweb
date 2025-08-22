@@ -16,6 +16,7 @@ import 'leaflet-draw/dist/leaflet.draw.css';
 import { Form } from 'react-bootstrap';
 import Shapefile from './Shapefile';
 import shp from 'shpjs';
+import { parseShapefileToLatLngs } from './utils/shapefileUtils';
 import FileInput from './FileInput';
 
 // Define the GPS data structure
@@ -38,6 +39,7 @@ export interface GPSSubsetProps {
   gpsData: GPSData[];
   onFilter: (filteredData: GPSData[]) => void;
   imageFiles?: File[];
+  onShapefileParsed?: (latLngs: [number, number][]) => void;
 }
 
 // A helper component to fit the map view to the given GPS points
@@ -62,6 +64,7 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
   gpsData,
   onFilter,
   imageFiles,
+  onShapefileParsed,
 }) => {
   const [polygons, setPolygons] = useState<PolygonSubset[]>([]);
   const featureGroupRef = useRef<L.FeatureGroup>(null);
@@ -256,7 +259,7 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
   useEffect(() => {
     if (shapefileBuffer) {
       shp(shapefileBuffer)
-        .then((geojson: any) => {
+        .then(async (geojson: any) => {
           let allowedPolygons: any[] = [];
           if (geojson.type === 'FeatureCollection') {
             allowedPolygons = geojson.features.filter(
@@ -285,6 +288,14 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
           });
           setCurrentFilteredPoints(newFilteredPoints);
           onFilter(newFilteredPoints);
+
+          // Also parse to simplified [lat,lng] list for saving later
+          try {
+            const latLngs = await parseShapefileToLatLngs(shapefileBuffer);
+            if (latLngs && onShapefileParsed) onShapefileParsed(latLngs);
+          } catch (e) {
+            console.error('Error simplifying shapefile for save', e);
+          }
         })
         .catch((err: any) => {
           console.error('Error parsing shapefile', err);
