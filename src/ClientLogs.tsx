@@ -15,7 +15,11 @@ export default function ClientLogs() {
   const { users } = useUsers();
 
   const userOptions: Option[] = useMemo(
-    () => users.map((u) => ({ label: `${u.name || u.id} (${u.email || ''})`, value: u.id })),
+    () =>
+      users.map((u) => ({
+        label: `${u.name || u.id} (${u.email || ''})`,
+        value: u.id,
+      })),
     [users]
   );
 
@@ -26,7 +30,8 @@ export default function ClientLogs() {
   const [logs, setLogs] = useState<Schema['ClientLog']['type'][]>([]);
 
   function escapeCsvValue(value: unknown): string {
-    const stringValue = value === null || value === undefined ? '' : String(value);
+    const stringValue =
+      value === null || value === undefined ? '' : String(value);
     const needsQuoting = /[",\n\r]/.test(stringValue);
     const escaped = stringValue.replace(/"/g, '""');
     return needsQuoting ? `"${escaped}"` : escaped;
@@ -61,15 +66,20 @@ export default function ClientLogs() {
         log.downlink ?? '',
         log.rtt ?? '',
         log.userAgent || '',
-      ].map(escapeCsvValue).join(',');
+      ]
+        .map(escapeCsvValue)
+        .join(',');
     });
 
     const csv = [header.join(','), ...rows].join('\r\n');
-    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\uFEFF' + csv], {
+      type: 'text/csv;charset=utf-8;',
+    });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    const usernamePart = selectedUser?.label?.replace(/[^a-z0-9-_]+/gi, '_') || 'all';
+    const usernamePart =
+      selectedUser?.label?.replace(/[^a-z0-9-_]+/gi, '_') || 'all';
     link.download = `client_logs_${usernamePart}.csv`;
     document.body.appendChild(link);
     link.click();
@@ -117,15 +127,21 @@ export default function ClientLogs() {
     let result = logs;
     if (start) {
       const s = new Date(start).getTime();
-      result = result.filter((l) => new Date(l.createdAt as any).getTime() >= s);
+      result = result.filter(
+        (l) => new Date(l.createdAt as any).getTime() >= s
+      );
     }
     if (end) {
       const e = new Date(end).getTime();
-      result = result.filter((l) => new Date(l.createdAt as any).getTime() <= e);
+      result = result.filter(
+        (l) => new Date(l.createdAt as any).getTime() <= e
+      );
     }
     // newest first
     return [...result].sort(
-      (a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime()
+      (a, b) =>
+        new Date(b.createdAt as any).getTime() -
+        new Date(a.createdAt as any).getTime()
     );
   }, [logs, start, end]);
 
@@ -160,39 +176,39 @@ export default function ClientLogs() {
   });
 
   return (
-    <div className="mt-2">
+    <div className='mt-2'>
       <h5>Client Logs</h5>
-      <div className="d-flex gap-2 align-items-end flex-wrap mb-3">
+      <div className='d-flex gap-2 align-items-end flex-wrap mb-3'>
         <div style={{ minWidth: 300 }}>
-          <Form.Label className="mb-1">User</Form.Label>
+          <Form.Label className='mb-1'>User</Form.Label>
           <Select
             options={userOptions}
             value={selectedUser}
             onChange={(opt) => setSelectedUser(opt as Option)}
-            placeholder="Select a user..."
+            placeholder='Select a user...'
             isClearable
             className='text-black'
           />
         </div>
         <div>
-          <Form.Label className="mb-1">Start</Form.Label>
+          <Form.Label className='mb-1'>Start</Form.Label>
           <Form.Control
-            type="datetime-local"
+            type='datetime-local'
             value={start}
             onChange={(e) => setStart(e.target.value)}
           />
         </div>
         <div>
-          <Form.Label className="mb-1">End</Form.Label>
+          <Form.Label className='mb-1'>End</Form.Label>
           <Form.Control
-            type="datetime-local"
+            type='datetime-local'
             value={end}
             onChange={(e) => setEnd(e.target.value)}
           />
         </div>
-        <div className="d-flex gap-2">
+        <div className='d-flex gap-2'>
           <Button
-            variant="secondary"
+            variant='secondary'
             onClick={() => {
               setStart('');
               setEnd('');
@@ -201,14 +217,14 @@ export default function ClientLogs() {
             Clear Filters
           </Button>
           <Button
-            variant="primary"
+            variant='primary'
             onClick={() => selectedUser && loadLogs(selectedUser.value)}
             disabled={!selectedUser || loading}
           >
             {loading ? 'Loading…' : 'Refresh'}
           </Button>
           <Button
-            variant="success"
+            variant='success'
             onClick={exportFilteredLogsToCsv}
             disabled={!filteredLogs.length}
           >
@@ -221,13 +237,15 @@ export default function ClientLogs() {
         tableHeadings={tableHeadings as any}
         tableData={tableData}
         pagination={true}
-        itemsPerPage={25}
+        itemsPerPage={10}
         emptyMessage={
-          selectedUser ? (loading ? 'Loading…' : 'No logs found for selection') : 'Select a user to view logs'
+          selectedUser
+            ? loading
+              ? 'Loading…'
+              : 'No logs found for selection'
+            : 'Select a user to view logs'
         }
       />
     </div>
   );
 }
-
-

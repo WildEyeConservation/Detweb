@@ -1,11 +1,18 @@
-import type { Handler } from "aws-lambda";
-import { env } from "$amplify/env/updateProjectMemberships";
-import { Amplify } from "aws-amplify";
-import { generateClient } from "aws-amplify/data";
-import type { GraphQLResult } from "@aws-amplify/api-graphql";
-import { listUserProjectMemberships } from "./graphql/queries";
-import { updateUserProjectMembership } from "./graphql/mutations";
-import { UserProjectMembership } from "./graphql/API";
+import type { Handler } from 'aws-lambda';
+import { env } from '$amplify/env/updateProjectMemberships';
+import { Amplify } from 'aws-amplify';
+import { generateClient } from 'aws-amplify/data';
+import type { GraphQLResult } from '@aws-amplify/api-graphql';
+import {
+  listUserProjectMemberships,
+  getProject,
+  listOrganizationMemberships,
+} from './graphql/queries';
+import {
+  updateUserProjectMembership,
+  updateOrganizationMembership,
+} from './graphql/mutations';
+import { OrganizationMembership, UserProjectMembership } from './graphql/API';
 
 Amplify.configure(
   {
@@ -13,7 +20,7 @@ Amplify.configure(
       GraphQL: {
         endpoint: env.AMPLIFY_DATA_GRAPHQL_ENDPOINT,
         region: env.AWS_REGION,
-        defaultAuthMode: "iam",
+        defaultAuthMode: 'iam',
       },
     },
   },
@@ -36,7 +43,7 @@ Amplify.configure(
 );
 
 const client = generateClient({
-  authMode: "iam",
+  authMode: 'iam',
 });
 
 interface PagedList<T> {
@@ -71,9 +78,9 @@ export const handler: Handler = async (event, context) => {
   const { projectId } = event.arguments;
 
   //get all UserProjectMembership records for the project
-  const memberships = await fetchAllPages<
+const memberships = await fetchAllPages<
     UserProjectMembership,
-    "listUserProjectMemberships"
+    'listUserProjectMemberships'
   >(
     (nextToken) =>
       client.graphql({
@@ -84,6 +91,7 @@ export const handler: Handler = async (event, context) => {
               eq: projectId,
             },
           },
+          limit: 1000,
           nextToken,
         },
       }) as Promise<
@@ -91,7 +99,7 @@ export const handler: Handler = async (event, context) => {
           listUserProjectMemberships: PagedList<UserProjectMembership>;
         }>
       >,
-    "listUserProjectMemberships"
+    'listUserProjectMemberships'
   );
 
   //dummy update the project memberships
@@ -104,5 +112,54 @@ export const handler: Handler = async (event, context) => {
         },
       },
     });
+  }
+
+  const { data: project } = await client.graphql({
+    query: getProject,
+    variables: {
+      id: projectId,
+    },
+  });
+
+  const organizationId = project?.getProject?.organizationId;
+
+  //get all organizationMemberships
+  if (organizationId) {
+    const orgMemberships = await fetchAllPages<
+      OrganizationMembership,
+      'listOrganizationMemberships'
+    >(
+      (nextToken) =>
+        client.graphql({
+          query: listOrganizationMemberships,
+          variables: {
+            filter: {
+              organizationId: {
+                eq: organizationId,
+              },
+            },
+            nextToken,
+            limit: 1000,
+          },
+        }) as Promise<
+          GraphQLResult<{
+            listOrganizationMemberships: PagedList<OrganizationMembership>;
+          }>
+        >,
+      'listOrganizationMemberships'
+    );
+
+    //dummy update the organization memberships
+    for (const membership of orgMemberships) {
+      await client.graphql({
+        query: updateOrganizationMembership,
+        variables: {
+          input: {
+            organizationId: membership.organizationId,
+            userId: membership.userId,
+          },
+        },
+      });
+    }
   }
 };
