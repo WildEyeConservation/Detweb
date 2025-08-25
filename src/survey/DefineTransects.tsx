@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { GlobalContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
 import { Form, Spinner, Button } from 'react-bootstrap';
@@ -291,7 +291,7 @@ export default function DefineTransects({
     );
     await Promise.all(
       existingStrata.map((st: any) =>
-        client.models.Stratum.delete({ id: st.id })
+        (client.models.Stratum.delete as any)({ id: st.id })
       )
     );
 
@@ -344,9 +344,14 @@ export default function DefineTransects({
       let exclusionAreaSqm = 0;
       exclusionCoords.forEach((coords) => {
         if (coords.length < 3) return;
-        const excCoordsLngLat = coords.map(
-          ([lat, lng]) => [lng, lat] as [number, number]
-        );
+        const excCoordsLngLat = coords.map((pt) => {
+          if (Array.isArray(pt)) {
+            const t = pt as [number, number];
+            return [t[1], t[0]] as [number, number];
+          }
+          const ll = pt as any;
+          return [ll.lng as number, ll.lat as number] as [number, number];
+        });
         // ensure closure
         if (
           excCoordsLngLat[0][0] !==
@@ -383,15 +388,14 @@ export default function DefineTransects({
       const flatCoords = section.coords.flatMap(
         (coord) => coord as [number, number]
       );
-      const {
-        data: { id: newSid },
-      } = await client.models.Stratum.create({
+      const createStratumRes = await (client.models.Stratum.create as any)({
         projectId,
         name: secName,
         area,
         baselineLength: length,
         coordinates: flatCoords,
       });
+      const newSid = createStratumRes.data.id as string;
       stratumMap[section.id] = newSid;
     }
 
@@ -408,12 +412,11 @@ export default function DefineTransects({
 
       if (assigned === null) continue;
       const strId = stratumMap[assigned];
-      const {
-        data: { id: trId },
-      } = await client.models.Transect.create({
+      const createTransectRes = await (client.models.Transect.create as any)({
         projectId,
         stratumId: strId,
       });
+      const trId = createTransectRes.data.id as string;
       transectMap[tid] = trId;
     }
 
@@ -422,7 +425,10 @@ export default function DefineTransects({
       segmentedImages.map(async (img) => {
         const trId = transectMap[img.transectId];
         if (trId) {
-          await client.models.Image.update({ id: img.id, transectId: trId });
+          await (client.models.Image.update as any)({
+            id: img.id,
+            transectId: trId,
+          });
         }
       })
     );
@@ -436,7 +442,7 @@ export default function DefineTransects({
       allTransects
         .map((t: any) => t.id)
         .filter((id: string) => !usedTransectIds.has(id))
-        .map((id: string) => client.models.Transect.delete({ id }))
+        .map((id: string) => (client.models.Transect.delete as any)({ id }))
     );
 
     //clear jolly results
@@ -456,7 +462,7 @@ export default function DefineTransects({
 
     await Promise.all(
       jollyResults.map((jr: any) =>
-        client.models.JollyResult.delete({
+        (client.models.JollyResult.delete as any)({
           surveyId: jr.surveyId,
           stratumId: jr.stratumId,
           annotationSetId: jr.annotationSetId,
@@ -608,7 +614,7 @@ export default function DefineTransects({
       )({ projectId })) as any;
       const data = result.data as Array<{ coordinates: (number | null)[] }>;
       const polys: L.LatLngExpression[][] = [];
-      data.forEach((ex, idx) => {
+      data.forEach((ex) => {
         if (ex.coordinates) {
           const coordsArr = ex.coordinates.filter(
             (n): n is number => n != null
@@ -618,9 +624,14 @@ export default function DefineTransects({
             latlngs.push([coordsArr[i], coordsArr[i + 1]]);
           }
           // Log exclusion polygon area
-          const excCoordsLngLat = latlngs.map(
-            ([lat, lng]) => [lng, lat] as [number, number]
-          );
+          const excCoordsLngLat = latlngs.map((pt) => {
+            if (Array.isArray(pt)) {
+              const t = pt as [number, number];
+              return [t[1], t[0]] as [number, number];
+            }
+            const ll = pt as any;
+            return [ll.lng as number, ll.lat as number] as [number, number];
+          });
           if (
             excCoordsLngLat[0][0] !==
               excCoordsLngLat[excCoordsLngLat.length - 1][0] ||
@@ -655,9 +666,14 @@ export default function DefineTransects({
           latlngs.push([coordsArr[i], coordsArr[i + 1]]);
         }
         // Log shapefile boundary area
-        const boundaryLngLat = latlngs.map(
-          ([lat, lng]) => [lng, lat] as [number, number]
-        );
+        const boundaryLngLat = latlngs.map((pt) => {
+          if (Array.isArray(pt)) {
+            const t = pt as [number, number];
+            return [t[1], t[0]] as [number, number];
+          }
+          const ll = pt as any;
+          return [ll.lng as number, ll.lat as number] as [number, number];
+        });
         if (
           boundaryLngLat[0][0] !==
             boundaryLngLat[boundaryLngLat.length - 1][0] ||
@@ -726,47 +742,157 @@ export default function DefineTransects({
     }
   }, [images, partsLoading, existingData, segmentedImages]);
 
-  // manual polygon splitting using Sutherland-Hodgman half-plane clipping
+  // Split a polygon by a multi-vertex polyline. Returns 1 or 2 polygons (open rings in [lat,lng]).
   const splitPolygon = (
     poly: L.LatLngExpression[],
     line: L.LatLngExpression[]
-  ): [L.LatLngExpression[], L.LatLngExpression[]] => {
-    const [p1, p2] = line as [L.LatLngExpression, L.LatLngExpression];
-    const x1 = (p1 as [number, number])[1],
-      y1 = (p1 as [number, number])[0];
-    const x2 = (p2 as [number, number])[1],
-      y2 = (p2 as [number, number])[0];
-    const dx = x2 - x1,
-      dy = y2 - y1;
-    const clip = (keepLeft: boolean) => {
-      const output: L.LatLngExpression[] = [];
-      const sign = (x: number, y: number) =>
-        keepLeft
-          ? (x - x1) * dy - (y - y1) * dx >= 0
-          : (x - x1) * dy - (y - y1) * dx <= 0;
+  ): L.LatLngExpression[][] => {
+    if (poly.length < 3 || line.length < 2) return [poly];
+
+    // Convert to [lng,lat]
+    const ringLngLat = ((): [number, number][] => {
+      const arr: [number, number][] = [];
       for (let i = 0; i < poly.length; i++) {
-        const curr = poly[i] as [number, number];
-        const next = poly[(i + 1) % poly.length] as [number, number];
-        const xC = curr[1],
-          yC = curr[0];
-        const xN = next[1],
-          yN = next[0];
-        const currInside = sign(xC, yC);
-        const nextInside = sign(xN, yN);
-        if (currInside) output.push([curr[0], curr[1]]);
-        if (currInside !== nextInside) {
-          const denom = (xN - xC) * dy - (yN - yC) * dx;
-          if (denom !== 0) {
-            const t = ((x1 - xC) * dy - (y1 - yC) * dx) / denom;
-            const xi = xC + t * (xN - xC);
-            const yi = yC + t * (yN - yC);
-            output.push([yi, xi]);
-          }
-        }
+        const [lat, lng] = poly[i] as [number, number];
+        arr.push([lng, lat]);
       }
-      return output;
+      // ensure closure
+      if (
+        arr[0][0] !== arr[arr.length - 1][0] ||
+        arr[0][1] !== arr[arr.length - 1][1]
+      ) {
+        arr.push([arr[0][0], arr[0][1]]);
+      }
+      return arr;
+    })();
+    const lineLngLat: [number, number][] = line.map((pt) => {
+      const [lat, lng] = pt as [number, number];
+      return [lng, lat];
+    });
+
+    const polyFC = turf.polygon([ringLngLat]);
+    const lineFC = turf.lineString(lineLngLat);
+    const boundary = turf.polygonToLine(polyFC);
+    const intersections = turf.lineIntersect(lineFC, boundary);
+
+    // Deduplicate intersections
+    const uniqKey = (c: [number, number]) => `${c[0].toFixed(10)},${c[1].toFixed(10)}`;
+    const uniquePtsMap: Record<string, any> = {};
+    intersections.features.forEach((f) => {
+      const c = f.geometry.coordinates as [number, number];
+      uniquePtsMap[uniqKey(c)] = f as any;
+    });
+    const uniquePts = Object.values(uniquePtsMap);
+
+    if (uniquePts.length < 2) {
+      // No proper cut; return original
+      return [poly];
+    }
+
+    // Order intersections along the polyline
+    const withLoc = uniquePts
+      .map((pt) => {
+        const onLine = turf.nearestPointOnLine(lineFC, pt);
+        return { pt, location: (onLine.properties as any).location as number };
+      })
+      .sort((a, b) => a.location - b.location);
+    const aPt = withLoc[0].pt;
+    const bPt = withLoc[withLoc.length - 1].pt;
+
+    // Find ring segment indices where intersections occur
+    const ringLine = turf.lineString(ringLngLat);
+    const aOnRing = turf.nearestPointOnLine(ringLine, aPt);
+    const bOnRing = turf.nearestPointOnLine(ringLine, bPt);
+    const aIdx = (aOnRing.properties as any).index as number;
+    const bIdx = (bOnRing.properties as any).index as number;
+
+    // Slice the polyline between a->b
+    const lineSlice = turf.lineSlice(aPt, bPt, lineFC);
+    const lineSliceCoords = turf.getCoords(lineSlice) as [number, number][];
+
+    // Helper to collect ring path going forward from idxA+1 .. idxB
+    const ringNoClose = ringLngLat.slice(0, ringLngLat.length - 1);
+    const ringLen = ringNoClose.length;
+    const collectRingPath = (
+      startIdx: number,
+      endIdx: number,
+      startCoord: [number, number],
+      endCoord: [number, number]
+    ): [number, number][] => {
+      const path: [number, number][] = [];
+      path.push(startCoord);
+      let i = (startIdx + 1) % ringLen;
+      while (true) {
+        path.push(ringNoClose[i]);
+        if (i === endIdx) break;
+        i = (i + 1) % ringLen;
+      }
+      // Avoid duplicating end vertex if identical to endCoord
+      const last = path[path.length - 1];
+      if (last[0] !== endCoord[0] || last[1] !== endCoord[1]) {
+        path.push(endCoord);
+      }
+      return path;
     };
-    return [clip(true), clip(false)];
+
+    const aCoord = aPt.geometry.coordinates as [number, number];
+    const bCoord = bPt.geometry.coordinates as [number, number];
+    const aT = ((aOnRing.properties as any)?.t as number | undefined) ?? 0;
+    const bT = ((bOnRing.properties as any)?.t as number | undefined) ?? 1;
+
+    // Build ring paths between intersections, with special handling when both
+    // intersections lie on the same edge (aIdx === bIdx)
+    let path1: [number, number][]; // A -> ... -> B along ring
+    let path2: [number, number][]; // B -> ... -> A along ring
+    if (aIdx === bIdx) {
+      if (aT <= bT) {
+        // Small forward segment along the same edge
+        path1 = [aCoord, bCoord];
+        // Complement goes the long way around the ring
+        path2 = collectRingPath(bIdx, aIdx, bCoord, aCoord);
+      } else {
+        // Forward path wraps around the ring
+        path1 = collectRingPath(aIdx, bIdx, aCoord, bCoord);
+        // Complement is the small segment along the same edge (backwards)
+        path2 = [bCoord, aCoord];
+      }
+    } else {
+      path1 = collectRingPath(aIdx, bIdx, aCoord, bCoord); // A -> ... -> B (ring)
+      path2 = collectRingPath(bIdx, aIdx, bCoord, aCoord); // B -> ... -> A (ring)
+    }
+
+    // Compose polygons by adding the polyline segment (nonlinear) to close loops
+    const segAtoB = lineSliceCoords; // A -> ... -> B
+    const segBtoA = lineSliceCoords.slice().reverse(); // B -> ... -> A
+
+    // Append without duplicating endpoints
+    const region1LngLat: [number, number][] = [
+      ...path1,
+      ...segBtoA.slice(1, -1), // B..A (without duplicating B and A)
+    ];
+    const region2LngLat: [number, number][] = [
+      ...path2,
+      ...segAtoB.slice(1, -1), // A..B (without duplicating A and B)
+    ];
+
+    // Convert back to [lat,lng] and ensure open rings (no duplicate last == first)
+    const toLatLng = (coords: [number, number][]): L.LatLngExpression[] => {
+      if (coords.length === 0) return [];
+      const out = coords.map(([x, y]) => [y, x] as [number, number]);
+      const first = out[0] as [number, number];
+      const last = out[out.length - 1] as [number, number];
+      if (first[0] === last[0] && first[1] === last[1]) out.pop();
+      return out;
+    };
+
+    const r1 = toLatLng(region1LngLat);
+    const r2 = toLatLng(region2LngLat);
+
+    // Validate minimal polygon
+    const results: L.LatLngExpression[][] = [];
+    if (r1.length >= 3) results.push(r1);
+    if (r2.length >= 3) results.push(r2);
+    return results.length ? results : [poly];
   };
 
   // compute strata sections when boundary or lines change
@@ -777,9 +903,10 @@ export default function DefineTransects({
     strataLines.forEach((line) => {
       const newRegions: L.LatLngExpression[][] = [];
       regions.forEach((region) => {
-        const [a, b] = splitPolygon(region, [line[0], line[line.length - 1]]);
-        if (a.length >= 3) newRegions.push(a);
-        if (b.length >= 3) newRegions.push(b);
+        const parts = splitPolygon(region, line);
+        parts.forEach((p) => {
+          if (p.length >= 3) newRegions.push(p);
+        });
       });
       regions = newRegions;
     });
@@ -907,8 +1034,7 @@ export default function DefineTransects({
                   positions={coords}
                   pathOptions={{
                     color: 'red',
-                    fillColor: 'red',
-                    fillOpacity: 0.2,
+                    fill: false,
                   }}
                 />
               ))}
@@ -924,7 +1050,6 @@ export default function DefineTransects({
                       polygon: false,
                       polyline: {
                         shapeOptions: { color: 'black' },
-                        maxPoints: 2,
                       },
                     }}
                     onCreated={(e: any) => {
@@ -991,7 +1116,7 @@ export default function DefineTransects({
                 </Polygon>
               ))}
               {partsLoading === null &&
-                segmentedImages.map((img, idx) => (
+                segmentedImages.map((img) => (
                   <CircleMarker
                     pane='markerPane'
                     key={img.id}
