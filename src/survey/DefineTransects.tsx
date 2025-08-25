@@ -214,6 +214,18 @@ export default function DefineTransects({
   const [contextMenu, setContextMenu] = useState<{
     position: L.LatLngExpression;
     img: any;
+    mode: 'move' | 'merge';
+  } | null>(null);
+  const [selectedTransectIds, setSelectedTransectIds] = useState<Set<number>>(
+    new Set()
+  );
+  const [detailsPopup, setDetailsPopup] = useState<{
+    position: L.LatLngExpression;
+    img: any;
+  } | null>(null);
+  const [lastDblClick, setLastDblClick] = useState<{
+    imgId: string;
+    at: number;
   } | null>(null);
   const [strataLines, setStrataLines] = useState<L.LatLngExpression[][]>([]);
   const [strataSections, setStrataSections] = useState<
@@ -236,6 +248,25 @@ export default function DefineTransects({
         si.id === imgId ? { ...si, transectId: newTransectId } : si
       )
     );
+  };
+  const handleBulkMove = (imgIds: string[], targetTransectId: number) => {
+    const ids = new Set(imgIds);
+    setSegmentedImages((prev) =>
+      prev.map((si) =>
+        ids.has(si.id) ? { ...si, transectId: targetTransectId } : si
+      )
+    );
+    setSelectedTransectIds(new Set([targetTransectId]));
+  };
+  const handleMergeSelectedInto = (targetTransectId: number) => {
+    setSegmentedImages((prev) =>
+      prev.map((si) =>
+        selectedTransectIds.has(si.transectId)
+          ? { ...si, transectId: targetTransectId }
+          : si
+      )
+    );
+    setSelectedTransectIds(new Set([targetTransectId]));
   };
   const clearStrata = () => {
     setExistingData(false);
@@ -776,7 +807,8 @@ export default function DefineTransects({
     const intersections = turf.lineIntersect(lineFC, boundary);
 
     // Deduplicate intersections
-    const uniqKey = (c: [number, number]) => `${c[0].toFixed(10)},${c[1].toFixed(10)}`;
+    const uniqKey = (c: [number, number]) =>
+      `${c[0].toFixed(10)},${c[1].toFixed(10)}`;
     const uniquePtsMap: Record<string, any> = {};
     intersections.features.forEach((f) => {
       const c = f.geometry.coordinates as [number, number];
@@ -976,17 +1008,27 @@ export default function DefineTransects({
         <span className='text-muted mb-2' style={{ fontSize: '14px' }}>
           <ul className='mb-0'>
             <li>
-              Transects are automatically defined based on the GPS data. Right
-              click on an image to move it to a new or different transect and
-              left click to view its details.
+              Single-click a point to select its transect (Ctrl-click for
+              multi-select), double-click to view image details.
+            </li>
+            <li>
+              Right-click a point to merge selected transects into that
+              transect. If you double-clicked the point first, right-click shows
+              the Move-to-Transect menu.
+            </li>
+            <li>
+              Use the polygon tool (top-right) to draw around points and merge
+              them into a transect. Points are merged into the majority transect
+              within the drawn area.
             </li>
             <li>
               Define strata by selecting the polyline tool in the top right
-              corner of the map and drawing a line across the boundary.
+              corner of the map and drawing a line across the boundary. Start and
+              end points should be outside the boundary.
             </li>
             <li>
               Save your work by clicking the save button at the bottom of the
-              page.
+              page (even if you haven't made any changes).
             </li>
             {existingData && (
               <li>
@@ -1016,6 +1058,7 @@ export default function DefineTransects({
               style={{ height: '100%', width: '100%' }}
               center={[0, 0]}
               zoom={2}
+              doubleClickZoom={false}
             >
               <FitBounds points={images} />
               <TileLayer
@@ -1028,6 +1071,84 @@ export default function DefineTransects({
                   pathOptions={{ fill: false, color: '#97009c' }}
                 />
               )}
+              {/* Polygon selection tool - always available */}
+              <FeatureGroup>
+                <EditControl
+                  position='topright'
+                  draw={{
+                    rectangle: false,
+                    circle: false,
+                    circlemarker: false,
+                    marker: false,
+                    polyline: false,
+                    polygon: {
+                      shapeOptions: { color: 'black' },
+                    },
+                  }}
+                  edit={{ edit: false, remove: false }}
+                  onCreated={(e: any) => {
+                    if (e.layerType === 'polygon') {
+                      const latlngs = e.layer.getLatLngs();
+                      // Support simple polygon (first ring)
+                      const ring: L.LatLng[] = Array.isArray(latlngs[0])
+                        ? latlngs[0]
+                        : latlngs;
+                      const polyLngLat: [number, number][] = (
+                        ring as any[]
+                      ).map((ll: any) => [ll.lng as number, ll.lat as number]);
+                      if (
+                        polyLngLat[0][0] !==
+                          polyLngLat[polyLngLat.length - 1][0] ||
+                        polyLngLat[0][1] !==
+                          polyLngLat[polyLngLat.length - 1][1]
+                      ) {
+                        polyLngLat.push(polyLngLat[0]);
+                      }
+                      const poly = turf.polygon([polyLngLat]);
+                      // Find enclosed images using displayed positions
+                      const enclosedImgs = segmentedImages.filter((img) => {
+                        const pos = adjustedPositions[img.id] || {
+                          latitude: img.latitude,
+                          longitude: img.longitude,
+                        };
+                        const pt = turf.point([pos.longitude, pos.latitude]);
+                        return turf.booleanPointInPolygon(pt, poly);
+                      });
+                      const enclosedIds = enclosedImgs.map(
+                        (i) => i.id as string
+                      );
+                      if (enclosedIds.length) {
+                        let target: number | null = null;
+                        if (selectedTransectIds.size === 1) {
+                          target = Array.from(selectedTransectIds)[0];
+                        } else {
+                          // majority transect among enclosed
+                          const counts: Record<number, number> = {};
+                          enclosedImgs.forEach((i) => {
+                            counts[i.transectId] =
+                              (counts[i.transectId] || 0) + 1;
+                          });
+                          const entries = Object.entries(counts).map(
+                            ([k, v]) => [Number(k), v as number]
+                          ) as [number, number][];
+                          entries.sort((a, b) => {
+                            if (b[1] !== a[1]) return b[1] - a[1];
+                            return a[0] - b[0];
+                          });
+                          target = entries.length ? entries[0][0] : null;
+                        }
+                        if (target !== null) {
+                          handleBulkMove(enclosedIds, target);
+                        }
+                      }
+                      // remove the drawn polygon
+                      try {
+                        e.layer.remove();
+                      } catch {}
+                    }
+                  }}
+                />
+              </FeatureGroup>
               {exclusionCoords.map((coords, idx) => (
                 <Polygon
                   key={'exclusion-' + idx}
@@ -1116,89 +1237,162 @@ export default function DefineTransects({
                 </Polygon>
               ))}
               {partsLoading === null &&
-                segmentedImages.map((img) => (
-                  <CircleMarker
-                    pane='markerPane'
-                    key={img.id}
-                    center={[
-                      adjustedPositions[img.id]?.latitude ?? img.latitude,
-                      adjustedPositions[img.id]?.longitude ?? img.longitude,
-                    ]}
-                    radius={5}
-                    pathOptions={{
-                      color:
-                        transectColors[img.transectId % transectColors.length],
-                      fillColor:
-                        transectColors[img.transectId % transectColors.length],
-                      fillOpacity: 1,
-                    }}
-                    eventHandlers={{
-                      contextmenu: (e) => {
-                        setContextMenu({ position: e.latlng, img });
-                      },
-                    }}
-                  >
-                    <Popup>
+                segmentedImages.map((img) => {
+                  const isSelected = selectedTransectIds.has(img.transectId);
+                  return (
+                    <CircleMarker
+                      pane='markerPane'
+                      key={img.id}
+                      center={[
+                        adjustedPositions[img.id]?.latitude ?? img.latitude,
+                        adjustedPositions[img.id]?.longitude ?? img.longitude,
+                      ]}
+                      radius={5}
+                      pathOptions={{
+                        color: isSelected
+                          ? 'black'
+                          : transectColors[
+                              img.transectId % transectColors.length
+                            ],
+                        weight: isSelected ? 5 : 1,
+                        fillColor:
+                          transectColors[
+                            img.transectId % transectColors.length
+                          ],
+                        fillOpacity: 1,
+                      }}
+                      eventHandlers={{
+                        click: (e: any) => {
+                          const ctrl = !!(
+                            e?.originalEvent?.ctrlKey ||
+                            e?.originalEvent?.metaKey
+                          );
+                          setSelectedTransectIds((prev) => {
+                            const next = new Set(prev);
+                            if (ctrl) {
+                              if (next.has(img.transectId))
+                                next.delete(img.transectId);
+                              else next.add(img.transectId);
+                            } else {
+                              next.clear();
+                              next.add(img.transectId);
+                            }
+                            return next;
+                          });
+                        },
+                        dblclick: (e: any) => {
+                          setDetailsPopup({ position: e.latlng, img });
+                          setLastDblClick({ imgId: img.id, at: Date.now() });
+                        },
+                        contextmenu: (e: any) => {
+                          const isRecentDblClick =
+                            lastDblClick &&
+                            lastDblClick.imgId === img.id &&
+                            Date.now() - lastDblClick.at < 2000;
+                          setContextMenu({
+                            position: e.latlng,
+                            img,
+                            mode: isRecentDblClick ? 'move' : 'merge',
+                          });
+                        },
+                      }}
+                    />
+                  );
+                })}
+              {detailsPopup && (
+                <Popup
+                  position={detailsPopup.position}
+                  eventHandlers={{ remove: () => setDetailsPopup(null) }}
+                >
+                  <div>
+                    <div>
+                      <strong>Transect:</strong> {detailsPopup.img.transectId}
+                    </div>
+                    {detailsPopup.img.timestamp && (
                       <div>
-                        <strong>Transect:</strong> {img.transectId}
+                        <strong>Timestamp:</strong>{' '}
+                        {new Date(detailsPopup.img.timestamp).toISOString()}
                       </div>
-                      {img.timestamp && (
-                        <div>
-                          <strong>Timestamp:</strong>{' '}
-                          {new Date(img.timestamp).toISOString()}
-                        </div>
-                      )}
-                      <div>
-                        <strong>Lat:</strong> {img.latitude}
-                      </div>
-                      <div>
-                        <strong>Lng:</strong> {img.longitude}
-                      </div>
-                    </Popup>
-                  </CircleMarker>
-                ))}
+                    )}
+                    <div>
+                      <strong>Lat:</strong> {detailsPopup.img.latitude}
+                    </div>
+                    <div>
+                      <strong>Lng:</strong> {detailsPopup.img.longitude}
+                    </div>
+                  </div>
+                </Popup>
+              )}
               {contextMenu && (
                 <Popup
                   position={contextMenu.position}
                   eventHandlers={{ remove: () => setContextMenu(null) }}
                 >
-                  <div>
-                    <strong>Move to transect:</strong>
-                    {visibleTransectIds.map((id) => (
+                  {contextMenu.mode === 'move' ? (
+                    <div>
+                      <strong>Move to transect:</strong>
+                      {visibleTransectIds.map((id) => (
+                        <div
+                          key={id}
+                          style={{
+                            cursor: 'pointer',
+                            color: transectColors[id % transectColors.length],
+                            margin: '4px 0',
+                          }}
+                          onClick={() => {
+                            handleMove(contextMenu.img.id, id);
+                            setContextMenu(null);
+                          }}
+                        >
+                          Transect {id}
+                        </div>
+                      ))}
                       <div
-                        key={id}
                         style={{
                           cursor: 'pointer',
-                          color: transectColors[id % transectColors.length],
                           margin: '4px 0',
+                          color: 'black',
+                          fontStyle: 'italic',
                         }}
                         onClick={() => {
-                          handleMove(contextMenu.img.id, id);
+                          const nextId =
+                            transectIds.length > 0
+                              ? transectIds[transectIds.length - 1] + 1
+                              : 0;
+                          handleMove(contextMenu.img.id, nextId);
                           setContextMenu(null);
                         }}
                       >
-                        Transect {id}
+                        + New Transect
                       </div>
-                    ))}
-                    <div
-                      style={{
-                        cursor: 'pointer',
-                        margin: '4px 0',
-                        color: 'black',
-                        fontStyle: 'italic',
-                      }}
-                      onClick={() => {
-                        const nextId =
-                          transectIds.length > 0
-                            ? transectIds[transectIds.length - 1] + 1
-                            : 0;
-                        handleMove(contextMenu.img.id, nextId);
-                        setContextMenu(null);
-                      }}
-                    >
-                      + New Transect
                     </div>
-                  </div>
+                  ) : (
+                    <div>
+                      <div style={{ marginBottom: '6px' }}>
+                        <strong>Merge:</strong>
+                      </div>
+                      {selectedTransectIds.size >= 2 ? (
+                        <div
+                          style={{
+                            cursor: 'pointer',
+                            margin: '4px 0',
+                            fontStyle: 'italic',
+                          }}
+                          onClick={() => {
+                            handleMergeSelectedInto(contextMenu.img.transectId);
+                            setContextMenu(null);
+                          }}
+                        >
+                          Merge selected transects into transect{' '}
+                          {contextMenu.img.transectId}
+                        </div>
+                      ) : (
+                        <div style={{ fontStyle: 'italic', color: 'gray' }}>
+                          Hold Ctrl and click to select multiple transects
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </Popup>
               )}
             </MapContainer>
