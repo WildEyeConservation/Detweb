@@ -25,6 +25,15 @@ Resources:
           Properties:
             Path: /hello
             Method: get
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt MyDLQ.Arn
+      ReservedConcurrentExecutions: 100
+      VpcConfig:
+        SecurityGroupIds:
+          - sg-xxx
+        SubnetIds:
+          - subnet-xxx
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
       BuildProperties:
@@ -34,6 +43,10 @@ Resources:
         EntryPoints: 
         - app.ts
 
+  MyDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      KmsMasterKeyId: alias/aws/sqs
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
   # Find out more about other implicit resources you can reference within SAM
