@@ -152,6 +152,26 @@ export default function UploadManager() {
       const allImages =
         ((await fileStore.getItem(projectId)) as ImageData[]) ?? [];
 
+      // Fetch cameras for this project and build a name -> id map
+      const { data: existingCameras } = await (
+        client.models.Camera.camerasByProjectId as any
+      )({ projectId });
+      const cameraNameToId: Record<string, string> = {};
+      (existingCameras || []).forEach((cam: any) => {
+        if (cam?.name && cam?.id) cameraNameToId[cam.name] = cam.id;
+      });
+      const knownCameraNames = Object.keys(cameraNameToId);
+
+      const extractCameraNameFromPath = (path: string): string | null => {
+        const parts = path.split('/');
+        if (parts.length > 1) parts.pop(); // remove filename
+        for (let i = parts.length - 1; i >= 0; i--) {
+          const seg = parts[i];
+          if (knownCameraNames.includes(seg)) return seg;
+        }
+        return null;
+      };
+
       // seed uploaded files from S3 and created images from DB
       const s3Files = (await fetchFilesFromS3()) as Set<string>;
       const dbRawImages = (await (fetchAllPaginatedResults as any)(
@@ -222,6 +242,11 @@ export default function UploadManager() {
             const altitude =
               imageData.altitude_egm96 ?? imageData.altitude_wgs84;
 
+            const cameraName = extractCameraNameFromPath(originalPath);
+            const cameraId = cameraName
+              ? cameraNameToId[cameraName]
+              : undefined;
+
             const { data: img } = await (client.models.Image.create as any)({
               projectId,
               width: imageData.width,
@@ -236,6 +261,7 @@ export default function UploadManager() {
               altitude_agl:
                 imageData.altitude_agl ??
                 (elevation > 0 && altitude ? altitude - elevation : undefined),
+              cameraId,
             });
             if (img) {
               createdImages.push({
@@ -300,6 +326,11 @@ export default function UploadManager() {
 
               const altitude = image.altitude_egm96 ?? image.altitude_wgs84;
 
+              const cameraName = extractCameraNameFromPath(image.originalPath);
+              const cameraId = cameraName
+                ? cameraNameToId[cameraName]
+                : undefined;
+
               const { data: img } = await (client.models.Image.create as any)({
                 projectId,
                 width: image.width,
@@ -316,6 +347,7 @@ export default function UploadManager() {
                   (elevation > 0 && altitude
                     ? altitude - elevation
                     : undefined),
+                cameraId,
               });
               if (img) {
                 createdImages.push({
