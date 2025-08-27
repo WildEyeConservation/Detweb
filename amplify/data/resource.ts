@@ -279,6 +279,9 @@ const schema = a
         index('setId')
           .sortKeys(['confidence'])
           .queryField('locationsBySetIdAndConfidence'),
+        index('projectId')
+          .sortKeys(['source'])
+          .queryField('locationsByProjectIdAndSource'),
       ]),
     Observation: a
       .model({
