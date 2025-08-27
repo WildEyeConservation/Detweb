@@ -1,7 +1,7 @@
-import { Form, Spinner, Button } from 'react-bootstrap';
-import { useState, useContext, useEffect, useCallback, useRef } from 'react';
-import { GlobalContext, UserContext } from '../Context';
-import Select from 'react-select';
+import { Form, Spinner, Button } from "react-bootstrap";
+import { useState, useContext, useEffect, useCallback, useRef } from "react";
+import { GlobalContext, UserContext } from "../Context";
+import Select from "react-select";
 
 export default function ProcessImages({
   projectId,
@@ -44,7 +44,7 @@ export default function ProcessImages({
     if (!model) return;
     setLoading(true);
     // Paginated fetch with cancellation
-    let allImages: any[] = [];
+    let allImages: { id: string; originalPath: string }[] = [];
     let nextToken: string | null | undefined = undefined;
     let imgCount = 0;
     do {
@@ -52,18 +52,18 @@ export default function ProcessImages({
         setLoading(false);
         return;
       }
-      const res: any = await client.models.Image.imagesByProjectId({
-        projectId,
-        selectionSet: ['id', 'originalPath'],
-        nextToken,
-      });
-      allImages = allImages.concat(res.data);
-      nextToken = res.nextToken;
-      imgCount += res.data.length;
+      const res = await client.models.Image.imagesByProjectId(
+        { projectId },
+        { selectionSet: ["id", "originalPath"], nextToken }
+      );
+      const page: { id: string; originalPath: string }[] = res.data ?? [];
+      allImages = allImages.concat(page);
+      nextToken = res.nextToken as string | null | undefined;
+      imgCount += page.length;
       setImagesLoaded(imgCount);
     } while (nextToken);
 
-    let allLocations: any[] = [];
+    let allLocations: { id: string; imageId: string; source: string }[] = [];
     nextToken = undefined;
     let locCount = 0;
     do {
@@ -71,17 +71,21 @@ export default function ProcessImages({
         setLoading(false);
         return;
       }
-      const res: any = await client.models.Location.list({
-        selectionSet: ['id', 'imageId', 'source'],
-        filter: {
-          projectId: { eq: projectId },
-          source: { contains: model.value },
+      const res = await client.models.Location.locationsByProjectIdAndSource(
+        {
+          projectId,
+          source: { beginsWith: model.value },
         },
-        nextToken,
-      });
-      allLocations = allLocations.concat(res.data);
-      nextToken = res.nextToken;
-      locCount += res.data.length;
+        {
+          selectionSet: ["id", "imageId", "source"],
+          nextToken,
+        }
+      );
+      const page: { id: string; imageId: string; source: string }[] =
+        res.data ?? [];
+      allLocations = allLocations.concat(page);
+      nextToken = res.nextToken as string | null | undefined;
+      locCount += page.length;
       setLocationsLoaded(locCount);
     } while (nextToken);
 
@@ -123,15 +127,15 @@ export default function ProcessImages({
     });
 
     if (!locationSet) {
-      console.error('Failed to create location set');
-      alert('Something went wrong, please try again.');
+      console.error("Failed to create location set");
+      alert("Something went wrong, please try again.");
       return;
     }
 
     const BATCH_SIZE = 500;
 
     switch (model.value) {
-      case 'scoutbotv3':
+      case "scoutbotv3":
         for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
           const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map(
@@ -148,11 +152,11 @@ export default function ProcessImages({
 
           await client.models.Project.update({
             id: projectId,
-            status: 'processing-scoutbot',
+            status: "processing-scoutbot",
           });
         }
         break;
-      case 'heatmap':
+      case "heatmap":
         for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
           const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map((image) => image.originalPath);
@@ -164,7 +168,7 @@ export default function ProcessImages({
 
         await client.models.Project.update({
           id: projectId,
-          status: 'processing-heatmap-busy',
+          status: "processing-heatmap-busy",
         });
         break;
     }
@@ -176,7 +180,15 @@ export default function ProcessImages({
     onClose();
 
     setLoading(false);
-  }, [model, projectId, unprocessedImages, client, backend, getSqsClient]);
+  }, [
+    model,
+    projectId,
+    unprocessedImages,
+    client,
+    backend,
+    getSqsClient,
+    onClose,
+  ]);
 
   useEffect(() => {
     setHandleSubmit(() => processImages);
@@ -189,44 +201,44 @@ export default function ProcessImages({
   return (
     <Form>
       <Form.Group>
-        <Form.Label className='mb-0'>Model</Form.Label>
+        <Form.Label className="mb-0">Model</Form.Label>
         <Select
           value={model}
           onChange={(m) => setModel(m)}
           options={[
-            { label: 'ScoutBot', value: 'scoutbotv3' },
-            { label: 'Elephant Detection Nadir', value: 'heatmap' },
+            { label: "ScoutBot", value: "scoutbotv3" },
+            { label: "Elephant Detection Nadir", value: "heatmap" },
           ]}
-          placeholder='Select a model'
-          className='text-black'
+          placeholder="Select a model"
+          className="text-black"
         />
         <Button
-          variant='primary'
+          variant="primary"
           onClick={scanImages}
           disabled={!model || loading}
-          className='mt-2'
+          className="mt-2"
         >
           Scan
         </Button>
         {loading ? (
-          <div className='d-flex flex-column align-items-center'>
-            <Spinner animation='border' role='status' />
-            <p className='mb-0'>Determining images to process...</p>
-            <p className='mb-1'>Found {imagesLoaded ?? 0} images</p>
+          <div className="d-flex flex-column align-items-center">
+            <Spinner animation="border" role="status" />
+            <p className="mb-0">Determining images to process...</p>
+            <p className="mb-1">Found {imagesLoaded ?? 0} images</p>
             {locationsLoaded !== null && (
               <>
-                <p className='mb-0'>Searching for detections on images...</p>
-                <p className='mb-0'>Found {locationsLoaded} detections</p>
+                <p className="mb-0">Searching for detections on images...</p>
+                <p className="mb-0">Found {locationsLoaded} detections</p>
               </>
             )}
           </div>
         ) : scanned ? (
           unprocessedImages.length > 0 ? (
-            <p className='mb-0 mt-2'>
+            <p className="mb-0 mt-2">
               Found {unprocessedImages.length} unprocessed images
             </p>
           ) : (
-            <p className='mb-0 mt-2'>All images have been processed</p>
+            <p className="mb-0 mt-2">All images have been processed</p>
           )
         ) : null}
       </Form.Group>
