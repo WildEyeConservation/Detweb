@@ -242,7 +242,10 @@ export default function UploadManager() {
             const altitude =
               imageData.altitude_egm96 ?? imageData.altitude_wgs84;
 
-            const cameraName = extractCameraNameFromPath(originalPath);
+            const cameraName =
+              existingCameras.length === 1
+                ? 'Survey Camera'
+                : extractCameraNameFromPath(originalPath);
             const cameraId = cameraName
               ? cameraNameToId[cameraName]
               : undefined;
@@ -326,7 +329,10 @@ export default function UploadManager() {
 
               const altitude = image.altitude_egm96 ?? image.altitude_wgs84;
 
-              const cameraName = extractCameraNameFromPath(image.originalPath);
+              const cameraName =
+                existingCameras.length === 1
+                  ? 'Survey Camera'
+                  : extractCameraNameFromPath(image.originalPath);
               const cameraId = cameraName
                 ? cameraNameToId[cameraName]
                 : undefined;
