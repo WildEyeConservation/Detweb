@@ -3,6 +3,7 @@ import { env } from '$amplify/env/runImageRegistration';
 import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 import { SendMessageBatchCommand, SQSClient } from '@aws-sdk/client-sqs';
+import type { SendMessageBatchRequestEntry } from '@aws-sdk/client-sqs';
 import type { GraphQLResult } from '@aws-amplify/api-graphql';
 import {
   cameraOverlapsByProjectId,
@@ -49,6 +50,44 @@ interface PagedList<T> {
   nextToken: string | null | undefined;
 }
 
+type SqsEntry = SendMessageBatchRequestEntry;
+
+// Simple exponential backoff for transient errors on GraphQL calls
+async function gqlWithRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastError: unknown;
+  for (let attemptIndex = 0; attemptIndex < attempts; attemptIndex++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const delayMs = 300 * 2 ** attemptIndex + Math.random() * 200;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  throw lastError as Error;
+}
+
+// Concurrency limiter for running many async tasks without overwhelming the runtime
+async function withConcurrency<T>(
+  tasks: Array<() => Promise<T>>,
+  limit: number
+): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (true) {
+      const currentIndex = nextIndex++;
+      if (currentIndex >= tasks.length) return;
+      results[currentIndex] = await tasks[currentIndex]();
+    }
+  }
+
+  const workerCount = Math.min(limit, tasks.length || 1);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
 // Helper function to handle pagination for GraphQL queries
 async function fetchAllPages<T, K extends string>(
   queryFn: (
@@ -86,13 +125,15 @@ async function handlePair(image1: Image, image2: Image, masks: number[][][]) {
 
     const {
       data: { getImageNeighbour: existingNeighbour },
-    } = await client.graphql({
-      query: getImageNeighbour,
-      variables: {
-        image1Id: image1.id,
-        image2Id: image2.id,
-      },
-    });
+    } = (await gqlWithRetry(() =>
+      client.graphql({
+        query: getImageNeighbour,
+        variables: {
+          image1Id: image1.id,
+          image2Id: image2.id,
+        },
+      })
+    )) as GraphQLResult<{ getImageNeighbour: any }> as any;
 
     if (existingNeighbour?.homography) {
       console.log(
@@ -102,15 +143,31 @@ async function handlePair(image1: Image, image2: Image, masks: number[][][]) {
     }
 
     if (!existingNeighbour) {
-      await client.graphql({
-        query: createImageNeighbour,
-        variables: {
-          input: {
-            image1Id: image1.id,
-            image2Id: image2.id,
-          },
-        },
-      });
+      try {
+        await gqlWithRetry(() =>
+          client.graphql({
+            query: createImageNeighbour,
+            variables: {
+              input: {
+                image1Id: image1.id,
+                image2Id: image2.id,
+              },
+            },
+          })
+        );
+      } catch (e: any) {
+        const gqlErrors: any[] = e?.errors ?? [];
+        const isConditionalFailure = gqlErrors.some((x) =>
+          String(x?.errorType ?? '').includes('ConditionalCheckFailedException')
+        );
+        if (isConditionalFailure) {
+          console.log(
+            `Neighbour already exists (created concurrently) for ${image1.id}/${image2.id}`
+          );
+        } else {
+          throw e;
+        }
+      }
     }
 
     // Return the message instead of sending it immediately
@@ -133,23 +190,29 @@ async function handlePair(image1: Image, image2: Image, masks: number[][][]) {
   }
 }
 
-function processImages(images: Image[], masks: number[][][]) {
-  const pairPromises: Array<ReturnType<typeof handlePair>> = [];
-
+function addAdjacentPairTasks(
+  images: Image[],
+  masks: number[][][],
+  seenPairs: Set<string>,
+  outTasks: Array<() => Promise<SqsEntry | null>>
+) {
   for (let i = 0; i < images.length - 1; i++) {
     const image1 = images[i];
     const image2 = images[i + 1];
-    if ((image2.timestamp ?? 0) - (image1.timestamp ?? 0) < 5) {
-      pairPromises.push(handlePair(image1, image2, masks));
+    const timeDeltaSeconds = (image2.timestamp ?? 0) - (image1.timestamp ?? 0);
+    if (timeDeltaSeconds < 5) {
+      const key = [image1.id, image2.id].sort().join('|');
+      if (!seenPairs.has(key)) {
+        seenPairs.add(key);
+        outTasks.push(() => handlePair(image1, image2, masks));
+      }
     } else {
       console.log(
         `Skipping pair ${image1.id} and ${image2.id} because the time difference is greater than 5 seconds`,
-        (image2.timestamp ?? 0) - (image1.timestamp ?? 0)
+        timeDeltaSeconds
       );
     }
   }
-
-  return pairPromises.filter((promise) => promise !== null);
 }
 
 export const handler: Handler = async (event, context) => {
@@ -207,12 +270,12 @@ export const handler: Handler = async (event, context) => {
       return acc;
     }, {} as Record<string, Image[]>);
 
-    const pairPromises: Array<ReturnType<typeof handlePair>> = [];
+    const tasks: Array<() => Promise<SqsEntry | null>> = [];
+    const seenPairs = new Set<string>();
 
     // process images by camera
     Object.entries(imagesByCamera).forEach(([_, images]) => {
-      const camPairPromises = processImages(images, masks);
-      pairPromises.push(...camPairPromises);
+      addAdjacentPairTasks(images, masks, seenPairs, tasks);
     });
 
     // process images from overlapping cameras
@@ -225,15 +288,14 @@ export const handler: Handler = async (event, context) => {
         (a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0)
       );
 
-      const camPairPromises = processImages(mergedImages, masks);
-      pairPromises.push(...camPairPromises);
+      addAdjacentPairTasks(mergedImages, masks, seenPairs, tasks);
     });
 
     // process images with no camera
-    const noCamPairPromises = processImages(noCamImgs, masks);
-    pairPromises.push(...noCamPairPromises);
+    addAdjacentPairTasks(noCamImgs, masks, seenPairs, tasks);
 
-    const messages = (await Promise.all(pairPromises)).filter(
+    // Limit concurrency to prevent exhausting file descriptors and network resources
+    const messages = (await withConcurrency<SqsEntry | null>(tasks, 10)).filter(
       (msg): msg is NonNullable<typeof msg> => msg !== null
     );
 
