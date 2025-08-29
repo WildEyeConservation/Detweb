@@ -221,6 +221,7 @@ export default function DefineTransects({
   const [selectedTransectIds, setSelectedTransectIds] = useState<Set<number>>(
     new Set()
   );
+  const [drawnPolygonLayer, setDrawnPolygonLayer] = useState<L.Layer | null>(null);
   const [strataLines, setStrataLines] = useState<L.LatLngExpression[][]>([]);
   const [strataSections, setStrataSections] = useState<
     { coords: L.LatLngExpression[]; id: number }[]
@@ -228,6 +229,8 @@ export default function DefineTransects({
 
   // Add ref for map instance
   const mapRef = useRef<L.Map | null>(null);
+  // Track if we've already fitted the map bounds
+  const [hasFittedBounds, setHasFittedBounds] = useState(false);
 
   // Add state to track if existing transect data is present
   const [existingData, setExistingData] = useState<boolean>(false);
@@ -246,15 +249,7 @@ export default function DefineTransects({
     });
     return counts;
   }, [segmentedImages]);
-  const handleBulkMove = (imgIds: string[], targetTransectId: number) => {
-    const ids = new Set(imgIds);
-    setSegmentedImages((prev) =>
-      prev.map((si) =>
-        ids.has(si.id) ? { ...si, transectId: targetTransectId } : si
-      )
-    );
-    setSelectedTransectIds(new Set([targetTransectId]));
-  };
+
   const handleMergeSelectedInto = (targetTransectId: number) => {
     setSegmentedImages((prev) =>
       prev.map((si) =>
@@ -264,6 +259,13 @@ export default function DefineTransects({
       )
     );
     setSelectedTransectIds(new Set());
+    // Remove the drawn polygon after merging
+    if (drawnPolygonLayer) {
+      try {
+        drawnPolygonLayer.remove();
+      } catch {}
+      setDrawnPolygonLayer(null);
+    }
   };
   const clearStrata = () => {
     setExistingData(false);
@@ -951,21 +953,49 @@ export default function DefineTransects({
 
   // Fit map to image points on initial load
   useEffect(() => {
-    if (segmentedImages.length > 0 && mapRef.current && partsLoading === null) {
-      const bounds = L.latLngBounds(
-        segmentedImages.map((img) => {
-          const pos = adjustedPositions[img.id] || {
-            latitude: img.latitude,
-            longitude: img.longitude,
-          };
-          return [pos.latitude, pos.longitude] as [number, number];
-        })
-      );
+    if (segmentedImages.length > 0 && !hasFittedBounds) {
+      // Use a timeout to ensure map is fully rendered
+      const timeoutId = setTimeout(() => {
+        if (mapRef.current) {
+          try {
+            const points = segmentedImages.map((img) => {
+              const pos = adjustedPositions[img.id] || {
+                latitude: img.latitude,
+                longitude: img.longitude,
+              };
+              return [pos.latitude, pos.longitude] as [number, number];
+            }).filter(([lat, lng]) => {
+              // Filter out invalid coordinates
+              return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 &&
+                     !isNaN(lat) && !isNaN(lng);
+            });
 
-      // Add some padding to the bounds
-      mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+            if (points.length > 0) {
+              const bounds = L.latLngBounds(points);
+              console.log('Fitting map bounds to', points.length, 'points:', bounds);
+
+              // Add some padding to the bounds
+              mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+              setHasFittedBounds(true);
+            } else {
+              console.warn('No valid points found for fitting bounds');
+            }
+          } catch (error) {
+            console.error('Error fitting map bounds:', error);
+          }
+        } else {
+          console.warn('Map reference not available for fitting bounds');
+        }
+      }, 100); // Small delay to ensure map is rendered
+
+      return () => clearTimeout(timeoutId);
     }
-  }, [segmentedImages, adjustedPositions, partsLoading]);
+  }, [segmentedImages, adjustedPositions, hasFittedBounds]);
+
+  // Reset fit bounds flag when project changes
+  useEffect(() => {
+    setHasFittedBounds(false);
+  }, [projectId]);
 
 
 
@@ -1005,12 +1035,14 @@ export default function DefineTransects({
             <li>
               Right-click a point to view that transect's info (name/number and
               image count). If multiple transects are selected, right-click to
-              merge them.
+              merge them, or use the "Merge Selected Transects" button that appears
+              at the bottom of the map.
             </li>
             <li>
-              Use the polygon tool (top-right) to draw around points and merge
-              them into a transect. Points are merged into the majority transect
-              within the drawn area.
+              Use the polygon tool (top-right) to draw around points and select
+              all transects that have points within the drawn area. The polygon
+              will remain visible so you can see your selection. Use the "Merge
+              Selected Transects" button to merge them and remove the polygon.
             </li>
             <li>
               Define strata by selecting the polyline tool in the top right
@@ -1106,37 +1138,20 @@ export default function DefineTransects({
                         const pt = turf.point([pos.longitude, pos.latitude]);
                         return turf.booleanPointInPolygon(pt, poly);
                       });
-                      const enclosedIds = enclosedImgs.map(
-                        (i) => i.id as string
-                      );
-                      if (enclosedIds.length) {
-                        let target: number | null = null;
-                        if (selectedTransectIds.size === 1) {
-                          target = Array.from(selectedTransectIds)[0];
-                        } else {
-                          // majority transect among enclosed
-                          const counts: Record<number, number> = {};
-                          enclosedImgs.forEach((i) => {
-                            counts[i.transectId] =
-                              (counts[i.transectId] || 0) + 1;
-                          });
-                          const entries = Object.entries(counts).map(
-                            ([k, v]) => [Number(k), v as number]
-                          ) as [number, number][];
-                          entries.sort((a, b) => {
-                            if (b[1] !== a[1]) return b[1] - a[1];
-                            return a[0] - b[0];
-                          });
-                          target = entries.length ? entries[0][0] : null;
-                        }
-                        if (target !== null) {
-                          handleBulkMove(enclosedIds, target);
-                        }
+                      if (enclosedImgs.length) {
+                        // Select all transects that have points within the polygon
+                        const enclosedTransectIds = new Set(
+                          enclosedImgs.map((img) => img.transectId)
+                        );
+                        setSelectedTransectIds(enclosedTransectIds);
+                        // Keep the polygon visible and store reference for later removal
+                        setDrawnPolygonLayer(e.layer);
+                      } else {
+                        // No points found, remove the polygon immediately
+                        try {
+                          e.layer.remove();
+                        } catch {}
                       }
-                      // remove the drawn polygon
-                      try {
-                        e.layer.remove();
-                      } catch {}
                     }
                   }}
                 />
@@ -1332,6 +1347,40 @@ export default function DefineTransects({
                     );
                   })()}
                 </Popup>
+              )}
+              {/* Merge Selected Transects Button */}
+              {selectedTransectIds.size >= 2 && (
+                <div
+                  className='d-flex flex-row gap-2 p-2'
+                  style={{
+                    position: 'absolute',
+                    bottom: '10px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    zIndex: 1000,
+                    backgroundColor: 'rgba(255,255,255,0.9)',
+                    border: '2px solid rgba(0, 0, 0, 0.28)',
+                    borderRadius: '4px',
+                  }}
+                >
+                  <Button
+                    variant='primary'
+                    onClick={() => {
+                      const selected = Array.from(selectedTransectIds);
+                      const primary = Math.min(...selected);
+                      handleMergeSelectedInto(primary);
+                      // Remove the drawn polygon after merging
+                      if (drawnPolygonLayer) {
+                        try {
+                          drawnPolygonLayer.remove();
+                        } catch {}
+                        setDrawnPolygonLayer(null);
+                      }
+                    }}
+                  >
+                    Merge Selected Transects ({selectedTransectIds.size})
+                  </Button>
+                </div>
               )}
             </MapContainer>
           )}

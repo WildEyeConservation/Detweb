@@ -379,11 +379,7 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
                   marker: false,
                   polyline: false,
                 }}
-                edit={
-                  featureGroupRef.current
-                    ? { featureGroup: featureGroupRef.current }
-                    : {}
-                }
+                edit={{}}
               />
             </FeatureGroup>
             {validGpsData.map((point, index) => (
