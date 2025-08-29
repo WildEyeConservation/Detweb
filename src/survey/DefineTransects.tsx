@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { GlobalContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
 import { Form, Spinner, Button } from 'react-bootstrap';
@@ -8,7 +8,6 @@ import {
   CircleMarker,
   Popup,
   Polygon,
-  useMap,
   FeatureGroup,
 } from 'react-leaflet';
 import L from 'leaflet';
@@ -211,26 +210,24 @@ export default function DefineTransects({
   const [segmentedImages, setSegmentedImages] = useState<
     (any & { transectId: number })[]
   >([]);
-  const [contextMenu, setContextMenu] = useState<{
+  const [transectInfo, setTransectInfo] = useState<{
     position: L.LatLngExpression;
-    img: any;
-    mode: 'move' | 'merge';
+    transectId: number;
+  } | null>(null);
+  const [mergePrompt, setMergePrompt] = useState<{
+    position: L.LatLngExpression;
+    ids: number[];
   } | null>(null);
   const [selectedTransectIds, setSelectedTransectIds] = useState<Set<number>>(
     new Set()
   );
-  const [detailsPopup, setDetailsPopup] = useState<{
-    position: L.LatLngExpression;
-    img: any;
-  } | null>(null);
-  const [lastDblClick, setLastDblClick] = useState<{
-    imgId: string;
-    at: number;
-  } | null>(null);
   const [strataLines, setStrataLines] = useState<L.LatLngExpression[][]>([]);
   const [strataSections, setStrataSections] = useState<
     { coords: L.LatLngExpression[]; id: number }[]
   >([]);
+
+  // Add ref for map instance
+  const mapRef = useRef<L.Map | null>(null);
 
   // Add state to track if existing transect data is present
   const [existingData, setExistingData] = useState<boolean>(false);
@@ -242,13 +239,13 @@ export default function DefineTransects({
     const ids = segmentedImages.map((img) => img.transectId);
     return Array.from(new Set(ids)).sort((a, b) => a - b);
   }, [segmentedImages]);
-  const handleMove = (imgId: string, newTransectId: number) => {
-    setSegmentedImages((prev) =>
-      prev.map((si) =>
-        si.id === imgId ? { ...si, transectId: newTransectId } : si
-      )
-    );
-  };
+  const transectImageCounts = React.useMemo(() => {
+    const counts: Record<number, number> = {};
+    segmentedImages.forEach((si) => {
+      counts[si.transectId] = (counts[si.transectId] || 0) + 1;
+    });
+    return counts;
+  }, [segmentedImages]);
   const handleBulkMove = (imgIds: string[], targetTransectId: number) => {
     const ids = new Set(imgIds);
     setSegmentedImages((prev) =>
@@ -266,7 +263,7 @@ export default function DefineTransects({
           : si
       )
     );
-    setSelectedTransectIds(new Set([targetTransectId]));
+    setSelectedTransectIds(new Set());
   };
   const clearStrata = () => {
     setExistingData(false);
@@ -945,29 +942,32 @@ export default function DefineTransects({
     setStrataSections(regions.map((coords, i) => ({ coords, id: i + 1 })));
   }, [polygonCoords, strataLines, existingData]);
 
-  // component to fit map bounds to points
-  const FitBounds: React.FC<{ points: any[] }> = ({ points }) => {
-    const map = useMap();
-    useEffect(() => {
-      const valid = points.filter(
-        (p) => p.latitude != null && p.longitude != null
-      );
-      if (valid.length) {
-        const bounds = L.latLngBounds(
-          valid.map((p) => [p.latitude, p.longitude] as [number, number])
-        );
-        map.fitBounds(bounds);
-      }
-    }, [points, map]);
-    return null;
-  };
-
   useEffect(() => {
     if (partsLoading === null) return;
     if (partsLoading === 4) {
       setPartsLoading(null);
     }
   }, [partsLoading]);
+
+  // Fit map to image points on initial load
+  useEffect(() => {
+    if (segmentedImages.length > 0 && mapRef.current && partsLoading === null) {
+      const bounds = L.latLngBounds(
+        segmentedImages.map((img) => {
+          const pos = adjustedPositions[img.id] || {
+            latitude: img.latitude,
+            longitude: img.longitude,
+          };
+          return [pos.latitude, pos.longitude] as [number, number];
+        })
+      );
+
+      // Add some padding to the bounds
+      mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+    }
+  }, [segmentedImages, adjustedPositions, partsLoading]);
+
+
 
   // a simple palette for transect colors
   const transectColors = [
@@ -990,16 +990,7 @@ export default function DefineTransects({
     'lightcoral',
     'lightpink',
   ];
-  // limit displayed transects to three before and after current
-  const visibleTransectIds = contextMenu
-    ? (() => {
-        const current = contextMenu.img.transectId;
-        const idx = transectIds.indexOf(current);
-        const start = Math.max(0, idx - 2);
-        const end = Math.min(transectIds.length, idx + 3);
-        return transectIds.slice(start, end);
-      })()
-    : transectIds;
+  // right-click popup shows transect info only
 
   return (
     <Form>
@@ -1009,12 +1000,12 @@ export default function DefineTransects({
           <ul className='mb-0'>
             <li>
               Single-click a point to select its transect (Ctrl-click for
-              multi-select), double-click to view image details.
+              multi-select). Clicking a selected transect will deselect it.
             </li>
             <li>
-              Right-click a point to merge selected transects into that
-              transect. If you double-clicked the point first, right-click shows
-              the Move-to-Transect menu.
+              Right-click a point to view that transect's info (name/number and
+              image count). If multiple transects are selected, right-click to
+              merge them.
             </li>
             <li>
               Use the polygon tool (top-right) to draw around points and merge
@@ -1055,12 +1046,13 @@ export default function DefineTransects({
             </div>
           ) : (
             <MapContainer
+              ref={mapRef}
               style={{ height: '100%', width: '100%' }}
               center={[0, 0]}
               zoom={2}
               doubleClickZoom={false}
+              preferCanvas={false}
             >
-              <FitBounds points={images} />
               <TileLayer
                 attribution='&copy; OpenStreetMap contributors'
                 url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
@@ -1226,7 +1218,7 @@ export default function DefineTransects({
                   pathOptions={{
                     fillColor: strataColors[section.id % strataColors.length],
                     color: strataColors[section.id % strataColors.length],
-                    fillOpacity: 0.3,
+                    fillOpacity: 0.1,
                   }}
                 >
                   <Popup>
@@ -1254,7 +1246,7 @@ export default function DefineTransects({
                           : transectColors[
                               img.transectId % transectColors.length
                             ],
-                        weight: isSelected ? 5 : 1,
+                        weight: isSelected ? 2 : 1,
                         fillColor:
                           transectColors[
                             img.transectId % transectColors.length
@@ -1270,129 +1262,75 @@ export default function DefineTransects({
                           setSelectedTransectIds((prev) => {
                             const next = new Set(prev);
                             if (ctrl) {
-                              if (next.has(img.transectId))
-                                next.delete(img.transectId);
+                              if (next.has(img.transectId)) next.delete(img.transectId);
                               else next.add(img.transectId);
                             } else {
-                              next.clear();
-                              next.add(img.transectId);
+                              if (next.size === 1 && next.has(img.transectId)) {
+                                next.clear();
+                              } else {
+                                next.clear();
+                                next.add(img.transectId);
+                              }
                             }
                             return next;
                           });
                         },
-                        dblclick: (e: any) => {
-                          setDetailsPopup({ position: e.latlng, img });
-                          setLastDblClick({ imgId: img.id, at: Date.now() });
-                        },
                         contextmenu: (e: any) => {
-                          const isRecentDblClick =
-                            lastDblClick &&
-                            lastDblClick.imgId === img.id &&
-                            Date.now() - lastDblClick.at < 2000;
-                          setContextMenu({
-                            position: e.latlng,
-                            img,
-                            mode: isRecentDblClick ? 'move' : 'merge',
-                          });
+                          const selected = Array.from(selectedTransectIds);
+                          if (selected.length >= 2) {
+                            setTransectInfo(null);
+                            setMergePrompt({
+                              position: e.latlng,
+                              ids: selected.sort((a, b) => a - b),
+                            });
+                          } else {
+                            setMergePrompt(null);
+                            setTransectInfo({ position: e.latlng, transectId: img.transectId });
+                          }
                         },
                       }}
                     />
                   );
                 })}
-              {detailsPopup && (
+              {transectInfo && (
                 <Popup
-                  position={detailsPopup.position}
-                  eventHandlers={{ remove: () => setDetailsPopup(null) }}
+                  position={transectInfo.position}
+                  eventHandlers={{ remove: () => setTransectInfo(null) }}
                 >
                   <div>
                     <div>
-                      <strong>Transect:</strong> {detailsPopup.img.transectId}
-                    </div>
-                    {detailsPopup.img.timestamp && (
-                      <div>
-                        <strong>Timestamp:</strong>{' '}
-                        {new Date(detailsPopup.img.timestamp).toISOString()}
-                      </div>
-                    )}
-                    <div>
-                      <strong>Lat:</strong> {detailsPopup.img.latitude}
+                      <strong>Transect:</strong> {transectInfo.transectId}
                     </div>
                     <div>
-                      <strong>Lng:</strong> {detailsPopup.img.longitude}
+                      <strong>Images:</strong>{' '}
+                      {transectImageCounts[transectInfo.transectId] || 0}
                     </div>
                   </div>
                 </Popup>
               )}
-              {contextMenu && (
+              {mergePrompt && (
                 <Popup
-                  position={contextMenu.position}
-                  eventHandlers={{ remove: () => setContextMenu(null) }}
+                  position={mergePrompt.position}
+                  eventHandlers={{ remove: () => setMergePrompt(null) }}
                 >
-                  {contextMenu.mode === 'move' ? (
-                    <div>
-                      <strong>Move to transect:</strong>
-                      {visibleTransectIds.map((id) => (
-                        <div
-                          key={id}
-                          style={{
-                            cursor: 'pointer',
-                            color: transectColors[id % transectColors.length],
-                            margin: '4px 0',
-                          }}
-                          onClick={() => {
-                            handleMove(contextMenu.img.id, id);
-                            setContextMenu(null);
-                          }}
-                        >
-                          Transect {id}
-                        </div>
-                      ))}
+                  {(() => {
+                    const ids = mergePrompt.ids;
+                    const primary = Math.min(...ids);
+                    const label = ids.length === 2
+                      ? `Merge transect ${ids[0]} and ${ids[1]}`
+                      : `Merge ${ids.length} selected transects`;
+                    return (
                       <div
-                        style={{
-                          cursor: 'pointer',
-                          margin: '4px 0',
-                          color: 'black',
-                          fontStyle: 'italic',
-                        }}
+                        style={{ cursor: 'pointer' }}
                         onClick={() => {
-                          const nextId =
-                            transectIds.length > 0
-                              ? transectIds[transectIds.length - 1] + 1
-                              : 0;
-                          handleMove(contextMenu.img.id, nextId);
-                          setContextMenu(null);
+                          handleMergeSelectedInto(primary);
+                          setMergePrompt(null);
                         }}
                       >
-                        + New Transect
+                        {label}
                       </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <div style={{ marginBottom: '6px' }}>
-                        <strong>Merge:</strong>
-                      </div>
-                      {selectedTransectIds.size >= 2 ? (
-                        <div
-                          style={{
-                            cursor: 'pointer',
-                            margin: '4px 0',
-                            fontStyle: 'italic',
-                          }}
-                          onClick={() => {
-                            handleMergeSelectedInto(contextMenu.img.transectId);
-                            setContextMenu(null);
-                          }}
-                        >
-                          Merge selected transects into transect{' '}
-                          {contextMenu.img.transectId}
-                        </div>
-                      ) : (
-                        <div style={{ fontStyle: 'italic', color: 'gray' }}>
-                          Hold Ctrl and click to select multiple transects
-                        </div>
-                      )}
-                    </div>
-                  )}
+                    );
+                  })()}
                 </Popup>
               )}
             </MapContainer>
