@@ -1,9 +1,9 @@
-import React, { useContext, useEffect, useState } from "react";
-import { Modal, Button, Form } from "react-bootstrap";
-import { GlobalContext } from "./Context";
-import { Tab, Tabs } from "./Tabs";
-import { Schema } from "../amplify/data/resource";
-import LabelEditor from "./survey/LabelEditor";
+import React, { useContext, useEffect, useState } from 'react';
+import { Modal, Button, Form } from 'react-bootstrap';
+import { GlobalContext } from './Context';
+import { Tab, Tabs } from './Tabs';
+import { Schema } from '../amplify/data/resource';
+import LabelEditor from './survey/LabelEditor';
 
 interface EditAnnotationSetModalProps {
   show: boolean;
@@ -11,7 +11,7 @@ interface EditAnnotationSetModalProps {
   annotationSet: { id: string; name: string };
   setAnnotationSet?: (annotationSet: { id: string; name: string }) => void;
   setSelectedSets?: (sets: string[]) => void;
-  project: Schema["Project"]["type"];
+  project: Schema['Project']['type'];
   categories: { name: string }[];
   setEditSurveyTab: (tab: number) => void;
 }
@@ -25,7 +25,7 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
   project,
 }) => {
   const { client } = useContext(GlobalContext)!;
-  const [newName, setNewName] = useState<string>("");
+  const [newName, setNewName] = useState<string>('');
   const [busy, setBusy] = useState<boolean>(false);
   const [tab, setTab] = useState<number>(0);
   const [handleMove, setHandleMove] = useState<() => Promise<void>>(() =>
@@ -36,7 +36,7 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
   >(null);
 
   const handleSave = async () => {
-    if (annotationSet && newName.trim() !== "") {
+    if (annotationSet && newName.trim() !== '') {
       setBusy(true);
 
       const { data: result } = await client.models.AnnotationSet.update({
@@ -66,8 +66,14 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
   }, [annotationSet.name]);
 
   return (
-    <Modal show={show} onHide={handleClose} size="xl">
-      <Modal.Header closeButton>
+    <Modal
+      show={show}
+      onHide={handleClose}
+      size='xl'
+      backdrop='static'
+      keyboard={false}
+    >
+      <Modal.Header>
         <Modal.Title>Edit Annotation Set</Modal.Title>
       </Modal.Header>
       <Modal.Body>
@@ -76,35 +82,39 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
             setTab(tab);
           }}
         >
-          <Tab label="Basic">
-            <Form className="mt-1 d-flex flex-column gap-2">
-              <Form.Group controlId="annotationSetName">
-                <Form.Label>Name</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="Enter new name"
+          <Tab label='Basic'>
+            <fieldset disabled={busy}>
+              <Form className='mt-1 d-flex flex-column gap-2'>
+                <Form.Group controlId='annotationSetName'>
+                  <Form.Label>Name</Form.Label>
+                  <Form.Control
+                    type='text'
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder='Enter new name'
+                  />
+                </Form.Group>
+                <LabelEditor
+                  defaultLabels={project.annotationSets
+                    .find((set) => set.id === annotationSet.id)
+                    ?.categories.map((category) => ({
+                      id: category.id,
+                      name: category.name,
+                      shortcutKey: category.shortcutKey,
+                      color: category.color,
+                    }))}
+                  isEditing
+                  setHandleSave={setSaveLabels}
                 />
-              </Form.Group>
-              <LabelEditor
-                defaultLabels={project.annotationSets.find(
-                  (set) => set.id === annotationSet.id
-                )?.categories.map((category) => ({
-                  id: category.id,
-                  name: category.name,
-                  shortcutKey: category.shortcutKey,
-                  color: category.color,
-                }))}
-                setHandleSave={setSaveLabels}
-              />
-            </Form>
+              </Form>
+            </fieldset>
           </Tab>
         </Tabs>
       </Modal.Body>
       <Modal.Footer>
         <Button
-          variant="primary"
+          variant='primary'
+          disabled={busy}
           onClick={() => {
             switch (tab) {
               case 0:
@@ -117,13 +127,14 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
           }}
         >
           {busy
-            ? "Saving..."
+            ? 'Saving...'
             : tab === 1
-            ? "Move Observations"
-            : "Save Changes"}
+            ? 'Move Observations'
+            : 'Save Changes'}
         </Button>
         <Button
-          variant="dark"
+          variant='dark'
+          disabled={busy}
           onClick={() => {
             handleClose();
             if (setSelectedSets) {
