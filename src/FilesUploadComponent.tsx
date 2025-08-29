@@ -1217,6 +1217,16 @@ export function FileUploadCore({
                 : 'The selected images have GPS data. Would you like to upload a separate file containing the GPS data for all images?'}
             </Form.Text>
             <Form.Text className='d-block mb-0' style={{ fontSize: '12px' }}>
+              Your CSV file should have the following columns (their headings
+              may be different):
+              <ul className='mb-0'>
+                <li>timestamp and/or filepath</li>
+                <li>lat</li>
+                <li>lng</li>
+                <li>alt</li>
+              </ul>
+            </Form.Text>
+            <Form.Text className='d-block mb-0' style={{ fontSize: '12px' }}>
               If your data contains file paths instead of timestamps, the format
               should be:{' '}
               <code className='text-primary' style={{ fontSize: '14px' }}>
