@@ -1,7 +1,7 @@
 import { Form, Button } from "react-bootstrap";
 import { useRecordHotkeys } from "react-hotkeys-hook";
 import MyTable from "../Table";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useContext } from "react";
 import { GlobalContext } from "../Context";
 
@@ -16,6 +16,7 @@ export default function LabelEditor({
   defaultLabels = [],
   importLabels = [],
   setHandleSave,
+  isEditing = false,
 }: {
   defaultLabels?: Label[];
   importLabels?: Label[];
@@ -24,11 +25,17 @@ export default function LabelEditor({
       ((annotationSetId: string, projectId: string) => Promise<void>) | null
     >
   >;
+  isEditing?: boolean;
 }) {
   const [keys, { start, stop, isRecording }] = useRecordHotkeys();
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
   const [labels, setLabels] = useState<Label[]>(defaultLabels);
   const { client } = useContext(GlobalContext)!;
+  const defaultLabelsRef = useRef<Label[]>(defaultLabels);
+
+  useEffect(() => {
+    defaultLabelsRef.current = defaultLabels;
+  }, [defaultLabels]);
 
   const handleSave = useCallback(
     async (annotationSetId: string, projectId: string) => {
@@ -36,11 +43,16 @@ export default function LabelEditor({
         (l) => l.name !== "" && l.shortcutKey !== ""
       );
 
-      if (defaultLabels.length > 0) {
+      if (isEditing) {
+        const currentDefaultLabels: Label[] = defaultLabelsRef.current;
+        const filteredLabelIdsArray: string[] = filteredLabels.map((l: Label) => l.id);
+        const defaultLabelIdsArray: string[] = currentDefaultLabels.map((l: Label) => l.id);
+        const filteredLabelIds = new Set<string>(filteredLabelIdsArray);
+        const defaultLabelIds = new Set<string>(defaultLabelIdsArray);
         // labels to delete
         await Promise.all(
-          defaultLabels
-            .filter((l) => !filteredLabels.some((fl) => fl.id === l.id))
+          currentDefaultLabels
+            .filter((l) => !filteredLabelIds.has(l.id))
             .map(async (l) => {
               await client.models.Category.delete({ id: l.id });
             })
@@ -49,7 +61,7 @@ export default function LabelEditor({
         //labels to create
         await Promise.all(
           filteredLabels
-            .filter((l) => !defaultLabels.some((dl) => dl.id === l.id))
+            .filter((l) => !defaultLabelIds.has(l.id))
             .map(async (l) => {
               await client.models.Category.create({
                 projectId: projectId,
@@ -64,7 +76,7 @@ export default function LabelEditor({
         //labels to update
         await Promise.all(
           filteredLabels
-            .filter((l) => defaultLabels.some((dl) => dl.id === l.id))
+            .filter((l) => defaultLabelIds.has(l.id))
             .map(async (l) => {
               await client.models.Category.update({
                 id: l.id,
@@ -97,7 +109,7 @@ export default function LabelEditor({
         projectId: projectId,
       });
     },
-    [client, labels]
+    [client, labels, isEditing]
   );
 
   useEffect(() => {

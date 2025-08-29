@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useContext } from "react";
-import L from "leaflet";
-import { ProjectContext } from "./Context";
-import { Card, Button } from "react-bootstrap";
+import { useState, useEffect, useRef, useContext } from 'react';
+import L from 'leaflet';
+import { ProjectContext } from './Context';
+import { Card, Button } from 'react-bootstrap';
 
 /**
  *
@@ -18,10 +18,10 @@ import { Card, Button } from "react-bootstrap";
  */
 
 const POSITION_CLASSES = {
-  bottomleft: "leaflet-bottom leaflet-left",
-  bottomright: "leaflet-bottom leaflet-right",
-  topleft: "leaflet-top leaflet-left",
-  topright: "leaflet-top leaflet-right",
+  bottomleft: 'leaflet-bottom leaflet-left',
+  bottomright: 'leaflet-bottom leaflet-right',
+  topleft: 'leaflet-top leaflet-left',
+  topright: 'leaflet-top leaflet-right',
 };
 
 interface LegendProps {
@@ -34,7 +34,10 @@ interface LegendProps {
   categoriesOverride?: any[];
 }
 
-export function SideLegend({ annotationSetId, categoriesOverride }: LegendProps) {
+export function SideLegend({
+  annotationSetId,
+  categoriesOverride,
+}: LegendProps) {
   const {
     categoriesHook: { data: categories },
     currentCategory,
@@ -43,30 +46,34 @@ export function SideLegend({ annotationSetId, categoriesOverride }: LegendProps)
   const cats = categoriesOverride ?? categories;
 
   return (
-    <Card className="d-none d-md-flex flex-column h-100 overflow-hidden">
+    <Card className='d-none d-md-flex flex-column h-100 overflow-hidden'>
       <Card.Header>
-        <Card.Title className="d-flex flex-row align-items-center gap-2 mb-2">
+        <Card.Title className='d-flex flex-row align-items-center gap-2 mb-2'>
           <span>Legend</span>
         </Card.Title>
-        <span className="text-muted" style={{ fontSize: "14px" }}>
-          Select a label to annotate with or use the shortcut key
+        <span className='text-muted' style={{ fontSize: '14px' }}>
+          Click on a label to annotate with or use the shortcut key
         </span>
+        {/* <span className='text-muted' style={{ fontSize: '14px' }}>
+          Select a label to annotate with or use the shortcut key
+        </span> */}
       </Card.Header>
-      <Card.Body className="d-flex flex-column gap-2 overflow-auto">
+      <Card.Body className='d-flex flex-column gap-2 overflow-auto'>
         {cats
           ?.filter((c) => c.annotationSetId === annotationSetId)
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((category) => (
             <Button
-              variant={currentCategory?.id === category.id ? "info" : "primary"}
+              variant={'primary'}
+              // variant={currentCategory?.id === category.id ? "info" : "primary"}
               key={category.id}
-              className="d-flex flex-row align-items-center justify-content-between gap-2"
+              className='d-flex flex-row align-items-center justify-content-between gap-2'
               onClick={() => setCurrentCategory(category)}
             >
-              <div className="d-flex flex-row align-items-center gap-2">
+              <div className='d-flex flex-row align-items-center gap-2'>
                 <div
-                  style={{ backgroundColor: category.color || "#000" }}
-                  className="rounded-circle p-2"
+                  style={{ backgroundColor: category.color || '#000' }}
+                  className='rounded-circle p-2'
                 ></div>
                 <div>{category.name}</div>
               </div>
@@ -105,16 +112,16 @@ export function MapLegend({
     <div
       ref={divRef}
       className={
-        positionClass + (alwaysVisible ? " d-block" : " d-block d-md-none")
+        positionClass + (alwaysVisible ? ' d-block' : ' d-block d-md-none')
       }
     >
-      <div className="leaflet-control leaflet-bar">
+      <div className='leaflet-control leaflet-bar'>
         <div
-          className="info legend"
+          className='info legend'
           onMouseEnter={() => setExpanded(true)}
           onMouseLeave={() => setExpanded(false)}
         >
-          <div className="d-flex flex-column">
+          <div className='d-flex flex-column'>
             {expanded
               ? cats
                   ?.filter((c) => c.annotationSetId === annotationSetId)
@@ -125,23 +132,23 @@ export function MapLegend({
                         key={index}
                         onClick={() => setCurrentCategory(item)}
                         style={{
-                          display: "flex",
-                          flexDirection: "row",
+                          display: 'flex',
+                          flexDirection: 'row',
                           backgroundColor:
                             currentCategory?.id === item.id
-                              ? "#bdbebf"
-                              : "transparent",
-                          padding: "8px",
+                              ? '#bdbebf'
+                              : 'transparent',
+                          padding: '8px',
                         }}
                       >
-                        <i style={{ background: item.color || "#000" }}></i>
+                        <i style={{ background: item.color || '#000' }}></i>
                         <div
                           style={{
-                            display: "flex",
-                            flexDirection: "row",
-                            width: "100%",
-                            alignItems: "center",
-                            justifyContent: "space-between",
+                            display: 'flex',
+                            flexDirection: 'row',
+                            width: '100%',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
                           }}
                         >
                           <div>{item.name}</div>
@@ -150,7 +157,7 @@ export function MapLegend({
                       </div>
                     );
                   })
-              : "Legend"}
+              : 'Legend'}
           </div>
         </div>
       </div>

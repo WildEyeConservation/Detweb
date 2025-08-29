@@ -226,7 +226,6 @@ export function useLaunchTask(
       const batchSize = 10;
       // Compute number of SQS send chunks for progress
       const progressChunks = Math.ceil(allLocations.length / batchSize);
-      onProgress?.(`Sending ${progressChunks} chunks`);
       const batchPromises: Promise<any>[] = [];
 
       for (let i = 0; i < allLocations.length; i += batchSize) {
@@ -274,7 +273,11 @@ export function useLaunchTask(
                 )
               )
               .then(() =>
-                onProgress?.(`Sent chunk ${batchNumber} of ${progressChunks}`)
+                onProgress?.(
+                  `Creating job ${Math.floor(
+                    (batchNumber / progressChunks) * 100
+                  )}%`
+                )
               )
           );
           batchPromises.push(sendTask);
@@ -282,7 +285,6 @@ export function useLaunchTask(
       }
 
       await Promise.all(batchPromises);
-      onProgress?.('All chunks sent');
       // Update DB with total worker batches (based on UI batch size)
       await client.models.Queue.update({
         id: mainQueue.id,
