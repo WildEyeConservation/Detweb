@@ -39,6 +39,7 @@ interface CreateTaskProps {
     React.SetStateAction<(() => Promise<string>) | null>
   >;
   setLaunchDisabled: React.Dispatch<React.SetStateAction<boolean>>;
+  disabled?: boolean;
 }
 
 interface ImageDimensions {
@@ -54,6 +55,7 @@ function CreateTask({
   labels,
   setHandleCreateTask,
   setLaunchDisabled,
+  disabled = false,
 }: CreateTaskProps) {
   const { client, backend } = useContext(GlobalContext)!;
   const { getSqsClient } = useContext(UserContext)!;
@@ -99,7 +101,12 @@ function CreateTask({
     MultiValue<CategoryOption> | SingleValue<CategoryOption>
   >([]);
   const [loadingImages, setLoadingImages] = useState<boolean>(false);
+  const [imagesLoaded, setImagesLoaded] = useState<number>(0);
   const [launching, setLaunching] = useState<boolean>(false);
+  const [numLocationsCreated, setNumLocationsCreated] = useState<number>(0);
+  const [numLocationsPlanned, setNumLocationsPlanned] = useState<number>(0);
+  // Add development subset number for selecting images in development mode
+  const [subsetN, setSubsetN] = useState<number>(1);
 
   // Dev-only: per-transect subsetting based on geo + timestamps
   const hasDevGeoTransect = useMemo(() => {
@@ -351,22 +358,26 @@ function CreateTask({
   }
 
   function getSidelapPixels() {
+    if (horizontalTiles <= 1) return 0;
     return Math.floor(
       (horizontalTiles * width - effectiveImageWidth) / (horizontalTiles - 1)
     );
   }
 
   function getOverlapPixels() {
+    if (verticalTiles <= 1) return 0;
     return Math.floor(
       (verticalTiles * height - effectiveImageHeight) / (verticalTiles - 1)
     );
   }
 
   function getSidelapPercent() {
+    if (horizontalTiles <= 1) return 0;
     return (getSidelapPixels() / width) * 100;
   }
 
   function getOverlapPercent() {
+    if (verticalTiles <= 1) return 0;
     return (getOverlapPixels() / height) * 100;
   }
 
@@ -494,6 +505,8 @@ function CreateTask({
     async function getAllImages() {
       setLoadingImages(true);
 
+      setImagesLoaded(0);
+
       // Gather all images across image sets
       const imagesArr: {
         timestamp: Nullable<number>;
@@ -525,6 +538,7 @@ function CreateTask({
             );
           nextToken = nextNextToken ?? undefined;
           imagesArr.push(...images.map(({ image }) => image));
+          setImagesLoaded((s: number) => s + images.length);
         } while (nextToken);
       }
       // Update state with all images
@@ -574,6 +588,19 @@ function CreateTask({
     }
   }, [loadingImages]);
 
+  const expectedImagesToUse = useMemo(() => {
+    if (loadingImages) return 0;
+    if (process.env.NODE_ENV === 'development') {
+      if (hasDevGeoTransect) return expectedCounts.total;
+      if (subsetN > 1) return Math.floor(allImages.length / Math.max(1, subsetN));
+    }
+    return allImages.length;
+  }, [loadingImages, hasDevGeoTransect, expectedCounts.total, subsetN, allImages.length]);
+
+  const expectedTiles = useMemo(() => {
+    return expectedImagesToUse * horizontalTiles * verticalTiles;
+  }, [expectedImagesToUse, horizontalTiles, verticalTiles]);
+
   const [setImagesCompleted, setTotalImages] = useUpdateProgress({
     taskId: `Create task (model guided)`,
     indeterminateTaskName: `Loading images`,
@@ -582,8 +609,6 @@ function CreateTask({
   });
 
   const [threshold, setThreshold] = useState(5); // New state variable for threshold
-  // Add development subset number for selecting images in development mode
-  const [subsetN, setSubsetN] = useState<number>(1);
 
   const handleSubmit = useCallback(
     async ({
@@ -594,6 +619,7 @@ function CreateTask({
       setTotalLocations: (steps: number) => void;
     }) => {
       setLaunching(true);
+      setNumLocationsCreated(0);
 
       // Development mode: subset images globally or per-transect with geo data
       let imagesToUse = allImages;
@@ -738,9 +764,9 @@ function CreateTask({
           }
           break;
         case 'tiled':
-          setTotalLocations(
-            imagesToUse.length * horizontalTiles * verticalTiles
-          );
+          const totalPlanned = imagesToUse.length * horizontalTiles * verticalTiles;
+          setTotalLocations(totalPlanned);
+          setNumLocationsPlanned(totalPlanned);
           const promises: Promise<void>[] = [];
           for (const {
             id,
@@ -749,15 +775,15 @@ function CreateTask({
           } of imagesToUse) {
             const effW = imgWidth;
             const effH = imgHeight;
-            const xStepSize = (effW - width) / (horizontalTiles - 1);
-            const yStepSize = (effH - height) / (verticalTiles - 1);
+            const xStepSize = horizontalTiles > 1 ? (effW - width) / (horizontalTiles - 1) : 0;
+            const yStepSize = verticalTiles > 1 ? (effH - height) / (verticalTiles - 1) : 0;
             for (let xStep = 0; xStep < horizontalTiles; xStep++) {
               for (let yStep = 0; yStep < verticalTiles; yStep++) {
                 const x = Math.round(
-                  (xStepSize ? xStep * xStepSize : 0) + width / 2
+                  (horizontalTiles > 1 ? xStep * xStepSize : 0) + width / 2
                 );
                 const y = Math.round(
-                  (yStepSize ? yStep * yStepSize : 0) + height / 2
+                  (verticalTiles > 1 ? yStep * yStepSize : 0) + height / 2
                 );
                 promises.push(
                   client.models.Location.create({
@@ -770,7 +796,10 @@ function CreateTask({
                     confidence: 1,
                     source: 'manual',
                     setId: locationSetId,
-                  }).then(() => setLocationsCompleted((s: number) => s + 1))
+                  }).then(() => {
+                    setLocationsCompleted((s: number) => s + 1);
+                    setNumLocationsCreated((s: number) => s + 1);
+                  })
                 );
               }
             }
@@ -1026,7 +1055,7 @@ function CreateTask({
             {loadingImages ? (
               <div className='d-flex justify-content-center align-items-center text-white'>
                 <Spinner animation='border' size='sm' className='me-2' />{' '}
-                Loading images...
+                Scanning images... ({imagesLoaded} images scanned)
               </div>
             ) : (
               <Form.Label
@@ -1036,6 +1065,11 @@ function CreateTask({
                 Detected image dimensions : {imageWidth}x{imageHeight}
               </Form.Label>
             )}
+            {!loadingImages && (
+              <div className='text-center text-white' style={{ fontSize: 'smaller' }}>
+                Expected tiles: {expectedTiles}
+              </div>
+            )}
             <Form.Group className='mb-3 mt-3'>
               <LabeledToggleSwitch
                 leftLabel='Specify number of tiles'
@@ -1044,31 +1078,31 @@ function CreateTask({
                 onChange={(checked) => {
                   setSpecifyTileDimensions(checked);
                 }}
-                disabled={loadingImages}
+                disabled={loadingImages || disabled}
               />
 
               <div className='row'>
                 <InputBox
                   label='Horizontal Tiles'
-                  enabled={!specifyTileDimensions && !loadingImages}
+                  enabled={!specifyTileDimensions && !loadingImages && !disabled}
                   getter={() => horizontalTiles}
                   setter={(x) => setHorizontalTiles(x)}
                 />
                 <InputBox
                   label='Vertical Tiles'
-                  enabled={!specifyTileDimensions && !loadingImages}
+                  enabled={!specifyTileDimensions && !loadingImages && !disabled}
                   getter={() => verticalTiles}
                   setter={(x) => setVerticalTiles(x)}
                 />
                 <InputBox
                   label='Width'
-                  enabled={specifyTileDimensions && !loadingImages}
+                  enabled={specifyTileDimensions && !loadingImages && !disabled}
                   getter={() => width}
                   setter={(x) => setWidth(x)}
                 />
                 <InputBox
                   label='Height'
-                  enabled={specifyTileDimensions && !loadingImages}
+                  enabled={specifyTileDimensions && !loadingImages && !disabled}
                   getter={() => height}
                   setter={(x) => setHeight(x)}
                 />
@@ -1082,30 +1116,30 @@ function CreateTask({
                 onChange={(checked) => {
                   setSpecifyOverlapInPercentage(checked);
                 }}
-                disabled={loadingImages}
+                disabled={loadingImages || disabled}
               />
               <div className='row'>
                 <InputBox
                   label='Minimum sidelap (px)'
-                  enabled={!specifyOverlapInPercentage && !loadingImages}
+                  enabled={!specifyOverlapInPercentage && !loadingImages && !disabled}
                   getter={() => minSidelap}
                   setter={(x) => setMinSidelap(x)}
                 />
                 <InputBox
                   label='Minimum overlap (px)'
-                  enabled={!specifyOverlapInPercentage && !loadingImages}
+                  enabled={!specifyOverlapInPercentage && !loadingImages && !disabled}
                   getter={() => minOverlap}
                   setter={(x) => setMinOverlap(x)}
                 />
                 <InputBox
                   label='Minimum sidelap (%)'
-                  enabled={specifyOverlapInPercentage && !loadingImages}
+                  enabled={specifyOverlapInPercentage && !loadingImages && !disabled}
                   getter={() => minSidelapPercentage}
                   setter={(x) => setMinSidelapPercentage(x)}
                 />
                 <InputBox
                   label='Minimum overlap (%)'
-                  enabled={specifyOverlapInPercentage && !loadingImages}
+                  enabled={specifyOverlapInPercentage && !loadingImages && !disabled}
                   getter={() => minOverlapPercentage}
                   setter={(x) => setMinOverlapPercentage(x)}
                 />
@@ -1145,7 +1179,7 @@ function CreateTask({
                   setMinY(0);
                   setMaxY(imageHeight!);
                 }}
-                disabled={loadingImages}
+                disabled={loadingImages || disabled}
               />
               {specifyBorders && (
                 <>
@@ -1156,24 +1190,24 @@ function CreateTask({
                     onChange={(checked) => {
                       setSpecifyBorderPercentage(checked);
                     }}
-                    disabled={loadingImages}
+                    disabled={loadingImages || disabled}
                   />
                   <div className='row'>
                     <InputBox
                       label='Minimum X (px)'
-                      enabled={!specifyBorderPercentage && !loadingImages}
+                      enabled={!specifyBorderPercentage && !loadingImages && !disabled}
                       getter={() => minX}
                       setter={(x) => setMinX(x)}
                     />
                     <InputBox
                       label='Minimum Y (px)'
-                      enabled={!specifyBorderPercentage && !loadingImages}
+                      enabled={!specifyBorderPercentage && !loadingImages && !disabled}
                       getter={() => minY}
                       setter={(x) => setMinY(x)}
                     />
                     <InputBox
                       label='Minimum X (%)'
-                      enabled={specifyBorderPercentage && !loadingImages}
+                      enabled={specifyBorderPercentage && !loadingImages && !disabled}
                       getter={() => Math.round((minX / imageWidth!) * 100)}
                       setter={(x) =>
                         setMinX(Math.round((imageWidth! * x) / 100))
@@ -1181,7 +1215,7 @@ function CreateTask({
                     />
                     <InputBox
                       label='Minimum Y (%)'
-                      enabled={specifyBorderPercentage && !loadingImages}
+                      enabled={specifyBorderPercentage && !loadingImages && !disabled}
                       getter={() => Math.round((minY / imageHeight!) * 100)}
                       setter={(x) =>
                         setMinY(Math.round((imageHeight! * x) / 100))
@@ -1191,19 +1225,19 @@ function CreateTask({
                   <div className='row'>
                     <InputBox
                       label='Maximum X (px)'
-                      enabled={!specifyBorderPercentage && !loadingImages}
+                      enabled={!specifyBorderPercentage && !loadingImages && !disabled}
                       getter={() => maxX}
                       setter={(x) => setMaxX(x)}
                     />
                     <InputBox
                       label='Maximum Y (px)'
-                      enabled={!specifyBorderPercentage && !loadingImages}
+                      enabled={!specifyBorderPercentage && !loadingImages && !disabled}
                       getter={() => maxY}
                       setter={(x) => setMaxY(x)}
                     />
                     <InputBox
                       label='Maximum X (%)'
-                      enabled={specifyBorderPercentage && !loadingImages}
+                      enabled={specifyBorderPercentage && !loadingImages && !disabled}
                       getter={() => Math.round((maxX / imageWidth!) * 100)}
                       setter={(x) =>
                         setMaxX(Math.round((imageWidth! * x) / 100))
@@ -1211,7 +1245,7 @@ function CreateTask({
                     />
                     <InputBox
                       label='Maximum Y (%)'
-                      enabled={specifyBorderPercentage && !loadingImages}
+                      enabled={specifyBorderPercentage && !loadingImages && !disabled}
                       getter={() => Math.round((maxY / imageHeight!) * 100)}
                       setter={(x) =>
                         setMaxY(Math.round((imageHeight! * x) / 100))
@@ -1224,7 +1258,7 @@ function CreateTask({
             {launching && (
               <div className='d-flex justify-content-center align-items-center'>
                 <Spinner animation='border' size='sm' className='me-2' />
-                Preparing task...
+                {`Creating tile ${numLocationsCreated} of ${numLocationsPlanned}`}
               </div>
             )}
           </Form.Group>
@@ -1244,6 +1278,7 @@ function CreateTask({
                 }
               }}
               value={modelId}
+              disabled={disabled}
             >
               <option>Select AI model to use to guide annotation</option>
               <option value='ivx'>Elephant detection (nadir)</option>
@@ -1261,11 +1296,13 @@ function CreateTask({
                   value={scoutbotFile ? scoutbotFile.name : ''}
                   placeholder='Select a ScoutBot export file'
                   onClick={() => fileInputRef.current?.click()}
+                  disabled={disabled}
                 />
                 <Button
                   variant='outline-primary'
                   onClick={() => fileInputRef.current?.click()}
                   className='ms-2'
+                  disabled={disabled}
                 >
                   Browse
                 </Button>
@@ -1281,6 +1318,7 @@ function CreateTask({
                   }
                 }}
                 accept='.csv'
+                disabled={disabled}
               />
             </Form.Group>
           )}
@@ -1295,6 +1333,7 @@ function CreateTask({
               onChange={(e) => {
                 setSelectedCategories(e.target.value);
               }}
+              disabled={disabled}
             >
               {labels.map((label) => (
                 <option key={label.id} value={label.id}>

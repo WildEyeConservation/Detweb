@@ -13,6 +13,7 @@ interface TabsProps {
   onTabChange?: (tab: number) => void;
   className?: string;
   sharedChild?: React.ReactNode;
+  disableSwitching?: boolean;
 }
 
 export const Tab: React.FC<TabProps> = ({ children, className }) => {
@@ -25,6 +26,7 @@ export const Tabs: React.FC<TabsProps> = ({
   onTabChange,
   className,
   sharedChild,
+  disableSwitching = false,
 }) => {
   const [activeTab, setActiveTab] = useState(defaultTab);
   const childrenArray = React.Children.toArray(children) as ReactElement<TabProps>[];
@@ -37,6 +39,7 @@ export const Tabs: React.FC<TabsProps> = ({
             key={index}
             className={`tab-label ${activeTab === index ? "bg-primary" : ""}`}
             onClick={() => {
+              if (disableSwitching) return;
               setActiveTab(index);
               onTabChange?.(index);
             }}

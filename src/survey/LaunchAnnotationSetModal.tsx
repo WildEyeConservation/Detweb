@@ -318,8 +318,10 @@ export default function LaunchAnnotationSetModal({
       </Modal.Header>
       <Modal.Body>
         <Form>
+          <fieldset disabled={launching}>
           <Tabs
             onTabChange={(tab) => {
+              if (launching) return;
               switch (tab) {
                 case 0:
                   setTaskType('species-labelling');
@@ -331,6 +333,7 @@ export default function LaunchAnnotationSetModal({
                   break;
               }
             }}
+            disableSwitching={launching}
             sharedChild={
               <div className=''>
                 {hasStandardOptions && (
@@ -535,6 +538,7 @@ export default function LaunchAnnotationSetModal({
                       options={modelOptions}
                       placeholder='Select a model'
                       className='text-black'
+                      isDisabled={launching}
                     />
                   </Form.Group>
                 ) : (
@@ -557,6 +561,7 @@ export default function LaunchAnnotationSetModal({
                   setHandleCreateTask={setHandleCreateTask}
                   projectId={project.id}
                   setLaunchDisabled={setLaunchDisabled}
+                  disabled={launching}
                 />
               )}
             </Tab>
@@ -564,6 +569,7 @@ export default function LaunchAnnotationSetModal({
               <></>
             </Tab>
           </Tabs>
+          </fieldset>
         </Form>
         {progressMessage && (
           <p className='mt-3 text-center text-muted'>{progressMessage}</p>
