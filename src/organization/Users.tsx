@@ -28,6 +28,9 @@ export default function Users({
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
   const { user: authUser } = useContext(UserContext)!;
   const { users } = useUsers();
+
+  // Only show users when both users and membership data are loaded
+  const isLoading = !users || !hook.data;
   const [userToEdit, setUserToEdit] = useState<{
     id: string;
     name: string;
@@ -112,65 +115,67 @@ export default function Users({
     { content: 'Remove' },
   ];
 
-  const tableData = hook.data?.map((membership) => {
-    const user = users?.find((user) => user.id === membership.userId);
-    return {
-      id: user?.id,
-      rowData: [
-        user?.name,
-        user?.email,
-        <LabeledToggleSwitch
-          className="mb-0"
-          leftLabel="No"
-          rightLabel="Yes"
-          checked={membership.isAdmin ?? false}
-          onChange={(checked) => {
-            if (user?.id === authUser.userId) {
-              alert('You cannot change your own admin status');
-              return;
-            }
-            updateUser(membership.userId, checked);
-          }}
-        />,
-        <Button
-          className="fixed-width-button"
-          disabled={
-            process.env.NODE_ENV === 'development'
-              ? false
-              : membership.isAdmin
-              ? true
-              : false
-          }
-          variant={'info'}
-          onClick={() => {
-            setUserToEdit({
-              id: user?.id || '',
-              name: user?.name || '',
-              organizationName: organization.name,
-            });
-            showModal('exceptions');
-          }}
-        >
-          Edit
-        </Button>,
-        <Button
-          className="fixed-width-button"
-          variant="danger"
-          disabled={user?.id === authUser.userId}
-          onClick={() => {
-            setUserToEdit({
-              id: user?.id || '',
-              name: user?.name || '',
-              organizationName: organization.name,
-            });
-            showModal('removeUser');
-          }}
-        >
-          Remove user
-        </Button>,
-      ],
-    };
-  });
+  const tableData = isLoading
+    ? []
+    : hook.data.map((membership) => {
+        const user = users.find((user) => user.id === membership.userId);
+        return {
+          id: membership.organizationId + membership.userId,
+          rowData: [
+            user?.name,
+            user?.email,
+            <LabeledToggleSwitch
+              className='mb-0'
+              leftLabel='No'
+              rightLabel='Yes'
+              checked={membership.isAdmin ?? false}
+              onChange={(checked) => {
+                if (user?.id === authUser.userId) {
+                  alert('You cannot change your own admin status');
+                  return;
+                }
+                updateUser(membership.userId, checked);
+              }}
+            />,
+            <Button
+              className='fixed-width-button'
+              disabled={
+                process.env.NODE_ENV === 'development'
+                  ? false
+                  : membership.isAdmin
+                  ? true
+                  : false
+              }
+              variant={'info'}
+              onClick={() => {
+                setUserToEdit({
+                  id: user?.id || '',
+                  name: user?.name || '',
+                  organizationName: organization.name,
+                });
+                showModal('exceptions');
+              }}
+            >
+              Edit
+            </Button>,
+            <Button
+              className='fixed-width-button'
+              variant='danger'
+              disabled={user?.id === authUser.userId}
+              onClick={() => {
+                setUserToEdit({
+                  id: user?.id || '',
+                  name: user?.name || '',
+                  organizationName: organization.name,
+                });
+                showModal('removeUser');
+              }}
+            >
+              Remove user
+            </Button>,
+          ],
+        };
+      });
 
   useEffect(() => {
     setOnClick({
@@ -223,14 +228,14 @@ export default function Users({
 
   return (
     <>
-      <div className="d-flex flex-column gap-2 mt-3 w-100 overflow-x-auto overflow-y-visible">
+      <div className='d-flex flex-column gap-2 mt-3 w-100 overflow-x-auto overflow-y-visible'>
         <h5>Organisation Users</h5>
         <MyTable
           tableData={tableData}
           tableHeadings={tableHeadings}
           pagination={true}
           itemsPerPage={5}
-          emptyMessage="Loading users..."
+          emptyMessage={isLoading ? 'Loading users...' : 'No users found'}
         />
       </div>
       <InviteUserModal
@@ -257,8 +262,8 @@ export default function Users({
           setUserToEdit(null);
         }}
         onConfirm={handleRemoveUser}
-        title="Remove User"
-        body="Are you sure you want to remove this user?"
+        title='Remove User'
+        body='Are you sure you want to remove this user?'
       />
     </>
   );
