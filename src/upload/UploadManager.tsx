@@ -520,6 +520,17 @@ export default function UploadManager() {
 
       createdImages.sort((a, b) => a.timestamp - b.timestamp);
 
+      const {
+        data: [imageSet],
+      } = await client.models.ImageSet.imageSetsByProjectId({
+        projectId: projectId,
+      });
+
+      await client.models.ImageSet.update({
+        id: imageSet.id,
+        imageCount: createdImages.length,
+      });
+
       const metadata = (await metadataStore.getItem(projectId)) as {
         model: string;
         masks: number[][][];
