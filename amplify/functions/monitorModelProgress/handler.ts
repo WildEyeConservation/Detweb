@@ -332,6 +332,11 @@ export const handler: Handler = async (event, context) => {
         await updateProgress(project, projectImages, 'scoutbotv3');
       }
 
+      if (project.status?.includes('mad')) {
+        console.log(`Project ${project.id} is running MAD`);
+        await updateProgress(project, projectImages, 'mad-v2');
+      }
+
       if (project.status?.includes('heatmap-busy')) {
         console.log(`Project ${project.id} is running heatmapper`);
 

@@ -98,10 +98,19 @@ def _load_model():
         pre_norm = False
         masks = False
         no_aux_loss = True
+        # The MAD repo expects `aux_loss`; keep aux disabled for inference
+        aux_loss = False
         mask_loss_coef = 1.0
         dice_loss_coef = 1.0
         bbox_loss_coef = 5.0
         giou_loss_coef = 2.0
+        # Matcher and criterion settings required by build()
+        set_cost_class = 1.0
+        set_cost_bbox = 5.0
+        set_cost_giou = 2.0
+        eos_coef = 0.1
+        # Used when masks are enabled; keep None here
+        frozen_weights = None
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     args = Args()

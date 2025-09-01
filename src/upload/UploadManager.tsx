@@ -603,6 +603,28 @@ export default function UploadManager() {
         });
       }
 
+      if (model === 'mad') {
+        for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
+          const batch = createdImages.slice(i, i + BATCH_SIZE);
+          const batchStrings = batch.map(
+            (image) => `${image.id}---${image.originalPath}`
+          );
+
+          client.mutations.runMadDetector({
+            projectId: projectId,
+            images: batchStrings,
+            setId: locationSet.id,
+            bucket: backend.storage.buckets[1].bucket_name,
+            queueUrl: backend.custom.madDetectorTaskQueueUrl,
+          });
+        }
+
+        await client.models.Project.update({
+          id: projectId,
+          status: 'processing-mad',
+        });
+      }
+
       //clear local storage
       await fileStore.removeItem(projectId);
       await fileStoreUploaded.removeItem(projectId);
