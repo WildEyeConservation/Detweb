@@ -34,9 +34,12 @@ export default function CameraSpecification({
   return (
     <div>
       <Form.Group className='mt-3'>
-        <Form.Label className='mb-0'>Camera Specifications</Form.Label>
+        <Form.Label className='mb-0'>
+          Camera Specifications (Optional)
+        </Form.Label>
         <span className='text-muted d-block mb-2' style={{ fontSize: '12px' }}>
-          Define camera specifications for each camera.
+          Define camera specifications for each camera. If you have only one
+          camera, you can define this later.
         </span>
         <div className='d-flex flex-column gap-3'>
           {cameraList.map((camera) => (

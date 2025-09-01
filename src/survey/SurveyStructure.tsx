@@ -68,7 +68,9 @@ function FolderNode({ folder, isOpen, onToggle }: FolderNodeProps) {
             <div className='text-muted small fst-italic'>No images</div>
           ) : (
             <div className='d-flex flex-wrap gap-2'>
-              {folder.images.map((image) => (
+              {folder.images
+                .sort((a, b) => a.originalPath.localeCompare(b.originalPath))
+                .map((image) => (
                 <div
                   key={image.id}
                   className='badge p-2 d-flex align-items-center bg-dark'
