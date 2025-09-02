@@ -27,7 +27,6 @@ export default function AddLocationsModal({
   preset,
   surveyId,
 }: Props) {
-  const navigate = useNavigate();
   const { client } = useContext(GlobalContext)!;
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -77,51 +76,48 @@ export default function AddLocationsModal({
     async (categoryId: string, maxAnn: number | '') => {
       setLoading(true);
       setLoadedCount(0);
-      // @ts-ignore: fetchAllPaginatedResults generic inference too complex here
+
+      // Get existing preset locations to exclude
       const existingRaw: any[] = await (fetchAllPaginatedResults as any)(
-        // @ts-ignore: complex union types from generated client
         (client as any).models.TestPresetLocation.locationsByTestPresetId,
         {
           testPresetId: preset.id,
-          selectionSet: [
-            'testPresetId',
-            'locationId',
-            'annotationSetId',
-          ] as const,
+          selectionSet: ['locationId', 'annotationSetId'] as const,
           limit: 1000,
         }
       );
-      const existing = existingRaw as {
-        testPresetId: string;
-        locationId: string;
-        annotationSetId: string;
-      }[];
       const presetKeys = new Set(
-        existing.map((loc) => `${loc.annotationSetId}_${loc.locationId}`)
+        existingRaw.map(
+          (loc: any) => `${loc.annotationSetId}_${loc.locationId}`
+        )
       );
 
-      // @ts-ignore: fetchAllPaginatedResults generic inference too complex here
+      // Get all annotation sets for the project
       const annotationSets = (await fetchAllPaginatedResults(
-        // @ts-ignore: complex union types from generated client
         (client as any).models.AnnotationSet.annotationSetsByProjectId,
         {
           projectId: surveyId,
           selectionSet: ['id'] as const,
         }
       )) as any[];
+
       const allCandidates: { annotationSetId: string; locationId: string }[] =
         [];
       const uniqueLocationIds = new Set<string>();
-      for (const as of annotationSets) {
-        // @ts-ignore: fetchAllPaginatedResults generic inference too complex here
+
+      // Callback to update observation count as they're loaded
+      const updateObservationCount = (count: number) => {
+        setLoadedCount((prev) => prev + count);
+      };
+
+      // OPTIMIZATION 1: Batch fetch observations for all annotation sets
+      // Instead of nested loops, collect all observations with their location data
+      const observationPromises = annotationSets.map(async (as) => {
         const observations = (await fetchAllPaginatedResults(
-          // @ts-ignore: complex union types from generated client
           (client as any).models.Observation.observationsByAnnotationSetId,
           {
             annotationSetId: as.id,
-            filter: {
-              annotationCount: { gt: 0 },
-            },
+            filter: { annotationCount: { gt: 0 } },
             selectionSet: [
               'locationId',
               'annotationSetId',
@@ -133,47 +129,96 @@ export default function AddLocationsModal({
               'location.y',
             ] as const,
             limit: 1000,
-          }
+          },
+          updateObservationCount
         )) as any[];
-        for (const obs of observations) {
-          const key = `${as.id}_${obs.locationId}`;
-          if (presetKeys.has(key)) continue;
-          // Verify there is at least one annotation inside the location bounds
-          if (!obs.location) continue;
-          const location = obs.location;
-          if (location.width == null || location.height == null) continue;
-          const anns = (await fetchAllPaginatedResults(
-            // @ts-ignore: complex union types from generated client
+        return observations;
+      });
+
+      // Wait for all observation queries to complete
+      const observationResults = await Promise.all(observationPromises);
+      const allObservations = observationResults.flat();
+
+      // OPTIMIZATION 2: Group observations by image to batch annotation queries
+      const imageGroups = new Map<string, any[]>();
+      for (const obs of allObservations) {
+        const key = `${obs.annotationSetId}_${obs.location.imageId}`;
+        if (!imageGroups.has(key)) {
+          imageGroups.set(key, []);
+        }
+        imageGroups.get(key)!.push(obs);
+      }
+
+      // OPTIMIZATION 3: Batch annotation queries by image
+      const annotationPromises = Array.from(imageGroups.entries()).map(
+        async ([key, observations]) => {
+          const [annotationSetId, imageId] = key.split('_');
+          const annotations = (await fetchAllPaginatedResults(
             (client as any).models.Annotation.annotationsByImageIdAndSetId,
             {
-              imageId: location.imageId,
-              setId: { eq: as.id },
+              imageId,
+              setId: { eq: annotationSetId },
               selectionSet: ['x', 'y', 'categoryId'] as const,
+              limit: 1000,
             }
           )) as any[];
-          const minX = location.x - (location.width as number) / 2;
-          const minY = location.y - (location.height as number) / 2;
-          const maxX = location.x + (location.width as number) / 2;
-          const maxY = location.y + (location.height as number) / 2;
-          const inside = anns.filter(
-            (ann) =>
-              ann.x >= minX && ann.y >= minY && ann.x <= maxX && ann.y <= maxY
-          );
-          if (categoryId && !inside.some((a) => a.categoryId === categoryId)) {
+
+          return { key, annotations, observations };
+        }
+      );
+
+      // Wait for all annotation queries to complete
+      const annotationResults = await Promise.all(annotationPromises);
+
+      // Process results
+      for (const { annotations, observations } of annotationResults) {
+        for (const obs of observations) {
+          const presetKey = `${obs.annotationSetId}_${obs.locationId}`;
+          if (presetKeys.has(presetKey)) continue;
+
+          // Check location bounds
+          if (
+            !obs.location ||
+            obs.location.width == null ||
+            obs.location.height == null
+          ) {
             continue;
           }
+
+          const location = obs.location;
+          const minX = location.x - location.width / 2;
+          const minY = location.y - location.height / 2;
+          const maxX = location.x + location.width / 2;
+          const maxY = location.y + location.height / 2;
+
+          // Filter annotations inside location bounds
+          const inside = annotations.filter(
+            (ann: any) =>
+              ann.x >= minX && ann.y >= minY && ann.x <= maxX && ann.y <= maxY
+          );
+
+          // Apply category filter
+          if (
+            categoryId &&
+            !inside.some((a: any) => a.categoryId === categoryId)
+          ) {
+            continue;
+          }
+
+          // Apply max annotations limit
           const limit = maxAnn === '' ? null : Number(maxAnn);
           if (limit != null && inside.length > limit) {
             continue;
           }
+
           if (inside.length > 0) {
             allCandidates.push({
-              annotationSetId: as.id,
+              annotationSetId: obs.annotationSetId,
               locationId: obs.locationId,
             });
+
             if (!uniqueLocationIds.has(obs.locationId)) {
               uniqueLocationIds.add(obs.locationId);
-              setLoadedCount(uniqueLocationIds.size);
             }
           }
         }
@@ -233,6 +278,7 @@ export default function AddLocationsModal({
         imageId: location.imageId,
         setId: { eq: cand.annotationSetId },
         selectionSet: ['categoryId', 'x', 'y'] as const,
+        limit: 1000,
       }
     )) as any[];
     if (location.width == null || location.height == null) return;
@@ -325,8 +371,8 @@ export default function AddLocationsModal({
         >
           {loading ? (
             <p className='d-flex align-items-center gap-2 p-2'>
-              <Spinner animation='border' size='sm' /> {loadedCount} locations
-              loaded
+              <Spinner animation='border' size='sm' /> {loadedCount}{' '}
+              observations loaded
             </p>
           ) : candidates.length === 0 ? (
             <p>No available locations to add.</p>
