@@ -10,7 +10,7 @@ import { Modal, Button, Form, Spinner } from 'react-bootstrap';
 import { GlobalContext, UserContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
 import { FetcherType, PreloaderFactory } from '../Preloader';
-import LightAddLocationView from './LightAddLocationView';
+import LightLocationView from './LightLocationView';
 import ProjectContext from './ProjectContext';
 
 type Props = {
@@ -54,7 +54,7 @@ export default function EditLocationsModal({
     annotationSetId: string;
   } | null>(null);
 
-  const Preloader = useMemo(() => PreloaderFactory(LightAddLocationView), []);
+  const Preloader = useMemo(() => PreloaderFactory(LightLocationView), []);
   const fetcher: FetcherType = useCallback(async () => {
     const loc = locationsRef.current[locationIndexRef.current];
     locationIndexRef.current = locationIndexRef.current + 1;

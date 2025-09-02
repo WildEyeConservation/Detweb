@@ -10,9 +10,8 @@ import { Modal, Button, Form, Spinner } from 'react-bootstrap';
 import { GlobalContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
 import { FetcherType, PreloaderFactory } from '../Preloader';
-import LightAddLocationView from './LightAddLocationView';
+import LightLocationView from './LightLocationView';
 import ProjectContext from './ProjectContext';
-import { useNavigate } from 'react-router-dom';
 
 type Props = {
   show: boolean;
@@ -57,7 +56,7 @@ export default function AddLocationsModal({
     locationId: string;
   } | null>(null);
 
-  const Preloader = useMemo(() => PreloaderFactory(LightAddLocationView), []);
+  const Preloader = useMemo(() => PreloaderFactory(LightLocationView), []);
 
   const fetcher: FetcherType = useCallback(async () => {
     const cand = candidatesRef.current[candidateIndexRef.current];

@@ -19,7 +19,7 @@ type LoadedLocation = {
   image: { id: string; width: number; height: number };
 };
 
-export default function LightAddLocationView({
+export default function LightLocationView({
   location: locationRef,
   visible,
   next,

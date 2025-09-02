@@ -8,11 +8,13 @@ import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import 'leaflet.heat';
 import { fetchAllPaginatedResults } from './utils';
 import { GlobalContext } from './Context';
+import ImageViewerModal from './ImageViewerModal';
 import {
   uniqueNamesGenerator,
   adjectives,
   names,
 } from 'unique-names-generator';
+import { Spinner } from 'react-bootstrap';
 
 export default function DensityMap({
   annotationSetId,
@@ -44,6 +46,18 @@ export default function DensityMap({
   const mapRef = useRef<L.Map | null>(null);
   // Track if we've already fitted the map bounds
   const [hasFittedBounds, setHasFittedBounds] = useState(false);
+  // Viewer modal state
+  const [viewerImageId, setViewerImageId] = useState<string | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
+
+  const openViewer = (imageId: string) => {
+    // Exit fullscreen if currently active when opening image viewer
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.();
+    }
+    setViewerImageId(imageId);
+    setViewerOpen(true);
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -188,9 +202,36 @@ export default function DensityMap({
             color: 'orange',
             radius: 5,
           });
-          marker.bindPopup(
-            `<div><strong>Name:</strong> ${a.name}</div><div><strong>Label:</strong> ${a.category.name}</div>`
-          );
+          const popupHtml = `
+            <div>
+              <div><strong>Name:</strong> ${a.name}</div>
+              <div><strong>Label:</strong> ${a.category.name}</div>
+              <div style="margin-top:6px;"><button class="btn btn-sm btn-primary view-image-btn" data-imageid="${img.id}">View Image</button></div>
+            </div>`;
+          marker.bindPopup(popupHtml);
+          marker.on('popupopen', () => {
+            const popupEl = (marker as any).getPopup()?.getElement?.();
+            const btn: HTMLElement | null =
+              popupEl?.querySelector('.view-image-btn') ?? null;
+            if (btn) {
+              const handler = (ev: Event) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                openViewer(img.id);
+              };
+              (btn as any).__detwebHandler = handler;
+              btn.addEventListener('click', handler);
+            }
+          });
+          marker.on('popupclose', () => {
+            const popupEl = (marker as any).getPopup()?.getElement?.();
+            const btn: HTMLElement | null =
+              popupEl?.querySelector('.view-image-btn') ?? null;
+            if (btn && (btn as any).__detwebHandler) {
+              btn.removeEventListener('click', (btn as any).__detwebHandler);
+              delete (btn as any).__detwebHandler;
+            }
+          });
           group.addLayer(marker);
         });
       map.addLayer(group);
@@ -305,14 +346,40 @@ export default function DensityMap({
 
         const transectNumber = transectNumbers.get(transectId) || 0;
 
-        marker.bindPopup(
-          `<div>
+        const popupHtml = `
+          <div>
             <strong>Transect:</strong> ${transectNumber}<br/>
             <strong>Coordinates:</strong> ${img.latitude.toFixed(
               4
             )}, ${img.longitude.toFixed(4)}
-          </div>`
-        );
+            <div style="margin-top:6px;"><button class="btn btn-sm btn-primary view-image-btn" data-imageid="${
+              img.id
+            }">View Image</button></div>
+          </div>`;
+        marker.bindPopup(popupHtml);
+        marker.on('popupopen', () => {
+          const popupEl = (marker as any).getPopup()?.getElement?.();
+          const btn: HTMLElement | null =
+            popupEl?.querySelector('.view-image-btn') ?? null;
+          if (btn) {
+            const handler = (ev: Event) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              openViewer(img.id);
+            };
+            (btn as any).__detwebHandler = handler;
+            btn.addEventListener('click', handler);
+          }
+        });
+        marker.on('popupclose', () => {
+          const popupEl = (marker as any).getPopup()?.getElement?.();
+          const btn: HTMLElement | null =
+            popupEl?.querySelector('.view-image-btn') ?? null;
+          if (btn && (btn as any).__detwebHandler) {
+            btn.removeEventListener('click', (btn as any).__detwebHandler);
+            delete (btn as any).__detwebHandler;
+          }
+        });
 
         group.addLayer(marker);
       });
@@ -385,7 +452,12 @@ export default function DensityMap({
 
   // handle loading and render main map
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div>
+        <Spinner size='sm' />
+        <span className='ms-2'>Loading...</span>
+      </div>
+    );
   }
 
   // Add mapKey to force remount on category change without refetching data
@@ -584,6 +656,12 @@ export default function DensityMap({
         />
         <FullscreenControl />
       </MapContainer>
+      <ImageViewerModal
+        show={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        imageId={viewerImageId}
+        annotationSetId={annotationSetId}
+      />
     </div>
   );
 }
