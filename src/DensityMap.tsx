@@ -121,7 +121,7 @@ export default function DensityMap({
         });
       });
       setAnnotations(primary);
-      setImages(imgs);
+      setImages(imgs.sort((a, b) => a.timestamp - b.timestamp));
       // Add setting strata state
       setStrata(str);
       // Add setting shapefile exclusions state
@@ -276,13 +276,6 @@ export default function DensityMap({
     useEffect(() => {
       if (!map) return;
 
-      // Sort images by timestamp for chronological processing
-      const sortedImages = [...images].sort((a, b) => {
-        const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-        const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-        return aTime - bTime;
-      });
-
       // Create a color palette for different transects
       const colors = [
         '#FF5733',
@@ -300,7 +293,7 @@ export default function DensityMap({
       const uniqueTransectIds: string[] = [];
       const seenTransects = new Set<string>();
 
-      sortedImages.forEach((img) => {
+      images.forEach((img) => {
         const transectId = img.transectId || 'No Transect';
         if (!seenTransects.has(transectId)) {
           seenTransects.add(transectId);
@@ -320,7 +313,7 @@ export default function DensityMap({
 
       // Group images by transect
       const transectMap = new Map();
-      sortedImages.forEach((img) => {
+      images.forEach((img) => {
         const transectId = img.transectId || 'No Transect';
         if (!transectMap.has(transectId)) {
           transectMap.set(transectId, []);
@@ -330,7 +323,7 @@ export default function DensityMap({
 
       const group = L.layerGroup();
 
-      sortedImages.forEach((img) => {
+      images.forEach((img) => {
         if (!img || img.latitude == null || img.longitude == null) return;
 
         const transectId = img.transectId || 'No Transect';
@@ -660,7 +653,10 @@ export default function DensityMap({
         show={viewerOpen}
         onClose={() => setViewerOpen(false)}
         imageId={viewerImageId}
+        imageIds={images.map((img) => img.id)}
         annotationSetId={annotationSetId}
+        onNavigate={openViewer}
+        categoryIds={categoryIds}
       />
     </div>
   );

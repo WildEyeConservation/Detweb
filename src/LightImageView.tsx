@@ -1,6 +1,6 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { GlobalContext } from './Context';
-import { MapContainer, LayersControl } from 'react-leaflet';
+import { MapContainer, LayersControl, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { StorageLayer } from './StorageLayer';
 import { fetchAllPaginatedResults } from './utils';
@@ -12,15 +12,18 @@ type AnnotationItem = {
   x: number;
   y: number;
   setId: string;
+  objectId: string;
   category: { id: string; name: string } | null;
 };
 
 export default function LightImageView({
   imageId,
   annotationSetId,
+  categoryIds = [],
 }: {
   imageId: string;
   annotationSetId: string;
+  categoryIds?: string[];
 }) {
   const { client } = useContext(GlobalContext)!;
   const [imageMeta, setImageMeta] = useState<{
@@ -70,6 +73,7 @@ export default function LightImageView({
             'x',
             'y',
             'setId',
+            'objectId',
             'category.id',
             'category.name',
           ] as const,
@@ -95,12 +99,76 @@ export default function LightImageView({
 
   const xy2latLng = (x: number, y: number) => L.latLng(-y / scale, x / scale);
 
+  // Filter annotations to only show those IN the categoryIds array (the labels)
+  const filteredAnnotations = useMemo(() => {
+    if (categoryIds.length === 0) return annotations;
+    return annotations.filter((annotation) =>
+      categoryIds.includes(annotation.category?.id || '')
+    );
+  }, [annotations, categoryIds]);
+
+  // Create color mapping for categories
+  const categoryColors = useMemo(() => {
+    const colors = [
+      '#FF5733',
+      '#33FF57',
+      '#3357FF',
+      '#F333FF',
+      '#33FFF8',
+      '#FFA833',
+      '#8B33FF',
+      '#FF3380',
+      '#33FF8B',
+    ];
+
+    const uniqueCategoryIds: string[] = [];
+    const seenCategories = new Set<string>();
+
+    filteredAnnotations.forEach((annotation) => {
+      const categoryId = annotation.category?.id || 'Unknown';
+      if (!seenCategories.has(categoryId)) {
+        seenCategories.add(categoryId);
+        uniqueCategoryIds.push(categoryId);
+      }
+    });
+
+    const categoryColorMap = new Map<string, string>();
+    uniqueCategoryIds.forEach((categoryId, index) => {
+      const colorIndex = index % colors.length;
+      categoryColorMap.set(categoryId, colors[colorIndex]);
+    });
+
+    return categoryColorMap;
+  }, [filteredAnnotations]);
+
   const bounds = useMemo(() => {
     if (!imageMeta) return undefined;
     const sw = xy2latLng(0, imageMeta.height);
     const ne = xy2latLng(imageMeta.width, 0);
     return L.latLngBounds(sw, ne);
   }, [imageMeta?.width, imageMeta?.height, scale]);
+
+  // Component to handle map zoom events
+  const MapZoomHandler: React.FC = () => {
+    const map = useMap();
+
+    const zoomToAnnotation = (latLng: L.LatLng) => {
+      map.flyTo(latLng, Math.max(map.getZoom() + 2, 8), {
+        duration: 0.5,
+        easeLinearity: 0.1,
+      });
+    };
+
+    // Expose zoom function globally for CircleMarker onClick handlers
+    useEffect(() => {
+      (window as any).__zoomToAnnotation = zoomToAnnotation;
+      return () => {
+        delete (window as any).__zoomToAnnotation;
+      };
+    }, [map]);
+
+    return null;
+  };
 
   if (!imageMeta || !sourceKey || !bounds || !annotationsLoaded)
     return (
@@ -119,6 +187,7 @@ export default function LightImageView({
       zoomDelta={1}
       keyboardPanDelta={0}
     >
+      <MapZoomHandler />
       <LayersControl position='topright'>
         <LayersControl.BaseLayer name='Image' checked>
           {/* StorageLayer understands sourceKey as the tile root identifier */}
@@ -131,20 +200,41 @@ export default function LightImageView({
         </LayersControl.BaseLayer>
         <LayersControl.Overlay name='Annotations' checked>
           <LayerGroup>
-            {annotations.map((a) => (
-              <CircleMarker
-                key={a.id}
-                center={xy2latLng(a.x as any, a.y as any)}
-                radius={7}
-                pathOptions={{ color: 'cyan', weight: 2, fillOpacity: 0.8 }}
-              >
-                <Popup>
-                  <div>
-                    <strong>Label:</strong> {a.category?.name || 'Unknown'}
-                  </div>
-                </Popup>
-              </CircleMarker>
-            ))}
+            {filteredAnnotations.map((a) => {
+              const categoryId = a.category?.id || 'Unknown';
+              const color = categoryColors.get(categoryId) || '#999999';
+              const isPrimary = a.id === a.objectId;
+              const sightingType = isPrimary ? 'Primary' : 'Secondary';
+
+              return (
+                <CircleMarker
+                  key={a.id}
+                  center={xy2latLng(a.x as any, a.y as any)}
+                  radius={7}
+                  pathOptions={{
+                    color: color,
+                    fillColor: color,
+                    weight: 2,
+                    fillOpacity: isPrimary ? 0.8 : 0,
+                  }}
+                  eventHandlers={{
+                    click: () => {
+                      const latLng = xy2latLng(a.x as any, a.y as any);
+                      if ((window as any).__zoomToAnnotation) {
+                        (window as any).__zoomToAnnotation(latLng);
+                      }
+                    },
+                  }}
+                >
+                  <Popup>
+                    <div>
+                      <div><strong>Label:</strong> {a.category?.name || 'Unknown'}</div>
+                      <div><strong>Sighting:</strong> {sightingType}</div>
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              );
+            })}
           </LayerGroup>
         </LayersControl.Overlay>
       </LayersControl>
