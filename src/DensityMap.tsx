@@ -9,6 +9,7 @@ import 'leaflet.heat';
 import { fetchAllPaginatedResults } from './utils';
 import { GlobalContext } from './Context';
 import ImageViewerModal from './ImageViewerModal';
+import AnnotationViewerModal from './AnnotationViewerModal';
 import {
   uniqueNamesGenerator,
   adjectives,
@@ -20,12 +21,17 @@ export default function DensityMap({
   annotationSetId,
   surveyId,
   categoryIds = [],
+  primaryOnly = false,
+  editable = false,
 }: {
   annotationSetId: string;
   surveyId: string;
   categoryIds?: string[];
+  primaryOnly?: boolean;
+  editable?: boolean;
 }) {
   const { client } = useContext(GlobalContext)!;
+  const [rawAnnotations, setRawAnnotations] = useState<any[]>([]);
   const [annotations, setAnnotations] = useState<any[]>([]);
   const [images, setImages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +65,7 @@ export default function DensityMap({
     setViewerOpen(true);
   };
 
+  // Fetch data only when core dependencies change
   useEffect(() => {
     async function loadData() {
       setLoading(true);
@@ -109,18 +116,9 @@ export default function DensityMap({
           } as any
         ),
       ]);
-      // keep only primary annotations
-      const primary = anns.filter((a) => a.id === a.objectId);
-      // add a name to each annotation
-      primary.forEach((a) => {
-        a.name = uniqueNamesGenerator({
-          dictionaries: [adjectives, names],
-          seed: a.id,
-          style: 'capital',
-          separator: ' ',
-        });
-      });
-      setAnnotations(primary);
+
+      // Store raw annotations without filtering
+      setRawAnnotations(anns);
       setImages(imgs.sort((a, b) => a.timestamp - b.timestamp));
       // Add setting strata state
       setStrata(str);
@@ -130,6 +128,25 @@ export default function DensityMap({
     }
     loadData();
   }, [client, annotationSetId, surveyId]);
+
+  // Filter annotations when primaryOnly or rawAnnotations change
+  useEffect(() => {
+    const filteredAnnotations = primaryOnly
+      ? rawAnnotations.filter((a) => a.id === a.objectId)
+      : rawAnnotations;
+
+    // add a name to each annotation
+    filteredAnnotations.forEach((a) => {
+      a.name = uniqueNamesGenerator({
+        dictionaries: [adjectives, names],
+        seed: a.id,
+        style: 'capital',
+        separator: ' ',
+      });
+    });
+
+    setAnnotations(filteredAnnotations);
+  }, [rawAnnotations, primaryOnly]);
 
   // Fit map to image points on initial load
   useEffect(() => {
@@ -446,7 +463,7 @@ export default function DensityMap({
   // handle loading and render main map
   if (loading) {
     return (
-      <div>
+      <div className='d-flex flex-row align-items-center justify-content-center h-100 w-100'>
         <Spinner size='sm' />
         <span className='ms-2'>Loading...</span>
       </div>
@@ -649,15 +666,26 @@ export default function DensityMap({
         />
         <FullscreenControl />
       </MapContainer>
-      <ImageViewerModal
-        show={viewerOpen}
-        onClose={() => setViewerOpen(false)}
-        imageId={viewerImageId}
-        imageIds={images.map((img) => img.id)}
-        annotationSetId={annotationSetId}
-        onNavigate={openViewer}
-        categoryIds={categoryIds}
-      />
+      {editable ? (
+        <AnnotationViewerModal
+          show={viewerOpen}
+          onClose={() => setViewerOpen(false)}
+          imageId={viewerImageId}
+          imageIds={images.map((img) => img.id)}
+          annotationSetId={annotationSetId}
+          onNavigate={openViewer}
+        />
+      ) : (
+        <ImageViewerModal
+          show={viewerOpen}
+          onClose={() => setViewerOpen(false)}
+          imageId={viewerImageId}
+          imageIds={images.map((img) => img.id)}
+          annotationSetId={annotationSetId}
+          onNavigate={openViewer}
+          categoryIds={categoryIds}
+        />
+      )}
     </div>
   );
 }

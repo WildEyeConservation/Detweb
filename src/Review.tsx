@@ -1,38 +1,32 @@
-import { useParams } from "react-router-dom";
-import { useEffect, useState, useMemo, useContext } from "react";
-import { PreloaderFactory } from "./Preloader";
-import BufferSource from "./BufferSource";
-import AnnotationImage from "./AnnotationImage";
-import { AnnotationSetDropdown } from "./AnnotationSetDropDown";
-import Select, { MultiValue, Options } from "react-select";
-import { ProjectContext, GlobalContext, ManagementContext } from "./Context";
-import { Form } from "react-bootstrap";
-import LabeledToggleSwitch from "./LabeledToggleSwitch";
-import "./Review.css";
-import { Card } from "react-bootstrap";
-import Button from "react-bootstrap/Button";
-import { PanelBottom } from "lucide-react";
+import { useParams } from 'react-router-dom';
+import { useEffect, useState, useContext } from 'react';
+import { AnnotationSetDropdown } from './AnnotationSetDropDown';
+import Select, { MultiValue } from 'react-select';
+import { ProjectContext, ManagementContext } from './Context';
+import { Form } from 'react-bootstrap';
+import './Review.css';
+import { Card } from 'react-bootstrap';
+import Button from 'react-bootstrap/Button';
+import { PanelBottom } from 'lucide-react';
+import { Tab, Tabs } from './Tabs';
+import ReviewCarousel from './ReviewCarousel';
+import DensityMap from './DensityMap';
 
 export function Review({ showAnnotationSetDropdown = true }) {
   const [selectedCategories, setSelectedCategories] = useState<
     { label: string; value: string }[]
   >([]);
+  const [tab, setTab] = useState<'carousel' | 'map'>('carousel');
   const [selectedAnnotationSet, setSelectedAnnotationSet] =
-    useState<string>("");
-  const [imageBased, setImageBased] = useState(true);
-  const [chronological, setChronological] = useState(false);
-  const [annotations, setAnnotations] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+    useState<string>('');
+  const [imageBased] = useState(true);
+  const [primaryOnly, setPrimaryOnly] = useState(false);
   const [showFilters, setShowFilters] = useState(true);
   const {
     categoriesHook: { data: categories },
     project,
   } = useContext(ProjectContext)!;
-  const [locationsLoaded, setLocationsLoaded] = useState(0);
-  const [index, setIndex] = useState(0);
-  const [bufferSource, setBufferSource] = useState<BufferSource | null>(null);
   const { annotationSetId } = useParams();
-  const { client } = useContext(GlobalContext)!;
   const {
     annotationSetsHook: { data: annotationSets },
   } = useContext(ManagementContext)!;
@@ -43,183 +37,50 @@ export function Review({ showAnnotationSetDropdown = true }) {
     }
   }, [annotationSetId]);
 
-  useEffect(() => {
-    async function fetchAnnotations() {
-      let nextNextToken: string | null | undefined = undefined;
-      do {
-        const result = await client.models.Annotation.annotationsByCategoryId(
-          { categoryId: categoryId ?? "" },
-          {
-            selectionSet: [
-              "x",
-              "y",
-              "image.id",
-              "image.width",
-              "image.height",
-              "image.timestamp",
-            ],
-            filter: { setId: { eq: annotationSetId } },
-            nextToken: nextNextToken,
-          }
-        );
-        const { data, nextToken } = result;
-        setAnnotations((prev) => [
-          ...prev,
-          ...data.map(
-            ({
-              x,
-              y,
-              image: { id: imageId, width: imageWidth, height: imageHeight },
-            }) => ({
-              location: {
-                x,
-                y,
-                width: 100,
-                height: 100,
-                image: { id: imageId, width: imageWidth, height: imageHeight },
-                annotationSetId,
-              },
-              id: crypto.randomUUID(),
-            })
-          ),
-        ]);
-        nextNextToken = nextToken;
-      } while (nextNextToken);
-      setIsLoading(false);
-    }
-
-    async function fetchImages() {
-      if (selectedCategories.length && selectedAnnotationSet) {
-        setIsLoading(true);
-        let imagesFound: Set<string> = new Set();
-        const locations = [];
-        for (const { value: categoryId } of selectedCategories) {
-          let nextNextToken: string | null | undefined = undefined;
-          do {
-            const result =
-              await client.models.Annotation.annotationsByCategoryId(
-                { categoryId: categoryId ?? "" },
-                {
-                  selectionSet: [
-                    "image.id",
-                    "image.width",
-                    "image.height",
-                    "image.timestamp",
-                  ],
-                  filter: { setId: { eq: selectedAnnotationSet } },
-                  nextToken: nextNextToken,
-                }
-              );
-            const { data, nextToken } = result;
-            data.forEach(
-              ({
-                image: {
-                  id: imageId,
-                  width: imageWidth,
-                  height: imageHeight,
-                  timestamp,
-                },
-              }) => {
-                if (!imagesFound.has(imageId)) {
-                  imagesFound.add(imageId);
-                  locations.push({
-                    location: {
-                      x: imageWidth / 2,
-                      y: imageHeight / 2,
-                      width: imageWidth,
-                      height: imageHeight,
-                      image: {
-                        id: imageId,
-                        width: imageWidth,
-                        height: imageHeight,
-                        timestamp: timestamp,
-                      },
-                      annotationSetId: selectedAnnotationSet,
-                    },
-                    taskTag: "review",
-                    id: crypto.randomUUID(),
-                  });
-                  setLocationsLoaded((prev) => prev + 1);
-                }
-              }
-            );
-            nextNextToken = nextToken;
-          } while (nextNextToken);
-        }
-        setAnnotations(
-          locations.sort(
-            (a, b) => a.location.image.timestamp - b.location.image.timestamp
-          )
-        );
-      }
-      setIsLoading(false);
-    }
-
-    if (selectedCategories.length && selectedAnnotationSet) {
-      if (imageBased) {
-        fetchImages();
-      } else {
-        fetchAnnotations();
-      }
-    }
-    return () => {
-      setAnnotations([]);
-      setIsLoading(false);
-      setLocationsLoaded(0);
-    };
-  }, [selectedCategories, selectedAnnotationSet, imageBased]);
-
-  useEffect(() => {
-    if (annotations.length) {
-      setBufferSource(new BufferSource(annotations));
-    }
-  }, [annotations]);
-
-  const Preloader = useMemo(() => PreloaderFactory(AnnotationImage), []);
+  // Keep imageBased in state for future toggling; carousel handles data fetching
   return (
     <div
       style={{
-        width: "100%",
-        maxWidth: "1555px",
-        marginTop: "16px",
-        marginBottom: "16px",
+        width: '100%',
+        maxWidth: '1555px',
+        marginTop: '16px',
+        marginBottom: '16px',
       }}
     >
-      <div className="w-100 h-100 d-flex flex-column flex-sm-row gap-3">
+      <div className='w-100 h-100 d-flex flex-column flex-sm-row gap-2'>
         <div
-          className="d-flex flex-column gap-3 w-100"
-          style={{ maxWidth: "300px" }}
+          className='d-flex flex-column gap-2 w-100'
+          style={{ maxWidth: '300px' }}
         >
-          <Card className="d-sm-block d-none w-100">
+          <Card className='d-sm-block d-none w-100'>
             <Card.Header>
-              <Card.Title className="mb-0">Information</Card.Title>
+              <Card.Title className='mb-0'>Information</Card.Title>
             </Card.Header>
-            <Card.Body className="d-flex flex-column gap-2">
-              <InfoTag label="Survey" value={project.name} />
-              <InfoTag
-                label="Annotation Set"
-                value={
-                  annotationSets?.find(
-                    (set) => set.id === selectedAnnotationSet
-                  )?.name ?? "Unknown"
-                }
-              />
+            <Card.Body className='d-flex flex-column gap-2'>
+              <p className='mb-0'>
+                <strong>Survey:</strong> {project.name}
+              </p>
+              <p className='mb-0'>
+                <strong>Annotation Set:</strong>{' '}
+                {annotationSets?.find((set) => set.id === selectedAnnotationSet)
+                  ?.name ?? 'Unknown'}
+              </p>
             </Card.Body>
           </Card>
-          <Card className="w-100 flex-grow-1">
+          <Card className='w-100 flex-grow-1'>
             <Card.Header>
-              <Card.Title className="mb-0 d-flex align-items-center">
+              <Card.Title className='mb-0 d-flex align-items-center'>
                 <Button
-                  className="p-0 mb-0"
-                  variant="outline"
+                  className='p-0 mb-0'
+                  variant='outline'
                   onClick={() => setShowFilters(!showFilters)}
                 >
                   <PanelBottom
-                    className="d-sm-none"
+                    className='d-sm-none'
                     style={{
                       transform: showFilters
-                        ? "rotate(180deg)"
-                        : "rotate(0deg)",
+                        ? 'rotate(180deg)'
+                        : 'rotate(0deg)',
                     }}
                   />
                 </Button>
@@ -227,14 +88,20 @@ export function Review({ showAnnotationSetDropdown = true }) {
               </Card.Title>
             </Card.Header>
             {showFilters && (
-              <Card.Body className="d-flex flex-column gap-2">
-                <div className="w-100">
+              <Card.Body className='d-flex flex-column gap-2'>
+                <div className='w-100'>
                   <Form.Label>Labels</Form.Label>
                   <Select
                     value={selectedCategories}
-                    onChange={setSelectedCategories}
+                    onChange={(
+                      newValue: MultiValue<{ label: string; value: string }>
+                    ) =>
+                      setSelectedCategories([
+                        ...(newValue as { label: string; value: string }[]),
+                      ])
+                    }
                     isMulti
-                    name="Labels to review"
+                    name='Labels to review'
                     options={categories
                       ?.filter(
                         (c) => c.annotationSetId === selectedAnnotationSet
@@ -243,9 +110,17 @@ export function Review({ showAnnotationSetDropdown = true }) {
                         label: q.name,
                         value: q.id,
                       }))}
-                    className="text-black w-100"
+                    className='text-black w-100'
                     closeMenuOnSelect={false}
                   />
+                  {tab === 'map' && (
+                    <Form.Switch
+                      label='Primary sightings only'
+                      className='mt-3'
+                      checked={primaryOnly}
+                      onChange={(e) => setPrimaryOnly(e.target.checked)}
+                    />
+                  )}
                 </div>
 
                 {showAnnotationSetDropdown && (
@@ -259,49 +134,42 @@ export function Review({ showAnnotationSetDropdown = true }) {
             )}
           </Card>
         </div>
-        {!annotations.length && isLoading ? (
-          <div className="d-flex flex-column align-items-center justify-content-center h-100 w-100">
-            Loading... Please be patient. {locationsLoaded} locations loaded so
-            far...
-          </div>
-        ) : (
-          bufferSource && (
-            <div className="d-flex flex-column align-items-center h-100 w-100">
-              <Preloader
-                key={
-                  selectedAnnotationSet +
-                  selectedCategories.map((cat) => cat.value).join(",")
+        <Card className='h-100 w-100'>
+          <Card.Body>
+            <Tabs
+              onTabChange={(tab) => {
+                switch (tab) {
+                  case 0:
+                    setTab('carousel');
+                    break;
+                  case 1:
+                    setTab('map');
+                    break;
                 }
-                index={index}
-                setIndex={setIndex}
-                fetcher={() => bufferSource.fetch()}
-                preloadN={2}
-                historyN={2}
-              />
-              <div className="mt-2 w-100">
-                <Form.Range
-                  value={index}
-                  onChange={(e) => setIndex(parseInt(e.target.value))}
-                  min={0}
-                  max={annotations.length - 1}
+              }}
+            >
+              <Tab label='Carousel'>
+                <ReviewCarousel
+                  selectedAnnotationSet={selectedAnnotationSet}
+                  selectedCategories={selectedCategories}
+                  imageBased={imageBased}
                 />
-                <div style={{ textAlign: "center" }}>
-                  Done with {index} out of {annotations.length} locations
+              </Tab>
+              <Tab label='Map'>
+                <div className='h-100 w-100 pt-3'>
+                  <DensityMap
+                    surveyId={project.id}
+                    annotationSetId={selectedAnnotationSet}
+                    categoryIds={selectedCategories.map((c) => c.value)}
+                    primaryOnly={primaryOnly}
+                    editable
+                  />
                 </div>
-              </div>
-            </div>
-          )
-        )}
+              </Tab>
+            </Tabs>
+          </Card.Body>
+        </Card>
       </div>
     </div>
-  );
-}
-
-function InfoTag({ label, value }: { label: string; value: string }) {
-  return (
-    <p className="mb-0 d-flex flex-row gap-2 justify-content-between">
-      <span>{label}:</span>
-      <span>{value}</span>
-    </p>
   );
 }
