@@ -35,7 +35,6 @@ export default function UploadManager() {
       resumeId,
       deleteId,
       pauseId,
-      fromStaleUpload,
     },
     progress: { isComplete, error },
     setTask,
@@ -47,6 +46,8 @@ export default function UploadManager() {
   const pendingResumeProjectIdRef = useRef<{ id: string; name: string } | null>(
     null
   );
+  const activeUploadRef = useRef<boolean>(false);
+  const retryPendingRef = useRef<boolean>(false);
   const [projectBackOff, setProjectBackOff] = useState<Record<string, number>>(
     {}
   );
@@ -135,11 +136,19 @@ export default function UploadManager() {
   }
 
   async function uploadProject() {
+    if (activeUploadRef.current) {
+      return;
+    }
+    activeUploadRef.current = true;
     console.log('uploading project', projectId);
 
     if (retryDelay) {
       // Wait for the calculated delay
       await new Promise((resolve) => setTimeout(resolve, retryDelay));
+    }
+    // If this is a retry-driven start, clear cancellation flag unless a pause/delete is in progress
+    if (!pauseId && !deleteId) {
+      cancelledRef.current = false;
     }
 
     try {
@@ -187,6 +196,7 @@ export default function UploadManager() {
       await fileStoreUploaded.setItem(projectId, uploadedFiles);
 
       // track which images are already created in the DB
+      const knownDbPaths = new Set(dbRawImages.map((img) => img.originalPath));
       let createdImages: CreatedImage[] = dbRawImages.map((img) => ({
         id: img.id,
         originalPath: img.originalPath,
@@ -221,6 +231,11 @@ export default function UploadManager() {
             (img) => img.originalPath === originalPath
           );
           if (imageData) {
+            // Double-check existence to avoid duplicates
+            if (knownDbPaths.has(originalPath)) {
+              setProgress((prev) => ({ ...prev, processed: prev.processed + 1 }));
+              continue;
+            }
             const fileObj = files.find(
               (f) => f.webkitRelativePath === originalPath
             );
@@ -272,6 +287,7 @@ export default function UploadManager() {
                 originalPath: img.originalPath!,
                 timestamp: img.timestamp!,
               });
+              knownDbPaths.add(img.originalPath!);
               await createdImagesStore.setItem(projectId, createdImages);
               await (client.models.ImageSetMembership.create as any)({
                 imageId: img.id,
@@ -318,6 +334,11 @@ export default function UploadManager() {
               uploadedFiles.push(image.originalPath);
               await fileStoreUploaded.setItem(projectId, uploadedFiles);
 
+              // If image DB entry already exists, skip DB creates to avoid duplicates
+              if (knownDbPaths.has(image.originalPath)) {
+                continue;
+              }
+
               let elevation = 0;
               if (image.latitude && image.longitude && !image.altitude_agl) {
                 elevation =
@@ -361,6 +382,7 @@ export default function UploadManager() {
                   originalPath: image.originalPath,
                   timestamp: image.timestamp,
                 });
+                knownDbPaths.add(image.originalPath);
                 await createdImagesStore.setItem(projectId, createdImages);
                 await (client.models.ImageSetMembership.create as any)({
                   imageId: img.id,
@@ -417,6 +439,14 @@ export default function UploadManager() {
         isComplete: false,
         error: JSON.stringify(error),
       }));
+    } finally {
+      activeUploadRef.current = false;
+      // If a retry was requested during this run, chain a new run now
+      if (retryPendingRef.current && projectId && !pauseId && !deleteId) {
+        retryPendingRef.current = false;
+        // Start the next attempt; this call will honor the current retryDelay
+        uploadProject();
+      }
     }
   }
 
@@ -447,6 +477,10 @@ export default function UploadManager() {
       `Waiting ${retryDelay / 1000} seconds before next retry attempt`
     );
 
+    // Cancel current run; the next run will be chained after it finishes
+    cancelledRef.current = true;
+    retryPendingRef.current = true;
+
     setTask((task) => ({
       ...task,
       retryDelay: retryDelay,
@@ -461,21 +495,35 @@ export default function UploadManager() {
 
   async function fetchFilesFromS3() {
     try {
-      const {
-        data: [imageSet],
-      } = await client.models.ImageSet.imageSetsByProjectId({
-        projectId: projectId,
-      });
+      // Restrict S3 matches to only the files selected for the current project
+      const filesToUpload =
+        ((await fileStore.getItem(projectId)) as ImageData[]) ?? [];
+      const localPaths = new Set(filesToUpload.map((f) => f.originalPath));
+      const topLevelPrefixes = Array.from(
+        new Set(
+          filesToUpload
+            .map((f) => (f.originalPath.split(/[/\\]/)[0] || '').trim())
+            .filter((p) => p.length > 0)
+        )
+      );
 
-      const { items } = await list({
-        path: `images/${imageSet.name}/`, // image set name
-        options: { bucket: 'inputs', listAll: true },
-      });
+      // List only under the relevant top-level prefixes to avoid cross-project contamination
+      const allItems: { path: string }[] = [];
+      for (const prefix of topLevelPrefixes) {
+        const { items } = await list({
+          path: `images/${prefix}/`,
+          options: { bucket: 'inputs', listAll: true },
+        });
+        allItems.push(...items);
+      }
 
-      const uploadedFiles = items.reduce((set, x) => {
-        set.add(x.path.substring('images/'.length));
+      const uploadedFiles = allItems.reduce<Set<string>>((set, x) => {
+        const keyWithoutPrefix = x.path.substring('images/'.length);
+        if (localPaths.has(keyWithoutPrefix)) {
+          set.add(keyWithoutPrefix);
+        }
         return set;
-      }, new Set());
+      }, new Set<string>());
 
       return uploadedFiles;
     } catch (error) {
@@ -869,8 +917,8 @@ export default function UploadManager() {
         }
       };
 
-      // Set interval to ping every 5 minutes
-      pingInterval = setInterval(pingProject, 300000);
+      // Set interval to ping every minute
+      pingInterval = setInterval(pingProject, 60000);
     }
 
     // Clear interval on cleanup
