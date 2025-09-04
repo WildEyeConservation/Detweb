@@ -1,5 +1,5 @@
-import React, { useState, ReactElement } from "react";
-import "./Tabs.css";
+import React, { useState, ReactElement } from 'react';
+import './Tabs.css';
 
 interface TabProps {
   label: string;
@@ -17,7 +17,11 @@ interface TabsProps {
 }
 
 export const Tab: React.FC<TabProps> = ({ children, className }) => {
-  return <div className={`d-block ${className}`}>{children}</div>;
+  return (
+    <div className={`d-flex flex-column w-100 h-100 ${className ?? ''}`}>
+      {children}
+    </div>
+  );
 };
 
 export const Tabs: React.FC<TabsProps> = ({
@@ -29,15 +33,19 @@ export const Tabs: React.FC<TabsProps> = ({
   disableSwitching = false,
 }) => {
   const [activeTab, setActiveTab] = useState(defaultTab);
-  const childrenArray = React.Children.toArray(children) as ReactElement<TabProps>[];
+  const childrenArray = React.Children.toArray(
+    children
+  ) as ReactElement<TabProps>[];
 
   return (
-    <div className="w-100">
-      <div className={`tabs-header border-bottom border-dark ${className}`}>
+    <div className='w-100 h-100 d-flex flex-column'>
+      <div
+        className={`tabs-header border-bottom border-dark ${className ?? ''}`}
+      >
         {childrenArray.map((child, index) => (
           <div
             key={index}
-            className={`tab-label ${activeTab === index ? "bg-primary" : ""}`}
+            className={`tab-label ${activeTab === index ? 'bg-primary' : ''}`}
             onClick={() => {
               if (disableSwitching) return;
               setActiveTab(index);
@@ -48,7 +56,7 @@ export const Tabs: React.FC<TabsProps> = ({
           </div>
         ))}
       </div>
-      <div>
+      <div className='flex-grow-1 d-flex flex-column w-100 h-100'>
         {sharedChild}
         {childrenArray[activeTab]}
       </div>

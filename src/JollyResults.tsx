@@ -552,6 +552,7 @@ export default function JollyResults() {
                     ? categoryIds
                     : categoryOptions.map((c) => c.value)
                 }
+                primaryOnly
               />
             </Card.Body>
           </Card>

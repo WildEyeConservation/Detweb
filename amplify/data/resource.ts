@@ -17,6 +17,7 @@ import { runPointFinder } from '../functions/runPointFinder/resource';
 import { deleteProject } from '../functions/deleteProject/resource';
 import { generateSurveyResults } from '../functions/generateSurveyResults/resource';
 import { getJwtSecret } from '../functions/getJwtSecret/resource';
+import { runMadDetector } from '../functions/runMadDetector/resource';
 // import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
@@ -883,6 +884,18 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(runScoutbot)),
+    runMadDetector: a
+      .mutation()
+      .arguments({
+        projectId: a.string().required(),
+        bucket: a.string().required(),
+        queueUrl: a.string().required(),
+        images: a.string().array(),
+        setId: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(runMadDetector)),
     runHeatmapper: a
       .mutation()
       .arguments({
@@ -927,6 +940,7 @@ const schema = a
     allow.resource(runScoutbot),
     allow.resource(runHeatmapper),
     allow.resource(runPointFinder),
+    allow.resource(runMadDetector),
     allow.resource(deleteProject),
     allow.resource(generateSurveyResults),
     allow.resource(getJwtSecret),

@@ -2,12 +2,11 @@ import { Card, Button } from "react-bootstrap";
 import { Tabs, Tab } from "./Tabs";
 import Users from "./organization/Users";
 import OrganizationSelector from "./OrganizationSelector";
-import { useState, useContext, useEffect } from "react";
+import { useState, useContext } from "react";
 import Info from "./organization/Info";
 import { UserContext, GlobalContext } from "./Context";
 import { useOptimisticUpdates } from "./useOptimisticUpdates";
 import type { Schema } from "../amplify/data/resource";
-import { useQueryClient } from "@tanstack/react-query";
 
 export default function Permissions() {
   const { isOrganizationAdmin } = useContext(UserContext)!;
@@ -19,19 +18,10 @@ export default function Permissions() {
     name: string;
     function: () => void;
   } | null>(null);
-  const queryClient = useQueryClient();
 
   if (!isOrganizationAdmin) {
     return <div>You are not authorized to access this page.</div>;
   }
-
-  useEffect(() => {
-    if (organization.id) {
-      queryClient.invalidateQueries({
-        queryKey: ["OrganizationMembership"],
-      });
-    }
-  }, [organization]);
 
   return (
     <div
@@ -92,7 +82,8 @@ function PermissionsBody({
         organizationId: organization.id,
         nextToken,
       }),
-    undefined, // subscriptionFilter (if needed) can go here
+    // Only subscribe to membership changes for this specific organization
+    { filter: { organizationId: { eq: organization.id } } },
     {
       compositeKey: (membership) =>
         `${membership.organizationId}:${membership.userId}`,

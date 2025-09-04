@@ -24,30 +24,43 @@ function OrganizationSelector({
   >([]);
 
   useEffect(() => {
-    Promise.all(
-      myOrganizations
-        ?.filter((membership) => membership.isAdmin)
-        .map(
-          async (membership) =>
-            (
-              await client.models.Organization.get({
-                id: membership.organizationId,
-              })
-            ).data
-        )
-    ).then((allOrganizations) => {
-      setOrganizations(
-        allOrganizations.filter((organization) => organization !== null)
-      );
+    // Only fetch organizations if we have admin memberships and haven't already loaded them
+    if (!myOrganizations?.length) return;
 
-      if (allOrganizations.length === 1 && allOrganizations[0]?.id) {
+    const adminMemberships = myOrganizations.filter((membership) => membership.isAdmin);
+    if (!adminMemberships.length) return;
+
+    // Check if we already have the organizations and they match the current admin memberships
+    const currentOrgIds = organizations.map(org => org.id).sort();
+    const newOrgIds = adminMemberships.map(m => m.organizationId).sort();
+
+    if (currentOrgIds.length === newOrgIds.length &&
+        currentOrgIds.every((id, index) => id === newOrgIds[index])) {
+      return; // No changes needed
+    }
+
+    Promise.all(
+      adminMemberships.map(
+        async (membership) =>
+          (
+            await client.models.Organization.get({
+              id: membership.organizationId,
+            })
+          ).data
+      )
+    ).then((allOrganizations) => {
+      const validOrganizations = allOrganizations.filter((organization) => organization !== null);
+      setOrganizations(validOrganizations);
+
+      // Auto-select organization only if there's exactly one and no organization is currently selected
+      if (validOrganizations.length === 1 && validOrganizations[0]?.id && !organization.id) {
         setOrganization({
-          id: allOrganizations[0].id,
-          name: allOrganizations[0].name,
+          id: validOrganizations[0].id,
+          name: validOrganizations[0].name,
         });
       }
     });
-  }, [myOrganizations]);
+  }, [myOrganizations, organizations, organization.id, client.models.Organization]);
 
   if (organizations.length <= 1) {
     return null;

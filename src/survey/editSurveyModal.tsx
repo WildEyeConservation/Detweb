@@ -7,6 +7,7 @@ import CreateSubset from '../CreateSubset';
 import EditShapeFile from './EditShapeFile';
 import DefineTransects from './DefineTransects';
 import EditInformation from './EditInformation';
+import EditCameras from './EditCameras';
 
 export default function EditSurveyModal({
   show,
@@ -54,9 +55,12 @@ export default function EditSurveyModal({
                 label = 'Process';
                 break;
               case 2:
-                label = 'Save Shapefile';
+                label = 'Save Cameras';
                 break;
               case 3:
+                label = 'Save Shapefile';
+                break;
+              case 4:
                 label = 'Save Work';
                 break;
             }
@@ -81,6 +85,15 @@ export default function EditSurveyModal({
               projectId={project.id}
               setHandleSubmit={setHandleSubmit}
               setSubmitDisabled={setSubmitDisabled}
+            />
+          </Tab>
+          <Tab label='Edit Cameras'>
+            <EditCameras
+              key={project.id}
+              projectId={project.id}
+              setHandleSubmit={setHandleSubmit}
+              setSubmitDisabled={setSubmitDisabled}
+              setCloseDisabled={setCloseDisabled}
             />
           </Tab>
           <Tab label='Edit Shape File'>

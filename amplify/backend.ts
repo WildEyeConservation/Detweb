@@ -262,6 +262,35 @@ scoutbotAutoProcessor.asg.role.addManagedPolicy(
   iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppSyncInvokeFullAccess')
 );
 
+// MAD Detector AutoProcessor (GPU)
+const madDetectorAutoProcessor = new AutoProcessor(
+  ecsStack,
+  'MadDetectorAutoProcessor',
+  {
+    vpc,
+    instanceType: ec2.InstanceType.of(
+      ec2.InstanceClass.G4DN,
+      ec2.InstanceSize.XLARGE
+    ),
+    ecsImage: ecs.ContainerImage.fromAsset('containerImages/madDetector'),
+    ecsTaskRole,
+    memoryLimitMiB: 1024 * 12,
+    gpuCount: 1,
+    environment: {
+      API_ENDPOINT: backend.data.graphqlUrl,
+      API_KEY: backend.data.apiKey || '',
+      BUCKET: backend.inputBucket.resources.bucket.bucketName,
+      MAD_CHECKPOINT_S3: 's3://surveyscope/2024-mad-v2/checkpoint.pth',
+    },
+    machineImage: ecs.EcsOptimizedImage.amazonLinux2(ecs.AmiHardwareType.GPU),
+    rootVolumeSize: 200,
+  }
+);
+
+madDetectorAutoProcessor.asg.role.addManagedPolicy(
+  iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppSyncInvokeFullAccess')
+);
+
 //const devRole = iam.Role.fromRoleArn(scope, "DevRole", devUserArn);
 
 // Grant the devuser permission to assume the Subsample Lambda role
@@ -315,6 +344,7 @@ backend.addOutput({
   custom: {
     lightglueTaskQueueUrl: lightGlueAutoProcessor.queue.queueUrl,
     scoutbotTaskQueueUrl: scoutbotAutoProcessor.queue.queueUrl,
+    madDetectorTaskQueueUrl: madDetectorAutoProcessor.queue.queueUrl,
     processTaskQueueUrl: processor.queue.queueUrl,
     pointFinderTaskQueueUrl: pointFinderAutoProcessor.queue.queueUrl,
     annotationTable: backend.data.resources.tables['Annotation'].tableName,

@@ -1100,6 +1100,10 @@ export function FileUploadCore({
               label: 'Elephant Detection Nadir',
               value: 'elephant-detection-nadir',
             },
+            // {
+            //   label: 'Marine Animal Detector (MAD AI)',
+            //   value: 'mad',
+            // },
             {
               label: 'Manual (images may be processed later)',
               value: 'manual',

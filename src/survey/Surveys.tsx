@@ -88,6 +88,7 @@ export default function Surveys() {
                     'status',
                     'updatedAt',
                     'createdAt',
+                    'imageSets.imageCount',
                   ],
                 }
               )
@@ -199,7 +200,8 @@ export default function Surveys() {
   const tableData = projects
     .filter(
       (project) =>
-        (project.status !== 'deleted' && project.status !== 'hidden') &&
+        project.status !== 'deleted' &&
+        project.status !== 'hidden' &&
         (project.name.toLowerCase().includes(search.toLowerCase()) ||
           project.organization.name
             .toLowerCase()
@@ -207,10 +209,14 @@ export default function Surveys() {
     )
     .sort((a, b) => {
       if (sortBy === 'createdAt') {
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        return (
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
       }
       if (sortBy === 'createdAt-reverse') {
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        return (
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
       }
       if (sortBy === 'name') {
         return a.name.localeCompare(b.name);
@@ -250,7 +256,14 @@ export default function Surveys() {
           <div className='d-flex justify-content-between align-items-center gap-2'>
             <div className='d-flex flex-column gap-1'>
               <h5 className='mb-0'>{project.name}</h5>
-              <i style={{ fontSize: '14px' }}>{project.organization.name}</i>
+              <div className='d-flex flex-column'>
+                <i style={{ fontSize: '14px' }}>{project.organization.name}</i>
+                {project.status !== 'uploading' && (
+                  <i style={{ fontSize: '14px' }}>
+                    Images: {project.imageSets[0].imageCount || 0}
+                  </i>
+                )}
+              </div>
               {project.status !== 'active' && (
                 <Badge
                   style={{ fontSize: '14px', width: 'fit-content' }}
@@ -461,7 +474,10 @@ export default function Surveys() {
                 ))}
             </div>
             {hasJobs && (
-              <div className='d-flex flex-row gap-2 w-100 align-items-center' style={{ maxWidth: '500px' }}>
+              <div
+                className='d-flex flex-row gap-2 w-100 align-items-center'
+                style={{ maxWidth: '500px' }}
+              >
                 <ProjectProgress projectId={project.id} />
                 <Button
                   className='flex align-items-center justify-content-center'
@@ -548,9 +564,7 @@ export default function Surveys() {
             </Card.Footer>
           )}
         </Card>
-        {process.env.NODE_ENV === 'development' && (
-          <UploadIntegrityChecker />
-        )}
+        {process.env.NODE_ENV === 'development' && <UploadIntegrityChecker />}
       </div>
       <NewSurveyModal
         show={modalToShow === 'newSurvey'}

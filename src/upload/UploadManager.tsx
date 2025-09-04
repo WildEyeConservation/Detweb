@@ -520,6 +520,17 @@ export default function UploadManager() {
 
       createdImages.sort((a, b) => a.timestamp - b.timestamp);
 
+      const {
+        data: [imageSet],
+      } = await client.models.ImageSet.imageSetsByProjectId({
+        projectId: projectId,
+      });
+
+      await client.models.ImageSet.update({
+        id: imageSet.id,
+        imageCount: createdImages.length,
+      });
+
       const metadata = (await metadataStore.getItem(projectId)) as {
         model: string;
         masks: number[][][];
@@ -600,6 +611,28 @@ export default function UploadManager() {
         await client.models.Project.update({
           id: projectId,
           status: 'processing-heatmap-busy',
+        });
+      }
+
+      if (model === 'mad') {
+        for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
+          const batch = createdImages.slice(i, i + BATCH_SIZE);
+          const batchStrings = batch.map(
+            (image) => `${image.id}---${image.originalPath}`
+          );
+
+          client.mutations.runMadDetector({
+            projectId: projectId,
+            images: batchStrings,
+            setId: locationSet.id,
+            bucket: backend.storage.buckets[1].bucket_name,
+            queueUrl: backend.custom.madDetectorTaskQueueUrl,
+          });
+        }
+
+        await client.models.Project.update({
+          id: projectId,
+          status: 'processing-mad',
         });
       }
 

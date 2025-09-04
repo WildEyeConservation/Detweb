@@ -36,6 +36,7 @@ export default function AnnotationImage(props: any) {
     testPresetId,
     isTest,
     config,
+    hideZoomSetting = false,
   } = props;
   const { annotationSetId } = location;
   const { client } = useContext(GlobalContext)!;
@@ -62,7 +63,9 @@ export default function AnnotationImage(props: any) {
   const {
     categoriesHook: { data: projectCategories },
   } = useContext(ProjectContext)!;
-  const [externalCategories, setExternalCategories] = useState<any[] | null>(null);
+  const [externalCategories, setExternalCategories] = useState<any[] | null>(
+    null
+  );
   const [legendCategories, setLegendCategories] = useState<any[] | null>(null);
 
   // If the annotation set on the test belongs to a different project than the current one,
@@ -72,7 +75,9 @@ export default function AnnotationImage(props: any) {
     async function ensureCategories() {
       try {
         // Fetch the annotation set to discover its project id
-        const { data: annSet } = await client.models.AnnotationSet.get({ id: annotationSetId });
+        const { data: annSet } = await client.models.AnnotationSet.get({
+          id: annotationSetId,
+        });
         if (!annSet) {
           setExternalCategories(null);
           setLegendCategories(projectCategories ?? null);
@@ -85,14 +90,21 @@ export default function AnnotationImage(props: any) {
             setLegendCategories(projectCategories ?? null);
           }
         } else {
-          const { data: cats } = await client.models.Category.categoriesByAnnotationSetId({ annotationSetId });
+          const { data: cats } =
+            await client.models.Category.categoriesByAnnotationSetId({
+              annotationSetId,
+            });
           if (!cancelled) {
             setExternalCategories(cats ?? []);
             setLegendCategories(cats ?? []);
           }
         }
       } catch (e) {
-        console.error('Failed to ensure categories for annotation set', annotationSetId, e);
+        console.error(
+          'Failed to ensure categories for annotation set',
+          annotationSetId,
+          e
+        );
         if (!cancelled) {
           setExternalCategories(null);
           setLegendCategories(projectCategories ?? null);
@@ -155,7 +167,13 @@ export default function AnnotationImage(props: any) {
           />
         ))
     );
-  }, [props.taskTag, location.image.id, annotationSetId, legendCategories, projectCategories]);
+  }, [
+    props.taskTag,
+    location.image.id,
+    annotationSetId,
+    legendCategories,
+    projectCategories,
+  ]);
 
   async function handleShare() {
     const windowUrl = new URL(window.location.href);
@@ -205,19 +223,19 @@ export default function AnnotationImage(props: any) {
             className='d-flex flex-row justify-content-center align-items-center w-100 gap-3 overflow-hidden'
             style={{ position: 'relative', height: '26px' }}
           >
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                }}
-              >
-                <Share2
-                  size={24}
-                  onClick={!isTest ? handleShare : undefined}
-                  style={{ cursor: 'pointer' }}
-                />
-              </div>
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+              }}
+            >
+              <Share2
+                size={24}
+                onClick={!isTest ? handleShare : undefined}
+                style={{ cursor: 'pointer' }}
+              />
+            </div>
             {visible && (
               <>
                 <Badge bg='secondary'>
@@ -226,16 +244,18 @@ export default function AnnotationImage(props: any) {
                     ? `${props.taskTag || currentTaskTag}`
                     : 'Viewing image'}
                 </Badge>
-                <SetDefaultZoom
-                  setDefaultZoom={setDefaultZoom}
-                  originalZoom={zoom}
-                  adminMemberships={myMembershipHook.data
-                    ?.filter((membership) => membership.isAdmin)
-                    .map((membership) => ({
-                      projectId: membership.projectId,
-                      queueId: membership.queueId!,
-                    }))}
-                />
+                {!hideZoomSetting && (
+                  <SetDefaultZoom
+                    setDefaultZoom={setDefaultZoom}
+                    originalZoom={zoom}
+                    adminMemberships={myMembershipHook.data
+                      ?.filter((membership) => membership.isAdmin)
+                      .map((membership) => ({
+                        projectId: membership.projectId,
+                        queueId: membership.queueId!,
+                      }))}
+                  />
+                )}
               </>
             )}
           </div>
