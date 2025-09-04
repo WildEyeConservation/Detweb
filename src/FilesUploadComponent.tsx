@@ -271,12 +271,30 @@ export function FileUploadCore({
     async function getExistingFiles() {
       // Always fetch existing files on S3 to determine upload count
       setListingS3Images(true);
-      const { items } = await list({
-        path: `images/${name}`,
-        options: { bucket: 'inputs', listAll: true },
-      });
-      const existingFiles = items.reduce<Set<string>>((set, x) => {
-        set.add(x.path.substring('images/'.length));
+      // Only consider S3 keys that match the currently scanned local files for this upload
+      const localPaths = new Set(imageFiles.map((f) => f.webkitRelativePath));
+      const prefixes = Array.from(
+        new Set(
+          Array.from(localPaths)
+            .map((p) => (p.split(/[/\\]/)[0] || '').trim())
+            .filter((p) => p.length > 0)
+        )
+      );
+
+      const allItems: { path: string }[] = [];
+      for (const prefix of prefixes) {
+        const { items } = await list({
+          path: `images/${prefix}/`,
+          options: { bucket: 'inputs', listAll: true },
+        });
+        allItems.push(...items);
+      }
+
+      const existingFiles = allItems.reduce<Set<string>>((set, x) => {
+        const keyWithoutPrefix = x.path.substring('images/'.length);
+        if (localPaths.has(keyWithoutPrefix)) {
+          set.add(keyWithoutPrefix);
+        }
         return set;
       }, new Set());
 
@@ -1607,8 +1625,6 @@ export default function FilesUploadComponent({
 
   // Modal version needs to handle its own submit
   const handleModalSubmit = async () => {
-    // Close the modal first, so the user doesn't experience the UI as unresponsive
-
     if (uploadSubmitFn && project?.id) {
       // Simplify return type to avoid complex union
       await (client.models.Project.update as any)({
