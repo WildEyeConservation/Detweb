@@ -266,6 +266,11 @@ export default function LaunchAnnotationSetModal({
             modelOptions.push({ label: 'ScoutBot', value: 'scoutbot' });
           }
         }
+        if (locationSet.name.toLowerCase().includes('mad')) {
+          if (!modelOptions.some((option) => option.value === 'mad')) {
+            modelOptions.push({ label: 'MAD AI', value: 'mad' });
+          }
+        }
         if (
           locationSet.name.toLowerCase().includes('elephant-detection-nadir')
         ) {
