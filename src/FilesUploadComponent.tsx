@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useContext, useCallback } from 'react';
+import { useEffect, useState, useContext, useCallback } from 'react';
 // import moment from 'moment'
 // import {MD5,enc} from 'crypto-js'
 import Modal from 'react-bootstrap/Modal';
@@ -99,8 +99,9 @@ export function FileUploadCore({
   setGpsDataReady,
   newProject = true,
   onShapefileParsed,
+  project,
 }: FilesUploadBaseProps) {
-  const [upload, setUpload] = useState(true);
+  const [upload] = useState(true);
   const [name, setName] = useState('');
   const { client } = useContext(GlobalContext)!;
   const [scannedFiles, setScannedFiles] = useState<File[]>([]);
@@ -164,6 +165,10 @@ export function FileUploadCore({
   }>({});
   const [mappingConfirmed, setMappingConfirmed] = useState(false);
   const [timestampInMs, setTimestampInMs] = useState(false);
+
+  // Prefetched existing cameras for the project (modal flow)
+  const [existingCameraNames, setExistingCameraNames] = useState<string[]>([]);
+  const [loadingExistingCameras, setLoadingExistingCameras] = useState(false);
 
   // State for scan count and total
   const [scanCount, setScanCount] = useState(0);
@@ -395,6 +400,33 @@ export function FileUploadCore({
     }
   }, [multipleCameras]);
 
+  useEffect(() => {
+    if (!project?.id) {
+      setExistingCameraNames([]);
+      return;
+    }
+    let cancelled = false;
+    async function fetchExistingCameras() {
+      try {
+        setLoadingExistingCameras(true);
+        const { data } = await client.models.Camera.camerasByProjectId({
+          projectId: project.id,
+        });
+        if (!cancelled) {
+          setExistingCameraNames(
+            (data || []).map((c: any) => c.name).filter(Boolean)
+          );
+        }
+      } finally {
+        if (!cancelled) setLoadingExistingCameras(false);
+      }
+    }
+    fetchExistingCameras();
+    return () => {
+      cancelled = true;
+    };
+  }, [client, project?.id]);
+
   const handleFileInputChange = (files: File[]) => {
     if (files) {
       setScannedFiles(Array.from(files));
@@ -546,9 +578,9 @@ export function FileUploadCore({
       const allCameras: Schema['Camera']['type'][] = [];
 
       const { data: existingCameras } =
-        await client.models.Camera.camerasByProjectId({
+        (await client.models.Camera.camerasByProjectId({
           projectId,
-        });
+        })) as any;
 
       for (const camera of existingCameras) {
         allCameras.push(camera);
@@ -580,9 +612,13 @@ export function FileUploadCore({
       });
 
       for (const overlap of overlaps) {
-        const cameraA = allCameras.find((c) => c.name === overlap.cameraA);
+        const cameraA = (allCameras as any[]).find(
+          (c) => c.name === overlap.cameraA
+        );
 
-        const cameraB = allCameras.find((c) => c.name === overlap.cameraB);
+        const cameraB = (allCameras as any[]).find(
+          (c) => c.name === overlap.cameraB
+        );
 
         if (cameraA && cameraB) {
           const { data: existingOverlap } =
@@ -1118,10 +1154,10 @@ export function FileUploadCore({
               label: 'Elephant Detection Nadir',
               value: 'elephant-detection-nadir',
             },
-            // {
-            //   label: 'Marine Animal Detector (MAD AI)',
-            //   value: 'mad',
-            // },
+            {
+              label: 'Marine Animal Detector (MAD AI)',
+              value: 'mad',
+            },
             {
               label: 'Manual (images may be processed later)',
               value: 'manual',
@@ -1564,6 +1600,9 @@ export function FileUploadCore({
           </div>
           <Form.Group className='mt-3'>
             <Form.Label className='mb-0'>Camera Definition</Form.Label>
+            <span className='text-muted d-block mb-1' style={{ fontSize: '12px' }}>
+              Does your survey have only one camera or multiple cameras?
+            </span>
             <LabeledToggleSwitch
               leftLabel='Single Camera'
               rightLabel='Multiple Cameras'
@@ -1585,13 +1624,51 @@ export function FileUploadCore({
                 )}
               </>
             )}
-            <CameraSpecification
-              cameraSelection={
-                cameraSelection || ['Survey Level', ['Survey Camera']]
-              }
-              cameraSpecs={cameraSpecs}
-              setCameraSpecs={setCameraSpecs}
-            />
+            {/* Existing vs New camera notice */}
+            {(() => {
+              if (!cameraSelection) return null;
+              const currentNames = cameraSelection[1];
+              const existingSet = new Set(existingCameraNames);
+              const matched = currentNames.filter((n) => existingSet.has(n));
+              const newOnes = currentNames.filter((n) => !existingSet.has(n));
+              const hasAny = currentNames.length > 0;
+              if (!hasAny || loadingExistingCameras) return null;
+              return (
+                <div className='mt-2'>
+                  {matched.length > 0 && (
+                    <div className='alert alert-info mb-2'>
+                      These cameras already exist and will be linked by name:{' '}
+                      {matched.join(', ')}
+                    </div>
+                  )}
+                  {matched.length === 0 && newOnes.length === 0 && (
+                    <div className='alert alert-warning mb-2'>
+                      No cameras detected from folder structure.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+            {(() => {
+              if (!cameraSelection) return null;
+              const names = (cameraSelection || [
+                'Survey Level',
+                ['Survey Camera'],
+              ])[1];
+              const existingSet = new Set(existingCameraNames);
+              const onlyNew = names.filter((n) => !existingSet.has(n));
+              if (onlyNew.length === 0) return null;
+              return (
+                <CameraSpecification
+                  cameraSelection={[
+                    (cameraSelection || ['Survey Level', ['Survey Camera']])[0],
+                    onlyNew,
+                  ]}
+                  cameraSpecs={cameraSpecs}
+                  setCameraSpecs={setCameraSpecs}
+                />
+              );
+            })()}
           </Form.Group>
         </>
       )}
