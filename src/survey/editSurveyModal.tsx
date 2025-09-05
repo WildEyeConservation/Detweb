@@ -8,6 +8,7 @@ import EditShapeFile from './EditShapeFile';
 import DefineTransects from './DefineTransects';
 import EditInformation from './EditInformation';
 import EditCameras from './EditCameras';
+import AdvancedOptions from './AdvancedOptions';
 
 export default function EditSurveyModal({
   show,
@@ -114,16 +115,21 @@ export default function EditSurveyModal({
               setCloseDisabled={setCloseDisabled}
             />
           </Tab>
+          <Tab label='Advanced Options'>
+            <AdvancedOptions key={project.id} projectId={project.id} />
+          </Tab>
         </Tabs>
       </Modal.Body>
       <Modal.Footer>
-        <Button
-          variant='primary'
-          disabled={submitDisabled}
-          onClick={handleOnClick}
-        >
-          {buttonLabel}
-        </Button>
+        {tab !== 5 && (
+          <Button
+            variant='primary'
+            disabled={submitDisabled}
+            onClick={handleOnClick}
+          >
+            {buttonLabel}
+          </Button>
+        )}
         <Button variant='dark' onClick={onClose} disabled={closeDisabled}>
           Close
         </Button>
