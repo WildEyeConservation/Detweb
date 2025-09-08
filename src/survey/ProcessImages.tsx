@@ -1,7 +1,7 @@
-import { Form, Spinner, Button } from "react-bootstrap";
-import { useState, useContext, useEffect, useCallback, useRef } from "react";
-import { GlobalContext, UserContext } from "../Context";
-import Select from "react-select";
+import { Form, Spinner, Button } from 'react-bootstrap';
+import { useState, useContext, useEffect, useCallback, useRef } from 'react';
+import { GlobalContext, UserContext } from '../Context';
+import Select from 'react-select';
 
 export default function ProcessImages({
   projectId,
@@ -54,7 +54,7 @@ export default function ProcessImages({
       }
       const res = await client.models.Image.imagesByProjectId(
         { projectId },
-        { selectionSet: ["id", "originalPath"], nextToken }
+        { selectionSet: ['id', 'originalPath'], nextToken, limit: 1000 }
       );
       const page: { id: string; originalPath: string }[] = res.data ?? [];
       allImages = allImages.concat(page);
@@ -77,8 +77,9 @@ export default function ProcessImages({
           source: { beginsWith: model.value },
         },
         {
-          selectionSet: ["id", "imageId", "source"],
+          selectionSet: ['id', 'imageId', 'source'],
           nextToken,
+          limit: 1000,
         }
       );
       const page: { id: string; imageId: string; source: string }[] =
@@ -127,15 +128,15 @@ export default function ProcessImages({
     });
 
     if (!locationSet) {
-      console.error("Failed to create location set");
-      alert("Something went wrong, please try again.");
+      console.error('Failed to create location set');
+      alert('Something went wrong, please try again.');
       return;
     }
 
     const BATCH_SIZE = 500;
 
     switch (model.value) {
-      case "scoutbotv3":
+      case 'scoutbotv3':
         for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
           const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map(
@@ -152,11 +153,11 @@ export default function ProcessImages({
 
           await client.models.Project.update({
             id: projectId,
-            status: "processing-scoutbot",
+            status: 'processing-scoutbot',
           });
         }
         break;
-      case "heatmap":
+      case 'heatmap':
         for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
           const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map((image) => image.originalPath);
@@ -168,8 +169,29 @@ export default function ProcessImages({
 
         await client.models.Project.update({
           id: projectId,
-          status: "processing-heatmap-busy",
+          status: 'processing-heatmap-busy',
         });
+        break;
+      case 'mad':
+        for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
+          const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
+          const batchStrings = batch.map(
+            (image) => `${image.id}---${image.originalPath}`
+          );
+
+          client.mutations.runMadDetector({
+            projectId: projectId,
+            images: batchStrings,
+            setId: locationSet.id,
+            bucket: backend.storage.buckets[1].bucket_name,
+            queueUrl: backend.custom.madDetectorTaskQueueUrl,
+          });
+
+          await client.models.Project.update({
+            id: projectId,
+            status: 'processing-mad',
+          });
+        }
         break;
     }
 
@@ -201,44 +223,45 @@ export default function ProcessImages({
   return (
     <Form>
       <Form.Group>
-        <Form.Label className="mb-0">Model</Form.Label>
+        <Form.Label className='mb-0'>Model</Form.Label>
         <Select
           value={model}
           onChange={(m) => setModel(m)}
           options={[
-            { label: "ScoutBot", value: "scoutbotv3" },
-            { label: "Elephant Detection Nadir", value: "heatmap" },
+            { label: 'ScoutBot', value: 'scoutbotv3' },
+            { label: 'Elephant Detection Nadir', value: 'heatmap' },
+            { label: 'MAD', value: 'mad' },
           ]}
-          placeholder="Select a model"
-          className="text-black"
+          placeholder='Select a model'
+          className='text-black'
         />
         <Button
-          variant="primary"
+          variant='primary'
           onClick={scanImages}
           disabled={!model || loading}
-          className="mt-2"
+          className='mt-2'
         >
           Scan
         </Button>
         {loading ? (
-          <div className="d-flex flex-column align-items-center">
-            <Spinner animation="border" role="status" />
-            <p className="mb-0">Determining images to process...</p>
-            <p className="mb-1">Found {imagesLoaded ?? 0} images</p>
+          <div className='d-flex flex-column align-items-center'>
+            <Spinner animation='border' role='status' />
+            <p className='mb-0'>Determining images to process...</p>
+            <p className='mb-1'>Found {imagesLoaded ?? 0} images</p>
             {locationsLoaded !== null && (
               <>
-                <p className="mb-0">Searching for detections on images...</p>
-                <p className="mb-0">Found {locationsLoaded} detections</p>
+                <p className='mb-0'>Searching for detections on images...</p>
+                <p className='mb-0'>Found {locationsLoaded} detections</p>
               </>
             )}
           </div>
         ) : scanned ? (
           unprocessedImages.length > 0 ? (
-            <p className="mb-0 mt-2">
+            <p className='mb-0 mt-2'>
               Found {unprocessedImages.length} unprocessed images
             </p>
           ) : (
-            <p className="mb-0 mt-2">All images have been processed</p>
+            <p className='mb-0 mt-2'>All images have been processed</p>
           )
         ) : null}
       </Form.Group>
