@@ -29,12 +29,14 @@ interface DetwebMarkerProps {
     input: L.Point | [number, number] | Array<L.Point | [number, number]>
   ) => L.LatLng | L.LatLng[];
   onShadowDrag?: (id: string, x: number, y: number) => void;
+  hideIdenticon?: boolean;
 }
 
 function createIcon(
   categories: CategoryType[],
   annotation: ExtendedAnnotationType,
-  activeAnnotation?: ExtendedAnnotationType
+  activeAnnotation?: ExtendedAnnotationType,
+  hideIdenticon?: boolean
 ) {
   const color =
     categories?.find((category) => category.id === annotation.categoryId)
@@ -54,7 +56,7 @@ function createIcon(
       ? '#888888'
       : '#000000';
 
-  const markerLabel = id ? jdenticon.toSvg(id, 20) : '';
+  const markerLabel = !hideIdenticon && id ? jdenticon.toSvg(id, 20) : '';
 
   let html = `
       <div class="marker" ${attributes}>
@@ -309,7 +311,7 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
           position={xy2latLng(annotation)}
           draggable={true}
           autopan={true}
-          icon={createIcon(categories, annotation, activeAnnotation)}
+          icon={createIcon(categories, annotation, activeAnnotation, props.hideIdenticon)}
           contextmenu={true}
           contextmenuInheritItems={false}
           contextmenuItems={getContextMenuItems(annotation)}
