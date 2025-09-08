@@ -4,9 +4,7 @@ import { createGroup } from '../data/create-group/resource';
 import { listUsers } from '../data/list-users/resource';
 import { listGroupsForUser } from '../data/list-groups-for-user/resource';
 import { processImages } from '../functions/processImages/resource';
-import { getAnnotationCounts } from '../functions/getAnnotationCounts/resource';
 import { updateUserStats } from '../functions/updateUserStats/resource';
-import { updateAnnotationCounts } from '../functions/updateAnnotationCounts/resource';
 import { monitorModelProgress } from '../functions/monitorModelProgress/resource';
 import { updateProjectMemberships } from '../functions/updateProjectMemberships/resource';
 import { cleanupJobs } from '../functions/cleanupJobs/resource';
@@ -44,10 +42,6 @@ const schema = a
         observations: a.hasMany('Observation', 'projectId'),
         members: a.hasMany('UserProjectMembership', 'projectId'),
         queues: a.hasMany('Queue', 'projectId'),
-        annotationCountsPerCategoryPerSet: a.hasMany(
-          'AnnotationCountPerCategoryPerSet',
-          'projectId'
-        ),
         shapefile: a.hasOne('Shapefile', 'projectId'),
         testConfig: a.hasOne('ProjectTestConfig', 'projectId'),
         testResults: a.hasMany('TestResult', 'projectId'),
@@ -79,10 +73,6 @@ const schema = a
         annotations: a.hasMany('Annotation', 'categoryId'),
         annotationCount: a.integer().default(0),
         objects: a.hasMany('Object', 'categoryId'),
-        annotationCountPerSet: a.hasMany(
-          'AnnotationCountPerCategoryPerSet',
-          'categoryId'
-        ),
         locationAnnotationCounts: a.hasMany(
           'LocationAnnotationCount',
           'categoryId'
@@ -157,10 +147,6 @@ const schema = a
         annotationCount: a.integer().default(0),
         observations: a.hasMany('Observation', 'annotationSetId'),
         tasks: a.hasMany('TasksOnAnnotationSet', 'annotationSetId'),
-        annotationCountPerCategory: a.hasMany(
-          'AnnotationCountPerCategoryPerSet',
-          'annotationSetId'
-        ),
         testPresetLocations: a.hasMany('TestPresetLocation', 'annotationSetId'),
         locationAnnotationCounts: a.hasMany(
           'LocationAnnotationCount',
@@ -178,21 +164,6 @@ const schema = a
       // .authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('annotationSetsByProjectId'),
-      ]),
-    AnnotationCountPerCategoryPerSet: a
-      .model({
-        projectId: a.id().required(),
-        project: a.belongsTo('Project', 'projectId'),
-        categoryId: a.id().required(),
-        category: a.belongsTo('Category', 'categoryId'),
-        annotationSetId: a.id().required(),
-        annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
-        annotationCount: a.integer().default(0),
-      })
-      .identifier(['annotationSetId', 'categoryId'])
-      .authorization((allow) => [allow.authenticated()])
-      .secondaryIndexes((index) => [
-        index('annotationSetId').queryField('categoryCountsByAnnotationSetId'),
       ]),
     Annotation: a
       .model({
@@ -744,14 +715,6 @@ const schema = a
           dataSource: a.ref('ImageSetMembership'),
         })
       ),
-    getAnnotationCounts: a
-      .query()
-      .arguments({
-        annotationSetId: a.string().required(),
-      })
-      .returns(a.json())
-      .authorization((allow) => [allow.authenticated()])
-      .handler(a.handler.function(getAnnotationCounts)),
     //.authorization(allow => [allow.authenticated()])
 
     // registerImages: a
@@ -929,10 +892,8 @@ const schema = a
       .handler(a.handler.function(getJwtSecret)),
   })
   .authorization((allow) => [
-    allow.resource(getAnnotationCounts),
     allow.resource(processImages),
     allow.resource(updateUserStats),
-    allow.resource(updateAnnotationCounts),
     allow.resource(monitorModelProgress),
     allow.resource(updateProjectMemberships),
     allow.resource(cleanupJobs),

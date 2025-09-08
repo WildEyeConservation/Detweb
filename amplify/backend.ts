@@ -12,14 +12,12 @@ import { AutoProcessor } from './autoProcessor';
 import { EC2QueueProcessor } from './ec2QueueProcessor';
 import { processImages } from './functions/processImages/resource';
 import { postDeploy } from './functions/postDeploy/resource';
-import { getAnnotationCounts } from './functions/getAnnotationCounts/resource';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { updateUserStats } from './functions/updateUserStats/resource';
 import { Policy, PolicyStatement, Effect } from 'aws-cdk-lib/aws-iam';
 import { StartingPosition, EventSourceMapping } from 'aws-cdk-lib/aws-lambda';
 import { Repository } from 'aws-cdk-lib/aws-ecr';
-import { updateAnnotationCounts } from './functions/updateAnnotationCounts/resource';
 import { monitorModelProgress } from './functions/monitorModelProgress/resource';
 import { cleanupJobs } from './functions/cleanupJobs/resource';
 import { runHeatmapper } from './functions/runHeatmapper/resource';
@@ -35,9 +33,7 @@ const backend = defineBackend({
   handleS3Upload,
   processImages,
   postDeploy,
-  getAnnotationCounts,
   updateUserStats,
-  updateAnnotationCounts,
   monitorModelProgress,
   runHeatmapper,
   runPointFinder,
@@ -83,12 +79,8 @@ const dynamoDbPolicy = new iam.PolicyStatement({
   resources: ['*'],
 });
 
-backend.getAnnotationCounts.resources.lambda.addToRolePolicy(dynamoDbPolicy);
 //Attach the dynamoDbPolicy to the authenticatedRole
 authenticatedRole.addToPrincipalPolicy(dynamoDbPolicy);
-
-//backend.data.resources.tables['Annotation'].grantReadData(backend.getAnnotationCounts.resources.lambda)
-//backend.getAnnotationCounts.addEnvironment('ANNOTATION_TABLE', backend.data.resources.tables['Annotation'].tableName)
 
 const sqsCreateQueueStatement = new iam.PolicyStatement({
   actions: [
