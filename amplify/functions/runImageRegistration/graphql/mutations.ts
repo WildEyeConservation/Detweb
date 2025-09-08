@@ -104,67 +104,12 @@ export const createAnnotation = /* GraphQL */ `mutation CreateAnnotation(
   APITypes.CreateAnnotationMutationVariables,
   APITypes.CreateAnnotationMutation
 >;
-export const createAnnotationCountPerCategoryPerSet = /* GraphQL */ `mutation CreateAnnotationCountPerCategoryPerSet(
-  $condition: ModelAnnotationCountPerCategoryPerSetConditionInput
-  $input: CreateAnnotationCountPerCategoryPerSetInput!
-) {
-  createAnnotationCountPerCategoryPerSet(condition: $condition, input: $input) {
-    annotationCount
-    annotationSet {
-      annotationCount
-      createdAt
-      id
-      name
-      projectId
-      register
-      updatedAt
-      __typename
-    }
-    annotationSetId
-    category {
-      annotationCount
-      annotationSetId
-      color
-      createdAt
-      id
-      name
-      projectId
-      shortcutKey
-      updatedAt
-      __typename
-    }
-    categoryId
-    createdAt
-    project {
-      createdAt
-      createdBy
-      hidden
-      id
-      name
-      organizationId
-      status
-      updatedAt
-      __typename
-    }
-    projectId
-    updatedAt
-    __typename
-  }
-}
-` as GeneratedMutation<
-  APITypes.CreateAnnotationCountPerCategoryPerSetMutationVariables,
-  APITypes.CreateAnnotationCountPerCategoryPerSetMutation
->;
 export const createAnnotationSet = /* GraphQL */ `mutation CreateAnnotationSet(
   $condition: ModelAnnotationSetConditionInput
   $input: CreateAnnotationSetInput!
 ) {
   createAnnotationSet(condition: $condition, input: $input) {
     annotationCount
-    annotationCountPerCategory {
-      nextToken
-      __typename
-    }
     annotations {
       nextToken
       __typename
@@ -290,10 +235,6 @@ export const createCategory = /* GraphQL */ `mutation CreateCategory(
 ) {
   createCategory(condition: $condition, input: $input) {
     annotationCount
-    annotationCountPerSet {
-      nextToken
-      __typename
-    }
     annotationSet {
       annotationCount
       createdAt
@@ -330,6 +271,29 @@ export const createCategory = /* GraphQL */ `mutation CreateCategory(
 ` as GeneratedMutation<
   APITypes.CreateCategoryMutationVariables,
   APITypes.CreateCategoryMutation
+>;
+export const createClientLog = /* GraphQL */ `mutation CreateClientLog(
+  $condition: ModelClientLogConditionInput
+  $input: CreateClientLogInput!
+) {
+  createClientLog(condition: $condition, input: $input) {
+    connectionType
+    createdAt
+    deviceType
+    downlink
+    id
+    ipAddress
+    os
+    rtt
+    updatedAt
+    userAgent
+    userId
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.CreateClientLogMutationVariables,
+  APITypes.CreateClientLogMutation
 >;
 export const createGroup = /* GraphQL */ `mutation CreateGroup($groupName: String!) {
   createGroup(groupName: $groupName)
@@ -1125,10 +1089,6 @@ export const createProject = /* GraphQL */ `mutation CreateProject(
   $input: CreateProjectInput!
 ) {
   createProject(condition: $condition, input: $input) {
-    annotationCountsPerCategoryPerSet {
-      nextToken
-      __typename
-    }
     annotationSets {
       nextToken
       __typename
@@ -1307,6 +1267,7 @@ export const createQueue = /* GraphQL */ `mutation CreateQueue(
       __typename
     }
     projectId
+    tag
     totalBatches
     updatedAt
     url
@@ -1748,6 +1709,7 @@ export const createUserProjectMembership = /* GraphQL */ `mutation CreateUserPro
       id
       name
       projectId
+      tag
       totalBatches
       updatedAt
       url
@@ -1778,6 +1740,7 @@ export const createUserProjectMembership = /* GraphQL */ `mutation CreateUserPro
       id
       name
       projectId
+      tag
       totalBatches
       updatedAt
       url
@@ -1909,67 +1872,12 @@ export const deleteAnnotation = /* GraphQL */ `mutation DeleteAnnotation(
   APITypes.DeleteAnnotationMutationVariables,
   APITypes.DeleteAnnotationMutation
 >;
-export const deleteAnnotationCountPerCategoryPerSet = /* GraphQL */ `mutation DeleteAnnotationCountPerCategoryPerSet(
-  $condition: ModelAnnotationCountPerCategoryPerSetConditionInput
-  $input: DeleteAnnotationCountPerCategoryPerSetInput!
-) {
-  deleteAnnotationCountPerCategoryPerSet(condition: $condition, input: $input) {
-    annotationCount
-    annotationSet {
-      annotationCount
-      createdAt
-      id
-      name
-      projectId
-      register
-      updatedAt
-      __typename
-    }
-    annotationSetId
-    category {
-      annotationCount
-      annotationSetId
-      color
-      createdAt
-      id
-      name
-      projectId
-      shortcutKey
-      updatedAt
-      __typename
-    }
-    categoryId
-    createdAt
-    project {
-      createdAt
-      createdBy
-      hidden
-      id
-      name
-      organizationId
-      status
-      updatedAt
-      __typename
-    }
-    projectId
-    updatedAt
-    __typename
-  }
-}
-` as GeneratedMutation<
-  APITypes.DeleteAnnotationCountPerCategoryPerSetMutationVariables,
-  APITypes.DeleteAnnotationCountPerCategoryPerSetMutation
->;
 export const deleteAnnotationSet = /* GraphQL */ `mutation DeleteAnnotationSet(
   $condition: ModelAnnotationSetConditionInput
   $input: DeleteAnnotationSetInput!
 ) {
   deleteAnnotationSet(condition: $condition, input: $input) {
     annotationCount
-    annotationCountPerCategory {
-      nextToken
-      __typename
-    }
     annotations {
       nextToken
       __typename
@@ -2095,10 +2003,6 @@ export const deleteCategory = /* GraphQL */ `mutation DeleteCategory(
 ) {
   deleteCategory(condition: $condition, input: $input) {
     annotationCount
-    annotationCountPerSet {
-      nextToken
-      __typename
-    }
     annotationSet {
       annotationCount
       createdAt
@@ -2135,6 +2039,29 @@ export const deleteCategory = /* GraphQL */ `mutation DeleteCategory(
 ` as GeneratedMutation<
   APITypes.DeleteCategoryMutationVariables,
   APITypes.DeleteCategoryMutation
+>;
+export const deleteClientLog = /* GraphQL */ `mutation DeleteClientLog(
+  $condition: ModelClientLogConditionInput
+  $input: DeleteClientLogInput!
+) {
+  deleteClientLog(condition: $condition, input: $input) {
+    connectionType
+    createdAt
+    deviceType
+    downlink
+    id
+    ipAddress
+    os
+    rtt
+    updatedAt
+    userAgent
+    userId
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.DeleteClientLogMutationVariables,
+  APITypes.DeleteClientLogMutation
 >;
 export const deleteImage = /* GraphQL */ `mutation DeleteImage(
   $condition: ModelImageConditionInput
@@ -2923,10 +2850,6 @@ export const deleteProject = /* GraphQL */ `mutation DeleteProject(
   $input: DeleteProjectInput!
 ) {
   deleteProject(condition: $condition, input: $input) {
-    annotationCountsPerCategoryPerSet {
-      nextToken
-      __typename
-    }
     annotationSets {
       nextToken
       __typename
@@ -3112,6 +3035,7 @@ export const deleteQueue = /* GraphQL */ `mutation DeleteQueue(
       __typename
     }
     projectId
+    tag
     totalBatches
     updatedAt
     url
@@ -3553,6 +3477,7 @@ export const deleteUserProjectMembership = /* GraphQL */ `mutation DeleteUserPro
       id
       name
       projectId
+      tag
       totalBatches
       updatedAt
       url
@@ -3583,6 +3508,7 @@ export const deleteUserProjectMembership = /* GraphQL */ `mutation DeleteUserPro
       id
       name
       projectId
+      tag
       totalBatches
       updatedAt
       url
@@ -3694,6 +3620,25 @@ export const runImageRegistration = /* GraphQL */ `mutation RunImageRegistration
   APITypes.RunImageRegistrationMutationVariables,
   APITypes.RunImageRegistrationMutation
 >;
+export const runMadDetector = /* GraphQL */ `mutation RunMadDetector(
+  $bucket: String!
+  $images: [String]
+  $projectId: String!
+  $queueUrl: String!
+  $setId: String!
+) {
+  runMadDetector(
+    bucket: $bucket
+    images: $images
+    projectId: $projectId
+    queueUrl: $queueUrl
+    setId: $setId
+  )
+}
+` as GeneratedMutation<
+  APITypes.RunMadDetectorMutationVariables,
+  APITypes.RunMadDetectorMutation
+>;
 export const runScoutbot = /* GraphQL */ `mutation RunScoutbot(
   $bucket: String!
   $images: [String]
@@ -3802,67 +3747,12 @@ export const updateAnnotation = /* GraphQL */ `mutation UpdateAnnotation(
   APITypes.UpdateAnnotationMutationVariables,
   APITypes.UpdateAnnotationMutation
 >;
-export const updateAnnotationCountPerCategoryPerSet = /* GraphQL */ `mutation UpdateAnnotationCountPerCategoryPerSet(
-  $condition: ModelAnnotationCountPerCategoryPerSetConditionInput
-  $input: UpdateAnnotationCountPerCategoryPerSetInput!
-) {
-  updateAnnotationCountPerCategoryPerSet(condition: $condition, input: $input) {
-    annotationCount
-    annotationSet {
-      annotationCount
-      createdAt
-      id
-      name
-      projectId
-      register
-      updatedAt
-      __typename
-    }
-    annotationSetId
-    category {
-      annotationCount
-      annotationSetId
-      color
-      createdAt
-      id
-      name
-      projectId
-      shortcutKey
-      updatedAt
-      __typename
-    }
-    categoryId
-    createdAt
-    project {
-      createdAt
-      createdBy
-      hidden
-      id
-      name
-      organizationId
-      status
-      updatedAt
-      __typename
-    }
-    projectId
-    updatedAt
-    __typename
-  }
-}
-` as GeneratedMutation<
-  APITypes.UpdateAnnotationCountPerCategoryPerSetMutationVariables,
-  APITypes.UpdateAnnotationCountPerCategoryPerSetMutation
->;
 export const updateAnnotationSet = /* GraphQL */ `mutation UpdateAnnotationSet(
   $condition: ModelAnnotationSetConditionInput
   $input: UpdateAnnotationSetInput!
 ) {
   updateAnnotationSet(condition: $condition, input: $input) {
     annotationCount
-    annotationCountPerCategory {
-      nextToken
-      __typename
-    }
     annotations {
       nextToken
       __typename
@@ -3988,10 +3878,6 @@ export const updateCategory = /* GraphQL */ `mutation UpdateCategory(
 ) {
   updateCategory(condition: $condition, input: $input) {
     annotationCount
-    annotationCountPerSet {
-      nextToken
-      __typename
-    }
     annotationSet {
       annotationCount
       createdAt
@@ -4028,6 +3914,29 @@ export const updateCategory = /* GraphQL */ `mutation UpdateCategory(
 ` as GeneratedMutation<
   APITypes.UpdateCategoryMutationVariables,
   APITypes.UpdateCategoryMutation
+>;
+export const updateClientLog = /* GraphQL */ `mutation UpdateClientLog(
+  $condition: ModelClientLogConditionInput
+  $input: UpdateClientLogInput!
+) {
+  updateClientLog(condition: $condition, input: $input) {
+    connectionType
+    createdAt
+    deviceType
+    downlink
+    id
+    ipAddress
+    os
+    rtt
+    updatedAt
+    userAgent
+    userId
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.UpdateClientLogMutationVariables,
+  APITypes.UpdateClientLogMutation
 >;
 export const updateImage = /* GraphQL */ `mutation UpdateImage(
   $condition: ModelImageConditionInput
@@ -4816,10 +4725,6 @@ export const updateProject = /* GraphQL */ `mutation UpdateProject(
   $input: UpdateProjectInput!
 ) {
   updateProject(condition: $condition, input: $input) {
-    annotationCountsPerCategoryPerSet {
-      nextToken
-      __typename
-    }
     annotationSets {
       nextToken
       __typename
@@ -5005,6 +4910,7 @@ export const updateQueue = /* GraphQL */ `mutation UpdateQueue(
       __typename
     }
     projectId
+    tag
     totalBatches
     updatedAt
     url
@@ -5446,6 +5352,7 @@ export const updateUserProjectMembership = /* GraphQL */ `mutation UpdateUserPro
       id
       name
       projectId
+      tag
       totalBatches
       updatedAt
       url
@@ -5476,6 +5383,7 @@ export const updateUserProjectMembership = /* GraphQL */ `mutation UpdateUserPro
       id
       name
       projectId
+      tag
       totalBatches
       updatedAt
       url

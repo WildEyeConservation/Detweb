@@ -325,37 +325,6 @@ export const categoriesByProjectId = /* GraphQL */ `query CategoriesByProjectId(
   APITypes.CategoriesByProjectIdQueryVariables,
   APITypes.CategoriesByProjectIdQuery
 >;
-export const categoryCountsByAnnotationSetId = /* GraphQL */ `query CategoryCountsByAnnotationSetId(
-  $annotationSetId: ID!
-  $filter: ModelAnnotationCountPerCategoryPerSetFilterInput
-  $limit: Int
-  $nextToken: String
-  $sortDirection: ModelSortDirection
-) {
-  categoryCountsByAnnotationSetId(
-    annotationSetId: $annotationSetId
-    filter: $filter
-    limit: $limit
-    nextToken: $nextToken
-    sortDirection: $sortDirection
-  ) {
-    items {
-      annotationCount
-      annotationSetId
-      categoryId
-      createdAt
-      projectId
-      updatedAt
-      __typename
-    }
-    nextToken
-    __typename
-  }
-}
-` as GeneratedQuery<
-  APITypes.CategoryCountsByAnnotationSetIdQueryVariables,
-  APITypes.CategoryCountsByAnnotationSetIdQuery
->;
 export const categoryCountsByLocationIdAndAnnotationSetId = /* GraphQL */ `query CategoryCountsByLocationIdAndAnnotationSetId(
   $annotationSetId: ModelIDKeyConditionInput
   $filter: ModelLocationAnnotationCountFilterInput
@@ -419,6 +388,42 @@ export const categoryCountsByTestResultId = /* GraphQL */ `query CategoryCountsB
 ` as GeneratedQuery<
   APITypes.CategoryCountsByTestResultIdQueryVariables,
   APITypes.CategoryCountsByTestResultIdQuery
+>;
+export const clientLogsByUserId = /* GraphQL */ `query ClientLogsByUserId(
+  $filter: ModelClientLogFilterInput
+  $limit: Int
+  $nextToken: String
+  $sortDirection: ModelSortDirection
+  $userId: String!
+) {
+  clientLogsByUserId(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    sortDirection: $sortDirection
+    userId: $userId
+  ) {
+    items {
+      connectionType
+      createdAt
+      deviceType
+      downlink
+      id
+      ipAddress
+      os
+      rtt
+      updatedAt
+      userAgent
+      userId
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ClientLogsByUserIdQueryVariables,
+  APITypes.ClientLogsByUserIdQuery
 >;
 export const getAnnotation = /* GraphQL */ `query GetAnnotation($id: ID!) {
   getAnnotation(id: $id) {
@@ -506,74 +511,9 @@ export const getAnnotation = /* GraphQL */ `query GetAnnotation($id: ID!) {
   APITypes.GetAnnotationQueryVariables,
   APITypes.GetAnnotationQuery
 >;
-export const getAnnotationCountPerCategoryPerSet = /* GraphQL */ `query GetAnnotationCountPerCategoryPerSet(
-  $annotationSetId: ID!
-  $categoryId: ID!
-) {
-  getAnnotationCountPerCategoryPerSet(
-    annotationSetId: $annotationSetId
-    categoryId: $categoryId
-  ) {
-    annotationCount
-    annotationSet {
-      annotationCount
-      createdAt
-      id
-      name
-      projectId
-      register
-      updatedAt
-      __typename
-    }
-    annotationSetId
-    category {
-      annotationCount
-      annotationSetId
-      color
-      createdAt
-      id
-      name
-      projectId
-      shortcutKey
-      updatedAt
-      __typename
-    }
-    categoryId
-    createdAt
-    project {
-      createdAt
-      createdBy
-      hidden
-      id
-      name
-      organizationId
-      status
-      updatedAt
-      __typename
-    }
-    projectId
-    updatedAt
-    __typename
-  }
-}
-` as GeneratedQuery<
-  APITypes.GetAnnotationCountPerCategoryPerSetQueryVariables,
-  APITypes.GetAnnotationCountPerCategoryPerSetQuery
->;
-export const getAnnotationCounts = /* GraphQL */ `query GetAnnotationCounts($annotationSetId: String!) {
-  getAnnotationCounts(annotationSetId: $annotationSetId)
-}
-` as GeneratedQuery<
-  APITypes.GetAnnotationCountsQueryVariables,
-  APITypes.GetAnnotationCountsQuery
->;
 export const getAnnotationSet = /* GraphQL */ `query GetAnnotationSet($id: ID!) {
   getAnnotationSet(id: $id) {
     annotationCount
-    annotationCountPerCategory {
-      nextToken
-      __typename
-    }
     annotations {
       nextToken
       __typename
@@ -687,10 +627,6 @@ export const getCameraOverlap = /* GraphQL */ `query GetCameraOverlap($cameraAId
 export const getCategory = /* GraphQL */ `query GetCategory($id: ID!) {
   getCategory(id: $id) {
     annotationCount
-    annotationCountPerSet {
-      nextToken
-      __typename
-    }
     annotationSet {
       annotationCount
       createdAt
@@ -727,6 +663,26 @@ export const getCategory = /* GraphQL */ `query GetCategory($id: ID!) {
 ` as GeneratedQuery<
   APITypes.GetCategoryQueryVariables,
   APITypes.GetCategoryQuery
+>;
+export const getClientLog = /* GraphQL */ `query GetClientLog($id: ID!) {
+  getClientLog(id: $id) {
+    connectionType
+    createdAt
+    deviceType
+    downlink
+    id
+    ipAddress
+    os
+    rtt
+    updatedAt
+    userAgent
+    userId
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.GetClientLogQueryVariables,
+  APITypes.GetClientLogQuery
 >;
 export const getImage = /* GraphQL */ `query GetImage($id: ID!) {
   getImage(id: $id) {
@@ -1492,10 +1448,6 @@ export const getOrganizationRegistration = /* GraphQL */ `query GetOrganizationR
 >;
 export const getProject = /* GraphQL */ `query GetProject($id: ID!) {
   getProject(id: $id) {
-    annotationCountsPerCategoryPerSet {
-      nextToken
-      __typename
-    }
     annotationSets {
       nextToken
       __typename
@@ -1668,6 +1620,7 @@ export const getQueue = /* GraphQL */ `query GetQueue($id: ID!) {
       __typename
     }
     projectId
+    tag
     totalBatches
     updatedAt
     url
@@ -2084,6 +2037,7 @@ export const getUserProjectMembership = /* GraphQL */ `query GetUserProjectMembe
       id
       name
       projectId
+      tag
       totalBatches
       updatedAt
       url
@@ -2114,6 +2068,7 @@ export const getUserProjectMembership = /* GraphQL */ `query GetUserProjectMembe
       id
       name
       projectId
+      tag
       totalBatches
       updatedAt
       url
@@ -2507,39 +2462,6 @@ export const jollyResultsMembershipsBySurveyId = /* GraphQL */ `query JollyResul
   APITypes.JollyResultsMembershipsBySurveyIdQueryVariables,
   APITypes.JollyResultsMembershipsBySurveyIdQuery
 >;
-export const listAnnotationCountPerCategoryPerSets = /* GraphQL */ `query ListAnnotationCountPerCategoryPerSets(
-  $annotationSetId: ID
-  $categoryId: ModelIDKeyConditionInput
-  $filter: ModelAnnotationCountPerCategoryPerSetFilterInput
-  $limit: Int
-  $nextToken: String
-  $sortDirection: ModelSortDirection
-) {
-  listAnnotationCountPerCategoryPerSets(
-    annotationSetId: $annotationSetId
-    categoryId: $categoryId
-    filter: $filter
-    limit: $limit
-    nextToken: $nextToken
-    sortDirection: $sortDirection
-  ) {
-    items {
-      annotationCount
-      annotationSetId
-      categoryId
-      createdAt
-      projectId
-      updatedAt
-      __typename
-    }
-    nextToken
-    __typename
-  }
-}
-` as GeneratedQuery<
-  APITypes.ListAnnotationCountPerCategoryPerSetsQueryVariables,
-  APITypes.ListAnnotationCountPerCategoryPerSetsQuery
->;
 export const listAnnotationSets = /* GraphQL */ `query ListAnnotationSets(
   $filter: ModelAnnotationSetFilterInput
   $limit: Int
@@ -2676,6 +2598,34 @@ export const listCategories = /* GraphQL */ `query ListCategories(
 ` as GeneratedQuery<
   APITypes.ListCategoriesQueryVariables,
   APITypes.ListCategoriesQuery
+>;
+export const listClientLogs = /* GraphQL */ `query ListClientLogs(
+  $filter: ModelClientLogFilterInput
+  $limit: Int
+  $nextToken: String
+) {
+  listClientLogs(filter: $filter, limit: $limit, nextToken: $nextToken) {
+    items {
+      connectionType
+      createdAt
+      deviceType
+      downlink
+      id
+      ipAddress
+      os
+      rtt
+      updatedAt
+      userAgent
+      userId
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ListClientLogsQueryVariables,
+  APITypes.ListClientLogsQuery
 >;
 export const listGroupsForUser = /* GraphQL */ `query ListGroupsForUser($nextToken: String, $userId: String!) {
   listGroupsForUser(nextToken: $nextToken, userId: $userId)
@@ -3246,6 +3196,7 @@ export const listQueues = /* GraphQL */ `query ListQueues(
       id
       name
       projectId
+      tag
       totalBatches
       updatedAt
       url
@@ -3743,6 +3694,45 @@ export const locationsByImageKey = /* GraphQL */ `query LocationsByImageKey(
   APITypes.LocationsByImageKeyQueryVariables,
   APITypes.LocationsByImageKeyQuery
 >;
+export const locationsByProjectIdAndSource = /* GraphQL */ `query LocationsByProjectIdAndSource(
+  $filter: ModelLocationFilterInput
+  $limit: Int
+  $nextToken: String
+  $projectId: ID!
+  $sortDirection: ModelSortDirection
+  $source: ModelStringKeyConditionInput
+) {
+  locationsByProjectIdAndSource(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    projectId: $projectId
+    sortDirection: $sortDirection
+    source: $source
+  ) {
+    items {
+      confidence
+      createdAt
+      height
+      id
+      imageId
+      projectId
+      setId
+      source
+      updatedAt
+      width
+      x
+      y
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.LocationsByProjectIdAndSourceQueryVariables,
+  APITypes.LocationsByProjectIdAndSourceQuery
+>;
 export const locationsBySetIdAndConfidence = /* GraphQL */ `query LocationsBySetIdAndConfidence(
   $confidence: ModelFloatKeyConditionInput
   $filter: ModelLocationFilterInput
@@ -4100,6 +4090,7 @@ export const queuesByProjectId = /* GraphQL */ `query QueuesByProjectId(
       id
       name
       projectId
+      tag
       totalBatches
       updatedAt
       url

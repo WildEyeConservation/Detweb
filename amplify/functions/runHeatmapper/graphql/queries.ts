@@ -194,6 +194,69 @@ export const annotationsByObjectId = /* GraphQL */ `query AnnotationsByObjectId(
   APITypes.AnnotationsByObjectIdQueryVariables,
   APITypes.AnnotationsByObjectIdQuery
 >;
+export const cameraOverlapsByProjectId = /* GraphQL */ `query CameraOverlapsByProjectId(
+  $filter: ModelCameraOverlapFilterInput
+  $limit: Int
+  $nextToken: String
+  $projectId: ID!
+  $sortDirection: ModelSortDirection
+) {
+  cameraOverlapsByProjectId(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    projectId: $projectId
+    sortDirection: $sortDirection
+  ) {
+    items {
+      cameraAId
+      cameraBId
+      createdAt
+      projectId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.CameraOverlapsByProjectIdQueryVariables,
+  APITypes.CameraOverlapsByProjectIdQuery
+>;
+export const camerasByProjectId = /* GraphQL */ `query CamerasByProjectId(
+  $filter: ModelCameraFilterInput
+  $limit: Int
+  $nextToken: String
+  $projectId: ID!
+  $sortDirection: ModelSortDirection
+) {
+  camerasByProjectId(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    projectId: $projectId
+    sortDirection: $sortDirection
+  ) {
+    items {
+      createdAt
+      focalLengthMm
+      id
+      name
+      projectId
+      sensorWidthMm
+      tiltDegrees
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.CamerasByProjectIdQueryVariables,
+  APITypes.CamerasByProjectIdQuery
+>;
 export const categoriesByAnnotationSetId = /* GraphQL */ `query CategoriesByAnnotationSetId(
   $annotationSetId: ID!
   $filter: ModelCategoryFilterInput
@@ -262,37 +325,6 @@ export const categoriesByProjectId = /* GraphQL */ `query CategoriesByProjectId(
   APITypes.CategoriesByProjectIdQueryVariables,
   APITypes.CategoriesByProjectIdQuery
 >;
-export const categoryCountsByAnnotationSetId = /* GraphQL */ `query CategoryCountsByAnnotationSetId(
-  $annotationSetId: ID!
-  $filter: ModelAnnotationCountPerCategoryPerSetFilterInput
-  $limit: Int
-  $nextToken: String
-  $sortDirection: ModelSortDirection
-) {
-  categoryCountsByAnnotationSetId(
-    annotationSetId: $annotationSetId
-    filter: $filter
-    limit: $limit
-    nextToken: $nextToken
-    sortDirection: $sortDirection
-  ) {
-    items {
-      annotationCount
-      annotationSetId
-      categoryId
-      createdAt
-      projectId
-      updatedAt
-      __typename
-    }
-    nextToken
-    __typename
-  }
-}
-` as GeneratedQuery<
-  APITypes.CategoryCountsByAnnotationSetIdQueryVariables,
-  APITypes.CategoryCountsByAnnotationSetIdQuery
->;
 export const categoryCountsByLocationIdAndAnnotationSetId = /* GraphQL */ `query CategoryCountsByLocationIdAndAnnotationSetId(
   $annotationSetId: ModelIDKeyConditionInput
   $filter: ModelLocationAnnotationCountFilterInput
@@ -357,6 +389,42 @@ export const categoryCountsByTestResultId = /* GraphQL */ `query CategoryCountsB
   APITypes.CategoryCountsByTestResultIdQueryVariables,
   APITypes.CategoryCountsByTestResultIdQuery
 >;
+export const clientLogsByUserId = /* GraphQL */ `query ClientLogsByUserId(
+  $filter: ModelClientLogFilterInput
+  $limit: Int
+  $nextToken: String
+  $sortDirection: ModelSortDirection
+  $userId: String!
+) {
+  clientLogsByUserId(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    sortDirection: $sortDirection
+    userId: $userId
+  ) {
+    items {
+      connectionType
+      createdAt
+      deviceType
+      downlink
+      id
+      ipAddress
+      os
+      rtt
+      updatedAt
+      userAgent
+      userId
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ClientLogsByUserIdQueryVariables,
+  APITypes.ClientLogsByUserIdQuery
+>;
 export const getAnnotation = /* GraphQL */ `query GetAnnotation($id: ID!) {
   getAnnotation(id: $id) {
     category {
@@ -378,6 +446,7 @@ export const getAnnotation = /* GraphQL */ `query GetAnnotation($id: ID!) {
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -390,6 +459,7 @@ export const getAnnotation = /* GraphQL */ `query GetAnnotation($id: ID!) {
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -441,74 +511,9 @@ export const getAnnotation = /* GraphQL */ `query GetAnnotation($id: ID!) {
   APITypes.GetAnnotationQueryVariables,
   APITypes.GetAnnotationQuery
 >;
-export const getAnnotationCountPerCategoryPerSet = /* GraphQL */ `query GetAnnotationCountPerCategoryPerSet(
-  $annotationSetId: ID!
-  $categoryId: ID!
-) {
-  getAnnotationCountPerCategoryPerSet(
-    annotationSetId: $annotationSetId
-    categoryId: $categoryId
-  ) {
-    annotationCount
-    annotationSet {
-      annotationCount
-      createdAt
-      id
-      name
-      projectId
-      register
-      updatedAt
-      __typename
-    }
-    annotationSetId
-    category {
-      annotationCount
-      annotationSetId
-      color
-      createdAt
-      id
-      name
-      projectId
-      shortcutKey
-      updatedAt
-      __typename
-    }
-    categoryId
-    createdAt
-    project {
-      createdAt
-      createdBy
-      hidden
-      id
-      name
-      organizationId
-      status
-      updatedAt
-      __typename
-    }
-    projectId
-    updatedAt
-    __typename
-  }
-}
-` as GeneratedQuery<
-  APITypes.GetAnnotationCountPerCategoryPerSetQueryVariables,
-  APITypes.GetAnnotationCountPerCategoryPerSetQuery
->;
-export const getAnnotationCounts = /* GraphQL */ `query GetAnnotationCounts($annotationSetId: String!) {
-  getAnnotationCounts(annotationSetId: $annotationSetId)
-}
-` as GeneratedQuery<
-  APITypes.GetAnnotationCountsQueryVariables,
-  APITypes.GetAnnotationCountsQuery
->;
 export const getAnnotationSet = /* GraphQL */ `query GetAnnotationSet($id: ID!) {
   getAnnotationSet(id: $id) {
     annotationCount
-    annotationCountPerCategory {
-      nextToken
-      __typename
-    }
     annotations {
       nextToken
       __typename
@@ -519,6 +524,10 @@ export const getAnnotationSet = /* GraphQL */ `query GetAnnotationSet($id: ID!) 
     }
     createdAt
     id
+    jollyResultsMemberships {
+      nextToken
+      __typename
+    }
     locationAnnotationCounts {
       nextToken
       __typename
@@ -561,13 +570,63 @@ export const getAnnotationSet = /* GraphQL */ `query GetAnnotationSet($id: ID!) 
   APITypes.GetAnnotationSetQueryVariables,
   APITypes.GetAnnotationSetQuery
 >;
-export const getCategory = /* GraphQL */ `query GetCategory($id: ID!) {
-  getCategory(id: $id) {
-    annotationCount
-    annotationCountPerSet {
+export const getCamera = /* GraphQL */ `query GetCamera($id: ID!) {
+  getCamera(id: $id) {
+    createdAt
+    focalLengthMm
+    id
+    images {
       nextToken
       __typename
     }
+    name
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    sensorWidthMm
+    tiltDegrees
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedQuery<APITypes.GetCameraQueryVariables, APITypes.GetCameraQuery>;
+export const getCameraOverlap = /* GraphQL */ `query GetCameraOverlap($cameraAId: ID!, $cameraBId: ID!) {
+  getCameraOverlap(cameraAId: $cameraAId, cameraBId: $cameraBId) {
+    cameraAId
+    cameraBId
+    createdAt
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.GetCameraOverlapQueryVariables,
+  APITypes.GetCameraOverlapQuery
+>;
+export const getCategory = /* GraphQL */ `query GetCategory($id: ID!) {
+  getCategory(id: $id) {
+    annotationCount
     annotationSet {
       annotationCount
       createdAt
@@ -605,6 +664,26 @@ export const getCategory = /* GraphQL */ `query GetCategory($id: ID!) {
   APITypes.GetCategoryQueryVariables,
   APITypes.GetCategoryQuery
 >;
+export const getClientLog = /* GraphQL */ `query GetClientLog($id: ID!) {
+  getClientLog(id: $id) {
+    connectionType
+    createdAt
+    deviceType
+    downlink
+    id
+    ipAddress
+    os
+    rtt
+    updatedAt
+    userAgent
+    userId
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.GetClientLogQueryVariables,
+  APITypes.GetClientLogQuery
+>;
 export const getImage = /* GraphQL */ `query GetImage($id: ID!) {
   getImage(id: $id) {
     altitude_agl
@@ -614,6 +693,18 @@ export const getImage = /* GraphQL */ `query GetImage($id: ID!) {
       nextToken
       __typename
     }
+    camera {
+      createdAt
+      focalLengthMm
+      id
+      name
+      projectId
+      sensorWidthMm
+      tiltDegrees
+      updatedAt
+      __typename
+    }
+    cameraId
     cameraSerial
     createdAt
     exifData
@@ -657,6 +748,15 @@ export const getImage = /* GraphQL */ `query GetImage($id: ID!) {
     }
     roll
     timestamp
+    transect {
+      createdAt
+      id
+      projectId
+      stratumId
+      updatedAt
+      __typename
+    }
+    transectId
     updatedAt
     width
     yaw
@@ -683,6 +783,7 @@ export const getImageFile = /* GraphQL */ `query GetImageFile($id: ID!) {
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -695,6 +796,7 @@ export const getImageFile = /* GraphQL */ `query GetImageFile($id: ID!) {
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -732,6 +834,7 @@ export const getImageNeighbour = /* GraphQL */ `query GetImageNeighbour($image1I
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -744,6 +847,7 @@ export const getImageNeighbour = /* GraphQL */ `query GetImageNeighbour($image1I
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -754,6 +858,7 @@ export const getImageNeighbour = /* GraphQL */ `query GetImageNeighbour($image1I
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -766,6 +871,7 @@ export const getImageNeighbour = /* GraphQL */ `query GetImageNeighbour($image1I
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -818,6 +924,7 @@ export const getImageSetMembership = /* GraphQL */ `query GetImageSetMembership(
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -830,6 +937,7 @@ export const getImageSetMembership = /* GraphQL */ `query GetImageSetMembership(
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -854,6 +962,83 @@ export const getImageSetMembership = /* GraphQL */ `query GetImageSetMembership(
   APITypes.GetImageSetMembershipQueryVariables,
   APITypes.GetImageSetMembershipQuery
 >;
+export const getJollyResult = /* GraphQL */ `query GetJollyResult(
+  $annotationSetId: ID!
+  $categoryId: ID!
+  $stratumId: ID!
+  $surveyId: ID!
+) {
+  getJollyResult(
+    annotationSetId: $annotationSetId
+    categoryId: $categoryId
+    stratumId: $stratumId
+    surveyId: $surveyId
+  ) {
+    animals
+    annotationSetId
+    areaSurveyed
+    categoryId
+    createdAt
+    density
+    estimate
+    lowerBound95
+    numSamples
+    standardError
+    stratumId
+    surveyId
+    updatedAt
+    upperBound95
+    variance
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.GetJollyResultQueryVariables,
+  APITypes.GetJollyResultQuery
+>;
+export const getJollyResultsMembership = /* GraphQL */ `query GetJollyResultsMembership(
+  $annotationSetId: ID!
+  $surveyId: ID!
+  $userId: String!
+) {
+  getJollyResultsMembership(
+    annotationSetId: $annotationSetId
+    surveyId: $surveyId
+    userId: $userId
+  ) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      register
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    createdAt
+    survey {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    surveyId
+    updatedAt
+    userId
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.GetJollyResultsMembershipQueryVariables,
+  APITypes.GetJollyResultsMembershipQuery
+>;
 export const getLocation = /* GraphQL */ `query GetLocation($id: ID!) {
   getLocation(id: $id) {
     annotationCounts {
@@ -868,6 +1053,7 @@ export const getLocation = /* GraphQL */ `query GetLocation($id: ID!) {
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -880,6 +1066,7 @@ export const getLocation = /* GraphQL */ `query GetLocation($id: ID!) {
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -1261,15 +1448,19 @@ export const getOrganizationRegistration = /* GraphQL */ `query GetOrganizationR
 >;
 export const getProject = /* GraphQL */ `query GetProject($id: ID!) {
   getProject(id: $id) {
-    annotationCountsPerCategoryPerSet {
-      nextToken
-      __typename
-    }
     annotationSets {
       nextToken
       __typename
     }
     annotations {
+      nextToken
+      __typename
+    }
+    cameraOverlaps {
+      nextToken
+      __typename
+    }
+    cameras {
       nextToken
       __typename
     }
@@ -1286,6 +1477,10 @@ export const getProject = /* GraphQL */ `query GetProject($id: ID!) {
       __typename
     }
     images {
+      nextToken
+      __typename
+    }
+    jollyResultsMemberships {
       nextToken
       __typename
     }
@@ -1323,7 +1518,23 @@ export const getProject = /* GraphQL */ `query GetProject($id: ID!) {
       nextToken
       __typename
     }
+    shapefile {
+      coordinates
+      createdAt
+      id
+      projectId
+      updatedAt
+      __typename
+    }
+    shapefileExclusions {
+      nextToken
+      __typename
+    }
     status
+    strata {
+      nextToken
+      __typename
+    }
     testConfig {
       accuracy
       createdAt
@@ -1337,6 +1548,10 @@ export const getProject = /* GraphQL */ `query GetProject($id: ID!) {
       __typename
     }
     testResults {
+      nextToken
+      __typename
+    }
+    transects {
       nextToken
       __typename
     }
@@ -1405,6 +1620,8 @@ export const getQueue = /* GraphQL */ `query GetQueue($id: ID!) {
       __typename
     }
     projectId
+    tag
+    totalBatches
     updatedAt
     url
     users {
@@ -1416,6 +1633,105 @@ export const getQueue = /* GraphQL */ `query GetQueue($id: ID!) {
   }
 }
 ` as GeneratedQuery<APITypes.GetQueueQueryVariables, APITypes.GetQueueQuery>;
+export const getResultSharingToken = /* GraphQL */ `query GetResultSharingToken($annotationSetId: ID!, $surveyId: ID!) {
+  getResultSharingToken(
+    annotationSetId: $annotationSetId
+    surveyId: $surveyId
+  ) {
+    annotationSetId
+    createdAt
+    jwt
+    surveyId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.GetResultSharingTokenQueryVariables,
+  APITypes.GetResultSharingTokenQuery
+>;
+export const getShapefile = /* GraphQL */ `query GetShapefile($id: ID!) {
+  getShapefile(id: $id) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.GetShapefileQueryVariables,
+  APITypes.GetShapefileQuery
+>;
+export const getShapefileExclusions = /* GraphQL */ `query GetShapefileExclusions($id: ID!) {
+  getShapefileExclusions(id: $id) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.GetShapefileExclusionsQueryVariables,
+  APITypes.GetShapefileExclusionsQuery
+>;
+export const getStratum = /* GraphQL */ `query GetStratum($id: ID!) {
+  getStratum(id: $id) {
+    area
+    baselineLength
+    coordinates
+    createdAt
+    id
+    name
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    transects {
+      nextToken
+      __typename
+    }
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.GetStratumQueryVariables,
+  APITypes.GetStratumQuery
+>;
 export const getTasksOnAnnotationSet = /* GraphQL */ `query GetTasksOnAnnotationSet($id: ID!) {
   getTasksOnAnnotationSet(id: $id) {
     annotationSet {
@@ -1671,6 +1987,46 @@ export const getTestResultCategoryCount = /* GraphQL */ `query GetTestResultCate
   APITypes.GetTestResultCategoryCountQueryVariables,
   APITypes.GetTestResultCategoryCountQuery
 >;
+export const getTransect = /* GraphQL */ `query GetTransect($id: ID!) {
+  getTransect(id: $id) {
+    createdAt
+    id
+    images {
+      nextToken
+      __typename
+    }
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    stratum {
+      area
+      baselineLength
+      coordinates
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    stratumId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.GetTransectQueryVariables,
+  APITypes.GetTransectQuery
+>;
 export const getUserProjectMembership = /* GraphQL */ `query GetUserProjectMembership($id: ID!) {
   getUserProjectMembership(id: $id) {
     backupQueue {
@@ -1681,6 +2037,8 @@ export const getUserProjectMembership = /* GraphQL */ `query GetUserProjectMembe
       id
       name
       projectId
+      tag
+      totalBatches
       updatedAt
       url
       zoom
@@ -1710,6 +2068,8 @@ export const getUserProjectMembership = /* GraphQL */ `query GetUserProjectMembe
       id
       name
       projectId
+      tag
+      totalBatches
       updatedAt
       url
       zoom
@@ -1930,6 +2290,7 @@ export const imagesByProjectId = /* GraphQL */ `query ImagesByProjectId(
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -1942,6 +2303,7 @@ export const imagesByProjectId = /* GraphQL */ `query ImagesByProjectId(
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -1988,29 +2350,36 @@ export const imagesByimageId = /* GraphQL */ `query ImagesByimageId(
   APITypes.ImagesByimageIdQueryVariables,
   APITypes.ImagesByimageIdQuery
 >;
-export const listAnnotationCountPerCategoryPerSets = /* GraphQL */ `query ListAnnotationCountPerCategoryPerSets(
-  $annotationSetId: ID
-  $categoryId: ModelIDKeyConditionInput
-  $filter: ModelAnnotationCountPerCategoryPerSetFilterInput
+export const jollyResultsByStratumId = /* GraphQL */ `query JollyResultsByStratumId(
+  $filter: ModelJollyResultFilterInput
   $limit: Int
   $nextToken: String
   $sortDirection: ModelSortDirection
+  $stratumId: ID!
 ) {
-  listAnnotationCountPerCategoryPerSets(
-    annotationSetId: $annotationSetId
-    categoryId: $categoryId
+  jollyResultsByStratumId(
     filter: $filter
     limit: $limit
     nextToken: $nextToken
     sortDirection: $sortDirection
+    stratumId: $stratumId
   ) {
     items {
-      annotationCount
+      animals
       annotationSetId
+      areaSurveyed
       categoryId
       createdAt
-      projectId
+      density
+      estimate
+      lowerBound95
+      numSamples
+      standardError
+      stratumId
+      surveyId
       updatedAt
+      upperBound95
+      variance
       __typename
     }
     nextToken
@@ -2018,8 +2387,80 @@ export const listAnnotationCountPerCategoryPerSets = /* GraphQL */ `query ListAn
   }
 }
 ` as GeneratedQuery<
-  APITypes.ListAnnotationCountPerCategoryPerSetsQueryVariables,
-  APITypes.ListAnnotationCountPerCategoryPerSetsQuery
+  APITypes.JollyResultsByStratumIdQueryVariables,
+  APITypes.JollyResultsByStratumIdQuery
+>;
+export const jollyResultsBySurveyId = /* GraphQL */ `query JollyResultsBySurveyId(
+  $filter: ModelJollyResultFilterInput
+  $limit: Int
+  $nextToken: String
+  $sortDirection: ModelSortDirection
+  $surveyId: ID!
+) {
+  jollyResultsBySurveyId(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    sortDirection: $sortDirection
+    surveyId: $surveyId
+  ) {
+    items {
+      animals
+      annotationSetId
+      areaSurveyed
+      categoryId
+      createdAt
+      density
+      estimate
+      lowerBound95
+      numSamples
+      standardError
+      stratumId
+      surveyId
+      updatedAt
+      upperBound95
+      variance
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.JollyResultsBySurveyIdQueryVariables,
+  APITypes.JollyResultsBySurveyIdQuery
+>;
+export const jollyResultsMembershipsBySurveyId = /* GraphQL */ `query JollyResultsMembershipsBySurveyId(
+  $annotationSetId: ModelIDKeyConditionInput
+  $filter: ModelJollyResultsMembershipFilterInput
+  $limit: Int
+  $nextToken: String
+  $sortDirection: ModelSortDirection
+  $surveyId: ID!
+) {
+  jollyResultsMembershipsBySurveyId(
+    annotationSetId: $annotationSetId
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    sortDirection: $sortDirection
+    surveyId: $surveyId
+  ) {
+    items {
+      annotationSetId
+      createdAt
+      surveyId
+      updatedAt
+      userId
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.JollyResultsMembershipsBySurveyIdQueryVariables,
+  APITypes.JollyResultsMembershipsBySurveyIdQuery
 >;
 export const listAnnotationSets = /* GraphQL */ `query ListAnnotationSets(
   $filter: ModelAnnotationSetFilterInput
@@ -2075,6 +2516,63 @@ export const listAnnotations = /* GraphQL */ `query ListAnnotations(
   APITypes.ListAnnotationsQueryVariables,
   APITypes.ListAnnotationsQuery
 >;
+export const listCameraOverlaps = /* GraphQL */ `query ListCameraOverlaps(
+  $cameraAId: ID
+  $cameraBId: ModelIDKeyConditionInput
+  $filter: ModelCameraOverlapFilterInput
+  $limit: Int
+  $nextToken: String
+  $sortDirection: ModelSortDirection
+) {
+  listCameraOverlaps(
+    cameraAId: $cameraAId
+    cameraBId: $cameraBId
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    sortDirection: $sortDirection
+  ) {
+    items {
+      cameraAId
+      cameraBId
+      createdAt
+      projectId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ListCameraOverlapsQueryVariables,
+  APITypes.ListCameraOverlapsQuery
+>;
+export const listCameras = /* GraphQL */ `query ListCameras(
+  $filter: ModelCameraFilterInput
+  $limit: Int
+  $nextToken: String
+) {
+  listCameras(filter: $filter, limit: $limit, nextToken: $nextToken) {
+    items {
+      createdAt
+      focalLengthMm
+      id
+      name
+      projectId
+      sensorWidthMm
+      tiltDegrees
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ListCamerasQueryVariables,
+  APITypes.ListCamerasQuery
+>;
 export const listCategories = /* GraphQL */ `query ListCategories(
   $filter: ModelCategoryFilterInput
   $limit: Int
@@ -2100,6 +2598,34 @@ export const listCategories = /* GraphQL */ `query ListCategories(
 ` as GeneratedQuery<
   APITypes.ListCategoriesQueryVariables,
   APITypes.ListCategoriesQuery
+>;
+export const listClientLogs = /* GraphQL */ `query ListClientLogs(
+  $filter: ModelClientLogFilterInput
+  $limit: Int
+  $nextToken: String
+) {
+  listClientLogs(filter: $filter, limit: $limit, nextToken: $nextToken) {
+    items {
+      connectionType
+      createdAt
+      deviceType
+      downlink
+      id
+      ipAddress
+      os
+      rtt
+      updatedAt
+      userAgent
+      userId
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ListClientLogsQueryVariables,
+  APITypes.ListClientLogsQuery
 >;
 export const listGroupsForUser = /* GraphQL */ `query ListGroupsForUser($nextToken: String, $userId: String!) {
   listGroupsForUser(nextToken: $nextToken, userId: $userId)
@@ -2224,6 +2750,7 @@ export const listImages = /* GraphQL */ `query ListImages(
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -2236,6 +2763,7 @@ export const listImages = /* GraphQL */ `query ListImages(
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -2248,6 +2776,80 @@ export const listImages = /* GraphQL */ `query ListImages(
 ` as GeneratedQuery<
   APITypes.ListImagesQueryVariables,
   APITypes.ListImagesQuery
+>;
+export const listJollyResults = /* GraphQL */ `query ListJollyResults(
+  $filter: ModelJollyResultFilterInput
+  $limit: Int
+  $nextToken: String
+  $sortDirection: ModelSortDirection
+  $stratumIdAnnotationSetIdCategoryId: ModelJollyResultPrimaryCompositeKeyConditionInput
+  $surveyId: ID
+) {
+  listJollyResults(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    sortDirection: $sortDirection
+    stratumIdAnnotationSetIdCategoryId: $stratumIdAnnotationSetIdCategoryId
+    surveyId: $surveyId
+  ) {
+    items {
+      animals
+      annotationSetId
+      areaSurveyed
+      categoryId
+      createdAt
+      density
+      estimate
+      lowerBound95
+      numSamples
+      standardError
+      stratumId
+      surveyId
+      updatedAt
+      upperBound95
+      variance
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ListJollyResultsQueryVariables,
+  APITypes.ListJollyResultsQuery
+>;
+export const listJollyResultsMemberships = /* GraphQL */ `query ListJollyResultsMemberships(
+  $annotationSetIdUserId: ModelJollyResultsMembershipPrimaryCompositeKeyConditionInput
+  $filter: ModelJollyResultsMembershipFilterInput
+  $limit: Int
+  $nextToken: String
+  $sortDirection: ModelSortDirection
+  $surveyId: ID
+) {
+  listJollyResultsMemberships(
+    annotationSetIdUserId: $annotationSetIdUserId
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    sortDirection: $sortDirection
+    surveyId: $surveyId
+  ) {
+    items {
+      annotationSetId
+      createdAt
+      surveyId
+      updatedAt
+      userId
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ListJollyResultsMembershipsQueryVariables,
+  APITypes.ListJollyResultsMembershipsQuery
 >;
 export const listLocationAnnotationCounts = /* GraphQL */ `query ListLocationAnnotationCounts(
   $categoryIdAnnotationSetId: ModelLocationAnnotationCountPrimaryCompositeKeyConditionInput
@@ -2594,6 +3196,8 @@ export const listQueues = /* GraphQL */ `query ListQueues(
       id
       name
       projectId
+      tag
+      totalBatches
       updatedAt
       url
       zoom
@@ -2606,6 +3210,111 @@ export const listQueues = /* GraphQL */ `query ListQueues(
 ` as GeneratedQuery<
   APITypes.ListQueuesQueryVariables,
   APITypes.ListQueuesQuery
+>;
+export const listResultSharingTokens = /* GraphQL */ `query ListResultSharingTokens(
+  $annotationSetId: ModelIDKeyConditionInput
+  $filter: ModelResultSharingTokenFilterInput
+  $limit: Int
+  $nextToken: String
+  $sortDirection: ModelSortDirection
+  $surveyId: ID
+) {
+  listResultSharingTokens(
+    annotationSetId: $annotationSetId
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    sortDirection: $sortDirection
+    surveyId: $surveyId
+  ) {
+    items {
+      annotationSetId
+      createdAt
+      jwt
+      surveyId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ListResultSharingTokensQueryVariables,
+  APITypes.ListResultSharingTokensQuery
+>;
+export const listShapefileExclusions = /* GraphQL */ `query ListShapefileExclusions(
+  $filter: ModelShapefileExclusionsFilterInput
+  $limit: Int
+  $nextToken: String
+) {
+  listShapefileExclusions(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+  ) {
+    items {
+      coordinates
+      createdAt
+      id
+      projectId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ListShapefileExclusionsQueryVariables,
+  APITypes.ListShapefileExclusionsQuery
+>;
+export const listShapefiles = /* GraphQL */ `query ListShapefiles(
+  $filter: ModelShapefileFilterInput
+  $limit: Int
+  $nextToken: String
+) {
+  listShapefiles(filter: $filter, limit: $limit, nextToken: $nextToken) {
+    items {
+      coordinates
+      createdAt
+      id
+      projectId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ListShapefilesQueryVariables,
+  APITypes.ListShapefilesQuery
+>;
+export const listStrata = /* GraphQL */ `query ListStrata(
+  $filter: ModelStratumFilterInput
+  $limit: Int
+  $nextToken: String
+) {
+  listStrata(filter: $filter, limit: $limit, nextToken: $nextToken) {
+    items {
+      area
+      baselineLength
+      coordinates
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ListStrataQueryVariables,
+  APITypes.ListStrataQuery
 >;
 export const listTasksOnAnnotationSets = /* GraphQL */ `query ListTasksOnAnnotationSets(
   $filter: ModelTasksOnAnnotationSetFilterInput
@@ -2778,6 +3487,28 @@ export const listTestResults = /* GraphQL */ `query ListTestResults(
 ` as GeneratedQuery<
   APITypes.ListTestResultsQueryVariables,
   APITypes.ListTestResultsQuery
+>;
+export const listTransects = /* GraphQL */ `query ListTransects(
+  $filter: ModelTransectFilterInput
+  $limit: Int
+  $nextToken: String
+) {
+  listTransects(filter: $filter, limit: $limit, nextToken: $nextToken) {
+    items {
+      createdAt
+      id
+      projectId
+      stratumId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ListTransectsQueryVariables,
+  APITypes.ListTransectsQuery
 >;
 export const listUserProjectMemberships = /* GraphQL */ `query ListUserProjectMemberships(
   $filter: ModelUserProjectMembershipFilterInput
@@ -2962,6 +3693,45 @@ export const locationsByImageKey = /* GraphQL */ `query LocationsByImageKey(
 ` as GeneratedQuery<
   APITypes.LocationsByImageKeyQueryVariables,
   APITypes.LocationsByImageKeyQuery
+>;
+export const locationsByProjectIdAndSource = /* GraphQL */ `query LocationsByProjectIdAndSource(
+  $filter: ModelLocationFilterInput
+  $limit: Int
+  $nextToken: String
+  $projectId: ID!
+  $sortDirection: ModelSortDirection
+  $source: ModelStringKeyConditionInput
+) {
+  locationsByProjectIdAndSource(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    projectId: $projectId
+    sortDirection: $sortDirection
+    source: $source
+  ) {
+    items {
+      confidence
+      createdAt
+      height
+      id
+      imageId
+      projectId
+      setId
+      source
+      updatedAt
+      width
+      x
+      y
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.LocationsByProjectIdAndSourceQueryVariables,
+  APITypes.LocationsByProjectIdAndSourceQuery
 >;
 export const locationsBySetIdAndConfidence = /* GraphQL */ `query LocationsBySetIdAndConfidence(
   $confidence: ModelFloatKeyConditionInput
@@ -3320,6 +4090,8 @@ export const queuesByProjectId = /* GraphQL */ `query QueuesByProjectId(
       id
       name
       projectId
+      tag
+      totalBatches
       updatedAt
       url
       zoom
@@ -3332,6 +4104,99 @@ export const queuesByProjectId = /* GraphQL */ `query QueuesByProjectId(
 ` as GeneratedQuery<
   APITypes.QueuesByProjectIdQueryVariables,
   APITypes.QueuesByProjectIdQuery
+>;
+export const shapefileExclusionsByProjectId = /* GraphQL */ `query ShapefileExclusionsByProjectId(
+  $filter: ModelShapefileExclusionsFilterInput
+  $limit: Int
+  $nextToken: String
+  $projectId: ID!
+  $sortDirection: ModelSortDirection
+) {
+  shapefileExclusionsByProjectId(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    projectId: $projectId
+    sortDirection: $sortDirection
+  ) {
+    items {
+      coordinates
+      createdAt
+      id
+      projectId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ShapefileExclusionsByProjectIdQueryVariables,
+  APITypes.ShapefileExclusionsByProjectIdQuery
+>;
+export const shapefilesByProjectId = /* GraphQL */ `query ShapefilesByProjectId(
+  $filter: ModelShapefileFilterInput
+  $limit: Int
+  $nextToken: String
+  $projectId: ID!
+  $sortDirection: ModelSortDirection
+) {
+  shapefilesByProjectId(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    projectId: $projectId
+    sortDirection: $sortDirection
+  ) {
+    items {
+      coordinates
+      createdAt
+      id
+      projectId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.ShapefilesByProjectIdQueryVariables,
+  APITypes.ShapefilesByProjectIdQuery
+>;
+export const strataByProjectId = /* GraphQL */ `query StrataByProjectId(
+  $filter: ModelStratumFilterInput
+  $limit: Int
+  $nextToken: String
+  $projectId: ID!
+  $sortDirection: ModelSortDirection
+) {
+  strataByProjectId(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    projectId: $projectId
+    sortDirection: $sortDirection
+  ) {
+    items {
+      area
+      baselineLength
+      coordinates
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.StrataByProjectIdQueryVariables,
+  APITypes.StrataByProjectIdQuery
 >;
 export const testPresetsByLocationId = /* GraphQL */ `query TestPresetsByLocationId(
   $filter: ModelTestPresetLocationFilterInput
@@ -3523,6 +4388,36 @@ export const testResultsByUserId = /* GraphQL */ `query TestResultsByUserId(
 ` as GeneratedQuery<
   APITypes.TestResultsByUserIdQueryVariables,
   APITypes.TestResultsByUserIdQuery
+>;
+export const transectsByProjectId = /* GraphQL */ `query TransectsByProjectId(
+  $filter: ModelTransectFilterInput
+  $limit: Int
+  $nextToken: String
+  $projectId: ID!
+  $sortDirection: ModelSortDirection
+) {
+  transectsByProjectId(
+    filter: $filter
+    limit: $limit
+    nextToken: $nextToken
+    projectId: $projectId
+    sortDirection: $sortDirection
+  ) {
+    items {
+      createdAt
+      id
+      projectId
+      stratumId
+      updatedAt
+      __typename
+    }
+    nextToken
+    __typename
+  }
+}
+` as GeneratedQuery<
+  APITypes.TransectsByProjectIdQueryVariables,
+  APITypes.TransectsByProjectIdQuery
 >;
 export const userProjectMembershipsByProjectId = /* GraphQL */ `query UserProjectMembershipsByProjectId(
   $filter: ModelUserProjectMembershipFilterInput
