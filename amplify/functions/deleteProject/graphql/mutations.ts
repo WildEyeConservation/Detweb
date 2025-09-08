@@ -39,6 +39,7 @@ export const createAnnotation = /* GraphQL */ `mutation CreateAnnotation(
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -51,6 +52,7 @@ export const createAnnotation = /* GraphQL */ `mutation CreateAnnotation(
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -102,67 +104,12 @@ export const createAnnotation = /* GraphQL */ `mutation CreateAnnotation(
   APITypes.CreateAnnotationMutationVariables,
   APITypes.CreateAnnotationMutation
 >;
-export const createAnnotationCountPerCategoryPerSet = /* GraphQL */ `mutation CreateAnnotationCountPerCategoryPerSet(
-  $condition: ModelAnnotationCountPerCategoryPerSetConditionInput
-  $input: CreateAnnotationCountPerCategoryPerSetInput!
-) {
-  createAnnotationCountPerCategoryPerSet(condition: $condition, input: $input) {
-    annotationCount
-    annotationSet {
-      annotationCount
-      createdAt
-      id
-      name
-      projectId
-      register
-      updatedAt
-      __typename
-    }
-    annotationSetId
-    category {
-      annotationCount
-      annotationSetId
-      color
-      createdAt
-      id
-      name
-      projectId
-      shortcutKey
-      updatedAt
-      __typename
-    }
-    categoryId
-    createdAt
-    project {
-      createdAt
-      createdBy
-      hidden
-      id
-      name
-      organizationId
-      status
-      updatedAt
-      __typename
-    }
-    projectId
-    updatedAt
-    __typename
-  }
-}
-` as GeneratedMutation<
-  APITypes.CreateAnnotationCountPerCategoryPerSetMutationVariables,
-  APITypes.CreateAnnotationCountPerCategoryPerSetMutation
->;
 export const createAnnotationSet = /* GraphQL */ `mutation CreateAnnotationSet(
   $condition: ModelAnnotationSetConditionInput
   $input: CreateAnnotationSetInput!
 ) {
   createAnnotationSet(condition: $condition, input: $input) {
     annotationCount
-    annotationCountPerCategory {
-      nextToken
-      __typename
-    }
     annotations {
       nextToken
       __typename
@@ -173,6 +120,10 @@ export const createAnnotationSet = /* GraphQL */ `mutation CreateAnnotationSet(
     }
     createdAt
     id
+    jollyResultsMemberships {
+      nextToken
+      __typename
+    }
     locationAnnotationCounts {
       nextToken
       __typename
@@ -215,16 +166,75 @@ export const createAnnotationSet = /* GraphQL */ `mutation CreateAnnotationSet(
   APITypes.CreateAnnotationSetMutationVariables,
   APITypes.CreateAnnotationSetMutation
 >;
+export const createCamera = /* GraphQL */ `mutation CreateCamera(
+  $condition: ModelCameraConditionInput
+  $input: CreateCameraInput!
+) {
+  createCamera(condition: $condition, input: $input) {
+    createdAt
+    focalLengthMm
+    id
+    images {
+      nextToken
+      __typename
+    }
+    name
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    sensorWidthMm
+    tiltDegrees
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.CreateCameraMutationVariables,
+  APITypes.CreateCameraMutation
+>;
+export const createCameraOverlap = /* GraphQL */ `mutation CreateCameraOverlap(
+  $condition: ModelCameraOverlapConditionInput
+  $input: CreateCameraOverlapInput!
+) {
+  createCameraOverlap(condition: $condition, input: $input) {
+    cameraAId
+    cameraBId
+    createdAt
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.CreateCameraOverlapMutationVariables,
+  APITypes.CreateCameraOverlapMutation
+>;
 export const createCategory = /* GraphQL */ `mutation CreateCategory(
   $condition: ModelCategoryConditionInput
   $input: CreateCategoryInput!
 ) {
   createCategory(condition: $condition, input: $input) {
     annotationCount
-    annotationCountPerSet {
-      nextToken
-      __typename
-    }
     annotationSet {
       annotationCount
       createdAt
@@ -262,6 +272,29 @@ export const createCategory = /* GraphQL */ `mutation CreateCategory(
   APITypes.CreateCategoryMutationVariables,
   APITypes.CreateCategoryMutation
 >;
+export const createClientLog = /* GraphQL */ `mutation CreateClientLog(
+  $condition: ModelClientLogConditionInput
+  $input: CreateClientLogInput!
+) {
+  createClientLog(condition: $condition, input: $input) {
+    connectionType
+    createdAt
+    deviceType
+    downlink
+    id
+    ipAddress
+    os
+    rtt
+    updatedAt
+    userAgent
+    userId
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.CreateClientLogMutationVariables,
+  APITypes.CreateClientLogMutation
+>;
 export const createGroup = /* GraphQL */ `mutation CreateGroup($groupName: String!) {
   createGroup(groupName: $groupName)
 }
@@ -281,6 +314,18 @@ export const createImage = /* GraphQL */ `mutation CreateImage(
       nextToken
       __typename
     }
+    camera {
+      createdAt
+      focalLengthMm
+      id
+      name
+      projectId
+      sensorWidthMm
+      tiltDegrees
+      updatedAt
+      __typename
+    }
+    cameraId
     cameraSerial
     createdAt
     exifData
@@ -324,6 +369,15 @@ export const createImage = /* GraphQL */ `mutation CreateImage(
     }
     roll
     timestamp
+    transect {
+      createdAt
+      id
+      projectId
+      stratumId
+      updatedAt
+      __typename
+    }
+    transectId
     updatedAt
     width
     yaw
@@ -345,6 +399,7 @@ export const createImageFile = /* GraphQL */ `mutation CreateImageFile(
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -357,6 +412,7 @@ export const createImageFile = /* GraphQL */ `mutation CreateImageFile(
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -397,6 +453,7 @@ export const createImageNeighbour = /* GraphQL */ `mutation CreateImageNeighbour
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -409,6 +466,7 @@ export const createImageNeighbour = /* GraphQL */ `mutation CreateImageNeighbour
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -419,6 +477,7 @@ export const createImageNeighbour = /* GraphQL */ `mutation CreateImageNeighbour
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -431,6 +490,7 @@ export const createImageNeighbour = /* GraphQL */ `mutation CreateImageNeighbour
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -489,6 +549,7 @@ export const createImageSetMembership = /* GraphQL */ `mutation CreateImageSetMe
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -501,6 +562,7 @@ export const createImageSetMembership = /* GraphQL */ `mutation CreateImageSetMe
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -525,6 +587,71 @@ export const createImageSetMembership = /* GraphQL */ `mutation CreateImageSetMe
   APITypes.CreateImageSetMembershipMutationVariables,
   APITypes.CreateImageSetMembershipMutation
 >;
+export const createJollyResult = /* GraphQL */ `mutation CreateJollyResult(
+  $condition: ModelJollyResultConditionInput
+  $input: CreateJollyResultInput!
+) {
+  createJollyResult(condition: $condition, input: $input) {
+    animals
+    annotationSetId
+    areaSurveyed
+    categoryId
+    createdAt
+    density
+    estimate
+    lowerBound95
+    numSamples
+    standardError
+    stratumId
+    surveyId
+    updatedAt
+    upperBound95
+    variance
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.CreateJollyResultMutationVariables,
+  APITypes.CreateJollyResultMutation
+>;
+export const createJollyResultsMembership = /* GraphQL */ `mutation CreateJollyResultsMembership(
+  $condition: ModelJollyResultsMembershipConditionInput
+  $input: CreateJollyResultsMembershipInput!
+) {
+  createJollyResultsMembership(condition: $condition, input: $input) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      register
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    createdAt
+    survey {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    surveyId
+    updatedAt
+    userId
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.CreateJollyResultsMembershipMutationVariables,
+  APITypes.CreateJollyResultsMembershipMutation
+>;
 export const createLocation = /* GraphQL */ `mutation CreateLocation(
   $condition: ModelLocationConditionInput
   $input: CreateLocationInput!
@@ -542,6 +669,7 @@ export const createLocation = /* GraphQL */ `mutation CreateLocation(
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -554,6 +682,7 @@ export const createLocation = /* GraphQL */ `mutation CreateLocation(
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -960,15 +1089,19 @@ export const createProject = /* GraphQL */ `mutation CreateProject(
   $input: CreateProjectInput!
 ) {
   createProject(condition: $condition, input: $input) {
-    annotationCountsPerCategoryPerSet {
-      nextToken
-      __typename
-    }
     annotationSets {
       nextToken
       __typename
     }
     annotations {
+      nextToken
+      __typename
+    }
+    cameraOverlaps {
+      nextToken
+      __typename
+    }
+    cameras {
       nextToken
       __typename
     }
@@ -985,6 +1118,10 @@ export const createProject = /* GraphQL */ `mutation CreateProject(
       __typename
     }
     images {
+      nextToken
+      __typename
+    }
+    jollyResultsMemberships {
       nextToken
       __typename
     }
@@ -1022,7 +1159,23 @@ export const createProject = /* GraphQL */ `mutation CreateProject(
       nextToken
       __typename
     }
+    shapefile {
+      coordinates
+      createdAt
+      id
+      projectId
+      updatedAt
+      __typename
+    }
+    shapefileExclusions {
+      nextToken
+      __typename
+    }
     status
+    strata {
+      nextToken
+      __typename
+    }
     testConfig {
       accuracy
       createdAt
@@ -1036,6 +1189,10 @@ export const createProject = /* GraphQL */ `mutation CreateProject(
       __typename
     }
     testResults {
+      nextToken
+      __typename
+    }
+    transects {
       nextToken
       __typename
     }
@@ -1110,6 +1267,8 @@ export const createQueue = /* GraphQL */ `mutation CreateQueue(
       __typename
     }
     projectId
+    tag
+    totalBatches
     updatedAt
     url
     users {
@@ -1123,6 +1282,114 @@ export const createQueue = /* GraphQL */ `mutation CreateQueue(
 ` as GeneratedMutation<
   APITypes.CreateQueueMutationVariables,
   APITypes.CreateQueueMutation
+>;
+export const createResultSharingToken = /* GraphQL */ `mutation CreateResultSharingToken(
+  $condition: ModelResultSharingTokenConditionInput
+  $input: CreateResultSharingTokenInput!
+) {
+  createResultSharingToken(condition: $condition, input: $input) {
+    annotationSetId
+    createdAt
+    jwt
+    surveyId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.CreateResultSharingTokenMutationVariables,
+  APITypes.CreateResultSharingTokenMutation
+>;
+export const createShapefile = /* GraphQL */ `mutation CreateShapefile(
+  $condition: ModelShapefileConditionInput
+  $input: CreateShapefileInput!
+) {
+  createShapefile(condition: $condition, input: $input) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.CreateShapefileMutationVariables,
+  APITypes.CreateShapefileMutation
+>;
+export const createShapefileExclusions = /* GraphQL */ `mutation CreateShapefileExclusions(
+  $condition: ModelShapefileExclusionsConditionInput
+  $input: CreateShapefileExclusionsInput!
+) {
+  createShapefileExclusions(condition: $condition, input: $input) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.CreateShapefileExclusionsMutationVariables,
+  APITypes.CreateShapefileExclusionsMutation
+>;
+export const createStratum = /* GraphQL */ `mutation CreateStratum(
+  $condition: ModelStratumConditionInput
+  $input: CreateStratumInput!
+) {
+  createStratum(condition: $condition, input: $input) {
+    area
+    baselineLength
+    coordinates
+    createdAt
+    id
+    name
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    transects {
+      nextToken
+      __typename
+    }
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.CreateStratumMutationVariables,
+  APITypes.CreateStratumMutation
 >;
 export const createTasksOnAnnotationSet = /* GraphQL */ `mutation CreateTasksOnAnnotationSet(
   $condition: ModelTasksOnAnnotationSetConditionInput
@@ -1386,6 +1653,49 @@ export const createTestResultCategoryCount = /* GraphQL */ `mutation CreateTestR
   APITypes.CreateTestResultCategoryCountMutationVariables,
   APITypes.CreateTestResultCategoryCountMutation
 >;
+export const createTransect = /* GraphQL */ `mutation CreateTransect(
+  $condition: ModelTransectConditionInput
+  $input: CreateTransectInput!
+) {
+  createTransect(condition: $condition, input: $input) {
+    createdAt
+    id
+    images {
+      nextToken
+      __typename
+    }
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    stratum {
+      area
+      baselineLength
+      coordinates
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    stratumId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.CreateTransectMutationVariables,
+  APITypes.CreateTransectMutation
+>;
 export const createUserProjectMembership = /* GraphQL */ `mutation CreateUserProjectMembership(
   $condition: ModelUserProjectMembershipConditionInput
   $input: CreateUserProjectMembershipInput!
@@ -1399,6 +1709,8 @@ export const createUserProjectMembership = /* GraphQL */ `mutation CreateUserPro
       id
       name
       projectId
+      tag
+      totalBatches
       updatedAt
       url
       zoom
@@ -1428,6 +1740,8 @@ export const createUserProjectMembership = /* GraphQL */ `mutation CreateUserPro
       id
       name
       projectId
+      tag
+      totalBatches
       updatedAt
       url
       zoom
@@ -1493,6 +1807,7 @@ export const deleteAnnotation = /* GraphQL */ `mutation DeleteAnnotation(
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -1505,6 +1820,7 @@ export const deleteAnnotation = /* GraphQL */ `mutation DeleteAnnotation(
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -1556,67 +1872,12 @@ export const deleteAnnotation = /* GraphQL */ `mutation DeleteAnnotation(
   APITypes.DeleteAnnotationMutationVariables,
   APITypes.DeleteAnnotationMutation
 >;
-export const deleteAnnotationCountPerCategoryPerSet = /* GraphQL */ `mutation DeleteAnnotationCountPerCategoryPerSet(
-  $condition: ModelAnnotationCountPerCategoryPerSetConditionInput
-  $input: DeleteAnnotationCountPerCategoryPerSetInput!
-) {
-  deleteAnnotationCountPerCategoryPerSet(condition: $condition, input: $input) {
-    annotationCount
-    annotationSet {
-      annotationCount
-      createdAt
-      id
-      name
-      projectId
-      register
-      updatedAt
-      __typename
-    }
-    annotationSetId
-    category {
-      annotationCount
-      annotationSetId
-      color
-      createdAt
-      id
-      name
-      projectId
-      shortcutKey
-      updatedAt
-      __typename
-    }
-    categoryId
-    createdAt
-    project {
-      createdAt
-      createdBy
-      hidden
-      id
-      name
-      organizationId
-      status
-      updatedAt
-      __typename
-    }
-    projectId
-    updatedAt
-    __typename
-  }
-}
-` as GeneratedMutation<
-  APITypes.DeleteAnnotationCountPerCategoryPerSetMutationVariables,
-  APITypes.DeleteAnnotationCountPerCategoryPerSetMutation
->;
 export const deleteAnnotationSet = /* GraphQL */ `mutation DeleteAnnotationSet(
   $condition: ModelAnnotationSetConditionInput
   $input: DeleteAnnotationSetInput!
 ) {
   deleteAnnotationSet(condition: $condition, input: $input) {
     annotationCount
-    annotationCountPerCategory {
-      nextToken
-      __typename
-    }
     annotations {
       nextToken
       __typename
@@ -1627,6 +1888,10 @@ export const deleteAnnotationSet = /* GraphQL */ `mutation DeleteAnnotationSet(
     }
     createdAt
     id
+    jollyResultsMemberships {
+      nextToken
+      __typename
+    }
     locationAnnotationCounts {
       nextToken
       __typename
@@ -1669,16 +1934,75 @@ export const deleteAnnotationSet = /* GraphQL */ `mutation DeleteAnnotationSet(
   APITypes.DeleteAnnotationSetMutationVariables,
   APITypes.DeleteAnnotationSetMutation
 >;
+export const deleteCamera = /* GraphQL */ `mutation DeleteCamera(
+  $condition: ModelCameraConditionInput
+  $input: DeleteCameraInput!
+) {
+  deleteCamera(condition: $condition, input: $input) {
+    createdAt
+    focalLengthMm
+    id
+    images {
+      nextToken
+      __typename
+    }
+    name
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    sensorWidthMm
+    tiltDegrees
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.DeleteCameraMutationVariables,
+  APITypes.DeleteCameraMutation
+>;
+export const deleteCameraOverlap = /* GraphQL */ `mutation DeleteCameraOverlap(
+  $condition: ModelCameraOverlapConditionInput
+  $input: DeleteCameraOverlapInput!
+) {
+  deleteCameraOverlap(condition: $condition, input: $input) {
+    cameraAId
+    cameraBId
+    createdAt
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.DeleteCameraOverlapMutationVariables,
+  APITypes.DeleteCameraOverlapMutation
+>;
 export const deleteCategory = /* GraphQL */ `mutation DeleteCategory(
   $condition: ModelCategoryConditionInput
   $input: DeleteCategoryInput!
 ) {
   deleteCategory(condition: $condition, input: $input) {
     annotationCount
-    annotationCountPerSet {
-      nextToken
-      __typename
-    }
     annotationSet {
       annotationCount
       createdAt
@@ -1716,6 +2040,29 @@ export const deleteCategory = /* GraphQL */ `mutation DeleteCategory(
   APITypes.DeleteCategoryMutationVariables,
   APITypes.DeleteCategoryMutation
 >;
+export const deleteClientLog = /* GraphQL */ `mutation DeleteClientLog(
+  $condition: ModelClientLogConditionInput
+  $input: DeleteClientLogInput!
+) {
+  deleteClientLog(condition: $condition, input: $input) {
+    connectionType
+    createdAt
+    deviceType
+    downlink
+    id
+    ipAddress
+    os
+    rtt
+    updatedAt
+    userAgent
+    userId
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.DeleteClientLogMutationVariables,
+  APITypes.DeleteClientLogMutation
+>;
 export const deleteImage = /* GraphQL */ `mutation DeleteImage(
   $condition: ModelImageConditionInput
   $input: DeleteImageInput!
@@ -1728,6 +2075,18 @@ export const deleteImage = /* GraphQL */ `mutation DeleteImage(
       nextToken
       __typename
     }
+    camera {
+      createdAt
+      focalLengthMm
+      id
+      name
+      projectId
+      sensorWidthMm
+      tiltDegrees
+      updatedAt
+      __typename
+    }
+    cameraId
     cameraSerial
     createdAt
     exifData
@@ -1771,6 +2130,15 @@ export const deleteImage = /* GraphQL */ `mutation DeleteImage(
     }
     roll
     timestamp
+    transect {
+      createdAt
+      id
+      projectId
+      stratumId
+      updatedAt
+      __typename
+    }
+    transectId
     updatedAt
     width
     yaw
@@ -1792,6 +2160,7 @@ export const deleteImageFile = /* GraphQL */ `mutation DeleteImageFile(
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -1804,6 +2173,7 @@ export const deleteImageFile = /* GraphQL */ `mutation DeleteImageFile(
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -1844,6 +2214,7 @@ export const deleteImageNeighbour = /* GraphQL */ `mutation DeleteImageNeighbour
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -1856,6 +2227,7 @@ export const deleteImageNeighbour = /* GraphQL */ `mutation DeleteImageNeighbour
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -1866,6 +2238,7 @@ export const deleteImageNeighbour = /* GraphQL */ `mutation DeleteImageNeighbour
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -1878,6 +2251,7 @@ export const deleteImageNeighbour = /* GraphQL */ `mutation DeleteImageNeighbour
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -1936,6 +2310,7 @@ export const deleteImageSetMembership = /* GraphQL */ `mutation DeleteImageSetMe
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -1948,6 +2323,7 @@ export const deleteImageSetMembership = /* GraphQL */ `mutation DeleteImageSetMe
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -1972,6 +2348,71 @@ export const deleteImageSetMembership = /* GraphQL */ `mutation DeleteImageSetMe
   APITypes.DeleteImageSetMembershipMutationVariables,
   APITypes.DeleteImageSetMembershipMutation
 >;
+export const deleteJollyResult = /* GraphQL */ `mutation DeleteJollyResult(
+  $condition: ModelJollyResultConditionInput
+  $input: DeleteJollyResultInput!
+) {
+  deleteJollyResult(condition: $condition, input: $input) {
+    animals
+    annotationSetId
+    areaSurveyed
+    categoryId
+    createdAt
+    density
+    estimate
+    lowerBound95
+    numSamples
+    standardError
+    stratumId
+    surveyId
+    updatedAt
+    upperBound95
+    variance
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.DeleteJollyResultMutationVariables,
+  APITypes.DeleteJollyResultMutation
+>;
+export const deleteJollyResultsMembership = /* GraphQL */ `mutation DeleteJollyResultsMembership(
+  $condition: ModelJollyResultsMembershipConditionInput
+  $input: DeleteJollyResultsMembershipInput!
+) {
+  deleteJollyResultsMembership(condition: $condition, input: $input) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      register
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    createdAt
+    survey {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    surveyId
+    updatedAt
+    userId
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.DeleteJollyResultsMembershipMutationVariables,
+  APITypes.DeleteJollyResultsMembershipMutation
+>;
 export const deleteLocation = /* GraphQL */ `mutation DeleteLocation(
   $condition: ModelLocationConditionInput
   $input: DeleteLocationInput!
@@ -1989,6 +2430,7 @@ export const deleteLocation = /* GraphQL */ `mutation DeleteLocation(
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -2001,6 +2443,7 @@ export const deleteLocation = /* GraphQL */ `mutation DeleteLocation(
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -2407,15 +2850,19 @@ export const deleteProject = /* GraphQL */ `mutation DeleteProject(
   $input: DeleteProjectInput!
 ) {
   deleteProject(condition: $condition, input: $input) {
-    annotationCountsPerCategoryPerSet {
-      nextToken
-      __typename
-    }
     annotationSets {
       nextToken
       __typename
     }
     annotations {
+      nextToken
+      __typename
+    }
+    cameraOverlaps {
+      nextToken
+      __typename
+    }
+    cameras {
       nextToken
       __typename
     }
@@ -2432,6 +2879,10 @@ export const deleteProject = /* GraphQL */ `mutation DeleteProject(
       __typename
     }
     images {
+      nextToken
+      __typename
+    }
+    jollyResultsMemberships {
       nextToken
       __typename
     }
@@ -2469,7 +2920,23 @@ export const deleteProject = /* GraphQL */ `mutation DeleteProject(
       nextToken
       __typename
     }
+    shapefile {
+      coordinates
+      createdAt
+      id
+      projectId
+      updatedAt
+      __typename
+    }
+    shapefileExclusions {
+      nextToken
+      __typename
+    }
     status
+    strata {
+      nextToken
+      __typename
+    }
     testConfig {
       accuracy
       createdAt
@@ -2486,6 +2953,10 @@ export const deleteProject = /* GraphQL */ `mutation DeleteProject(
       nextToken
       __typename
     }
+    transects {
+      nextToken
+      __typename
+    }
     updatedAt
     __typename
   }
@@ -2493,6 +2964,13 @@ export const deleteProject = /* GraphQL */ `mutation DeleteProject(
 ` as GeneratedMutation<
   APITypes.DeleteProjectMutationVariables,
   APITypes.DeleteProjectMutation
+>;
+export const deleteProjectInFull = /* GraphQL */ `mutation DeleteProjectInFull($projectId: String!) {
+  deleteProjectInFull(projectId: $projectId)
+}
+` as GeneratedMutation<
+  APITypes.DeleteProjectInFullMutationVariables,
+  APITypes.DeleteProjectInFullMutation
 >;
 export const deleteProjectTestConfig = /* GraphQL */ `mutation DeleteProjectTestConfig(
   $condition: ModelProjectTestConfigConditionInput
@@ -2557,6 +3035,8 @@ export const deleteQueue = /* GraphQL */ `mutation DeleteQueue(
       __typename
     }
     projectId
+    tag
+    totalBatches
     updatedAt
     url
     users {
@@ -2570,6 +3050,114 @@ export const deleteQueue = /* GraphQL */ `mutation DeleteQueue(
 ` as GeneratedMutation<
   APITypes.DeleteQueueMutationVariables,
   APITypes.DeleteQueueMutation
+>;
+export const deleteResultSharingToken = /* GraphQL */ `mutation DeleteResultSharingToken(
+  $condition: ModelResultSharingTokenConditionInput
+  $input: DeleteResultSharingTokenInput!
+) {
+  deleteResultSharingToken(condition: $condition, input: $input) {
+    annotationSetId
+    createdAt
+    jwt
+    surveyId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.DeleteResultSharingTokenMutationVariables,
+  APITypes.DeleteResultSharingTokenMutation
+>;
+export const deleteShapefile = /* GraphQL */ `mutation DeleteShapefile(
+  $condition: ModelShapefileConditionInput
+  $input: DeleteShapefileInput!
+) {
+  deleteShapefile(condition: $condition, input: $input) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.DeleteShapefileMutationVariables,
+  APITypes.DeleteShapefileMutation
+>;
+export const deleteShapefileExclusions = /* GraphQL */ `mutation DeleteShapefileExclusions(
+  $condition: ModelShapefileExclusionsConditionInput
+  $input: DeleteShapefileExclusionsInput!
+) {
+  deleteShapefileExclusions(condition: $condition, input: $input) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.DeleteShapefileExclusionsMutationVariables,
+  APITypes.DeleteShapefileExclusionsMutation
+>;
+export const deleteStratum = /* GraphQL */ `mutation DeleteStratum(
+  $condition: ModelStratumConditionInput
+  $input: DeleteStratumInput!
+) {
+  deleteStratum(condition: $condition, input: $input) {
+    area
+    baselineLength
+    coordinates
+    createdAt
+    id
+    name
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    transects {
+      nextToken
+      __typename
+    }
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.DeleteStratumMutationVariables,
+  APITypes.DeleteStratumMutation
 >;
 export const deleteTasksOnAnnotationSet = /* GraphQL */ `mutation DeleteTasksOnAnnotationSet(
   $condition: ModelTasksOnAnnotationSetConditionInput
@@ -2833,6 +3421,49 @@ export const deleteTestResultCategoryCount = /* GraphQL */ `mutation DeleteTestR
   APITypes.DeleteTestResultCategoryCountMutationVariables,
   APITypes.DeleteTestResultCategoryCountMutation
 >;
+export const deleteTransect = /* GraphQL */ `mutation DeleteTransect(
+  $condition: ModelTransectConditionInput
+  $input: DeleteTransectInput!
+) {
+  deleteTransect(condition: $condition, input: $input) {
+    createdAt
+    id
+    images {
+      nextToken
+      __typename
+    }
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    stratum {
+      area
+      baselineLength
+      coordinates
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    stratumId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.DeleteTransectMutationVariables,
+  APITypes.DeleteTransectMutation
+>;
 export const deleteUserProjectMembership = /* GraphQL */ `mutation DeleteUserProjectMembership(
   $condition: ModelUserProjectMembershipConditionInput
   $input: DeleteUserProjectMembershipInput!
@@ -2846,6 +3477,8 @@ export const deleteUserProjectMembership = /* GraphQL */ `mutation DeleteUserPro
       id
       name
       projectId
+      tag
+      totalBatches
       updatedAt
       url
       zoom
@@ -2875,6 +3508,8 @@ export const deleteUserProjectMembership = /* GraphQL */ `mutation DeleteUserPro
       id
       name
       projectId
+      tag
+      totalBatches
       updatedAt
       url
       zoom
@@ -2916,6 +3551,28 @@ export const deleteUserStats = /* GraphQL */ `mutation DeleteUserStats(
   APITypes.DeleteUserStatsMutationVariables,
   APITypes.DeleteUserStatsMutation
 >;
+export const generateSurveyResults = /* GraphQL */ `mutation GenerateSurveyResults(
+  $annotationSetId: String!
+  $categoryIds: [String]!
+  $surveyId: String!
+) {
+  generateSurveyResults(
+    annotationSetId: $annotationSetId
+    categoryIds: $categoryIds
+    surveyId: $surveyId
+  )
+}
+` as GeneratedMutation<
+  APITypes.GenerateSurveyResultsMutationVariables,
+  APITypes.GenerateSurveyResultsMutation
+>;
+export const getJwtSecret = /* GraphQL */ `mutation GetJwtSecret {
+  getJwtSecret
+}
+` as GeneratedMutation<
+  APITypes.GetJwtSecretMutationVariables,
+  APITypes.GetJwtSecretMutation
+>;
 export const processImages = /* GraphQL */ `mutation ProcessImages($model: String!, $s3key: String!, $threshold: Float) {
   processImages(model: $model, s3key: $s3key, threshold: $threshold)
 }
@@ -2941,6 +3598,66 @@ export const removeUserFromGroup = /* GraphQL */ `mutation RemoveUserFromGroup($
   APITypes.RemoveUserFromGroupMutationVariables,
   APITypes.RemoveUserFromGroupMutation
 >;
+export const runHeatmapper = /* GraphQL */ `mutation RunHeatmapper($images: [String]) {
+  runHeatmapper(images: $images)
+}
+` as GeneratedMutation<
+  APITypes.RunHeatmapperMutationVariables,
+  APITypes.RunHeatmapperMutation
+>;
+export const runImageRegistration = /* GraphQL */ `mutation RunImageRegistration(
+  $metadata: String!
+  $projectId: String!
+  $queueUrl: String!
+) {
+  runImageRegistration(
+    metadata: $metadata
+    projectId: $projectId
+    queueUrl: $queueUrl
+  )
+}
+` as GeneratedMutation<
+  APITypes.RunImageRegistrationMutationVariables,
+  APITypes.RunImageRegistrationMutation
+>;
+export const runMadDetector = /* GraphQL */ `mutation RunMadDetector(
+  $bucket: String!
+  $images: [String]
+  $projectId: String!
+  $queueUrl: String!
+  $setId: String!
+) {
+  runMadDetector(
+    bucket: $bucket
+    images: $images
+    projectId: $projectId
+    queueUrl: $queueUrl
+    setId: $setId
+  )
+}
+` as GeneratedMutation<
+  APITypes.RunMadDetectorMutationVariables,
+  APITypes.RunMadDetectorMutation
+>;
+export const runScoutbot = /* GraphQL */ `mutation RunScoutbot(
+  $bucket: String!
+  $images: [String]
+  $projectId: String!
+  $queueUrl: String!
+  $setId: String!
+) {
+  runScoutbot(
+    bucket: $bucket
+    images: $images
+    projectId: $projectId
+    queueUrl: $queueUrl
+    setId: $setId
+  )
+}
+` as GeneratedMutation<
+  APITypes.RunScoutbotMutationVariables,
+  APITypes.RunScoutbotMutation
+>;
 export const updateAnnotation = /* GraphQL */ `mutation UpdateAnnotation(
   $condition: ModelAnnotationConditionInput
   $input: UpdateAnnotationInput!
@@ -2965,6 +3682,7 @@ export const updateAnnotation = /* GraphQL */ `mutation UpdateAnnotation(
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -2977,6 +3695,7 @@ export const updateAnnotation = /* GraphQL */ `mutation UpdateAnnotation(
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -3028,67 +3747,12 @@ export const updateAnnotation = /* GraphQL */ `mutation UpdateAnnotation(
   APITypes.UpdateAnnotationMutationVariables,
   APITypes.UpdateAnnotationMutation
 >;
-export const updateAnnotationCountPerCategoryPerSet = /* GraphQL */ `mutation UpdateAnnotationCountPerCategoryPerSet(
-  $condition: ModelAnnotationCountPerCategoryPerSetConditionInput
-  $input: UpdateAnnotationCountPerCategoryPerSetInput!
-) {
-  updateAnnotationCountPerCategoryPerSet(condition: $condition, input: $input) {
-    annotationCount
-    annotationSet {
-      annotationCount
-      createdAt
-      id
-      name
-      projectId
-      register
-      updatedAt
-      __typename
-    }
-    annotationSetId
-    category {
-      annotationCount
-      annotationSetId
-      color
-      createdAt
-      id
-      name
-      projectId
-      shortcutKey
-      updatedAt
-      __typename
-    }
-    categoryId
-    createdAt
-    project {
-      createdAt
-      createdBy
-      hidden
-      id
-      name
-      organizationId
-      status
-      updatedAt
-      __typename
-    }
-    projectId
-    updatedAt
-    __typename
-  }
-}
-` as GeneratedMutation<
-  APITypes.UpdateAnnotationCountPerCategoryPerSetMutationVariables,
-  APITypes.UpdateAnnotationCountPerCategoryPerSetMutation
->;
 export const updateAnnotationSet = /* GraphQL */ `mutation UpdateAnnotationSet(
   $condition: ModelAnnotationSetConditionInput
   $input: UpdateAnnotationSetInput!
 ) {
   updateAnnotationSet(condition: $condition, input: $input) {
     annotationCount
-    annotationCountPerCategory {
-      nextToken
-      __typename
-    }
     annotations {
       nextToken
       __typename
@@ -3099,6 +3763,10 @@ export const updateAnnotationSet = /* GraphQL */ `mutation UpdateAnnotationSet(
     }
     createdAt
     id
+    jollyResultsMemberships {
+      nextToken
+      __typename
+    }
     locationAnnotationCounts {
       nextToken
       __typename
@@ -3141,16 +3809,75 @@ export const updateAnnotationSet = /* GraphQL */ `mutation UpdateAnnotationSet(
   APITypes.UpdateAnnotationSetMutationVariables,
   APITypes.UpdateAnnotationSetMutation
 >;
+export const updateCamera = /* GraphQL */ `mutation UpdateCamera(
+  $condition: ModelCameraConditionInput
+  $input: UpdateCameraInput!
+) {
+  updateCamera(condition: $condition, input: $input) {
+    createdAt
+    focalLengthMm
+    id
+    images {
+      nextToken
+      __typename
+    }
+    name
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    sensorWidthMm
+    tiltDegrees
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.UpdateCameraMutationVariables,
+  APITypes.UpdateCameraMutation
+>;
+export const updateCameraOverlap = /* GraphQL */ `mutation UpdateCameraOverlap(
+  $condition: ModelCameraOverlapConditionInput
+  $input: UpdateCameraOverlapInput!
+) {
+  updateCameraOverlap(condition: $condition, input: $input) {
+    cameraAId
+    cameraBId
+    createdAt
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.UpdateCameraOverlapMutationVariables,
+  APITypes.UpdateCameraOverlapMutation
+>;
 export const updateCategory = /* GraphQL */ `mutation UpdateCategory(
   $condition: ModelCategoryConditionInput
   $input: UpdateCategoryInput!
 ) {
   updateCategory(condition: $condition, input: $input) {
     annotationCount
-    annotationCountPerSet {
-      nextToken
-      __typename
-    }
     annotationSet {
       annotationCount
       createdAt
@@ -3188,6 +3915,29 @@ export const updateCategory = /* GraphQL */ `mutation UpdateCategory(
   APITypes.UpdateCategoryMutationVariables,
   APITypes.UpdateCategoryMutation
 >;
+export const updateClientLog = /* GraphQL */ `mutation UpdateClientLog(
+  $condition: ModelClientLogConditionInput
+  $input: UpdateClientLogInput!
+) {
+  updateClientLog(condition: $condition, input: $input) {
+    connectionType
+    createdAt
+    deviceType
+    downlink
+    id
+    ipAddress
+    os
+    rtt
+    updatedAt
+    userAgent
+    userId
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.UpdateClientLogMutationVariables,
+  APITypes.UpdateClientLogMutation
+>;
 export const updateImage = /* GraphQL */ `mutation UpdateImage(
   $condition: ModelImageConditionInput
   $input: UpdateImageInput!
@@ -3200,6 +3950,18 @@ export const updateImage = /* GraphQL */ `mutation UpdateImage(
       nextToken
       __typename
     }
+    camera {
+      createdAt
+      focalLengthMm
+      id
+      name
+      projectId
+      sensorWidthMm
+      tiltDegrees
+      updatedAt
+      __typename
+    }
+    cameraId
     cameraSerial
     createdAt
     exifData
@@ -3243,6 +4005,15 @@ export const updateImage = /* GraphQL */ `mutation UpdateImage(
     }
     roll
     timestamp
+    transect {
+      createdAt
+      id
+      projectId
+      stratumId
+      updatedAt
+      __typename
+    }
+    transectId
     updatedAt
     width
     yaw
@@ -3264,6 +4035,7 @@ export const updateImageFile = /* GraphQL */ `mutation UpdateImageFile(
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -3276,6 +4048,7 @@ export const updateImageFile = /* GraphQL */ `mutation UpdateImageFile(
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -3316,6 +4089,7 @@ export const updateImageNeighbour = /* GraphQL */ `mutation UpdateImageNeighbour
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -3328,6 +4102,7 @@ export const updateImageNeighbour = /* GraphQL */ `mutation UpdateImageNeighbour
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -3338,6 +4113,7 @@ export const updateImageNeighbour = /* GraphQL */ `mutation UpdateImageNeighbour
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -3350,6 +4126,7 @@ export const updateImageNeighbour = /* GraphQL */ `mutation UpdateImageNeighbour
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -3408,6 +4185,7 @@ export const updateImageSetMembership = /* GraphQL */ `mutation UpdateImageSetMe
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -3420,6 +4198,7 @@ export const updateImageSetMembership = /* GraphQL */ `mutation UpdateImageSetMe
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -3444,6 +4223,71 @@ export const updateImageSetMembership = /* GraphQL */ `mutation UpdateImageSetMe
   APITypes.UpdateImageSetMembershipMutationVariables,
   APITypes.UpdateImageSetMembershipMutation
 >;
+export const updateJollyResult = /* GraphQL */ `mutation UpdateJollyResult(
+  $condition: ModelJollyResultConditionInput
+  $input: UpdateJollyResultInput!
+) {
+  updateJollyResult(condition: $condition, input: $input) {
+    animals
+    annotationSetId
+    areaSurveyed
+    categoryId
+    createdAt
+    density
+    estimate
+    lowerBound95
+    numSamples
+    standardError
+    stratumId
+    surveyId
+    updatedAt
+    upperBound95
+    variance
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.UpdateJollyResultMutationVariables,
+  APITypes.UpdateJollyResultMutation
+>;
+export const updateJollyResultsMembership = /* GraphQL */ `mutation UpdateJollyResultsMembership(
+  $condition: ModelJollyResultsMembershipConditionInput
+  $input: UpdateJollyResultsMembershipInput!
+) {
+  updateJollyResultsMembership(condition: $condition, input: $input) {
+    annotationSet {
+      annotationCount
+      createdAt
+      id
+      name
+      projectId
+      register
+      updatedAt
+      __typename
+    }
+    annotationSetId
+    createdAt
+    survey {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    surveyId
+    updatedAt
+    userId
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.UpdateJollyResultsMembershipMutationVariables,
+  APITypes.UpdateJollyResultsMembershipMutation
+>;
 export const updateLocation = /* GraphQL */ `mutation UpdateLocation(
   $condition: ModelLocationConditionInput
   $input: UpdateLocationInput!
@@ -3461,6 +4305,7 @@ export const updateLocation = /* GraphQL */ `mutation UpdateLocation(
       altitude_agl
       altitude_egm96
       altitude_wgs84
+      cameraId
       cameraSerial
       createdAt
       exifData
@@ -3473,6 +4318,7 @@ export const updateLocation = /* GraphQL */ `mutation UpdateLocation(
       projectId
       roll
       timestamp
+      transectId
       updatedAt
       width
       yaw
@@ -3879,15 +4725,19 @@ export const updateProject = /* GraphQL */ `mutation UpdateProject(
   $input: UpdateProjectInput!
 ) {
   updateProject(condition: $condition, input: $input) {
-    annotationCountsPerCategoryPerSet {
-      nextToken
-      __typename
-    }
     annotationSets {
       nextToken
       __typename
     }
     annotations {
+      nextToken
+      __typename
+    }
+    cameraOverlaps {
+      nextToken
+      __typename
+    }
+    cameras {
       nextToken
       __typename
     }
@@ -3904,6 +4754,10 @@ export const updateProject = /* GraphQL */ `mutation UpdateProject(
       __typename
     }
     images {
+      nextToken
+      __typename
+    }
+    jollyResultsMemberships {
       nextToken
       __typename
     }
@@ -3941,7 +4795,23 @@ export const updateProject = /* GraphQL */ `mutation UpdateProject(
       nextToken
       __typename
     }
+    shapefile {
+      coordinates
+      createdAt
+      id
+      projectId
+      updatedAt
+      __typename
+    }
+    shapefileExclusions {
+      nextToken
+      __typename
+    }
     status
+    strata {
+      nextToken
+      __typename
+    }
     testConfig {
       accuracy
       createdAt
@@ -3955,6 +4825,10 @@ export const updateProject = /* GraphQL */ `mutation UpdateProject(
       __typename
     }
     testResults {
+      nextToken
+      __typename
+    }
+    transects {
       nextToken
       __typename
     }
@@ -4036,6 +4910,8 @@ export const updateQueue = /* GraphQL */ `mutation UpdateQueue(
       __typename
     }
     projectId
+    tag
+    totalBatches
     updatedAt
     url
     users {
@@ -4049,6 +4925,114 @@ export const updateQueue = /* GraphQL */ `mutation UpdateQueue(
 ` as GeneratedMutation<
   APITypes.UpdateQueueMutationVariables,
   APITypes.UpdateQueueMutation
+>;
+export const updateResultSharingToken = /* GraphQL */ `mutation UpdateResultSharingToken(
+  $condition: ModelResultSharingTokenConditionInput
+  $input: UpdateResultSharingTokenInput!
+) {
+  updateResultSharingToken(condition: $condition, input: $input) {
+    annotationSetId
+    createdAt
+    jwt
+    surveyId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.UpdateResultSharingTokenMutationVariables,
+  APITypes.UpdateResultSharingTokenMutation
+>;
+export const updateShapefile = /* GraphQL */ `mutation UpdateShapefile(
+  $condition: ModelShapefileConditionInput
+  $input: UpdateShapefileInput!
+) {
+  updateShapefile(condition: $condition, input: $input) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.UpdateShapefileMutationVariables,
+  APITypes.UpdateShapefileMutation
+>;
+export const updateShapefileExclusions = /* GraphQL */ `mutation UpdateShapefileExclusions(
+  $condition: ModelShapefileExclusionsConditionInput
+  $input: UpdateShapefileExclusionsInput!
+) {
+  updateShapefileExclusions(condition: $condition, input: $input) {
+    coordinates
+    createdAt
+    id
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.UpdateShapefileExclusionsMutationVariables,
+  APITypes.UpdateShapefileExclusionsMutation
+>;
+export const updateStratum = /* GraphQL */ `mutation UpdateStratum(
+  $condition: ModelStratumConditionInput
+  $input: UpdateStratumInput!
+) {
+  updateStratum(condition: $condition, input: $input) {
+    area
+    baselineLength
+    coordinates
+    createdAt
+    id
+    name
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    transects {
+      nextToken
+      __typename
+    }
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.UpdateStratumMutationVariables,
+  APITypes.UpdateStratumMutation
 >;
 export const updateTasksOnAnnotationSet = /* GraphQL */ `mutation UpdateTasksOnAnnotationSet(
   $condition: ModelTasksOnAnnotationSetConditionInput
@@ -4312,6 +5296,49 @@ export const updateTestResultCategoryCount = /* GraphQL */ `mutation UpdateTestR
   APITypes.UpdateTestResultCategoryCountMutationVariables,
   APITypes.UpdateTestResultCategoryCountMutation
 >;
+export const updateTransect = /* GraphQL */ `mutation UpdateTransect(
+  $condition: ModelTransectConditionInput
+  $input: UpdateTransectInput!
+) {
+  updateTransect(condition: $condition, input: $input) {
+    createdAt
+    id
+    images {
+      nextToken
+      __typename
+    }
+    project {
+      createdAt
+      createdBy
+      hidden
+      id
+      name
+      organizationId
+      status
+      updatedAt
+      __typename
+    }
+    projectId
+    stratum {
+      area
+      baselineLength
+      coordinates
+      createdAt
+      id
+      name
+      projectId
+      updatedAt
+      __typename
+    }
+    stratumId
+    updatedAt
+    __typename
+  }
+}
+` as GeneratedMutation<
+  APITypes.UpdateTransectMutationVariables,
+  APITypes.UpdateTransectMutation
+>;
 export const updateUserProjectMembership = /* GraphQL */ `mutation UpdateUserProjectMembership(
   $condition: ModelUserProjectMembershipConditionInput
   $input: UpdateUserProjectMembershipInput!
@@ -4325,6 +5352,8 @@ export const updateUserProjectMembership = /* GraphQL */ `mutation UpdateUserPro
       id
       name
       projectId
+      tag
+      totalBatches
       updatedAt
       url
       zoom
@@ -4354,6 +5383,8 @@ export const updateUserProjectMembership = /* GraphQL */ `mutation UpdateUserPro
       id
       name
       projectId
+      tag
+      totalBatches
       updatedAt
       url
       zoom

@@ -105,11 +105,11 @@ export type ModelAnnotationSetConnection = {
 export type AnnotationSet = {
   __typename: "AnnotationSet",
   annotationCount?: number | null,
-  annotationCountPerCategory?: ModelAnnotationCountPerCategoryPerSetConnection | null,
   annotations?: ModelAnnotationConnection | null,
   categories?: ModelCategoryConnection | null,
   createdAt: string,
   id: string,
+  jollyResultsMemberships?: ModelJollyResultsMembershipConnection | null,
   locationAnnotationCounts?: ModelLocationAnnotationCountConnection | null,
   name: string,
   observations?: ModelObservationConnection | null,
@@ -119,43 +119,6 @@ export type AnnotationSet = {
   tasks?: ModelTasksOnAnnotationSetConnection | null,
   testPresetLocations?: ModelTestPresetLocationConnection | null,
   testResults?: ModelTestResultConnection | null,
-  updatedAt: string,
-};
-
-export type ModelAnnotationCountPerCategoryPerSetConnection = {
-  __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-  items:  Array<AnnotationCountPerCategoryPerSet | null >,
-  nextToken?: string | null,
-};
-
-export type AnnotationCountPerCategoryPerSet = {
-  __typename: "AnnotationCountPerCategoryPerSet",
-  annotationCount?: number | null,
-  annotationSet?: AnnotationSet | null,
-  annotationSetId: string,
-  category?: Category | null,
-  categoryId: string,
-  createdAt: string,
-  project?: Project | null,
-  projectId: string,
-  updatedAt: string,
-};
-
-export type Category = {
-  __typename: "Category",
-  annotationCount?: number | null,
-  annotationCountPerSet?: ModelAnnotationCountPerCategoryPerSetConnection | null,
-  annotationSet?: AnnotationSet | null,
-  annotationSetId: string,
-  annotations?: ModelAnnotationConnection | null,
-  color?: string | null,
-  createdAt: string,
-  id: string,
-  locationAnnotationCounts?: ModelLocationAnnotationCountConnection | null,
-  name: string,
-  objects?: ModelObjectConnection | null,
-  projectId: string,
-  shortcutKey?: string | null,
   updatedAt: string,
 };
 
@@ -183,6 +146,66 @@ export type Annotation = {
   setId: string,
   source: string,
   updatedAt: string,
+  x: number,
+  y: number,
+};
+
+export type Category = {
+  __typename: "Category",
+  annotationCount?: number | null,
+  annotationSet?: AnnotationSet | null,
+  annotationSetId: string,
+  annotations?: ModelAnnotationConnection | null,
+  color?: string | null,
+  createdAt: string,
+  id: string,
+  locationAnnotationCounts?: ModelLocationAnnotationCountConnection | null,
+  name: string,
+  objects?: ModelObjectConnection | null,
+  projectId: string,
+  shortcutKey?: string | null,
+  updatedAt: string,
+};
+
+export type ModelLocationAnnotationCountConnection = {
+  __typename: "ModelLocationAnnotationCountConnection",
+  items:  Array<LocationAnnotationCount | null >,
+  nextToken?: string | null,
+};
+
+export type LocationAnnotationCount = {
+  __typename: "LocationAnnotationCount",
+  annotationSet?: AnnotationSet | null,
+  annotationSetId: string,
+  category?: Category | null,
+  categoryId: string,
+  count?: number | null,
+  createdAt: string,
+  location?: Location | null,
+  locationId: string,
+  updatedAt: string,
+};
+
+export type Location = {
+  __typename: "Location",
+  annotationCounts?: ModelLocationAnnotationCountConnection | null,
+  confidence?: number | null,
+  createdAt: string,
+  height?: number | null,
+  id: string,
+  image?: Image | null,
+  imageId?: string | null,
+  observations?: ModelObservationConnection | null,
+  project?: Project | null,
+  projectId: string,
+  set?: LocationSet | null,
+  setId: string,
+  sets?: ModelLocationSetMembershipConnection | null,
+  source: string,
+  testPresets?: ModelTestPresetLocationConnection | null,
+  testResults?: ModelTestResultConnection | null,
+  updatedAt: string,
+  width?: number | null,
   x: number,
   y: number,
 };
@@ -242,9 +265,9 @@ export type ModelImageConnection = {
 
 export type Project = {
   __typename: "Project",
-  annotationCountsPerCategoryPerSet?: ModelAnnotationCountPerCategoryPerSetConnection | null,
   annotationSets?: ModelAnnotationSetConnection | null,
   annotations?: ModelAnnotationConnection | null,
+  cameraOverlaps?: ModelCameraOverlapConnection | null,
   cameras?: ModelCameraConnection | null,
   createdAt: string,
   createdBy: string,
@@ -264,11 +287,28 @@ export type Project = {
   organizationId: string,
   queues?: ModelQueueConnection | null,
   shapefile?: Shapefile | null,
+  shapefileExclusions?: ModelShapefileExclusionsConnection | null,
   status?: string | null,
   strata?: ModelStratumConnection | null,
   testConfig?: ProjectTestConfig | null,
   testResults?: ModelTestResultConnection | null,
   transects?: ModelTransectConnection | null,
+  updatedAt: string,
+};
+
+export type ModelCameraOverlapConnection = {
+  __typename: "ModelCameraOverlapConnection",
+  items:  Array<CameraOverlap | null >,
+  nextToken?: string | null,
+};
+
+export type CameraOverlap = {
+  __typename: "CameraOverlap",
+  cameraAId: string,
+  cameraBId: string,
+  createdAt: string,
+  project?: Project | null,
+  projectId: string,
   updatedAt: string,
 };
 
@@ -341,6 +381,8 @@ export type ModelJollyResultsMembershipConnection = {
 
 export type JollyResultsMembership = {
   __typename: "JollyResultsMembership",
+  annotationSet?: AnnotationSet | null,
+  annotationSetId: string,
   createdAt: string,
   survey?: Project | null,
   surveyId: string,
@@ -374,46 +416,95 @@ export type ModelLocationConnection = {
   nextToken?: string | null,
 };
 
-export type Location = {
-  __typename: "Location",
-  annotationCounts?: ModelLocationAnnotationCountConnection | null,
-  confidence?: number | null,
-  createdAt: string,
-  height?: number | null,
-  id: string,
-  image?: Image | null,
-  imageId?: string | null,
-  observations?: ModelObservationConnection | null,
-  project?: Project | null,
-  projectId: string,
-  set?: LocationSet | null,
-  setId: string,
-  sets?: ModelLocationSetMembershipConnection | null,
-  source: string,
-  testPresets?: ModelTestPresetLocationConnection | null,
-  testResults?: ModelTestResultConnection | null,
-  updatedAt: string,
-  width?: number | null,
-  x: number,
-  y: number,
-};
-
-export type ModelLocationAnnotationCountConnection = {
-  __typename: "ModelLocationAnnotationCountConnection",
-  items:  Array<LocationAnnotationCount | null >,
+export type ModelLocationSetMembershipConnection = {
+  __typename: "ModelLocationSetMembershipConnection",
+  items:  Array<LocationSetMembership | null >,
   nextToken?: string | null,
 };
 
-export type LocationAnnotationCount = {
-  __typename: "LocationAnnotationCount",
-  annotationSet?: AnnotationSet | null,
-  annotationSetId: string,
-  category?: Category | null,
-  categoryId: string,
-  count?: number | null,
+export type LocationSetMembership = {
+  __typename: "LocationSetMembership",
   createdAt: string,
+  id: string,
   location?: Location | null,
   locationId: string,
+  locationSet?: LocationSet | null,
+  locationSetId: string,
+  updatedAt: string,
+};
+
+export type ModelTasksOnAnnotationSetConnection = {
+  __typename: "ModelTasksOnAnnotationSetConnection",
+  items:  Array<TasksOnAnnotationSet | null >,
+  nextToken?: string | null,
+};
+
+export type TasksOnAnnotationSet = {
+  __typename: "TasksOnAnnotationSet",
+  annotationSet?: AnnotationSet | null,
+  annotationSetId: string,
+  createdAt: string,
+  id: string,
+  locationSet?: LocationSet | null,
+  locationSetId: string,
+  updatedAt: string,
+};
+
+export type ModelUserProjectMembershipConnection = {
+  __typename: "ModelUserProjectMembershipConnection",
+  items:  Array<UserProjectMembership | null >,
+  nextToken?: string | null,
+};
+
+export type UserProjectMembership = {
+  __typename: "UserProjectMembership",
+  backupQueue?: Queue | null,
+  backupQueueId?: string | null,
+  createdAt: string,
+  id: string,
+  isAdmin?: boolean | null,
+  project?: Project | null,
+  projectId: string,
+  queue?: Queue | null,
+  queueId?: string | null,
+  updatedAt: string,
+  userId: string,
+};
+
+export type Queue = {
+  __typename: "Queue",
+  approximateSize?: number | null,
+  backupUsers?: ModelUserProjectMembershipConnection | null,
+  batchSize?: number | null,
+  createdAt: string,
+  hidden?: boolean | null,
+  id: string,
+  name: string,
+  project?: Project | null,
+  projectId: string,
+  tag?: string | null,
+  totalBatches?: number | null,
+  updatedAt: string,
+  url?: string | null,
+  users?: ModelUserProjectMembershipConnection | null,
+  zoom?: number | null,
+};
+
+export type ModelObjectConnection = {
+  __typename: "ModelObjectConnection",
+  items:  Array<Object | null >,
+  nextToken?: string | null,
+};
+
+export type Object = {
+  __typename: "Object",
+  annotations?: ModelAnnotationConnection | null,
+  category?: Category | null,
+  categoryId: string,
+  createdAt: string,
+  id: string,
+  project?: Project | null,
+  projectId: string,
   updatedAt: string,
 };
 
@@ -439,54 +530,6 @@ export type Observation = {
   timeTaken?: number | null,
   updatedAt: string,
   waitingTime?: number | null,
-};
-
-export type ModelLocationSetMembershipConnection = {
-  __typename: "ModelLocationSetMembershipConnection",
-  items:  Array<LocationSetMembership | null >,
-  nextToken?: string | null,
-};
-
-export type LocationSetMembership = {
-  __typename: "LocationSetMembership",
-  createdAt: string,
-  id: string,
-  location?: Location | null,
-  locationId: string,
-  locationSet?: LocationSet | null,
-  locationSetId: string,
-  updatedAt: string,
-};
-
-export type ModelTestPresetLocationConnection = {
-  __typename: "ModelTestPresetLocationConnection",
-  items:  Array<TestPresetLocation | null >,
-  nextToken?: string | null,
-};
-
-export type TestPresetLocation = {
-  __typename: "TestPresetLocation",
-  annotationSet?: AnnotationSet | null,
-  annotationSetId: string,
-  createdAt: string,
-  location?: Location | null,
-  locationId: string,
-  testPreset?: TestPreset | null,
-  testPresetId: string,
-  updatedAt: string,
-};
-
-export type TestPreset = {
-  __typename: "TestPreset",
-  createdAt: string,
-  id: string,
-  locations?: ModelTestPresetLocationConnection | null,
-  name: string,
-  organization?: Organization | null,
-  organizationId: string,
-  projects?: ModelTestPresetProjectConnection | null,
-  testResults?: ModelTestResultConnection | null,
-  updatedAt: string,
 };
 
 export type Organization = {
@@ -547,6 +590,37 @@ export type ModelTestPresetConnection = {
   __typename: "ModelTestPresetConnection",
   items:  Array<TestPreset | null >,
   nextToken?: string | null,
+};
+
+export type TestPreset = {
+  __typename: "TestPreset",
+  createdAt: string,
+  id: string,
+  locations?: ModelTestPresetLocationConnection | null,
+  name: string,
+  organization?: Organization | null,
+  organizationId: string,
+  projects?: ModelTestPresetProjectConnection | null,
+  testResults?: ModelTestResultConnection | null,
+  updatedAt: string,
+};
+
+export type ModelTestPresetLocationConnection = {
+  __typename: "ModelTestPresetLocationConnection",
+  items:  Array<TestPresetLocation | null >,
+  nextToken?: string | null,
+};
+
+export type TestPresetLocation = {
+  __typename: "TestPresetLocation",
+  annotationSet?: AnnotationSet | null,
+  annotationSetId: string,
+  createdAt: string,
+  location?: Location | null,
+  locationId: string,
+  testPreset?: TestPreset | null,
+  testPresetId: string,
+  updatedAt: string,
 };
 
 export type ModelTestPresetProjectConnection = {
@@ -623,80 +697,6 @@ export type TestResultCategoryCount = {
   userCount: number,
 };
 
-export type ModelTasksOnAnnotationSetConnection = {
-  __typename: "ModelTasksOnAnnotationSetConnection",
-  items:  Array<TasksOnAnnotationSet | null >,
-  nextToken?: string | null,
-};
-
-export type TasksOnAnnotationSet = {
-  __typename: "TasksOnAnnotationSet",
-  annotationSet?: AnnotationSet | null,
-  annotationSetId: string,
-  createdAt: string,
-  id: string,
-  locationSet?: LocationSet | null,
-  locationSetId: string,
-  updatedAt: string,
-};
-
-export type ModelUserProjectMembershipConnection = {
-  __typename: "ModelUserProjectMembershipConnection",
-  items:  Array<UserProjectMembership | null >,
-  nextToken?: string | null,
-};
-
-export type UserProjectMembership = {
-  __typename: "UserProjectMembership",
-  backupQueue?: Queue | null,
-  backupQueueId?: string | null,
-  createdAt: string,
-  id: string,
-  isAdmin?: boolean | null,
-  project?: Project | null,
-  projectId: string,
-  queue?: Queue | null,
-  queueId?: string | null,
-  updatedAt: string,
-  userId: string,
-};
-
-export type Queue = {
-  __typename: "Queue",
-  approximateSize?: number | null,
-  backupUsers?: ModelUserProjectMembershipConnection | null,
-  batchSize?: number | null,
-  createdAt: string,
-  hidden?: boolean | null,
-  id: string,
-  name: string,
-  project?: Project | null,
-  projectId: string,
-  totalBatches?: number | null,
-  updatedAt: string,
-  url?: string | null,
-  users?: ModelUserProjectMembershipConnection | null,
-  zoom?: number | null,
-};
-
-export type ModelObjectConnection = {
-  __typename: "ModelObjectConnection",
-  items:  Array<Object | null >,
-  nextToken?: string | null,
-};
-
-export type Object = {
-  __typename: "Object",
-  annotations?: ModelAnnotationConnection | null,
-  category?: Category | null,
-  categoryId: string,
-  createdAt: string,
-  id: string,
-  project?: Project | null,
-  projectId: string,
-  updatedAt: string,
-};
-
 export type ModelQueueConnection = {
   __typename: "ModelQueueConnection",
   items:  Array<Queue | null >,
@@ -705,6 +705,22 @@ export type ModelQueueConnection = {
 
 export type Shapefile = {
   __typename: "Shapefile",
+  coordinates?: Array< number | null > | null,
+  createdAt: string,
+  id: string,
+  project?: Project | null,
+  projectId: string,
+  updatedAt: string,
+};
+
+export type ModelShapefileExclusionsConnection = {
+  __typename: "ModelShapefileExclusionsConnection",
+  items:  Array<ShapefileExclusions | null >,
+  nextToken?: string | null,
+};
+
+export type ShapefileExclusions = {
+  __typename: "ShapefileExclusions",
   coordinates?: Array< number | null > | null,
   createdAt: string,
   id: string,
@@ -723,6 +739,7 @@ export type Stratum = {
   __typename: "Stratum",
   area?: number | null,
   baselineLength?: number | null,
+  coordinates?: Array< number | null > | null,
   createdAt: string,
   id: string,
   name: string,
@@ -802,6 +819,18 @@ export type ModelIDKeyConditionInput = {
   lt?: string | null,
 };
 
+export type ModelCameraOverlapFilterInput = {
+  and?: Array< ModelCameraOverlapFilterInput | null > | null,
+  cameraAId?: ModelIDInput | null,
+  cameraBId?: ModelIDInput | null,
+  createdAt?: ModelStringInput | null,
+  id?: ModelIDInput | null,
+  not?: ModelCameraOverlapFilterInput | null,
+  or?: Array< ModelCameraOverlapFilterInput | null > | null,
+  projectId?: ModelIDInput | null,
+  updatedAt?: ModelStringInput | null,
+};
+
 export type ModelCameraFilterInput = {
   and?: Array< ModelCameraFilterInput | null > | null,
   createdAt?: ModelStringInput | null,
@@ -843,19 +872,6 @@ export type ModelCategoryFilterInput = {
   updatedAt?: ModelStringInput | null,
 };
 
-export type ModelAnnotationCountPerCategoryPerSetFilterInput = {
-  and?: Array< ModelAnnotationCountPerCategoryPerSetFilterInput | null > | null,
-  annotationCount?: ModelIntInput | null,
-  annotationSetId?: ModelIDInput | null,
-  categoryId?: ModelIDInput | null,
-  createdAt?: ModelStringInput | null,
-  id?: ModelIDInput | null,
-  not?: ModelAnnotationCountPerCategoryPerSetFilterInput | null,
-  or?: Array< ModelAnnotationCountPerCategoryPerSetFilterInput | null > | null,
-  projectId?: ModelIDInput | null,
-  updatedAt?: ModelStringInput | null,
-};
-
 export type ModelLocationAnnotationCountFilterInput = {
   and?: Array< ModelLocationAnnotationCountFilterInput | null > | null,
   annotationSetId?: ModelIDInput | null,
@@ -880,6 +896,44 @@ export type ModelTestResultCategoryCountFilterInput = {
   testResultId?: ModelIDInput | null,
   updatedAt?: ModelStringInput | null,
   userCount?: ModelIntInput | null,
+};
+
+export type ModelClientLogFilterInput = {
+  and?: Array< ModelClientLogFilterInput | null > | null,
+  connectionType?: ModelStringInput | null,
+  createdAt?: ModelStringInput | null,
+  deviceType?: ModelStringInput | null,
+  downlink?: ModelFloatInput | null,
+  id?: ModelIDInput | null,
+  ipAddress?: ModelStringInput | null,
+  not?: ModelClientLogFilterInput | null,
+  or?: Array< ModelClientLogFilterInput | null > | null,
+  os?: ModelStringInput | null,
+  rtt?: ModelFloatInput | null,
+  updatedAt?: ModelStringInput | null,
+  userAgent?: ModelStringInput | null,
+  userId?: ModelStringInput | null,
+};
+
+export type ModelClientLogConnection = {
+  __typename: "ModelClientLogConnection",
+  items:  Array<ClientLog | null >,
+  nextToken?: string | null,
+};
+
+export type ClientLog = {
+  __typename: "ClientLog",
+  connectionType?: string | null,
+  createdAt: string,
+  deviceType?: string | null,
+  downlink?: number | null,
+  id: string,
+  ipAddress?: string | null,
+  os?: string | null,
+  rtt?: number | null,
+  updatedAt: string,
+  userAgent?: string | null,
+  userId: string,
 };
 
 export type GetImageCountsReturnType = {
@@ -915,6 +969,15 @@ export type OrganizationRegistration = {
   organizationName: string,
   requestedBy: string,
   status?: string | null,
+  updatedAt: string,
+};
+
+export type ResultSharingToken = {
+  __typename: "ResultSharingToken",
+  annotationSetId: string,
+  createdAt: string,
+  jwt: string,
+  surveyId: string,
   updatedAt: string,
 };
 
@@ -1019,9 +1082,9 @@ export type ModelJollyResultFilterInput = {
   categoryId?: ModelIDInput | null,
   createdAt?: ModelStringInput | null,
   density?: ModelFloatInput | null,
-  estimate?: ModelIntInput | null,
+  estimate?: ModelFloatInput | null,
   id?: ModelIDInput | null,
-  lowerBound95?: ModelIntInput | null,
+  lowerBound95?: ModelFloatInput | null,
   not?: ModelJollyResultFilterInput | null,
   numSamples?: ModelIntInput | null,
   or?: Array< ModelJollyResultFilterInput | null > | null,
@@ -1029,7 +1092,7 @@ export type ModelJollyResultFilterInput = {
   stratumId?: ModelIDInput | null,
   surveyId?: ModelIDInput | null,
   updatedAt?: ModelStringInput | null,
-  upperBound95?: ModelIntInput | null,
+  upperBound95?: ModelFloatInput | null,
   variance?: ModelFloatInput | null,
 };
 
@@ -1041,6 +1104,7 @@ export type ModelJollyResultConnection = {
 
 export type ModelJollyResultsMembershipFilterInput = {
   and?: Array< ModelJollyResultsMembershipFilterInput | null > | null,
+  annotationSetId?: ModelIDInput | null,
   createdAt?: ModelStringInput | null,
   id?: ModelIDInput | null,
   not?: ModelJollyResultsMembershipFilterInput | null,
@@ -1066,14 +1130,19 @@ export type ModelJollyResultPrimaryCompositeKeyInput = {
   stratumId?: string | null,
 };
 
-export type ModelStringKeyConditionInput = {
-  beginsWith?: string | null,
-  between?: Array< string | null > | null,
-  eq?: string | null,
-  ge?: string | null,
-  gt?: string | null,
-  le?: string | null,
-  lt?: string | null,
+export type ModelJollyResultsMembershipPrimaryCompositeKeyConditionInput = {
+  beginsWith?: ModelJollyResultsMembershipPrimaryCompositeKeyInput | null,
+  between?: Array< ModelJollyResultsMembershipPrimaryCompositeKeyInput | null > | null,
+  eq?: ModelJollyResultsMembershipPrimaryCompositeKeyInput | null,
+  ge?: ModelJollyResultsMembershipPrimaryCompositeKeyInput | null,
+  gt?: ModelJollyResultsMembershipPrimaryCompositeKeyInput | null,
+  le?: ModelJollyResultsMembershipPrimaryCompositeKeyInput | null,
+  lt?: ModelJollyResultsMembershipPrimaryCompositeKeyInput | null,
+};
+
+export type ModelJollyResultsMembershipPrimaryCompositeKeyInput = {
+  annotationSetId?: string | null,
+  userId?: string | null,
 };
 
 export type ModelLocationAnnotationCountPrimaryCompositeKeyConditionInput = {
@@ -1186,6 +1255,16 @@ export type ModelOrganizationMembershipFilterInput = {
   userId?: ModelStringInput | null,
 };
 
+export type ModelStringKeyConditionInput = {
+  beginsWith?: string | null,
+  between?: Array< string | null > | null,
+  eq?: string | null,
+  ge?: string | null,
+  gt?: string | null,
+  le?: string | null,
+  lt?: string | null,
+};
+
 export type ModelOrganizationRegistrationFilterInput = {
   and?: Array< ModelOrganizationRegistrationFilterInput | null > | null,
   briefDescription?: ModelStringInput | null,
@@ -1269,10 +1348,40 @@ export type ModelQueueFilterInput = {
   not?: ModelQueueFilterInput | null,
   or?: Array< ModelQueueFilterInput | null > | null,
   projectId?: ModelIDInput | null,
+  tag?: ModelStringInput | null,
   totalBatches?: ModelIntInput | null,
   updatedAt?: ModelStringInput | null,
   url?: ModelStringInput | null,
   zoom?: ModelIntInput | null,
+};
+
+export type ModelResultSharingTokenFilterInput = {
+  and?: Array< ModelResultSharingTokenFilterInput | null > | null,
+  annotationSetId?: ModelIDInput | null,
+  createdAt?: ModelStringInput | null,
+  id?: ModelIDInput | null,
+  jwt?: ModelStringInput | null,
+  not?: ModelResultSharingTokenFilterInput | null,
+  or?: Array< ModelResultSharingTokenFilterInput | null > | null,
+  surveyId?: ModelIDInput | null,
+  updatedAt?: ModelStringInput | null,
+};
+
+export type ModelResultSharingTokenConnection = {
+  __typename: "ModelResultSharingTokenConnection",
+  items:  Array<ResultSharingToken | null >,
+  nextToken?: string | null,
+};
+
+export type ModelShapefileExclusionsFilterInput = {
+  and?: Array< ModelShapefileExclusionsFilterInput | null > | null,
+  coordinates?: ModelFloatInput | null,
+  createdAt?: ModelStringInput | null,
+  id?: ModelIDInput | null,
+  not?: ModelShapefileExclusionsFilterInput | null,
+  or?: Array< ModelShapefileExclusionsFilterInput | null > | null,
+  projectId?: ModelIDInput | null,
+  updatedAt?: ModelStringInput | null,
 };
 
 export type ModelShapefileFilterInput = {
@@ -1296,6 +1405,7 @@ export type ModelStratumFilterInput = {
   and?: Array< ModelStratumFilterInput | null > | null,
   area?: ModelFloatInput | null,
   baselineLength?: ModelFloatInput | null,
+  coordinates?: ModelFloatInput | null,
   createdAt?: ModelStringInput | null,
   id?: ModelIDInput | null,
   name?: ModelStringInput | null,
@@ -1504,23 +1614,6 @@ export type CreateAnnotationInput = {
   y: number,
 };
 
-export type ModelAnnotationCountPerCategoryPerSetConditionInput = {
-  and?: Array< ModelAnnotationCountPerCategoryPerSetConditionInput | null > | null,
-  annotationCount?: ModelIntInput | null,
-  createdAt?: ModelStringInput | null,
-  not?: ModelAnnotationCountPerCategoryPerSetConditionInput | null,
-  or?: Array< ModelAnnotationCountPerCategoryPerSetConditionInput | null > | null,
-  projectId?: ModelIDInput | null,
-  updatedAt?: ModelStringInput | null,
-};
-
-export type CreateAnnotationCountPerCategoryPerSetInput = {
-  annotationCount?: number | null,
-  annotationSetId: string,
-  categoryId: string,
-  projectId: string,
-};
-
 export type ModelAnnotationSetConditionInput = {
   and?: Array< ModelAnnotationSetConditionInput | null > | null,
   annotationCount?: ModelIntInput | null,
@@ -1563,6 +1656,21 @@ export type CreateCameraInput = {
   tiltDegrees?: number | null,
 };
 
+export type ModelCameraOverlapConditionInput = {
+  and?: Array< ModelCameraOverlapConditionInput | null > | null,
+  createdAt?: ModelStringInput | null,
+  not?: ModelCameraOverlapConditionInput | null,
+  or?: Array< ModelCameraOverlapConditionInput | null > | null,
+  projectId?: ModelIDInput | null,
+  updatedAt?: ModelStringInput | null,
+};
+
+export type CreateCameraOverlapInput = {
+  cameraAId: string,
+  cameraBId: string,
+  projectId: string,
+};
+
 export type ModelCategoryConditionInput = {
   and?: Array< ModelCategoryConditionInput | null > | null,
   annotationCount?: ModelIntInput | null,
@@ -1585,6 +1693,34 @@ export type CreateCategoryInput = {
   name: string,
   projectId: string,
   shortcutKey?: string | null,
+};
+
+export type ModelClientLogConditionInput = {
+  and?: Array< ModelClientLogConditionInput | null > | null,
+  connectionType?: ModelStringInput | null,
+  createdAt?: ModelStringInput | null,
+  deviceType?: ModelStringInput | null,
+  downlink?: ModelFloatInput | null,
+  ipAddress?: ModelStringInput | null,
+  not?: ModelClientLogConditionInput | null,
+  or?: Array< ModelClientLogConditionInput | null > | null,
+  os?: ModelStringInput | null,
+  rtt?: ModelFloatInput | null,
+  updatedAt?: ModelStringInput | null,
+  userAgent?: ModelStringInput | null,
+  userId?: ModelStringInput | null,
+};
+
+export type CreateClientLogInput = {
+  connectionType?: string | null,
+  deviceType?: string | null,
+  downlink?: number | null,
+  id?: string | null,
+  ipAddress?: string | null,
+  os?: string | null,
+  rtt?: number | null,
+  userAgent?: string | null,
+  userId: string,
 };
 
 export type ModelImageConditionInput = {
@@ -1710,14 +1846,14 @@ export type ModelJollyResultConditionInput = {
   areaSurveyed?: ModelFloatInput | null,
   createdAt?: ModelStringInput | null,
   density?: ModelFloatInput | null,
-  estimate?: ModelIntInput | null,
-  lowerBound95?: ModelIntInput | null,
+  estimate?: ModelFloatInput | null,
+  lowerBound95?: ModelFloatInput | null,
   not?: ModelJollyResultConditionInput | null,
   numSamples?: ModelIntInput | null,
   or?: Array< ModelJollyResultConditionInput | null > | null,
   standardError?: ModelFloatInput | null,
   updatedAt?: ModelStringInput | null,
-  upperBound95?: ModelIntInput | null,
+  upperBound95?: ModelFloatInput | null,
   variance?: ModelFloatInput | null,
 };
 
@@ -1746,6 +1882,7 @@ export type ModelJollyResultsMembershipConditionInput = {
 };
 
 export type CreateJollyResultsMembershipInput = {
+  annotationSetId: string,
   surveyId: string,
   userId: string,
 };
@@ -2004,6 +2141,7 @@ export type ModelQueueConditionInput = {
   not?: ModelQueueConditionInput | null,
   or?: Array< ModelQueueConditionInput | null > | null,
   projectId?: ModelIDInput | null,
+  tag?: ModelStringInput | null,
   totalBatches?: ModelIntInput | null,
   updatedAt?: ModelStringInput | null,
   url?: ModelStringInput | null,
@@ -2017,9 +2155,25 @@ export type CreateQueueInput = {
   id?: string | null,
   name: string,
   projectId: string,
+  tag?: string | null,
   totalBatches?: number | null,
   url?: string | null,
   zoom?: number | null,
+};
+
+export type ModelResultSharingTokenConditionInput = {
+  and?: Array< ModelResultSharingTokenConditionInput | null > | null,
+  createdAt?: ModelStringInput | null,
+  jwt?: ModelStringInput | null,
+  not?: ModelResultSharingTokenConditionInput | null,
+  or?: Array< ModelResultSharingTokenConditionInput | null > | null,
+  updatedAt?: ModelStringInput | null,
+};
+
+export type CreateResultSharingTokenInput = {
+  annotationSetId: string,
+  jwt: string,
+  surveyId: string,
 };
 
 export type ModelShapefileConditionInput = {
@@ -2038,10 +2192,27 @@ export type CreateShapefileInput = {
   projectId: string,
 };
 
+export type ModelShapefileExclusionsConditionInput = {
+  and?: Array< ModelShapefileExclusionsConditionInput | null > | null,
+  coordinates?: ModelFloatInput | null,
+  createdAt?: ModelStringInput | null,
+  not?: ModelShapefileExclusionsConditionInput | null,
+  or?: Array< ModelShapefileExclusionsConditionInput | null > | null,
+  projectId?: ModelIDInput | null,
+  updatedAt?: ModelStringInput | null,
+};
+
+export type CreateShapefileExclusionsInput = {
+  coordinates?: Array< number | null > | null,
+  id?: string | null,
+  projectId: string,
+};
+
 export type ModelStratumConditionInput = {
   and?: Array< ModelStratumConditionInput | null > | null,
   area?: ModelFloatInput | null,
   baselineLength?: ModelFloatInput | null,
+  coordinates?: ModelFloatInput | null,
   createdAt?: ModelStringInput | null,
   name?: ModelStringInput | null,
   not?: ModelStratumConditionInput | null,
@@ -2053,6 +2224,7 @@ export type ModelStratumConditionInput = {
 export type CreateStratumInput = {
   area?: number | null,
   baselineLength?: number | null,
+  coordinates?: Array< number | null > | null,
   id?: string | null,
   name: string,
   projectId: string,
@@ -2235,11 +2407,6 @@ export type DeleteAnnotationInput = {
   id: string,
 };
 
-export type DeleteAnnotationCountPerCategoryPerSetInput = {
-  annotationSetId: string,
-  categoryId: string,
-};
-
 export type DeleteAnnotationSetInput = {
   id: string,
 };
@@ -2248,7 +2415,16 @@ export type DeleteCameraInput = {
   id: string,
 };
 
+export type DeleteCameraOverlapInput = {
+  cameraAId: string,
+  cameraBId: string,
+};
+
 export type DeleteCategoryInput = {
+  id: string,
+};
+
+export type DeleteClientLogInput = {
   id: string,
 };
 
@@ -2281,6 +2457,7 @@ export type DeleteJollyResultInput = {
 };
 
 export type DeleteJollyResultsMembershipInput = {
+  annotationSetId: string,
   surveyId: string,
   userId: string,
 };
@@ -2340,7 +2517,16 @@ export type DeleteQueueInput = {
   id: string,
 };
 
+export type DeleteResultSharingTokenInput = {
+  annotationSetId: string,
+  surveyId: string,
+};
+
 export type DeleteShapefileInput = {
+  id: string,
+};
+
+export type DeleteShapefileExclusionsInput = {
   id: string,
 };
 
@@ -2410,13 +2596,6 @@ export type UpdateAnnotationInput = {
   y?: number | null,
 };
 
-export type UpdateAnnotationCountPerCategoryPerSetInput = {
-  annotationCount?: number | null,
-  annotationSetId: string,
-  categoryId: string,
-  projectId?: string | null,
-};
-
 export type UpdateAnnotationSetInput = {
   annotationCount?: number | null,
   id: string,
@@ -2434,6 +2613,12 @@ export type UpdateCameraInput = {
   tiltDegrees?: number | null,
 };
 
+export type UpdateCameraOverlapInput = {
+  cameraAId: string,
+  cameraBId: string,
+  projectId?: string | null,
+};
+
 export type UpdateCategoryInput = {
   annotationCount?: number | null,
   annotationSetId?: string | null,
@@ -2442,6 +2627,18 @@ export type UpdateCategoryInput = {
   name?: string | null,
   projectId?: string | null,
   shortcutKey?: string | null,
+};
+
+export type UpdateClientLogInput = {
+  connectionType?: string | null,
+  deviceType?: string | null,
+  downlink?: number | null,
+  id: string,
+  ipAddress?: string | null,
+  os?: string | null,
+  rtt?: number | null,
+  userAgent?: string | null,
+  userId?: string | null,
 };
 
 export type UpdateImageInput = {
@@ -2510,6 +2707,7 @@ export type UpdateJollyResultInput = {
 };
 
 export type UpdateJollyResultsMembershipInput = {
+  annotationSetId: string,
   surveyId: string,
   userId: string,
 };
@@ -2621,9 +2819,16 @@ export type UpdateQueueInput = {
   id: string,
   name?: string | null,
   projectId?: string | null,
+  tag?: string | null,
   totalBatches?: number | null,
   url?: string | null,
   zoom?: number | null,
+};
+
+export type UpdateResultSharingTokenInput = {
+  annotationSetId: string,
+  jwt?: string | null,
+  surveyId: string,
 };
 
 export type UpdateShapefileInput = {
@@ -2632,9 +2837,16 @@ export type UpdateShapefileInput = {
   projectId?: string | null,
 };
 
+export type UpdateShapefileExclusionsInput = {
+  coordinates?: Array< number | null > | null,
+  id: string,
+  projectId?: string | null,
+};
+
 export type UpdateStratumInput = {
   area?: number | null,
   baselineLength?: number | null,
+  coordinates?: Array< number | null > | null,
   id: string,
   name?: string | null,
   projectId?: string | null,
@@ -2777,18 +2989,6 @@ export type ModelSubscriptionIntInput = {
   notIn?: Array< number | null > | null,
 };
 
-export type ModelSubscriptionAnnotationCountPerCategoryPerSetFilterInput = {
-  and?: Array< ModelSubscriptionAnnotationCountPerCategoryPerSetFilterInput | null > | null,
-  annotationCount?: ModelSubscriptionIntInput | null,
-  annotationSetId?: ModelSubscriptionIDInput | null,
-  categoryId?: ModelSubscriptionIDInput | null,
-  createdAt?: ModelSubscriptionStringInput | null,
-  id?: ModelSubscriptionIDInput | null,
-  or?: Array< ModelSubscriptionAnnotationCountPerCategoryPerSetFilterInput | null > | null,
-  projectId?: ModelSubscriptionIDInput | null,
-  updatedAt?: ModelSubscriptionStringInput | null,
-};
-
 export type ModelSubscriptionAnnotationSetFilterInput = {
   and?: Array< ModelSubscriptionAnnotationSetFilterInput | null > | null,
   annotationCount?: ModelSubscriptionIntInput | null,
@@ -2826,6 +3026,17 @@ export type ModelSubscriptionFloatInput = {
   notIn?: Array< number | null > | null,
 };
 
+export type ModelSubscriptionCameraOverlapFilterInput = {
+  and?: Array< ModelSubscriptionCameraOverlapFilterInput | null > | null,
+  cameraAId?: ModelSubscriptionIDInput | null,
+  cameraBId?: ModelSubscriptionIDInput | null,
+  createdAt?: ModelSubscriptionStringInput | null,
+  id?: ModelSubscriptionIDInput | null,
+  or?: Array< ModelSubscriptionCameraOverlapFilterInput | null > | null,
+  projectId?: ModelSubscriptionIDInput | null,
+  updatedAt?: ModelSubscriptionStringInput | null,
+};
+
 export type ModelSubscriptionCategoryFilterInput = {
   and?: Array< ModelSubscriptionCategoryFilterInput | null > | null,
   annotationCount?: ModelSubscriptionIntInput | null,
@@ -2838,6 +3049,22 @@ export type ModelSubscriptionCategoryFilterInput = {
   projectId?: ModelSubscriptionIDInput | null,
   shortcutKey?: ModelSubscriptionStringInput | null,
   updatedAt?: ModelSubscriptionStringInput | null,
+};
+
+export type ModelSubscriptionClientLogFilterInput = {
+  and?: Array< ModelSubscriptionClientLogFilterInput | null > | null,
+  connectionType?: ModelSubscriptionStringInput | null,
+  createdAt?: ModelSubscriptionStringInput | null,
+  deviceType?: ModelSubscriptionStringInput | null,
+  downlink?: ModelSubscriptionFloatInput | null,
+  id?: ModelSubscriptionIDInput | null,
+  ipAddress?: ModelSubscriptionStringInput | null,
+  or?: Array< ModelSubscriptionClientLogFilterInput | null > | null,
+  os?: ModelSubscriptionStringInput | null,
+  rtt?: ModelSubscriptionFloatInput | null,
+  updatedAt?: ModelSubscriptionStringInput | null,
+  userAgent?: ModelSubscriptionStringInput | null,
+  userId?: ModelSubscriptionStringInput | null,
 };
 
 export type ModelSubscriptionImageFilterInput = {
@@ -2918,21 +3145,22 @@ export type ModelSubscriptionJollyResultFilterInput = {
   categoryId?: ModelSubscriptionIDInput | null,
   createdAt?: ModelSubscriptionStringInput | null,
   density?: ModelSubscriptionFloatInput | null,
-  estimate?: ModelSubscriptionIntInput | null,
+  estimate?: ModelSubscriptionFloatInput | null,
   id?: ModelSubscriptionIDInput | null,
-  lowerBound95?: ModelSubscriptionIntInput | null,
+  lowerBound95?: ModelSubscriptionFloatInput | null,
   numSamples?: ModelSubscriptionIntInput | null,
   or?: Array< ModelSubscriptionJollyResultFilterInput | null > | null,
   standardError?: ModelSubscriptionFloatInput | null,
   stratumId?: ModelSubscriptionIDInput | null,
   surveyId?: ModelSubscriptionIDInput | null,
   updatedAt?: ModelSubscriptionStringInput | null,
-  upperBound95?: ModelSubscriptionIntInput | null,
+  upperBound95?: ModelSubscriptionFloatInput | null,
   variance?: ModelSubscriptionFloatInput | null,
 };
 
 export type ModelSubscriptionJollyResultsMembershipFilterInput = {
   and?: Array< ModelSubscriptionJollyResultsMembershipFilterInput | null > | null,
+  annotationSetId?: ModelSubscriptionIDInput | null,
   createdAt?: ModelSubscriptionStringInput | null,
   id?: ModelSubscriptionIDInput | null,
   or?: Array< ModelSubscriptionJollyResultsMembershipFilterInput | null > | null,
@@ -3101,10 +3329,22 @@ export type ModelSubscriptionQueueFilterInput = {
   name?: ModelSubscriptionStringInput | null,
   or?: Array< ModelSubscriptionQueueFilterInput | null > | null,
   projectId?: ModelSubscriptionIDInput | null,
+  tag?: ModelSubscriptionStringInput | null,
   totalBatches?: ModelSubscriptionIntInput | null,
   updatedAt?: ModelSubscriptionStringInput | null,
   url?: ModelSubscriptionStringInput | null,
   zoom?: ModelSubscriptionIntInput | null,
+};
+
+export type ModelSubscriptionResultSharingTokenFilterInput = {
+  and?: Array< ModelSubscriptionResultSharingTokenFilterInput | null > | null,
+  annotationSetId?: ModelSubscriptionIDInput | null,
+  createdAt?: ModelSubscriptionStringInput | null,
+  id?: ModelSubscriptionIDInput | null,
+  jwt?: ModelSubscriptionStringInput | null,
+  or?: Array< ModelSubscriptionResultSharingTokenFilterInput | null > | null,
+  surveyId?: ModelSubscriptionIDInput | null,
+  updatedAt?: ModelSubscriptionStringInput | null,
 };
 
 export type ModelSubscriptionShapefileFilterInput = {
@@ -3117,10 +3357,21 @@ export type ModelSubscriptionShapefileFilterInput = {
   updatedAt?: ModelSubscriptionStringInput | null,
 };
 
+export type ModelSubscriptionShapefileExclusionsFilterInput = {
+  and?: Array< ModelSubscriptionShapefileExclusionsFilterInput | null > | null,
+  coordinates?: ModelSubscriptionFloatInput | null,
+  createdAt?: ModelSubscriptionStringInput | null,
+  id?: ModelSubscriptionIDInput | null,
+  or?: Array< ModelSubscriptionShapefileExclusionsFilterInput | null > | null,
+  projectId?: ModelSubscriptionIDInput | null,
+  updatedAt?: ModelSubscriptionStringInput | null,
+};
+
 export type ModelSubscriptionStratumFilterInput = {
   and?: Array< ModelSubscriptionStratumFilterInput | null > | null,
   area?: ModelSubscriptionFloatInput | null,
   baselineLength?: ModelSubscriptionFloatInput | null,
+  coordinates?: ModelSubscriptionFloatInput | null,
   createdAt?: ModelSubscriptionStringInput | null,
   id?: ModelSubscriptionIDInput | null,
   name?: ModelSubscriptionStringInput | null,
@@ -3391,6 +3642,29 @@ export type AnnotationsByObjectIdQuery = {
   } | null,
 };
 
+export type CameraOverlapsByProjectIdQueryVariables = {
+  filter?: ModelCameraOverlapFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  projectId: string,
+  sortDirection?: ModelSortDirection | null,
+};
+
+export type CameraOverlapsByProjectIdQuery = {
+  cameraOverlapsByProjectId?:  {
+    __typename: "ModelCameraOverlapConnection",
+    items:  Array< {
+      __typename: "CameraOverlap",
+      cameraAId: string,
+      cameraBId: string,
+      createdAt: string,
+      projectId: string,
+      updatedAt: string,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
 export type CamerasByProjectIdQueryVariables = {
   filter?: ModelCameraFilterInput | null,
   limit?: number | null,
@@ -3471,30 +3745,6 @@ export type CategoriesByProjectIdQuery = {
   } | null,
 };
 
-export type CategoryCountsByAnnotationSetIdQueryVariables = {
-  annotationSetId: string,
-  filter?: ModelAnnotationCountPerCategoryPerSetFilterInput | null,
-  limit?: number | null,
-  nextToken?: string | null,
-  sortDirection?: ModelSortDirection | null,
-};
-
-export type CategoryCountsByAnnotationSetIdQuery = {
-  categoryCountsByAnnotationSetId?:  {
-    __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-    items:  Array< {
-      __typename: "AnnotationCountPerCategoryPerSet",
-      annotationCount?: number | null,
-      annotationSetId: string,
-      categoryId: string,
-      createdAt: string,
-      projectId: string,
-      updatedAt: string,
-    } | null >,
-    nextToken?: string | null,
-  } | null,
-};
-
 export type CategoryCountsByLocationIdAndAnnotationSetIdQueryVariables = {
   annotationSetId?: ModelIDKeyConditionInput | null,
   filter?: ModelLocationAnnotationCountFilterInput | null,
@@ -3539,6 +3789,35 @@ export type CategoryCountsByTestResultIdQuery = {
       testResultId: string,
       updatedAt: string,
       userCount: number,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type ClientLogsByUserIdQueryVariables = {
+  filter?: ModelClientLogFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  sortDirection?: ModelSortDirection | null,
+  userId: string,
+};
+
+export type ClientLogsByUserIdQuery = {
+  clientLogsByUserId?:  {
+    __typename: "ModelClientLogConnection",
+    items:  Array< {
+      __typename: "ClientLog",
+      connectionType?: string | null,
+      createdAt: string,
+      deviceType?: string | null,
+      downlink?: number | null,
+      id: string,
+      ipAddress?: string | null,
+      os?: string | null,
+      rtt?: number | null,
+      updatedAt: string,
+      userAgent?: string | null,
+      userId: string,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -3631,64 +3910,6 @@ export type GetAnnotationQuery = {
   } | null,
 };
 
-export type GetAnnotationCountPerCategoryPerSetQueryVariables = {
-  annotationSetId: string,
-  categoryId: string,
-};
-
-export type GetAnnotationCountPerCategoryPerSetQuery = {
-  getAnnotationCountPerCategoryPerSet?:  {
-    __typename: "AnnotationCountPerCategoryPerSet",
-    annotationCount?: number | null,
-    annotationSet?:  {
-      __typename: "AnnotationSet",
-      annotationCount?: number | null,
-      createdAt: string,
-      id: string,
-      name: string,
-      projectId: string,
-      register?: boolean | null,
-      updatedAt: string,
-    } | null,
-    annotationSetId: string,
-    category?:  {
-      __typename: "Category",
-      annotationCount?: number | null,
-      annotationSetId: string,
-      color?: string | null,
-      createdAt: string,
-      id: string,
-      name: string,
-      projectId: string,
-      shortcutKey?: string | null,
-      updatedAt: string,
-    } | null,
-    categoryId: string,
-    createdAt: string,
-    project?:  {
-      __typename: "Project",
-      createdAt: string,
-      createdBy: string,
-      hidden?: boolean | null,
-      id: string,
-      name: string,
-      organizationId: string,
-      status?: string | null,
-      updatedAt: string,
-    } | null,
-    projectId: string,
-    updatedAt: string,
-  } | null,
-};
-
-export type GetAnnotationCountsQueryVariables = {
-  annotationSetId: string,
-};
-
-export type GetAnnotationCountsQuery = {
-  getAnnotationCounts?: string | null,
-};
-
 export type GetAnnotationSetQueryVariables = {
   id: string,
 };
@@ -3697,10 +3918,6 @@ export type GetAnnotationSetQuery = {
   getAnnotationSet?:  {
     __typename: "AnnotationSet",
     annotationCount?: number | null,
-    annotationCountPerCategory?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -3711,6 +3928,10 @@ export type GetAnnotationSetQuery = {
     } | null,
     createdAt: string,
     id: string,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
+      nextToken?: string | null,
+    } | null,
     locationAnnotationCounts?:  {
       __typename: "ModelLocationAnnotationCountConnection",
       nextToken?: string | null,
@@ -3782,6 +4003,33 @@ export type GetCameraQuery = {
   } | null,
 };
 
+export type GetCameraOverlapQueryVariables = {
+  cameraAId: string,
+  cameraBId: string,
+};
+
+export type GetCameraOverlapQuery = {
+  getCameraOverlap?:  {
+    __typename: "CameraOverlap",
+    cameraAId: string,
+    cameraBId: string,
+    createdAt: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type GetCategoryQueryVariables = {
   id: string,
 };
@@ -3790,10 +4038,6 @@ export type GetCategoryQuery = {
   getCategory?:  {
     __typename: "Category",
     annotationCount?: number | null,
-    annotationCountPerSet?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotationSet?:  {
       __typename: "AnnotationSet",
       annotationCount?: number | null,
@@ -3824,6 +4068,27 @@ export type GetCategoryQuery = {
     projectId: string,
     shortcutKey?: string | null,
     updatedAt: string,
+  } | null,
+};
+
+export type GetClientLogQueryVariables = {
+  id: string,
+};
+
+export type GetClientLogQuery = {
+  getClientLog?:  {
+    __typename: "ClientLog",
+    connectionType?: string | null,
+    createdAt: string,
+    deviceType?: string | null,
+    downlink?: number | null,
+    id: string,
+    ipAddress?: string | null,
+    os?: string | null,
+    rtt?: number | null,
+    updatedAt: string,
+    userAgent?: string | null,
+    userId: string,
   } | null,
 };
 
@@ -4145,6 +4410,7 @@ export type GetJollyResultQuery = {
 };
 
 export type GetJollyResultsMembershipQueryVariables = {
+  annotationSetId: string,
   surveyId: string,
   userId: string,
 };
@@ -4152,6 +4418,17 @@ export type GetJollyResultsMembershipQueryVariables = {
 export type GetJollyResultsMembershipQuery = {
   getJollyResultsMembership?:  {
     __typename: "JollyResultsMembership",
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      register?: boolean | null,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
     createdAt: string,
     survey?:  {
       __typename: "Project",
@@ -4592,16 +4869,16 @@ export type GetProjectQueryVariables = {
 export type GetProjectQuery = {
   getProject?:  {
     __typename: "Project",
-    annotationCountsPerCategoryPerSet?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotationSets?:  {
       __typename: "ModelAnnotationSetConnection",
       nextToken?: string | null,
     } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
+      nextToken?: string | null,
+    } | null,
+    cameraOverlaps?:  {
+      __typename: "ModelCameraOverlapConnection",
       nextToken?: string | null,
     } | null,
     cameras?:  {
@@ -4669,6 +4946,10 @@ export type GetProjectQuery = {
       id: string,
       projectId: string,
       updatedAt: string,
+    } | null,
+    shapefileExclusions?:  {
+      __typename: "ModelShapefileExclusionsConnection",
+      nextToken?: string | null,
     } | null,
     status?: string | null,
     strata?:  {
@@ -4762,6 +5043,7 @@ export type GetQueueQuery = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tag?: string | null,
     totalBatches?: number | null,
     updatedAt: string,
     url?: string | null,
@@ -4770,6 +5052,22 @@ export type GetQueueQuery = {
       nextToken?: string | null,
     } | null,
     zoom?: number | null,
+  } | null,
+};
+
+export type GetResultSharingTokenQueryVariables = {
+  annotationSetId: string,
+  surveyId: string,
+};
+
+export type GetResultSharingTokenQuery = {
+  getResultSharingToken?:  {
+    __typename: "ResultSharingToken",
+    annotationSetId: string,
+    createdAt: string,
+    jwt: string,
+    surveyId: string,
+    updatedAt: string,
   } | null,
 };
 
@@ -4799,6 +5097,32 @@ export type GetShapefileQuery = {
   } | null,
 };
 
+export type GetShapefileExclusionsQueryVariables = {
+  id: string,
+};
+
+export type GetShapefileExclusionsQuery = {
+  getShapefileExclusions?:  {
+    __typename: "ShapefileExclusions",
+    coordinates?: Array< number | null > | null,
+    createdAt: string,
+    id: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type GetStratumQueryVariables = {
   id: string,
 };
@@ -4808,6 +5132,7 @@ export type GetStratumQuery = {
     __typename: "Stratum",
     area?: number | null,
     baselineLength?: number | null,
+    coordinates?: Array< number | null > | null,
     createdAt: string,
     id: string,
     name: string,
@@ -5114,6 +5439,7 @@ export type GetTransectQuery = {
       __typename: "Stratum",
       area?: number | null,
       baselineLength?: number | null,
+      coordinates?: Array< number | null > | null,
       createdAt: string,
       id: string,
       name: string,
@@ -5141,6 +5467,7 @@ export type GetUserProjectMembershipQuery = {
       id: string,
       name: string,
       projectId: string,
+      tag?: string | null,
       totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
@@ -5171,6 +5498,7 @@ export type GetUserProjectMembershipQuery = {
       id: string,
       name: string,
       projectId: string,
+      tag?: string | null,
       totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
@@ -5459,6 +5787,7 @@ export type JollyResultsBySurveyIdQuery = {
 };
 
 export type JollyResultsMembershipsBySurveyIdQueryVariables = {
+  annotationSetId?: ModelIDKeyConditionInput | null,
   filter?: ModelJollyResultsMembershipFilterInput | null,
   limit?: number | null,
   nextToken?: string | null,
@@ -5471,35 +5800,11 @@ export type JollyResultsMembershipsBySurveyIdQuery = {
     __typename: "ModelJollyResultsMembershipConnection",
     items:  Array< {
       __typename: "JollyResultsMembership",
+      annotationSetId: string,
       createdAt: string,
       surveyId: string,
       updatedAt: string,
       userId: string,
-    } | null >,
-    nextToken?: string | null,
-  } | null,
-};
-
-export type ListAnnotationCountPerCategoryPerSetsQueryVariables = {
-  annotationSetId?: string | null,
-  categoryId?: ModelIDKeyConditionInput | null,
-  filter?: ModelAnnotationCountPerCategoryPerSetFilterInput | null,
-  limit?: number | null,
-  nextToken?: string | null,
-  sortDirection?: ModelSortDirection | null,
-};
-
-export type ListAnnotationCountPerCategoryPerSetsQuery = {
-  listAnnotationCountPerCategoryPerSets?:  {
-    __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-    items:  Array< {
-      __typename: "AnnotationCountPerCategoryPerSet",
-      annotationCount?: number | null,
-      annotationSetId: string,
-      categoryId: string,
-      createdAt: string,
-      projectId: string,
-      updatedAt: string,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -5557,6 +5862,30 @@ export type ListAnnotationsQuery = {
   } | null,
 };
 
+export type ListCameraOverlapsQueryVariables = {
+  cameraAId?: string | null,
+  cameraBId?: ModelIDKeyConditionInput | null,
+  filter?: ModelCameraOverlapFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  sortDirection?: ModelSortDirection | null,
+};
+
+export type ListCameraOverlapsQuery = {
+  listCameraOverlaps?:  {
+    __typename: "ModelCameraOverlapConnection",
+    items:  Array< {
+      __typename: "CameraOverlap",
+      cameraAId: string,
+      cameraBId: string,
+      createdAt: string,
+      projectId: string,
+      updatedAt: string,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
 export type ListCamerasQueryVariables = {
   filter?: ModelCameraFilterInput | null,
   limit?: number | null,
@@ -5601,6 +5930,33 @@ export type ListCategoriesQuery = {
       projectId: string,
       shortcutKey?: string | null,
       updatedAt: string,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type ListClientLogsQueryVariables = {
+  filter?: ModelClientLogFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+};
+
+export type ListClientLogsQuery = {
+  listClientLogs?:  {
+    __typename: "ModelClientLogConnection",
+    items:  Array< {
+      __typename: "ClientLog",
+      connectionType?: string | null,
+      createdAt: string,
+      deviceType?: string | null,
+      downlink?: number | null,
+      id: string,
+      ipAddress?: string | null,
+      os?: string | null,
+      rtt?: number | null,
+      updatedAt: string,
+      userAgent?: string | null,
+      userId: string,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -5777,12 +6133,12 @@ export type ListJollyResultsQuery = {
 };
 
 export type ListJollyResultsMembershipsQueryVariables = {
+  annotationSetIdUserId?: ModelJollyResultsMembershipPrimaryCompositeKeyConditionInput | null,
   filter?: ModelJollyResultsMembershipFilterInput | null,
   limit?: number | null,
   nextToken?: string | null,
   sortDirection?: ModelSortDirection | null,
   surveyId?: string | null,
-  userId?: ModelStringKeyConditionInput | null,
 };
 
 export type ListJollyResultsMembershipsQuery = {
@@ -5790,6 +6146,7 @@ export type ListJollyResultsMembershipsQuery = {
     __typename: "ModelJollyResultsMembershipConnection",
     items:  Array< {
       __typename: "JollyResultsMembership",
+      annotationSetId: string,
       createdAt: string,
       surveyId: string,
       updatedAt: string,
@@ -6104,10 +6461,56 @@ export type ListQueuesQuery = {
       id: string,
       name: string,
       projectId: string,
+      tag?: string | null,
       totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type ListResultSharingTokensQueryVariables = {
+  annotationSetId?: ModelIDKeyConditionInput | null,
+  filter?: ModelResultSharingTokenFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  sortDirection?: ModelSortDirection | null,
+  surveyId?: string | null,
+};
+
+export type ListResultSharingTokensQuery = {
+  listResultSharingTokens?:  {
+    __typename: "ModelResultSharingTokenConnection",
+    items:  Array< {
+      __typename: "ResultSharingToken",
+      annotationSetId: string,
+      createdAt: string,
+      jwt: string,
+      surveyId: string,
+      updatedAt: string,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type ListShapefileExclusionsQueryVariables = {
+  filter?: ModelShapefileExclusionsFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+};
+
+export type ListShapefileExclusionsQuery = {
+  listShapefileExclusions?:  {
+    __typename: "ModelShapefileExclusionsConnection",
+    items:  Array< {
+      __typename: "ShapefileExclusions",
+      coordinates?: Array< number | null > | null,
+      createdAt: string,
+      id: string,
+      projectId: string,
+      updatedAt: string,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -6147,6 +6550,7 @@ export type ListStrataQuery = {
       __typename: "Stratum",
       area?: number | null,
       baselineLength?: number | null,
+      coordinates?: Array< number | null > | null,
       createdAt: string,
       id: string,
       name: string,
@@ -6472,6 +6876,37 @@ export type LocationsByImageKeyQuery = {
   } | null,
 };
 
+export type LocationsByProjectIdAndSourceQueryVariables = {
+  filter?: ModelLocationFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  projectId: string,
+  sortDirection?: ModelSortDirection | null,
+  source?: ModelStringKeyConditionInput | null,
+};
+
+export type LocationsByProjectIdAndSourceQuery = {
+  locationsByProjectIdAndSource?:  {
+    __typename: "ModelLocationConnection",
+    items:  Array< {
+      __typename: "Location",
+      confidence?: number | null,
+      createdAt: string,
+      height?: number | null,
+      id: string,
+      imageId?: string | null,
+      projectId: string,
+      setId: string,
+      source: string,
+      updatedAt: string,
+      width?: number | null,
+      x: number,
+      y: number,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
 export type LocationsBySetIdAndConfidenceQueryVariables = {
   confidence?: ModelFloatKeyConditionInput | null,
   filter?: ModelLocationFilterInput | null,
@@ -6755,10 +7190,34 @@ export type QueuesByProjectIdQuery = {
       id: string,
       name: string,
       projectId: string,
+      tag?: string | null,
       totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
       zoom?: number | null,
+    } | null >,
+    nextToken?: string | null,
+  } | null,
+};
+
+export type ShapefileExclusionsByProjectIdQueryVariables = {
+  filter?: ModelShapefileExclusionsFilterInput | null,
+  limit?: number | null,
+  nextToken?: string | null,
+  projectId: string,
+  sortDirection?: ModelSortDirection | null,
+};
+
+export type ShapefileExclusionsByProjectIdQuery = {
+  shapefileExclusionsByProjectId?:  {
+    __typename: "ModelShapefileExclusionsConnection",
+    items:  Array< {
+      __typename: "ShapefileExclusions",
+      coordinates?: Array< number | null > | null,
+      createdAt: string,
+      id: string,
+      projectId: string,
+      updatedAt: string,
     } | null >,
     nextToken?: string | null,
   } | null,
@@ -6802,6 +7261,7 @@ export type StrataByProjectIdQuery = {
       __typename: "Stratum",
       area?: number | null,
       baselineLength?: number | null,
+      coordinates?: Array< number | null > | null,
       createdAt: string,
       id: string,
       name: string,
@@ -7133,56 +7593,6 @@ export type CreateAnnotationMutation = {
   } | null,
 };
 
-export type CreateAnnotationCountPerCategoryPerSetMutationVariables = {
-  condition?: ModelAnnotationCountPerCategoryPerSetConditionInput | null,
-  input: CreateAnnotationCountPerCategoryPerSetInput,
-};
-
-export type CreateAnnotationCountPerCategoryPerSetMutation = {
-  createAnnotationCountPerCategoryPerSet?:  {
-    __typename: "AnnotationCountPerCategoryPerSet",
-    annotationCount?: number | null,
-    annotationSet?:  {
-      __typename: "AnnotationSet",
-      annotationCount?: number | null,
-      createdAt: string,
-      id: string,
-      name: string,
-      projectId: string,
-      register?: boolean | null,
-      updatedAt: string,
-    } | null,
-    annotationSetId: string,
-    category?:  {
-      __typename: "Category",
-      annotationCount?: number | null,
-      annotationSetId: string,
-      color?: string | null,
-      createdAt: string,
-      id: string,
-      name: string,
-      projectId: string,
-      shortcutKey?: string | null,
-      updatedAt: string,
-    } | null,
-    categoryId: string,
-    createdAt: string,
-    project?:  {
-      __typename: "Project",
-      createdAt: string,
-      createdBy: string,
-      hidden?: boolean | null,
-      id: string,
-      name: string,
-      organizationId: string,
-      status?: string | null,
-      updatedAt: string,
-    } | null,
-    projectId: string,
-    updatedAt: string,
-  } | null,
-};
-
 export type CreateAnnotationSetMutationVariables = {
   condition?: ModelAnnotationSetConditionInput | null,
   input: CreateAnnotationSetInput,
@@ -7192,10 +7602,6 @@ export type CreateAnnotationSetMutation = {
   createAnnotationSet?:  {
     __typename: "AnnotationSet",
     annotationCount?: number | null,
-    annotationCountPerCategory?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -7206,6 +7612,10 @@ export type CreateAnnotationSetMutation = {
     } | null,
     createdAt: string,
     id: string,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
+      nextToken?: string | null,
+    } | null,
     locationAnnotationCounts?:  {
       __typename: "ModelLocationAnnotationCountConnection",
       nextToken?: string | null,
@@ -7278,6 +7688,33 @@ export type CreateCameraMutation = {
   } | null,
 };
 
+export type CreateCameraOverlapMutationVariables = {
+  condition?: ModelCameraOverlapConditionInput | null,
+  input: CreateCameraOverlapInput,
+};
+
+export type CreateCameraOverlapMutation = {
+  createCameraOverlap?:  {
+    __typename: "CameraOverlap",
+    cameraAId: string,
+    cameraBId: string,
+    createdAt: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type CreateCategoryMutationVariables = {
   condition?: ModelCategoryConditionInput | null,
   input: CreateCategoryInput,
@@ -7287,10 +7724,6 @@ export type CreateCategoryMutation = {
   createCategory?:  {
     __typename: "Category",
     annotationCount?: number | null,
-    annotationCountPerSet?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotationSet?:  {
       __typename: "AnnotationSet",
       annotationCount?: number | null,
@@ -7321,6 +7754,28 @@ export type CreateCategoryMutation = {
     projectId: string,
     shortcutKey?: string | null,
     updatedAt: string,
+  } | null,
+};
+
+export type CreateClientLogMutationVariables = {
+  condition?: ModelClientLogConditionInput | null,
+  input: CreateClientLogInput,
+};
+
+export type CreateClientLogMutation = {
+  createClientLog?:  {
+    __typename: "ClientLog",
+    connectionType?: string | null,
+    createdAt: string,
+    deviceType?: string | null,
+    downlink?: number | null,
+    id: string,
+    ipAddress?: string | null,
+    os?: string | null,
+    rtt?: number | null,
+    updatedAt: string,
+    userAgent?: string | null,
+    userId: string,
   } | null,
 };
 
@@ -7646,6 +8101,17 @@ export type CreateJollyResultsMembershipMutationVariables = {
 export type CreateJollyResultsMembershipMutation = {
   createJollyResultsMembership?:  {
     __typename: "JollyResultsMembership",
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      register?: boolean | null,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
     createdAt: string,
     survey?:  {
       __typename: "Project",
@@ -8094,16 +8560,16 @@ export type CreateProjectMutationVariables = {
 export type CreateProjectMutation = {
   createProject?:  {
     __typename: "Project",
-    annotationCountsPerCategoryPerSet?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotationSets?:  {
       __typename: "ModelAnnotationSetConnection",
       nextToken?: string | null,
     } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
+      nextToken?: string | null,
+    } | null,
+    cameraOverlaps?:  {
+      __typename: "ModelCameraOverlapConnection",
       nextToken?: string | null,
     } | null,
     cameras?:  {
@@ -8171,6 +8637,10 @@ export type CreateProjectMutation = {
       id: string,
       projectId: string,
       updatedAt: string,
+    } | null,
+    shapefileExclusions?:  {
+      __typename: "ModelShapefileExclusionsConnection",
+      nextToken?: string | null,
     } | null,
     status?: string | null,
     strata?:  {
@@ -8266,6 +8736,7 @@ export type CreateQueueMutation = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tag?: string | null,
     totalBatches?: number | null,
     updatedAt: string,
     url?: string | null,
@@ -8274,6 +8745,22 @@ export type CreateQueueMutation = {
       nextToken?: string | null,
     } | null,
     zoom?: number | null,
+  } | null,
+};
+
+export type CreateResultSharingTokenMutationVariables = {
+  condition?: ModelResultSharingTokenConditionInput | null,
+  input: CreateResultSharingTokenInput,
+};
+
+export type CreateResultSharingTokenMutation = {
+  createResultSharingToken?:  {
+    __typename: "ResultSharingToken",
+    annotationSetId: string,
+    createdAt: string,
+    jwt: string,
+    surveyId: string,
+    updatedAt: string,
   } | null,
 };
 
@@ -8304,6 +8791,33 @@ export type CreateShapefileMutation = {
   } | null,
 };
 
+export type CreateShapefileExclusionsMutationVariables = {
+  condition?: ModelShapefileExclusionsConditionInput | null,
+  input: CreateShapefileExclusionsInput,
+};
+
+export type CreateShapefileExclusionsMutation = {
+  createShapefileExclusions?:  {
+    __typename: "ShapefileExclusions",
+    coordinates?: Array< number | null > | null,
+    createdAt: string,
+    id: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type CreateStratumMutationVariables = {
   condition?: ModelStratumConditionInput | null,
   input: CreateStratumInput,
@@ -8314,6 +8828,7 @@ export type CreateStratumMutation = {
     __typename: "Stratum",
     area?: number | null,
     baselineLength?: number | null,
+    coordinates?: Array< number | null > | null,
     createdAt: string,
     id: string,
     name: string,
@@ -8623,6 +9138,7 @@ export type CreateTransectMutation = {
       __typename: "Stratum",
       area?: number | null,
       baselineLength?: number | null,
+      coordinates?: Array< number | null > | null,
       createdAt: string,
       id: string,
       name: string,
@@ -8651,6 +9167,7 @@ export type CreateUserProjectMembershipMutation = {
       id: string,
       name: string,
       projectId: string,
+      tag?: string | null,
       totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
@@ -8681,6 +9198,7 @@ export type CreateUserProjectMembershipMutation = {
       id: string,
       name: string,
       projectId: string,
+      tag?: string | null,
       totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
@@ -8805,56 +9323,6 @@ export type DeleteAnnotationMutation = {
   } | null,
 };
 
-export type DeleteAnnotationCountPerCategoryPerSetMutationVariables = {
-  condition?: ModelAnnotationCountPerCategoryPerSetConditionInput | null,
-  input: DeleteAnnotationCountPerCategoryPerSetInput,
-};
-
-export type DeleteAnnotationCountPerCategoryPerSetMutation = {
-  deleteAnnotationCountPerCategoryPerSet?:  {
-    __typename: "AnnotationCountPerCategoryPerSet",
-    annotationCount?: number | null,
-    annotationSet?:  {
-      __typename: "AnnotationSet",
-      annotationCount?: number | null,
-      createdAt: string,
-      id: string,
-      name: string,
-      projectId: string,
-      register?: boolean | null,
-      updatedAt: string,
-    } | null,
-    annotationSetId: string,
-    category?:  {
-      __typename: "Category",
-      annotationCount?: number | null,
-      annotationSetId: string,
-      color?: string | null,
-      createdAt: string,
-      id: string,
-      name: string,
-      projectId: string,
-      shortcutKey?: string | null,
-      updatedAt: string,
-    } | null,
-    categoryId: string,
-    createdAt: string,
-    project?:  {
-      __typename: "Project",
-      createdAt: string,
-      createdBy: string,
-      hidden?: boolean | null,
-      id: string,
-      name: string,
-      organizationId: string,
-      status?: string | null,
-      updatedAt: string,
-    } | null,
-    projectId: string,
-    updatedAt: string,
-  } | null,
-};
-
 export type DeleteAnnotationSetMutationVariables = {
   condition?: ModelAnnotationSetConditionInput | null,
   input: DeleteAnnotationSetInput,
@@ -8864,10 +9332,6 @@ export type DeleteAnnotationSetMutation = {
   deleteAnnotationSet?:  {
     __typename: "AnnotationSet",
     annotationCount?: number | null,
-    annotationCountPerCategory?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -8878,6 +9342,10 @@ export type DeleteAnnotationSetMutation = {
     } | null,
     createdAt: string,
     id: string,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
+      nextToken?: string | null,
+    } | null,
     locationAnnotationCounts?:  {
       __typename: "ModelLocationAnnotationCountConnection",
       nextToken?: string | null,
@@ -8950,6 +9418,33 @@ export type DeleteCameraMutation = {
   } | null,
 };
 
+export type DeleteCameraOverlapMutationVariables = {
+  condition?: ModelCameraOverlapConditionInput | null,
+  input: DeleteCameraOverlapInput,
+};
+
+export type DeleteCameraOverlapMutation = {
+  deleteCameraOverlap?:  {
+    __typename: "CameraOverlap",
+    cameraAId: string,
+    cameraBId: string,
+    createdAt: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type DeleteCategoryMutationVariables = {
   condition?: ModelCategoryConditionInput | null,
   input: DeleteCategoryInput,
@@ -8959,10 +9454,6 @@ export type DeleteCategoryMutation = {
   deleteCategory?:  {
     __typename: "Category",
     annotationCount?: number | null,
-    annotationCountPerSet?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotationSet?:  {
       __typename: "AnnotationSet",
       annotationCount?: number | null,
@@ -8993,6 +9484,28 @@ export type DeleteCategoryMutation = {
     projectId: string,
     shortcutKey?: string | null,
     updatedAt: string,
+  } | null,
+};
+
+export type DeleteClientLogMutationVariables = {
+  condition?: ModelClientLogConditionInput | null,
+  input: DeleteClientLogInput,
+};
+
+export type DeleteClientLogMutation = {
+  deleteClientLog?:  {
+    __typename: "ClientLog",
+    connectionType?: string | null,
+    createdAt: string,
+    deviceType?: string | null,
+    downlink?: number | null,
+    id: string,
+    ipAddress?: string | null,
+    os?: string | null,
+    rtt?: number | null,
+    updatedAt: string,
+    userAgent?: string | null,
+    userId: string,
   } | null,
 };
 
@@ -9310,6 +9823,17 @@ export type DeleteJollyResultsMembershipMutationVariables = {
 export type DeleteJollyResultsMembershipMutation = {
   deleteJollyResultsMembership?:  {
     __typename: "JollyResultsMembership",
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      register?: boolean | null,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
     createdAt: string,
     survey?:  {
       __typename: "Project",
@@ -9758,16 +10282,16 @@ export type DeleteProjectMutationVariables = {
 export type DeleteProjectMutation = {
   deleteProject?:  {
     __typename: "Project",
-    annotationCountsPerCategoryPerSet?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotationSets?:  {
       __typename: "ModelAnnotationSetConnection",
       nextToken?: string | null,
     } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
+      nextToken?: string | null,
+    } | null,
+    cameraOverlaps?:  {
+      __typename: "ModelCameraOverlapConnection",
       nextToken?: string | null,
     } | null,
     cameras?:  {
@@ -9835,6 +10359,10 @@ export type DeleteProjectMutation = {
       id: string,
       projectId: string,
       updatedAt: string,
+    } | null,
+    shapefileExclusions?:  {
+      __typename: "ModelShapefileExclusionsConnection",
+      nextToken?: string | null,
     } | null,
     status?: string | null,
     strata?:  {
@@ -9938,6 +10466,7 @@ export type DeleteQueueMutation = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tag?: string | null,
     totalBatches?: number | null,
     updatedAt: string,
     url?: string | null,
@@ -9946,6 +10475,22 @@ export type DeleteQueueMutation = {
       nextToken?: string | null,
     } | null,
     zoom?: number | null,
+  } | null,
+};
+
+export type DeleteResultSharingTokenMutationVariables = {
+  condition?: ModelResultSharingTokenConditionInput | null,
+  input: DeleteResultSharingTokenInput,
+};
+
+export type DeleteResultSharingTokenMutation = {
+  deleteResultSharingToken?:  {
+    __typename: "ResultSharingToken",
+    annotationSetId: string,
+    createdAt: string,
+    jwt: string,
+    surveyId: string,
+    updatedAt: string,
   } | null,
 };
 
@@ -9976,6 +10521,33 @@ export type DeleteShapefileMutation = {
   } | null,
 };
 
+export type DeleteShapefileExclusionsMutationVariables = {
+  condition?: ModelShapefileExclusionsConditionInput | null,
+  input: DeleteShapefileExclusionsInput,
+};
+
+export type DeleteShapefileExclusionsMutation = {
+  deleteShapefileExclusions?:  {
+    __typename: "ShapefileExclusions",
+    coordinates?: Array< number | null > | null,
+    createdAt: string,
+    id: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type DeleteStratumMutationVariables = {
   condition?: ModelStratumConditionInput | null,
   input: DeleteStratumInput,
@@ -9986,6 +10558,7 @@ export type DeleteStratumMutation = {
     __typename: "Stratum",
     area?: number | null,
     baselineLength?: number | null,
+    coordinates?: Array< number | null > | null,
     createdAt: string,
     id: string,
     name: string,
@@ -10295,6 +10868,7 @@ export type DeleteTransectMutation = {
       __typename: "Stratum",
       area?: number | null,
       baselineLength?: number | null,
+      coordinates?: Array< number | null > | null,
       createdAt: string,
       id: string,
       name: string,
@@ -10323,6 +10897,7 @@ export type DeleteUserProjectMembershipMutation = {
       id: string,
       name: string,
       projectId: string,
+      tag?: string | null,
       totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
@@ -10353,6 +10928,7 @@ export type DeleteUserProjectMembershipMutation = {
       id: string,
       name: string,
       projectId: string,
+      tag?: string | null,
       totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
@@ -10391,11 +10967,19 @@ export type DeleteUserStatsMutation = {
 
 export type GenerateSurveyResultsMutationVariables = {
   annotationSetId: string,
+  categoryIds: Array< string | null >,
   surveyId: string,
 };
 
 export type GenerateSurveyResultsMutation = {
   generateSurveyResults?: string | null,
+};
+
+export type GetJwtSecretMutationVariables = {
+};
+
+export type GetJwtSecretMutation = {
+  getJwtSecret?: string | null,
 };
 
 export type ProcessImagesMutationVariables = {
@@ -10439,7 +11023,6 @@ export type RunHeatmapperMutation = {
 };
 
 export type RunImageRegistrationMutationVariables = {
-  images?: Array< string | null > | null,
   metadata: string,
   projectId: string,
   queueUrl: string,
@@ -10447,6 +11030,18 @@ export type RunImageRegistrationMutationVariables = {
 
 export type RunImageRegistrationMutation = {
   runImageRegistration?: string | null,
+};
+
+export type RunMadDetectorMutationVariables = {
+  bucket: string,
+  images?: Array< string | null > | null,
+  projectId: string,
+  queueUrl: string,
+  setId: string,
+};
+
+export type RunMadDetectorMutation = {
+  runMadDetector?: string | null,
 };
 
 export type RunScoutbotMutationVariables = {
@@ -10549,56 +11144,6 @@ export type UpdateAnnotationMutation = {
   } | null,
 };
 
-export type UpdateAnnotationCountPerCategoryPerSetMutationVariables = {
-  condition?: ModelAnnotationCountPerCategoryPerSetConditionInput | null,
-  input: UpdateAnnotationCountPerCategoryPerSetInput,
-};
-
-export type UpdateAnnotationCountPerCategoryPerSetMutation = {
-  updateAnnotationCountPerCategoryPerSet?:  {
-    __typename: "AnnotationCountPerCategoryPerSet",
-    annotationCount?: number | null,
-    annotationSet?:  {
-      __typename: "AnnotationSet",
-      annotationCount?: number | null,
-      createdAt: string,
-      id: string,
-      name: string,
-      projectId: string,
-      register?: boolean | null,
-      updatedAt: string,
-    } | null,
-    annotationSetId: string,
-    category?:  {
-      __typename: "Category",
-      annotationCount?: number | null,
-      annotationSetId: string,
-      color?: string | null,
-      createdAt: string,
-      id: string,
-      name: string,
-      projectId: string,
-      shortcutKey?: string | null,
-      updatedAt: string,
-    } | null,
-    categoryId: string,
-    createdAt: string,
-    project?:  {
-      __typename: "Project",
-      createdAt: string,
-      createdBy: string,
-      hidden?: boolean | null,
-      id: string,
-      name: string,
-      organizationId: string,
-      status?: string | null,
-      updatedAt: string,
-    } | null,
-    projectId: string,
-    updatedAt: string,
-  } | null,
-};
-
 export type UpdateAnnotationSetMutationVariables = {
   condition?: ModelAnnotationSetConditionInput | null,
   input: UpdateAnnotationSetInput,
@@ -10608,10 +11153,6 @@ export type UpdateAnnotationSetMutation = {
   updateAnnotationSet?:  {
     __typename: "AnnotationSet",
     annotationCount?: number | null,
-    annotationCountPerCategory?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -10622,6 +11163,10 @@ export type UpdateAnnotationSetMutation = {
     } | null,
     createdAt: string,
     id: string,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
+      nextToken?: string | null,
+    } | null,
     locationAnnotationCounts?:  {
       __typename: "ModelLocationAnnotationCountConnection",
       nextToken?: string | null,
@@ -10694,6 +11239,33 @@ export type UpdateCameraMutation = {
   } | null,
 };
 
+export type UpdateCameraOverlapMutationVariables = {
+  condition?: ModelCameraOverlapConditionInput | null,
+  input: UpdateCameraOverlapInput,
+};
+
+export type UpdateCameraOverlapMutation = {
+  updateCameraOverlap?:  {
+    __typename: "CameraOverlap",
+    cameraAId: string,
+    cameraBId: string,
+    createdAt: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type UpdateCategoryMutationVariables = {
   condition?: ModelCategoryConditionInput | null,
   input: UpdateCategoryInput,
@@ -10703,10 +11275,6 @@ export type UpdateCategoryMutation = {
   updateCategory?:  {
     __typename: "Category",
     annotationCount?: number | null,
-    annotationCountPerSet?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotationSet?:  {
       __typename: "AnnotationSet",
       annotationCount?: number | null,
@@ -10737,6 +11305,28 @@ export type UpdateCategoryMutation = {
     projectId: string,
     shortcutKey?: string | null,
     updatedAt: string,
+  } | null,
+};
+
+export type UpdateClientLogMutationVariables = {
+  condition?: ModelClientLogConditionInput | null,
+  input: UpdateClientLogInput,
+};
+
+export type UpdateClientLogMutation = {
+  updateClientLog?:  {
+    __typename: "ClientLog",
+    connectionType?: string | null,
+    createdAt: string,
+    deviceType?: string | null,
+    downlink?: number | null,
+    id: string,
+    ipAddress?: string | null,
+    os?: string | null,
+    rtt?: number | null,
+    updatedAt: string,
+    userAgent?: string | null,
+    userId: string,
   } | null,
 };
 
@@ -11054,6 +11644,17 @@ export type UpdateJollyResultsMembershipMutationVariables = {
 export type UpdateJollyResultsMembershipMutation = {
   updateJollyResultsMembership?:  {
     __typename: "JollyResultsMembership",
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      register?: boolean | null,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
     createdAt: string,
     survey?:  {
       __typename: "Project",
@@ -11502,16 +12103,16 @@ export type UpdateProjectMutationVariables = {
 export type UpdateProjectMutation = {
   updateProject?:  {
     __typename: "Project",
-    annotationCountsPerCategoryPerSet?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotationSets?:  {
       __typename: "ModelAnnotationSetConnection",
       nextToken?: string | null,
     } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
+      nextToken?: string | null,
+    } | null,
+    cameraOverlaps?:  {
+      __typename: "ModelCameraOverlapConnection",
       nextToken?: string | null,
     } | null,
     cameras?:  {
@@ -11579,6 +12180,10 @@ export type UpdateProjectMutation = {
       id: string,
       projectId: string,
       updatedAt: string,
+    } | null,
+    shapefileExclusions?:  {
+      __typename: "ModelShapefileExclusionsConnection",
+      nextToken?: string | null,
     } | null,
     status?: string | null,
     strata?:  {
@@ -11682,6 +12287,7 @@ export type UpdateQueueMutation = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tag?: string | null,
     totalBatches?: number | null,
     updatedAt: string,
     url?: string | null,
@@ -11690,6 +12296,22 @@ export type UpdateQueueMutation = {
       nextToken?: string | null,
     } | null,
     zoom?: number | null,
+  } | null,
+};
+
+export type UpdateResultSharingTokenMutationVariables = {
+  condition?: ModelResultSharingTokenConditionInput | null,
+  input: UpdateResultSharingTokenInput,
+};
+
+export type UpdateResultSharingTokenMutation = {
+  updateResultSharingToken?:  {
+    __typename: "ResultSharingToken",
+    annotationSetId: string,
+    createdAt: string,
+    jwt: string,
+    surveyId: string,
+    updatedAt: string,
   } | null,
 };
 
@@ -11720,6 +12342,33 @@ export type UpdateShapefileMutation = {
   } | null,
 };
 
+export type UpdateShapefileExclusionsMutationVariables = {
+  condition?: ModelShapefileExclusionsConditionInput | null,
+  input: UpdateShapefileExclusionsInput,
+};
+
+export type UpdateShapefileExclusionsMutation = {
+  updateShapefileExclusions?:  {
+    __typename: "ShapefileExclusions",
+    coordinates?: Array< number | null > | null,
+    createdAt: string,
+    id: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type UpdateStratumMutationVariables = {
   condition?: ModelStratumConditionInput | null,
   input: UpdateStratumInput,
@@ -11730,6 +12379,7 @@ export type UpdateStratumMutation = {
     __typename: "Stratum",
     area?: number | null,
     baselineLength?: number | null,
+    coordinates?: Array< number | null > | null,
     createdAt: string,
     id: string,
     name: string,
@@ -12039,6 +12689,7 @@ export type UpdateTransectMutation = {
       __typename: "Stratum",
       area?: number | null,
       baselineLength?: number | null,
+      coordinates?: Array< number | null > | null,
       createdAt: string,
       id: string,
       name: string,
@@ -12067,6 +12718,7 @@ export type UpdateUserProjectMembershipMutation = {
       id: string,
       name: string,
       projectId: string,
+      tag?: string | null,
       totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
@@ -12097,6 +12749,7 @@ export type UpdateUserProjectMembershipMutation = {
       id: string,
       name: string,
       projectId: string,
+      tag?: string | null,
       totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
@@ -12221,55 +12874,6 @@ export type OnCreateAnnotationSubscription = {
   } | null,
 };
 
-export type OnCreateAnnotationCountPerCategoryPerSetSubscriptionVariables = {
-  filter?: ModelSubscriptionAnnotationCountPerCategoryPerSetFilterInput | null,
-};
-
-export type OnCreateAnnotationCountPerCategoryPerSetSubscription = {
-  onCreateAnnotationCountPerCategoryPerSet?:  {
-    __typename: "AnnotationCountPerCategoryPerSet",
-    annotationCount?: number | null,
-    annotationSet?:  {
-      __typename: "AnnotationSet",
-      annotationCount?: number | null,
-      createdAt: string,
-      id: string,
-      name: string,
-      projectId: string,
-      register?: boolean | null,
-      updatedAt: string,
-    } | null,
-    annotationSetId: string,
-    category?:  {
-      __typename: "Category",
-      annotationCount?: number | null,
-      annotationSetId: string,
-      color?: string | null,
-      createdAt: string,
-      id: string,
-      name: string,
-      projectId: string,
-      shortcutKey?: string | null,
-      updatedAt: string,
-    } | null,
-    categoryId: string,
-    createdAt: string,
-    project?:  {
-      __typename: "Project",
-      createdAt: string,
-      createdBy: string,
-      hidden?: boolean | null,
-      id: string,
-      name: string,
-      organizationId: string,
-      status?: string | null,
-      updatedAt: string,
-    } | null,
-    projectId: string,
-    updatedAt: string,
-  } | null,
-};
-
 export type OnCreateAnnotationSetSubscriptionVariables = {
   filter?: ModelSubscriptionAnnotationSetFilterInput | null,
 };
@@ -12278,10 +12882,6 @@ export type OnCreateAnnotationSetSubscription = {
   onCreateAnnotationSet?:  {
     __typename: "AnnotationSet",
     annotationCount?: number | null,
-    annotationCountPerCategory?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -12292,6 +12892,10 @@ export type OnCreateAnnotationSetSubscription = {
     } | null,
     createdAt: string,
     id: string,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
+      nextToken?: string | null,
+    } | null,
     locationAnnotationCounts?:  {
       __typename: "ModelLocationAnnotationCountConnection",
       nextToken?: string | null,
@@ -12363,6 +12967,32 @@ export type OnCreateCameraSubscription = {
   } | null,
 };
 
+export type OnCreateCameraOverlapSubscriptionVariables = {
+  filter?: ModelSubscriptionCameraOverlapFilterInput | null,
+};
+
+export type OnCreateCameraOverlapSubscription = {
+  onCreateCameraOverlap?:  {
+    __typename: "CameraOverlap",
+    cameraAId: string,
+    cameraBId: string,
+    createdAt: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type OnCreateCategorySubscriptionVariables = {
   filter?: ModelSubscriptionCategoryFilterInput | null,
 };
@@ -12371,10 +13001,6 @@ export type OnCreateCategorySubscription = {
   onCreateCategory?:  {
     __typename: "Category",
     annotationCount?: number | null,
-    annotationCountPerSet?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotationSet?:  {
       __typename: "AnnotationSet",
       annotationCount?: number | null,
@@ -12405,6 +13031,27 @@ export type OnCreateCategorySubscription = {
     projectId: string,
     shortcutKey?: string | null,
     updatedAt: string,
+  } | null,
+};
+
+export type OnCreateClientLogSubscriptionVariables = {
+  filter?: ModelSubscriptionClientLogFilterInput | null,
+};
+
+export type OnCreateClientLogSubscription = {
+  onCreateClientLog?:  {
+    __typename: "ClientLog",
+    connectionType?: string | null,
+    createdAt: string,
+    deviceType?: string | null,
+    downlink?: number | null,
+    id: string,
+    ipAddress?: string | null,
+    os?: string | null,
+    rtt?: number | null,
+    updatedAt: string,
+    userAgent?: string | null,
+    userId: string,
   } | null,
 };
 
@@ -12715,6 +13362,17 @@ export type OnCreateJollyResultsMembershipSubscriptionVariables = {
 export type OnCreateJollyResultsMembershipSubscription = {
   onCreateJollyResultsMembership?:  {
     __typename: "JollyResultsMembership",
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      register?: boolean | null,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
     createdAt: string,
     survey?:  {
       __typename: "Project",
@@ -13153,16 +13811,16 @@ export type OnCreateProjectSubscriptionVariables = {
 export type OnCreateProjectSubscription = {
   onCreateProject?:  {
     __typename: "Project",
-    annotationCountsPerCategoryPerSet?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotationSets?:  {
       __typename: "ModelAnnotationSetConnection",
       nextToken?: string | null,
     } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
+      nextToken?: string | null,
+    } | null,
+    cameraOverlaps?:  {
+      __typename: "ModelCameraOverlapConnection",
       nextToken?: string | null,
     } | null,
     cameras?:  {
@@ -13230,6 +13888,10 @@ export type OnCreateProjectSubscription = {
       id: string,
       projectId: string,
       updatedAt: string,
+    } | null,
+    shapefileExclusions?:  {
+      __typename: "ModelShapefileExclusionsConnection",
+      nextToken?: string | null,
     } | null,
     status?: string | null,
     strata?:  {
@@ -13323,6 +13985,7 @@ export type OnCreateQueueSubscription = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tag?: string | null,
     totalBatches?: number | null,
     updatedAt: string,
     url?: string | null,
@@ -13331,6 +13994,21 @@ export type OnCreateQueueSubscription = {
       nextToken?: string | null,
     } | null,
     zoom?: number | null,
+  } | null,
+};
+
+export type OnCreateResultSharingTokenSubscriptionVariables = {
+  filter?: ModelSubscriptionResultSharingTokenFilterInput | null,
+};
+
+export type OnCreateResultSharingTokenSubscription = {
+  onCreateResultSharingToken?:  {
+    __typename: "ResultSharingToken",
+    annotationSetId: string,
+    createdAt: string,
+    jwt: string,
+    surveyId: string,
+    updatedAt: string,
   } | null,
 };
 
@@ -13360,6 +14038,32 @@ export type OnCreateShapefileSubscription = {
   } | null,
 };
 
+export type OnCreateShapefileExclusionsSubscriptionVariables = {
+  filter?: ModelSubscriptionShapefileExclusionsFilterInput | null,
+};
+
+export type OnCreateShapefileExclusionsSubscription = {
+  onCreateShapefileExclusions?:  {
+    __typename: "ShapefileExclusions",
+    coordinates?: Array< number | null > | null,
+    createdAt: string,
+    id: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type OnCreateStratumSubscriptionVariables = {
   filter?: ModelSubscriptionStratumFilterInput | null,
 };
@@ -13369,6 +14073,7 @@ export type OnCreateStratumSubscription = {
     __typename: "Stratum",
     area?: number | null,
     baselineLength?: number | null,
+    coordinates?: Array< number | null > | null,
     createdAt: string,
     id: string,
     name: string,
@@ -13671,6 +14376,7 @@ export type OnCreateTransectSubscription = {
       __typename: "Stratum",
       area?: number | null,
       baselineLength?: number | null,
+      coordinates?: Array< number | null > | null,
       createdAt: string,
       id: string,
       name: string,
@@ -13698,6 +14404,7 @@ export type OnCreateUserProjectMembershipSubscription = {
       id: string,
       name: string,
       projectId: string,
+      tag?: string | null,
       totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
@@ -13728,6 +14435,7 @@ export type OnCreateUserProjectMembershipSubscription = {
       id: string,
       name: string,
       projectId: string,
+      tag?: string | null,
       totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
@@ -13851,55 +14559,6 @@ export type OnDeleteAnnotationSubscription = {
   } | null,
 };
 
-export type OnDeleteAnnotationCountPerCategoryPerSetSubscriptionVariables = {
-  filter?: ModelSubscriptionAnnotationCountPerCategoryPerSetFilterInput | null,
-};
-
-export type OnDeleteAnnotationCountPerCategoryPerSetSubscription = {
-  onDeleteAnnotationCountPerCategoryPerSet?:  {
-    __typename: "AnnotationCountPerCategoryPerSet",
-    annotationCount?: number | null,
-    annotationSet?:  {
-      __typename: "AnnotationSet",
-      annotationCount?: number | null,
-      createdAt: string,
-      id: string,
-      name: string,
-      projectId: string,
-      register?: boolean | null,
-      updatedAt: string,
-    } | null,
-    annotationSetId: string,
-    category?:  {
-      __typename: "Category",
-      annotationCount?: number | null,
-      annotationSetId: string,
-      color?: string | null,
-      createdAt: string,
-      id: string,
-      name: string,
-      projectId: string,
-      shortcutKey?: string | null,
-      updatedAt: string,
-    } | null,
-    categoryId: string,
-    createdAt: string,
-    project?:  {
-      __typename: "Project",
-      createdAt: string,
-      createdBy: string,
-      hidden?: boolean | null,
-      id: string,
-      name: string,
-      organizationId: string,
-      status?: string | null,
-      updatedAt: string,
-    } | null,
-    projectId: string,
-    updatedAt: string,
-  } | null,
-};
-
 export type OnDeleteAnnotationSetSubscriptionVariables = {
   filter?: ModelSubscriptionAnnotationSetFilterInput | null,
 };
@@ -13908,10 +14567,6 @@ export type OnDeleteAnnotationSetSubscription = {
   onDeleteAnnotationSet?:  {
     __typename: "AnnotationSet",
     annotationCount?: number | null,
-    annotationCountPerCategory?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -13922,6 +14577,10 @@ export type OnDeleteAnnotationSetSubscription = {
     } | null,
     createdAt: string,
     id: string,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
+      nextToken?: string | null,
+    } | null,
     locationAnnotationCounts?:  {
       __typename: "ModelLocationAnnotationCountConnection",
       nextToken?: string | null,
@@ -13993,6 +14652,32 @@ export type OnDeleteCameraSubscription = {
   } | null,
 };
 
+export type OnDeleteCameraOverlapSubscriptionVariables = {
+  filter?: ModelSubscriptionCameraOverlapFilterInput | null,
+};
+
+export type OnDeleteCameraOverlapSubscription = {
+  onDeleteCameraOverlap?:  {
+    __typename: "CameraOverlap",
+    cameraAId: string,
+    cameraBId: string,
+    createdAt: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type OnDeleteCategorySubscriptionVariables = {
   filter?: ModelSubscriptionCategoryFilterInput | null,
 };
@@ -14001,10 +14686,6 @@ export type OnDeleteCategorySubscription = {
   onDeleteCategory?:  {
     __typename: "Category",
     annotationCount?: number | null,
-    annotationCountPerSet?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotationSet?:  {
       __typename: "AnnotationSet",
       annotationCount?: number | null,
@@ -14035,6 +14716,27 @@ export type OnDeleteCategorySubscription = {
     projectId: string,
     shortcutKey?: string | null,
     updatedAt: string,
+  } | null,
+};
+
+export type OnDeleteClientLogSubscriptionVariables = {
+  filter?: ModelSubscriptionClientLogFilterInput | null,
+};
+
+export type OnDeleteClientLogSubscription = {
+  onDeleteClientLog?:  {
+    __typename: "ClientLog",
+    connectionType?: string | null,
+    createdAt: string,
+    deviceType?: string | null,
+    downlink?: number | null,
+    id: string,
+    ipAddress?: string | null,
+    os?: string | null,
+    rtt?: number | null,
+    updatedAt: string,
+    userAgent?: string | null,
+    userId: string,
   } | null,
 };
 
@@ -14345,6 +15047,17 @@ export type OnDeleteJollyResultsMembershipSubscriptionVariables = {
 export type OnDeleteJollyResultsMembershipSubscription = {
   onDeleteJollyResultsMembership?:  {
     __typename: "JollyResultsMembership",
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      register?: boolean | null,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
     createdAt: string,
     survey?:  {
       __typename: "Project",
@@ -14783,16 +15496,16 @@ export type OnDeleteProjectSubscriptionVariables = {
 export type OnDeleteProjectSubscription = {
   onDeleteProject?:  {
     __typename: "Project",
-    annotationCountsPerCategoryPerSet?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotationSets?:  {
       __typename: "ModelAnnotationSetConnection",
       nextToken?: string | null,
     } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
+      nextToken?: string | null,
+    } | null,
+    cameraOverlaps?:  {
+      __typename: "ModelCameraOverlapConnection",
       nextToken?: string | null,
     } | null,
     cameras?:  {
@@ -14860,6 +15573,10 @@ export type OnDeleteProjectSubscription = {
       id: string,
       projectId: string,
       updatedAt: string,
+    } | null,
+    shapefileExclusions?:  {
+      __typename: "ModelShapefileExclusionsConnection",
+      nextToken?: string | null,
     } | null,
     status?: string | null,
     strata?:  {
@@ -14953,6 +15670,7 @@ export type OnDeleteQueueSubscription = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tag?: string | null,
     totalBatches?: number | null,
     updatedAt: string,
     url?: string | null,
@@ -14961,6 +15679,21 @@ export type OnDeleteQueueSubscription = {
       nextToken?: string | null,
     } | null,
     zoom?: number | null,
+  } | null,
+};
+
+export type OnDeleteResultSharingTokenSubscriptionVariables = {
+  filter?: ModelSubscriptionResultSharingTokenFilterInput | null,
+};
+
+export type OnDeleteResultSharingTokenSubscription = {
+  onDeleteResultSharingToken?:  {
+    __typename: "ResultSharingToken",
+    annotationSetId: string,
+    createdAt: string,
+    jwt: string,
+    surveyId: string,
+    updatedAt: string,
   } | null,
 };
 
@@ -14990,6 +15723,32 @@ export type OnDeleteShapefileSubscription = {
   } | null,
 };
 
+export type OnDeleteShapefileExclusionsSubscriptionVariables = {
+  filter?: ModelSubscriptionShapefileExclusionsFilterInput | null,
+};
+
+export type OnDeleteShapefileExclusionsSubscription = {
+  onDeleteShapefileExclusions?:  {
+    __typename: "ShapefileExclusions",
+    coordinates?: Array< number | null > | null,
+    createdAt: string,
+    id: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type OnDeleteStratumSubscriptionVariables = {
   filter?: ModelSubscriptionStratumFilterInput | null,
 };
@@ -14999,6 +15758,7 @@ export type OnDeleteStratumSubscription = {
     __typename: "Stratum",
     area?: number | null,
     baselineLength?: number | null,
+    coordinates?: Array< number | null > | null,
     createdAt: string,
     id: string,
     name: string,
@@ -15301,6 +16061,7 @@ export type OnDeleteTransectSubscription = {
       __typename: "Stratum",
       area?: number | null,
       baselineLength?: number | null,
+      coordinates?: Array< number | null > | null,
       createdAt: string,
       id: string,
       name: string,
@@ -15328,6 +16089,7 @@ export type OnDeleteUserProjectMembershipSubscription = {
       id: string,
       name: string,
       projectId: string,
+      tag?: string | null,
       totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
@@ -15358,6 +16120,7 @@ export type OnDeleteUserProjectMembershipSubscription = {
       id: string,
       name: string,
       projectId: string,
+      tag?: string | null,
       totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
@@ -15481,55 +16244,6 @@ export type OnUpdateAnnotationSubscription = {
   } | null,
 };
 
-export type OnUpdateAnnotationCountPerCategoryPerSetSubscriptionVariables = {
-  filter?: ModelSubscriptionAnnotationCountPerCategoryPerSetFilterInput | null,
-};
-
-export type OnUpdateAnnotationCountPerCategoryPerSetSubscription = {
-  onUpdateAnnotationCountPerCategoryPerSet?:  {
-    __typename: "AnnotationCountPerCategoryPerSet",
-    annotationCount?: number | null,
-    annotationSet?:  {
-      __typename: "AnnotationSet",
-      annotationCount?: number | null,
-      createdAt: string,
-      id: string,
-      name: string,
-      projectId: string,
-      register?: boolean | null,
-      updatedAt: string,
-    } | null,
-    annotationSetId: string,
-    category?:  {
-      __typename: "Category",
-      annotationCount?: number | null,
-      annotationSetId: string,
-      color?: string | null,
-      createdAt: string,
-      id: string,
-      name: string,
-      projectId: string,
-      shortcutKey?: string | null,
-      updatedAt: string,
-    } | null,
-    categoryId: string,
-    createdAt: string,
-    project?:  {
-      __typename: "Project",
-      createdAt: string,
-      createdBy: string,
-      hidden?: boolean | null,
-      id: string,
-      name: string,
-      organizationId: string,
-      status?: string | null,
-      updatedAt: string,
-    } | null,
-    projectId: string,
-    updatedAt: string,
-  } | null,
-};
-
 export type OnUpdateAnnotationSetSubscriptionVariables = {
   filter?: ModelSubscriptionAnnotationSetFilterInput | null,
 };
@@ -15538,10 +16252,6 @@ export type OnUpdateAnnotationSetSubscription = {
   onUpdateAnnotationSet?:  {
     __typename: "AnnotationSet",
     annotationCount?: number | null,
-    annotationCountPerCategory?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
       nextToken?: string | null,
@@ -15552,6 +16262,10 @@ export type OnUpdateAnnotationSetSubscription = {
     } | null,
     createdAt: string,
     id: string,
+    jollyResultsMemberships?:  {
+      __typename: "ModelJollyResultsMembershipConnection",
+      nextToken?: string | null,
+    } | null,
     locationAnnotationCounts?:  {
       __typename: "ModelLocationAnnotationCountConnection",
       nextToken?: string | null,
@@ -15623,6 +16337,32 @@ export type OnUpdateCameraSubscription = {
   } | null,
 };
 
+export type OnUpdateCameraOverlapSubscriptionVariables = {
+  filter?: ModelSubscriptionCameraOverlapFilterInput | null,
+};
+
+export type OnUpdateCameraOverlapSubscription = {
+  onUpdateCameraOverlap?:  {
+    __typename: "CameraOverlap",
+    cameraAId: string,
+    cameraBId: string,
+    createdAt: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type OnUpdateCategorySubscriptionVariables = {
   filter?: ModelSubscriptionCategoryFilterInput | null,
 };
@@ -15631,10 +16371,6 @@ export type OnUpdateCategorySubscription = {
   onUpdateCategory?:  {
     __typename: "Category",
     annotationCount?: number | null,
-    annotationCountPerSet?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotationSet?:  {
       __typename: "AnnotationSet",
       annotationCount?: number | null,
@@ -15665,6 +16401,27 @@ export type OnUpdateCategorySubscription = {
     projectId: string,
     shortcutKey?: string | null,
     updatedAt: string,
+  } | null,
+};
+
+export type OnUpdateClientLogSubscriptionVariables = {
+  filter?: ModelSubscriptionClientLogFilterInput | null,
+};
+
+export type OnUpdateClientLogSubscription = {
+  onUpdateClientLog?:  {
+    __typename: "ClientLog",
+    connectionType?: string | null,
+    createdAt: string,
+    deviceType?: string | null,
+    downlink?: number | null,
+    id: string,
+    ipAddress?: string | null,
+    os?: string | null,
+    rtt?: number | null,
+    updatedAt: string,
+    userAgent?: string | null,
+    userId: string,
   } | null,
 };
 
@@ -15975,6 +16732,17 @@ export type OnUpdateJollyResultsMembershipSubscriptionVariables = {
 export type OnUpdateJollyResultsMembershipSubscription = {
   onUpdateJollyResultsMembership?:  {
     __typename: "JollyResultsMembership",
+    annotationSet?:  {
+      __typename: "AnnotationSet",
+      annotationCount?: number | null,
+      createdAt: string,
+      id: string,
+      name: string,
+      projectId: string,
+      register?: boolean | null,
+      updatedAt: string,
+    } | null,
+    annotationSetId: string,
     createdAt: string,
     survey?:  {
       __typename: "Project",
@@ -16413,16 +17181,16 @@ export type OnUpdateProjectSubscriptionVariables = {
 export type OnUpdateProjectSubscription = {
   onUpdateProject?:  {
     __typename: "Project",
-    annotationCountsPerCategoryPerSet?:  {
-      __typename: "ModelAnnotationCountPerCategoryPerSetConnection",
-      nextToken?: string | null,
-    } | null,
     annotationSets?:  {
       __typename: "ModelAnnotationSetConnection",
       nextToken?: string | null,
     } | null,
     annotations?:  {
       __typename: "ModelAnnotationConnection",
+      nextToken?: string | null,
+    } | null,
+    cameraOverlaps?:  {
+      __typename: "ModelCameraOverlapConnection",
       nextToken?: string | null,
     } | null,
     cameras?:  {
@@ -16490,6 +17258,10 @@ export type OnUpdateProjectSubscription = {
       id: string,
       projectId: string,
       updatedAt: string,
+    } | null,
+    shapefileExclusions?:  {
+      __typename: "ModelShapefileExclusionsConnection",
+      nextToken?: string | null,
     } | null,
     status?: string | null,
     strata?:  {
@@ -16583,6 +17355,7 @@ export type OnUpdateQueueSubscription = {
       updatedAt: string,
     } | null,
     projectId: string,
+    tag?: string | null,
     totalBatches?: number | null,
     updatedAt: string,
     url?: string | null,
@@ -16591,6 +17364,21 @@ export type OnUpdateQueueSubscription = {
       nextToken?: string | null,
     } | null,
     zoom?: number | null,
+  } | null,
+};
+
+export type OnUpdateResultSharingTokenSubscriptionVariables = {
+  filter?: ModelSubscriptionResultSharingTokenFilterInput | null,
+};
+
+export type OnUpdateResultSharingTokenSubscription = {
+  onUpdateResultSharingToken?:  {
+    __typename: "ResultSharingToken",
+    annotationSetId: string,
+    createdAt: string,
+    jwt: string,
+    surveyId: string,
+    updatedAt: string,
   } | null,
 };
 
@@ -16620,6 +17408,32 @@ export type OnUpdateShapefileSubscription = {
   } | null,
 };
 
+export type OnUpdateShapefileExclusionsSubscriptionVariables = {
+  filter?: ModelSubscriptionShapefileExclusionsFilterInput | null,
+};
+
+export type OnUpdateShapefileExclusionsSubscription = {
+  onUpdateShapefileExclusions?:  {
+    __typename: "ShapefileExclusions",
+    coordinates?: Array< number | null > | null,
+    createdAt: string,
+    id: string,
+    project?:  {
+      __typename: "Project",
+      createdAt: string,
+      createdBy: string,
+      hidden?: boolean | null,
+      id: string,
+      name: string,
+      organizationId: string,
+      status?: string | null,
+      updatedAt: string,
+    } | null,
+    projectId: string,
+    updatedAt: string,
+  } | null,
+};
+
 export type OnUpdateStratumSubscriptionVariables = {
   filter?: ModelSubscriptionStratumFilterInput | null,
 };
@@ -16629,6 +17443,7 @@ export type OnUpdateStratumSubscription = {
     __typename: "Stratum",
     area?: number | null,
     baselineLength?: number | null,
+    coordinates?: Array< number | null > | null,
     createdAt: string,
     id: string,
     name: string,
@@ -16931,6 +17746,7 @@ export type OnUpdateTransectSubscription = {
       __typename: "Stratum",
       area?: number | null,
       baselineLength?: number | null,
+      coordinates?: Array< number | null > | null,
       createdAt: string,
       id: string,
       name: string,
@@ -16958,6 +17774,7 @@ export type OnUpdateUserProjectMembershipSubscription = {
       id: string,
       name: string,
       projectId: string,
+      tag?: string | null,
       totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
@@ -16988,6 +17805,7 @@ export type OnUpdateUserProjectMembershipSubscription = {
       id: string,
       name: string,
       projectId: string,
+      tag?: string | null,
       totalBatches?: number | null,
       updatedAt: string,
       url?: string | null,
