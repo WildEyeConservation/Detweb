@@ -52,7 +52,7 @@ export function ShowMarkers(props: ShowMarkersProps) {
   } = useContext(ProjectContext)!;
   const effectiveCategories = props.categoriesOverride ?? categories;
   const [enabled, setEnabled] = useState(true);
-  const { annotationsHook, latLng2xy, xy2latLng } = useContext(ImageContext)!;
+  const { annotationsHook, latLng2xy, xy2latLng, prevImages } = useContext(ImageContext)!;
   const {
     data: annotations,
     delete: deleteAnnotation,
@@ -60,6 +60,17 @@ export function ShowMarkers(props: ShowMarkersProps) {
     create: createAnnotation,
   } = annotationsHook;
   const activeAnnotation = props.activeAnnotation;
+  const isInsidePrevImage = useCallback(
+    (x: number, y: number): boolean => {
+      return (prevImages || []).some((im) => {
+        if (!im?.transform?.fwd) return false;
+        const [tx, ty] = im.transform.fwd([x, y]);
+        return tx >= 0 && ty >= 0 && tx <= im.image.width && ty <= im.image.height;
+      });
+    },
+    [prevImages]
+  );
+
   useHotkeys(
     "Tab",
     (event) => {
@@ -98,6 +109,7 @@ export function ShowMarkers(props: ShowMarkersProps) {
               xy2latLng={xy2latLng}
               getType={getType}
               onShadowDrag={props.onShadowDrag}
+              hideIdenticon={isInsidePrevImage(annotation.x, annotation.y)}
             />
           ))}
         {/* {Array.from({ length: 500 }, (_, i) => (
