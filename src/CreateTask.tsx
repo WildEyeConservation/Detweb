@@ -30,7 +30,6 @@ type Nullable<T> = T | null;
 type TaskType = 'tiled' | 'model' | 'annotation';
 
 interface CreateTaskProps {
-  imageSets: string[];
   taskType: TaskType;
   name: string;
   projectId: string;
@@ -48,7 +47,6 @@ interface ImageDimensions {
 }
 
 function CreateTask({
-  imageSets,
   name,
   taskType,
   projectId,
@@ -507,40 +505,44 @@ function CreateTask({
 
       setImagesLoaded(0);
 
-      // Gather all images across image sets
+      // Gather all images for the project using paginated helper
+      const all = await fetchAllPaginatedResults(
+        client.models.Image.imagesByProjectId,
+        {
+          projectId,
+          selectionSet: [
+            'width',
+            'height',
+            'id',
+            'timestamp',
+            'originalPath',
+            'transectId',
+            'latitude',
+            'longitude',
+          ],
+          limit: 1000,
+        } as any,
+        (count) => setImagesLoaded(count)
+      );
       const imagesArr: {
         timestamp: Nullable<number>;
         width: number;
         height: number;
         id: string;
         originalPath: string;
-      }[] = [];
-      for (const imageSetId of imageSets) {
-        let nextToken: string | undefined = undefined;
-        do {
-          const { data: images, nextToken: nextNextToken } =
-            await client.models.ImageSetMembership.imageSetMembershipsByImageSetId(
-              { imageSetId },
-              {
-                selectionSet: [
-                  'image.width',
-                  'image.height',
-                  'image.id',
-                  'image.timestamp',
-                  'image.originalPath',
-                  'image.transectId',
-                  'image.latitude',
-                  'image.longitude',
-                ],
-                nextToken,
-                limit: 1000,
-              }
-            );
-          nextToken = nextNextToken ?? undefined;
-          imagesArr.push(...images.map(({ image }) => image));
-          setImagesLoaded((s: number) => s + images.length);
-        } while (nextToken);
-      }
+        transectId: Nullable<string>;
+        latitude: Nullable<number>;
+        longitude: Nullable<number>;
+      }[] = all.map((img: any) => ({
+        timestamp: (img?.timestamp ?? null) as Nullable<number>,
+        width: img.width as number,
+        height: img.height as number,
+        id: img.id as string,
+        originalPath: (img?.originalPath ?? '') as string,
+        transectId: (img?.transectId ?? null) as Nullable<string>,
+        latitude: (img?.latitude ?? null) as Nullable<number>,
+        longitude: (img?.longitude ?? null) as Nullable<number>,
+      }));
       // Update state with all images
       setAllImages(imagesArr);
 
@@ -575,10 +577,10 @@ function CreateTask({
       setLoadingImages(false);
     }
 
-    if (imageSets && imageSets.length > 0) {
+    if (projectId) {
       getAllImages();
     }
-  }, [imageSets, client.models.ImageSetMembership]);
+  }, [projectId, client.models.Image]);
 
   useEffect(() => {
     if (loadingImages) {

@@ -561,7 +561,6 @@ export default function LaunchAnnotationSetModal({
                 <CreateTask
                   name={annotationSet.name}
                   taskType={'tiled'}
-                  imageSets={selectedImageSets}
                   labels={annotationSet.categories}
                   setHandleCreateTask={setHandleCreateTask}
                   projectId={project.id}
