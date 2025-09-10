@@ -1,36 +1,34 @@
-import Button from "react-bootstrap/Button";
-import Form from "react-bootstrap/Form";
-import { Modal } from "react-bootstrap";
-import { useContext } from "react";
-import { GlobalContext, UserContext } from "../Context";
-import { useUsers } from "../apiInterface";
-import { Schema } from "../../amplify/data/resource";
+import Button from 'react-bootstrap/Button';
+import Form from 'react-bootstrap/Form';
+import { Modal } from 'react-bootstrap';
+import { useContext } from 'react';
+import { GlobalContext, UserContext } from '../Context';
+import { useUsers } from '../apiInterface';
+import { Schema } from '../../amplify/data/resource';
 
 export default function InviteUserModal({
   memberships,
   organization,
   show,
-  onClose,
 }: {
-  memberships: Schema["OrganizationMembership"]["type"][];
+  memberships: Schema['OrganizationMembership']['type'][];
   organization: {
     id: string;
     name: string;
   };
   show: boolean;
-  onClose: () => void;
 }) {
-  const { client } = useContext(GlobalContext)!;
+  const { client, showModal } = useContext(GlobalContext)!;
   const { user: authUser } = useContext(UserContext)!;
   const { users } = useUsers();
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.target as HTMLFormElement);
-    const username = formData.get("username") as string;
+    const username = formData.get('username') as string;
 
     if (!username) {
-      alert("Please enter a username");
+      alert('Please enter a username');
       return;
     }
 
@@ -38,12 +36,12 @@ export default function InviteUserModal({
       (user) => user.name === username || user.email === username
     )?.id;
     if (!userId) {
-      alert("User not found");
+      alert('User not found');
       return;
     }
 
     if (memberships?.some((membership) => membership.userId === userId)) {
-      alert("User is already a member of the organisation");
+      alert('User is already a member of the organisation');
       return;
     }
 
@@ -56,11 +54,11 @@ export default function InviteUserModal({
       old.length > 0 &&
       old.some(
         (invite) =>
-          invite.status === "pending" &&
+          invite.status === 'pending' &&
           invite.organizationId === organization.id
       )
     ) {
-      alert("User already has a pending invitation");
+      alert('User already has a pending invitation');
       return;
     }
 
@@ -71,38 +69,38 @@ export default function InviteUserModal({
     });
 
     if (invite) {
-      alert("Invite sent!");
+      alert('Invite sent!');
     } else {
-      alert("Failed to send invite");
+      alert('Failed to send invite');
     }
   };
 
   return (
-    <Modal show={show} onHide={onClose}>
+    <Modal show={show} onHide={() => showModal(null)}>
       <Modal.Header closeButton>
         <Modal.Title>Invite a user to {organization.name}</Modal.Title>
       </Modal.Header>
       <Modal.Body>
         <Form onSubmit={handleSubmit}>
-          <Form.Group className="mb-3" controlId="formBasicEmail">
+          <Form.Group className='mb-3' controlId='formBasicEmail'>
             <Form.Label>Username</Form.Label>
             <Form.Control
-              type="text"
-              placeholder="Enter username"
-              name="username"
+              type='text'
+              placeholder='Enter username'
+              name='username'
             />
           </Form.Group>
-          <Button variant="primary" type="submit">
+          <Button variant='primary' type='submit'>
             Send Invite
           </Button>
-          <Form.Text className="d-block mt-2">
-            *This will send an invite to the user's SurveyScope inbox.{" "}
+          <Form.Text className='d-block mt-2'>
+            *This will send an invite to the user's SurveyScope inbox.{' '}
             <span
-              className="text-muted"
-              style={{ textDecoration: "underline", cursor: "pointer" }}
+              className='text-muted'
+              style={{ textDecoration: 'underline', cursor: 'pointer' }}
               onClick={() => {
                 navigator.clipboard.writeText(window.location.origin);
-                alert("Signup link copied to clipboard!");
+                alert('Signup link copied to clipboard!');
               }}
             >
               (Copy link to signup page)

@@ -1,4 +1,5 @@
-import { Modal, Button, Form } from 'react-bootstrap';
+import { Button, Form } from 'react-bootstrap';
+import { Modal, Body, Header, Footer, Title } from '../Modal';
 import { useState, useContext, useEffect } from 'react';
 import ImageSetDropdown from './ImageSetDropdown';
 import { Tabs, Tab } from '../Tabs';
@@ -16,13 +17,11 @@ type TaskType = 'species-labelling' | 'registration';
 
 export default function LaunchAnnotationSetModal({
   show,
-  onClose,
   project,
   imageSets,
   annotationSet,
 }: {
   show: boolean;
-  onClose: () => void;
   project: Schema['Project']['type'];
   imageSets: { id: string; name: string }[];
   annotationSet: Schema['AnnotationSet']['type'];
@@ -79,7 +78,7 @@ export default function LaunchAnnotationSetModal({
   const [launchDisabled, setLaunchDisabled] = useState<boolean>(false);
 
   // set up queue creation helper
-  const { client } = useContext(GlobalContext)!;
+  const { client, showModal } = useContext(GlobalContext)!;
   const { getSqsClient } = useContext(UserContext)!;
   const createQueue = async (
     name: string,
@@ -133,6 +132,12 @@ export default function LaunchAnnotationSetModal({
     annotationSetId: annotationSet.id,
     createQueue,
   });
+
+  function onClose() {
+    setTaskType('species-labelling');
+    setProgressMessage('');
+    showModal(null);
+  }
 
   async function createTiledTask() {
     if (handleCreateTask) {
@@ -306,41 +311,39 @@ export default function LaunchAnnotationSetModal({
     }
   }, [loadingLocationSets]);
 
+  useEffect(() => {
+    if (taskType === 'registration') {
+      setHasStandardOptions(false);
+      setHasAdvancedOptions(false);
+    }
+    if (taskType === 'species-labelling') {
+      setHasStandardOptions(true);
+      setHasAdvancedOptions(true);
+    }
+  }, [taskType]);
+
   return (
-    <Modal
-      show={show}
-      onHide={() => {
-        onClose();
-        setTaskType('species-labelling');
-        setProgressMessage('');
-      }}
-      backdrop='static'
-      keyboard={false}
-      size='lg'
-    >
-      <Modal.Header>
-        <Modal.Title>Launch for Manual Annotation</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
+    <Modal show={show} strict={true} size='lg'>
+      <Header>
+        <Title>Launch for Manual Annotation</Title>
+      </Header>
+      <Body>
         <Form>
-          <fieldset disabled={launching}>
           <Tabs
             onTabChange={(tab) => {
               if (launching) return;
               switch (tab) {
                 case 0:
                   setTaskType('species-labelling');
-                  setHasAdvancedOptions(true);
                   break;
                 case 1:
                   setTaskType('registration');
-                  setHasAdvancedOptions(false);
                   break;
               }
             }}
             disableSwitching={launching}
             sharedChild={
-              <div className=''>
+              <div className='px-3'>
                 {hasStandardOptions && (
                   <div className='d-flex flex-column gap-3 mt-2'>
                     <ImageSetDropdown
@@ -380,7 +383,10 @@ export default function LaunchAnnotationSetModal({
                   </div>
                 )}
                 {hasAdvancedOptions && showAdvancedOptions && (
-                  <div className='d-flex flex-column gap-3 border border-dark shadow-sm p-2'>
+                  <div
+                    className='d-flex flex-column gap-3 border border-dark shadow-sm p-2'
+                    style={{ backgroundColor: '#697582' }}
+                  >
                     <Form.Group>
                       <Form.Label className='mb-0'>Job Name</Form.Label>
                       <span
@@ -491,7 +497,7 @@ export default function LaunchAnnotationSetModal({
                         }
                       />
                     </Form.Group>
-                    {/* This will create a secondary queue but the cleanup lambda will clear it before it's used */}
+                    {/* Fix this when required: This will create a secondary queue but the cleanup lambda will clear it before it's used */}
                     {/* <Form.Group>
                       <Form.Switch
                         label="Send Detections to Secondary Queue"
@@ -516,81 +522,86 @@ export default function LaunchAnnotationSetModal({
             }
           >
             <Tab label='Species Labelling'>
-              <LabeledToggleSwitch
-                className='m-0 border-top pt-2 mt-2 border-dark'
-                leftLabel='Model Guided'
-                rightLabel='Tiled Annotation'
-                checked={!modelGuided}
-                onChange={(checked) => {
-                  setModelGuided(!checked);
-                }}
-              />
+              <div className='px-3 pb-3 pt-1'>
+                <LabeledToggleSwitch
+                  className='m-0 border-top pt-2 mt-2 border-dark'
+                  leftLabel='Model Guided'
+                  rightLabel='Tiled Annotation'
+                  checked={!modelGuided}
+                  onChange={(checked) => {
+                    setModelGuided(!checked);
+                  }}
+                />
 
-              {modelGuided ? (
-                loadingLocationSets ? (
-                  <p
-                    className='text-muted mb-0 mt-2 text-center'
-                    style={{ fontSize: '12px' }}
-                  >
-                    Loading models...
-                  </p>
-                ) : modelOptions.length > 1 ? (
-                  <Form.Group>
-                    <Form.Label className='mb-0'>Model</Form.Label>
-                    <Select
-                      value={model}
-                      onChange={(m) => setModel(m)}
-                      options={modelOptions}
-                      placeholder='Select a model'
-                      className='text-black'
-                      isDisabled={launching}
-                    />
-                  </Form.Group>
-                ) : (
-                  modelOptions.length === 0 && (
+                {modelGuided ? (
+                  loadingLocationSets ? (
                     <p
                       className='text-muted mb-0 mt-2 text-center'
                       style={{ fontSize: '12px' }}
                     >
-                      You must first process your images before launching a
-                      model guided task.
+                      Loading models...
                     </p>
+                  ) : modelOptions.length > 1 ? (
+                    <Form.Group>
+                      <Form.Label className='mb-0'>Model</Form.Label>
+                      <Select
+                        value={model}
+                        onChange={(m) => setModel(m)}
+                        options={modelOptions}
+                        placeholder='Select a model'
+                        className='text-black'
+                        isDisabled={launching}
+                      />
+                    </Form.Group>
+                  ) : (
+                    modelOptions.length === 0 && (
+                      <p
+                        className='text-muted mb-0 mt-2 text-center'
+                        style={{ fontSize: '12px' }}
+                      >
+                        You must first process your images before launching a
+                        model guided task.
+                      </p>
+                    )
                   )
-                )
-              ) : (
-                <CreateTask
-                  name={annotationSet.name}
-                  taskType={'tiled'}
-                  labels={annotationSet.categories}
-                  setHandleCreateTask={setHandleCreateTask}
-                  projectId={project.id}
-                  setLaunchDisabled={setLaunchDisabled}
-                  disabled={launching}
-                />
-              )}
+                ) : (
+                  <CreateTask
+                    name={annotationSet.name}
+                    taskType={'tiled'}
+                    labels={annotationSet.categories}
+                    setHandleCreateTask={setHandleCreateTask}
+                    projectId={project.id}
+                    setLaunchDisabled={setLaunchDisabled}
+                    disabled={launching}
+                  />
+                )}
+              </div>
             </Tab>
-            <Tab label='Registration' className='mt-1'>
-              <></>
+            <Tab label='Registration'>
+              <div className='p-3'>
+                <p className='m-0'>
+                  This will launch a registration task for the annotation set.
+                </p>
+              </div>
             </Tab>
           </Tabs>
-          </fieldset>
         </Form>
         {progressMessage && (
           <p className='mt-3 text-center text-muted'>{progressMessage}</p>
         )}
-      </Modal.Body>
-      <Modal.Footer>
-        <Button
-          variant='primary'
-          disabled={launchDisabled || launching}
-          onClick={handleSubmit}
-        >
-          Launch
-        </Button>
-        <Button variant='dark' disabled={launching} onClick={onClose}>
-          Close
-        </Button>
-      </Modal.Footer>
+        <Footer>
+          <Button
+            variant='primary'
+            disabled={launchDisabled || launching}
+            onClick={handleSubmit}
+          >
+            Launch
+          </Button>
+          <Button variant='dark' disabled={launching} onClick={onClose}>
+            Close
+          </Button>
+        </Footer>
+      </Body>
     </Modal>
   );
 }

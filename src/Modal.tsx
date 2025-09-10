@@ -141,16 +141,6 @@ const CustomModal = forwardRef<HTMLDivElement, CustomModalProps>(
                 {showHelp ? 'Hide' : helpButtonText}
               </Button>
             )}
-            {!strict && (
-              <Button
-                variant='outline-secondary'
-                size='sm'
-                onClick={props.onHide}
-                aria-label='Close'
-              >
-                ×
-              </Button>
-            )}
           </div>
         </div>
       </ModalHeader>
@@ -171,7 +161,6 @@ const CustomModal = forwardRef<HTMLDivElement, CustomModalProps>(
             style={{
               padding: 0,
               position: 'relative',
-              minHeight: '200px',
             }}
           >
             <fieldset

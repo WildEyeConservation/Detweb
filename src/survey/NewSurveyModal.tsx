@@ -1,5 +1,6 @@
-import { Button, Form, Modal } from 'react-bootstrap';
+import { Button, Form } from 'react-bootstrap';
 import { useState } from 'react';
+import { Modal, Body, Header, Footer, Title } from '../Modal';
 import { GlobalContext, UserContext } from '../Context';
 import { useContext, useEffect } from 'react';
 import Select from 'react-select';
@@ -7,22 +8,20 @@ import LabeledToggleSwitch from '../LabeledToggleSwitch';
 import MyTable from '../Table';
 import { useUsers } from '../apiInterface';
 import { fetchAllPaginatedResults } from '../utils';
-import { FilesUploadForm, formatFileSize } from '../FilesUploadComponent';
+import { FilesUploadForm } from '../FilesUploadComponent';
 import { saveShapefileForProject } from '../utils/shapefileUtils';
 import { useUpdateProgress } from '../useUpdateProgress';
 import { X, Check } from 'lucide-react';
 
 export default function NewSurveyModal({
   show,
-  onClose,
   projects,
 }: {
   show: boolean;
-  onClose: () => void;
   projects: string[];
 }) {
   const { myOrganizationHook, user } = useContext(UserContext)!;
-  const { client } = useContext(GlobalContext)!;
+  const { client, showModal } = useContext(GlobalContext)!;
   const { users: allUsers } = useUsers();
 
   const [filesReady, setFilesReady] = useState(false);
@@ -63,7 +62,8 @@ export default function NewSurveyModal({
     ((projectId: string) => Promise<void>) | null
   >(null);
   const [gpsReady, setGpsReady] = useState(false);
-  const [shapefileLatLngs, setShapefileLatLngs] = useState<[number, number][]>();
+  const [shapefileLatLngs, setShapefileLatLngs] =
+    useState<[number, number][]>();
 
   const canSubmit = !loading && filesReady && name && organization && gpsReady;
 
@@ -126,9 +126,7 @@ export default function NewSurveyModal({
       (u) => !exceptions.some((e) => e.user.id === u.id)
     );
 
-    if (
-      globalAnnotationAccess?.value === 'Yes'
-    ) {
+    if (globalAnnotationAccess?.value === 'Yes') {
       await Promise.all(
         other.map(async (u) => {
           await client.models.UserProjectMembership.create({
@@ -171,7 +169,7 @@ export default function NewSurveyModal({
       await saveShapefileForProject(client, project.id, shapefileLatLngs);
     }
     setLoading(false);
-    onClose();
+    showModal(null);
   }
 
   useEffect(() => {
@@ -249,18 +247,12 @@ export default function NewSurveyModal({
   }, [show]);
 
   return (
-    <Modal
-      show={show}
-      onHide={onClose}
-      backdrop='static'
-      keyboard={false}
-      size='xl'
-    >
-      <Modal.Header>
-        <Modal.Title>New Survey</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        <Form className='d-flex flex-column gap-2'>
+    <Modal show={show} strict={true}>
+      <Header>
+        <Title>New Survey</Title>
+      </Header>
+      <Body>
+        <Form className='d-flex flex-column gap-2 p-3'>
           <Form.Group>
             <Form.Label>Name</Form.Label>
             <Form.Control
@@ -443,28 +435,29 @@ export default function NewSurveyModal({
             onShapefileParsed={(latLngs) => setShapefileLatLngs(latLngs)}
           />
         </Form>
-      </Modal.Body>
-      <div className='pb-2 pt-2 text-end border-top border-dark mx-3'>
-        <ul className='list-unstyled mb-2'>
-          <li style={{ color: name ? 'lime' : 'red' }}>
-            Name: {name ? <Check /> : <X />}
-          </li>
-          <li style={{ color: filesReady ? 'lime' : 'red' }}>
-            Files: {filesReady ? <Check /> : <X />}
-          </li>
-          <li style={{ color: gpsReady ? 'lime' : 'red' }}>
-            GPS Data: {gpsReady ? <Check /> : <X />}
-          </li>
-        </ul>
-      </div>
-      <Modal.Footer>
+        <div className='pb-2 pt-2 text-end border-top border-dark mx-3'>
+          <ul className='list-unstyled mb-2'>
+            <li style={{ color: name ? 'lime' : 'red' }}>
+              Name: {name ? <Check /> : <X />}
+            </li>
+            <li style={{ color: filesReady ? 'lime' : 'red' }}>
+              Files: {filesReady ? <Check /> : <X />}
+            </li>
+            <li style={{ color: gpsReady ? 'lime' : 'red' }}>
+              GPS Data: {gpsReady ? <Check /> : <X />}
+            </li>
+          </ul>
+        </div>
+      </Body>
+
+      <Footer>
         <Button variant='primary' onClick={handleSave} disabled={!canSubmit}>
           {loading ? 'Creating...' : 'Create'}
         </Button>
-        <Button variant='dark' onClick={onClose}>
+        <Button variant='dark' onClick={() => showModal(null)}>
           Cancel
         </Button>
-      </Modal.Footer>
+      </Footer>
     </Modal>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { Modal, Button, Form } from 'react-bootstrap';
+import { Button, Form } from 'react-bootstrap';
+import { Modal, Body, Header, Footer, Title } from './Modal';
 import { GlobalContext } from './Context';
 import { Tab, Tabs } from './Tabs';
 import { Schema } from '../amplify/data/resource';
@@ -66,85 +67,77 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
   }, [annotationSet.name]);
 
   return (
-    <Modal
-      show={show}
-      onHide={handleClose}
-      size='xl'
-      backdrop='static'
-      keyboard={false}
-    >
-      <Modal.Header>
-        <Modal.Title>Edit Annotation Set</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
+    <Modal show={show} onHide={handleClose} disabled={busy} strict={true}>
+      <Header>
+        <Title>Edit Annotation Set</Title>
+      </Header>
+      <Body>
         <Tabs
           onTabChange={(tab) => {
             setTab(tab);
           }}
         >
           <Tab label='Basic'>
-            <fieldset disabled={busy}>
-              <Form className='mt-1 d-flex flex-column gap-2'>
-                <Form.Group controlId='annotationSetName'>
-                  <Form.Label>Name</Form.Label>
-                  <Form.Control
-                    type='text'
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    placeholder='Enter new name'
-                  />
-                </Form.Group>
-                <LabelEditor
-                  defaultLabels={project.annotationSets
-                    .find((set) => set.id === annotationSet.id)
-                    ?.categories.map((category) => ({
-                      id: category.id,
-                      name: category.name,
-                      shortcutKey: category.shortcutKey,
-                      color: category.color,
-                    }))}
-                  isEditing
-                  setHandleSave={setSaveLabels}
+            <Form className='d-flex flex-column gap-2 p-3'>
+              <Form.Group controlId='annotationSetName'>
+                <Form.Label>Name</Form.Label>
+                <Form.Control
+                  type='text'
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder='Enter new name'
                 />
-              </Form>
-            </fieldset>
+              </Form.Group>
+              <LabelEditor
+                defaultLabels={project.annotationSets
+                  .find((set) => set.id === annotationSet.id)
+                  ?.categories.map((category) => ({
+                    id: category.id,
+                    name: category.name,
+                    shortcutKey: category.shortcutKey,
+                    color: category.color,
+                  }))}
+                isEditing
+                setHandleSave={setSaveLabels}
+              />
+            </Form>
           </Tab>
         </Tabs>
-      </Modal.Body>
-      <Modal.Footer>
-        <Button
-          variant='primary'
-          disabled={busy}
-          onClick={() => {
-            switch (tab) {
-              case 0:
-                handleSave();
-                break;
-              case 1:
-                handleMove();
-                break;
-            }
-          }}
-        >
-          {busy
-            ? 'Saving...'
-            : tab === 1
-            ? 'Move Observations'
-            : 'Save Changes'}
-        </Button>
-        <Button
-          variant='dark'
-          disabled={busy}
-          onClick={() => {
-            handleClose();
-            if (setSelectedSets) {
-              setSelectedSets([]);
-            }
-          }}
-        >
-          Cancel
-        </Button>
-      </Modal.Footer>
+        <Footer>
+          <Button
+            variant='primary'
+            disabled={busy}
+            onClick={() => {
+              switch (tab) {
+                case 0:
+                  handleSave();
+                  break;
+                case 1:
+                  handleMove();
+                  break;
+              }
+            }}
+          >
+            {busy
+              ? 'Saving...'
+              : tab === 1
+              ? 'Move Observations'
+              : 'Save Changes'}
+          </Button>
+          <Button
+            variant='dark'
+            disabled={busy}
+            onClick={() => {
+              handleClose();
+              if (setSelectedSets) {
+                setSelectedSets([]);
+              }
+            }}
+          >
+            Cancel
+          </Button>
+        </Footer>
+      </Body>
     </Modal>
   );
 };

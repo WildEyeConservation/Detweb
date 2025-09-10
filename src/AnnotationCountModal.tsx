@@ -1,5 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { Modal, Button, Spinner } from 'react-bootstrap';
+import { Button, Spinner } from 'react-bootstrap';
+import { Modal, Body, Header, Footer, Title } from './Modal';
+
 import { GlobalContext } from './Context';
 import { fetchAllPaginatedResults } from './utils';
 import MyTable from './Table';
@@ -61,65 +63,69 @@ const AnnotationCountModal: React.FC<Props> = ({
       rowData: [
         category,
         primaryOnly
-          ? annotations.filter((annotation) => annotation.objectId === annotation.id).length
+          ? annotations.filter(
+              (annotation) => annotation.objectId === annotation.id
+            ).length
           : annotations.length,
       ],
     })
   );
 
   return (
-    <Modal show={show} onHide={handleClose}>
-      <Modal.Header closeButton>
-        <Modal.Title>Annotation Set Details</Modal.Title>
-      </Modal.Header>
-      <Modal.Body className='pb-0'>
-        {loading ? (
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginBottom: '16px',
-            }}
-          >
-            <Spinner
-              animation='border'
-              variant='light'
-              size='sm'
-              className='me-2'
-            />
-            Fetching annotations...
-          </div>
-        ) : (
-          <div className='d-flex flex-column gap-2 w-100'>
-            <LabeledToggleSwitch
-              className='mb-2'
-              leftLabel='All annotations'
-              rightLabel='Primary only'
-              checked={primaryOnly}
-              onChange={(checked) => {
-                setPrimaryOnly(checked);
+    <Modal show={show} onHide={handleClose} size='md'>
+      <Header>
+        <Title>Annotation Set Details</Title>
+      </Header>
+      <Body>
+        <div className='p-3'>
+          {loading ? (
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: '16px',
               }}
-            />
-            <MyTable
-              tableHeadings={[
-                { content: 'Label', style: { width: '50%' } },
-                {
-                  content: primaryOnly ? 'Primary only' : 'All annotations',
-                  style: { width: '50%' },
-                },
-              ]}
-              tableData={tableData}
-              emptyMessage='No annotations found'
-            />
-          </div>
-        )}
-      </Modal.Body>
-      <Modal.Footer>
+            >
+              <Spinner
+                animation='border'
+                variant='light'
+                size='sm'
+                className='me-2'
+              />
+              Fetching annotations...
+            </div>
+          ) : (
+            <div className='d-flex flex-column gap-2 w-100'>
+              <LabeledToggleSwitch
+                className='mb-2'
+                leftLabel='All annotations'
+                rightLabel='Primary only'
+                checked={primaryOnly}
+                onChange={(checked) => {
+                  setPrimaryOnly(checked);
+                }}
+              />
+              <MyTable
+                tableHeadings={[
+                  { content: 'Label', style: { width: '50%' } },
+                  {
+                    content: primaryOnly ? 'Primary only' : 'All annotations',
+                    style: { width: '50%' },
+                  },
+                ]}
+                tableData={tableData}
+                emptyMessage='No annotations found'
+              />
+            </div>
+          )}
+        </div>
+      </Body>
+      <Footer>
         <Button variant='dark' onClick={handleClose}>
           Close
         </Button>
-      </Modal.Footer>
+      </Footer>
     </Modal>
   );
 };

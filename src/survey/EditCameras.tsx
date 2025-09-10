@@ -1,5 +1,6 @@
-import { Form, Alert } from 'react-bootstrap';
+import { Form, Alert, Button } from 'react-bootstrap';
 import { useState, useEffect, useContext, useCallback } from 'react';
+import { Footer } from '../Modal';
 import { GlobalContext } from '../Context';
 import { Schema } from '../../amplify/data/resource';
 
@@ -13,25 +14,14 @@ interface CameraFormDataMap {
   [cameraId: string]: CameraFormData;
 }
 
-export default function EditCameras({
-  projectId,
-  setHandleSubmit,
-  setSubmitDisabled,
-  setCloseDisabled,
-}: {
-  projectId: string;
-  setHandleSubmit: React.Dispatch<
-    React.SetStateAction<(() => Promise<void>) | null>
-  >;
-  setSubmitDisabled: React.Dispatch<React.SetStateAction<boolean>>;
-  setCloseDisabled: React.Dispatch<React.SetStateAction<boolean>>;
-}) {
-  const { client } = useContext(GlobalContext);
+export default function EditCameras({ projectId }: { projectId: string }) {
+  const { client, showModal } = useContext(GlobalContext);
   const [cameras, setCameras] = useState<Schema['Camera']['type'][]>([]);
   const [cameraFormDataMap, setCameraFormDataMap] = useState<CameraFormDataMap>(
     {}
   );
   const [isLoading, setIsLoading] = useState(true);
+  const [disabled, setDisabled] = useState(false);
 
   useEffect(() => {
     async function getCameras() {
@@ -84,10 +74,8 @@ export default function EditCameras({
     }));
   };
 
-  const handleSubmit = useCallback(async () => {
-    setCloseDisabled(true);
-    setSubmitDisabled(true);
-
+  const handleSubmit = async () => {
+    setDisabled(true);
     // Validate all camera form data
     if (cameras.length === 0) {
       // Validate new camera data
@@ -98,8 +86,7 @@ export default function EditCameras({
         newCameraData?.tiltDegrees === undefined
       ) {
         alert('Please fill in all fields for the new camera');
-        setSubmitDisabled(false);
-        setCloseDisabled(false);
+        setDisabled(false);
         return;
       }
     } else {
@@ -112,8 +99,7 @@ export default function EditCameras({
           formData?.tiltDegrees === undefined
         ) {
           alert(`Please fill in all fields for camera "${camera.name}"`);
-          setSubmitDisabled(false);
-          setCloseDisabled(false);
+          setDisabled(false);
           return;
         }
       }
@@ -160,215 +146,216 @@ export default function EditCameras({
       );
     }
 
-    setSubmitDisabled(false);
-    setCloseDisabled(false);
-  }, [
-    cameras,
-    cameraFormDataMap,
-    client,
-    projectId,
-    setCloseDisabled,
-    setSubmitDisabled,
-  ]);
-
-  // Wire up handleSubmit to parent
-  useEffect(() => {
-    setHandleSubmit(() => handleSubmit);
-  }, [handleSubmit, cameraFormDataMap, cameras, projectId]);
+    setDisabled(false);
+  };
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return <div className='p-3'>Loading...</div>;
   }
 
   const hasCameras = cameras.length > 0;
 
   return (
-    <Form className='d-flex flex-column gap-3'>
-      {hasCameras ? (
-        <>
-          <Alert variant='warning' className='mb-1'>
-            <strong>Warning:</strong> Updating camera details will require you
-            to recalculate your Jolly II results.
-          </Alert>
+    <>
+      <Form className='d-flex flex-column gap-3 p-3'>
+        {hasCameras ? (
+          <>
+            <Alert variant='warning' className='mb-0'>
+              <strong>Warning:</strong> Updating camera details will require you
+              to recalculate your Jolly II results.
+            </Alert>
 
-          {cameras.map((camera, index) => {
-            const formData = cameraFormDataMap[camera.id];
-            return (
-              <div
-                key={camera.id}
-                className='border rounded p-3 shadow-sm'
-                style={{ backgroundColor: '#697582' }}
-              >
-                <h5 className='mb-3'>
-                  Camera {index + 1}: {camera.name}
-                </h5>
+            {cameras.map((camera, index) => {
+              const formData = cameraFormDataMap[camera.id];
+              return (
+                <div
+                  key={camera.id}
+                  className='border rounded p-3 shadow-sm'
+                  style={{ backgroundColor: '#697582' }}
+                >
+                  <h5 className='mb-3'>
+                    Camera {index + 1}: {camera.name}
+                  </h5>
 
-                <div className='row g-3'>
-                  <div className='col-md-4'>
-                    <Form.Group>
-                      <Form.Label className='mb-0'>
-                        Focal Length (mm)
-                      </Form.Label>
-                      <Form.Control
-                        type='number'
-                        step='0.01'
-                        value={
-                          formData?.focalLengthMm != null
-                            ? formData.focalLengthMm.toString()
-                            : ''
-                        }
-                        onChange={(e) =>
-                          handleFormChange(
-                            camera.id,
-                            'focalLengthMm',
-                            e.target.value
-                          )
-                        }
-                        placeholder='Enter focal length'
-                      />
-                    </Form.Group>
-                  </div>
+                  <div className='row g-3'>
+                    <div className='col-md-4'>
+                      <Form.Group>
+                        <Form.Label className='mb-0'>
+                          Focal Length (mm)
+                        </Form.Label>
+                        <Form.Control
+                          type='number'
+                          step='0.01'
+                          value={
+                            formData?.focalLengthMm != null
+                              ? formData.focalLengthMm.toString()
+                              : ''
+                          }
+                          onChange={(e) =>
+                            handleFormChange(
+                              camera.id,
+                              'focalLengthMm',
+                              e.target.value
+                            )
+                          }
+                          placeholder='Enter focal length'
+                        />
+                      </Form.Group>
+                    </div>
 
-                  <div className='col-md-4'>
-                    <Form.Group>
-                      <Form.Label className='mb-0'>
-                        Sensor Width (mm)
-                      </Form.Label>
-                      <Form.Control
-                        type='number'
-                        step='0.01'
-                        value={
-                          formData?.sensorWidthMm != null
-                            ? formData.sensorWidthMm.toString()
-                            : ''
-                        }
-                        onChange={(e) =>
-                          handleFormChange(
-                            camera.id,
-                            'sensorWidthMm',
-                            e.target.value
-                          )
-                        }
-                        placeholder='Enter sensor width'
-                      />
-                    </Form.Group>
-                  </div>
+                    <div className='col-md-4'>
+                      <Form.Group>
+                        <Form.Label className='mb-0'>
+                          Sensor Width (mm)
+                        </Form.Label>
+                        <Form.Control
+                          type='number'
+                          step='0.01'
+                          value={
+                            formData?.sensorWidthMm != null
+                              ? formData.sensorWidthMm.toString()
+                              : ''
+                          }
+                          onChange={(e) =>
+                            handleFormChange(
+                              camera.id,
+                              'sensorWidthMm',
+                              e.target.value
+                            )
+                          }
+                          placeholder='Enter sensor width'
+                        />
+                      </Form.Group>
+                    </div>
 
-                  <div className='col-md-4'>
-                    <Form.Group>
-                      <Form.Label className='mb-0'>Tilt (degrees)</Form.Label>
-                      <Form.Control
-                        type='number'
-                        step='0.01'
-                        value={
-                          formData?.tiltDegrees != null
-                            ? formData.tiltDegrees.toString()
-                            : ''
-                        }
-                        onChange={(e) =>
-                          handleFormChange(
-                            camera.id,
-                            'tiltDegrees',
-                            e.target.value
-                          )
-                        }
-                        placeholder='Enter tilt'
-                      />
-                    </Form.Group>
+                    <div className='col-md-4'>
+                      <Form.Group>
+                        <Form.Label className='mb-0'>Tilt (degrees)</Form.Label>
+                        <Form.Control
+                          type='number'
+                          step='0.01'
+                          value={
+                            formData?.tiltDegrees != null
+                              ? formData.tiltDegrees.toString()
+                              : ''
+                          }
+                          onChange={(e) =>
+                            handleFormChange(
+                              camera.id,
+                              'tiltDegrees',
+                              e.target.value
+                            )
+                          }
+                          placeholder='Enter tilt'
+                        />
+                      </Form.Group>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </>
-      ) : (
-        <>
-          <Alert variant='info'>
-            No cameras found. Adding a new camera named "Survey Camera".
-          </Alert>
+              );
+            })}
+          </>
+        ) : (
+          <>
+            <Alert variant='info' className='mb-0'>
+              No cameras found. Adding a new camera named "Survey Camera".
+            </Alert>
 
-          <div className='border rounded p-3'>
-            <h5 className='mb-3'>New Camera: Survey Camera</h5>
+            <div className='border rounded p-3'>
+              <h5 className='mb-3'>New Camera: Survey Camera</h5>
 
-            <div className='row g-3'>
-              <div className='col-md-4'>
-                <Form.Group>
-                  <Form.Label className='mb-0'>Focal Length (mm)</Form.Label>
-                  <Form.Control
-                    type='number'
-                    step='0.01'
-                    value={
-                      cameraFormDataMap['new-camera']?.focalLengthMm != null
-                        ? cameraFormDataMap[
-                            'new-camera'
-                          ].focalLengthMm!.toString()
-                        : ''
-                    }
-                    onChange={(e) =>
-                      handleFormChange(
-                        'new-camera',
-                        'focalLengthMm',
-                        e.target.value
-                      )
-                    }
-                    placeholder='Enter focal length'
-                  />
-                </Form.Group>
-              </div>
+              <div className='row g-3'>
+                <div className='col-md-4'>
+                  <Form.Group>
+                    <Form.Label className='mb-0'>Focal Length (mm)</Form.Label>
+                    <Form.Control
+                      type='number'
+                      step='0.01'
+                      value={
+                        cameraFormDataMap['new-camera']?.focalLengthMm != null
+                          ? cameraFormDataMap[
+                              'new-camera'
+                            ].focalLengthMm!.toString()
+                          : ''
+                      }
+                      onChange={(e) =>
+                        handleFormChange(
+                          'new-camera',
+                          'focalLengthMm',
+                          e.target.value
+                        )
+                      }
+                      placeholder='Enter focal length'
+                    />
+                  </Form.Group>
+                </div>
 
-              <div className='col-md-4'>
-                <Form.Group>
-                  <Form.Label className='mb-0'>Sensor Width (mm)</Form.Label>
-                  <Form.Control
-                    type='number'
-                    step='0.01'
-                    value={
-                      cameraFormDataMap['new-camera']?.sensorWidthMm != null
-                        ? cameraFormDataMap[
-                            'new-camera'
-                          ].sensorWidthMm!.toString()
-                        : ''
-                    }
-                    onChange={(e) =>
-                      handleFormChange(
-                        'new-camera',
-                        'sensorWidthMm',
-                        e.target.value
-                      )
-                    }
-                    placeholder='Enter sensor width'
-                  />
-                </Form.Group>
-              </div>
+                <div className='col-md-4'>
+                  <Form.Group>
+                    <Form.Label className='mb-0'>Sensor Width (mm)</Form.Label>
+                    <Form.Control
+                      type='number'
+                      step='0.01'
+                      value={
+                        cameraFormDataMap['new-camera']?.sensorWidthMm != null
+                          ? cameraFormDataMap[
+                              'new-camera'
+                            ].sensorWidthMm!.toString()
+                          : ''
+                      }
+                      onChange={(e) =>
+                        handleFormChange(
+                          'new-camera',
+                          'sensorWidthMm',
+                          e.target.value
+                        )
+                      }
+                      placeholder='Enter sensor width'
+                    />
+                  </Form.Group>
+                </div>
 
-              <div className='col-md-4'>
-                <Form.Group>
-                  <Form.Label className='mb-0'>Tilt (degrees)</Form.Label>
-                  <Form.Control
-                    type='number'
-                    step='0.01'
-                    value={
-                      cameraFormDataMap['new-camera']?.tiltDegrees != null
-                        ? cameraFormDataMap[
-                            'new-camera'
-                          ].tiltDegrees!.toString()
-                        : ''
-                    }
-                    onChange={(e) =>
-                      handleFormChange(
-                        'new-camera',
-                        'tiltDegrees',
-                        e.target.value
-                      )
-                    }
-                    placeholder='Enter tilt'
-                  />
-                </Form.Group>
+                <div className='col-md-4'>
+                  <Form.Group>
+                    <Form.Label className='mb-0'>Tilt (degrees)</Form.Label>
+                    <Form.Control
+                      type='number'
+                      step='0.01'
+                      value={
+                        cameraFormDataMap['new-camera']?.tiltDegrees != null
+                          ? cameraFormDataMap[
+                              'new-camera'
+                            ].tiltDegrees!.toString()
+                          : ''
+                      }
+                      onChange={(e) =>
+                        handleFormChange(
+                          'new-camera',
+                          'tiltDegrees',
+                          e.target.value
+                        )
+                      }
+                      placeholder='Enter tilt'
+                    />
+                  </Form.Group>
+                </div>
               </div>
             </div>
-          </div>
-        </>
-      )}
-    </Form>
+          </>
+        )}
+      </Form>
+      <Footer>
+        <Button variant='primary' onClick={handleSubmit} disabled={disabled}>
+          Save Cameras
+        </Button>
+        <Button
+          variant='dark'
+          onClick={() => showModal(null)}
+          disabled={disabled}
+        >
+          Close
+        </Button>
+      </Footer>
+    </>
   );
 }

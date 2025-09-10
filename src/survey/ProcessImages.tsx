@@ -1,22 +1,11 @@
 import { Form, Spinner, Button } from 'react-bootstrap';
+import { Footer } from '../Modal';
 import { useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { GlobalContext, UserContext } from '../Context';
 import Select from 'react-select';
 
-export default function ProcessImages({
-  projectId,
-  onClose,
-  setHandleSubmit,
-  setSubmitDisabled,
-}: {
-  projectId: string;
-  onClose: () => void;
-  setHandleSubmit: React.Dispatch<
-    React.SetStateAction<(() => Promise<void>) | null>
-  >;
-  setSubmitDisabled: React.Dispatch<React.SetStateAction<boolean>>;
-}) {
-  const { client, backend } = useContext(GlobalContext)!;
+export default function ProcessImages({ projectId }: { projectId: string }) {
+  const { client, backend, showModal } = useContext(GlobalContext)!;
   const { getSqsClient } = useContext(UserContext)!;
   const [model, setModel] = useState<{ label: string; value: string } | null>(
     null
@@ -31,6 +20,7 @@ export default function ProcessImages({
   const [imagesLoaded, setImagesLoaded] = useState<number | null>(null);
   const [locationsLoaded, setLocationsLoaded] = useState<number | null>(null);
   const [scanned, setScanned] = useState(false);
+  const [disabled, setDisabled] = useState(false);
   const isActiveRef = useRef(true);
 
   useEffect(() => {
@@ -115,11 +105,12 @@ export default function ProcessImages({
     setLocationsLoaded(null);
   }, [model]);
 
-  const processImages = useCallback(async () => {
+  const processImages = async () => {
     if (!model) {
       return;
     }
 
+    setDisabled(true);
     setLoading(true);
 
     const { data: locationSet } = await client.models.LocationSet.create({
@@ -199,72 +190,69 @@ export default function ProcessImages({
       projectId: projectId,
     });
 
-    onClose();
-
     setLoading(false);
-  }, [
-    model,
-    projectId,
-    unprocessedImages,
-    client,
-    backend,
-    getSqsClient,
-    onClose,
-  ]);
-
-  useEffect(() => {
-    setHandleSubmit(() => processImages);
-  }, [processImages, setHandleSubmit]);
-
-  useEffect(() => {
-    setSubmitDisabled(loading || !model || !unprocessedImages.length);
-  }, [loading, model, unprocessedImages.length, setSubmitDisabled]);
+    setDisabled(false);
+  };
 
   return (
-    <Form>
-      <Form.Group>
-        <Form.Label className='mb-0'>Model</Form.Label>
-        <Select
-          value={model}
-          onChange={(m) => setModel(m)}
-          options={[
-            { label: 'ScoutBot', value: 'scoutbotv3' },
-            { label: 'Elephant Detection Nadir', value: 'heatmap' },
-            { label: 'MAD', value: 'mad' },
-          ]}
-          placeholder='Select a model'
-          className='text-black'
-        />
-        <Button
-          variant='primary'
-          onClick={scanImages}
-          disabled={!model || loading}
-          className='mt-2'
-        >
-          Scan
+    <>
+      <Form className='p-3'>
+        <Form.Group>
+          <Form.Label className='mb-0'>Model</Form.Label>
+          <Select
+            value={model}
+            onChange={(m) => setModel(m)}
+            options={[
+              { label: 'ScoutBot', value: 'scoutbotv3' },
+              { label: 'Elephant Detection Nadir', value: 'heatmap' },
+              { label: 'MAD', value: 'mad' },
+            ]}
+            placeholder='Select a model'
+            className='text-black'
+          />
+          <Button
+            variant='primary'
+            onClick={scanImages}
+            disabled={!model || loading}
+            className='mt-2'
+          >
+            Scan
+          </Button>
+          {loading ? (
+            <div className='d-flex flex-column align-items-center'>
+              <Spinner animation='border' role='status' />
+              <p className='mb-0'>Determining images to process...</p>
+              <p className='mb-1'>Found {imagesLoaded ?? 0} images</p>
+              {locationsLoaded !== null && (
+                <>
+                  <p className='mb-0'>Searching for detections on images...</p>
+                  <p className='mb-0'>Found {locationsLoaded} detections</p>
+                </>
+              )}
+            </div>
+          ) : scanned ? (
+            unprocessedImages.length > 0 ? (
+              <p className='mb-0 mt-2'>
+                Found {unprocessedImages.length} unprocessed images
+              </p>
+            ) : (
+              <p className='mb-0 mt-2'>All images have been processed</p>
+            )
+          ) : null}
+        </Form.Group>
+      </Form>
+      <Footer>
+        <Button variant='primary' onClick={processImages} disabled={disabled}>
+          Process Images
         </Button>
-        {loading ? (
-          <div className='d-flex flex-column align-items-center'>
-            <Spinner animation='border' role='status' />
-            <p className='mb-0'>Determining images to process...</p>
-            <p className='mb-1'>Found {imagesLoaded ?? 0} images</p>
-            {locationsLoaded !== null && (
-              <>
-                <p className='mb-0'>Searching for detections on images...</p>
-                <p className='mb-0'>Found {locationsLoaded} detections</p>
-              </>
-            )}
-          </div>
-        ) : scanned ? (
-          unprocessedImages.length > 0 ? (
-            <p className='mb-0 mt-2'>
-              Found {unprocessedImages.length} unprocessed images
-            </p>
-          ) : (
-            <p className='mb-0 mt-2'>All images have been processed</p>
-          )
-        ) : null}
-      </Form.Group>
-    </Form>
+        <Button
+          variant='dark'
+          onClick={() => showModal(null)}
+          disabled={disabled}
+        >
+          Close
+        </Button>
+      </Footer>
+    </>
   );
 }

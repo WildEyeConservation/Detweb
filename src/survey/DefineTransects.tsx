@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { GlobalContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
 import { Form, Spinner, Button } from 'react-bootstrap';
+import { Footer } from '../Modal';
 import {
   MapContainer,
   TileLayer,
@@ -187,23 +188,14 @@ function mergeSmallSegmentsByBoundary(
 }
 
 // define transects and strata
-export default function DefineTransects({
-  projectId,
-  setHandleSubmit,
-  setSubmitDisabled,
-  setCloseDisabled,
-}: {
-  projectId: string;
-  setHandleSubmit: React.Dispatch<
-    React.SetStateAction<(() => Promise<void>) | null>
-  >;
-  setSubmitDisabled: React.Dispatch<React.SetStateAction<boolean>>;
-  setCloseDisabled: React.Dispatch<React.SetStateAction<boolean>>;
-}) {
-  const { client } = useContext(GlobalContext)!;
+export default function DefineTransects({ projectId }: { projectId: string }) {
+  const { client, showModal } = useContext(GlobalContext)!;
   const [images, setImages] = useState<any[]>([]);
   const [partsLoading, setPartsLoading] = useState<null | number>(0);
   const [saving, setSaving] = useState(false);
+  const [savingImageCount, setSavingImageCount] = useState(0);
+  const [savingProgress, setSavingProgress] = useState(0);
+  const [disabled, setDisabled] = useState(false);
   const [polygonCoords, setPolygonCoords] = useState<
     L.LatLngExpression[] | null
   >(null);
@@ -221,7 +213,9 @@ export default function DefineTransects({
   const [selectedTransectIds, setSelectedTransectIds] = useState<Set<number>>(
     new Set()
   );
-  const [drawnPolygonLayer, setDrawnPolygonLayer] = useState<L.Layer | null>(null);
+  const [drawnPolygonLayer, setDrawnPolygonLayer] = useState<L.Layer | null>(
+    null
+  );
   const [strataLines, setStrataLines] = useState<L.LatLngExpression[][]>([]);
   const [strataSections, setStrataSections] = useState<
     { coords: L.LatLngExpression[]; id: number }[]
@@ -311,8 +305,19 @@ export default function DefineTransects({
   }, [segmentedImages]);
 
   // submit handler: creates strata, transects, and assigns images
-  const handleSubmit = React.useCallback(async () => {
+  const handleSubmit = async () => {
     if (!polygonCoords) return;
+
+    setDisabled(true);
+    setSaving(true);
+
+    // Calculate how many images will be linked to transects
+    const imagesToUpdate = segmentedImages.filter(
+      (img) => img.transectId != null
+    );
+    const imageCount = imagesToUpdate.length;
+    setSavingImageCount(imageCount);
+    setSavingProgress(0);
 
     // delete all existing strata so we can recreate them fresh
     const existingStrata = await fetchAllPaginatedResults<any, any>(
@@ -450,7 +455,7 @@ export default function DefineTransects({
       transectMap[tid] = trId;
     }
 
-    // update images
+    // update images with progress tracking
     await Promise.all(
       segmentedImages.map(async (img) => {
         const trId = transectMap[img.transectId];
@@ -459,9 +464,11 @@ export default function DefineTransects({
             id: img.id,
             transectId: trId,
           });
+          setSavingProgress((p) => p + 1);
         }
       })
     );
+
     // cleanup: delete unused transects from the database
     const allTransects = await fetchAllPaginatedResults<any, any>(
       client.models.Transect.transectsByProjectId as any,
@@ -500,30 +507,16 @@ export default function DefineTransects({
         })
       )
     );
-  }, [
-    polygonCoords,
-    strataSections,
-    segmentedImages,
-    transectIds,
-    projectId,
-    client,
-    exclusionCoords,
-  ]);
-  // register submit handler
+
+    setDisabled(false);
+    setSaving(false);
+    setSavingImageCount(0);
+    setSavingProgress(0);
+  };
+
   useEffect(() => {
-    setHandleSubmit(() => async () => {
-      setSubmitDisabled(true);
-      setCloseDisabled(true);
-      setSaving(true);
-
-      await handleSubmit();
-
-      setSaving(false);
-      setSubmitDisabled(false);
-      setCloseDisabled(false);
-    });
-    setSubmitDisabled(strataSections.length === 0);
-  }, [strataSections, handleSubmit, setHandleSubmit, setSubmitDisabled]);
+    setDisabled(strataSections.length === 0);
+  }, [strataSections, setDisabled]);
 
   // fetch images for project
   useEffect(() => {
@@ -958,21 +951,34 @@ export default function DefineTransects({
       const timeoutId = setTimeout(() => {
         if (mapRef.current) {
           try {
-            const points = segmentedImages.map((img) => {
-              const pos = adjustedPositions[img.id] || {
-                latitude: img.latitude,
-                longitude: img.longitude,
-              };
-              return [pos.latitude, pos.longitude] as [number, number];
-            }).filter(([lat, lng]) => {
-              // Filter out invalid coordinates
-              return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 &&
-                     !isNaN(lat) && !isNaN(lng);
-            });
+            const points = segmentedImages
+              .map((img) => {
+                const pos = adjustedPositions[img.id] || {
+                  latitude: img.latitude,
+                  longitude: img.longitude,
+                };
+                return [pos.latitude, pos.longitude] as [number, number];
+              })
+              .filter(([lat, lng]) => {
+                // Filter out invalid coordinates
+                return (
+                  lat >= -90 &&
+                  lat <= 90 &&
+                  lng >= -180 &&
+                  lng <= 180 &&
+                  !isNaN(lat) &&
+                  !isNaN(lng)
+                );
+              });
 
             if (points.length > 0) {
               const bounds = L.latLngBounds(points);
-              console.log('Fitting map bounds to', points.length, 'points:', bounds);
+              console.log(
+                'Fitting map bounds to',
+                points.length,
+                'points:',
+                bounds
+              );
 
               // Add some padding to the bounds
               mapRef.current.fitBounds(bounds, { padding: [20, 20] });
@@ -996,8 +1002,6 @@ export default function DefineTransects({
   useEffect(() => {
     setHasFittedBounds(false);
   }, [projectId]);
-
-
 
   // a simple palette for transect colors
   const transectColors = [
@@ -1023,150 +1027,81 @@ export default function DefineTransects({
   // right-click popup shows transect info only
 
   return (
-    <Form>
-      <Form.Group className='d-flex flex-column'>
-        <Form.Label className='mb-0'>Define Transects and Strata</Form.Label>
-        <span className='text-muted mb-2' style={{ fontSize: '14px' }}>
-          <ul className='mb-0'>
-            <li>
-              Single-click a point to select its transect (Ctrl-click for
-              multi-select). Clicking a selected transect will deselect it.
-            </li>
-            <li>
-              Right-click a point to view that transect's info (name/number and
-              image count). If multiple transects are selected, right-click to
-              merge them, or use the "Merge Selected Transects" button that appears
-              at the bottom of the map.
-            </li>
-            <li>
-              Use the polygon tool (top-right) to draw around points and select
-              all transects that have points within the drawn area. The polygon
-              will remain visible so you can see your selection. Use the "Merge
-              Selected Transects" button to merge them and remove the polygon.
-            </li>
-            <li>
-              Define strata by selecting the polyline tool in the top right
-              corner of the map and drawing a line across the boundary. Start and
-              end points should be outside the boundary.
-            </li>
-            <li>
-              Save your work by clicking the save button at the bottom of the
-              page (even if you haven't made any changes).
-            </li>
-            {existingData && (
+    <>
+      <Form className='p-3'>
+        <Form.Group className='d-flex flex-column'>
+          <Form.Label className='mb-0'>Define Transects and Strata</Form.Label>
+          <span className='text-muted mb-2' style={{ fontSize: '14px' }}>
+            <ul className='mb-0'>
               <li>
-                To make changes to strata, clear strata and redraw the strata
-                lines.
+                Single-click a point to select its transect (Ctrl-click for
+                multi-select). Clicking a selected transect will deselect it.
               </li>
-            )}
-          </ul>
-        </span>
-        {existingData && (
-          <Button
-            variant='outline-primary'
-            className='mb-2'
-            onClick={clearStrata}
-          >
-            Clear Strata
-          </Button>
-        )}
-        <div style={{ height: '600px', width: '100%', position: 'relative' }}>
-          {partsLoading !== null ? (
-            <div className='d-flex justify-content-center align-items-center mt-3'>
-              <Spinner animation='border' />
-              <span className='ms-2'>Loading data</span>
-            </div>
-          ) : (
-            <MapContainer
-              ref={mapRef}
-              style={{ height: '100%', width: '100%' }}
-              center={[0, 0]}
-              zoom={2}
-              doubleClickZoom={false}
-              preferCanvas={false}
-            >
-              <TileLayer
-                attribution='&copy; OpenStreetMap contributors'
-                url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-              />
-              {polygonCoords && (
-                <Polygon
-                  positions={polygonCoords}
-                  pathOptions={{ fill: false, color: '#97009c' }}
-                />
+              <li>
+                Right-click a point to view that transect's info (name/number
+                and image count). If multiple transects are selected,
+                right-click to merge them, or use the "Merge Selected Transects"
+                button that appears at the bottom of the map.
+              </li>
+              <li>
+                Use the polygon tool (top-right) to draw around points and
+                select all transects that have points within the drawn area. The
+                polygon will remain visible so you can see your selection. Use
+                the "Merge Selected Transects" button to merge them and remove
+                the polygon.
+              </li>
+              <li>
+                Define strata by selecting the polyline tool in the top right
+                corner of the map and drawing a line across the boundary. Start
+                and end points should be outside the boundary.
+              </li>
+              <li>
+                Save your work by clicking the save button at the bottom of the
+                page (even if you haven't made any changes).
+              </li>
+              {existingData && (
+                <li>
+                  To make changes to strata, clear strata and redraw the strata
+                  lines.
+                </li>
               )}
-              {/* Polygon selection tool - always available */}
-              <FeatureGroup>
-                <EditControl
-                  position='topright'
-                  draw={{
-                    rectangle: false,
-                    circle: false,
-                    circlemarker: false,
-                    marker: false,
-                    polyline: false,
-                    polygon: {
-                      shapeOptions: { color: 'black' },
-                    },
-                  }}
-                  edit={{ edit: false, remove: false }}
-                  onCreated={(e: any) => {
-                    if (e.layerType === 'polygon') {
-                      const latlngs = e.layer.getLatLngs();
-                      // Support simple polygon (first ring)
-                      const ring: L.LatLng[] = Array.isArray(latlngs[0])
-                        ? latlngs[0]
-                        : latlngs;
-                      const polyLngLat: [number, number][] = (
-                        ring as any[]
-                      ).map((ll: any) => [ll.lng as number, ll.lat as number]);
-                      if (
-                        polyLngLat[0][0] !==
-                          polyLngLat[polyLngLat.length - 1][0] ||
-                        polyLngLat[0][1] !==
-                          polyLngLat[polyLngLat.length - 1][1]
-                      ) {
-                        polyLngLat.push(polyLngLat[0]);
-                      }
-                      const poly = turf.polygon([polyLngLat]);
-                      // Find enclosed images using displayed positions
-                      const enclosedImgs = segmentedImages.filter((img) => {
-                        const pos = adjustedPositions[img.id] || {
-                          latitude: img.latitude,
-                          longitude: img.longitude,
-                        };
-                        const pt = turf.point([pos.longitude, pos.latitude]);
-                        return turf.booleanPointInPolygon(pt, poly);
-                      });
-                      if (enclosedImgs.length) {
-                        // Select all transects that have points within the polygon
-                        const enclosedTransectIds = new Set(
-                          enclosedImgs.map((img) => img.transectId)
-                        );
-                        setSelectedTransectIds(enclosedTransectIds);
-                        // Keep the polygon visible and store reference for later removal
-                        setDrawnPolygonLayer(e.layer);
-                      } else {
-                        // No points found, remove the polygon immediately
-                        try {
-                          e.layer.remove();
-                        } catch {}
-                      }
-                    }
-                  }}
+            </ul>
+          </span>
+          {existingData && (
+            <Button
+              variant='outline-primary'
+              className='mb-2'
+              onClick={clearStrata}
+            >
+              Clear Strata
+            </Button>
+          )}
+          <div style={{ height: '600px', width: '100%', position: 'relative' }}>
+            {partsLoading !== null ? (
+              <div className='d-flex justify-content-center align-items-center mt-3'>
+                <Spinner animation='border' />
+                <span className='ms-2'>Loading data</span>
+              </div>
+            ) : (
+              <MapContainer
+                ref={mapRef}
+                style={{ height: '100%', width: '100%' }}
+                center={[0, 0]}
+                zoom={2}
+                doubleClickZoom={false}
+                preferCanvas={false}
+              >
+                <TileLayer
+                  attribution='&copy; OpenStreetMap contributors'
+                  url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
                 />
-              </FeatureGroup>
-              {exclusionCoords.map((coords, idx) => (
-                <Polygon
-                  key={'exclusion-' + idx}
-                  positions={coords}
-                  pathOptions={{
-                    color: 'red',
-                    fill: false,
-                  }}
-                />
-              ))}
-              {!existingData && (
+                {polygonCoords && (
+                  <Polygon
+                    positions={polygonCoords}
+                    pathOptions={{ fill: false, color: '#97009c' }}
+                  />
+                )}
+                {/* Polygon selection tool - always available */}
                 <FeatureGroup>
                   <EditControl
                     position='topright'
@@ -1175,225 +1110,323 @@ export default function DefineTransects({
                       circle: false,
                       circlemarker: false,
                       marker: false,
-                      polygon: false,
-                      polyline: {
+                      polyline: false,
+                      polygon: {
                         shapeOptions: { color: 'black' },
                       },
                     }}
+                    edit={{ edit: false, remove: false }}
                     onCreated={(e: any) => {
-                      if (e.layerType === 'polyline') {
-                        const latlngs = e.layer
-                          .getLatLngs()
-                          .map(
-                            (ll: L.LatLng) =>
-                              [ll.lat, ll.lng] as L.LatLngExpression
+                      if (e.layerType === 'polygon') {
+                        const latlngs = e.layer.getLatLngs();
+                        // Support simple polygon (first ring)
+                        const ring: L.LatLng[] = Array.isArray(latlngs[0])
+                          ? latlngs[0]
+                          : latlngs;
+                        const polyLngLat: [number, number][] = (
+                          ring as any[]
+                        ).map((ll: any) => [
+                          ll.lng as number,
+                          ll.lat as number,
+                        ]);
+                        if (
+                          polyLngLat[0][0] !==
+                            polyLngLat[polyLngLat.length - 1][0] ||
+                          polyLngLat[0][1] !==
+                            polyLngLat[polyLngLat.length - 1][1]
+                        ) {
+                          polyLngLat.push(polyLngLat[0]);
+                        }
+                        const poly = turf.polygon([polyLngLat]);
+                        // Find enclosed images using displayed positions
+                        const enclosedImgs = segmentedImages.filter((img) => {
+                          const pos = adjustedPositions[img.id] || {
+                            latitude: img.latitude,
+                            longitude: img.longitude,
+                          };
+                          const pt = turf.point([pos.longitude, pos.latitude]);
+                          return turf.booleanPointInPolygon(pt, poly);
+                        });
+                        if (enclosedImgs.length) {
+                          // Select all transects that have points within the polygon
+                          const enclosedTransectIds = new Set(
+                            enclosedImgs.map((img) => img.transectId)
                           );
-                        setStrataLines((prev) => [...prev, latlngs]);
+                          setSelectedTransectIds(enclosedTransectIds);
+                          // Keep the polygon visible and store reference for later removal
+                          setDrawnPolygonLayer(e.layer);
+                        } else {
+                          // No points found, remove the polygon immediately
+                          try {
+                            e.layer.remove();
+                          } catch {}
+                        }
                       }
                     }}
-                    onDeleted={(e: any) => {
-                      // Remove deleted polylines from state
-                      const layers = e.layers;
-                      const removed: L.LatLngExpression[][] = [];
-                      layers.eachLayer((layer: any) => {
-                        const latlngs = layer
-                          .getLatLngs()
-                          .map(
-                            (ll: L.LatLng) =>
-                              [ll.lat, ll.lng] as L.LatLngExpression
-                          );
-                        removed.push(latlngs);
-                      });
-                      setStrataLines((prev) =>
-                        prev.filter(
-                          (line) =>
-                            !removed.some(
-                              (r) =>
-                                r.length === line.length &&
-                                r.every((pt, idx) => {
-                                  const [rLat, rLng] = pt as [number, number];
-                                  const [lLat, lLng] = line[idx] as [
-                                    number,
-                                    number
-                                  ];
-                                  return rLat === lLat && rLng === lLng;
-                                })
-                            )
-                        )
-                      );
-                    }}
-                    edit={{ remove: true, edit: false }}
                   />
                 </FeatureGroup>
-              )}
-              {strataSections.map((section) => (
-                <Polygon
-                  key={`stratum-${section.id}`}
-                  positions={section.coords}
-                  pathOptions={{
-                    fillColor: strataColors[section.id % strataColors.length],
-                    color: strataColors[section.id % strataColors.length],
-                    fillOpacity: 0.1,
-                  }}
-                >
-                  <Popup>
-                    <div>
-                      <strong>Stratum:</strong> {section.id}
-                    </div>
-                  </Popup>
-                </Polygon>
-              ))}
-              {partsLoading === null &&
-                segmentedImages.map((img) => {
-                  const isSelected = selectedTransectIds.has(img.transectId);
-                  return (
-                    <CircleMarker
-                      pane='markerPane'
-                      key={img.id}
-                      center={[
-                        adjustedPositions[img.id]?.latitude ?? img.latitude,
-                        adjustedPositions[img.id]?.longitude ?? img.longitude,
-                      ]}
-                      radius={5}
-                      pathOptions={{
-                        color: isSelected
-                          ? 'black'
-                          : transectColors[
-                              img.transectId % transectColors.length
-                            ],
-                        weight: isSelected ? 2 : 1,
-                        fillColor:
-                          transectColors[
-                            img.transectId % transectColors.length
-                          ],
-                        fillOpacity: 1,
-                      }}
-                      eventHandlers={{
-                        click: (e: any) => {
-                          const ctrl = !!(
-                            e?.originalEvent?.ctrlKey ||
-                            e?.originalEvent?.metaKey
-                          );
-                          setSelectedTransectIds((prev) => {
-                            const next = new Set(prev);
-                            if (ctrl) {
-                              if (next.has(img.transectId)) next.delete(img.transectId);
-                              else next.add(img.transectId);
-                            } else {
-                              if (next.size === 1 && next.has(img.transectId)) {
-                                next.clear();
-                              } else {
-                                next.clear();
-                                next.add(img.transectId);
-                              }
-                            }
-                            return next;
-                          });
-                        },
-                        contextmenu: (e: any) => {
-                          const selected = Array.from(selectedTransectIds);
-                          if (selected.length >= 2) {
-                            setTransectInfo(null);
-                            setMergePrompt({
-                              position: e.latlng,
-                              ids: selected.sort((a, b) => a - b),
-                            });
-                          } else {
-                            setMergePrompt(null);
-                            setTransectInfo({ position: e.latlng, transectId: img.transectId });
-                          }
+                {exclusionCoords.map((coords, idx) => (
+                  <Polygon
+                    key={'exclusion-' + idx}
+                    positions={coords}
+                    pathOptions={{
+                      color: 'red',
+                      fill: false,
+                    }}
+                  />
+                ))}
+                {!existingData && (
+                  <FeatureGroup>
+                    <EditControl
+                      position='topright'
+                      draw={{
+                        rectangle: false,
+                        circle: false,
+                        circlemarker: false,
+                        marker: false,
+                        polygon: false,
+                        polyline: {
+                          shapeOptions: { color: 'black' },
                         },
                       }}
+                      onCreated={(e: any) => {
+                        if (e.layerType === 'polyline') {
+                          const latlngs = e.layer
+                            .getLatLngs()
+                            .map(
+                              (ll: L.LatLng) =>
+                                [ll.lat, ll.lng] as L.LatLngExpression
+                            );
+                          setStrataLines((prev) => [...prev, latlngs]);
+                        }
+                      }}
+                      onDeleted={(e: any) => {
+                        // Remove deleted polylines from state
+                        const layers = e.layers;
+                        const removed: L.LatLngExpression[][] = [];
+                        layers.eachLayer((layer: any) => {
+                          const latlngs = layer
+                            .getLatLngs()
+                            .map(
+                              (ll: L.LatLng) =>
+                                [ll.lat, ll.lng] as L.LatLngExpression
+                            );
+                          removed.push(latlngs);
+                        });
+                        setStrataLines((prev) =>
+                          prev.filter(
+                            (line) =>
+                              !removed.some(
+                                (r) =>
+                                  r.length === line.length &&
+                                  r.every((pt, idx) => {
+                                    const [rLat, rLng] = pt as [number, number];
+                                    const [lLat, lLng] = line[idx] as [
+                                      number,
+                                      number
+                                    ];
+                                    return rLat === lLat && rLng === lLng;
+                                  })
+                              )
+                          )
+                        );
+                      }}
+                      edit={{ remove: true, edit: false }}
                     />
-                  );
-                })}
-              {transectInfo && (
-                <Popup
-                  position={transectInfo.position}
-                  eventHandlers={{ remove: () => setTransectInfo(null) }}
-                >
-                  <div>
-                    <div>
-                      <strong>Transect:</strong> {transectInfo.transectId}
-                    </div>
-                    <div>
-                      <strong>Images:</strong>{' '}
-                      {transectImageCounts[transectInfo.transectId] || 0}
-                    </div>
-                  </div>
-                </Popup>
-              )}
-              {mergePrompt && (
-                <Popup
-                  position={mergePrompt.position}
-                  eventHandlers={{ remove: () => setMergePrompt(null) }}
-                >
-                  {(() => {
-                    const ids = mergePrompt.ids;
-                    const primary = Math.min(...ids);
-                    const label = ids.length === 2
-                      ? `Merge transect ${ids[0]} and ${ids[1]}`
-                      : `Merge ${ids.length} selected transects`;
-                    return (
-                      <div
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => {
-                          handleMergeSelectedInto(primary);
-                          setMergePrompt(null);
-                        }}
-                      >
-                        {label}
-                      </div>
-                    );
-                  })()}
-                </Popup>
-              )}
-              {/* Merge Selected Transects Button */}
-              {selectedTransectIds.size >= 2 && (
-                <div
-                  className='d-flex flex-row gap-2 p-2'
-                  style={{
-                    position: 'absolute',
-                    bottom: '10px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    zIndex: 1000,
-                    backgroundColor: 'rgba(255,255,255,0.9)',
-                    border: '2px solid rgba(0, 0, 0, 0.28)',
-                    borderRadius: '4px',
-                  }}
-                >
-                  <Button
-                    variant='primary'
-                    onClick={() => {
-                      const selected = Array.from(selectedTransectIds);
-                      const primary = Math.min(...selected);
-                      handleMergeSelectedInto(primary);
-                      // Remove the drawn polygon after merging
-                      if (drawnPolygonLayer) {
-                        try {
-                          drawnPolygonLayer.remove();
-                        } catch {}
-                        setDrawnPolygonLayer(null);
-                      }
+                  </FeatureGroup>
+                )}
+                {strataSections.map((section) => (
+                  <Polygon
+                    key={`stratum-${section.id}`}
+                    positions={section.coords}
+                    pathOptions={{
+                      fillColor: strataColors[section.id % strataColors.length],
+                      color: strataColors[section.id % strataColors.length],
+                      fillOpacity: 0.1,
                     }}
                   >
-                    Merge Selected Transects ({selectedTransectIds.size})
-                  </Button>
-                </div>
-              )}
-            </MapContainer>
-          )}
-        </div>
-        {saving && (
-          <div className='d-flex justify-content-center align-items-center mt-3'>
-            <Spinner animation='border' />
-            <span className='ms-2'>
-              Saving, please do not close this window
-            </span>
+                    <Popup>
+                      <div>
+                        <strong>Stratum:</strong> {section.id}
+                      </div>
+                    </Popup>
+                  </Polygon>
+                ))}
+                {partsLoading === null &&
+                  segmentedImages.map((img) => {
+                    const isSelected = selectedTransectIds.has(img.transectId);
+                    return (
+                      <CircleMarker
+                        pane='markerPane'
+                        key={img.id}
+                        center={[
+                          adjustedPositions[img.id]?.latitude ?? img.latitude,
+                          adjustedPositions[img.id]?.longitude ?? img.longitude,
+                        ]}
+                        radius={5}
+                        pathOptions={{
+                          color: isSelected
+                            ? 'black'
+                            : transectColors[
+                                img.transectId % transectColors.length
+                              ],
+                          weight: isSelected ? 2 : 1,
+                          fillColor:
+                            transectColors[
+                              img.transectId % transectColors.length
+                            ],
+                          fillOpacity: 1,
+                        }}
+                        eventHandlers={{
+                          click: (e: any) => {
+                            const ctrl = !!(
+                              e?.originalEvent?.ctrlKey ||
+                              e?.originalEvent?.metaKey
+                            );
+                            setSelectedTransectIds((prev) => {
+                              const next = new Set(prev);
+                              if (ctrl) {
+                                if (next.has(img.transectId))
+                                  next.delete(img.transectId);
+                                else next.add(img.transectId);
+                              } else {
+                                if (
+                                  next.size === 1 &&
+                                  next.has(img.transectId)
+                                ) {
+                                  next.clear();
+                                } else {
+                                  next.clear();
+                                  next.add(img.transectId);
+                                }
+                              }
+                              return next;
+                            });
+                          },
+                          contextmenu: (e: any) => {
+                            const selected = Array.from(selectedTransectIds);
+                            if (selected.length >= 2) {
+                              setTransectInfo(null);
+                              setMergePrompt({
+                                position: e.latlng,
+                                ids: selected.sort((a, b) => a - b),
+                              });
+                            } else {
+                              setMergePrompt(null);
+                              setTransectInfo({
+                                position: e.latlng,
+                                transectId: img.transectId,
+                              });
+                            }
+                          },
+                        }}
+                      />
+                    );
+                  })}
+                {transectInfo && (
+                  <Popup
+                    position={transectInfo.position}
+                    eventHandlers={{ remove: () => setTransectInfo(null) }}
+                  >
+                    <div>
+                      <div>
+                        <strong>Transect:</strong> {transectInfo.transectId}
+                      </div>
+                      <div>
+                        <strong>Images:</strong>{' '}
+                        {transectImageCounts[transectInfo.transectId] || 0}
+                      </div>
+                    </div>
+                  </Popup>
+                )}
+                {mergePrompt && (
+                  <Popup
+                    position={mergePrompt.position}
+                    eventHandlers={{ remove: () => setMergePrompt(null) }}
+                  >
+                    {(() => {
+                      const ids = mergePrompt.ids;
+                      const primary = Math.min(...ids);
+                      const label =
+                        ids.length === 2
+                          ? `Merge transect ${ids[0]} and ${ids[1]}`
+                          : `Merge ${ids.length} selected transects`;
+                      return (
+                        <div
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => {
+                            handleMergeSelectedInto(primary);
+                            setMergePrompt(null);
+                          }}
+                        >
+                          {label}
+                        </div>
+                      );
+                    })()}
+                  </Popup>
+                )}
+                {/* Merge Selected Transects Button */}
+                {selectedTransectIds.size >= 2 && (
+                  <div
+                    className='d-flex flex-row gap-2 p-2'
+                    style={{
+                      position: 'absolute',
+                      bottom: '10px',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      zIndex: 1000,
+                      backgroundColor: 'rgba(255,255,255,0.9)',
+                      border: '2px solid rgba(0, 0, 0, 0.28)',
+                      borderRadius: '4px',
+                    }}
+                  >
+                    <Button
+                      variant='primary'
+                      onClick={() => {
+                        const selected = Array.from(selectedTransectIds);
+                        const primary = Math.min(...selected);
+                        handleMergeSelectedInto(primary);
+                        // Remove the drawn polygon after merging
+                        if (drawnPolygonLayer) {
+                          try {
+                            drawnPolygonLayer.remove();
+                          } catch {}
+                          setDrawnPolygonLayer(null);
+                        }
+                      }}
+                    >
+                      Merge Selected Transects ({selectedTransectIds.size})
+                    </Button>
+                  </div>
+                )}
+              </MapContainer>
+            )}
           </div>
-        )}
-      </Form.Group>
-    </Form>
+          {saving && (
+            <div className='d-flex justify-content-center align-items-center mt-3'>
+              <Spinner animation='border' size='sm'/>
+              <span className='ms-2'>
+                Saving images to transects: {savingImageCount > 0
+                  ? Math.round((savingProgress / savingImageCount) * 100)
+                  : 0}
+                %
+              </span>
+            </div>
+          )}
+        </Form.Group>
+      </Form>
+      <Footer>
+        <Button variant='primary' onClick={handleSubmit} disabled={disabled}>
+          Save Transects and Strata
+        </Button>
+        <Button
+          variant='dark'
+          onClick={() => showModal(null)}
+          disabled={disabled}
+        >
+          Close
+        </Button>
+      </Footer>
+    </>
   );
 }

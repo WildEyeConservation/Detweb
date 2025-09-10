@@ -1,5 +1,6 @@
 import { useContext, useState, useCallback } from 'react';
 import { Button } from 'react-bootstrap';
+import { Footer } from '../Modal';
 import { GlobalContext } from '../Context';
 import type {
   Feature as GeoJSONFeature,
@@ -20,7 +21,7 @@ type NeighbourGeoJSON = {
 };
 
 export default function AdvancedOptions({ projectId }: { projectId: string }) {
-  const { client } = useContext(GlobalContext)!;
+  const { client, showModal } = useContext(GlobalContext)!;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState<string>('');
@@ -196,21 +197,28 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
   }, [client, projectId, buildGeoJSON]);
 
   return (
-    <div className='d-flex flex-column gap-2'>
-      <div>
-        <h5 className='mb-0'>Export image neighbours</h5>
-        <span className='text-muted' style={{ fontSize: '14px' }}>
-          Export the image neighbours of all images in GeoJSON format.
-        </span>
-        <Button
-          className='d-block mt-2'
-          onClick={onFetchNeighbours}
-          disabled={loading}
-        >
-          {loading ? loadingStatus || 'Exporting...' : 'Export'}
-        </Button>
-        {error && <span className='text-danger'>{error}</span>}
+    <>
+      <div className='d-flex flex-column gap-2 p-3'>
+        <div>
+          <h5 className='mb-0'>Export image neighbours</h5>
+          <span className='text-muted' style={{ fontSize: '14px' }}>
+            Export the image neighbours of all images in GeoJSON format.
+          </span>
+          <Button
+            className='d-block mt-2'
+            onClick={onFetchNeighbours}
+            disabled={loading}
+          >
+            {loading ? loadingStatus || 'Exporting...' : 'Export'}
+          </Button>
+          {error && <span className='text-danger'>{error}</span>}
+        </div>
       </div>
-    </div>
+      <Footer>
+        <Button variant='dark' onClick={() => showModal(null)}>
+          Close
+        </Button>
+      </Footer>
+    </>
   );
 }

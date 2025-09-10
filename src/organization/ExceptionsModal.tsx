@@ -1,4 +1,4 @@
-import Modal from 'react-bootstrap/Modal';
+import { Modal, Body, Header, Footer, Title } from '../Modal';
 import MyTable from '../Table';
 import { useContext, useEffect, useState } from 'react';
 import { GlobalContext } from '../Context';
@@ -51,7 +51,7 @@ export default function ExceptionsModal({
       );
 
       const validProjects = projects.filter(
-        (project) => project.status !== "deleted"
+        (project) => project.status !== 'deleted'
       );
 
       if (validProjects.length > 0) {
@@ -96,9 +96,9 @@ export default function ExceptionsModal({
     rowData: [
       permission.projectName,
       <LabeledToggleSwitch
-        className="mb-0"
-        leftLabel="No"
-        rightLabel="Yes"
+        className='mb-0'
+        leftLabel='No'
+        rightLabel='Yes'
         checked={permission.annotationAccess}
         onChange={(checked) => {
           if (permission.isAdmin) {
@@ -115,9 +115,9 @@ export default function ExceptionsModal({
         }}
       />,
       <LabeledToggleSwitch
-        className="mb-0"
-        leftLabel="No"
-        rightLabel="Yes"
+        className='mb-0'
+        leftLabel='No'
+        rightLabel='Yes'
         checked={permission.isAdmin}
         onChange={(checked) => {
           setPermissions(
@@ -167,47 +167,48 @@ export default function ExceptionsModal({
     }
 
     setIsSaving(false);
-    onClose();
   };
 
   return (
-    <Modal show={show} onHide={onClose} size="lg">
-      <Modal.Header closeButton>
-        <Modal.Title>
+    <Modal show={show} strict={true} size='lg'>
+      <Header>
+        <Title>
           Permission Exceptions for {user.name} ({organization.name})
-        </Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        <div className="text-muted mb-3" style={{ lineHeight: 1.2 }}>
-          <span style={{ fontSize: 16 }}>Instructions</span>
-          <br />
-          <span style={{ fontSize: 12 }}>
-            Select the surveys and the level of access you would like to give
-            the user for each survey.
+        </Title>
+      </Header>
+      <Body>
+        <div className='p-3'>
+          <div className='text-muted mb-3' style={{ lineHeight: 1.2 }}>
+            <span style={{ fontSize: 16 }}>Instructions</span>
             <br />
-            This will override the default access level for the user for the
-            selected surveys.
-          </span>
+            <span style={{ fontSize: 12 }}>
+              Select the surveys and the level of access you would like to give
+              the user for each survey.
+              <br />
+              This will override the default access level for the user for the
+              selected surveys.
+            </span>
+          </div>
+          <MyTable
+            tableHeadings={[
+              { content: 'Survey', sort: true },
+              { content: 'Annotation Access' },
+              { content: 'Admin' },
+            ]}
+            tableData={tableData}
+            pagination={true}
+            emptyMessage={isLoading ? 'Loading...' : 'No surveys found'}
+          />
         </div>
-        <MyTable
-          tableHeadings={[
-            { content: 'Survey', sort: true },
-            { content: 'Annotation Access' },
-            { content: 'Admin' },
-          ]}
-          tableData={tableData}
-          pagination={true}
-          emptyMessage={isLoading ? 'Loading...' : 'No surveys found'}
-        />
-      </Modal.Body>
-      <Modal.Footer>
-        <Button variant="primary" onClick={handleSave} disabled={isSaving}>
+      </Body>
+      <Footer>
+        <Button variant='primary' onClick={handleSave} disabled={isSaving}>
           {isSaving ? 'Saving...' : 'Save'}
         </Button>
-        <Button variant="dark" onClick={onClose}>
+        <Button variant='dark' onClick={onClose} disabled={isSaving}>
           Cancel
         </Button>
-      </Modal.Footer>
+      </Footer>
     </Modal>
   );
 }

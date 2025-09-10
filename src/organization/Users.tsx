@@ -242,7 +242,6 @@ export default function Users({
         memberships={hook.data}
         organization={organization}
         show={modalToShow === 'inviteUser'}
-        onClose={() => showModal(null)}
       />
       {userToEdit && (
         <ExceptionsModal
