@@ -1,10 +1,10 @@
-import Form from "react-bootstrap/Form";
-import Button from "react-bootstrap/Button";
-import { useState, useContext, useEffect } from "react";
-import { GlobalContext } from "../Context";
-import { useUsers } from "../apiInterface";
-import { Modal } from "react-bootstrap";
-import { Schema } from "../../amplify/data/resource";
+import Form from 'react-bootstrap/Form';
+import Button from 'react-bootstrap/Button';
+import { useState, useContext, useEffect } from 'react';
+import { GlobalContext } from '../Context';
+import { useUsers } from '../apiInterface';
+import { Modal, Body, Header, Footer, Title } from '../Modal';
+import { Schema } from '../../amplify/data/resource';
 
 export default function CreateOrganization({
   show,
@@ -13,30 +13,30 @@ export default function CreateOrganization({
 }: {
   show: boolean;
   onHide: () => void;
-  request?: Schema["OrganizationRegistration"]["type"] & {
+  request?: Schema['OrganizationRegistration']['type'] & {
     requestedByEmail: string;
   };
 }) {
   const { client } = useContext(GlobalContext);
   const { users } = useUsers();
 
-  const [name, setName] = useState<string>("");
-  const [description, setDescription] = useState<string>("");
-  const [adminEmail, setAdminEmail] = useState<string>("");
+  const [name, setName] = useState<string>('');
+  const [description, setDescription] = useState<string>('');
+  const [adminEmail, setAdminEmail] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!name) {
-      alert("Name is required");
+      alert('Name is required');
       return;
     }
 
     const user = users.find((user) => user.email === adminEmail);
 
     if (!user) {
-      alert("A user with this email does not exist");
+      alert('A user with this email does not exist');
       return;
     }
 
@@ -59,11 +59,11 @@ export default function CreateOrganization({
         if (request) {
           await client.models.OrganizationRegistration.update({
             id: request.id,
-            status: "approved",
+            status: 'approved',
           });
         }
 
-        alert("Organisation " + name + " created for " + adminEmail);
+        alert('Organisation ' + name + ' created for ' + adminEmail);
       }
     }
 
@@ -76,7 +76,7 @@ export default function CreateOrganization({
     if (request) {
       await client.models.OrganizationRegistration.update({
         id: request.id,
-        status: "denied",
+        status: 'denied',
       });
     }
 
@@ -84,9 +84,9 @@ export default function CreateOrganization({
   }
 
   const handleClear = () => {
-    setName("");
-    setDescription("");
-    setAdminEmail("");
+    setName('');
+    setDescription('');
+    setAdminEmail('');
   };
 
   useEffect(() => {
@@ -101,66 +101,66 @@ export default function CreateOrganization({
   }, [request]);
 
   return (
-    <Modal show={show} onHide={onHide} size="lg">
-      <Modal.Header closeButton>
-        <Modal.Title>{request ? "Add" : "Create"} Organisation</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        <Form onSubmit={handleSubmit}>
-          <Form.Group className="mb-3">
+    <Modal show={show} strict={true} size='lg'>
+      <Header>
+        <Title>{request ? 'Add' : 'Create'} Organisation</Title>
+      </Header>
+      <Body>
+        <Form onSubmit={handleSubmit} className='p-3'>
+          <Form.Group className='mb-3'>
             <Form.Label>Name</Form.Label>
             <Form.Control
-              type="text"
-              placeholder="Enter organisation name"
+              type='text'
+              placeholder='Enter organisation name'
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </Form.Group>
-          <Form.Group className="mb-3">
+          <Form.Group className='mb-3'>
             <Form.Label>Description</Form.Label>
             <Form.Control
-              as="textarea"
+              as='textarea'
               rows={3}
-              placeholder="Enter organisation description"
+              placeholder='Enter organisation description'
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
           </Form.Group>
-          <Form.Group className="mb-3">
+          <Form.Group className='mb-3'>
             <Form.Label>Admin Email</Form.Label>
             <Form.Control
-              type="email"
-              placeholder="Enter admin email"
+              type='email'
+              placeholder='Enter admin email'
               value={adminEmail}
               onChange={(e) => setAdminEmail(e.target.value)}
             />
           </Form.Group>
           <div
             className={`d-flex gap-2 justify-content-${
-              request ? "between" : "end"
+              request ? 'between' : 'end'
             }`}
           >
             {request && (
-              <Button variant="danger" onClick={handleDeny}>
+              <Button variant='danger' onClick={handleDeny}>
                 Deny
               </Button>
             )}
             <div>
               <Button
-                variant="primary"
-                className="me-2"
-                type="submit"
+                variant='primary'
+                className='me-2'
+                type='submit'
                 disabled={isSubmitting}
               >
-                {request ? "Approve" : "Create"}
+                {request ? 'Approve' : 'Create'}
               </Button>
-              <Button variant="dark" type="button" onClick={onHide}>
+              <Button variant='dark' type='button' onClick={onHide}>
                 Cancel
               </Button>
             </div>
           </div>
         </Form>
-      </Modal.Body>
+      </Body>
     </Modal>
   );
 }

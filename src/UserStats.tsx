@@ -51,6 +51,11 @@ export default function UserStats() {
   // State for export loading
   const [exporting, setExporting] = useState(false);
 
+  // Check if user is admin for the selected project
+  const isProjectAdmin = project
+    ? myMembershipHook.data?.find((m) => m.projectId === project.value)?.isAdmin || false
+    : false;
+
   const startString = startDate
     ? `${startDate?.getFullYear()}-${String(startDate?.getMonth() + 1).padStart(
         2,
@@ -419,22 +424,24 @@ export default function UserStats() {
             />
           </div>
         </Card.Body>
-        <Card.Footer className='d-flex justify-content-center gap-2'>
-          <Button
-            variant='outline-primary'
-            onClick={() => showModal('snapshotStats')}
-            disabled={!project || !selectedSets?.length}
-          >
-            Snapshot
-          </Button>
-          <Button
-            variant='primary'
-            onClick={handleExportData}
-            disabled={exporting}
-          >
-            {exporting ? 'Loading...' : 'Export Raw Observation Data'}
-          </Button>
-        </Card.Footer>
+        {isProjectAdmin && (
+          <Card.Footer className='d-flex justify-content-center gap-2'>
+            <Button
+              variant='outline-primary'
+              onClick={() => showModal('snapshotStats')}
+              disabled={!project || !selectedSets?.length}
+            >
+              Snapshot
+            </Button>
+            <Button
+              variant='primary'
+              onClick={handleExportData}
+              disabled={exporting}
+            >
+              {exporting ? 'Loading...' : 'Export Raw Observation Data'}
+            </Button>
+          </Card.Footer>
+        )}
       </Card>
       <SnapshotStatsModal
         show={modalToShow === 'snapshotStats'}

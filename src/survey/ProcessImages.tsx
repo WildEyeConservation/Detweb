@@ -1,22 +1,11 @@
-import { Form, Spinner, Button } from "react-bootstrap";
-import { useState, useContext, useEffect, useCallback, useRef } from "react";
-import { GlobalContext, UserContext } from "../Context";
-import Select from "react-select";
+import { Form, Spinner, Button } from 'react-bootstrap';
+import { Footer } from '../Modal';
+import { useState, useContext, useEffect, useCallback, useRef } from 'react';
+import { GlobalContext, UserContext } from '../Context';
+import Select from 'react-select';
 
-export default function ProcessImages({
-  projectId,
-  onClose,
-  setHandleSubmit,
-  setSubmitDisabled,
-}: {
-  projectId: string;
-  onClose: () => void;
-  setHandleSubmit: React.Dispatch<
-    React.SetStateAction<(() => Promise<void>) | null>
-  >;
-  setSubmitDisabled: React.Dispatch<React.SetStateAction<boolean>>;
-}) {
-  const { client, backend } = useContext(GlobalContext)!;
+export default function ProcessImages({ projectId }: { projectId: string }) {
+  const { client, backend, showModal } = useContext(GlobalContext)!;
   const { getSqsClient } = useContext(UserContext)!;
   const [model, setModel] = useState<{ label: string; value: string } | null>(
     null
@@ -31,6 +20,7 @@ export default function ProcessImages({
   const [imagesLoaded, setImagesLoaded] = useState<number | null>(null);
   const [locationsLoaded, setLocationsLoaded] = useState<number | null>(null);
   const [scanned, setScanned] = useState(false);
+  const [disabled, setDisabled] = useState(false);
   const isActiveRef = useRef(true);
 
   useEffect(() => {
@@ -54,7 +44,7 @@ export default function ProcessImages({
       }
       const res = await client.models.Image.imagesByProjectId(
         { projectId },
-        { selectionSet: ["id", "originalPath"], nextToken }
+        { selectionSet: ['id', 'originalPath'], nextToken, limit: 1000 }
       );
       const page: { id: string; originalPath: string }[] = res.data ?? [];
       allImages = allImages.concat(page);
@@ -77,8 +67,9 @@ export default function ProcessImages({
           source: { beginsWith: model.value },
         },
         {
-          selectionSet: ["id", "imageId", "source"],
+          selectionSet: ['id', 'imageId', 'source'],
           nextToken,
+          limit: 1000,
         }
       );
       const page: { id: string; imageId: string; source: string }[] =
@@ -114,11 +105,12 @@ export default function ProcessImages({
     setLocationsLoaded(null);
   }, [model]);
 
-  const processImages = useCallback(async () => {
+  const processImages = async () => {
     if (!model) {
       return;
     }
 
+    setDisabled(true);
     setLoading(true);
 
     const { data: locationSet } = await client.models.LocationSet.create({
@@ -127,15 +119,15 @@ export default function ProcessImages({
     });
 
     if (!locationSet) {
-      console.error("Failed to create location set");
-      alert("Something went wrong, please try again.");
+      console.error('Failed to create location set');
+      alert('Something went wrong, please try again.');
       return;
     }
 
     const BATCH_SIZE = 500;
 
     switch (model.value) {
-      case "scoutbotv3":
+      case 'scoutbotv3':
         for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
           const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map(
@@ -152,11 +144,11 @@ export default function ProcessImages({
 
           await client.models.Project.update({
             id: projectId,
-            status: "processing-scoutbot",
+            status: 'processing-scoutbot',
           });
         }
         break;
-      case "heatmap":
+      case 'heatmap':
         for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
           const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map((image) => image.originalPath);
@@ -168,8 +160,29 @@ export default function ProcessImages({
 
         await client.models.Project.update({
           id: projectId,
-          status: "processing-heatmap-busy",
+          status: 'processing-heatmap-busy',
         });
+        break;
+      case 'mad':
+        for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
+          const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
+          const batchStrings = batch.map(
+            (image) => `${image.id}---${image.originalPath}`
+          );
+
+          client.mutations.runMadDetector({
+            projectId: projectId,
+            images: batchStrings,
+            setId: locationSet.id,
+            bucket: backend.storage.buckets[1].bucket_name,
+            queueUrl: backend.custom.madDetectorTaskQueueUrl,
+          });
+
+          await client.models.Project.update({
+            id: projectId,
+            status: 'processing-mad',
+          });
+        }
         break;
     }
 
@@ -177,71 +190,71 @@ export default function ProcessImages({
       projectId: projectId,
     });
 
-    onClose();
-
     setLoading(false);
-  }, [
-    model,
-    projectId,
-    unprocessedImages,
-    client,
-    backend,
-    getSqsClient,
-    onClose,
-  ]);
+    setDisabled(false);
 
-  useEffect(() => {
-    setHandleSubmit(() => processImages);
-  }, [processImages, setHandleSubmit]);
-
-  useEffect(() => {
-    setSubmitDisabled(loading || !model || !unprocessedImages.length);
-  }, [loading, model, unprocessedImages.length, setSubmitDisabled]);
+    showModal(null);
+  };
 
   return (
-    <Form>
-      <Form.Group>
-        <Form.Label className="mb-0">Model</Form.Label>
-        <Select
-          value={model}
-          onChange={(m) => setModel(m)}
-          options={[
-            { label: "ScoutBot", value: "scoutbotv3" },
-            { label: "Elephant Detection Nadir", value: "heatmap" },
-          ]}
-          placeholder="Select a model"
-          className="text-black"
-        />
-        <Button
-          variant="primary"
-          onClick={scanImages}
-          disabled={!model || loading}
-          className="mt-2"
-        >
-          Scan
+    <>
+      <Form className='p-3'>
+        <Form.Group>
+          <Form.Label className='mb-0'>Model</Form.Label>
+          <Select
+            value={model}
+            onChange={(m) => setModel(m)}
+            options={[
+              { label: 'ScoutBot', value: 'scoutbotv3' },
+              { label: 'Elephant Detection Nadir', value: 'heatmap' },
+              { label: 'MAD', value: 'mad' },
+            ]}
+            placeholder='Select a model'
+            className='text-black'
+          />
+          <Button
+            variant='primary'
+            onClick={scanImages}
+            disabled={!model || loading}
+            className='mt-2'
+          >
+            Scan
+          </Button>
+          {loading ? (
+            <div className='d-flex flex-column align-items-center'>
+              <Spinner animation='border' role='status' />
+              <p className='mb-0'>Determining images to process...</p>
+              <p className='mb-1'>Found {imagesLoaded ?? 0} images</p>
+              {locationsLoaded !== null && (
+                <>
+                  <p className='mb-0'>Searching for detections on images...</p>
+                  <p className='mb-0'>Found {locationsLoaded} detections</p>
+                </>
+              )}
+            </div>
+          ) : scanned ? (
+            unprocessedImages.length > 0 ? (
+              <p className='mb-0 mt-2'>
+                Found {unprocessedImages.length} unprocessed images
+              </p>
+            ) : (
+              <p className='mb-0 mt-2'>All images have been processed</p>
+            )
+          ) : null}
+        </Form.Group>
+      </Form>
+      <Footer>
+        <Button variant='primary' onClick={processImages} disabled={disabled}>
+          Process Images
         </Button>
-        {loading ? (
-          <div className="d-flex flex-column align-items-center">
-            <Spinner animation="border" role="status" />
-            <p className="mb-0">Determining images to process...</p>
-            <p className="mb-1">Found {imagesLoaded ?? 0} images</p>
-            {locationsLoaded !== null && (
-              <>
-                <p className="mb-0">Searching for detections on images...</p>
-                <p className="mb-0">Found {locationsLoaded} detections</p>
-              </>
-            )}
-          </div>
-        ) : scanned ? (
-          unprocessedImages.length > 0 ? (
-            <p className="mb-0 mt-2">
-              Found {unprocessedImages.length} unprocessed images
-            </p>
-          ) : (
-            <p className="mb-0 mt-2">All images have been processed</p>
-          )
-        ) : null}
-      </Form.Group>
-    </Form>
+        <Button
+          variant='dark'
+          onClick={() => showModal(null)}
+          disabled={disabled}
+        >
+          Close
+        </Button>
+      </Footer>
+    </>
   );
 }

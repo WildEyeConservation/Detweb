@@ -1,9 +1,9 @@
-import { Modal, Form, Button } from 'react-bootstrap';
+import { Form, Button } from 'react-bootstrap';
+import { Modal, Body, Header, Footer, Title } from '../Modal';
 import { Schema } from '../../amplify/data/resource';
-import { useState, useContext, useEffect } from 'react';
-import { GlobalContext, UserContext } from '../Context';
+import { useState, useContext } from 'react';
+import { GlobalContext } from '../Context';
 import LabelEditor from './LabelEditor';
-import { LoadBalancerListenerProtocol } from 'aws-cdk-lib/cloud-assembly-schema';
 
 export default function AddAnnotationSetModal({
   show,
@@ -79,93 +79,85 @@ export default function AddAnnotationSetModal({
   }
 
   return (
-    <Modal
-      show={show}
-      onHide={onClose}
-      size='xl'
-      backdrop='static'
-      keyboard={false}
-    >
-      <Modal.Header>
-        <Modal.Title>Add Annotation Set</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        <fieldset disabled={busy}>
-          <Form className='d-flex flex-column gap-2'>
-            <Form.Group>
-              <Form.Label className='mb-0'>Name</Form.Label>
-              <span
-                className='text-muted d-block mb-1'
-                style={{ fontSize: '12px' }}
-              >
-                A descriptive name for your annotation set to help you identify
-                it.
-              </span>
-              <Form.Control
-                type='text'
-                value={name}
-                placeholder='Enter a name'
-                onChange={(e) => setName(e.target.value)}
-              />
-            </Form.Group>
-            <Form.Group>
-              <Form.Label className='mb-0'>Load Labels</Form.Label>
-              <span
-                className='text-muted d-block mb-1'
-                style={{ fontSize: '12px' }}
-              >
-                Load labels from a previous annotation set.
-              </span>
-              <Form.Select
-                value={selectedProject}
-                onChange={(e) => setSelectedProject(e.target.value)}
-              >
-                <option value=''>Select a survey</option>
-                {allProjects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
+    <Modal show={show} onHide={onClose} disabled={busy} strict={true}>
+      <Header>
+        <Title>Add Annotation Set</Title>
+      </Header>
+      <Body>
+        <Form className='d-flex flex-column gap-2 p-3'>
+          <Form.Group>
+            <Form.Label className='mb-0'>Name</Form.Label>
+            <span
+              className='text-muted d-block mb-1'
+              style={{ fontSize: '12px' }}
+            >
+              A descriptive name for your annotation set to help you identify
+              it.
+            </span>
+            <Form.Control
+              type='text'
+              value={name}
+              placeholder='Enter a name'
+              onChange={(e) => setName(e.target.value)}
+            />
+          </Form.Group>
+          <Form.Group>
+            <Form.Label className='mb-0'>Load Labels</Form.Label>
+            <span
+              className='text-muted d-block mb-1'
+              style={{ fontSize: '12px' }}
+            >
+              Load labels from a previous annotation set.
+            </span>
+            <Form.Select
+              value={selectedProject}
+              onChange={(e) => setSelectedProject(e.target.value)}
+            >
+              <option value=''>Select a survey</option>
+              {allProjects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Form.Select>
+            <Form.Select
+              className='mt-1'
+              disabled={!selectedProject}
+              value={selectedAnnotationSet}
+              onChange={handleAnnotationSetChange}
+            >
+              <option value=''>Select an annotation set</option>
+              {allProjects
+                .find((p) => p.id === selectedProject)
+                ?.annotationSets.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
                   </option>
                 ))}
-              </Form.Select>
-              <Form.Select
-                className='mt-1'
-                disabled={!selectedProject}
-                value={selectedAnnotationSet}
-                onChange={handleAnnotationSetChange}
-              >
-                <option value=''>Select an annotation set</option>
-                {allProjects
-                  .find((p) => p.id === selectedProject)
-                  ?.annotationSets.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-              </Form.Select>
-            </Form.Group>
-            <LabelEditor
-              defaultLabels={[
-                {
-                  id: crypto.randomUUID(),
-                  name: 'Unknown',
-                  shortcutKey: 'u',
-                  color: '#ff2643',
-                },
-              ]}
-              importLabels={importedLabels}
-              setHandleSave={setSaveLabels}
-            />
-          </Form>
-        </fieldset>
-      </Modal.Body>
-      <Modal.Footer>
-        <Button variant='primary' onClick={handleSave} disabled={busy}>
-          {busy ? 'Creating...' : 'Create'}
-        </Button>
-        <Button variant='dark' onClick={onClose} disabled={busy}>
-          Cancel
-        </Button>
-      </Modal.Footer>
+            </Form.Select>
+          </Form.Group>
+          <LabelEditor
+            defaultLabels={[
+              {
+                id: crypto.randomUUID(),
+                name: 'Unknown',
+                shortcutKey: 'u',
+                color: '#ff2643',
+              },
+            ]}
+            importLabels={importedLabels}
+            setHandleSave={setSaveLabels}
+          />
+        </Form>
+        <Footer>
+          <Button variant='primary' onClick={handleSave} disabled={busy}>
+            {busy ? 'Creating...' : 'Create'}
+          </Button>
+          <Button variant='dark' onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+        </Footer>
+      </Body>
     </Modal>
   );
 }

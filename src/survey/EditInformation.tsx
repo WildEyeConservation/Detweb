@@ -1,24 +1,13 @@
 import { Form, Button, Spinner } from 'react-bootstrap';
+import { Footer } from '../Modal';
 import { useContext, useEffect, useState } from 'react';
 import { GlobalContext } from '../Context';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchAllPaginatedResults } from '../utils';
 import { TreeNode, Camera } from './SurveyStructure';
 
-export default function EditInformation({
-  projectId,
-  setHandleSubmit,
-  setSubmitDisabled,
-  setCloseDisabled,
-}: {
-  projectId: string;
-  setHandleSubmit: React.Dispatch<
-    React.SetStateAction<(() => Promise<void>) | null>
-  >;
-  setSubmitDisabled: React.Dispatch<React.SetStateAction<boolean>>;
-  setCloseDisabled: React.Dispatch<React.SetStateAction<boolean>>;
-}) {
-  const { client } = useContext(GlobalContext)!;
+export default function EditInformation({ projectId }: { projectId: string }) {
+  const { client, showModal } = useContext(GlobalContext)!;
   const [oldProjectName, setOldProjectName] = useState('');
   const [newProjectName, setNewProjectName] = useState('');
   const [fetching, setFetching] = useState(false);
@@ -29,6 +18,7 @@ export default function EditInformation({
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
     new Set()
   );
+  const [disabled, setDisabled] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -75,51 +65,40 @@ export default function EditInformation({
     });
   };
 
-  useEffect(() => {
-    setHandleSubmit(() => async () => {
-      setSubmitDisabled(true);
-      setCloseDisabled(true);
+  const handleSubmit = async () => {
+    setDisabled(true);
 
-      const { data: project } = await client.models.Project.update({
-        id: projectId,
-        name: newProjectName,
+    const { data: project } = await client.models.Project.update({
+      id: projectId,
+      name: newProjectName,
+    });
+
+    if (project?.name === newProjectName) {
+      const {
+        data: [testPreset],
+      } = await client.models.TestPreset.testPresetsByName({
+        name: oldProjectName,
       });
 
-      if (project?.name === newProjectName) {
-        const {
-          data: [testPreset],
-        } = await client.models.TestPreset.testPresetsByName({
-          name: oldProjectName,
+      if (testPreset) {
+        await client.models.TestPreset.update({
+          id: testPreset.id,
+          name: newProjectName,
         });
-
-        if (testPreset) {
-          await client.models.TestPreset.update({
-            id: testPreset.id,
-            name: newProjectName,
-          });
-        }
-
-        setOldProjectName(newProjectName);
       }
 
-      await client.mutations.updateProjectMemberships({
-        projectId,
-      });
+      setOldProjectName(newProjectName);
+    }
 
-      setSubmitDisabled(false);
-      setCloseDisabled(false);
-
-      queryClient.invalidateQueries({ queryKey: ['Project'] });
-      queryClient.invalidateQueries({ queryKey: ['TestPreset'] });
+    await client.mutations.updateProjectMemberships({
+      projectId,
     });
-  }, [
-    projectId,
-    setHandleSubmit,
-    setSubmitDisabled,
-    setCloseDisabled,
-    oldProjectName,
-    newProjectName,
-  ]);
+
+    setDisabled(false);
+
+    queryClient.invalidateQueries({ queryKey: ['Project'] });
+    queryClient.invalidateQueries({ queryKey: ['TestPreset'] });
+  };
 
   useEffect(() => {
     async function getProject() {
@@ -221,51 +200,65 @@ export default function EditInformation({
   }, [projectId]);
 
   return (
-    <Form className='d-flex flex-column gap-2'>
-      <Form.Group className='d-flex flex-column'>
-        <Form.Label className='mb-0'>Survey Name</Form.Label>
-        <Form.Control
-          type='text'
-          value={newProjectName}
-          disabled={fetching}
-          onChange={(e) => setNewProjectName(e.target.value)}
-        />
-      </Form.Group>
-      <Form.Group className='d-flex flex-column'>
-        <div className='d-flex align-items-center justify-content-between'>
-          <Form.Label className='mb-0'>Survey Structure</Form.Label>
-          {structure.length > 0 && (
-            <Button
-              variant='link'
-              size='sm'
-              onClick={toggleAllCameras}
-              className='text-white'
-            >
-              {expandedCameras.size === structure.length
-                ? 'Collapse All'
-                : 'Expand All'}
-            </Button>
+    <>
+      <Form className='d-flex flex-column gap-2 p-3'>
+        <Form.Group className='d-flex flex-column'>
+          <Form.Label className='mb-0'>Survey Name</Form.Label>
+          <Form.Control
+            type='text'
+            value={newProjectName}
+            disabled={fetching}
+            onChange={(e) => setNewProjectName(e.target.value)}
+          />
+        </Form.Group>
+        <Form.Group className='d-flex flex-column'>
+          <div className='d-flex align-items-center justify-content-between'>
+            <Form.Label className='mb-0'>Survey Structure</Form.Label>
+            {structure.length > 0 && (
+              <Button
+                variant='link'
+                size='sm'
+                onClick={toggleAllCameras}
+                className='text-white'
+              >
+                {expandedCameras.size === structure.length
+                  ? 'Collapse All'
+                  : 'Expand All'}
+              </Button>
+            )}
+          </div>
+          {fetching || structure.length === 0 ? (
+            <div className='text-muted'>
+              <Spinner animation='border' size='sm' /> Loading structure...
+            </div>
+          ) : (
+            <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
+              {structure.map((camera, index) => (
+                <TreeNode
+                  key={camera.name + index}
+                  camera={camera}
+                  isOpen={expandedCameras.has(camera.name)}
+                  onToggle={() => toggleCamera(camera.name)}
+                  expandedFolders={expandedFolders}
+                  onToggleFolder={toggleFolder}
+                />
+              ))}
+            </div>
           )}
-        </div>
-        {fetching || structure.length === 0 ? (
-          <div className='text-muted'>
-            <Spinner animation='border' size='sm' /> Loading structure...
-          </div>
-        ) : (
-          <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
-            {structure.map((camera, index) => (
-              <TreeNode
-                key={camera.name + index}
-                camera={camera}
-                isOpen={expandedCameras.has(camera.name)}
-                onToggle={() => toggleCamera(camera.name)}
-                expandedFolders={expandedFolders}
-                onToggleFolder={toggleFolder}
-              />
-            ))}
-          </div>
-        )}
-      </Form.Group>
-    </Form>
+        </Form.Group>
+      </Form>
+      <Footer>
+        <Button variant='primary' onClick={handleSubmit} disabled={disabled}>
+          Save
+        </Button>
+        <Button
+          variant='dark'
+          onClick={() => showModal(null)}
+          disabled={disabled}
+        >
+          Close
+        </Button>
+      </Footer>
+    </>
   );
 }

@@ -1,4 +1,5 @@
-import { Modal, Button } from 'react-bootstrap';
+import { Button } from 'react-bootstrap';
+import { Modal, Body, Header, Footer, Title } from './Modal';
 import { useNavigate } from 'react-router-dom';
 import { useUpdateProgress } from './useUpdateProgress.tsx';
 import { fetchAllPaginatedResults } from './utils.tsx';
@@ -163,86 +164,90 @@ export default function AnnotationSetResults({
 
   return (
     <>
-      <Modal show={show} onHide={onClose} size='lg' backdrop='static'>
-        <Modal.Header>
-          <Modal.Title>{annotationSet.name} Results</Modal.Title>
-        </Modal.Header>
-        <Modal.Body className='d-flex flex-column gap-4'>
-          <div>
-            <h5 className='mb-0'>Explore</h5>
-            <span className='text-muted' style={{ fontSize: '14px' }}>
-              Explore your annotation set by searching for all sightings of a
-              specific specific species. Can be used to find and correct errors,
-              and reannotate unknown sightings.
-            </span>
-            <Button
-              className='d-block mt-1'
-              variant='primary'
-              onClick={() =>
-                navigate(`/surveys/${surveyId}/set/${annotationSet.id}/review`)
-              }
-            >
-              Explore
-            </Button>
-          </div>
-          <div>
-            <h5 className='mb-0'>CSV File</h5>
-            <span className='text-muted' style={{ fontSize: '14px' }}>
-              Download a CSV file of your annotation set.
-            </span>
-            <Button
-              className='d-block mt-1'
-              variant='primary'
-              onClick={() => {
-                onClose();
-                exportData([annotationSet]);
-              }}
-            >
-              Download
-            </Button>
-          </div>
-          <div>
-            <h5 className='mb-0'>Jolly II</h5>
-            <span className='text-muted' style={{ fontSize: '14px' }}>
-              Generate and view the Jolly results for this annotation set.
-            </span>
-            <div className='d-flex flex-row gap-2'>
+      <Modal show={show} onHide={onClose} strict={true} size='lg'>
+        <Header>
+          <Title>{annotationSet.name} Results</Title>
+        </Header>
+        <Body>
+          <div className='d-flex flex-column gap-4 p-3'>
+            <div>
+              <h5 className='mb-0'>Explore</h5>
+              <span className='text-muted' style={{ fontSize: '14px' }}>
+                Explore your annotation set by searching for all sightings of a
+                specific specific species. Can be used to find and correct
+                errors, and reannotate unknown sightings.
+              </span>
               <Button
                 className='d-block mt-1'
                 variant='primary'
-                disabled={loading}
-                onClick={() => {
-                  if (
-                    jollyResultsExists &&
-                    !window.confirm(
-                      'Jolly results already exist for this annotation set. Recalculating will overwrite existing results. Continue?'
-                    )
-                  ) {
-                    return;
-                  }
-                  generateSurveyResults();
-                }}
+                onClick={() =>
+                  navigate(
+                    `/surveys/${surveyId}/set/${annotationSet.id}/review`
+                  )
+                }
               >
-                Generate Results
-              </Button>
-              <Button
-                className='d-block mt-1'
-                variant='primary'
-                disabled={loading || !jollyResultsExists}
-                onClick={() => {
-                  viewSurveyResults(annotationSet.id);
-                }}
-              >
-                View Results
+                Explore
               </Button>
             </div>
+            <div>
+              <h5 className='mb-0'>CSV File</h5>
+              <span className='text-muted' style={{ fontSize: '14px' }}>
+                Download a CSV file of your annotation set.
+              </span>
+              <Button
+                className='d-block mt-1'
+                variant='primary'
+                onClick={() => {
+                  onClose();
+                  exportData([annotationSet]);
+                }}
+              >
+                Download
+              </Button>
+            </div>
+            <div>
+              <h5 className='mb-0'>Jolly II</h5>
+              <span className='text-muted' style={{ fontSize: '14px' }}>
+                Generate and view the Jolly results for this annotation set.
+              </span>
+              <div className='d-flex flex-row gap-2'>
+                <Button
+                  className='d-block mt-1'
+                  variant='primary'
+                  disabled={loading}
+                  onClick={() => {
+                    if (
+                      jollyResultsExists &&
+                      !window.confirm(
+                        'Jolly results already exist for this annotation set. Recalculating will overwrite existing results. Continue?'
+                      )
+                    ) {
+                      return;
+                    }
+                    generateSurveyResults();
+                  }}
+                >
+                  Generate Results
+                </Button>
+                <Button
+                  className='d-block mt-1'
+                  variant='primary'
+                  disabled={loading || !jollyResultsExists}
+                  onClick={() => {
+                    viewSurveyResults(annotationSet.id);
+                  }}
+                >
+                  View Results
+                </Button>
+              </div>
+            </div>
           </div>
-        </Modal.Body>
-        <Modal.Footer>
+        </Body>
+        <Footer>
           <Button variant='dark' onClick={onClose} disabled={loading}>
             Close
           </Button>
-        </Modal.Footer>
+        </Footer>
       </Modal>
       <GenerateJollyResults
         surveyId={surveyId}

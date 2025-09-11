@@ -188,7 +188,6 @@ export default function Surveys() {
       {selectedSurvey && (
         <ConfigModal
           show={modalToShow === 'configModal'}
-          onClose={() => showModal(null)}
           survey={{ id: selectedSurvey.value, name: selectedSurvey.label }}
         />
       )}
@@ -196,7 +195,6 @@ export default function Surveys() {
         <EditLocationsModal
           key={selectedSurvey.value}
           show={modalToShow === 'editLocationPoolModal'}
-          onClose={() => showModal(null)}
           preset={{
             id: locationPools.find(
               (pool) => pool.name === selectedSurvey.label
@@ -209,7 +207,6 @@ export default function Surveys() {
       {selectedSurvey && (
         <AddLocationsModal
           show={modalToShow === 'addLocationsToPoolModal'}
-          onClose={() => showModal(null)}
           preset={{
             id: locationPools.find(
               (pool) => pool.name === selectedSurvey.label

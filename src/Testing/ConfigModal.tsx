@@ -1,28 +1,27 @@
-import { Button, Form, Modal } from "react-bootstrap";
-import { useState, useEffect, useContext } from "react";
-import { GlobalContext } from "../Context";
-import Tooltip from "react-bootstrap/Tooltip";
-import OverlayTrigger from "react-bootstrap/OverlayTrigger";
+import { Button, Form } from 'react-bootstrap';
+import { Modal, Header, Title, Body, Footer } from '../Modal';
+import { useState, useEffect, useContext } from 'react';
+import { GlobalContext } from '../Context';
+import Tooltip from 'react-bootstrap/Tooltip';
+import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
 
-type TestType = "random" | "interval";
+type TestType = 'random' | 'interval';
 
 export default function ConfigModal({
   show,
-  onClose,
   survey,
 }: {
   show: boolean;
-  onClose: () => void;
   survey: { id: string; name: string };
 }) {
   const [testInterval, setTestInterval] = useState<number>(0);
-  const [testType, setTestType] = useState<TestType>("interval");
+  const [testType, setTestType] = useState<TestType>('interval');
   const [testChance, setTestChance] = useState<number>(0);
   const [testAccuracy, setTestAccuracy] = useState<number>(0);
   const [deadzone, setDeadzone] = useState<number>(0);
   const [confirmation, setConfirmation] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
-  const { client } = useContext(GlobalContext)!;
+  const { client, showModal } = useContext(GlobalContext)!;
 
   useEffect(() => {
     const fetchTestConfig = async () => {
@@ -36,7 +35,7 @@ export default function ConfigModal({
 
       setTestType(config.testType as TestType);
 
-      if (config.testType === "interval") {
+      if (config.testType === 'interval') {
         setTestInterval(config.interval!);
       } else {
         setTestChance(config.random!);
@@ -57,23 +56,23 @@ export default function ConfigModal({
   }, [show]);
 
   async function handleSave() {
-    if (testType === "interval" && testInterval < 10) {
-      alert("Test interval must be greater than 10");
+    if (testType === 'interval' && testInterval < 10) {
+      alert('Test interval must be greater than 10');
       return;
     }
 
     if (testAccuracy < 1 || testAccuracy > 100) {
-      alert("Test accuracy must be between 1 and 100");
+      alert('Test accuracy must be between 1 and 100');
       return;
     }
 
-    if (testType === "random") {
+    if (testType === 'random') {
       if (testChance < 0 || testChance > 100) {
-        alert("Test chance must be between 0 and 100");
+        alert('Test chance must be between 0 and 100');
         return;
       }
       if (deadzone < 10) {
-        alert("Deadzone must be greater than 10");
+        alert('Deadzone must be greater than 10');
         return;
       }
     }
@@ -83,40 +82,40 @@ export default function ConfigModal({
     await client.models.ProjectTestConfig.update({
       projectId: survey.id,
       testType: testType,
-      random: testType === "random" ? testChance : undefined,
-      deadzone: testType === "random" ? deadzone : undefined,
-      interval: testType === "interval" ? testInterval : undefined,
+      random: testType === 'random' ? testChance : undefined,
+      deadzone: testType === 'random' ? deadzone : undefined,
+      interval: testType === 'interval' ? testInterval : undefined,
       accuracy: testAccuracy,
       postTestConfirmation: confirmation,
     });
 
     setSaving(false);
-    onClose();
+    showModal(null);
   }
 
   return (
-    <Modal show={show} onHide={onClose} size="lg">
-      <Modal.Header closeButton>
-        <Modal.Title>Configure {survey.name} Tests</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        <Form>
-          <Form.Group className="mb-2">
+    <Modal show={show} strict={true} size='lg'>
+      <Header>
+        <Title>Configure {survey.name} Tests</Title>
+      </Header>
+      <Body>
+        <Form className='p-3'>
+          <Form.Group className='mb-2'>
             <Form.Label>Test type</Form.Label>
             <Form.Select
               value={testType}
               onChange={(e) =>
-                setTestType(e.target.value as "random" | "interval")
+                setTestType(e.target.value as 'random' | 'interval')
               }
             >
-              <option value="random">Random</option>
-              <option value="interval">Interval</option>
+              <option value='random'>Random</option>
+              <option value='interval'>Interval</option>
             </Form.Select>
           </Form.Group>
-          {testType === "interval" && (
-            <Form.Group className="mb-2">
+          {testType === 'interval' && (
+            <Form.Group className='mb-2'>
               <OverlayTrigger
-                placement="right-end"
+                placement='right-end'
                 overlay={
                   <Tooltip>
                     User will be tested if they haven't consecutively annotated
@@ -124,24 +123,24 @@ export default function ConfigModal({
                     and annotating a previous job will not reset the counter.
                   </Tooltip>
                 }
-                trigger={["hover", "focus"]}
+                trigger={['hover', 'focus']}
               >
                 <Form.Label>Test after * unannotated jobs</Form.Label>
               </OverlayTrigger>
               <Form.Control
-                type="number"
+                type='number'
                 value={testInterval}
                 onChange={(e) =>
-                  setTestInterval(parseInt(e.target.value || "10"))
+                  setTestInterval(parseInt(e.target.value || '10'))
                 }
                 min={10}
               />
             </Form.Group>
           )}
-          {testType === "random" && (
-            <Form.Group className="mb-2">
+          {testType === 'random' && (
+            <Form.Group className='mb-2'>
               <OverlayTrigger
-                placement="right-end"
+                placement='right-end'
                 overlay={
                   <Tooltip>
                     After the amount of jobs specified in deadzone, each of the
@@ -149,47 +148,47 @@ export default function ConfigModal({
                     a test.
                   </Tooltip>
                 }
-                trigger={["hover", "focus"]}
+                trigger={['hover', 'focus']}
               >
                 <Form.Label>Deadzone</Form.Label>
               </OverlayTrigger>
               <Form.Control
-                type="number"
+                type='number'
                 value={deadzone}
-                onChange={(e) => setDeadzone(parseInt(e.target.value || "10"))}
+                onChange={(e) => setDeadzone(parseInt(e.target.value || '10'))}
                 min={10}
-                className="mb-2"
+                className='mb-2'
               />
               <Form.Label>Test probability (%)</Form.Label>
               <Form.Control
-                type="number"
+                type='number'
                 value={testChance}
-                onChange={(e) => setTestChance(parseInt(e.target.value || "0"))}
+                onChange={(e) => setTestChance(parseInt(e.target.value || '0'))}
                 min={0}
                 max={100}
               />
             </Form.Group>
           )}
-          <Form.Group className="mb-2">
+          <Form.Group className='mb-2'>
             <Form.Label>Pass rate (%)</Form.Label>
             <Form.Control
-              type="number"
+              type='number'
               value={testAccuracy}
-              onChange={(e) => setTestAccuracy(parseInt(e.target.value || "0"))}
+              onChange={(e) => setTestAccuracy(parseInt(e.target.value || '0'))}
               min={1}
               max={100}
             />
           </Form.Group>
         </Form>
-      </Modal.Body>
-      <Modal.Footer>
-        <Button variant="primary" onClick={handleSave} disabled={saving}>
+      </Body>
+      <Footer>
+        <Button variant='primary' onClick={handleSave} disabled={saving}>
           Save
         </Button>
-        <Button variant="dark" onClick={onClose}>
+        <Button variant='dark' onClick={() => showModal(null)}>
           Cancel
         </Button>
-      </Modal.Footer>
+      </Footer>
     </Modal>
   );
 }
