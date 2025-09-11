@@ -721,7 +721,6 @@ export default function Surveys() {
         <LaunchAnnotationSetModal
           show={modalToShow === 'launchAnnotationSet'}
           onClose={() => showModal(null)}
-          imageSets={selectedProject.imageSets}
           annotationSet={selectedAnnotationSet}
           project={selectedProject}
         />

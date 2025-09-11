@@ -192,6 +192,8 @@ export default function ProcessImages({ projectId }: { projectId: string }) {
 
     setLoading(false);
     setDisabled(false);
+
+    showModal(null);
   };
 
   return (
