@@ -18,6 +18,7 @@ import Shapefile from './Shapefile';
 import shp from 'shpjs';
 import { parseShapefileToLatLngs } from './utils/shapefileUtils';
 import FileInput from './FileInput';
+import GPSSubsetImageViewerModal from './GPSSubsetImageViewerModal';
 
 // Define the GPS data structure
 export interface GPSData {
@@ -71,6 +72,11 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
   const [shapefileBuffer, setShapefileBuffer] = useState<
     ArrayBuffer | undefined
   >(undefined);
+
+  // Image modal state
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [imageRotation, setImageRotation] = useState(0); // Global rotation for all images (0, 90, 180, 270)
 
   // Add object URL mapping for imageFiles to show thumbnails
   const [objectUrlMap, setObjectUrlMap] = useState<Record<string, string>>({});
@@ -256,6 +262,40 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
     [onFilter]
   );
 
+  // Image modal handlers
+  const handleViewImage = useCallback((index: number) => {
+    setCurrentImageIndex(index);
+    setShowImageModal(true);
+  }, []);
+
+  const handleCloseModal = useCallback(() => {
+    setShowImageModal(false);
+  }, []);
+
+  const handleNextImage = useCallback(() => {
+    setCurrentImageIndex((prev) => (prev + 1) % currentFilteredPoints.length);
+  }, [currentFilteredPoints.length]);
+
+  const handlePrevImage = useCallback(() => {
+    setCurrentImageIndex((prev) =>
+      prev === 0 ? currentFilteredPoints.length - 1 : prev - 1
+    );
+  }, [currentFilteredPoints.length]);
+
+  const handleRemoveImage = useCallback(() => {
+    handleRemovePoint(currentImageIndex);
+    // Adjust current index if we're removing the last image or if the index is now out of bounds
+    if (currentFilteredPoints.length === 1) {
+      setShowImageModal(false);
+    } else if (currentImageIndex >= currentFilteredPoints.length - 1) {
+      setCurrentImageIndex(currentFilteredPoints.length - 2);
+    }
+  }, [currentImageIndex, currentFilteredPoints.length, handleRemovePoint]);
+
+  const handleRotateImage = useCallback(() => {
+    setImageRotation((prev) => (prev + 90) % 360);
+  }, []);
+
   useEffect(() => {
     if (shapefileBuffer) {
       shp(shapefileBuffer)
@@ -280,14 +320,26 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
             console.warn('No valid polygon found in shapefile');
             return;
           }
-          const newFilteredPoints = validGpsData.filter((point) => {
-            const pt = turf.point([point.lng, point.lat]);
-            return allowedPolygons.some((feature: any) =>
-              turf.booleanPointInPolygon(pt, feature)
-            );
+          // Apply shapefile filter relative to the current filtered set
+          // and push the removed points onto the undo stack so this action is undoable.
+          setCurrentFilteredPoints((prev) => {
+            const newVisiblePoints: GPSData[] = [];
+            const removedPoints: GPSData[] = [];
+            prev.forEach((point) => {
+              const pt = turf.point([point.lng, point.lat]);
+              const inside = allowedPolygons.some((feature: any) =>
+                turf.booleanPointInPolygon(pt, feature)
+              );
+              if (inside) {
+                newVisiblePoints.push(point);
+              } else {
+                removedPoints.push(point);
+              }
+            });
+            setDeletedPointsStack((stack) => [...stack, removedPoints]);
+            onFilter(newVisiblePoints);
+            return newVisiblePoints;
           });
-          setCurrentFilteredPoints(newFilteredPoints);
-          onFilter(newFilteredPoints);
 
           // Also parse to simplified [lat,lng] list for saving later
           try {
@@ -343,8 +395,7 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
                 polygon.
               </li>
               <li>
-                Click "Remove Images" to remove the images within the
-                polygon.
+                Click "Remove Images" to remove the images within the polygon.
               </li>
               <li>Click "Undo" to reverse the last action.</li>
             </ul>
@@ -427,6 +478,17 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
                           />
                         </div>
                       )}
+                    {point.filepath &&
+                      objectUrlMap[point.filepath.toLowerCase()] && (
+                        <Button
+                          className='w-100 mt-2'
+                          variant='primary'
+                          size='sm'
+                          onClick={() => handleViewImage(index)}
+                        >
+                          View Image
+                        </Button>
+                      )}
                     <Button
                       className='w-100 mt-2'
                       variant='danger'
@@ -469,6 +531,23 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
           </div>
         </div>
       </Form.Group>
+
+      <GPSSubsetImageViewerModal
+        showImageModal={showImageModal}
+        imageData={{
+          currentImageIndex,
+          currentFilteredPoints,
+          objectUrlMap,
+          imageRotation,
+        }}
+        handlers={{
+          handleCloseModal,
+          handleNextImage,
+          handlePrevImage,
+          handleRotateImage,
+          handleRemoveImage,
+        }}
+      />
     </>
   );
 };

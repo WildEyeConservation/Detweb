@@ -22,6 +22,8 @@ import CameraOverlap from './CameraOverlap';
 import CameraSpecification from './CameraSpecification';
 import LabeledToggleSwitch from './LabeledToggleSwitch.tsx';
 import { Schema } from '../amplify/data/resource.ts';
+import Slider from 'rc-slider';
+import 'rc-slider/assets/index.css';
 
 // Configure a dedicated storage instance for file paths
 const fileStore = localforage.createInstance({
@@ -248,6 +250,34 @@ export function FileUploadCore({
           }
           setColumnMapping(defaultMappings);
           setMappingConfirmed(false);
+
+          // Auto-detect if timestamp values are milliseconds or seconds using a small sample
+          const tsCol = defaultMappings.timestamp;
+          if (tsCol) {
+            Papa.parse(file, {
+              header: true,
+              preview: 50,
+              skipEmptyLines: true,
+              complete: (sample) => {
+                try {
+                  const values = (sample.data as any[])
+                    .map((row: any) => row[tsCol])
+                    .map((v: any) => (typeof v === 'string' ? v.trim() : v))
+                    .map((v: any) => Number(v))
+                    .filter((n: number) => Number.isFinite(n) && n > 0);
+                  if (values.length > 0) {
+                    const msCount = values.filter(
+                      (n: number) => n >= 1e12
+                    ).length;
+                    const msLikely = msCount / values.length >= 0.5;
+                    setTimestampInMs(msLikely);
+                  }
+                } catch {
+                  // noop: leave as user default if detection fails
+                }
+              },
+            });
+          }
         },
       });
     }
@@ -474,8 +504,9 @@ export function FileUploadCore({
     async function fetchExistingCameras() {
       try {
         setLoadingExistingCameras(true);
-        const { data } = (await (client.models.Camera
-          .camerasByProjectId as any)({
+        const { data } = (await (
+          client.models.Camera.camerasByProjectId as any
+        )({
           projectId,
         })) as any;
         if (!cancelled) {
@@ -698,7 +729,11 @@ export function FileUploadCore({
             })
             .then(() => {
               active--;
-              if (results.length === items.length && nextIndex >= items.length && active === 0) {
+              if (
+                results.length === items.length &&
+                nextIndex >= items.length &&
+                active === 0
+              ) {
                 resolve(results);
               } else {
                 launch();
@@ -730,9 +765,11 @@ export function FileUploadCore({
 
       // @ts-ignore Amplify typed union is overly complex; cast to any for app usage
       const existingCameras: any[] =
-        (((await (client.models.Camera.camerasByProjectId as any)({
-          projectId,
-        })) as any).data as any[]) || [];
+        ((
+          (await (client.models.Camera.camerasByProjectId as any)({
+            projectId,
+          })) as any
+        ).data as any[]) || [];
 
       for (const camera of existingCameras) {
         allCameras.push(camera);
@@ -754,7 +791,9 @@ export function FileUploadCore({
           });
         } else {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: newCamera } = await (client.models.Camera.create as any)({
+          const { data: newCamera } = await (
+            client.models.Camera.create as any
+          )({
             name: name,
             projectId: projectId,
             focalLengthMm: spec.focalLengthMm || 0,
@@ -969,7 +1008,7 @@ export function FileUploadCore({
     const hasData =
       filteredImageFiles.length > 0 && (!csvData || csvData.data.length > 0);
     setReadyToSubmit(hasData);
-  }, [filteredImageFiles, csvData, setReadyToSubmit]);
+  }, [filteredImageFiles, csvData]);
 
   // Register the submit handler with the parent form if provided
   useEffect(() => {
@@ -1269,6 +1308,15 @@ export function FileUploadCore({
     return hours * 60 + minutes;
   };
 
+  // Helper: converts total minutes to "HH:mm" string.
+  const minutesToTime = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${mins
+      .toString()
+      .padStart(2, '0')}`;
+  };
+
   // Filter csvData rows by each day's selected time range.
   const applyTimeFilter = () => {
     if (!fullCsvData) return;
@@ -1288,7 +1336,10 @@ export function FileUploadCore({
 
   // Automatically re-filter when time ranges change
   useEffect(() => {
-    if (associateByTimestamp) {
+    if (
+      associateByTimestamp ||
+      (fullCsvData && fullCsvData.some((row) => row.timestamp))
+    ) {
       applyTimeFilter();
     }
   }, [timeRanges, fullCsvData, associateByTimestamp]);
@@ -1622,7 +1673,10 @@ export function FileUploadCore({
             }}
             onShapefileParsed={onShapefileParsed}
           />
-          {associateByTimestamp && (
+          {(associateByTimestamp ||
+            (csvData &&
+              fullCsvData &&
+              fullCsvData.some((row) => row.timestamp))) && (
             <Form.Group>
               <Form.Label className='mb-0'>
                 Filter Data by Time Range (Optional)
@@ -1643,53 +1697,77 @@ export function FileUploadCore({
               <div className='d-flex flex-column gap-2'>
                 {Array.from(
                   new Set(
-                    csvData.data.map((row) =>
+                    (fullCsvData || csvData.data).map((row) =>
                       new Date(row.timestamp!).getUTCDate()
                     )
                   )
                 )
                   .sort((a: number, b: number) => a - b)
-                  .map((day: number) => (
-                    <div
-                      key={`day-${day}`}
-                      className='d-flex flex-row align-items-center gap-2'
-                    >
-                      <span className='me-2'>
-                        {new Date(
-                          csvData.data[0].timestamp!
-                        ).toLocaleDateString()}
-                      </span>
-                      <input
-                        type='time'
-                        value={timeRanges[day]?.start || '00:00'}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          updateTimeRange(
-                            day,
-                            e.target.value,
-                            timeRanges[day]?.end || '23:59'
-                          )
-                        }
-                      />
-                      <input
-                        type='time'
-                        value={timeRanges[day]?.end || '23:59'}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          updateTimeRange(
-                            day,
-                            timeRanges[day]?.start || '00:00',
-                            e.target.value
-                          )
-                        }
-                      />
-                    </div>
-                  ))}
+                  .map((day: number) => {
+                    const startMinutes = timeToMinutes(
+                      timeRanges[day]?.start || '00:00'
+                    );
+                    const endMinutes = timeToMinutes(
+                      timeRanges[day]?.end || '23:59'
+                    );
+                    return (
+                      <div
+                        key={`day-${day}`}
+                        className='d-flex flex-column gap-2 mt-2'
+                      >
+                        <span className='fw-bold'>
+                          {new Date(
+                            (fullCsvData || csvData.data)[0].timestamp!
+                          ).toLocaleDateString()}
+                        </span>
+                        <div className='d-flex align-items-center gap-2'>
+                          <label className='mb-0'>Start:</label>
+                          <span
+                            className='badge bg-success'
+                            style={{ minWidth: '60px' }}
+                          >
+                            {minutesToTime(startMinutes)}
+                          </span>
+                          <label className='mb-0'>End:</label>
+                          <span
+                            className='badge bg-primary'
+                            style={{ minWidth: '60px' }}
+                          >
+                            {minutesToTime(endMinutes)}
+                          </span>
+                          <div className='flex-grow-1'>
+                            <Slider
+                              range
+                              min={0}
+                              max={1439}
+                              value={[startMinutes, endMinutes]}
+                              onChange={(vals) => {
+                                if (Array.isArray(vals)) {
+                                  const [s, e] = vals as [number, number];
+                                  updateTimeRange(
+                                    day,
+                                    minutesToTime(s),
+                                    minutesToTime(e)
+                                  );
+                                }
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             </Form.Group>
           )}
           <div className='mt-3'>
             {(() => {
               let message = '';
-              if (associateByTimestamp) {
+              const hasTimestampData =
+                csvData &&
+                fullCsvData &&
+                fullCsvData.some((row) => row.timestamp);
+              if (associateByTimestamp || hasTimestampData) {
                 const csvTimestamps = csvData.data.map(
                   (row) => row.timestamp || 0
                 );
@@ -1749,7 +1827,10 @@ export function FileUploadCore({
           </div>
           <Form.Group className='mt-3'>
             <Form.Label className='mb-0'>Camera Definition</Form.Label>
-            <span className='text-muted d-block mb-1' style={{ fontSize: '12px' }}>
+            <span
+              className='text-muted d-block mb-1'
+              style={{ fontSize: '12px' }}
+            >
               Does your survey have only one camera or multiple cameras?
             </span>
             <LabeledToggleSwitch
