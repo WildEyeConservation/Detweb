@@ -28,14 +28,7 @@ const metadataStore = localforage.createInstance({
 
 export default function UploadManager() {
   const {
-    task: {
-      projectId,
-      files,
-      retryDelay,
-      resumeId,
-      deleteId,
-      pauseId,
-    },
+    task: { projectId, files, retryDelay, resumeId, deleteId, pauseId },
     progress: { isComplete, error },
     setTask,
     setProgress,
@@ -62,6 +55,7 @@ export default function UploadManager() {
   const deletingRef = useRef<boolean>(false);
   const cancelledRef = useRef<boolean>(false);
   const pausedRef = useRef<boolean>(false);
+  const finalizeAfterMaxAttemptsRef = useRef<boolean>(false);
 
   function computeElevationFromBuffer(
     buffer: ArrayBuffer,
@@ -233,7 +227,10 @@ export default function UploadManager() {
           if (imageData) {
             // Double-check existence to avoid duplicates
             if (knownDbPaths.has(originalPath)) {
-              setProgress((prev) => ({ ...prev, processed: prev.processed + 1 }));
+              setProgress((prev) => ({
+                ...prev,
+                processed: prev.processed + 1,
+              }));
               continue;
             }
             const fileObj = files.find(
@@ -414,17 +411,25 @@ export default function UploadManager() {
       await Promise.all(workers);
       // if pause was requested, after active uploads finish, reset state
       if (cancelledRef.current) {
-        setProgress({ processed: 0, total: 0, isComplete: false, error: null });
-        setTask({
-          newProject: true,
-          projectId: '',
-          files: [],
-          retryDelay: 0,
-          resumeId: undefined,
-          deleteId: undefined,
-          pauseId: undefined,
-        });
-        return;
+        // If we're finalizing after max attempts, do NOT reset; allow completion flow
+        if (!finalizeAfterMaxAttemptsRef.current) {
+          setProgress({
+            processed: 0,
+            total: 0,
+            isComplete: false,
+            error: null,
+          });
+          setTask({
+            newProject: true,
+            projectId: '',
+            files: [],
+            retryDelay: 0,
+            resumeId: undefined,
+            deleteId: undefined,
+            pauseId: undefined,
+          });
+          return;
+        }
       }
       // all tasks finished successfully; mark upload complete
       setProgress((prev) => ({
@@ -441,6 +446,16 @@ export default function UploadManager() {
       }));
     } finally {
       activeUploadRef.current = false;
+      // If we hit max attempts, force completion instead of retrying
+      if (
+        finalizeAfterMaxAttemptsRef.current &&
+        projectId &&
+        !pauseId &&
+        !deleteId
+      ) {
+        setProgress((prev) => ({ ...prev, isComplete: true }));
+        return;
+      }
       // If a retry was requested during this run, chain a new run now
       if (retryPendingRef.current && projectId && !pauseId && !deleteId) {
         retryPendingRef.current = false;
@@ -461,11 +476,18 @@ export default function UploadManager() {
       return delay + Math.random() * 1000;
     };
 
-    const MAX_ATTEMPTS = 153; // 153 attempts = 12 hours (theoretically)
+    const MAX_ATTEMPTS = 20; // 20 attempts = 1 hour (theoretically)
     const attempt = projectBackOff[projectId] || 1;
 
     if (attempt >= MAX_ATTEMPTS) {
       console.log(`Max attempts reached for project ${projectId}`);
+      // Stop current/next runs and force completion with whatever is uploaded
+      cancelledRef.current = true;
+      retryPendingRef.current = false;
+      finalizeAfterMaxAttemptsRef.current = true;
+      // Clear any retry delay and trigger completion flow
+      setTask((task) => ({ ...task, retryDelay: 0 }));
+      setProgress((prev) => ({ ...prev, error: null, isComplete: true }));
       return;
     }
 
@@ -559,9 +581,11 @@ export default function UploadManager() {
       uploadedFiles.map((file) => file.originalPath)
     );
 
-    if (uploadedFiles.length !== filesToUpload.length) {
+    const forceFinalize = finalizeAfterMaxAttemptsRef.current === true;
+    if (uploadedFiles.length !== filesToUpload.length && !forceFinalize) {
       await retryWithBackoff();
     } else {
+      finalizeAfterMaxAttemptsRef.current = false;
       // finish upload
       const createdImages =
         ((await createdImagesStore.getItem(projectId)) as CreatedImage[]) ?? [];
