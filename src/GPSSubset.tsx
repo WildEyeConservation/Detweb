@@ -1,4 +1,10 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useMemo,
+} from 'react';
 import Button from 'react-bootstrap/Button';
 import {
   MapContainer,
@@ -103,6 +109,34 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
   const [currentFilteredPoints, setCurrentFilteredPoints] =
     useState<GPSData[]>(validGpsData);
   const [deletedPointsStack, setDeletedPointsStack] = useState<GPSData[][]>([]);
+
+  const createPointKey = useCallback((p: GPSData) => {
+    return `${p.filepath ?? ''}|${p.timestamp ?? ''}|${p.lat}|${p.lng}|${
+      p.alt
+    }`;
+  }, []);
+
+  const visibleKeys = useMemo(
+    () => new Set(currentFilteredPoints.map((p) => createPointKey(p))),
+    [currentFilteredPoints, createPointKey]
+  );
+
+  // Union of currently visible points and all removed points from the stack.
+  const allPoints = useMemo(() => {
+    const union = new Map<string, GPSData>();
+    for (const p of deletedPointsStack.flat()) {
+      union.set(createPointKey(p), p);
+    }
+    for (const p of currentFilteredPoints) {
+      union.set(createPointKey(p), p);
+    }
+    return Array.from(union.values());
+  }, [deletedPointsStack, currentFilteredPoints, createPointKey]);
+
+  const removedPoints = useMemo(
+    () => allPoints.filter((p) => !visibleKeys.has(createPointKey(p))),
+    [allPoints, visibleKeys, createPointKey]
+  );
   // When a polygon is created
   const handleCreated = useCallback((e: any) => {
     const { layer } = e;
@@ -262,6 +296,18 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
     [onFilter]
   );
 
+  const handleRestorePoint = useCallback(
+    (point: GPSData) => {
+      setCurrentFilteredPoints((prevPoints) => {
+        if (prevPoints.includes(point)) return prevPoints;
+        const newPoints = [...prevPoints, point];
+        onFilter(newPoints);
+        return newPoints;
+      });
+    },
+    [onFilter]
+  );
+
   // Image modal handlers
   const handleViewImage = useCallback((index: number) => {
     setCurrentImageIndex(index);
@@ -398,6 +444,14 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
                 Click "Remove Images" to remove the images within the polygon.
               </li>
               <li>Click "Undo" to reverse the last action.</li>
+              <li>
+                <span style={{ color: 'blue' }}>Blue points</span> represent
+                images that are included.
+              </li>
+              <li>
+                <span style={{ color: 'red' }}>Red points</span> represent
+                images that are removed.
+              </li>
             </ul>
           </Form.Text>
         </div>
@@ -433,12 +487,12 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
                 edit={{}}
               />
             </FeatureGroup>
-            {validGpsData.map((point, index) => (
+            {currentFilteredPoints.map((point, index) => (
               <CircleMarker
                 key={index}
                 center={[point.lat, point.lng]}
                 radius={3}
-                color='orange'
+                color='blue'
               >
                 <Popup>
                   <div>
@@ -496,6 +550,47 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
                       onClick={() => handleRemovePoint(index)}
                     >
                       Remove
+                    </Button>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            ))}
+            {removedPoints.map((point, index) => (
+              <CircleMarker
+                key={`removed-${index}`}
+                center={[point.lat, point.lng]}
+                radius={3}
+                color='red'
+              >
+                <Popup>
+                  <div>
+                    {point.timestamp && (
+                      <div>
+                        <strong>Timestamp:</strong>{' '}
+                        {new Date(point.timestamp).toISOString()}
+                      </div>
+                    )}
+                    {point.filepath && (
+                      <div>
+                        <strong>Filepath:</strong> {point.filepath}
+                      </div>
+                    )}
+                    <div>
+                      <strong>Lng:</strong> {point.lng}
+                    </div>
+                    <div>
+                      <strong>Lat:</strong> {point.lat}
+                    </div>
+                    <div>
+                      <strong>Alt:</strong> {point.alt}
+                    </div>
+                    <Button
+                      className='w-100 mt-2'
+                      variant='success'
+                      size='sm'
+                      onClick={() => handleRestorePoint(point)}
+                    >
+                      Add Back
                     </Button>
                   </div>
                 </Popup>
