@@ -83,6 +83,28 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
   const [showImageModal, setShowImageModal] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageRotation, setImageRotation] = useState(0); // Global rotation for all images (0, 90, 180, 270)
+  const [isDrawing, setIsDrawing] = useState(false);
+
+  // Stable draw/edit options and handlers to avoid control resets on re-render
+  const drawOptions = useMemo(
+    () => ({
+      polygon: {
+        allowIntersection: false,
+        shapeOptions: { color: '#97009c' },
+      },
+      rectangle: false,
+      circle: false,
+      circlemarker: false,
+      marker: false,
+      polyline: false,
+    }),
+    []
+  );
+  const editOptions = useMemo(() => ({}), []);
+  const handleDrawStart = useCallback(() => setIsDrawing(true), []);
+  const handleDrawStop = useCallback(() => setIsDrawing(false), []);
+  const handleEditStart = useCallback(() => setIsDrawing(true), []);
+  const handleEditStop = useCallback(() => setIsDrawing(false), []);
 
   // Add object URL mapping for imageFiles to show thumbnails
   const [objectUrlMap, setObjectUrlMap] = useState<Record<string, string>>({});
@@ -110,6 +132,22 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
     useState<GPSData[]>(validGpsData);
   const [deletedPointsStack, setDeletedPointsStack] = useState<GPSData[][]>([]);
 
+  // Keep a snapshot of the initial set of points so that when parent filters
+  // (e.g., time filter), we can still render excluded points as red markers.
+  const initialPointsRef = useRef<Map<string, GPSData> | null>(null);
+  useEffect(() => {
+    if (!initialPointsRef.current && validGpsData.length > 0) {
+      const map = new Map<string, GPSData>();
+      for (const p of validGpsData) {
+        map.set(
+          `${p.filepath ?? ''}|${p.timestamp ?? ''}|${p.lat}|${p.lng}|${p.alt}`,
+          p
+        );
+      }
+      initialPointsRef.current = map;
+    }
+  }, [validGpsData]);
+
   const createPointKey = useCallback((p: GPSData) => {
     return `${p.filepath ?? ''}|${p.timestamp ?? ''}|${p.lat}|${p.lng}|${
       p.alt
@@ -124,9 +162,18 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
   // Union of currently visible points and all removed points from the stack.
   const allPoints = useMemo(() => {
     const union = new Map<string, GPSData>();
+    // Include initial full set so externally removed points (e.g., time filter)
+    // can display as red markers.
+    if (initialPointsRef.current) {
+      for (const [k, v] of initialPointsRef.current.entries()) {
+        union.set(k, v);
+      }
+    }
+    // Include manually removed points stored in the stack
     for (const p of deletedPointsStack.flat()) {
       union.set(createPointKey(p), p);
     }
+    // Include currently visible points
     for (const p of currentFilteredPoints) {
       union.set(createPointKey(p), p);
     }
@@ -137,6 +184,22 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
     () => allPoints.filter((p) => !visibleKeys.has(createPointKey(p))),
     [allPoints, visibleKeys, createPointKey]
   );
+
+  // Sync visible points when parent-provided data changes (e.g., time filter).
+  // This treats externally excluded points like "removed" without losing manual removals.
+  useEffect(() => {
+    // Build set of keys that were manually removed via in-component actions
+    const manualRemovedKeys = new Set<string>();
+    for (const group of deletedPointsStack) {
+      for (const p of group) {
+        manualRemovedKeys.add(createPointKey(p));
+      }
+    }
+    const nextVisible = validGpsData.filter(
+      (p) => !manualRemovedKeys.has(createPointKey(p))
+    );
+    setCurrentFilteredPoints(nextVisible);
+  }, [validGpsData, deletedPointsStack, createPointKey]);
   // When a polygon is created
   const handleCreated = useCallback((e: any) => {
     const { layer } = e;
@@ -298,14 +361,28 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
 
   const handleRestorePoint = useCallback(
     (point: GPSData) => {
+      // Remove this point from the manual deleted stack so sync effect doesn't exclude it again
+      setDeletedPointsStack((prev) => {
+        const keyToRestore = createPointKey(point);
+        const next = prev
+          .map((group) =>
+            group.filter((p) => createPointKey(p) !== keyToRestore)
+          )
+          .filter((group) => group.length > 0);
+        return next;
+      });
+
       setCurrentFilteredPoints((prevPoints) => {
-        if (prevPoints.includes(point)) return prevPoints;
+        const alreadyVisible = prevPoints.some(
+          (p) => createPointKey(p) === createPointKey(point)
+        );
+        if (alreadyVisible) return prevPoints;
         const newPoints = [...prevPoints, point];
         onFilter(newPoints);
         return newPoints;
       });
     },
-    [onFilter]
+    [onFilter, createPointKey]
   );
 
   // Image modal handlers
@@ -473,18 +550,12 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
                 onCreated={handleCreated}
                 onEdited={handleEdited}
                 onDeleted={handleDeleted}
-                draw={{
-                  polygon: {
-                    allowIntersection: false,
-                    shapeOptions: { color: '#97009c' },
-                  },
-                  rectangle: false,
-                  circle: false,
-                  circlemarker: false,
-                  marker: false,
-                  polyline: false,
-                }}
-                edit={{}}
+                onDrawStart={handleDrawStart}
+                onDrawStop={handleDrawStop}
+                onEditStart={handleEditStart}
+                onEditStop={handleEditStop}
+                draw={drawOptions}
+                edit={editOptions}
               />
             </FeatureGroup>
             {currentFilteredPoints.map((point, index) => (
@@ -493,6 +564,7 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
                 center={[point.lat, point.lng]}
                 radius={3}
                 color='blue'
+                interactive={!isDrawing}
               >
                 <Popup>
                   <div>
@@ -561,6 +633,7 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
                 center={[point.lat, point.lng]}
                 radius={3}
                 color='red'
+                interactive={!isDrawing}
               >
                 <Popup>
                   <div>
