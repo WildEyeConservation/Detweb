@@ -153,19 +153,17 @@ export default function UploadProgress() {
           />
           {error ? (
             <p className="m-0">Error</p>
+          ) : deleteId ? (
+            <p className="m-0">{`Deleting project: ${processed}/${total}`}</p>
+          ) : retryDelay > 0 ? (
+            <p className="m-0">Retrying failed images...</p>
           ) : !isComplete ? (
-            deleteId ? (
-              <p className="m-0">{`Deleting project: ${processed}/${total}`}</p>
-            ) : (
-              <div className="d-flex flex-column">
-                <p className="m-0">{`${processed}/${total} (${percent}%) images`}</p>
-                {estimatedTimeRemaining && (
-                  <p className="m-0">{`${(estimatedTimeRemaining / 3600).toFixed(
-                    2
-                  )} hours remaining`}</p>
-                )}
-              </div>
-            )
+            <div className="d-flex flex-column">
+              <p className="m-0">{`${processed}/${total} (${percent}%) images`}</p>
+              {estimatedTimeRemaining && (
+                <p className="m-0">{`${(estimatedTimeRemaining / 3600).toFixed(2)} hours remaining`}</p>
+              )}
+            </div>
           ) : (
             <p className="m-0">Finished</p>
           )}

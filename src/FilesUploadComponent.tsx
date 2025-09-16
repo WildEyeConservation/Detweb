@@ -7,6 +7,7 @@ import Form from 'react-bootstrap/Form';
 import { list } from 'aws-amplify/storage';
 import { GlobalContext, UploadContext } from './Context.tsx';
 import ExifReader from 'exifreader';
+import exifr from 'exifr';
 import { DateTime } from 'luxon';
 import { fetchAllPaginatedResults } from './utils';
 import Papa from 'papaparse';
@@ -21,6 +22,8 @@ import CameraOverlap from './CameraOverlap';
 import CameraSpecification from './CameraSpecification';
 import LabeledToggleSwitch from './LabeledToggleSwitch.tsx';
 import { Schema } from '../amplify/data/resource.ts';
+import Slider from 'rc-slider';
+import 'rc-slider/assets/index.css';
 
 // Configure a dedicated storage instance for file paths
 const fileStore = localforage.createInstance({
@@ -79,6 +82,15 @@ type ExifData = Record<
     gpsData: GpsData | null;
   }
 >;
+
+type ImageExif = {
+  key: string;
+  width: number;
+  height: number;
+  timestamp: number;
+  cameraSerial: string;
+  gpsData: GpsData | null;
+};
 
 type CsvFile = {
   timestamp?: number;
@@ -238,6 +250,34 @@ export function FileUploadCore({
           }
           setColumnMapping(defaultMappings);
           setMappingConfirmed(false);
+
+          // Auto-detect if timestamp values are milliseconds or seconds using a small sample
+          const tsCol = defaultMappings.timestamp;
+          if (tsCol) {
+            Papa.parse(file, {
+              header: true,
+              preview: 50,
+              skipEmptyLines: true,
+              complete: (sample) => {
+                try {
+                  const values = (sample.data as any[])
+                    .map((row: any) => row[tsCol])
+                    .map((v: any) => (typeof v === 'string' ? v.trim() : v))
+                    .map((v: any) => Number(v))
+                    .filter((n: number) => Number.isFinite(n) && n > 0);
+                  if (values.length > 0) {
+                    const msCount = values.filter(
+                      (n: number) => n >= 1e12
+                    ).length;
+                    const msLikely = msCount / values.length >= 0.5;
+                    setTimestampInMs(msLikely);
+                  }
+                } catch {
+                  // noop: leave as user default if detection fails
+                }
+              },
+            });
+          }
         },
       });
     }
@@ -322,12 +362,17 @@ export function FileUploadCore({
       setScanTotal(mapFiles.length);
       setScanningEXIF(true);
 
-      // Get EXIF metadata for each file
-      const exifData = await Promise.all(
-        mapFiles.map(async (file) => {
+      // Get EXIF metadata for each file (sample first, then selective fast path if no GPS)
+      const sampleSize = Math.min(5, mapFiles.length);
+      const sampleFiles = mapFiles.slice(0, sampleSize);
+      const restFiles = mapFiles.slice(sampleSize);
+
+      // Sample with full EXIF to check for GPS
+      const sampleRaw: ImageExif[] = await Promise.all(
+        sampleFiles.map(async (file) => {
           const exif = await getExifmeta(file);
 
-          const updatedExif = {
+          const updatedExif: ImageExif = {
             ...exif,
             width: exif.width || 0,
             height: exif.height || 0,
@@ -340,19 +385,68 @@ export function FileUploadCore({
                   }
                 : null,
           };
-
-          if (updatedExif.gpsData === null) {
-            missing = true;
-          } else {
-            gpsToCSVData.push({
-              ...updatedExif.gpsData,
-              timestamp: updatedExif.timestamp,
-            });
-          }
-          setScanCount((prev) => prev + 1);
           return updatedExif;
         })
       );
+      setScanCount((prev) => prev + sampleRaw.length);
+
+      const gpsLikely = sampleRaw.some((x) => x.gpsData !== null);
+      const extractor = gpsLikely ? getExifmeta : getTimestampOnlyExif;
+
+      for (const updatedExif of sampleRaw) {
+        if (updatedExif.gpsData === null) {
+          missing = true;
+        } else {
+          gpsToCSVData.push({
+            timestamp: updatedExif.timestamp,
+            lat: (updatedExif.gpsData as any).lat as number,
+            lng: (updatedExif.gpsData as any).lng as number,
+            alt: (updatedExif.gpsData as any).alt as number,
+          });
+        }
+      }
+
+      // Process the rest with limited concurrency using chosen extractor
+      const restRaw: ImageExif[] = await mapWithLimit(
+        restFiles,
+        4,
+        async (file) => {
+          const exif = (await extractor(file as File)) as ImageExif;
+          const updatedExif: ImageExif = {
+            ...exif,
+            width: exif.width || 0,
+            height: exif.height || 0,
+            gpsData:
+              exif.gpsData &&
+              (exif.gpsData as any).alt !== undefined &&
+              (exif.gpsData as any).lat !== undefined &&
+              (exif.gpsData as any).lng !== undefined
+                ? {
+                    lat: Number((exif.gpsData as any).lat),
+                    lng: Number((exif.gpsData as any).lng),
+                    alt: Number((exif.gpsData as any).alt),
+                  }
+                : null,
+          };
+          return updatedExif;
+        },
+        () => setScanCount((prev) => prev + 1)
+      );
+
+      for (const updatedExif of restRaw) {
+        if (updatedExif.gpsData === null) {
+          missing = true;
+        } else {
+          gpsToCSVData.push({
+            timestamp: updatedExif.timestamp,
+            lat: (updatedExif.gpsData as any).lat as number,
+            lng: (updatedExif.gpsData as any).lng as number,
+            alt: (updatedExif.gpsData as any).alt as number,
+          });
+        }
+      }
+
+      const exifData: ImageExif[] = [...sampleRaw, ...restRaw];
 
       setScanningEXIF(false);
 
@@ -372,7 +466,7 @@ export function FileUploadCore({
       }
 
       setExifData(
-        exifData.reduce((acc, x) => {
+        (exifData as ImageExif[]).reduce((acc, x) => {
           acc[x.key] = x;
           return acc;
         }, {} as ExifData)
@@ -401,17 +495,20 @@ export function FileUploadCore({
   }, [multipleCameras]);
 
   useEffect(() => {
-    if (!project?.id) {
+    if (!project || !project.id) {
       setExistingCameraNames([]);
       return;
     }
+    const projectId = project.id;
     let cancelled = false;
     async function fetchExistingCameras() {
       try {
         setLoadingExistingCameras(true);
-        const { data } = await client.models.Camera.camerasByProjectId({
-          projectId: project.id,
-        });
+        const { data } = (await (
+          client.models.Camera.camerasByProjectId as any
+        )({
+          projectId,
+        })) as any;
         if (!cancelled) {
           setExistingCameraNames(
             (data || []).map((c: any) => c.name).filter(Boolean)
@@ -563,6 +660,95 @@ export function FileUploadCore({
     }
   };
 
+  // Fast path: read only timestamp and a few lightweight fields using exifr
+  async function getTimestampOnlyExif(file: File) {
+    const tags = await exifr.parse(file, {
+      pick: [
+        'DateTimeOriginal',
+        'OffsetTimeOriginal',
+        'Orientation',
+        'ImageWidth',
+        'ImageHeight',
+        'ExifImageWidth',
+        'ExifImageHeight',
+        'InternalSerialNumber',
+      ],
+    } as any);
+
+    const orientation = (tags as any)?.Orientation ?? 1;
+    const rotated = orientation > 4;
+
+    // Build timestamp from DateTimeOriginal + OffsetTimeOriginal (if any)
+    let timestamp: number;
+    const dto = (tags as any)?.DateTimeOriginal;
+    const tz = (tags as any)?.OffsetTimeOriginal as string | undefined;
+    if (dto instanceof Date) {
+      timestamp = dto.getTime();
+    } else if (typeof dto === 'string' && dto.length > 0) {
+      const dt = DateTime.fromFormat(dto, 'yyyy:MM:dd HH:mm:ss', { zone: tz });
+      timestamp = dt.isValid ? dt.toMillis() : file.lastModified;
+    } else {
+      timestamp = file.lastModified;
+    }
+
+    const imageWidth =
+      (tags as any)?.ImageWidth ?? (tags as any)?.ExifImageWidth ?? 0;
+    const imageHeight =
+      (tags as any)?.ImageHeight ?? (tags as any)?.ExifImageHeight ?? 0;
+
+    return {
+      key: file.webkitRelativePath,
+      width: rotated ? imageHeight : imageWidth,
+      height: rotated ? imageWidth : imageHeight,
+      timestamp,
+      cameraSerial: (tags as any)?.InternalSerialNumber ?? '',
+      gpsData: null as GpsData | null,
+    };
+  }
+
+  // Simple concurrency limiter for mapping large arrays without blocking UI
+  async function mapWithLimit<T, U>(
+    items: T[],
+    limit: number,
+    mapper: (item: T, index: number) => Promise<U>,
+    onProgress?: (index: number) => void
+  ): Promise<U[]> {
+    const results: U[] = new Array(items.length);
+    let nextIndex = 0;
+    let active = 0;
+
+    return new Promise<U[]>((resolve, reject) => {
+      const launch = () => {
+        while (active < limit && nextIndex < items.length) {
+          const current = nextIndex++;
+          active++;
+          mapper(items[current], current)
+            .then((res) => {
+              results[current] = res;
+              if (onProgress) onProgress(current);
+            })
+            .then(() => {
+              active--;
+              if (
+                results.length === items.length &&
+                nextIndex >= items.length &&
+                active === 0
+              ) {
+                resolve(results);
+              } else {
+                launch();
+              }
+            })
+            .catch((err) => reject(err));
+        }
+        if (nextIndex >= items.length && active === 0) {
+          resolve(results);
+        }
+      };
+      launch();
+    });
+  }
+
   const handleSubmit = useCallback(
     async (projectId: string, fromStaleUpload?: boolean) => {
       if (!projectId) {
@@ -577,20 +763,26 @@ export function FileUploadCore({
 
       const allCameras: Schema['Camera']['type'][] = [];
 
-      const { data: existingCameras } =
-        (await client.models.Camera.camerasByProjectId({
-          projectId,
-        })) as any;
+      // @ts-ignore Amplify typed union is overly complex; cast to any for app usage
+      const existingCameras: any[] =
+        ((
+          (await (client.models.Camera.camerasByProjectId as any)({
+            projectId,
+          })) as any
+        ).data as any[]) || [];
 
       for (const camera of existingCameras) {
         allCameras.push(camera);
       }
 
-      Object.entries(cameraSpecs).forEach(async ([name, spec]) => {
-        const existingCamera = existingCameras.find((c) => c.name === name);
-
+      for (const [name, spec] of Object.entries(cameraSpecs)) {
+        // @ts-ignore ignore amplify type unions on model results
+        const existingCamera = (existingCameras as any[]).find(
+          (c: any) => c.name === name
+        );
         if (existingCamera) {
-          await client.models.Camera.update({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (client.models.Camera.update as any)({
             id: existingCamera.id,
             name: name,
             focalLengthMm: spec.focalLengthMm || 0,
@@ -598,7 +790,10 @@ export function FileUploadCore({
             tiltDegrees: spec.tiltDegrees || 0,
           });
         } else {
-          const { data: newCamera } = await client.models.Camera.create({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: newCamera } = await (
+            client.models.Camera.create as any
+          )({
             name: name,
             projectId: projectId,
             focalLengthMm: spec.focalLengthMm || 0,
@@ -609,26 +804,29 @@ export function FileUploadCore({
             allCameras.push(newCamera);
           }
         }
-      });
+      }
 
       for (const overlap of overlaps) {
-        const cameraA = (allCameras as any[]).find(
-          (c) => c.name === overlap.cameraA
+        const cameraA: any = (allCameras as any[]).find(
+          (c: any) => c.name === overlap.cameraA
         );
 
-        const cameraB = (allCameras as any[]).find(
-          (c) => c.name === overlap.cameraB
+        const cameraB: any = (allCameras as any[]).find(
+          (c: any) => c.name === overlap.cameraB
         );
 
         if (cameraA && cameraB) {
-          const { data: existingOverlap } =
-            await client.models.CameraOverlap.get({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const existingOverlap: any = (
+            (await (client.models.CameraOverlap.get as any)({
               cameraAId: cameraA.id,
               cameraBId: cameraB.id,
-            });
+            })) as any
+          ).data;
 
           if (!existingOverlap) {
-            await client.models.CameraOverlap.create({
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (client.models.CameraOverlap.create as any)({
               cameraAId: cameraA.id,
               cameraBId: cameraB.id,
               projectId: projectId,
@@ -810,7 +1008,7 @@ export function FileUploadCore({
     const hasData =
       filteredImageFiles.length > 0 && (!csvData || csvData.data.length > 0);
     setReadyToSubmit(hasData);
-  }, [filteredImageFiles, csvData, setReadyToSubmit]);
+  }, [filteredImageFiles, csvData]);
 
   // Register the submit handler with the parent form if provided
   useEffect(() => {
@@ -1110,6 +1308,15 @@ export function FileUploadCore({
     return hours * 60 + minutes;
   };
 
+  // Helper: converts total minutes to "HH:mm" string.
+  const minutesToTime = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${mins
+      .toString()
+      .padStart(2, '0')}`;
+  };
+
   // Filter csvData rows by each day's selected time range.
   const applyTimeFilter = () => {
     if (!fullCsvData) return;
@@ -1129,7 +1336,10 @@ export function FileUploadCore({
 
   // Automatically re-filter when time ranges change
   useEffect(() => {
-    if (associateByTimestamp) {
+    if (
+      associateByTimestamp ||
+      (fullCsvData && fullCsvData.some((row) => row.timestamp))
+    ) {
       applyTimeFilter();
     }
   }, [timeRanges, fullCsvData, associateByTimestamp]);
@@ -1473,7 +1683,10 @@ export function FileUploadCore({
             }}
             onShapefileParsed={onShapefileParsed}
           />
-          {associateByTimestamp && (
+          {(associateByTimestamp ||
+            (csvData &&
+              fullCsvData &&
+              fullCsvData.some((row) => row.timestamp))) && (
             <Form.Group>
               <Form.Label className='mb-0'>
                 Filter Data by Time Range (Optional)
@@ -1494,53 +1707,77 @@ export function FileUploadCore({
               <div className='d-flex flex-column gap-2'>
                 {Array.from(
                   new Set(
-                    csvData.data.map((row) =>
+                    (fullCsvData || csvData.data).map((row) =>
                       new Date(row.timestamp!).getUTCDate()
                     )
                   )
                 )
                   .sort((a: number, b: number) => a - b)
-                  .map((day: number) => (
-                    <div
-                      key={`day-${day}`}
-                      className='d-flex flex-row align-items-center gap-2'
-                    >
-                      <span className='me-2'>
-                        {new Date(
-                          csvData.data[0].timestamp!
-                        ).toLocaleDateString()}
-                      </span>
-                      <input
-                        type='time'
-                        value={timeRanges[day]?.start || '00:00'}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          updateTimeRange(
-                            day,
-                            e.target.value,
-                            timeRanges[day]?.end || '23:59'
-                          )
-                        }
-                      />
-                      <input
-                        type='time'
-                        value={timeRanges[day]?.end || '23:59'}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          updateTimeRange(
-                            day,
-                            timeRanges[day]?.start || '00:00',
-                            e.target.value
-                          )
-                        }
-                      />
-                    </div>
-                  ))}
+                  .map((day: number) => {
+                    const startMinutes = timeToMinutes(
+                      timeRanges[day]?.start || '00:00'
+                    );
+                    const endMinutes = timeToMinutes(
+                      timeRanges[day]?.end || '23:59'
+                    );
+                    return (
+                      <div
+                        key={`day-${day}`}
+                        className='d-flex flex-column gap-2 mt-2'
+                      >
+                        <span className='fw-bold'>
+                          {new Date(
+                            (fullCsvData || csvData.data)[0].timestamp!
+                          ).toLocaleDateString()}
+                        </span>
+                        <div className='d-flex align-items-center gap-2'>
+                          <label className='mb-0'>Start:</label>
+                          <span
+                            className='badge bg-success'
+                            style={{ minWidth: '60px' }}
+                          >
+                            {minutesToTime(startMinutes)}
+                          </span>
+                          <label className='mb-0'>End:</label>
+                          <span
+                            className='badge bg-primary'
+                            style={{ minWidth: '60px' }}
+                          >
+                            {minutesToTime(endMinutes)}
+                          </span>
+                          <div className='flex-grow-1'>
+                            <Slider
+                              range
+                              min={0}
+                              max={1439}
+                              value={[startMinutes, endMinutes]}
+                              onChange={(vals) => {
+                                if (Array.isArray(vals)) {
+                                  const [s, e] = vals as [number, number];
+                                  updateTimeRange(
+                                    day,
+                                    minutesToTime(s),
+                                    minutesToTime(e)
+                                  );
+                                }
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             </Form.Group>
           )}
           <div className='mt-3'>
             {(() => {
               let message = '';
-              if (associateByTimestamp) {
+              const hasTimestampData =
+                csvData &&
+                fullCsvData &&
+                fullCsvData.some((row) => row.timestamp);
+              if (associateByTimestamp || hasTimestampData) {
                 const csvTimestamps = csvData.data.map(
                   (row) => row.timestamp || 0
                 );
@@ -1600,7 +1837,10 @@ export function FileUploadCore({
           </div>
           <Form.Group className='mt-3'>
             <Form.Label className='mb-0'>Camera Definition</Form.Label>
-            <span className='text-muted d-block mb-1' style={{ fontSize: '12px' }}>
+            <span
+              className='text-muted d-block mb-1'
+              style={{ fontSize: '12px' }}
+            >
               Does your survey have only one camera or multiple cameras?
             </span>
             <LabeledToggleSwitch
