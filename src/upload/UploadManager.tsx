@@ -635,20 +635,19 @@ export default function UploadManager() {
         });
       }
 
-      const { data: locationSet } = await (
-        client.models.LocationSet.create as any
-      )({
-        name: projectId + `_${model}`,
-        projectId: projectId,
-      });
-
-      if (!locationSet) {
-        console.error('Failed to create location set');
-        alert('Something went wrong, please try again.');
-        return;
-      }
-
       if (model === 'scoutbot') {
+        const { data: locationSet } = await (
+          client.models.LocationSet.create as any
+        )({
+          name: projectId + `_${model}`,
+          projectId: projectId,
+        });
+
+        if (!locationSet) {
+          console.error('Failed to create location set');
+          alert('Something went wrong, please try again.');
+          return;
+        }
         for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
           const batch = createdImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map(
@@ -687,6 +686,18 @@ export default function UploadManager() {
       }
 
       if (model === 'mad') {
+        const { data: locationSet } = await (
+          client.models.LocationSet.create as any
+        )({
+          name: projectId + `_${model}`,
+          projectId: projectId,
+        });
+
+        if (!locationSet) {
+          console.error('Failed to create location set');
+          alert('Something went wrong, please try again.');
+          return;
+        }
         for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
           const batch = createdImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map(

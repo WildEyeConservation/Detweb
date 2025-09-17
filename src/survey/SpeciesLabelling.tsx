@@ -7,7 +7,6 @@ import { Schema } from '../../amplify/data/resource';
 import { GlobalContext, UserContext } from '../Context';
 import { useLaunchTask } from '../useLaunchTask';
 import { makeSafeQueueName } from '../utils';
-import ImageSetDropdown from './ImageSetDropdown';
 import CreateTask from '../CreateTask';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
 
@@ -57,6 +56,11 @@ export default function SpeciesLabelling({
   const [locationSets, setLocationSets] = useState<any[]>([]);
   const [loadingLocationSets, setLoadingLocationSets] =
     useState<boolean>(false);
+  const [useExistingTiled, setUseExistingTiled] = useState<boolean>(false);
+  const [selectedTiledSetId, setSelectedTiledSetId] = useState<string>('');
+  const [tiledSetOptions, setTiledSetOptions] = useState<
+    { label: string; value: string }[]
+  >([]);
 
   // queue helper used by useLaunchTask
   const createQueue = async (
@@ -123,10 +127,20 @@ export default function SpeciesLabelling({
       )({
         projectId: project.id,
       })) as { data: any[] };
+      // Fetch mappings to restrict tiled sets to current annotation set
+      const { data: taskMappings } = (await (
+        client.models.TasksOnAnnotationSet.locationSetsByAnnotationSetId as any
+      )({
+        annotationSetId: annotationSet.id,
+      })) as { data: any[] };
       if (!mounted) return;
       setLocationSets(data);
 
       const options: { label: string; value: string }[] = [];
+      const tiledOptions: { label: string; value: string }[] = [];
+      const allowedTiledSetIds = new Set(
+        (taskMappings || []).map((m: any) => m.locationSetId)
+      );
       for (const ls of data) {
         const n = ls.name.toLowerCase();
         if (n.includes('scoutbot')) {
@@ -147,11 +161,117 @@ export default function SpeciesLabelling({
             });
           }
         }
+
+        // Build options for existing tiled sets (those with a description)
+        const descRaw = ls.description as string | undefined;
+        if (descRaw && allowedTiledSetIds.has(ls.id)) {
+          try {
+            const desc = JSON.parse(descRaw);
+            if (desc && desc.mode === 'tiled') {
+              const labelParts: string[] = [];
+              if (typeof ls.name === 'string' && ls.name.length > 0) {
+                labelParts.push(ls.name);
+              }
+              if (
+                typeof desc.horizontalTiles === 'number' &&
+                typeof desc.verticalTiles === 'number'
+              ) {
+                labelParts.push(
+                  `${desc.horizontalTiles}x${desc.verticalTiles}`
+                );
+              }
+              if (
+                typeof desc.width === 'number' &&
+                typeof desc.height === 'number'
+              ) {
+                labelParts.push(`${desc.width}x${desc.height}px`);
+              }
+              // Overlap/Sidelap
+              if (desc.specifyOverlapInPercentage) {
+                if (
+                  typeof desc.minOverlapPercentage === 'number' ||
+                  typeof desc.minSidelapPercentage === 'number'
+                ) {
+                  const ov =
+                    typeof desc.minOverlapPercentage === 'number'
+                      ? `${desc.minOverlapPercentage}%`
+                      : '?%';
+                  const sl =
+                    typeof desc.minSidelapPercentage === 'number'
+                      ? `${desc.minSidelapPercentage}%`
+                      : '?%';
+                  labelParts.push(`overlap ${ov}/${sl}`);
+                }
+              } else {
+                if (
+                  typeof desc.minOverlap === 'number' ||
+                  typeof desc.minSidelap === 'number'
+                ) {
+                  const ov =
+                    typeof desc.minOverlap === 'number'
+                      ? `${desc.minOverlap}px`
+                      : '?px';
+                  const sl =
+                    typeof desc.minSidelap === 'number'
+                      ? `${desc.minSidelap}px`
+                      : '?px';
+                  labelParts.push(`overlap ${ov}/${sl}`);
+                }
+              }
+              // ROI
+              if (desc.specifyBorders) {
+                if (desc.specifyBorderPercentage) {
+                  if (
+                    typeof desc.minX === 'number' &&
+                    typeof desc.maxX === 'number' &&
+                    typeof desc.minY === 'number' &&
+                    typeof desc.maxY === 'number'
+                  ) {
+                    labelParts.push(
+                      `ROI ${Math.round(desc.minX)}-${Math.round(
+                        desc.maxX
+                      )}% x ${Math.round(desc.minY)}-${Math.round(desc.maxY)}%`
+                    );
+                  }
+                } else {
+                  if (
+                    typeof desc.minX === 'number' &&
+                    typeof desc.maxX === 'number' &&
+                    typeof desc.minY === 'number' &&
+                    typeof desc.maxY === 'number'
+                  ) {
+                    labelParts.push(
+                      `ROI ${desc.minX}-${desc.maxX}px x ${desc.minY}-${desc.maxY}px`
+                    );
+                  }
+                }
+              }
+              // Subset
+              if (typeof desc.subsetN === 'number' && desc.subsetN > 1) {
+                labelParts.push(`subset n=${desc.subsetN}`);
+              }
+              // Location count
+              if (
+                typeof ls.locationCount === 'number' &&
+                ls.locationCount > 0
+              ) {
+                labelParts.push(`tiles ${ls.locationCount}`);
+              }
+              tiledOptions.push({
+                label: labelParts.join(' • '),
+                value: ls.id,
+              });
+            }
+          } catch {}
+        }
       }
       if (options.length === 1) {
         setModel(options[0]);
       }
       setModelOptions(options);
+      setTiledSetOptions(
+        tiledOptions.sort((a, b) => (a.label > b.label ? 1 : -1))
+      );
       setLoadingLocationSets(false);
     }
     fetchLocationSets();
@@ -166,13 +286,16 @@ export default function SpeciesLabelling({
       ? loadingLocationSets ||
         modelOptions.length === 0 ||
         (modelOptions.length > 1 && !model)
-      : false;
+      : useExistingTiled && tiledSetOptions.length > 0 && !selectedTiledSetId;
     setLaunchDisabled(shouldDisable);
   }, [
     modelGuided,
     loadingLocationSets,
     modelOptions.length,
     model,
+    useExistingTiled,
+    selectedTiledSetId,
+    tiledSetOptions.length,
     setLaunchDisabled,
   ]);
 
@@ -184,6 +307,8 @@ export default function SpeciesLabelling({
   const launchTaskRef = useRef(launchTask);
   const handleCreateTaskRef = useRef(handleCreateTaskWithArgs);
   const hiddenRef = useRef(hidden);
+  const useExistingTiledRef = useRef(useExistingTiled);
+  const selectedTiledSetIdRef = useRef(selectedTiledSetId);
 
   useEffect(() => {
     modelGuidedRef.current = modelGuided;
@@ -206,6 +331,12 @@ export default function SpeciesLabelling({
   useEffect(() => {
     hiddenRef.current = hidden;
   }, [hidden]);
+  useEffect(() => {
+    useExistingTiledRef.current = useExistingTiled;
+  }, [useExistingTiled]);
+  useEffect(() => {
+    selectedTiledSetIdRef.current = selectedTiledSetId;
+  }, [selectedTiledSetId]);
 
   useEffect(() => {
     // Wrap in function to store a function value (not treat as state updater)
@@ -230,15 +361,21 @@ export default function SpeciesLabelling({
           },
         });
       } else {
-        const createTask = handleCreateTaskRef.current;
-        if (!createTask) return;
-        const locationSetId = await createTask({
-          setLocationsCompleted: () => {},
-          setTotalLocations: () => {},
-        });
+        let tiledSetIdToUse: string | null = null;
+        if (useExistingTiledRef.current && selectedTiledSetIdRef.current) {
+          tiledSetIdToUse = selectedTiledSetIdRef.current;
+        } else {
+          const createTask = handleCreateTaskRef.current;
+          if (!createTask) return;
+          tiledSetIdToUse = await createTask({
+            setLocationsCompleted: () => {},
+            setTotalLocations: () => {},
+          });
+        }
+        if (!tiledSetIdToUse) return;
         onProgress('Initializing launch...');
         await launchTaskRef.current({
-          selectedTasks: [locationSetId],
+          selectedTasks: [tiledSetIdToUse],
           onProgress,
           queueOptions: {
             name: 'Tiled Annotation',
@@ -439,13 +576,51 @@ export default function SpeciesLabelling({
           )
         )
       ) : (
-        <CreateTask
-          name={annotationSet.name}
-          setHandleCreateTask={setHandleCreateTaskWithArgs}
-          projectId={project.id}
-          setLaunchDisabled={setLaunchDisabled}
-          disabled={launching}
-        />
+        <>
+          {tiledSetOptions.length > 0 && (
+            <div
+              className='border border-dark shadow-sm p-2'
+              style={{ backgroundColor: '#697582' }}
+            >
+              <Form.Group>
+                <Form.Switch
+                  label='Use existing tiled location set'
+                  checked={useExistingTiled}
+                  onChange={() => setUseExistingTiled(!useExistingTiled)}
+                  disabled={launching}
+                />
+              </Form.Group>
+              {useExistingTiled && (
+                <Form.Group>
+                  <Form.Label className='mb-0'>Existing tiled sets</Form.Label>
+                  <Select
+                    value={
+                      tiledSetOptions.find(
+                        (o) => o.value === selectedTiledSetId
+                      ) as any
+                    }
+                    onChange={(opt) =>
+                      setSelectedTiledSetId((opt as any)?.value ?? '')
+                    }
+                    options={tiledSetOptions}
+                    placeholder='Select a tiled set'
+                    className='text-black'
+                    isDisabled={launching}
+                  />
+                </Form.Group>
+              )}
+            </div>
+          )}
+          {!useExistingTiled && (
+            <CreateTask
+              name={annotationSet.name}
+              setHandleCreateTask={setHandleCreateTaskWithArgs}
+              projectId={project.id}
+              setLaunchDisabled={setLaunchDisabled}
+              disabled={launching}
+            />
+          )}
+        </>
       )}
     </div>
   );

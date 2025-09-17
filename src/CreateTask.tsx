@@ -438,7 +438,7 @@ function CreateTask({
       setLoadingImages(true);
       setImagesLoaded(0);
       const all = await fetchAllPaginatedResults(
-        client.models.Image.imagesByProjectId,
+        (client as any).models.Image.imagesByProjectId,
         {
           projectId,
           selectionSet: [
@@ -583,47 +583,124 @@ function CreateTask({
         }
       }
 
-      const {
-        data: { id: locationSetId },
-      } = await client.models.LocationSet.create({
+      const description = JSON.stringify({
+        mode: 'tiled',
+        width,
+        height,
+        horizontalTiles,
+        verticalTiles,
+        specifyTileDimensions,
+        specifyOverlapInPercentage,
+        minSidelap,
+        minOverlap,
+        minSidelapPercentage,
+        minOverlapPercentage,
+        specifyBorders,
+        specifyBorderPercentage,
+        minX,
+        minY,
+        maxX,
+        maxY,
+        subsetN,
+        dev: hasDevGeoTransect
+          ? {
+              transectSubsetSteps,
+              transectSubsetOffsets,
+            }
+          : undefined,
+      });
+
+      const createResp = await (client as any).models.LocationSet.create({
         name,
         projectId: projectId,
+        description,
         locationCount: imagesToUse.length * horizontalTiles * verticalTiles,
       });
+      const locationSetId = (createResp.data as any).id as string;
 
       const totalPlanned = imagesToUse.length * horizontalTiles * verticalTiles;
       setTotalLocations(totalPlanned);
       setNumLocationsPlanned(totalPlanned);
       const promises: Promise<void>[] = [];
+      let completedCount = 0;
+      let createdCount = 0;
       for (const { id, width: imgWidth, height: imgHeight } of imagesToUse) {
         const effW = imgWidth;
         const effH = imgHeight;
+
+        // Determine if this image's orientation differs from the baseline selection
+        const baselineWidth =
+          Number.isFinite(effectiveImageWidth) && effectiveImageWidth > 0
+            ? effectiveImageWidth
+            : (imageWidth as number) ?? (allImages[0]?.width as number);
+        const baselineHeight =
+          Number.isFinite(effectiveImageHeight) && effectiveImageHeight > 0
+            ? effectiveImageHeight
+            : (imageHeight as number) ?? (allImages[0]?.height as number);
+
+        const baselineIsLandscape =
+          (baselineWidth ?? effW) >= (baselineHeight ?? effH);
+        const imageIsLandscape = effW >= effH;
+        const swapTileForImage = baselineIsLandscape !== imageIsLandscape;
+
+        const tileWidthForImage = swapTileForImage ? height : width;
+        const tileHeightForImage = swapTileForImage ? width : height;
+
+        // When an image's orientation differs from the baseline, swap the tile
+        // counts as well so the grid orientation matches the swapped axes.
+        const horizontalTilesForImage = swapTileForImage
+          ? verticalTiles
+          : horizontalTiles;
+        const verticalTilesForImage = swapTileForImage
+          ? horizontalTiles
+          : verticalTiles;
+
+        // Compute ROI for this image (swap axes if orientation differs)
+        const roiMinXForImage = swapTileForImage ? minY : minX;
+        const roiMinYForImage = swapTileForImage ? minX : minY;
+        const roiMaxXForImage = swapTileForImage ? maxY : maxX;
+        const roiMaxYForImage = swapTileForImage ? maxX : maxY;
+
+        const effectiveW = Math.max(0, roiMaxXForImage - roiMinXForImage);
+        const effectiveH = Math.max(0, roiMaxYForImage - roiMinYForImage);
+
         const xStepSize =
-          horizontalTiles > 1 ? (effW - width) / (horizontalTiles - 1) : 0;
+          horizontalTilesForImage > 1
+            ? (effectiveW - tileWidthForImage) / (horizontalTilesForImage - 1)
+            : 0;
         const yStepSize =
-          verticalTiles > 1 ? (effH - height) / (verticalTiles - 1) : 0;
-        for (let xStep = 0; xStep < horizontalTiles; xStep++) {
-          for (let yStep = 0; yStep < verticalTiles; yStep++) {
+          verticalTilesForImage > 1
+            ? (effectiveH - tileHeightForImage) / (verticalTilesForImage - 1)
+            : 0;
+
+        for (let xStep = 0; xStep < horizontalTilesForImage; xStep++) {
+          for (let yStep = 0; yStep < verticalTilesForImage; yStep++) {
             const x = Math.round(
-              (horizontalTiles > 1 ? xStep * xStepSize : 0) + width / 2
+              roiMinXForImage +
+                (horizontalTilesForImage > 1 ? xStep * xStepSize : 0) +
+                tileWidthForImage / 2
             );
             const y = Math.round(
-              (verticalTiles > 1 ? yStep * yStepSize : 0) + height / 2
+              roiMinYForImage +
+                (verticalTilesForImage > 1 ? yStep * yStepSize : 0) +
+                tileHeightForImage / 2
             );
             promises.push(
-              client.models.Location.create({
+              (client as any).models.Location.create({
                 x,
                 y,
-                width,
-                height,
+                width: tileWidthForImage,
+                height: tileHeightForImage,
                 imageId: id,
                 projectId,
                 confidence: 1,
                 source: 'manual',
                 setId: locationSetId,
               }).then(() => {
-                setLocationsCompleted((s: number) => s + 1);
-                setNumLocationsCreated((s: number) => s + 1);
+                completedCount += 1;
+                createdCount += 1;
+                setLocationsCompleted(completedCount);
+                setNumLocationsCreated(createdCount);
               })
             );
           }
@@ -658,7 +735,13 @@ function CreateTask({
 
   useEffect(() => {
     if (setHandleCreateTask) {
-      setHandleCreateTask(() => handleSubmit);
+      setHandleCreateTask(
+        () => () =>
+          handleSubmit({
+            setLocationsCompleted: () => {},
+            setTotalLocations: () => {},
+          })
+      );
     }
   }, [setHandleCreateTask, handleSubmit]);
 
