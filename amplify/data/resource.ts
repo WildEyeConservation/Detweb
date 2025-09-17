@@ -285,6 +285,7 @@ const schema = a
         project: a.belongsTo('Project', 'projectId'),
         locations: a.hasMany('Location', 'setId'),
         memberships: a.hasMany('LocationSetMembership', 'locationSetId'),
+        description: a.string(),
         locationCount: a.integer().default(0),
         tasks: a.hasMany('TasksOnAnnotationSet', 'locationSetId'),
       })
