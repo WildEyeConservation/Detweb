@@ -23,8 +23,7 @@
       "$amplify/*": [
         "./.amplify/generated/*"
       ]
-    },
-    "typeRoots": ["./node_modules/@types", "./src"]
+    }
 
   },
   "exclude": ["amplify/**/*"],

@@ -20,27 +20,41 @@ type PaginatedQueryResult<T> = {
   nextToken?: string | null;
 };
 
-type QueryFunction<T, P> = (
-  params: P & { nextToken?: string | null }
-) => Promise<PaginatedQueryResult<T>>;
-
 type SelectionSet<T> = (keyof T)[] | string[];
 
-export async function fetchAllPaginatedResults<
-  T,
-  P extends { selectionSet?: SelectionSet<T> },
-  R = P['selectionSet'] extends SelectionSet<T> ? Pick<T, P['selectionSet'][number]> : T
->(
-  queryFn: QueryFunction<R, P>,
-  params: P,
+function splitInputAndOptions(params: any): { input?: any; options: any } {
+  if (!params) {
+    return { input: undefined, options: {} };
+  }
+  const { filter, sortDirection, limit, nextToken: _nt, selectionSet, ...rest } = params;
+  const input = Object.keys(rest).length ? rest : undefined;
+  const options: any = {};
+  if (filter !== undefined) options.filter = filter;
+  if (sortDirection !== undefined) options.sortDirection = sortDirection;
+  if (limit !== undefined) options.limit = limit;
+  if (selectionSet !== undefined) options.selectionSet = selectionSet;
+  return { input, options };
+}
+
+export async function fetchAllPaginatedResults<T>(
+  queryFn:
+    | ((options?: any) => Promise<PaginatedQueryResult<T>>)
+    | ((input: any, options?: any) => Promise<PaginatedQueryResult<T>>),
+  params?: any,
   setStepsCompleted?: (steps: number) => void
-): Promise<R[]> {
-  let allResults: R[] = [];
+): Promise<T[]> {
+  let allResults: T[] = [];
   let nextToken: string | null | undefined = undefined;
   let stepCount = 0;
 
+  const { input, options: baseOptions } = splitInputAndOptions(params);
+
   do {
-    const result = await queryFn({ ...params, nextToken });
+    const options = { ...baseOptions, nextToken };
+    const result =
+      input === undefined
+        ? await (queryFn as any)(options)
+        : await (queryFn as any)(input, options);
     allResults = allResults.concat(result.data);
     nextToken = result.nextToken;
     stepCount += result.data.length;
@@ -48,7 +62,6 @@ export async function fetchAllPaginatedResults<
     if (setStepsCompleted) {
       setStepsCompleted(stepCount);
     }
-
   } while (nextToken);
 
   return allResults;

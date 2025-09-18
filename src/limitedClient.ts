@@ -4,6 +4,7 @@ import outputs from '../amplify_outputs.json'
 Amplify.configure(outputs)
 import { generateClient } from "aws-amplify/api";
 import { Schema } from '../amplify/data/resource'; // Path to your backend resource definition
+import type { DataClient } from '../amplify/shared/data-schema.generated';
 
 /* Here we generate a graphQL client with the Amplify API module, and then we wrap the client methods
 to limit the number of concurrent requests to the GraphQL API, as well as to check for errors.
@@ -15,7 +16,7 @@ for error responses from the server.
 The pLimit module is used to limit the number of concurrent requests to the GraphQL API. 
 */
 
-const client = generateClient<Schema>({ authMode: "userPool" });
+const client = generateClient<Schema>({ authMode: "userPool" }) as unknown as DataClient;
 
 // Create a pLimit instance with a concurrency limit (adjust as needed)
 const limit = pLimit(15);
@@ -107,5 +108,5 @@ function wrapClientMethods(obj: any): any {
 }
 
 // Create the limited client with wrapped methods
-export const limitedClient = wrapClientMethods(client);
+export const limitedClient = wrapClientMethods(client) as DataClient;
 

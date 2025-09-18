@@ -3,7 +3,8 @@ import { Schema } from '../amplify/data/resource'; // Path to your backend resou
 import outputs from '../amplify_outputs.json';
 import { AuthUser } from '@aws-amplify/auth';
 import { SQSClient } from '@aws-sdk/client-sqs';
-import { V6Client } from '@aws-amplify/api-graphql';
+import type { DataClient } from '../amplify/shared/data-schema.generated';
+import type { UserType } from '../amplify/shared/types';
 import { limitedClient } from './limitedClient';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 
@@ -11,7 +12,7 @@ export interface ProgressType {
   [key: string]: { value?: number; detail: JSX.Element };
 }
 
-type ClientType = V6Client<Schema>;
+type ClientType = DataClient;
 type ModelType = keyof ClientType['models'];
 export type CRUDhook<T extends ModelType> = {
   data: Schema[T]['type'][];
@@ -22,7 +23,7 @@ export type CRUDhook<T extends ModelType> = {
 export type AnnotationsHook = CRUDhook<'Annotation'>;
 
 export interface GlobalContextType {
-  client: V6Client<Schema>;
+  client: DataClient;
   backend: typeof outputs;
   region: string;
   modalToShow: string | null;
@@ -105,7 +106,7 @@ export interface UserContextType {
 }
 
 export interface ManagementContextType {
-  allUsers: Schema['UserType']['type'][];
+  allUsers: UserType[];
   projectMembershipHook: CRUDhook<'UserProjectMembership'>;
   annotationSetsHook: CRUDhook<'AnnotationSet'>;
   imageSetsHook: CRUDhook<'ImageSet'>;
@@ -162,13 +163,13 @@ interface ImageContextType {
   setZoom: React.Dispatch<React.SetStateAction<number>>;
   prevImages:
     | {
-        image: Schema['ImageType']['type'];
+        image: Schema['Image']['type'];
         transform: (c1: [number, number]) => [number, number];
       }[]
     | undefined;
   nextImages:
     | {
-        image: Schema['ImageType']['type'];
+        image: Schema['Image']['type'];
         transform: (c1: [number, number]) => [number, number];
       }[]
     | undefined;

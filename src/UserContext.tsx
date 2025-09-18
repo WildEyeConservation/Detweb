@@ -16,6 +16,7 @@ import {
   UploadContext,
 } from "./Context.tsx";
 import { generateClient } from "aws-amplify/api";
+import type { DataClient } from '../amplify/shared/data-schema.generated';
 import outputs from "../amplify_outputs.json";
 import { useOptimisticUpdates, useQueues } from "./useOptimisticUpdates.tsx";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";

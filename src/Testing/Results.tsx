@@ -42,7 +42,7 @@ export default function Results() {
       const results = await fetchAllPaginatedResults(
         client.models.TestResult.testResultsByUserId,
         {
-          userId: selectedUser?.value,
+          userId: selectedUser!.value,
           selectionSet: [
             'id',
             'testPreset.name',
@@ -65,7 +65,7 @@ export default function Results() {
           .filter((result) => result.projectId === selectedProject?.value)
           .sort(
             (a, b) =>
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+              new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()
           )
       );
 
@@ -84,7 +84,8 @@ export default function Results() {
   ];
 
   const tableData = results.map((result) => {
-    const date = new Date(result.createdAt);
+    const createdAt = result.createdAt ?? new Date().toISOString();
+    const date = new Date(createdAt);
     const pool = result.testPreset.name
     let surveyId = selectedProject?.value
 
@@ -135,7 +136,7 @@ export default function Results() {
 
   const countsByCategory = results
     .flatMap((result) => result.categoryCounts)
-    .reduce((acc, category) => {
+    .reduce((acc: Record<string, { userCount: number; testCount: number; name: string }>, category) => {
       const key = category.categoryName.toLowerCase();
       if (!acc[key]) {
         acc[key] = {
@@ -246,10 +247,10 @@ export default function Results() {
 
     setIsPurging(true);
 
-    const results = await fetchAllPaginatedResults(
+      const results = await fetchAllPaginatedResults(
       client.models.TestResult.testResultsByUserId,
       {
-        userId: selectedUser?.value,
+        userId: selectedUser!.value,
         selectionSet: ['id', 'projectId', 'categoryCounts.categoryName'],
       }
     );
@@ -260,7 +261,7 @@ export default function Results() {
 
     const deletePromises = filteredResults.flatMap((result) => [
       client.models.TestResult.delete({ id: result.id }),
-      ...result.categoryCounts.map((category) =>
+      ...result.categoryCounts.map((category: any) =>
         client.models.TestResultCategoryCount.delete({
           testResultId: result.id,
           categoryName: category.categoryName,

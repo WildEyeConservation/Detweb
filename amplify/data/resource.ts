@@ -1,4 +1,4 @@
-import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
+import { a, defineData } from '@aws-amplify/backend';
 import { addUserToGroup } from '../functions/add-user-to-group/resource';
 import { createGroup } from '../data/create-group/resource';
 import { listUsers } from '../data/list-users/resource';
@@ -909,7 +909,7 @@ const schema = a
     // allow.resource(consolidateUserStats),
   ]);
 
-export type Schema = ClientSchema<typeof schema>;
+export type { Schema } from '../shared/data-schema.generated';
 export const data = defineData({
   schema,
   authorizationModes: {
