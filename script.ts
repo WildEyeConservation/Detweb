@@ -362,14 +362,22 @@ function buildTypesFile(intro: IntrospectionData): string {
 
       // Create input
       lines.push(`export interface Create${modelName}Input {`);
+      const primaryFieldsForCreate = getPrimaryKeyFields(model);
+      const isDefaultAutoId =
+        primaryFieldsForCreate.length === 1 &&
+        primaryFieldsForCreate[0] === 'id' &&
+        model.primaryKeyInfo?.isCustomPrimaryKey !== true;
       for (const [fieldName, field] of fieldEntries) {
         if (!shouldIncludeFieldInInput(field)) {
           continue;
         }
         const isReadOnlyField = Boolean(field.isReadOnly) || READONLY_FIELD_NAMES.has(fieldName.toLowerCase());
+        const isAutoIdField = isDefaultAutoId && fieldName === 'id';
         const { type, optional } = getFieldTyping(field, {
           mode: 'local',
-          forceOptional: isReadOnlyField
+          // If the model uses the default auto-generated 'id' primary key,
+          // make 'id' optional for create inputs so callers don't need to supply it.
+          forceOptional: isReadOnlyField || isAutoIdField
         });
         lines.push(
           `${SINGLE_INDENT}${fieldName}${optional ? '?' : ''}: ${type};`
