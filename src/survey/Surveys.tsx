@@ -564,7 +564,7 @@ export default function Surveys() {
             </Card.Footer>
           )}
         </Card>
-        {process.env.NODE_ENV === 'development' && <UploadIntegrityChecker />}
+        {/* {process.env.NODE_ENV === 'development' && <UploadIntegrityChecker />} */}
       </div>
       <NewSurveyModal
         show={modalToShow === 'newSurvey'}

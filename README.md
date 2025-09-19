@@ -62,3 +62,9 @@ Cannot destructure property 'isReadOnly' of 'fields7[fieldName]' as it is undefi
 ```
 
 This is not very informative, but it usually means that your client.models.SomeModel.someAction call is referring to a field that does not exist. If you checked against the schema, and everything seems correct, then the likely cause is simply that your amplify_outputs.json file is out of date. If you are testing against the production backend, then just make sure your latest schema is deployed in production, download the latest amplify_outputs.json from the aws amplify dashboard and place it in the project folder. If you are testing in your sandbox, you just need to make sure npx ampx sandbox has completed succesfully against your latest backend definition.
+
+### 7. Amplify Type System Limitations
+Amplify Gen2’s type system can break in larger/complex schemas (see the upstream issue). While this is being addressed, we generate a typed data client from `amplify_outputs.json` to restore full typing in the IDE. For the workaround details, see the referenced comment below.
+
+- Issue: https://github.com/aws-amplify/amplify-data/issues/424
+- Workaround/solution comment: https://github.com/aws-amplify/amplify-data/issues/424#issuecomment-3304528163

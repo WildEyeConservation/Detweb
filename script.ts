@@ -782,7 +782,7 @@ function buildDataSchemaFile(intro: IntrospectionData): string {
         }
         for (const fieldName of additionalFields) {
           modelSectionLines.push(
-            `${SINGLE_INDENT.repeat(2)}${fieldName}?: ModelType<'${modelName}'>['${fieldName}'];`
+            `${SINGLE_INDENT.repeat(2)}${fieldName}?: FieldFilter<ModelType<'${modelName}'>['${fieldName}']>;`
           );
         }
         if (!fields.length) {

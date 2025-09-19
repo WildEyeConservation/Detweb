@@ -5,8 +5,9 @@ import { Tabs, Tab } from '../Tabs';
 import { Schema } from '../../amplify/data/resource';
 import { GlobalContext } from '../Context';
 import SpeciesLabelling from './SpeciesLabelling';
+import FalseNegatives from './FalseNegatives';
 
-type TaskType = 'species-labelling' | 'registration';
+type TaskType = 'species-labelling' | 'registration' | 'false-negatives';
 
 export default function LaunchAnnotationSetModal({
   show,
@@ -22,6 +23,9 @@ export default function LaunchAnnotationSetModal({
   const [progressMessage, setProgressMessage] = useState<string>('');
   const [launchDisabled, setLaunchDisabled] = useState<boolean>(false);
   const [speciesLaunchHandler, setSpeciesLaunchHandler] = useState<
+    ((onProgress: (msg: string) => void) => Promise<void>) | null
+  >(null);
+  const [falseNegativesLaunchHandler, setFalseNegativesLaunchHandler] = useState<
     ((onProgress: (msg: string) => void) => Promise<void>) | null
   >(null);
 
@@ -44,12 +48,8 @@ export default function LaunchAnnotationSetModal({
   }
 
   async function handleSubmit() {
-    if (
-      taskType === 'species-labelling' &&
-      typeof speciesLaunchHandler !== 'function'
-    ) {
-      return;
-    }
+    if (taskType === 'species-labelling' && typeof speciesLaunchHandler !== 'function') return;
+    if (taskType === 'false-negatives' && typeof falseNegativesLaunchHandler !== 'function') return;
     setLaunching(true);
 
     await client.models.Project.update({
@@ -66,6 +66,12 @@ export default function LaunchAnnotationSetModal({
         if (typeof speciesLaunchHandler === 'function') {
           setProgressMessage('Initializing launch...');
           await speciesLaunchHandler(setProgressMessage);
+        }
+        break;
+      case 'false-negatives':
+        if (typeof falseNegativesLaunchHandler === 'function') {
+          setProgressMessage('Initializing launch...');
+          await falseNegativesLaunchHandler(setProgressMessage);
         }
         break;
       case 'registration':
@@ -105,6 +111,9 @@ export default function LaunchAnnotationSetModal({
                 case 1:
                   setTaskType('registration');
                   break;
+                case 2:
+                  setTaskType('false-negatives');
+                  break;
               }
             }}
             disableSwitching={launching}
@@ -125,6 +134,15 @@ export default function LaunchAnnotationSetModal({
                 </p>
               </div>
             </Tab>
+            <Tab label='False Negatives'>
+              <FalseNegatives
+                project={project}
+                annotationSet={annotationSet}
+                launching={launching}
+                setLaunchDisabled={setLaunchDisabled}
+                setFalseNegativesLaunchHandler={setFalseNegativesLaunchHandler}
+              />
+            </Tab>
           </Tabs>
         </Form>
         {progressMessage && (
@@ -137,7 +155,9 @@ export default function LaunchAnnotationSetModal({
               launchDisabled ||
               launching ||
               (taskType === 'species-labelling' &&
-                typeof speciesLaunchHandler !== 'function')
+                typeof speciesLaunchHandler !== 'function') ||
+              (taskType === 'false-negatives' &&
+                typeof falseNegativesLaunchHandler !== 'function')
             }
             onClick={handleSubmit}
           >

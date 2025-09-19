@@ -365,33 +365,6 @@ export default function Jobs() {
           )}
         </Card.Body>
       </Card>
-      {jobToDelete && (
-        <ConfirmationModal
-          show={modalToShow === 'deleteJob'}
-          title='Delete Job'
-          onClose={() => {
-            showModal(null);
-            setJobToDelete(null);
-          }}
-          onConfirm={() => handleDeleteJob(jobToDelete)}
-          body={
-            <p className='mb-0'>
-              Are you sure you want to delete the job <b>{jobToDelete.name}</b>{' '}
-              on survey{' '}
-              <b>
-                {
-                  displayProjects.find(
-                    (project) => project.id === jobToDelete.projectId
-                  )?.name
-                }
-              </b>
-              ?
-              <br />
-              This action cannot be undone.
-            </p>
-          }
-        />
-      )}
     </div>
   );
 }
