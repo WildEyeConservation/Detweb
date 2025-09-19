@@ -650,7 +650,6 @@ export default function UploadManager() {
 
           client.mutations.runScoutbot({
             projectId: projectId,
-            //@ts-ignore
             images: batchStrings,
             setId: locationSet.id,
             bucket: backend.storage.buckets[1].bucket_name,
@@ -670,7 +669,6 @@ export default function UploadManager() {
           const batchStrings = batch.map((image) => image.originalPath);
 
           client.mutations.runHeatmapper({
-            //@ts-ignore
             images: batchStrings,
           });
         }
@@ -702,7 +700,6 @@ export default function UploadManager() {
 
           client.mutations.runMadDetector({
             projectId: projectId,
-            //@ts-ignore
             images: batchStrings,
             setId: locationSet.id,
             bucket: backend.storage.buckets[1].bucket_name,

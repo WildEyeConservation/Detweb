@@ -199,7 +199,7 @@ function getFieldTyping(
   }
 
   if (options.treatAsInput && !isRequired) {
-    type = addNullUnion(baseType);
+    type = addNullUnion(type);
   }
 
   return {
