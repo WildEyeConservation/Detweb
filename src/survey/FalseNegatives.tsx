@@ -2,7 +2,6 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -64,13 +63,17 @@ export default function FalseNegatives({
 
   // Model selection and threshold
   const [model, setModel] = useState<Option | null>(null);
+  const [modelOptions, setModelOptions] = useState<Option[]>([]);
+  // Internal flag during initial model derivation; not used in UI yet
+  const [loadingModels, setLoadingModels] = useState<boolean>(false);
   const [threshold, setThreshold] = useState<number>(0.6);
   const [queueTag, setQueueTag] = useState<string>(
     `${annotationSet.name} - False Negatives`
   );
 
   // Sampling
-  const [samplePercent, setSamplePercent] = useState<number>(10);
+  const [samplePercent, setSamplePercent] = useState<number>(5);
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState<boolean>(false);
   const [scanning, setScanning] = useState<boolean>(false);
   const [scanMessage, setScanMessage] = useState<string>('');
   const [totalTiles, setTotalTiles] = useState<number>(0);
@@ -82,6 +85,7 @@ export default function FalseNegatives({
   useEffect(() => {
     let cancelled = false;
     async function loadTiledSets() {
+      setLoadingModels(true);
       const resp1 = await client.models.LocationSet.locationSetsByProjectId(
         { projectId: project.id },
         { selectionSet: ['id', 'name', 'description'] as const }
@@ -91,6 +95,22 @@ export default function FalseNegatives({
         name: string;
         description?: string | null;
       }>;
+      // Derive model options from location set names the user actually has
+      const modelOpts: Option[] = [];
+      const pushOnce = (label: string, value: string) => {
+        if (!modelOpts.some((o) => o.value === value)) modelOpts.push({ label, value });
+      };
+      for (const ls of data || []) {
+        const n = String(ls.name || '').toLowerCase();
+        if (n.includes('scoutbot')) pushOnce('ScoutBot', 'scoutbot');
+        if (n.includes('mad')) pushOnce('MAD AI', 'mad');
+        if (n.includes('elephant-detection-nadir'))
+          pushOnce('Elephant Detection Nadir', 'heatmap');
+      }
+      if (!cancelled) {
+        setModelOptions(modelOpts);
+        if (modelOpts.length === 1) setModel(modelOpts[0]);
+      }
       // Restrict tiled sets to those mapped to the current annotation set
       const resp2 =
         await client.models.TasksOnAnnotationSet.locationSetsByAnnotationSetId({
@@ -130,6 +150,7 @@ export default function FalseNegatives({
         setTiledSetOptions(
           options.sort((a, b) => (a.label > b.label ? 1 : -1))
         );
+      if (!cancelled) setLoadingModels(false);
     }
     loadTiledSets();
     return () => {
@@ -146,6 +167,7 @@ export default function FalseNegatives({
   useEffect(() => {
     const shouldDisable =
       launching ||
+      loadingModels ||
       !model ||
       (useExistingTiled
         ? !selectedTiledSetId
@@ -155,6 +177,7 @@ export default function FalseNegatives({
     setLaunchDisabled(shouldDisable);
   }, [
     launching,
+    loadingModels,
     model,
     useExistingTiled,
     selectedTiledSetId,
@@ -475,34 +498,12 @@ export default function FalseNegatives({
     queueTag,
   ]);
 
-  const modelOptions = useMemo(
-    () => [
-      { label: 'ScoutBot', value: 'scoutbotv3' },
-      { label: 'Elephant Detection Nadir', value: 'heatmap' },
-      { label: 'MAD', value: 'mad-v2' },
-    ],
-    []
-  );
+  // modelOptions now derived from actual location sets; when exactly one, it's auto-selected
 
   return (
     <div className='px-3 pb-3 pt-1'>
       <div className='d-flex flex-column gap-3 mt-2'>
-        <Form.Group>
-          <Form.Label className='mb-0'>Job Name</Form.Label>
-          <span
-            className='text-muted d-block mb-1'
-            style={{ fontSize: '12px' }}
-          >
-            Modify this to display a different name for the job in the jobs
-            page.
-          </span>
-          <Form.Control
-            type='text'
-            value={queueTag}
-            onChange={(e) => setQueueTag((e.target as HTMLInputElement).value)}
-            disabled={launching}
-          />
-        </Form.Group>
+        
         <div
           className='border border-dark shadow-sm p-2'
           style={{ backgroundColor: '#697582' }}
@@ -544,31 +545,35 @@ export default function FalseNegatives({
           )}
         </div>
 
-        <Form.Group>
-          <Form.Label className='mb-0'>Model</Form.Label>
-          <Select<Option>
-            value={model}
-            onChange={(m: SingleValue<Option>) => setModel(m ?? null)}
-            options={modelOptions}
-            placeholder='Select a model'
-            className='text-black'
-            isDisabled={launching}
-          />
-        </Form.Group>
-        <Form.Group>
-          <Form.Label className='mb-0'>Confidence threshold (&gt;=)</Form.Label>
-          <Form.Control
-            type='number'
-            min={0}
-            max={1}
-            step={0.01}
-            value={threshold}
-            onChange={(e) =>
-              setThreshold(Number((e.target as HTMLInputElement).value))
-            }
-            disabled={launching}
-          />
-        </Form.Group>
+        {loadingModels ? (
+          <p
+            className='text-muted mb-0 mt-2 text-center'
+            style={{ fontSize: '12px' }}
+          >
+            Loading models...
+          </p>
+        ) : modelOptions.length > 1 ? (
+          <Form.Group>
+            <Form.Label className='mb-0'>Model</Form.Label>
+            <Select<Option>
+              value={model}
+              onChange={(m: SingleValue<Option>) => setModel(m ?? null)}
+              options={modelOptions}
+              placeholder='Select a model'
+              className='text-black'
+              isDisabled={launching}
+            />
+          </Form.Group>
+        ) : (
+          modelOptions.length === 0 && (
+            <p
+              className='text-muted mb-0 mt-2 text-center'
+              style={{ fontSize: '12px' }}
+            >
+              You must first process your images before launching this task.
+            </p>
+          )
+        )}
         <Form.Group>
           <Form.Label className='mb-0'>Sample size (%)</Form.Label>
           <Form.Control
@@ -583,6 +588,53 @@ export default function FalseNegatives({
             disabled={launching}
           />
         </Form.Group>
+
+        <Form.Group>
+          <Form.Switch
+            label='Show Advanced Options'
+            checked={showAdvancedOptions}
+            onChange={() => setShowAdvancedOptions(!showAdvancedOptions)}
+            disabled={launching}
+          />
+        </Form.Group>
+
+        {showAdvancedOptions && (
+          <div
+            className='d-flex flex-column gap-3 border border-dark shadow-sm p-2'
+            style={{ backgroundColor: '#697582' }}
+          >
+            <Form.Group>
+              <Form.Label className='mb-0'>Job Name</Form.Label>
+              <span
+                className='text-muted d-block mb-1'
+                style={{ fontSize: '12px' }}
+              >
+                Modify this to display a different name for the job in the jobs
+                page.
+              </span>
+              <Form.Control
+                type='text'
+                value={queueTag}
+                onChange={(e) => setQueueTag((e.target as HTMLInputElement).value)}
+                disabled={launching}
+              />
+            </Form.Group>
+            <Form.Group>
+              <Form.Label className='mb-0'>Confidence threshold (&gt;=)</Form.Label>
+              <Form.Control
+                type='number'
+                min={0}
+                max={1}
+                step={0.01}
+                value={threshold}
+                onChange={(e) =>
+                  setThreshold(Number((e.target as HTMLInputElement).value))
+                }
+                disabled={launching}
+              />
+            </Form.Group>
+          </div>
+        )}
 
         <div
           className='border border-dark shadow-sm p-2'

@@ -23,12 +23,14 @@ export default function DensityMap({
   categoryIds = [],
   primaryOnly = false,
   editable = false,
+  dropFalseNegatives = false,
 }: {
   annotationSetId: string;
   surveyId: string;
   categoryIds?: string[];
   primaryOnly?: boolean;
   editable?: boolean;
+  dropFalseNegatives?: boolean;
 }) {
   const { client } = useContext(GlobalContext)!;
   const [rawAnnotations, setRawAnnotations] = useState<any[]>([]);
@@ -70,8 +72,8 @@ export default function DensityMap({
     async function loadData() {
       setLoading(true);
       const [anns, imgs, str, exclusions] = await Promise.all([
-        fetchAllPaginatedResults<any, any>(
-          client.models.Annotation.annotationsByAnnotationSetId as any,
+        fetchAllPaginatedResults(
+          client.models.Annotation.annotationsByAnnotationSetId,
           {
             setId: annotationSetId,
             limit: 1000,
@@ -81,45 +83,39 @@ export default function DensityMap({
               'category.name',
               'category.id',
               'objectId',
+              'source',
             ],
           } as any
         ),
-        fetchAllPaginatedResults<any, any>(
-          client.models.Image.imagesByProjectId as any,
-          {
-            projectId: surveyId,
-            limit: 1000,
-            selectionSet: [
-              'id',
-              'latitude',
-              'longitude',
-              'transectId',
-              'timestamp',
-            ],
-          } as any
-        ),
-        fetchAllPaginatedResults<any, any>(
-          client.models.Stratum.strataByProjectId as any,
-          {
-            projectId: surveyId,
-            limit: 1000,
-            selectionSet: ['id', 'name', 'coordinates'],
-          } as any
-        ),
-        fetchAllPaginatedResults<any, any>(
-          client.models.ShapefileExclusions
-            .shapefileExclusionsByProjectId as any,
+        fetchAllPaginatedResults(client.models.Image.imagesByProjectId, {
+          projectId: surveyId,
+          limit: 1000,
+          selectionSet: [
+            'id',
+            'latitude',
+            'longitude',
+            'transectId',
+            'timestamp',
+          ],
+        }),
+        fetchAllPaginatedResults(client.models.Stratum.strataByProjectId, {
+          projectId: surveyId,
+          limit: 1000,
+          selectionSet: ['id', 'name', 'coordinates'],
+        }),
+        fetchAllPaginatedResults(
+          client.models.ShapefileExclusions.shapefileExclusionsByProjectId,
           {
             projectId: surveyId,
             limit: 1000,
             selectionSet: ['id', 'coordinates'],
-          } as any
+          }
         ),
       ]);
 
       // Store raw annotations without filtering
       setRawAnnotations(anns);
-      setImages(imgs.sort((a, b) => a.timestamp - b.timestamp));
+      setImages(imgs.sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0)));
       // Add setting strata state
       setStrata(str);
       // Add setting shapefile exclusions state
@@ -132,7 +128,11 @@ export default function DensityMap({
   // Filter annotations when primaryOnly or rawAnnotations change
   useEffect(() => {
     const filteredAnnotations = primaryOnly
-      ? rawAnnotations.filter((a) => a.id === a.objectId)
+      ? rawAnnotations.filter(
+          (a) =>
+            a.id === a.objectId &&
+            (!dropFalseNegatives || !a.source.includes('false-negative'))
+        )
       : rawAnnotations;
 
     // add a name to each annotation
@@ -146,7 +146,7 @@ export default function DensityMap({
     });
 
     setAnnotations(filteredAnnotations);
-  }, [rawAnnotations, primaryOnly]);
+  }, [rawAnnotations, primaryOnly, dropFalseNegatives]);
 
   // Fit map to image points on initial load
   useEffect(() => {

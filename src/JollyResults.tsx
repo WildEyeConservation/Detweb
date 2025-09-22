@@ -553,6 +553,7 @@ export default function JollyResults() {
                     : categoryOptions.map((c) => c.value)
                 }
                 primaryOnly
+                dropFalseNegatives
               />
             </Card.Body>
           </Card>

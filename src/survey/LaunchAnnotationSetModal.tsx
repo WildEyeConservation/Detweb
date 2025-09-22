@@ -25,9 +25,10 @@ export default function LaunchAnnotationSetModal({
   const [speciesLaunchHandler, setSpeciesLaunchHandler] = useState<
     ((onProgress: (msg: string) => void) => Promise<void>) | null
   >(null);
-  const [falseNegativesLaunchHandler, setFalseNegativesLaunchHandler] = useState<
-    ((onProgress: (msg: string) => void) => Promise<void>) | null
-  >(null);
+  const [falseNegativesLaunchHandler, setFalseNegativesLaunchHandler] =
+    useState<((onProgress: (msg: string) => void) => Promise<void>) | null>(
+      null
+    );
 
   // set up queue creation helper
   const { client, showModal } = useContext(GlobalContext)! as any;
@@ -48,8 +49,16 @@ export default function LaunchAnnotationSetModal({
   }
 
   async function handleSubmit() {
-    if (taskType === 'species-labelling' && typeof speciesLaunchHandler !== 'function') return;
-    if (taskType === 'false-negatives' && typeof falseNegativesLaunchHandler !== 'function') return;
+    if (
+      taskType === 'species-labelling' &&
+      typeof speciesLaunchHandler !== 'function'
+    )
+      return;
+    if (
+      taskType === 'false-negatives' &&
+      typeof falseNegativesLaunchHandler !== 'function'
+    )
+      return;
     setLaunching(true);
 
     await client.models.Project.update({
@@ -109,10 +118,10 @@ export default function LaunchAnnotationSetModal({
                   setTaskType('species-labelling');
                   break;
                 case 1:
-                  setTaskType('registration');
+                  setTaskType('false-negatives');
                   break;
                 case 2:
-                  setTaskType('false-negatives');
+                  setTaskType('registration');
                   break;
               }
             }}
@@ -127,13 +136,6 @@ export default function LaunchAnnotationSetModal({
                 setSpeciesLaunchHandler={setSpeciesLaunchHandler}
               />
             </Tab>
-            <Tab label='Registration'>
-              <div className='p-3'>
-                <p className='m-0'>
-                  This will launch a registration task for the annotation set.
-                </p>
-              </div>
-            </Tab>
             <Tab label='False Negatives'>
               <FalseNegatives
                 project={project}
@@ -142,6 +144,13 @@ export default function LaunchAnnotationSetModal({
                 setLaunchDisabled={setLaunchDisabled}
                 setFalseNegativesLaunchHandler={setFalseNegativesLaunchHandler}
               />
+            </Tab>
+            <Tab label='Registration'>
+              <div className='p-3'>
+                <p className='m-0'>
+                  This will launch a registration task for the annotation set.
+                </p>
+              </div>
             </Tab>
           </Tabs>
         </Form>
