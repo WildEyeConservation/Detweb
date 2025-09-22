@@ -292,6 +292,7 @@ export default function AnnotationImage(props: any) {
             location={location}
             taskTag={props.taskTag}
             zoom={defaultZoom}
+            viewBoundsScale={props.viewBoundsScale}
             id={id}
             prev={prev}
             next={next}

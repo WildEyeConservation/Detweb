@@ -6,6 +6,7 @@ import { GlobalContext } from './Context';
 import { fetchAllPaginatedResults } from './utils';
 import MyTable from './Table';
 import LabeledToggleSwitch from './LabeledToggleSwitch';
+import { Schema } from '../amplify/data/resource';
 
 interface Props {
   show: boolean;
@@ -20,10 +21,11 @@ const AnnotationCountModal: React.FC<Props> = ({
 }) => {
   const { client } = useContext(GlobalContext)!;
   const [annotations, setAnnotations] = useState<
-    { id: string; category: { name: string }; objectId: string }[]
+    Schema['Annotation']['type'][]
   >([]);
   const [primaryOnly, setPrimaryOnly] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [hasFalseNegatives, setHasFalseNegatives] = useState(false);
 
   useEffect(() => {
     async function getAnnotationCounts() {
@@ -33,13 +35,21 @@ const AnnotationCountModal: React.FC<Props> = ({
         client.models.Annotation.annotationsByAnnotationSetId,
         {
           setId: setId,
-          selectionSet: ['id', 'category.name', 'objectId'] as const,
+          selectionSet: ['id', 'category.name', 'objectId', 'source'] as const,
           limit: 1000,
         }
       );
       setAnnotations(result);
 
       setLoading(false);
+
+      if (
+        result.some((annotation) =>
+          annotation.source.includes('false-negative')
+        )
+      ) {
+        setHasFalseNegatives(true);
+      }
     }
 
     if (setId && show) {
@@ -55,7 +65,18 @@ const AnnotationCountModal: React.FC<Props> = ({
     }
     acc[category].push(annotation);
     return acc;
-  }, {} as { [category: string]: { id: string; category: { name: string }; objectId: string }[] });
+  }, {} as { [category: string]: Schema['Annotation']['type'][] });
+
+  const falseNegativesByCategory = annotations.reduce((acc, annotation) => {
+    const category = annotation.category.name;
+    if (!acc[category]) {
+      acc[category] = 0;
+    }
+    if (annotation.source.includes('false-negative')) {
+      acc[category]++;
+    }
+    return acc;
+  }, {} as { [category: string]: number });
 
   const tableData = Object.entries(annotationByCategory).map(
     ([category, annotations]) => ({
@@ -67,17 +88,17 @@ const AnnotationCountModal: React.FC<Props> = ({
               (annotation) => annotation.objectId === annotation.id
             ).length
           : annotations.length,
-      ],
+      ].concat(hasFalseNegatives ? [falseNegativesByCategory[category]] : []),
     })
   );
 
   return (
-    <Modal show={show} onHide={handleClose} size='md'>
+    <Modal show={show} onHide={handleClose} size="lg">
       <Header>
         <Title>Annotation Set Details</Title>
       </Header>
       <Body>
-        <div className='p-3'>
+        <div className="p-3">
           {loading ? (
             <div
               style={{
@@ -88,19 +109,19 @@ const AnnotationCountModal: React.FC<Props> = ({
               }}
             >
               <Spinner
-                animation='border'
-                variant='light'
-                size='sm'
-                className='me-2'
+                animation="border"
+                variant="light"
+                size="sm"
+                className="me-2"
               />
               Fetching annotations...
             </div>
           ) : (
-            <div className='d-flex flex-column gap-2 w-100'>
+            <div className="d-flex flex-column gap-2 w-100">
               <LabeledToggleSwitch
-                className='mb-2'
-                leftLabel='All annotations'
-                rightLabel='Primary only'
+                className="mb-2"
+                leftLabel="All annotations"
+                rightLabel="Primary only"
                 checked={primaryOnly}
                 onChange={(checked) => {
                   setPrimaryOnly(checked);
@@ -108,21 +129,25 @@ const AnnotationCountModal: React.FC<Props> = ({
               />
               <MyTable
                 tableHeadings={[
-                  { content: 'Label', style: { width: '50%' } },
+                  { content: 'Label', style: { width: '33%' } },
                   {
                     content: primaryOnly ? 'Primary only' : 'All annotations',
-                    style: { width: '50%' },
+                    style: { width: '33%' },
                   },
-                ]}
+                ].concat(
+                  hasFalseNegatives
+                    ? [{ content: 'False Negatives', style: { width: '34%' } }]
+                    : []
+                )}
                 tableData={tableData}
-                emptyMessage='No annotations found'
+                emptyMessage="No annotations found"
               />
             </div>
           )}
         </div>
       </Body>
       <Footer>
-        <Button variant='dark' onClick={handleClose}>
+        <Button variant="dark" onClick={handleClose}>
           Close
         </Button>
       </Footer>

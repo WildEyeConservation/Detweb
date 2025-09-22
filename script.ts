@@ -903,9 +903,19 @@ function buildDataSchemaFile(intro: IntrospectionData): string {
 /*                                   Main                                     */
 /* -------------------------------------------------------------------------- */
 const typesFileContent = buildTypesFile(introspection);
-fs.writeFileSync(typesOutputPath, `${typesFileContent}\n`);
-
 const schemaFileContent = buildDataSchemaFile(introspection);
+
+// Ensure output directories exist before writing files
+for (const dir of new Set([
+  path.dirname(typesOutputPath),
+  path.dirname(schemaOutputPath)
+])) {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
+fs.writeFileSync(typesOutputPath, `${typesFileContent}\n`);
 fs.writeFileSync(schemaOutputPath, `${schemaFileContent}\n`);
 
 console.log(`✅ Generated Amplify types at ${typesOutputPath}`);

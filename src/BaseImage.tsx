@@ -50,6 +50,8 @@ export interface BaseImageProps {
   otherImageId?: string;
   hideNavButtons?: boolean;
   isTest?: boolean;
+  // Controls how tightly we fit bounds around a location. 0.5 = exact bbox, 1.5 = padded
+  viewBoundsScale?: number;
 }
 
 const BaseImage: React.FC<BaseImageProps> = memo(
@@ -337,22 +339,31 @@ const BaseImage: React.FC<BaseImageProps> = memo(
       }),
       [fullyLoaded]
     );
-    const viewBounds = useMemo(
-      () =>
-        location?.x
-          ? xy2latLng([
-              [
-                location.x - location.width * 1.5,
-                location.y - location.height * 1.5,
-              ],
-              [
-                location.x + location.width * 1.5,
-                location.y + location.height * 1.5,
-              ],
-            ])
-          : imageBounds,
-      [location.x, location.y, location.width, location.height, imageBounds]
-    );
+    const viewBounds = useMemo(() => {
+      if (!location?.x) return imageBounds;
+      const scale = props.viewBoundsScale ?? 1.5;
+      // Compute desired bounds and clamp to image edges so view never goes off-image
+      const left = Math.max(0, location.x - location.width * scale);
+      const top = Math.max(0, location.y - location.height * scale);
+      const right = Math.min(image.width, location.x + location.width * scale);
+      const bottom = Math.min(
+        image.height,
+        location.y + location.height * scale
+      );
+      return xy2latLng([
+        [left, top],
+        [right, bottom],
+      ]);
+    }, [
+      location.x,
+      location.y,
+      location.width,
+      location.height,
+      image.width,
+      image.height,
+      imageBounds,
+      props.viewBoundsScale,
+    ]);
     const viewCenter = useMemo(
       () =>
         location?.x
