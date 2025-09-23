@@ -9,7 +9,7 @@ import { DateTime } from "luxon";
 import { fetchAllPaginatedResults } from "./utils";
 import LabeledToggleSwitch from "./LabeledToggleSwitch";
 import ImageSetDropdown from "./survey/ImageSetDropdown";
-import { Schema } from "../amplify/client-schema";
+import { Schema } from "./amplify/client-schema";
 
 interface AddGpsDataProps {
   imageSets: Schema["ImageSet"]["type"][];

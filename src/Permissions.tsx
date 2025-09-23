@@ -6,7 +6,7 @@ import { useState, useContext } from "react";
 import Info from "./organization/Info";
 import { UserContext, GlobalContext } from "./Context";
 import { useOptimisticUpdates } from "./useOptimisticUpdates";
-import type { Schema } from "../amplify/client-schema";
+import type { Schema } from "./amplify/client-schema";
 
 export default function Permissions() {
   const { isOrganizationAdmin } = useContext(UserContext)!;

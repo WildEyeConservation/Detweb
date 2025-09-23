@@ -1,4 +1,4 @@
-import { Schema } from '../amplify/client-schema'
+import { Schema } from './amplify/client-schema'
 import { useContext,useEffect, useState } from 'react'
 import { GlobalContext } from './Context'
 import { V6Client } from '@aws-amplify/api-graphql' 

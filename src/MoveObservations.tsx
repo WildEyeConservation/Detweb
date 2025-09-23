@@ -5,7 +5,7 @@ import { fetchAllPaginatedResults } from "./utils";
 import { useUpdateProgress } from "./useUpdateProgress";
 import LabeledToggleSwitch from "./LabeledToggleSwitch";
 import { useUsers } from "./apiInterface";
-import { Schema } from "../amplify/client-schema";
+import { Schema } from "./amplify/client-schema";
 import Select from "react-select";
 
 type MoveObservationsProps = {

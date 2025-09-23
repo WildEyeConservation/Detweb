@@ -4,7 +4,7 @@ import { UseAckOnTimeoutProps } from './useAckOnTimeout';
 import { BaseImageProps } from './BaseImage';
 import { ImageContext } from './Context';
 import { fetchAllPaginatedResults } from './utils';
-import { Schema } from '../amplify/client-schema';
+import { Schema } from './amplify/client-schema';
 
 /* This hook will take an ack callback as input and create a new ack callback that:
 - Uses the graphQL API to create an Observation entry for the current user.

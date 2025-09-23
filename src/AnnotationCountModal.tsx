@@ -6,7 +6,7 @@ import { GlobalContext } from './Context';
 import { fetchAllPaginatedResults } from './utils';
 import MyTable from './Table';
 import LabeledToggleSwitch from './LabeledToggleSwitch';
-import { Schema } from '../amplify/client-schema';
+import { Schema } from './amplify/client-schema';
 
 interface Props {
   show: boolean;
