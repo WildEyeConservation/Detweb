@@ -26,10 +26,14 @@ export default function JollyResults() {
   const { myMembershipHook: myProjectsHook, user: authUser } =
     useContext(UserContext)!;
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<
+    (Schema['JollyResult']['type'] & { stratumName?: string })[]
+  >([]);
   const [surveyName, setSurveyName] = useState('');
   const [annotationSetName, setAnnotationSetName] = useState('');
-  const [resultsMemberships, setResultsMemberships] = useState<any[]>([]);
+  const [resultsMemberships, setResultsMemberships] = useState<
+    Schema['JollyResultsMembership']['type'][]
+  >([]);
   const [categoryOptions, setCategoryOptions] = useState<
     { label: string; value: string }[]
   >([]);
@@ -43,6 +47,7 @@ export default function JollyResults() {
   );
   const [isCopying, setIsCopying] = useState(false);
   const [moreInfo, setMoreInfo] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const { users } = useUsers();
   const adminProjects = myProjectsHook.data?.filter((p) => p.isAdmin);
   const isProjectAdmin = adminProjects?.some((p) => p.projectId === surveyId);
@@ -141,7 +146,7 @@ export default function JollyResults() {
 
   async function handleCopyLink(token: string) {
     const windowUrl = new URL(window.location.href);
-    let url = `${windowUrl.origin}?t=${token}`;
+    const url = `${windowUrl.origin}?t=${token}`;
 
     // First, attempt to use the native share API if available
     if (navigator.share) {
@@ -173,9 +178,46 @@ export default function JollyResults() {
   }
 
   async function exportResultsAsCSV() {
+    setExporting(true);
+
+    const annotations: Schema['Annotation']['type'][] = [];
+
+    for (const categoryId of categoryOptions.map((c) => c.value)) {
+      const annotationsForCategory = await fetchAllPaginatedResults(
+        client.models.Annotation.annotationsByCategoryId,
+        {
+          categoryId,
+          selectionSet: ['source'],
+          limit: 1000,
+        }
+      );
+
+      annotations.push(...annotationsForCategory);
+    }
+
+    //count false negatives per category by reducing annotations into a map of categoryId to count
+    const falseNegatives = annotations.reduce((acc, annotation) => {
+      const categoryId = annotation.categoryId;
+      if (annotation.source.includes('false-negative')) {
+        if (!acc[categoryId]) {
+          acc[categoryId] = 0;
+        }
+        acc[categoryId]++;
+      }
+      return acc;
+    }, {} as { [categoryId: string]: number });
+
+    //add false negatives to results
+    const resultsWithFalseNegatives = results.map((r) => ({
+      ...r,
+      falseNegatives: falseNegatives[r.categoryId] ?? 0,
+    }));
+
     const filteredResults = categoryIds.length
-      ? results.filter((r) => categoryIds.includes(r.categoryId))
-      : results;
+      ? resultsWithFalseNegatives.filter((r) =>
+          categoryIds.includes(r.categoryId)
+        )
+      : resultsWithFalseNegatives;
 
     exportFromJSON({
       data: filteredResults.map((r) => ({
@@ -190,10 +232,13 @@ export default function JollyResults() {
         numSamples: r.numSamples,
         lowerBound95: r.lowerBound95,
         upperBound95: r.upperBound95,
+        falseNegatives: r.falseNegatives,
       })),
       fileName: `${surveyName} - ${annotationSetName} - Jolly Results`,
       exportType: exportFromJSON.types.csv,
     });
+
+    setExporting(false);
   }
 
   useEffect(() => {
@@ -530,8 +575,10 @@ export default function JollyResults() {
                   </Form.Group>
                 </div>
               )}
-              <Button onClick={exportResultsAsCSV}>
-                Export Results as CSV
+              <Button onClick={exportResultsAsCSV} disabled={exporting}>
+                {exporting
+                  ? 'Exporting, Please wait...'
+                  : 'Export Results as CSV'}
               </Button>
             </Card.Body>
           </Card>
@@ -553,6 +600,7 @@ export default function JollyResults() {
                     : categoryOptions.map((c) => c.value)
                 }
                 primaryOnly
+                dropFalseNegatives
               />
             </Card.Body>
           </Card>

@@ -46,6 +46,31 @@ export default function AnnotationImage(props: any) {
   const navigate = useNavigate();
   const { surveyId } = useParams();
   const [defaultZoom, setDefaultZoom] = useState<number | null>(zoom);
+  const [isFalseNegativesJob, setIsFalseNegativesJob] = useState<boolean>(false);
+  useEffect(() => {
+    let cancelled = false;
+    async function checkQueue() {
+      try {
+        const membership = myMembershipHook.data?.find(
+          (m: any) => m.projectId === (surveyId as string)
+        );
+        const queueId = membership?.queueId;
+        if (!queueId) {
+          if (!cancelled) setIsFalseNegativesJob(false);
+          return;
+        }
+        const { data: q } = await client.models.Queue.get({ id: queueId });
+        if (!cancelled) setIsFalseNegativesJob((q?.name ?? '') === 'False Negatives');
+      } catch {
+        if (!cancelled) setIsFalseNegativesJob(false);
+      }
+    }
+    checkQueue();
+    return () => {
+      cancelled = true;
+    };
+  }, [client.models.Queue, myMembershipHook.data, surveyId]);
+
   const testSetId = useMemo(
     () => (isTest ? crypto.randomUUID() : annotationSetId),
     [isTest, annotationSetId]
@@ -130,7 +155,8 @@ export default function AnnotationImage(props: any) {
   );
   const stats = useImageStats(annotationsHook);
   const memoizedChildren = useMemo(() => {
-    const source = props.taskTag ? `manual-${props.taskTag}` : 'manual';
+    const baseSource = props.taskTag ? `manual-${props.taskTag}` : 'manual';
+    const source = isFalseNegativesJob ? `${baseSource}-false-negative` : baseSource;
     return [
       <CreateAnnotationOnClick
         key='caok'
@@ -173,6 +199,7 @@ export default function AnnotationImage(props: any) {
     annotationSetId,
     legendCategories,
     projectCategories,
+    isFalseNegativesJob,
   ]);
 
   async function handleShare() {
@@ -265,6 +292,7 @@ export default function AnnotationImage(props: any) {
             location={location}
             taskTag={props.taskTag}
             zoom={defaultZoom}
+            viewBoundsScale={props.viewBoundsScale}
             id={id}
             prev={prev}
             next={next}

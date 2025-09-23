@@ -311,7 +311,6 @@ export default function UploadManager() {
 
       // 2) upload new files to S3 with concurrency, continuing progress count
       const CONCURRENCY = 20;
-      let processedTasks = 0; // counts only upload tasks here but progress is tracked globally via state
       const iterator = images[Symbol.iterator]();
       const runWorker = async () => {
         while (true) {
@@ -613,11 +612,6 @@ export default function UploadManager() {
       const BATCH_SIZE = 500;
 
       for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
-        const batch = createdImages.slice(i, i + BATCH_SIZE);
-        const batchStrings = batch.map(
-          (image) => `${image.id}---${image.originalPath}---${image.timestamp}`
-        );
-
         // kick off image registration
         client.mutations.runImageRegistration({
           projectId: projectId,
@@ -833,10 +827,10 @@ export default function UploadManager() {
       setProgress((prev) => ({ ...prev, processed: 1, total: 3 }));
 
       // Delete the project memberships
-      const { data: memberships } = await (
-        client.models.UserProjectMembership
-          .userProjectMembershipsByProjectId as any
-      )({ projectId: id });
+      const { data: memberships } =
+        await client.models.UserProjectMembership.userProjectMembershipsByProjectId(
+          { projectId: id }
+        );
       await Promise.all(
         memberships.map((membership) =>
           client.models.UserProjectMembership.delete({ id: membership.id })
@@ -970,6 +964,7 @@ export default function UploadManager() {
         ref={fileInputRef}
         type='file'
         webkitdirectory='true'
+        //@ts-ignore
         directory='true'
         multiple
         onChange={handleFileSelect}

@@ -1,4 +1,4 @@
-import { Button } from 'react-bootstrap';
+import { Button, Form } from 'react-bootstrap';
 import { useContext, useState, useEffect } from 'react';
 import { GlobalContext, TestingContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
@@ -10,6 +10,7 @@ import { useUpdateProgress } from '../useUpdateProgress';
 import { Schema } from '../../amplify/data/resource';
 import { useUsers } from '../apiInterface';
 import Select from 'react-select';
+// removed modal; pass/fail rules are now inline
 
 export default function Results() {
   const { client } = useContext(GlobalContext)!;
@@ -19,6 +20,10 @@ export default function Results() {
   const [results, setResults] = useState<Schema['TestResult']['type'][]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isPurging, setIsPurging] = useState(false);
+  const [rules, setRules] = useState<{
+    accuracyPercent: number;
+    ignoreOvercounts: boolean;
+  }>({ accuracyPercent: 90, ignoreOvercounts: false });
   const [selectedProject, setSelectedProject] = useState<{
     label: string;
     value: string;
@@ -42,14 +47,13 @@ export default function Results() {
       const results = await fetchAllPaginatedResults(
         client.models.TestResult.testResultsByUserId,
         {
-          userId: selectedUser?.value,
+          userId: selectedUser!.value,
           selectionSet: [
             'id',
             'testPreset.name',
             'testAnimals',
             'projectId',
             'totalMissedAnimals',
-            'passedOnTotal',
             'createdAt',
             'categoryCounts.categoryName',
             'categoryCounts.userCount',
@@ -65,28 +69,42 @@ export default function Results() {
           .filter((result) => result.projectId === selectedProject?.value)
           .sort(
             (a, b) =>
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+              new Date(b.createdAt!).getTime() -
+              new Date(a.createdAt!).getTime()
           )
       );
 
       setIsLoading(false);
     }
     if (!isPurging && selectedUser) setup();
-  }, [isPurging, selectedUser]);
+  }, [isPurging, selectedUser, selectedProject?.value, client]);
 
   const headings = [
     { content: 'Date', sort: true },
     { content: 'Pool', sort: true },
     { content: 'Test Animals', sort: true },
     { content: 'Missed Animals', sort: true },
-    { content: 'Passed on Total', sort: true },
+    { content: 'Overcounted Animals', sort: true },
+    { content: 'Pass (current rules)', sort: true },
     { content: 'Permalink', sort: false },
   ];
 
+  function passedForResult(result: Schema['TestResult']['type']) {
+    const total = result.testAnimals;
+    const missed = result.totalMissedAnimals;
+    let userCount = total - missed;
+    if (rules.ignoreOvercounts && userCount > total) {
+      userCount = total;
+    }
+    const accuracy = rules.accuracyPercent / 100;
+    return userCount >= total * accuracy && userCount <= total * (2 - accuracy);
+  }
+
   const tableData = results.map((result) => {
-    const date = new Date(result.createdAt);
-    const pool = result.testPreset.name
-    let surveyId = selectedProject?.value
+    const createdAt = result.createdAt ?? new Date().toISOString();
+    const date = new Date(createdAt);
+    const pool = result.testPreset.name;
+    let surveyId = selectedProject?.value;
 
     if (pool !== selectedProject?.label) {
       const project = organizationProjects.find((p) => p.name === pool);
@@ -95,14 +113,23 @@ export default function Results() {
       }
     }
 
+    const missedAnimals =
+      result.totalMissedAnimals > 0 ? result.totalMissedAnimals : 0;
+    const overcountedAnimalsForRow =
+      result.totalMissedAnimals < 0 ? Math.abs(result.totalMissedAnimals) : 0;
+
     return {
       id: result.id,
       rowData: [
-        `${date.toISOString().split('T')[0].replace(/-/g, '/')} - ${date.toLocaleTimeString()}`,
+        `${date
+          .toISOString()
+          .split('T')[0]
+          .replace(/-/g, '/')} - ${date.toLocaleTimeString()}`,
         pool,
         result.testAnimals,
-        result.totalMissedAnimals,
-        result.passedOnTotal ? 'Yes' : 'No',
+        missedAnimals,
+        overcountedAnimalsForRow,
+        passedForResult(result) ? 'Yes' : 'No',
         <a
           href={`/surveys/${surveyId}/location/${result.locationId}/${result.annotationSetId}`}
           target="_blank"
@@ -113,7 +140,7 @@ export default function Results() {
     };
   });
 
-  const passed = results.filter((result) => result.passedOnTotal).length;
+  const passed = results.filter((result) => passedForResult(result)).length;
   const failed = results.length - passed;
   const totalAnimals = results.reduce(
     (acc, result) => acc + result.testAnimals,
@@ -135,19 +162,31 @@ export default function Results() {
 
   const countsByCategory = results
     .flatMap((result) => result.categoryCounts)
-    .reduce((acc, category) => {
-      const key = category.categoryName.toLowerCase();
-      if (!acc[key]) {
-        acc[key] = {
-          userCount: 0,
-          testCount: 0,
-          name: key,
-        };
-      }
-      acc[key].userCount += category.userCount;
-      acc[key].testCount += category.testCount;
-      return acc;
-    }, {} as Record<string, { userCount: number; testCount: number; name: string }>);
+    .reduce(
+      (
+        acc: Record<
+          string,
+          { userCount: number; testCount: number; name: string }
+        >,
+        category
+      ) => {
+        const key = category.categoryName.toLowerCase();
+        if (!acc[key]) {
+          acc[key] = {
+            userCount: 0,
+            testCount: 0,
+            name: key,
+          };
+        }
+        acc[key].userCount += category.userCount;
+        acc[key].testCount += category.testCount;
+        return acc;
+      },
+      {} as Record<
+        string,
+        { userCount: number; testCount: number; name: string }
+      >
+    );
 
   const accuracyByCategory = Object.entries(countsByCategory)
     .map(([categoryId, counts]) => {
@@ -219,7 +258,7 @@ export default function Results() {
         preset: result.testPreset.name,
         testAnimals: result.testAnimals,
         missedAnimals: result.totalMissedAnimals,
-        passedOnTotal: result.passedOnTotal,
+        passed: passedForResult(result),
       })),
       fileName: `${selectedUser?.label}-test-results`,
       exportType: 'csv',
@@ -249,7 +288,7 @@ export default function Results() {
     const results = await fetchAllPaginatedResults(
       client.models.TestResult.testResultsByUserId,
       {
-        userId: selectedUser?.value,
+        userId: selectedUser!.value,
         selectionSet: ['id', 'projectId', 'categoryCounts.categoryName'],
       }
     );
@@ -260,11 +299,12 @@ export default function Results() {
 
     const deletePromises = filteredResults.flatMap((result) => [
       client.models.TestResult.delete({ id: result.id }),
-      ...result.categoryCounts.map((category) =>
-        client.models.TestResultCategoryCount.delete({
-          testResultId: result.id,
-          categoryName: category.categoryName,
-        })
+      ...result.categoryCounts.map(
+        (category: Schema['TestResultCategoryCount']['type']) =>
+          client.models.TestResultCategoryCount.delete({
+            testResultId: result.id,
+            categoryName: category.categoryName,
+          })
       ),
     ]);
 
@@ -329,6 +369,39 @@ export default function Results() {
             ) : (
               <Tabs defaultTab={0}>
                 <Tab label="All Results">
+                  <div className="d-flex flex-column mb-1">
+                    <p className="mt-2 mb-1">Rules</p>
+                    <div>
+                      <label className="mb-1">Pass rate (%)</label>
+                      <Form.Control
+                        type="number"
+                        min={1}
+                        max={100}
+                        className="text-black"
+                        value={rules.accuracyPercent}
+                        onChange={(e) =>
+                          setRules({
+                            ...rules,
+                            accuracyPercent: parseInt(e.target.value || '0'),
+                          })
+                        }
+                        style={{ width: 160 }}
+                      />
+                    </div>
+                    <Form.Check
+                      type="checkbox"
+                      id="ignore-overcounts"
+                      label="Ignore overcounts"
+                      className='mt-2'
+                      checked={rules.ignoreOvercounts}
+                      onChange={(e) =>
+                        setRules({
+                          ...rules,
+                          ignoreOvercounts: e.target.checked,
+                        })
+                      }
+                    />
+                  </div>
                   <p className="my-2">Summary</p>
                   <div className="d-flex gap-3 mb-3">
                     {summaryCards.map((card, index) => (
@@ -437,3 +510,5 @@ function SummaryCard({ content }: { content: (string | JSX.Element)[] }) {
     </div>
   );
 }
+
+// Rules modal removed in favor of inline controls

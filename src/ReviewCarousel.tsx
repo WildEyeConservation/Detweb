@@ -40,8 +40,7 @@ export default function ReviewCarousel({
   const [annotations, setAnnotations] = useState<LocationLike[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [locationsLoaded, setLocationsLoaded] = useState(0);
-  const [totalLocations, setTotalLocations] = useState(0);
-  const [loadingMessage, setLoadingMessage] = useState('');
+
   const [index, setIndex] = useState(0);
   const [bufferSource, setBufferSource] = useState<BufferSource | null>(null);
 
@@ -60,30 +59,29 @@ export default function ReviewCarousel({
 
     async function fetchAnnotationsPoints() {
       setIsLoading(true);
-      setLoadingMessage('Loading annotation points...');
+
       setLocationsLoaded(0);
-      setTotalLocations(0);
+
       try {
         for (const { value: categoryId } of effectiveCategories) {
           let nextNextToken: string | null | undefined = undefined;
           do {
-            const result: any = await (
-              client as any
-            ).models.Annotation.annotationsByCategoryId(
-              { categoryId },
-              {
-                selectionSet: [
-                  'x',
-                  'y',
-                  'image.id',
-                  'image.width',
-                  'image.height',
-                  'image.timestamp',
-                ],
-                filter: { setId: { eq: selectedAnnotationSet } },
-                nextToken: nextNextToken,
-              }
-            );
+            const result =
+              await client.models.Annotation.annotationsByCategoryId(
+                { categoryId },
+                {
+                  selectionSet: [
+                    'x',
+                    'y',
+                    'image.id',
+                    'image.width',
+                    'image.height',
+                    'image.timestamp',
+                  ],
+                  filter: { setId: { eq: selectedAnnotationSet } },
+                  nextToken: nextNextToken,
+                }
+              );
             const { data, nextToken } = result as {
               data: Array<{
                 x: number;
@@ -118,7 +116,7 @@ export default function ReviewCarousel({
               })),
             ]);
             setLocationsLoaded((prev) => prev + data.length);
-            setTotalLocations((prev) => prev + data.length);
+
             nextNextToken = nextToken ?? null;
           } while (nextNextToken);
         }
@@ -130,7 +128,7 @@ export default function ReviewCarousel({
     async function fetchImagesUnique() {
       if (!effectiveCategories.length || !selectedAnnotationSet) return;
       setIsLoading(true);
-      setLoadingMessage('Loading unique images...');
+
       setLocationsLoaded(0);
       try {
         const imagesFound = new Set<string>();
@@ -138,21 +136,20 @@ export default function ReviewCarousel({
         for (const { value: categoryId } of effectiveCategories) {
           let nextNextToken: string | null | undefined = undefined;
           do {
-            const result: any = await (
-              client as any
-            ).models.Annotation.annotationsByCategoryId(
-              { categoryId },
-              {
-                selectionSet: [
-                  'image.id',
-                  'image.width',
-                  'image.height',
-                  'image.timestamp',
-                ],
-                filter: { setId: { eq: selectedAnnotationSet } },
-                nextToken: nextNextToken,
-              }
-            );
+            const result =
+              await client.models.Annotation.annotationsByCategoryId(
+                { categoryId },
+                {
+                  selectionSet: [
+                    'image.id',
+                    'image.width',
+                    'image.height',
+                    'image.timestamp',
+                  ],
+                  filter: { setId: { eq: selectedAnnotationSet } },
+                  nextToken: nextNextToken,
+                }
+              );
             const { data, nextToken } = result as {
               data: Array<{
                 image: {
@@ -185,7 +182,6 @@ export default function ReviewCarousel({
                   id: crypto.randomUUID(),
                 });
                 setLocationsLoaded((prev) => prev + 1);
-                setTotalLocations((prev) => prev + 1);
               }
             }
             nextNextToken = nextToken ?? null;
@@ -206,8 +202,6 @@ export default function ReviewCarousel({
     setBufferSource(null);
     setIndex(0);
     setLocationsLoaded(0);
-    setTotalLocations(0);
-    setLoadingMessage('');
 
     if (selectedAnnotationSet && effectiveCategories.length) {
       if (imageBased) {
@@ -232,7 +226,7 @@ export default function ReviewCarousel({
 
   if (!selectedAnnotationSet) {
     return (
-      <div className='d-flex flex-column align-items-center justify-content-center h-100 w-100'>
+      <div className="d-flex flex-column align-items-center justify-content-center h-100 w-100">
         Select an annotation set to begin.
       </div>
     );
@@ -241,11 +235,11 @@ export default function ReviewCarousel({
   return (
     <>
       {!annotations.length && isLoading ? (
-        <div className='d-flex flex-column align-items-center justify-content-center h-100 w-100 p-4'>
-          <div className='text-center'>
-            <div className='d-flex flex-row align-items-center justify-content-center h-100 w-100'>
-              <Spinner size='sm' />
-              <span className='ms-2'>
+        <div className="d-flex flex-column align-items-center justify-content-center h-100 w-100 p-4">
+          <div className="text-center">
+            <div className="d-flex flex-row align-items-center justify-content-center h-100 w-100">
+              <Spinner size="sm" />
+              <span className="ms-2">
                 {locationsLoaded > 0
                   ? `${locationsLoaded} items loaded so far`
                   : 'Preparing to load data'}
@@ -255,7 +249,7 @@ export default function ReviewCarousel({
         </div>
       ) : (
         bufferSource && (
-          <div className='d-flex flex-column align-items-center h-100 w-100 mt-3'>
+          <div className="d-flex flex-column align-items-center h-100 w-100 mt-3">
             <Preloader
               key={
                 selectedAnnotationSet +
@@ -267,15 +261,17 @@ export default function ReviewCarousel({
               preloadN={2}
               historyN={2}
               hideZoomSetting={true}
+              // Tight fit around locations for review; 0.55 keeps a small margin
+              viewBoundsScale={0.55}
             />
-            <div className='mt-2 w-100'>
+            <div className="mt-2 w-100">
               <input
-                type='range'
+                type="range"
                 value={index}
                 onChange={(e) => setIndex(parseInt(e.target.value))}
                 min={0}
                 max={Math.max(annotations.length - 1, 0)}
-                className='form-range'
+                className="form-range"
               />
               <div style={{ textAlign: 'center' }}>
                 Done with {index} out of {annotations.length} locations

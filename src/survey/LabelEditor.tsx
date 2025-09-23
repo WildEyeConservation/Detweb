@@ -4,6 +4,7 @@ import MyTable from "../Table";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useContext } from "react";
 import { GlobalContext } from "../Context";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface Label {
   id: string;
@@ -32,6 +33,7 @@ export default function LabelEditor({
   const [labels, setLabels] = useState<Label[]>(defaultLabels);
   const { client } = useContext(GlobalContext)!;
   const defaultLabelsRef = useRef<Label[]>(defaultLabels);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     defaultLabelsRef.current = defaultLabels;
@@ -108,6 +110,9 @@ export default function LabelEditor({
       await client.mutations.updateProjectMemberships({
         projectId: projectId,
       });
+
+      // Ensure any persisted/react-query caches for categories are refreshed
+      await queryClient.invalidateQueries({ queryKey: ["Category"] });
     },
     [client, labels, isEditing]
   );

@@ -55,8 +55,14 @@ function createIcon(
       : annotation.objectId
       ? '#888888'
       : '#000000';
-
-  const markerLabel = !hideIdenticon && id ? jdenticon.toSvg(id, 20) : '';
+  const isFalseNegative = String((annotation as { source?: string }).source || '')
+    .toLowerCase()
+    .includes('false-negative');
+  const markerLabel = isFalseNegative
+    ? '<span style="font-weight:bold;font-size:18px;line-height:1;">!</span>'
+    : !hideIdenticon && id
+    ? jdenticon.toSvg(id, 20)
+    : '';
 
   let html = `
       <div class="marker" ${attributes}>
@@ -318,6 +324,13 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
         >
           <Tooltip>
             Label: {getType(annotation)} <br />
+            {String((annotation as { source?: string }).source || '')
+              .toLowerCase()
+              .includes('false-negative') && (
+              <>
+                False Negative <br />
+              </>
+            )}
             Created by :{' '}
             {allUsers.find((u) => u.id == annotation.owner)?.name || 'Unknown'}
             <br />

@@ -17,7 +17,6 @@ export default function ConfigModal({
   const [testInterval, setTestInterval] = useState<number>(0);
   const [testType, setTestType] = useState<TestType>('interval');
   const [testChance, setTestChance] = useState<number>(0);
-  const [testAccuracy, setTestAccuracy] = useState<number>(0);
   const [deadzone, setDeadzone] = useState<number>(0);
   const [confirmation, setConfirmation] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
@@ -43,7 +42,6 @@ export default function ConfigModal({
       }
 
       setConfirmation(config.postTestConfirmation!);
-      setTestAccuracy(config.accuracy!);
     };
     if (show) {
       fetchTestConfig();
@@ -58,11 +56,6 @@ export default function ConfigModal({
   async function handleSave() {
     if (testType === 'interval' && testInterval < 10) {
       alert('Test interval must be greater than 10');
-      return;
-    }
-
-    if (testAccuracy < 1 || testAccuracy > 100) {
-      alert('Test accuracy must be between 1 and 100');
       return;
     }
 
@@ -85,7 +78,6 @@ export default function ConfigModal({
       random: testType === 'random' ? testChance : undefined,
       deadzone: testType === 'random' ? deadzone : undefined,
       interval: testType === 'interval' ? testInterval : undefined,
-      accuracy: testAccuracy,
       postTestConfirmation: confirmation,
     });
 
@@ -169,16 +161,6 @@ export default function ConfigModal({
               />
             </Form.Group>
           )}
-          <Form.Group className='mb-2'>
-            <Form.Label>Pass rate (%)</Form.Label>
-            <Form.Control
-              type='number'
-              value={testAccuracy}
-              onChange={(e) => setTestAccuracy(parseInt(e.target.value || '0'))}
-              min={1}
-              max={100}
-            />
-          </Form.Group>
         </Form>
       </Body>
       <Footer>
