@@ -9,7 +9,7 @@
  **/
 
 import React, { ReactNode } from "react";
-import { Schema } from "../amplify/data/resource";
+import { Schema } from "../amplify/client-schema";
 
 interface IfAdminProps {
   currentPM?: Schema['UserProjectMembership']['type'];

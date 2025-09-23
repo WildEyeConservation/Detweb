@@ -3,7 +3,7 @@ import { AnnotationSetDropdown } from './AnnotationSetDropDown';
 import Select from 'react-select';
 import { ProjectContext } from './Context';
 import { useOptimisticUpdates } from './useOptimisticUpdates';
-import { Schema } from '../amplify/data/resource';
+import { Schema } from '../amplify/client-schema';
 import { useQueries } from '@tanstack/react-query';
 import { makeTransform, array2Matrix } from './utils';
 import { inv } from 'mathjs';

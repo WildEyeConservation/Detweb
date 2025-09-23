@@ -2,7 +2,7 @@ import Form from 'react-bootstrap/Form';
 import Button from 'react-bootstrap/Button';
 import { useEffect, useState, useContext } from 'react';
 import { GlobalContext } from '../Context';
-import { Schema } from '../../amplify/data/resource';
+import { Schema } from '../../amplify/client-schema';
 
 export default function Info({ organizationId }: { organizationId: string }) {
   const { client } = useContext(GlobalContext);

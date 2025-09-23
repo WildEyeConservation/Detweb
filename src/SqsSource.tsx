@@ -4,7 +4,7 @@ import {
   ReceiveMessageCommand,
   DeleteMessageCommand,
 } from '@aws-sdk/client-sqs';
-import { Schema } from '../amplify/data/resource';
+import { Schema } from '../amplify/client-schema';
 import useTesting from './TestSource';
 
 export default function useSQS(

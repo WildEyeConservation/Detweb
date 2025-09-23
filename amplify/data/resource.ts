@@ -910,7 +910,7 @@ const schema = a
   ]);
 
 export type ServerSchema = typeof schema;
-export type { Schema } from '../shared/data-schema.generated';
+// Do NOT re-export client Schema here; backend build shouldn't depend on generated frontend types.
 
 // Minimal, explicit server handler types to avoid indexing into ModelSchema
 interface LambdaContext {

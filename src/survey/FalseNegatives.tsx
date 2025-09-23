@@ -7,7 +7,7 @@ import {
 } from 'react';
 import { Form, Spinner } from 'react-bootstrap';
 import Select, { SingleValue } from 'react-select';
-import { Schema } from '../../amplify/data/resource';
+import { Schema } from '../../amplify/client-schema';
 import { GlobalContext, UserContext } from '../Context';
 import CreateTask from '../CreateTask';
 import { makeSafeQueueName } from '../utils';

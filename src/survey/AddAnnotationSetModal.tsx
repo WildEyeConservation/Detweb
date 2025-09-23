@@ -1,6 +1,6 @@
 import { Form, Button } from 'react-bootstrap';
 import { Modal, Body, Header, Footer, Title } from '../Modal';
-import { Schema } from '../../amplify/data/resource';
+import { Schema } from '../../amplify/client-schema';
 import { useState, useContext } from 'react';
 import { GlobalContext } from '../Context';
 import LabelEditor from './LabelEditor';

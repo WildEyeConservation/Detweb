@@ -1,7 +1,7 @@
 import { Card } from 'react-bootstrap';
 import { useContext, useEffect, useState } from 'react';
 import { UserContext, GlobalContext } from '../Context';
-import { Schema } from '../../amplify/data/resource';
+import { Schema } from '../../amplify/client-schema';
 import { Spinner, Button, ProgressBar } from 'react-bootstrap';
 import MyTable from '../Table';
 import { useNavigate } from 'react-router-dom';

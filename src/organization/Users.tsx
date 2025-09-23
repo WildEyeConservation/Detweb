@@ -1,7 +1,7 @@
 import Button from 'react-bootstrap/Button';
 import MyTable from '../Table';
 import { useOptimisticUpdates } from '../useOptimisticUpdates';
-import { Schema } from '../../amplify/data/resource';
+import { Schema } from '../../amplify/client-schema';
 import { useContext, useState, useEffect } from 'react';
 import { GlobalContext, UserContext } from '../Context';
 import { useUsers } from '../apiInterface';

@@ -1,6 +1,6 @@
 import { Project, Management } from './UserContext';
 import { Outlet } from 'react-router-dom';
-import { Schema } from '../amplify/data/resource';
+import { Schema } from '../amplify/client-schema';
 import { UserContext, GlobalContext } from './Context';
 import { useContext, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
