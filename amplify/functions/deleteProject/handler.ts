@@ -1,6 +1,6 @@
 import { env } from '$amplify/env/deleteProject';
 import { Amplify } from 'aws-amplify';
-import type { Schema } from '../../data/resource';
+import type { DeleteProjectInFullHandler } from '../../data/resource';
 import {
   getProject,
   listImageSets,
@@ -108,7 +108,7 @@ async function fetchAllPages<T, K extends string>(
   return allItems;
 }
 
-export const handler: Schema['deleteProjectInFull']['functionHandler'] = async (
+export const handler: DeleteProjectInFullHandler = async (
   event,
   context
 ) => {

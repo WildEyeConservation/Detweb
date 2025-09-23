@@ -1,11 +1,11 @@
-import type { Schema } from "../resource"
+import type { RemoveUserFromGroupHandler } from "../resource"
 import { env } from "$amplify/env/remove-user-from-group"
 import {
   AdminRemoveUserFromGroupCommand,
   CognitoIdentityProviderClient,
 } from "@aws-sdk/client-cognito-identity-provider"
 
-type Handler = Schema["removeUserFromGroup"]["functionHandler"]
+type Handler = RemoveUserFromGroupHandler
 const client = new CognitoIdentityProviderClient()
 
 export const handler: Handler = async (event) => {

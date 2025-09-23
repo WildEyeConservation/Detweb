@@ -1,6 +1,6 @@
 import { env } from '$amplify/env/deleteProject';
 import { Amplify } from 'aws-amplify';
-import type { Schema } from '../../data/resource';
+import type { GenerateSurveyResultsHandler } from '../../data/resource';
 import {
   camerasByProjectId,
   strataByProjectId,
@@ -181,7 +181,7 @@ function covariance(x: number[], y: number[]) {
   return cov / (n - 1);
 }
 
-export const handler: Schema['generateSurveyResults']['functionHandler'] =
+export const handler: GenerateSurveyResultsHandler =
   async (event, context) => {
     const surveyId = event.arguments.surveyId;
     const projectId = surveyId;

@@ -1,11 +1,11 @@
-import type { Schema } from "../resource"
+import type { ListUsersHandler } from "../resource"
 import { env } from "$amplify/env/list-users"
 import {
   ListUsersCommand,
   CognitoIdentityProviderClient,
 } from "@aws-sdk/client-cognito-identity-provider"
 
-type Handler = Schema["listUsers"]["functionHandler"]
+type Handler = ListUsersHandler
 const client = new CognitoIdentityProviderClient()
 export const handler: Handler = async (event) => {
   const command = new ListUsersCommand({
