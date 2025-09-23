@@ -1,11 +1,11 @@
-import type { Schema } from "../resource"
+import type { AddUserToGroupHandler } from "../resource"
 import { env } from "$amplify/env/add-user-to-group"
 import {
   AdminAddUserToGroupCommand,
   CognitoIdentityProviderClient,
 } from "@aws-sdk/client-cognito-identity-provider"
 
-type Handler = Schema["addUserToGroup"]["functionHandler"]
+type Handler = AddUserToGroupHandler
 const client = new CognitoIdentityProviderClient()
 
 export const handler: Handler = async (event) => {

@@ -909,7 +909,26 @@ const schema = a
     // allow.resource(consolidateUserStats),
   ]);
 
+export type ServerSchema = typeof schema;
 export type { Schema } from '../shared/data-schema.generated';
+
+// Minimal, explicit server handler types to avoid indexing into ModelSchema
+interface LambdaContext {
+  awsRequestId?: string;
+}
+
+type MutationHandler<Args, Result = unknown> = (
+  event: { arguments: Args },
+  context: LambdaContext
+) => Promise<Result>;
+
+export type AddUserToGroupHandler = MutationHandler<{ userId: string; groupName: string }>;
+export type RemoveUserFromGroupHandler = MutationHandler<{ userId: string; groupName: string }>;
+export type CreateGroupHandler = MutationHandler<{ groupName: string }>;
+export type ListUsersHandler = MutationHandler<{ nextToken?: string | null }>;
+export type ListGroupsForUserHandler = MutationHandler<{ userId: string; nextToken?: string | null }>;
+export type DeleteProjectInFullHandler = MutationHandler<{ projectId: string }>;
+export type GenerateSurveyResultsHandler = MutationHandler<{ surveyId: string; annotationSetId: string; categoryIds: string[] }>;
 export const data = defineData({
   schema,
   authorizationModes: {
