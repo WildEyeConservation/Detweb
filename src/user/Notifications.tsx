@@ -1,7 +1,7 @@
 import { useContext, useMemo, useEffect, useState } from "react";
 import { GlobalContext, UserContext } from "../Context";
 import { useOptimisticUpdates } from "../useOptimisticUpdates";
-import { Schema } from "../../amplify/data/resource";
+import { Schema } from "../../amplify/client-schema";
 import Button from "react-bootstrap/Button";
 import { fetchAllPaginatedResults } from "../utils";
 import { Bell, Check, X } from "lucide-react";

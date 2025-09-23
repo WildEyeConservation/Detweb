@@ -1,5 +1,5 @@
 import { Project, Management } from '../UserContext';
-import { Schema } from '../../amplify/data/resource';
+import { Schema } from '../../amplify/client-schema';
 import { UserContext, GlobalContext } from '../Context';
 import { useContext, useEffect, useState } from 'react';
 

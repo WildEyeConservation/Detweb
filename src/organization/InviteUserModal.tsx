@@ -4,7 +4,7 @@ import { Modal } from 'react-bootstrap';
 import { useContext } from 'react';
 import { GlobalContext, UserContext } from '../Context';
 import { useUsers } from '../apiInterface';
-import { Schema } from '../../amplify/data/resource';
+import { Schema } from '../../amplify/client-schema';
 
 export default function InviteUserModal({
   memberships,

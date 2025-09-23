@@ -2,7 +2,7 @@ import { Form, Alert, Button } from 'react-bootstrap';
 import { useState, useEffect, useContext, useCallback } from 'react';
 import { Footer } from '../Modal';
 import { GlobalContext } from '../Context';
-import { Schema } from '../../amplify/data/resource';
+import { Schema } from '../../amplify/client-schema';
 
 interface CameraFormData {
   focalLengthMm?: number;

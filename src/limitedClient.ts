@@ -3,7 +3,7 @@ import { Amplify } from 'aws-amplify'
 import outputs from '../amplify_outputs.json'
 Amplify.configure(outputs)
 import { generateClient } from "aws-amplify/api";
-import { Schema } from '../amplify/data/resource'; // Path to your backend resource definition
+import { Schema } from '../amplify/client-schema'; // Path to your backend resource definition
 import type { DataClient } from '../amplify/shared/data-schema.generated';
 
 /* Here we generate a graphQL client with the Amplify API module, and then we wrap the client methods

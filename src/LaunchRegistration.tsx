@@ -7,7 +7,7 @@ import ImageSetDropdown from "./survey/ImageSetDropdown";
 import * as math from "mathjs";
 import { inv } from "mathjs";
 import { useUpdateProgress } from "./useUpdateProgress";
-import { Schema } from "../amplify/data/resource";
+import { Schema } from "../amplify/client-schema";
 
 interface LaunchRegistrationProps {
   project: Schema["Project"]["type"];

@@ -4,7 +4,7 @@ import { useState, useContext, useEffect } from 'react';
 import { GlobalContext } from '../Context';
 import { useUsers } from '../apiInterface';
 import { Modal, Body, Header, Footer, Title } from '../Modal';
-import { Schema } from '../../amplify/data/resource';
+import { Schema } from '../../amplify/client-schema';
 
 export default function CreateOrganization({
   show,

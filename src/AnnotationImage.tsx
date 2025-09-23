@@ -15,7 +15,7 @@ import { ShowMarkers } from './ShowMarkers';
 import { useOptimisticUpdates } from './useOptimisticUpdates';
 import { ImageContextFromHook } from './ImageContext';
 import CreateAnnotationOnHotKey from './CreateAnnotationOnHotKey';
-import { Schema } from '../amplify/data/resource';
+import { Schema } from '../amplify/client-schema';
 import useImageStats from './useImageStats';
 import { Badge, Button } from 'react-bootstrap';
 import { Share2, SearchCheck, RotateCcw } from 'lucide-react';

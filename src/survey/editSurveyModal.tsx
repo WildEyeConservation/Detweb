@@ -1,5 +1,5 @@
 import { Modal, Header, Title, Body } from '../Modal';
-import { Schema } from '../../amplify/data/resource';
+import { Schema } from '../../amplify/client-schema';
 import { Tabs, Tab } from '../Tabs';
 import ProcessImages from './ProcessImages';
 import CreateSubset from '../CreateSubset';

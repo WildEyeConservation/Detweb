@@ -44,7 +44,7 @@ const { data, create, update, delete } = useOptimisticUpdates(
 */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useContext, useMemo, useCallback } from 'react';
-import type { Schema } from '../amplify/data/resource';
+import type { Schema } from '../amplify/client-schema';
 import { V6Client } from '@aws-amplify/api-graphql';
 import { CreateQueueCommand, DeleteQueueCommand } from '@aws-sdk/client-sqs';
 import { makeSafeQueueName } from './utils';

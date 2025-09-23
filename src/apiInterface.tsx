@@ -1,5 +1,5 @@
 import {useState, useEffect} from 'react';
-import { Schema } from '../amplify/data/resource'; // Path to your backend resource definition
+import { Schema } from '../amplify/client-schema'; // Path to your backend resource definition
 import { useContext } from 'react';
 import { GlobalContext } from './Context';
 
