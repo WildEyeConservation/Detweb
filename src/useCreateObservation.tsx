@@ -26,7 +26,9 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     location: { annotationSetId, id },
     isTest,
     ack,
-    config,
+    // Do not use config for pass/fail here anymore; keep prop for compatibility
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    config: _config,
     testPresetId,
     testSetId,
   } = props;
@@ -55,7 +57,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     );
 
     const userAnnotations = Object.entries(currentAnnoCount).filter(
-      ([_, annotations]) => annotations.length > 0
+      ([, annotations]) => annotations.length > 0
     );
 
     setCurrentAnnoCount({});
@@ -117,24 +119,13 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
 
     // Total count of annotations
     const totalUserCounts = userAnnotationsEntries.reduce(
-      (acc, [_, count]) => acc + count,
+      (acc, [, count]) => acc + count,
       0
     );
     const totalTestCounts = categoryCounts.reduce(
       (acc, count) => acc + (count.count as number),
       0
     );
-
-    const requiredAccuracy = config?.accuracy ?? 0;
-
-    // Total count of annotations regardless of category
-    const allUserCounts = Object.values(annotationCounts).reduce(
-      (acc, count) => acc + count,
-      0
-    );
-    const passedOnTotal =
-      allUserCounts >= totalTestCounts * (requiredAccuracy / 100) &&
-      allUserCounts <= totalTestCounts * (2 - requiredAccuracy / 100);
 
     let testResult: Schema['TestResult']['type'];
     if (existingTestResult) {
@@ -144,7 +135,8 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
           id: existingTestResult.id,
           testAnimals: totalTestCounts,
           totalMissedAnimals: totalTestCounts - totalUserCounts,
-          passedOnTotal: passedOnTotal,
+          // Placeholder to satisfy current schema; not used for reporting
+          passedOnTotal: false,
         }
       );
       testResult = updatedTestResult;
@@ -157,7 +149,8 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
         annotationSetId: annotationSetId,
         testAnimals: totalTestCounts,
         totalMissedAnimals: totalTestCounts - totalUserCounts,
-        passedOnTotal: passedOnTotal,
+        // Placeholder to satisfy current schema; not used for reporting
+        passedOnTotal: false,
       });
       testResult = newTestResult;
     }
