@@ -78,6 +78,7 @@ export const createAnnotation = /* GraphQL */ `mutation CreateAnnotation(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -141,6 +142,7 @@ export const createAnnotationSet = /* GraphQL */ `mutation CreateAnnotationSet(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -187,6 +189,7 @@ export const createCamera = /* GraphQL */ `mutation CreateCamera(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -217,6 +220,7 @@ export const createCameraOverlap = /* GraphQL */ `mutation CreateCameraOverlap(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -359,6 +363,7 @@ export const createImage = /* GraphQL */ `mutation CreateImage(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -429,6 +434,7 @@ export const createImageFile = /* GraphQL */ `mutation CreateImageFile(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -526,6 +532,7 @@ export const createImageSet = /* GraphQL */ `mutation CreateImageSet(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -639,6 +646,7 @@ export const createJollyResultsMembership = /* GraphQL */ `mutation CreateJollyR
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -701,12 +709,14 @@ export const createLocation = /* GraphQL */ `mutation CreateLocation(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
     projectId
     set {
       createdAt
+      description
       id
       locationCount
       name
@@ -800,6 +810,7 @@ export const createLocationSet = /* GraphQL */ `mutation CreateLocationSet(
 ) {
   createLocationSet(condition: $condition, input: $input) {
     createdAt
+    description
     id
     locationCount
     locations {
@@ -819,6 +830,7 @@ export const createLocationSet = /* GraphQL */ `mutation CreateLocationSet(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -860,6 +872,7 @@ export const createLocationSetMembership = /* GraphQL */ `mutation CreateLocatio
     locationId
     locationSet {
       createdAt
+      description
       id
       locationCount
       name
@@ -908,6 +921,7 @@ export const createObject = /* GraphQL */ `mutation CreateObject(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -965,6 +979,7 @@ export const createObservation = /* GraphQL */ `mutation CreateObservation(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1176,6 +1191,7 @@ export const createProject = /* GraphQL */ `mutation CreateProject(
       nextToken
       __typename
     }
+    tags
     testConfig {
       accuracy
       createdAt
@@ -1222,6 +1238,7 @@ export const createProjectTestConfig = /* GraphQL */ `mutation CreateProjectTest
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1263,6 +1280,7 @@ export const createQueue = /* GraphQL */ `mutation CreateQueue(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1316,6 +1334,7 @@ export const createShapefile = /* GraphQL */ `mutation CreateShapefile(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1344,6 +1363,7 @@ export const createShapefileExclusions = /* GraphQL */ `mutation CreateShapefile
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1375,6 +1395,7 @@ export const createStratum = /* GraphQL */ `mutation CreateStratum(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1411,6 +1432,7 @@ export const createTasksOnAnnotationSet = /* GraphQL */ `mutation CreateTasksOnA
     id
     locationSet {
       createdAt
+      description
       id
       locationCount
       name
@@ -1597,6 +1619,7 @@ export const createTestResult = /* GraphQL */ `mutation CreateTestResult(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1672,6 +1695,7 @@ export const createTransect = /* GraphQL */ `mutation CreateTransect(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1728,6 +1752,7 @@ export const createUserProjectMembership = /* GraphQL */ `mutation CreateUserPro
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1846,6 +1871,7 @@ export const deleteAnnotation = /* GraphQL */ `mutation DeleteAnnotation(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1909,6 +1935,7 @@ export const deleteAnnotationSet = /* GraphQL */ `mutation DeleteAnnotationSet(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1955,6 +1982,7 @@ export const deleteCamera = /* GraphQL */ `mutation DeleteCamera(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1985,6 +2013,7 @@ export const deleteCameraOverlap = /* GraphQL */ `mutation DeleteCameraOverlap(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2120,6 +2149,7 @@ export const deleteImage = /* GraphQL */ `mutation DeleteImage(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2190,6 +2220,7 @@ export const deleteImageFile = /* GraphQL */ `mutation DeleteImageFile(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2287,6 +2318,7 @@ export const deleteImageSet = /* GraphQL */ `mutation DeleteImageSet(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2400,6 +2432,7 @@ export const deleteJollyResultsMembership = /* GraphQL */ `mutation DeleteJollyR
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2462,12 +2495,14 @@ export const deleteLocation = /* GraphQL */ `mutation DeleteLocation(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
     projectId
     set {
       createdAt
+      description
       id
       locationCount
       name
@@ -2561,6 +2596,7 @@ export const deleteLocationSet = /* GraphQL */ `mutation DeleteLocationSet(
 ) {
   deleteLocationSet(condition: $condition, input: $input) {
     createdAt
+    description
     id
     locationCount
     locations {
@@ -2580,6 +2616,7 @@ export const deleteLocationSet = /* GraphQL */ `mutation DeleteLocationSet(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2621,6 +2658,7 @@ export const deleteLocationSetMembership = /* GraphQL */ `mutation DeleteLocatio
     locationId
     locationSet {
       createdAt
+      description
       id
       locationCount
       name
@@ -2669,6 +2707,7 @@ export const deleteObject = /* GraphQL */ `mutation DeleteObject(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2726,6 +2765,7 @@ export const deleteObservation = /* GraphQL */ `mutation DeleteObservation(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2937,6 +2977,7 @@ export const deleteProject = /* GraphQL */ `mutation DeleteProject(
       nextToken
       __typename
     }
+    tags
     testConfig {
       accuracy
       createdAt
@@ -2990,6 +3031,7 @@ export const deleteProjectTestConfig = /* GraphQL */ `mutation DeleteProjectTest
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3031,6 +3073,7 @@ export const deleteQueue = /* GraphQL */ `mutation DeleteQueue(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3084,6 +3127,7 @@ export const deleteShapefile = /* GraphQL */ `mutation DeleteShapefile(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3112,6 +3156,7 @@ export const deleteShapefileExclusions = /* GraphQL */ `mutation DeleteShapefile
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3143,6 +3188,7 @@ export const deleteStratum = /* GraphQL */ `mutation DeleteStratum(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3179,6 +3225,7 @@ export const deleteTasksOnAnnotationSet = /* GraphQL */ `mutation DeleteTasksOnA
     id
     locationSet {
       createdAt
+      description
       id
       locationCount
       name
@@ -3365,6 +3412,7 @@ export const deleteTestResult = /* GraphQL */ `mutation DeleteTestResult(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3440,6 +3488,7 @@ export const deleteTransect = /* GraphQL */ `mutation DeleteTransect(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3496,6 +3545,7 @@ export const deleteUserProjectMembership = /* GraphQL */ `mutation DeleteUserPro
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3721,6 +3771,7 @@ export const updateAnnotation = /* GraphQL */ `mutation UpdateAnnotation(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3784,6 +3835,7 @@ export const updateAnnotationSet = /* GraphQL */ `mutation UpdateAnnotationSet(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3830,6 +3882,7 @@ export const updateCamera = /* GraphQL */ `mutation UpdateCamera(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3860,6 +3913,7 @@ export const updateCameraOverlap = /* GraphQL */ `mutation UpdateCameraOverlap(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3995,6 +4049,7 @@ export const updateImage = /* GraphQL */ `mutation UpdateImage(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4065,6 +4120,7 @@ export const updateImageFile = /* GraphQL */ `mutation UpdateImageFile(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4162,6 +4218,7 @@ export const updateImageSet = /* GraphQL */ `mutation UpdateImageSet(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4275,6 +4332,7 @@ export const updateJollyResultsMembership = /* GraphQL */ `mutation UpdateJollyR
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4337,12 +4395,14 @@ export const updateLocation = /* GraphQL */ `mutation UpdateLocation(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
     projectId
     set {
       createdAt
+      description
       id
       locationCount
       name
@@ -4436,6 +4496,7 @@ export const updateLocationSet = /* GraphQL */ `mutation UpdateLocationSet(
 ) {
   updateLocationSet(condition: $condition, input: $input) {
     createdAt
+    description
     id
     locationCount
     locations {
@@ -4455,6 +4516,7 @@ export const updateLocationSet = /* GraphQL */ `mutation UpdateLocationSet(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4496,6 +4558,7 @@ export const updateLocationSetMembership = /* GraphQL */ `mutation UpdateLocatio
     locationId
     locationSet {
       createdAt
+      description
       id
       locationCount
       name
@@ -4544,6 +4607,7 @@ export const updateObject = /* GraphQL */ `mutation UpdateObject(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4601,6 +4665,7 @@ export const updateObservation = /* GraphQL */ `mutation UpdateObservation(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4812,6 +4877,7 @@ export const updateProject = /* GraphQL */ `mutation UpdateProject(
       nextToken
       __typename
     }
+    tags
     testConfig {
       accuracy
       createdAt
@@ -4865,6 +4931,7 @@ export const updateProjectTestConfig = /* GraphQL */ `mutation UpdateProjectTest
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4906,6 +4973,7 @@ export const updateQueue = /* GraphQL */ `mutation UpdateQueue(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4959,6 +5027,7 @@ export const updateShapefile = /* GraphQL */ `mutation UpdateShapefile(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4987,6 +5056,7 @@ export const updateShapefileExclusions = /* GraphQL */ `mutation UpdateShapefile
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -5018,6 +5088,7 @@ export const updateStratum = /* GraphQL */ `mutation UpdateStratum(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -5054,6 +5125,7 @@ export const updateTasksOnAnnotationSet = /* GraphQL */ `mutation UpdateTasksOnA
     id
     locationSet {
       createdAt
+      description
       id
       locationCount
       name
@@ -5240,6 +5312,7 @@ export const updateTestResult = /* GraphQL */ `mutation UpdateTestResult(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -5315,6 +5388,7 @@ export const updateTransect = /* GraphQL */ `mutation UpdateTransect(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -5371,6 +5445,7 @@ export const updateUserProjectMembership = /* GraphQL */ `mutation UpdateUserPro
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }

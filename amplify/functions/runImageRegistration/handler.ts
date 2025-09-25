@@ -9,9 +9,15 @@ import {
   cameraOverlapsByProjectId,
   getImageNeighbour,
   imagesByProjectId,
+  getProject,
 } from './graphql/queries';
 import { createImageNeighbour } from './graphql/mutations';
-import { CameraOverlap, Image } from '../runImageRegistration/graphql/API';
+import {
+  CameraOverlap,
+  Image,
+  GetImageNeighbourQuery,
+  GetProjectQuery,
+} from '../runImageRegistration/graphql/API';
 
 Amplify.configure(
   {
@@ -76,9 +82,11 @@ async function withConcurrency<T>(
   let nextIndex = 0;
 
   async function worker() {
-    while (true) {
-      const currentIndex = nextIndex++;
-      if (currentIndex >= tasks.length) return;
+    for (
+      let currentIndex = nextIndex++;
+      currentIndex < tasks.length;
+      currentIndex = nextIndex++
+    ) {
       results[currentIndex] = await tasks[currentIndex]();
     }
   }
@@ -112,7 +120,12 @@ async function fetchAllPages<T, K extends string>(
   return allItems;
 }
 
-async function handlePair(image1: Image, image2: Image, masks: number[][][]) {
+async function handlePair(
+  image1: Image,
+  image2: Image,
+  masks: number[][][],
+  computeKey: (orig: string) => string
+) {
   try {
     console.log(`Processing pair ${image1.id} and ${image2.id}`);
 
@@ -123,9 +136,7 @@ async function handlePair(image1: Image, image2: Image, masks: number[][][]) {
       return null;
     }
 
-    const {
-      data: { getImageNeighbour: existingNeighbour },
-    } = (await gqlWithRetry(() =>
+    const neighbourResp = (await gqlWithRetry(() =>
       client.graphql({
         query: getImageNeighbour,
         variables: {
@@ -133,7 +144,8 @@ async function handlePair(image1: Image, image2: Image, masks: number[][][]) {
           image2Id: image2.id,
         },
       })
-    )) as GraphQLResult<{ getImageNeighbour: any }> as any;
+    )) as GraphQLResult<GetImageNeighbourQuery>;
+    const existingNeighbour = neighbourResp.data?.getImageNeighbour;
 
     if (existingNeighbour?.homography) {
       console.log(
@@ -155,11 +167,23 @@ async function handlePair(image1: Image, image2: Image, masks: number[][][]) {
             },
           })
         );
-      } catch (e: any) {
-        const gqlErrors: any[] = e?.errors ?? [];
-        const isConditionalFailure = gqlErrors.some((x) =>
-          String(x?.errorType ?? '').includes('ConditionalCheckFailedException')
-        );
+      } catch (e: unknown) {
+        const errors = ((): unknown[] => {
+          if (typeof e === 'object' && e !== null && 'errors' in e) {
+            const maybe = (e as { errors?: unknown }).errors;
+            if (Array.isArray(maybe)) return maybe;
+          }
+          return [];
+        })();
+        const isConditionalFailure = errors.some((x) => {
+          if (typeof x === 'object' && x !== null && 'errorType' in x) {
+            const errorType = (x as { errorType?: unknown }).errorType;
+            return String(errorType ?? '').includes(
+              'ConditionalCheckFailedException'
+            );
+          }
+          return false;
+        });
         if (isConditionalFailure) {
           console.log(
             `Neighbour already exists (created concurrently) for ${image1.id}/${image2.id}`
@@ -171,17 +195,26 @@ async function handlePair(image1: Image, image2: Image, masks: number[][][]) {
     }
 
     // Return the message instead of sending it immediately
+    const originalPath1 = image1.originalPath ?? null;
+    const originalPath2 = image2.originalPath ?? null;
+    if (!originalPath1 || !originalPath2) {
+      console.log(
+        `Skipping pair ${image1.id} and ${image2.id} due to missing originalPath`
+      );
+      return null;
+    }
+
     return {
       Id: `${image1.id}-${image2.id}`, // Required unique ID for batch entries
       MessageBody: JSON.stringify({
         image1Id: image1.id,
         image2Id: image2.id,
-        keys: [image1.originalPath, image2.originalPath],
+        keys: [computeKey(originalPath1), computeKey(originalPath2)],
         action: 'register',
         masks: masks.length > 0 ? masks : undefined,
       }),
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(
       `Error in handlePair for ${image1.id} and ${image2.id}:`,
       error
@@ -194,7 +227,8 @@ function addAdjacentPairTasks(
   images: Image[],
   masks: number[][][],
   seenPairs: Set<string>,
-  outTasks: Array<() => Promise<SqsEntry | null>>
+  outTasks: Array<() => Promise<SqsEntry | null>>,
+  computeKey: (orig: string) => string
 ) {
   for (let i = 0; i < images.length - 1; i++) {
     const image1 = images[i];
@@ -204,7 +238,7 @@ function addAdjacentPairTasks(
       const key = [image1.id, image2.id].sort().join('|');
       if (!seenPairs.has(key)) {
         seenPairs.add(key);
-        outTasks.push(() => handlePair(image1, image2, masks));
+        outTasks.push(() => handlePair(image1, image2, masks, computeKey));
       }
     } else {
       console.log(
@@ -215,7 +249,7 @@ function addAdjacentPairTasks(
   }
 }
 
-export const handler: Handler = async (event, context) => {
+export const handler: Handler = async (event) => {
   try {
     const projectId = event.arguments.projectId as string;
     const metadata = JSON.parse(event.arguments.metadata) as {
@@ -223,6 +257,31 @@ export const handler: Handler = async (event, context) => {
     };
     const masks = metadata.masks;
     const queueUrl = event.arguments.queueUrl as string;
+
+    // Fetch project info to determine key prefixing
+    let organizationId: string | undefined = undefined;
+    let isLegacyProject = false;
+    try {
+      const projResp = (await client.graphql({
+        query: getProject,
+        variables: { id: projectId },
+      })) as GraphQLResult<GetProjectQuery>;
+      organizationId = projResp.data?.getProject?.organizationId;
+      const tagsRaw = projResp.data?.getProject?.tags ?? [];
+      const tags = Array.isArray(tagsRaw)
+        ? tagsRaw.filter((t): t is string => typeof t === 'string')
+        : [];
+      isLegacyProject = tags.includes('legacy');
+    } catch (e) {
+      console.warn(
+        'Unable to fetch project tags; defaulting to legacy=false behavior'
+      );
+    }
+
+    const computeKey = (orig: string) =>
+      !isLegacyProject && organizationId
+        ? `${organizationId}/${projectId}/${orig}`
+        : orig;
 
     const images = await fetchAllPages<Image, 'imagesByProjectId'>(
       (nextToken) =>
@@ -274,25 +333,25 @@ export const handler: Handler = async (event, context) => {
     const seenPairs = new Set<string>();
 
     // process images by camera
-    Object.entries(imagesByCamera).forEach(([_, images]) => {
-      addAdjacentPairTasks(images, masks, seenPairs, tasks);
+    Object.entries(imagesByCamera).forEach(([, images]) => {
+      addAdjacentPairTasks(images, masks, seenPairs, tasks, computeKey);
     });
 
     // process images from overlapping cameras
     cameraOverlaps.forEach((overlap) => {
-      const imgsA = imagesByCamera[overlap.cameraAId];
-      const imgsB = imagesByCamera[overlap.cameraBId];
+      const imgsA = imagesByCamera[overlap.cameraAId] ?? [];
+      const imgsB = imagesByCamera[overlap.cameraBId] ?? [];
 
       // interleave images from the two cameras
       const mergedImages = [...imgsA, ...imgsB].sort(
         (a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0)
       );
 
-      addAdjacentPairTasks(mergedImages, masks, seenPairs, tasks);
+      addAdjacentPairTasks(mergedImages, masks, seenPairs, tasks, computeKey);
     });
 
     // process images with no camera
-    addAdjacentPairTasks(noCamImgs, masks, seenPairs, tasks);
+    addAdjacentPairTasks(noCamImgs, masks, seenPairs, tasks, computeKey);
 
     // Limit concurrency to prevent exhausting file descriptors and network resources
     const messages = (await withConcurrency<SqsEntry | null>(tasks, 10)).filter(
@@ -317,7 +376,7 @@ export const handler: Handler = async (event, context) => {
             Entries: batch,
           })
         );
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error(`Error sending SQS batch at index ${i}:`, error);
       }
     }
@@ -329,19 +388,22 @@ export const handler: Handler = async (event, context) => {
         count: sortedImages.length,
       }),
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in runImageRegistration:', error);
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name,
-    });
+    const errorDetails = (() => {
+      if (error instanceof Error) {
+        return { message: error.message, stack: error.stack, name: error.name };
+      }
+      return { message: String(error) };
+    })();
+    console.error('Error details:', errorDetails);
 
     return {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Error running image registration',
-        error: error.message,
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
       }),
     };
   }
