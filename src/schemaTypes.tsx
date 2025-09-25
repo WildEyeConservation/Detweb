@@ -1,4 +1,4 @@
-import type { Schema } from '../amplify/client-schema';
+import type { Schema } from './amplify/client-schema';
 
 export type ProjectType = Schema["Project"]["type"];
 export type CategoryType = Schema["Category"]["type"];

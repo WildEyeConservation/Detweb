@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import { Form } from 'react-bootstrap';
 import Select from 'react-select';
 import { CreateQueueCommand } from '@aws-sdk/client-sqs';
-import { Schema } from '../../amplify/client-schema';
+import { Schema } from '../amplify/client-schema';
 import { GlobalContext, UserContext } from '../Context';
 import { useLaunchTask } from '../useLaunchTask';
 import { makeSafeQueueName } from '../utils';

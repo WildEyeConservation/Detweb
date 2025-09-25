@@ -2,7 +2,7 @@ import { Button, Form } from 'react-bootstrap';
 import { Modal, Body, Header, Footer, Title } from '../Modal';
 import { useState, useContext } from 'react';
 import { Tabs, Tab } from '../Tabs';
-import { Schema } from '../../amplify/client-schema';
+import { Schema } from '../amplify/client-schema';
 import { GlobalContext } from '../Context';
 import SpeciesLabelling from './SpeciesLabelling';
 import FalseNegatives from './FalseNegatives';

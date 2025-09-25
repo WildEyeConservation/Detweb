@@ -1,5 +1,5 @@
 import { createContext, useState } from 'react';
-import { Schema } from '../amplify/client-schema'; // Path to your backend resource definition
+import { Schema } from './amplify/client-schema'; // Path to your backend resource definition
 import outputs from '../amplify_outputs.json';
 import { AuthUser } from '@aws-amplify/auth';
 import { SQSClient } from '@aws-sdk/client-sqs';

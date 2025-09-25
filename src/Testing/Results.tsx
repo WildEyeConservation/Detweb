@@ -7,7 +7,7 @@ import { BarChart } from '@mui/x-charts/BarChart';
 import { Tab, Tabs } from '../Tabs';
 import exportFromJSON from 'export-from-json';
 import { useUpdateProgress } from '../useUpdateProgress';
-import { Schema } from '../../amplify/client-schema';
+import { Schema } from '../amplify/client-schema';
 import { useUsers } from '../apiInterface';
 import Select from 'react-select';
 // removed modal; pass/fail rules are now inline

@@ -2,7 +2,7 @@ import React, { useContext, useState } from "react";
 import { Form, Button } from "react-bootstrap";
 import { GlobalContext } from "./Context";
 import ImageSetDropdown from "./survey/ImageSetDropdown";
-import { Schema } from "../amplify/client-schema";
+import { Schema } from "./amplify/client-schema";
 
 interface CreateSubsetModalProps {
   imageSets: Schema["ImageSet"]["type"][];

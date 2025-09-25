@@ -10,7 +10,7 @@ import {
 import { fetchAllPaginatedResults } from "./utils";
 import { ImageType } from "./schemaTypes";
 import pLimit from "p-limit";
-import { Schema } from "../amplify/client-schema";
+import { Schema } from "./amplify/client-schema";
 import ImageSetDropdown from "./survey/ImageSetDropdown";
 // const createPair = `mutation MyMutation($image1Key: String!, $image2Key: String!) {
 //   createImageNeighbour(input: {image1key: $image1Key, image2key: $image2Key}) {

@@ -4,7 +4,7 @@ import { useState, useContext } from "react";
 import { Tab, Tabs } from "../Tabs";
 import Surveys from "./Surveys";
 import { TestingContext, GlobalContext } from "../Context";
-import { Schema } from "../../amplify/client-schema";
+import { Schema } from "../amplify/client-schema";
 import { useOptimisticUpdates } from "../useOptimisticUpdates";
 import Users from "./Users";
 import Results from "./Results";

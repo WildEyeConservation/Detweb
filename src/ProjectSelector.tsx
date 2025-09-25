@@ -1,7 +1,7 @@
 import { useContext, useEffect,useState, useMemo } from "react";
 import Form from "react-bootstrap/Form";
 import { GlobalContext,UserContext } from "./Context";
-import { Schema } from "../amplify/client-schema";
+import { Schema } from "./amplify/client-schema";
 import { useNavigate,useParams } from "react-router-dom";
 import NavDropdown from 'react-bootstrap/NavDropdown';
 interface ProjectSelectorProps {

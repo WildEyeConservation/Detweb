@@ -7,7 +7,7 @@ import {
   GetQueueAttributesCommand,
 } from '@aws-sdk/client-sqs';
 import { type GetQueueAttributesCommandInput } from '@aws-sdk/client-sqs';
-import { Schema } from '../amplify/client-schema';
+import { Schema } from './amplify/client-schema';
 import EditQueueModal from './EditQueueModal';
 // import { publishError } from './ErrorHandler';
 import ActionsDropdown from './ActionsDropdown';
