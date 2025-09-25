@@ -31,6 +31,8 @@ const schema = a
         organizationId: a.id().required(),
         organization: a.belongsTo('Organization', 'organizationId'),
         name: a.string().required(),
+        // tags for flags like 'legacy'
+        tags: a.string().array(),
         images: a.hasMany('Image', 'projectId'),
         imageFiles: a.hasMany('ImageFile', 'projectId'),
         annotations: a.hasMany('Annotation', 'projectId'),
