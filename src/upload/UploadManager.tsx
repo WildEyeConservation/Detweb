@@ -134,7 +134,43 @@ export default function UploadManager() {
       return;
     }
     activeUploadRef.current = true;
-    console.log('uploading project', projectId);
+
+    // Ensure project status reflects upload start
+    try {
+      await client.models.Project.update({
+        id: projectId,
+        status: 'uploading',
+      });
+      try {
+        await client.mutations.updateProjectMemberships({
+          projectId,
+        });
+      } catch {
+        /* noop: membership ping best-effort */
+      }
+    } catch {
+      /* noop: status update will be attempted again by modal path */
+    }
+
+    // Fetch project to determine organization and legacy handling
+    const { data: project } = await client.models.Project.get(
+      { id: projectId },
+      { selectionSet: ['id', 'organizationId', 'tags'] as const }
+    );
+    const projRecord = (project ?? {}) as Record<string, unknown>;
+    const organizationId: string | undefined =
+      typeof projRecord['organizationId'] === 'string'
+        ? (projRecord['organizationId'] as string)
+        : undefined;
+    const tagsVal = projRecord['tags'];
+    const isLegacyProject: boolean = Array.isArray(tagsVal)
+      ? (tagsVal as unknown[]).some((t) => t === 'legacy')
+      : false;
+
+    const makeKey = (orig: string): string =>
+      !isLegacyProject && organizationId
+        ? `${organizationId}/${projectId}/${orig}`
+        : orig;
 
     if (retryDelay) {
       // Wait for the calculated delay
@@ -156,11 +192,10 @@ export default function UploadManager() {
         ((await fileStore.getItem(projectId)) as ImageData[]) ?? [];
 
       // Fetch cameras for this project and build a name -> id map
-      const { data: existingCameras } = await (
-        client.models.Camera.camerasByProjectId as any
-      )({ projectId });
+      const { data: existingCameras } =
+        await client.models.Camera.camerasByProjectId({ projectId });
       const cameraNameToId: Record<string, string> = {};
-      (existingCameras || []).forEach((cam: any) => {
+      (existingCameras || []).forEach((cam) => {
         if (cam?.name && cam?.id) cameraNameToId[cam.name] = cam.id;
       });
       const knownCameraNames = Object.keys(cameraNameToId);
@@ -177,7 +212,7 @@ export default function UploadManager() {
 
       // seed uploaded files from S3 and created images from DB
       const s3Files = (await fetchFilesFromS3()) as Set<string>;
-      const dbRawImages = (await (fetchAllPaginatedResults as any)(
+      const dbRawImages = (await fetchAllPaginatedResults(
         client.models.Image.imagesByProjectId,
         {
           projectId,
@@ -191,7 +226,7 @@ export default function UploadManager() {
 
       // track which images are already created in the DB
       const knownDbPaths = new Set(dbRawImages.map((img) => img.originalPath));
-      let createdImages: CreatedImage[] = dbRawImages.map((img) => ({
+      const createdImages: CreatedImage[] = dbRawImages.map((img) => ({
         id: img.id,
         originalPath: img.originalPath,
         timestamp: img.timestamp,
@@ -218,9 +253,12 @@ export default function UploadManager() {
       const SEED_CONCURRENCY = 5;
       const seedIterator = seedPaths[Symbol.iterator]();
       const seedWorker = async () => {
-        while (true) {
-          const { value: originalPath, done } = seedIterator.next();
-          if (done) break;
+        for (
+          let next = seedIterator.next();
+          !next.done;
+          next = seedIterator.next()
+        ) {
+          const originalPath = next.value as string;
           const imageData = allImages.find(
             (img) => img.originalPath === originalPath
           );
@@ -262,7 +300,7 @@ export default function UploadManager() {
               ? cameraNameToId[cameraName]
               : undefined;
 
-            const { data: img } = await (client.models.Image.create as any)({
+            const { data: img } = await client.models.Image.create({
               projectId,
               width: imageData.width,
               height: imageData.height,
@@ -286,15 +324,16 @@ export default function UploadManager() {
               });
               knownDbPaths.add(img.originalPath!);
               await createdImagesStore.setItem(projectId, createdImages);
-              await (client.models.ImageSetMembership.create as any)({
+              await client.models.ImageSetMembership.create({
                 imageId: img.id,
                 imageSetId: imageSet.id,
               });
-              await (client.models.ImageFile.create as any)({
+              const finalKey = makeKey(img.originalPath!);
+              await client.models.ImageFile.create({
                 projectId,
                 imageId: img.id,
-                key: img.originalPath!,
-                path: img.originalPath!,
+                key: finalKey,
+                path: finalKey,
                 type: fileType,
               });
             }
@@ -313,17 +352,20 @@ export default function UploadManager() {
       const CONCURRENCY = 20;
       const iterator = images[Symbol.iterator]();
       const runWorker = async () => {
-        while (true) {
-          if (cancelledRef.current) break;
-          const { value: image, done } = iterator.next();
-          if (done) break;
+        for (
+          let next = iterator.next();
+          !next.done && !cancelledRef.current;
+          next = iterator.next()
+        ) {
+          const image = next.value as ImageData;
           try {
             const file = files.find(
               (f) => f.webkitRelativePath === image.originalPath
             );
             if (file) {
+              const s3Key = makeKey(image.originalPath);
               await uploadData({
-                path: 'images/' + image.originalPath,
+                path: 'images/' + s3Key,
                 data: file,
                 options: { bucket: 'inputs', contentType: file.type },
               }).result;
@@ -354,7 +396,7 @@ export default function UploadManager() {
                 ? cameraNameToId[cameraName]
                 : undefined;
 
-              const { data: img } = await (client.models.Image.create as any)({
+              const { data: img } = await client.models.Image.create({
                 projectId,
                 width: image.width,
                 height: image.height,
@@ -380,15 +422,16 @@ export default function UploadManager() {
                 });
                 knownDbPaths.add(image.originalPath);
                 await createdImagesStore.setItem(projectId, createdImages);
-                await (client.models.ImageSetMembership.create as any)({
+                await client.models.ImageSetMembership.create({
                   imageId: img.id,
                   imageSetId: imageSet.id,
                 });
-                await (client.models.ImageFile.create as any)({
+                const finalKey = makeKey(img.originalPath!);
+                await client.models.ImageFile.create({
                   projectId,
                   imageId: img.id,
-                  key: img.originalPath!,
-                  path: image.originalPath,
+                  key: finalKey,
+                  path: finalKey,
                   type: file.type,
                 });
               }
@@ -453,12 +496,13 @@ export default function UploadManager() {
         !deleteId
       ) {
         setProgress((prev) => ({ ...prev, isComplete: true }));
-        return;
-      }
-      // If a retry was requested during this run, chain a new run now
-      if (retryPendingRef.current && projectId && !pauseId && !deleteId) {
+      } else if (
+        retryPendingRef.current &&
+        projectId &&
+        !pauseId &&
+        !deleteId
+      ) {
         retryPendingRef.current = false;
-        // Start the next attempt; this call will honor the current retryDelay
         uploadProject();
       }
     }
@@ -520,28 +564,60 @@ export default function UploadManager() {
       const filesToUpload =
         ((await fileStore.getItem(projectId)) as ImageData[]) ?? [];
       const localPaths = new Set(filesToUpload.map((f) => f.originalPath));
-      const topLevelPrefixes = Array.from(
-        new Set(
-          filesToUpload
-            .map((f) => (f.originalPath.split(/[/\\]/)[0] || '').trim())
-            .filter((p) => p.length > 0)
-        )
-      );
 
-      // List only under the relevant top-level prefixes to avoid cross-project contamination
+      // Determine legacy vs new key structure
+      const { data: project } = await client.models.Project.get(
+        { id: projectId },
+        { selectionSet: ['id', 'organizationId', 'tags'] as const }
+      );
+      const projRecord = (project ?? {}) as Record<string, unknown>;
+      const organizationId: string | undefined =
+        typeof projRecord['organizationId'] === 'string'
+          ? (projRecord['organizationId'] as string)
+          : undefined;
+      const tagsVal = projRecord['tags'];
+      const isLegacyProject: boolean = Array.isArray(tagsVal)
+        ? (tagsVal as unknown[]).some((t) => t === 'legacy')
+        : false;
+
       const allItems: { path: string }[] = [];
-      for (const prefix of topLevelPrefixes) {
+
+      if (!isLegacyProject && organizationId) {
+        // New structure: list under org/project prefix
+        const listPrefix = `images/${organizationId}/${projectId}/`;
         const { items } = await list({
-          path: `images/${prefix}/`,
+          path: listPrefix,
           options: { bucket: 'inputs', listAll: true },
         });
         allItems.push(...items);
+      } else {
+        // Legacy: limit by first folder of originalPath to avoid cross-project contamination
+        const topLevelPrefixes = Array.from(
+          new Set(
+            filesToUpload
+              .map((f) => (f.originalPath.split(/[/\\]/)[0] || '').trim())
+              .filter((p) => p.length > 0)
+          )
+        );
+        for (const prefix of topLevelPrefixes) {
+          const { items } = await list({
+            path: `images/${prefix}/`,
+            options: { bucket: 'inputs', listAll: true },
+          });
+          allItems.push(...items);
+        }
       }
 
       const uploadedFiles = allItems.reduce<Set<string>>((set, x) => {
-        const keyWithoutPrefix = x.path.substring('images/'.length);
-        if (localPaths.has(keyWithoutPrefix)) {
-          set.add(keyWithoutPrefix);
+        const keyWithoutImages = x.path.substring('images/'.length);
+        let candidateOriginalPath = keyWithoutImages;
+        if (!isLegacyProject && organizationId) {
+          const newPrefix = `${organizationId}/${projectId}/`;
+          if (!keyWithoutImages.startsWith(newPrefix)) return set;
+          candidateOriginalPath = keyWithoutImages.substring(newPrefix.length);
+        }
+        if (localPaths.has(candidateOriginalPath)) {
+          set.add(candidateOriginalPath);
         }
         return set;
       }, new Set<string>());
@@ -602,6 +678,25 @@ export default function UploadManager() {
         imageCount: createdImages.length,
       });
 
+      // Determine legacy vs new key structure
+      const { data: project } = await client.models.Project.get(
+        { id: projectId },
+        { selectionSet: ['id', 'organizationId', 'tags'] as const }
+      );
+      const projRecord = (project ?? {}) as Record<string, unknown>;
+      const organizationId: string | undefined =
+        typeof projRecord['organizationId'] === 'string'
+          ? (projRecord['organizationId'] as string)
+          : undefined;
+      const tagsVal = projRecord['tags'];
+      const isLegacyProject: boolean = Array.isArray(tagsVal)
+        ? (tagsVal as unknown[]).some((t) => t === 'legacy')
+        : false;
+      const makeKey = (orig: string): string =>
+        !isLegacyProject && organizationId
+          ? `${organizationId}/${projectId}/${orig}`
+          : orig;
+
       const metadata = (await metadataStore.getItem(projectId)) as {
         model: string;
         masks: number[][][];
@@ -623,16 +718,14 @@ export default function UploadManager() {
       }
 
       if (model === 'manual') {
-        await (client.models.Project.update as any)({
+        await client.models.Project.update({
           id: projectId,
           status: 'active',
         });
       }
 
       if (model === 'scoutbot') {
-        const { data: locationSet } = await (
-          client.models.LocationSet.create as any
-        )({
+        const { data: locationSet } = await client.models.LocationSet.create({
           name: projectId + `_${model}`,
           projectId: projectId,
         });
@@ -645,7 +738,7 @@ export default function UploadManager() {
         for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
           const batch = createdImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map(
-            (image) => `${image.id}---${image.originalPath}`
+            (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
 
           client.mutations.runScoutbot({
@@ -666,7 +759,9 @@ export default function UploadManager() {
       if (model === 'elephant-detection-nadir') {
         for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
           const batch = createdImages.slice(i, i + BATCH_SIZE);
-          const batchStrings = batch.map((image) => image.originalPath);
+          const batchStrings = batch.map((image) =>
+            makeKey(image.originalPath)
+          );
 
           client.mutations.runHeatmapper({
             images: batchStrings,
@@ -680,9 +775,7 @@ export default function UploadManager() {
       }
 
       if (model === 'mad') {
-        const { data: locationSet } = await (
-          client.models.LocationSet.create as any
-        )({
+        const { data: locationSet } = await client.models.LocationSet.create({
           name: projectId + `_${model}`,
           projectId: projectId,
         });
@@ -695,7 +788,7 @@ export default function UploadManager() {
         for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
           const batch = createdImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map(
-            (image) => `${image.id}---${image.originalPath}`
+            (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
 
           client.mutations.runMadDetector({
@@ -962,10 +1055,10 @@ export default function UploadManager() {
     <>
       <input
         ref={fileInputRef}
-        type='file'
-        webkitdirectory='true'
-        //@ts-ignore
-        directory='true'
+        type="file"
+        webkitdirectory="true"
+        // @ts-expect-error - nonstandard attribute supported by Chromium for directory selection
+        directory="true"
         multiple
         onChange={handleFileSelect}
         style={{ display: 'none' }}
@@ -974,7 +1067,7 @@ export default function UploadManager() {
         show={showConfirmationModal}
         onClose={() => setShowConfirmationModal(false)}
         onConfirm={() => fileInputRef.current?.click()}
-        title='Found interrupted uploads'
+        title="Found interrupted uploads"
         body={`Uploads were interrupted for ${pendingResumeProjectIdRef.current?.name}. Would you like to resume? After confirming, please select the files again. If the upload was started on this device you won't have to filter the data again. Only the files that were interrupted will be uploaded.`}
       />
       <ConfirmationModal
@@ -989,7 +1082,7 @@ export default function UploadManager() {
           pausedRef.current = true;
           handlePause();
         }}
-        title='Pause upload'
+        title="Pause upload"
         body={`Are you sure you want to pause the upload? The in flight uploads will be completed and the remaining files will be uploaded when you resume.`}
       />
       <ConfirmationModal
@@ -1004,7 +1097,7 @@ export default function UploadManager() {
           deletingRef.current = true;
           handleDelete();
         }}
-        title='Delete Survey'
+        title="Delete Survey"
         body={`This will cancel the upload and delete the survey. This action cannot be undone.`}
       />
     </>
