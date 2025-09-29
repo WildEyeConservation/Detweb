@@ -1954,10 +1954,21 @@ export default function FilesUploadComponent({
   const handleModalSubmit = async () => {
     if (uploadSubmitFn && project?.id) {
       // Simplify return type to avoid complex union
-      await (client.models.Project.update as any)({
-        id: project.id,
-        status: 'uploading',
-      });
+      try {
+        await (client.models.Project.update as any)({
+          id: project.id,
+          status: 'uploading',
+        });
+        try {
+          await (client.mutations.updateProjectMemberships as any)({
+            projectId: project.id,
+          });
+        } catch {
+          /* noop: membership ping best-effort */
+        }
+      } catch {
+        /* noop: status update will be enforced by UploadManager */
+      }
 
       handleClose();
 
@@ -2006,3 +2017,4 @@ export default function FilesUploadComponent({
     </Modal>
   );
 }
+
