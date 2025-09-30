@@ -26,6 +26,106 @@ import proj4 from 'proj4';
 // tolerance in degrees for simplifying the transect line
 const SIMPLIFY_TOLERANCE = 0.002;
 
+// Utilities: validation and sanitization
+function isFiniteNumber(n: any): n is number {
+  return typeof n === 'number' && Number.isFinite(n) && !Number.isNaN(n);
+}
+
+function isValidLatLng(lat: any, lng: any): lat is number {
+  return (
+    isFiniteNumber(lat) &&
+    isFiniteNumber(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  );
+}
+
+function toLatLngPairs(
+  values: Array<number | null | undefined>
+): [number, number][] {
+  const pairs: [number, number][] = [];
+  for (let i = 0; i + 1 < values.length; i += 2) {
+    const lat = values[i] as any;
+    const lng = values[i + 1] as any;
+    if (isValidLatLng(lat, lng)) {
+      pairs.push([lat, lng]);
+    }
+  }
+  return pairs;
+}
+
+function filterValidImages<T extends { latitude: any; longitude: any }>(
+  imgs: T[]
+): T[] {
+  return imgs.filter((img) => isValidLatLng(img.latitude, img.longitude));
+}
+
+// Impute missing/invalid lat/lng by time-based linear interpolation between
+// nearest valid neighbors; falls back to nearest neighbor if only one side exists
+function imputeLatLngForImages(
+  imgs: Array<{
+    id: any;
+    timestamp: any;
+    latitude: any;
+    longitude: any;
+  }>
+): { filled: any[]; imputedIds: Set<any> } {
+  if (!imgs || imgs.length === 0) return { filled: [], imputedIds: new Set() };
+  const filled = imgs.map((img) => ({ ...img }));
+  const n = filled.length;
+  const isValid: boolean[] = filled.map((img) =>
+    isValidLatLng(img.latitude, img.longitude)
+  );
+  const prevValidIdx: number[] = Array(n).fill(-1);
+  const nextValidIdx: number[] = Array(n).fill(-1);
+  let last = -1;
+  for (let i = 0; i < n; i++) {
+    if (isValid[i]) last = i;
+    prevValidIdx[i] = last;
+  }
+  last = -1;
+  for (let i = n - 1; i >= 0; i--) {
+    if (isValid[i]) last = i;
+    nextValidIdx[i] = last;
+  }
+  const imputedIds = new Set<any>();
+  for (let i = 0; i < n; i++) {
+    if (isValid[i]) continue;
+    const p = prevValidIdx[i];
+    const q = nextValidIdx[i];
+    if (p !== -1 && q !== -1) {
+      const t0 = new Date(filled[p].timestamp).getTime();
+      const t1 = new Date(filled[q].timestamp).getTime();
+      const ti = new Date(filled[i].timestamp).getTime();
+      const denom = Math.max(t1 - t0, 1);
+      const r = Math.min(Math.max((ti - t0) / denom, 0), 1);
+      const lat =
+        (filled[p].latitude as number) +
+        r * ((filled[q].latitude as number) - (filled[p].latitude as number));
+      const lng =
+        (filled[p].longitude as number) +
+        r * ((filled[q].longitude as number) - (filled[p].longitude as number));
+      filled[i].latitude = lat;
+      filled[i].longitude = lng;
+      (filled[i] as any)._imputed = true;
+      imputedIds.add(filled[i].id);
+    } else if (p !== -1) {
+      filled[i].latitude = filled[p].latitude;
+      filled[i].longitude = filled[p].longitude;
+      (filled[i] as any)._imputed = true;
+      imputedIds.add(filled[i].id);
+    } else if (q !== -1) {
+      filled[i].latitude = filled[q].latitude;
+      filled[i].longitude = filled[q].longitude;
+      (filled[i] as any)._imputed = true;
+      imputedIds.add(filled[i].id);
+    }
+  }
+  return { filled, imputedIds };
+}
+
 // Normalize mixed timestamp units to milliseconds since epoch
 function normalizeToMillis(ts: any): number {
   const n = typeof ts === 'string' ? Number(ts) : ts ?? 0;
@@ -216,6 +316,11 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
   const [drawnPolygonLayer, setDrawnPolygonLayer] = useState<L.Layer | null>(
     null
   );
+  const [pendingPolygon, setPendingPolygon] = useState<{
+    layer: L.Layer;
+    enclosedImageIds: Set<any>;
+    position: L.LatLngExpression;
+  } | null>(null);
   const [strataLines, setStrataLines] = useState<L.LatLngExpression[][]>([]);
   const [strataSections, setStrataSections] = useState<
     { coords: L.LatLngExpression[]; id: number }[]
@@ -232,10 +337,41 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
   const [exclusionCoords, setExclusionCoords] = useState<
     L.LatLngExpression[][]
   >([]);
+  const [imputedImageIds, setImputedImageIds] = useState<Set<any>>(new Set());
   const transectIds = React.useMemo(() => {
     const ids = segmentedImages.map((img) => img.transectId);
     return Array.from(new Set(ids)).sort((a, b) => a - b);
   }, [segmentedImages]);
+
+  // Polygon selection actions
+  const clearPendingSelection = (removeLayer: boolean) => {
+    if (removeLayer) {
+      try {
+        pendingPolygon?.layer.remove();
+      } catch {}
+    }
+    setDrawnPolygonLayer(null);
+    setPendingPolygon(null);
+  };
+
+  const assignPendingToNewTransect = () => {
+    if (!pendingPolygon) return;
+    const currentMax =
+      segmentedImages.length > 0
+        ? Math.max(...segmentedImages.map((si) => si.transectId))
+        : -1;
+    const newTransectId = isFiniteNumber(currentMax) ? currentMax + 1 : 0;
+    const enclosedIds = pendingPolygon.enclosedImageIds;
+    setSegmentedImages((prev) =>
+      prev.map((si) =>
+        enclosedIds.has(si.id) ? { ...si, transectId: newTransectId } : si
+      )
+    );
+    setSelectedTransectIds(new Set([newTransectId]));
+    clearPendingSelection(true);
+  };
+
+  // removed merge-into-existing option
   const transectImageCounts = React.useMemo(() => {
     const counts: Record<number, number> = {};
     segmentedImages.forEach((si) => {
@@ -320,7 +456,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
     setSavingProgress(0);
 
     // delete all existing strata so we can recreate them fresh
-    const existingStrata = await fetchAllPaginatedResults<any, any>(
+    const existingStrata = await fetchAllPaginatedResults(
       client.models.Stratum.strataByProjectId as any,
       { projectId, limit: 1000, selectionSet: ['id'] } as any
     );
@@ -460,17 +596,23 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
       segmentedImages.map(async (img) => {
         const trId = transectMap[img.transectId];
         if (trId) {
-          await (client.models.Image.update as any)({
+          const update: any = {
             id: img.id,
             transectId: trId,
-          });
+          };
+          // if this image had imputed coordinates, persist them back
+          if (imputedImageIds.has(img.id)) {
+            update.latitude = img.latitude;
+            update.longitude = img.longitude;
+          }
+          await (client.models.Image.update as any)(update);
           setSavingProgress((p) => p + 1);
         }
       })
     );
 
     // cleanup: delete unused transects from the database
-    const allTransects = await fetchAllPaginatedResults<any, any>(
+    const allTransects = await fetchAllPaginatedResults(
       client.models.Transect.transectsByProjectId as any,
       { projectId, limit: 1000, selectionSet: ['id'] } as any
     );
@@ -483,7 +625,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
     );
 
     //clear jolly results
-    const jollyResults = await fetchAllPaginatedResults<any, any>(
+    const jollyResults = await fetchAllPaginatedResults(
       client.models.JollyResult.jollyResultsBySurveyId as any,
       {
         surveyId: projectId,
@@ -521,7 +663,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
   // fetch images for project
   useEffect(() => {
     async function loadImages() {
-      const imgs = (await fetchAllPaginatedResults<any, any>(
+      const rawImgs = (await fetchAllPaginatedResults(
         client.models.Image.imagesByProjectId as any,
         {
           projectId,
@@ -535,16 +677,21 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
           ],
         } as any
       )) as any[];
-      // normalize timestamp unit
-      imgs.forEach((img) => {
+      // normalize timestamp unit and sort chronologically before imputation
+      rawImgs.forEach((img) => {
         img.timestamp = normalizeToMillis(img.timestamp);
       });
-      // sort chronologically
-      imgs.sort(
+      rawImgs.sort(
         (a, b) =>
           new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
       );
-      setImages(imgs);
+      const { filled, imputedIds } = imputeLatLngForImages(rawImgs);
+      setImages(filled);
+      setImputedImageIds((prev) => {
+        const next = new Set(prev);
+        imputedIds.forEach((id) => next.add(id));
+        return next;
+      });
       setPartsLoading((l) => (l === null ? 1 : l + 1));
     }
     loadImages();
@@ -553,7 +700,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
   // Insert logic to load existing strata and transect assignments
   useEffect(() => {
     async function loadExistingData() {
-      const existingStrata = await fetchAllPaginatedResults<any, any>(
+      const existingStrata = await fetchAllPaginatedResults(
         client.models.Stratum.strataByProjectId as any,
         {
           projectId,
@@ -563,7 +710,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
       );
       if (existingStrata.length > 0) {
         setExistingData(true);
-        const imgsWithTx = await fetchAllPaginatedResults<any, any>(
+        const rawImgsWithTx = await fetchAllPaginatedResults(
           client.models.Image.imagesByProjectId as any,
           {
             projectId,
@@ -577,14 +724,21 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
             ],
           } as any
         );
-        // Normalize and sort the loaded images by timestamp to preserve chronological order for baseline calculation
-        imgsWithTx.forEach((img) => {
+        const imgsWithTxRaw = rawImgsWithTx as any[];
+        imgsWithTxRaw.forEach((img) => {
           img.timestamp = normalizeToMillis(img.timestamp);
         });
-        imgsWithTx.sort(
+        imgsWithTxRaw.sort(
           (a, b) =>
             new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
         );
+        const { filled: imgsWithTx, imputedIds: impIds } =
+          imputeLatLngForImages(imgsWithTxRaw);
+        setImputedImageIds((prev) => {
+          const next = new Set(prev);
+          impIds.forEach((id) => next.add(id));
+          return next;
+        });
         // build UI segment IDs from DB transect IDs
         const uniqueDbIds = Array.from(
           new Set(
@@ -611,16 +765,22 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
         }));
         setSegmentedImages(segImgs);
         // load existing strata polygons into state
-        const loadedSections = existingStrata.map((st: any) => {
-          const flat = st.coordinates || [];
-          const coords: L.LatLngExpression[] = [];
-          for (let i = 0; i < flat.length; i += 2) {
-            coords.push([flat[i], flat[i + 1]]);
-          }
-          const match = /^Stratum (\d+)$/.exec(st.name);
-          const id = match ? parseInt(match[1], 10) : 0;
-          return { coords, id };
-        });
+        const loadedSections = existingStrata
+          .map((st: any) => {
+            const flat = st.coordinates || [];
+            const latlngs = toLatLngPairs(
+              (flat as Array<number | null>).filter(
+                (n): n is number => n != null
+              )
+            ) as L.LatLngExpression[];
+            if (latlngs.length < 3) return null;
+            const match = /^Stratum (\d+)$/.exec(st.name);
+            const id = match ? parseInt(match[1], 10) : 0;
+            return { coords: latlngs, id };
+          })
+          .filter(
+            (x): x is { coords: L.LatLngExpression[]; id: number } => !!x
+          );
         setStrataSections(loadedSections);
       }
 
@@ -642,10 +802,8 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
           const coordsArr = ex.coordinates.filter(
             (n): n is number => n != null
           );
-          const latlngs: L.LatLngExpression[] = [];
-          for (let i = 0; i < coordsArr.length; i += 2) {
-            latlngs.push([coordsArr[i], coordsArr[i + 1]]);
-          }
+          const latlngs = toLatLngPairs(coordsArr) as L.LatLngExpression[];
+          if (latlngs.length < 3) return;
           // Log exclusion polygon area
           const excCoordsLngLat = latlngs.map((pt) => {
             if (Array.isArray(pt)) {
@@ -684,9 +842,10 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
         const coordsArr = data[0].coordinates.filter(
           (n): n is number => n != null
         );
-        const latlngs: L.LatLngExpression[] = [];
-        for (let i = 0; i < coordsArr.length; i += 2) {
-          latlngs.push([coordsArr[i], coordsArr[i + 1]]);
+        const latlngs = toLatLngPairs(coordsArr) as L.LatLngExpression[];
+        if (latlngs.length < 3) {
+          setPartsLoading((l) => (l === null ? 1 : l + 1));
+          return;
         }
         // Log shapefile boundary area
         const boundaryLngLat = latlngs.map((pt) => {
@@ -716,13 +875,13 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (existingData) return;
     // only run segmentation once when no segments exist
-    if (
-      partsLoading === null &&
-      images.length > 1 &&
-      segmentedImages.length === 0
-    ) {
+    if (partsLoading === null && segmentedImages.length === 0) {
+      const validImgs = images.filter((img) =>
+        isValidLatLng(img.latitude, img.longitude)
+      );
+      if (validImgs.length <= 1) return;
       // build lineString in [lng,lat]
-      const coords = images.map(
+      const coords = validImgs.map(
         (img) => [img.longitude, img.latitude] as [number, number]
       );
       const line = turf.lineString(coords);
@@ -737,7 +896,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
         .filter((idx) => idx >= 0)
         .sort((a, b) => a - b);
       // assign each image to a transect segment
-      const segImgs = images.map((img, idx) => {
+      const segImgs = validImgs.map((img, idx) => {
         let segId = anchorIndices.length - 1;
         for (let i = 0; i < anchorIndices.length - 1; i++) {
           if (idx >= anchorIndices[i] && idx < anchorIndices[i + 1]) {
@@ -1028,11 +1187,11 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
 
   return (
     <>
-      <Form className='p-3'>
-        <Form.Group className='d-flex flex-column'>
-          <Form.Label className='mb-0'>Define Transects and Strata</Form.Label>
-          <span className='text-muted mb-2' style={{ fontSize: '14px' }}>
-            <ul className='mb-0'>
+      <Form className="p-3">
+        <Form.Group className="d-flex flex-column">
+          <Form.Label className="mb-0">Define Transects and Strata</Form.Label>
+          <span className="text-muted mb-2" style={{ fontSize: '14px' }}>
+            <ul className="mb-0">
               <li>
                 Single-click a point to select its transect (Ctrl-click for
                 multi-select). Clicking a selected transect will deselect it.
@@ -1044,11 +1203,9 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
                 button that appears at the bottom of the map.
               </li>
               <li>
-                Use the polygon tool (top-right) to draw around points and
-                select all transects that have points within the drawn area. The
-                polygon will remain visible so you can see your selection. Use
-                the "Merge Selected Transects" button to merge them and remove
-                the polygon.
+                Use the polygon tool (top-right) to draw around points, then
+                click "Merge points" to put only the enclosed points into a new
+                transect.
               </li>
               <li>
                 Define strata by selecting the polyline tool in the top right
@@ -1069,8 +1226,8 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
           </span>
           {existingData && (
             <Button
-              variant='outline-primary'
-              className='mb-2'
+              variant="outline-primary"
+              className="mb-2"
               onClick={clearStrata}
             >
               Clear Strata
@@ -1078,9 +1235,9 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
           )}
           <div style={{ height: '600px', width: '100%', position: 'relative' }}>
             {partsLoading !== null ? (
-              <div className='d-flex justify-content-center align-items-center mt-3'>
-                <Spinner animation='border' />
-                <span className='ms-2'>Loading data</span>
+              <div className="d-flex justify-content-center align-items-center mt-3">
+                <Spinner animation="border" />
+                <span className="ms-2">Loading data</span>
               </div>
             ) : (
               <MapContainer
@@ -1092,8 +1249,8 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
                 preferCanvas={false}
               >
                 <TileLayer
-                  attribution='&copy; OpenStreetMap contributors'
-                  url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                  attribution="&copy; OpenStreetMap contributors"
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
                 {polygonCoords && (
                   <Polygon
@@ -1104,7 +1261,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
                 {/* Polygon selection tool - always available */}
                 <FeatureGroup>
                   <EditControl
-                    position='topright'
+                    position="topright"
                     draw={{
                       rectangle: false,
                       circle: false,
@@ -1148,13 +1305,22 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
                           return turf.booleanPointInPolygon(pt, poly);
                         });
                         if (enclosedImgs.length) {
-                          // Select all transects that have points within the polygon
-                          const enclosedTransectIds = new Set(
-                            enclosedImgs.map((img) => img.transectId)
+                          const enclosedIds = new Set(
+                            enclosedImgs.map((img) => img.id)
                           );
-                          setSelectedTransectIds(enclosedTransectIds);
-                          // Keep the polygon visible and store reference for later removal
+                          // Keep polygon visible and present options
                           setDrawnPolygonLayer(e.layer);
+                          // position popup at polygon center
+                          const center = e.layer.getBounds().getCenter();
+                          const pos: [number, number] = [
+                            center.lat,
+                            center.lng,
+                          ];
+                          setPendingPolygon({
+                            layer: e.layer,
+                            enclosedImageIds: enclosedIds,
+                            position: pos,
+                          });
                         } else {
                           // No points found, remove the polygon immediately
                           try {
@@ -1178,7 +1344,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
                 {!existingData && (
                   <FeatureGroup>
                     <EditControl
-                      position='topright'
+                      position="topright"
                       draw={{
                         rectangle: false,
                         circle: false,
@@ -1257,7 +1423,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
                     const isSelected = selectedTransectIds.has(img.transectId);
                     return (
                       <CircleMarker
-                        pane='markerPane'
+                        pane="markerPane"
                         key={img.id}
                         center={[
                           adjustedPositions[img.id]?.latitude ?? img.latitude,
@@ -1365,10 +1531,32 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
                     })()}
                   </Popup>
                 )}
+                {pendingPolygon && (
+                  <Popup
+                    position={pendingPolygon.position}
+                    eventHandlers={{
+                      remove: () => clearPendingSelection(false),
+                    }}
+                  >
+                    <div className="d-flex flex-column gap-2">
+                      <div className="mb-1">
+                        <strong>{pendingPolygon.enclosedImageIds.size}</strong>{' '}
+                        points selected
+                      </div>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={assignPendingToNewTransect}
+                      >
+                        Merge points
+                      </Button>
+                    </div>
+                  </Popup>
+                )}
                 {/* Merge Selected Transects Button */}
                 {selectedTransectIds.size >= 2 && (
                   <div
-                    className='d-flex flex-row gap-2 p-2'
+                    className="d-flex flex-row gap-2 p-2"
                     style={{
                       position: 'absolute',
                       bottom: '10px',
@@ -1381,7 +1569,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
                     }}
                   >
                     <Button
-                      variant='primary'
+                      variant="primary"
                       onClick={() => {
                         const selected = Array.from(selectedTransectIds);
                         const primary = Math.min(...selected);
@@ -1403,10 +1591,11 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
             )}
           </div>
           {saving && (
-            <div className='d-flex justify-content-center align-items-center mt-3'>
-              <Spinner animation='border' size='sm'/>
-              <span className='ms-2'>
-                Saving images to transects: {savingImageCount > 0
+            <div className="d-flex justify-content-center align-items-center mt-3">
+              <Spinner animation="border" size="sm" />
+              <span className="ms-2">
+                Saving images to transects:{' '}
+                {savingImageCount > 0
                   ? Math.round((savingProgress / savingImageCount) * 100)
                   : 0}
                 %
@@ -1416,11 +1605,11 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
         </Form.Group>
       </Form>
       <Footer>
-        <Button variant='primary' onClick={handleSubmit} disabled={disabled}>
+        <Button variant="primary" onClick={handleSubmit} disabled={disabled}>
           Save Transects and Strata
         </Button>
         <Button
-          variant='dark'
+          variant="dark"
           onClick={() => showModal(null)}
           disabled={disabled}
         >
