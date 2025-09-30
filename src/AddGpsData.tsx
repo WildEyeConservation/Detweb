@@ -126,22 +126,38 @@ function AddGpsData({ imageSets, setHandleSubmit }: AddGpsDataProps) {
 
     if (associateByTimestamp) {
       if (!selectedImageSets) return;
-      const allImages: { image: { timestamp: number; id: string } }[] =
-        await fetchAllPaginatedResults(
-          client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
-          {
-            imageSetId: selectedImageSets[0],
-            selectionSet: ["image.timestamp", "image.id"] as const,
-          }
-        );
+      const allImages = (await fetchAllPaginatedResults(
+        client.models.ImageSetMembership
+          .imageSetMembershipsByImageSetId as any,
+        {
+          imageSetId: selectedImageSets[0],
+          selectionSet: ["image.timestamp", "image.id"] as const,
+        }
+      )) as any[];
       setTotalSteps(allImages.length);
       let count = 0;
       await Promise.all(
-        allImages.map(async ({ image: { timestamp, id } }) => {
-          if (
-            timestamp > csvData.data[0].timestamp &&
-            timestamp < csvData.data[csvData.data.length - 1].timestamp
-          ) {
+        allImages.map(async (row: any) => {
+          const timestamp: number | undefined = row?.image?.timestamp;
+          const id: string | undefined = row?.image?.id;
+          if (timestamp == null || !id) {
+            count++;
+            setStepsCompleted((s) => s + 1);
+            return;
+          }
+          const firstTs = csvData.data[0].timestamp;
+          const lastTs = csvData.data[csvData.data.length - 1].timestamp;
+
+          // Exact endpoint match or exact match anywhere
+          const exact = csvData.data.find((r: any) => r.timestamp === timestamp);
+          if (exact) {
+            await client.models.Image.update({
+              id,
+              latitude: exact.lat,
+              longitude: exact.lon,
+              altitude_agl: exact.alt,
+            });
+          } else if (timestamp >= firstTs && timestamp <= lastTs) {
             const gpsData = interpolateGpsData(csvData.data, timestamp);
             await client.models.Image.update({
               id,
