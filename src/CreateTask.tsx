@@ -210,6 +210,7 @@ function CreateTask({
   const [transectSubsetOffsets, setTransectSubsetOffsets] = useState<
     Record<string, number>
   >({});
+  const [showTransectId, setShowTransectId] = useState<boolean>(false);
 
   useEffect(() => {
     if (!hasDevGeoTransect) return;
@@ -315,6 +316,42 @@ function CreateTask({
   function getOverlapPercent() {
     if (verticalTiles <= 1) return 0;
     return (getOverlapPixels() / height) * 100;
+  }
+
+  // Exponential backoff retry helper (3 attempts by default)
+  function isTransientNetworkError(error: unknown) {
+    const message = String((error as any)?.message ?? error ?? '');
+    return /ERR_NETWORK_CHANGED|Failed to fetch|NetworkError|Network request failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN|fetch failed|socket hang up/i.test(
+      message
+    );
+  }
+
+  function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function retryWithBackoff<T>(
+    fn: () => Promise<T>,
+    maxAttempts: number = 3,
+    baseDelayMs: number = 500
+  ): Promise<T> {
+    let attempt = 1;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let lastError: any;
+    while (attempt <= maxAttempts) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error;
+        if (attempt >= maxAttempts || !isTransientNetworkError(error)) {
+          throw error;
+        }
+        const delay = baseDelayMs * Math.pow(2, attempt - 1);
+        await sleep(delay);
+        attempt += 1;
+      }
+    }
+    throw lastError;
   }
 
   useEffect(() => {
@@ -686,17 +723,19 @@ function CreateTask({
                 tileHeightForImage / 2
             );
             promises.push(
-              (client as any).models.Location.create({
-                x,
-                y,
-                width: tileWidthForImage,
-                height: tileHeightForImage,
-                imageId: id,
-                projectId,
-                confidence: 1,
-                source: 'manual',
-                setId: locationSetId,
-              }).then(() => {
+              retryWithBackoff(() =>
+                (client as any).models.Location.create({
+                  x,
+                  y,
+                  width: tileWidthForImage,
+                  height: tileHeightForImage,
+                  imageId: id,
+                  projectId,
+                  confidence: 1,
+                  source: 'manual',
+                  setId: locationSetId,
+                })
+              ).then(() => {
                 completedCount += 1;
                 createdCount += 1;
                 setLocationsCompleted(completedCount);
@@ -755,9 +794,19 @@ function CreateTask({
           >
             {hasDevGeoTransect ? (
               <>
-                <Form.Label className='mb-0'>
-                  Per-transect subset steps
-                </Form.Label>
+                <div className='d-flex align-items-center justify-content-between mb-2'>
+                  <Form.Label className='mb-0'>
+                    Per-transect subset steps
+                  </Form.Label>
+                  <Form.Check
+                    type='checkbox'
+                    label='Show Transect ID'
+                    checked={showTransectId}
+                    onChange={(e) => setShowTransectId(e.target.checked)}
+                    className='text-white'
+                    style={{ fontSize: '12px' }}
+                  />
+                </div>
                 <span
                   className='d-block text-muted mb-2'
                   style={{ fontSize: '12px' }}
@@ -765,7 +814,7 @@ function CreateTask({
                   Computed distance (vincenty) and speed are based on the first
                   and last image of each transect. Steps use 1-based indexing.
                 </span>
-                {transectGroupStats.map((g: any, idx: number) => (
+                {transectGroupStats.map((g: any) => (
                   <div
                     key={g.transectId}
                     className='d-flex align-items-center justify-content-between mb-2'
@@ -774,7 +823,7 @@ function CreateTask({
                       className='me-3 text-white'
                       style={{ fontSize: '14px' }}
                     >
-                      Transect {idx + 1}: {g.imageCount} images -{' '}
+                      Transect{showTransectId ? ` ${g.transectId}` : ''}: {g.imageCount} images -{' '}
                       {g.distanceKm.toFixed(2)} km - {g.speedKmh.toFixed(2)}{' '}
                       km/h
                     </div>
@@ -828,9 +877,9 @@ function CreateTask({
                   className='mt-2 text-white border-top border-dark pt-2'
                   style={{ fontSize: '12px' }}
                 >
-                  {transectGroupStats.map((g: any, idx: number) => (
+                  {transectGroupStats.map((g: any) => (
                     <div key={`exp-${g.transectId}`}>
-                      Transect {idx + 1} expected images:{' '}
+                      Transect{showTransectId ? ` ${g.transectId}` : ''} expected images:{' '}
                       {expectedCounts.per[g.transectId] ?? 0}
                     </div>
                   ))}
