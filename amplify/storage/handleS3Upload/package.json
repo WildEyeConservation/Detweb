@@ -9,7 +9,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "exifreader": "^4.23.5",
     "luxon": "^3.5.0",
     "p-limit": "^6.1.0"
   }
