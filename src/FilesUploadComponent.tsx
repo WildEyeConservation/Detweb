@@ -6,7 +6,6 @@ import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import { list } from 'aws-amplify/storage';
 import { GlobalContext, UploadContext } from './Context.tsx';
-import ExifReader from 'exifreader';
 import exifr from 'exifr';
 import { DateTime } from 'luxon';
 import { fetchAllPaginatedResults } from './utils';
@@ -21,7 +20,7 @@ import localforage from 'localforage';
 import CameraOverlap from './CameraOverlap';
 import CameraSpecification from './CameraSpecification';
 import LabeledToggleSwitch from './LabeledToggleSwitch.tsx';
-import { Schema } from '../amplify/data/resource.ts';
+import { Schema } from './amplify/client-schema.ts';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css';
 
@@ -532,29 +531,52 @@ export function FileUploadCore({
   };
 
   async function getExifmeta(file: File) {
-    const tags = await ExifReader.load(file);
-    /* I am saving all of the exifdata to make it easier to answer questions about eg. lens used/ISO/shutterTime/aperture distributions later on. However, some
-      EXIF fields are absolutely huge and make writing to my database impossibly slow. I explicitly drop those here*/
-    delete tags['Thumbnail'];
-    delete tags['Images'];
-    delete tags['MakerNote'];
-    for (const tag of Object.keys(tags)) {
-      if (tags[tag]?.description?.length > 100) {
-        console.log(
-          `Tag ${tag} has a description longer than 100 characters. Dropping it.`
-        );
-        delete tags[tag];
-      }
+    const tags = (await exifr.parse(file, {
+      pick: [
+        'DateTimeOriginal',
+        'OffsetTimeOriginal',
+        'Orientation',
+        'ImageWidth',
+        'ImageHeight',
+        'ExifImageWidth',
+        'ExifImageHeight',
+        'InternalSerialNumber',
+        'GPSLatitude',
+        'GPSLongitude',
+        'GPSLatitudeRef',
+        'GPSLongitudeRef',
+        'GPSAltitude',
+        // convenience props sometimes provided by exifr
+        'latitude',
+        'longitude',
+      ],
+    } as any)) as any;
+
+    const orientation = tags?.Orientation ?? 1;
+    const rotated = orientationRequiresSwap(orientation);
+
+    // Build timestamp from DateTimeOriginal + OffsetTimeOriginal (if any)
+    let timestamp: number;
+    const dto = tags?.DateTimeOriginal as Date | string | undefined;
+    const tz = tags?.OffsetTimeOriginal as string | undefined;
+    if (dto instanceof Date) {
+      timestamp = dto.getTime();
+    } else if (typeof dto === 'string' && dto.length > 0) {
+      const dt = DateTime.fromFormat(dto, 'yyyy:MM:dd HH:mm:ss', { zone: tz });
+      timestamp = dt.isValid ? dt.toMillis() : file.lastModified;
+    } else {
+      timestamp = file.lastModified;
     }
-    const rotated = (tags['Orientation']?.value as number) > 4;
 
-    // Retrieve raw GPS values, allow number[] or string
-    let lat: any = tags['GPSLatitude']?.value;
-    let lng: any = tags['GPSLongitude']?.value;
-    const latRef = tags['GPSLatitudeRef']?.value;
-    const lngRef = tags['GPSLongitudeRef']?.value;
+    const imageWidth = tags?.ImageWidth ?? tags?.ExifImageWidth ?? 0;
+    const imageHeight = tags?.ImageHeight ?? tags?.ExifImageHeight ?? 0;
 
-    // Convert coordinates to decimal degrees when value is an array
+    // GPS handling: prefer decimal latitude/longitude if provided, else compute from DMS
+    let lat: any = tags?.latitude ?? tags?.GPSLatitude;
+    let lng: any = tags?.longitude ?? tags?.GPSLongitude;
+    const latRef = tags?.GPSLatitudeRef;
+    const lngRef = tags?.GPSLongitudeRef;
+
     if (Array.isArray(lat) && latRef) {
       lat = convertDMSToDD(lat as number[], latRef === 'N' ? 1 : -1);
     }
@@ -562,41 +584,16 @@ export function FileUploadCore({
       lng = convertDMSToDD(lng as number[], lngRef === 'E' ? 1 : -1);
     }
 
-    // Parse EXIF original timestamp, fallback to file.lastModified
-    let timestamp: number;
-    const dateStr = tags.DateTimeOriginal?.description; // eg "2025:08:11 10:00:00"
-    const timeZone = tags.OffsetTimeOriginal?.description; // eg "+02:00"
-    if (dateStr) {
-      let dt = DateTime.fromFormat(dateStr, 'yyyy:MM:dd HH:mm:ss', {
-        zone: timeZone,
-      });
-
-      if (dt.isValid) {
-        timestamp = dt.toMillis();
-      } else {
-        console.warn(
-          `Invalid EXIF DateTimeOriginal '${dateStr}' for ${file.webkitRelativePath}, falling back to file.lastModified`
-        );
-        timestamp = file.lastModified;
-      }
-    } else {
-      console.warn(
-        `No EXIF DateTimeOriginal for ${file.webkitRelativePath}, falling back to file.lastModified`
-      );
-      timestamp = file.lastModified;
-    }
     return {
       key: file.webkitRelativePath,
-      width: rotated ? tags['Image Height']?.value : tags['Image Width']?.value,
-      height: rotated
-        ? tags['Image Width']?.value
-        : tags['Image Height']?.value,
+      width: rotated ? imageHeight : imageWidth,
+      height: rotated ? imageWidth : imageHeight,
       timestamp,
-      cameraSerial: tags['Internal Serial Number']?.value,
+      cameraSerial: tags?.InternalSerialNumber ?? '',
       gpsData: {
         lat: lat?.toString(),
         lng: lng?.toString(),
-        alt: tags['GPSAltitude']?.description,
+        alt: (tags?.GPSAltitude as any)?.toString?.() ?? (tags?.GPSAltitude as any),
       },
     };
   }
@@ -608,6 +605,24 @@ export function FileUploadCore({
     const minutes = dms[1] || 0;
     const seconds = dms[2] || 0;
     return sign * (degrees + minutes / 60 + seconds / 3600);
+  }
+
+  function orientationRequiresSwap(orientation: unknown): boolean {
+    if (typeof orientation === 'number') {
+      return orientation > 4;
+    }
+    if (typeof orientation === 'string') {
+      const o = orientation.toLowerCase();
+      return (
+        o.includes('90') ||
+        o.includes('270') ||
+        o.includes('transpose') ||
+        o.includes('transverse') ||
+        o.includes('mirror horizontal and rotate') ||
+        o.includes('mirror vertical and rotate')
+      );
+    }
+    return false;
   }
 
   const interpolateGpsData = (
@@ -676,7 +691,7 @@ export function FileUploadCore({
     } as any);
 
     const orientation = (tags as any)?.Orientation ?? 1;
-    const rotated = orientation > 4;
+    const rotated = orientationRequiresSwap(orientation);
 
     // Build timestamp from DateTimeOriginal + OffsetTimeOriginal (if any)
     let timestamp: number;
@@ -929,9 +944,15 @@ export function FileUploadCore({
         let gpsData = null;
 
         if (associateByTimestamp) {
-          if (
-            exifmeta.timestamp > minTimestamp &&
-            exifmeta.timestamp < maxTimestamp
+          // Prefer exact match first to handle endpoints (first/last CSV timestamp)
+          const exactRow = csvData.data.find(
+            (row) => row.timestamp === exifmeta.timestamp
+          );
+          if (exactRow) {
+            gpsData = { lat: exactRow.lat, lng: exactRow.lng, alt: exactRow.alt };
+          } else if (
+            exifmeta.timestamp >= minTimestamp &&
+            exifmeta.timestamp <= maxTimestamp
           ) {
             gpsData = interpolateGpsData(
               csvData.data.map((row) => ({
