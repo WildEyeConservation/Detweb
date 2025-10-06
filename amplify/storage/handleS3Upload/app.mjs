@@ -1,6 +1,6 @@
 import  fs  from 'node:fs/promises'
 import  path  from 'node:path'
-//import ExifReader from 'exifreader'
+// EXIF reading switched to exifr; currently not parsing EXIF in this handler
 //import { DateTime } from 'luxon'
 import pLimit from 'p-limit'
 import { S3Client, GetObjectCommand, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
@@ -181,6 +181,11 @@ export async function handler(event) {
       }
       const buffer = Buffer.concat(chunks);
       const localTmpPath = "/tmp/tiles";
+      // Ensure a clean temp directory per image to avoid cross-image contamination
+      try {
+        await fs.rm(localTmpPath, { recursive: true, force: true });
+      } catch {}
+      await fs.mkdir(localTmpPath, { recursive: true });
       // Read the exif data from the image stored in buffer.
       // const tags = ExifReader.load(buffer);
       // //Drop all tags with a length longer than 100 characters

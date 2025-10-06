@@ -1,6 +1,6 @@
 import  fs  from 'node:fs/promises'
 import  path  from 'node:path'
-import ExifReader from 'exifreader'
+// import exifr from 'exifr'
 import { DateTime } from 'luxon'
 import pLimit from 'p-limit'
 import { S3Client, GetObjectCommand, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
@@ -147,18 +147,27 @@ export async function lambdaHandler(event:S3Event) {
       }
       const buffer = Buffer.concat(chunks);
       const localTmpPath = "/tmp/tiles";
+      // Ensure a clean temp directory per image to avoid cross-image contamination
+      try {
+        await fs.rm(localTmpPath, { recursive: true, force: true } as any);
+      } catch {}
+      await fs.mkdir(localTmpPath, { recursive: true });
       // Read the exif data from the image stored in buffer.
-      const tags = ExifReader.load(buffer);
-      //Drop all tags with a length longer than 100 characters
-    //   let tagsDD = {}
-      for (const tag of Object.keys(tags)) {
-        if (tags[tag]?.description?.length > 100) {
-          console.log(`Tag ${tag} has a description longer than 100 characters. Dropping it.`)
-          console.log(tags[tag].description)
-          delete tags[tag];
-        }
-      }
-      delete tags.MakerNote
+      // const tags = await exifr.parse(buffer, {
+      //   pick: [
+      //     'DateTimeOriginal',
+      //     'OffsetTimeOriginal',
+      //     'Orientation',
+      //     'ImageWidth',
+      //     'ImageHeight',
+      //     'ExifImageWidth',
+      //     'ExifImageHeight',
+      //     'InternalSerialNumber',
+      //     'GPSLatitude',
+      //     'GPSLongitude',
+      //     'GPSAltitude',
+      //   ],
+      // } as any);
     //   Object.keys(tags).forEach(key => { tagsDD[key] = tags[key]?.description })
     //   tagsDD['key'] = Key.substring('public/images/'.length)
     //   /*tags.DateTimeOriginal.value[0]

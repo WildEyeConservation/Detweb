@@ -21,6 +21,10 @@ const client = generateClient<Schema>({ authMode: "userPool" }) as unknown as Da
 // Create a pLimit instance with a concurrency limit (adjust as needed)
 const limit = pLimit(15);
 
+// Expose a helper to run arbitrary async work through the same limiter
+export const runWithClientLimit = async <T>(fn: () => Promise<T>): Promise<T> =>
+  limit(fn);
+
 // Custom error class for GraphQL errors
 class GraphQLError extends Error {
   constructor(message: string) {
