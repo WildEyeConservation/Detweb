@@ -43,6 +43,7 @@ type AutoProcessorProps={
   memoryLimitMiB?: number;
   gpuCount?: number;
   rootVolumeSize?: number;
+  maxTasks?: number; // maximum desired ECS tasks to allow
 }
 
 export class AutoProcessor extends Construct {
@@ -52,6 +53,8 @@ export class AutoProcessor extends Construct {
     super(scope, id);
 
     const { vpc, ecsImage,instanceType,ecsTaskRole,memoryLimitMiB,gpuCount,machineImage } = props;
+    const maxTasks = props.maxTasks ?? 10; // default upper bound for tasks
+    const messagesPerTask = 500; // one task per 500 messages
 
     // Create Dead Letter Queue for processing
     const dlq = new sqs.Queue(this, 'ProcessingDeadLetterQueue');
@@ -80,7 +83,7 @@ export class AutoProcessor extends Construct {
       },
       minCapacity: 0,
       securityGroup: sg,
-      maxCapacity: 1,
+      maxCapacity: maxTasks,
       desiredCapacity: 0,
       keyName: "wildcru2",
       associatePublicIpAddress: true, // Ensure instances get a public IP
@@ -99,6 +102,8 @@ export class AutoProcessor extends Construct {
     // Add ASG to ECS Cluster
     const capacityProvider = new ecs.AsgCapacityProvider(this, 'AsgCapacityProvider', {
       autoScalingGroup: this.asg,
+      enableManagedScaling: true,
+      targetCapacityPercent: 100,
     });
     cluster.addAsgCapacityProvider(capacityProvider);
 
@@ -138,16 +143,21 @@ export class AutoProcessor extends Construct {
     // Set up scaling based on SQS queue
     const scaling = service.autoScaleTaskCount({
       minCapacity: 0,
-      maxCapacity: 1,
+      maxCapacity: maxTasks,
     });
 
+    const steps: autoscaling.ScalingInterval[] = [ { upper: 0, change: 0 } ];
+    for (let i = 1; i <= maxTasks; i++) {
+      const lower = (i - 1) * messagesPerTask + 1;
+      steps.push({ lower, change: i });
+    }
+
     scaling.scaleOnMetric('ScaleOnSQSMessages', {
-      metric: this.queue.metricApproximateNumberOfMessagesVisible(),
-      scalingSteps: [
-        { upper: 0, change: -1 },
-        { lower: 1, change: +1 },
-      ],
-      adjustmentType: autoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
+      metric: this.queue.metricApproximateNumberOfMessagesVisible({ period: cdk.Duration.minutes(1) }),
+      scalingSteps: steps,
+      adjustmentType: autoscaling.AdjustmentType.EXACT_CAPACITY,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
     });
   }
 }
@@ -156,6 +166,7 @@ export interface AutoProcessorEC2Props extends cdk.StackProps {
   vpc: ec2.Vpc;
   outputqueue: sqs.Queue;
   amiArn: string;
+  maxInstances?: number; // maximum number of EC2 instances to allow
 }
 
 export class AutoProcessorEC2 extends Construct {
@@ -163,6 +174,8 @@ export class AutoProcessorEC2 extends Construct {
     super(scope, id);
 
     const { vpc, outputqueue, amiArn } = props;
+    const maxInstances = props.maxInstances ?? 10;
+    const messagesPerInstance = 500; // one instance per 500 messages
     // Create processing queue with dead letter queue for EC2 auto processor
     const ec2dlq = new sqs.Queue(this, 'EC2ProcessingDeadLetterQueue');
     const processingQueue = new sqs.Queue(this, 'EC2ProcessingQueue', {
@@ -199,7 +212,7 @@ export class AutoProcessorEC2 extends Construct {
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.G4DN, ec2.InstanceSize.XLARGE),
       machineImage: ec2.MachineImage.genericLinux({ [cdk.Stack.of(this).region]: amiArn }),
       minCapacity: 0,
-      maxCapacity: 1,
+      maxCapacity: maxInstances,
       desiredCapacity: 0,
       securityGroup,
       role,
@@ -207,13 +220,18 @@ export class AutoProcessorEC2 extends Construct {
       userData: createUserData(processingQueue, outputqueue),
     });
 
+    const ec2Steps: autoscaling.ScalingInterval[] = [ { upper: 0, change: 0 } ];
+    for (let i = 1; i <= maxInstances; i++) {
+      const lower = (i - 1) * messagesPerInstance + 1;
+      ec2Steps.push({ lower, change: i });
+    }
+
     scaling.scaleOnMetric('ScaleOnSQSMessages', {
-      metric: processingQueue.metricApproximateNumberOfMessagesVisible(),
-      scalingSteps: [
-        { upper: 0, change: -1 },
-        { lower: 1, change: +1 },
-      ],
-      adjustmentType: autoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
+      metric: processingQueue.metricApproximateNumberOfMessagesVisible({ period: cdk.Duration.minutes(1) }),
+      scalingSteps: ec2Steps,
+      adjustmentType: autoscaling.AdjustmentType.EXACT_CAPACITY,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
     });
   }
 }
