@@ -3,7 +3,7 @@ import  path  from 'node:path'
 // EXIF reading switched to exifr; currently not parsing EXIF in this handler
 //import { DateTime } from 'luxon'
 import pLimit from 'p-limit'
-import { S3Client, GetObjectCommand, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
+import { S3Client, GetObjectCommand, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3'
 //import { marshall } from '@aws-sdk/util-dynamodb'
 const s3 = new S3Client();
 import { STSClient, AssumeRoleCommand } from '@aws-sdk/client-sts';
@@ -76,6 +76,28 @@ async function uploadDir(localDir, s3Prefix) {
   );
 
   await Promise.all(uploadPromises);
+}
+
+async function deleteS3Prefix(bucket, prefix) {
+  let continuationToken = undefined;
+  let totalDeleted = 0;
+  do {
+    const listResp = await s3.send(
+      new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken: continuationToken }),
+    );
+    const objects = listResp.Contents || [];
+    if (objects.length > 0) {
+      const deleteResp = await s3.send(
+        new DeleteObjectsCommand({
+          Bucket: bucket,
+          Delete: { Objects: objects.map((o) => ({ Key: o.Key })) },
+        }),
+      );
+      totalDeleted += deleteResp.Deleted?.length || 0;
+    }
+    continuationToken = listResp.IsTruncated ? listResp.NextContinuationToken : undefined;
+  } while (continuationToken);
+  console.log(`Deleted ${totalDeleted} existing objects under prefix ${prefix} in bucket ${bucket}`);
 }
 
 /* This function was created because I had a bug in my lambda function at one stage that caused it to terminate early.
@@ -268,6 +290,12 @@ export async function handler(event) {
         await fs.mkdir(localTmpPath, { recursive: true });
       }
       const outputS3Prefix = Key.replace("images", "slippymaps");
+      if (typeof process.env.AWS_SAM_LOCAL === 'undefined') {
+        console.log(`Clearing existing tiles at s3://${env.OUTPUTS_BUCKET_NAME}/${outputS3Prefix} before upload...`);
+        await deleteS3Prefix(env.OUTPUTS_BUCKET_NAME, outputS3Prefix);
+      } else {
+        console.log('Local testing mode: skipping S3 prefix deletion');
+      }
       console.log(`Uploading ${localTmpPath}`);
       await uploadDir(localTmpPath, outputS3Prefix);
       console.log("Done");
