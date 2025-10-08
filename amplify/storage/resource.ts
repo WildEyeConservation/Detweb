@@ -10,7 +10,7 @@ export const outputBucket = defineStorage({
   isDefault: true,
   access: allow => ({
     'slippymaps/*': [
-      allow.resource(handleS3Upload).to(['write', 'list', 'get']),
+      allow.resource(handleS3Upload).to(['write', 'list', 'get','delete']),
       allow.authenticated.to(['read'])
     ],
     'heatmaps/*': [

@@ -290,15 +290,26 @@ export async function handler(event) {
         await fs.mkdir(localTmpPath, { recursive: true });
       }
       const outputS3Prefix = Key.replace("images", "slippymaps");
+      let deleteDurationMs = 0
+      let uploadDurationMs = 0
+      const totalStartMs = Date.now()
       if (typeof process.env.AWS_SAM_LOCAL === 'undefined') {
-        console.log(`Clearing existing tiles at s3://${env.OUTPUTS_BUCKET_NAME}/${outputS3Prefix} before upload...`);
-        await deleteS3Prefix(env.OUTPUTS_BUCKET_NAME, outputS3Prefix);
+        console.log(`Clearing existing tiles at s3://${env.OUTPUTS_BUCKET_NAME}/${outputS3Prefix} before upload...`)
+        const deleteStartMs = Date.now()
+        await deleteS3Prefix(env.OUTPUTS_BUCKET_NAME, outputS3Prefix)
+        deleteDurationMs = Date.now() - deleteStartMs
+        console.log(`Delete completed in ${deleteDurationMs} ms`)
       } else {
-        console.log('Local testing mode: skipping S3 prefix deletion');
+        console.log('Local testing mode: skipping S3 prefix deletion')
       }
-      console.log(`Uploading ${localTmpPath}`);
-      await uploadDir(localTmpPath, outputS3Prefix);
-      console.log("Done");
+      console.log(`Uploading ${localTmpPath}`)
+      const uploadStartMs = Date.now()
+      await uploadDir(localTmpPath, outputS3Prefix)
+      uploadDurationMs = Date.now() - uploadStartMs
+      const totalDurationMs = Date.now() - totalStartMs
+      console.log(`Upload completed in ${uploadDurationMs} ms`)
+      console.log(`Slippymap refresh times for ${Key}: delete=${deleteDurationMs} ms, upload=${uploadDurationMs} ms, total=${totalDurationMs} ms`)
+      console.log("Done")
     }
   }
 };
