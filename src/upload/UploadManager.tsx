@@ -216,9 +216,14 @@ export default function UploadManager() {
         client.models.Image.imagesByProjectId,
         {
           projectId,
-          selectionSet: ['id', 'originalPath', 'timestamp'],
+          selectionSet: ['id', 'originalPath', 'timestamp', 'cameraId'],
         }
-      )) as { id: string; originalPath: string; timestamp: number }[];
+      )) as {
+        id: string;
+        originalPath: string;
+        timestamp: number;
+        cameraId?: string | null;
+      }[];
 
       // track which files are already on S3
       const uploadedFiles = Array.from(s3Files);
@@ -230,6 +235,7 @@ export default function UploadManager() {
         id: img.id,
         originalPath: img.originalPath,
         timestamp: img.timestamp,
+        cameraId: img.cameraId ?? undefined,
       }));
       await createdImagesStore.setItem(projectId, createdImages);
 
@@ -707,11 +713,23 @@ export default function UploadManager() {
       const BATCH_SIZE = 500;
 
       for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
-        // kick off image registration
+        const batch = createdImages.slice(i, i + BATCH_SIZE);
+        // include 10 prior images to enable adjacency linking across batch boundaries (and across cameras)
+        const overlapCount = 10;
+        const overlapStart = Math.max(0, i - overlapCount);
+        const overlap: CreatedImage[] = i > 0 ? createdImages.slice(overlapStart, i) : [];
+        const payload = overlap.concat(batch).map((img) => ({
+          id: img.id,
+          originalPath: img.originalPath,
+          timestamp: img.timestamp,
+          cameraId: img.cameraId,
+        }));
+
         client.mutations.runImageRegistration({
           projectId: projectId,
           metadata: JSON.stringify({
             masks: masks,
+            images: payload,
           }),
           queueUrl: backend.custom.lightglueTaskQueueUrl,
         });

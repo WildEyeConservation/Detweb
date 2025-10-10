@@ -3659,11 +3659,13 @@ export const runImageRegistration = /* GraphQL */ `mutation RunImageRegistration
   $metadata: String!
   $projectId: String!
   $queueUrl: String!
+  $images: [String]
 ) {
   runImageRegistration(
     metadata: $metadata
     projectId: $projectId
     queueUrl: $queueUrl
+    images: $images
   )
 }
 ` as GeneratedMutation<
