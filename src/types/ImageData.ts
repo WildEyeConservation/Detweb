@@ -17,4 +17,5 @@ export interface CreatedImage {
   id: string;
   originalPath: string;
   timestamp: number;
+  cameraId?: string;
 }

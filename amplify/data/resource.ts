@@ -834,6 +834,8 @@ const schema = a
         //JSON stringified metadata
         metadata: a.string().required(),
         queueUrl: a.string().required(),
+        // Optional: batch of images to process (each as JSON string with id, originalPath, timestamp, cameraId)
+        images: a.string().array(),
       })
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])

@@ -14,7 +14,6 @@ import {
 import { createImageNeighbour } from './graphql/mutations';
 import {
   CameraOverlap,
-  Image,
   GetImageNeighbourQuery,
   GetProjectQuery,
 } from '../runImageRegistration/graphql/API';
@@ -57,6 +56,14 @@ interface PagedList<T> {
 }
 
 type SqsEntry = SendMessageBatchRequestEntry;
+
+// Minimal image fields needed for registration and pairing logic
+interface MinimalImage {
+  id: string;
+  originalPath?: string | null;
+  timestamp?: number | null;
+  cameraId?: string | null;
+}
 
 // Simple exponential backoff for transient errors on GraphQL calls
 async function gqlWithRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
@@ -121,8 +128,8 @@ async function fetchAllPages<T, K extends string>(
 }
 
 async function handlePair(
-  image1: Image,
-  image2: Image,
+  image1: MinimalImage,
+  image2: MinimalImage,
   masks: number[][][],
   computeKey: (orig: string) => string
 ) {
@@ -224,7 +231,7 @@ async function handlePair(
 }
 
 function addAdjacentPairTasks(
-  images: Image[],
+  images: MinimalImage[],
   masks: number[][][],
   seenPairs: Set<string>,
   outTasks: Array<() => Promise<SqsEntry | null>>,
@@ -249,13 +256,24 @@ function addAdjacentPairTasks(
   }
 }
 
-export const handler: Handler = async (event) => {
+export const handler: Handler = async (event, context) => {
   try {
+    // Do not wait for open handles after we return a response
+    if (context && typeof context === 'object') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (context as any).callbackWaitsForEmptyEventLoop = false;
+    }
     const projectId = event.arguments.projectId as string;
     const metadata = JSON.parse(event.arguments.metadata) as {
-      masks: number[][][];
+      masks?: number[][][];
+      images?: Array<{
+        id: string;
+        originalPath: string;
+        timestamp?: number | null;
+        cameraId?: string | null;
+      }>;
     };
-    const masks = metadata.masks;
+    const masks = Array.isArray(metadata?.masks) ? (metadata.masks as number[][][]) : [];
     const queueUrl = event.arguments.queueUrl as string;
 
     // Fetch project info to determine key prefixing
@@ -283,14 +301,46 @@ export const handler: Handler = async (event) => {
         ? `${organizationId}/${projectId}/${orig}`
         : orig;
 
-    const images = await fetchAllPages<Image, 'imagesByProjectId'>(
-      (nextToken) =>
-        client.graphql({
-          query: imagesByProjectId,
-          variables: { projectId, nextToken, limit: 1000 },
-        }) as Promise<GraphQLResult<{ imagesByProjectId: PagedList<Image> }>>,
-      'imagesByProjectId'
-    );
+    // If a batch of images was provided in metadata, use that to avoid scanning the entire project.
+    // Otherwise, fall back to fetching all project images (legacy behavior).
+    const providedBatch = Array.isArray(metadata?.images)
+      ? metadata.images.filter((it): it is NonNullable<typeof it> => Boolean(it))
+      : [];
+
+    const images: MinimalImage[] = providedBatch.length
+      ? providedBatch.map((it) => ({
+          id: it.id,
+          originalPath: it.originalPath,
+          timestamp:
+            typeof it.timestamp === 'number' ? (it.timestamp as number) : null,
+          cameraId: (it.cameraId ?? null) as string | null,
+        }))
+      : (await fetchAllPages<
+          // Fetch full Image records then map down to MinimalImage to keep types narrow
+          { id: string; originalPath?: string | null; timestamp?: number | null; cameraId?: string | null },
+          'imagesByProjectId'
+        >(
+          (nextToken) =>
+            client.graphql({
+              query: imagesByProjectId,
+              variables: { projectId, nextToken, limit: 1000 },
+            }) as Promise<
+              GraphQLResult<{
+                imagesByProjectId: PagedList<{
+                  id: string;
+                  originalPath?: string | null;
+                  timestamp?: number | null;
+                  cameraId?: string | null;
+                }>;
+              }>
+            >,
+          'imagesByProjectId'
+        )).map((img) => ({
+          id: img.id,
+          originalPath: img.originalPath ?? null,
+          timestamp: typeof img.timestamp === 'number' ? img.timestamp : null,
+          cameraId: (img.cameraId ?? null) as string | null,
+        }));
 
     const sortedImages = images.sort(
       (a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0)
@@ -311,7 +361,7 @@ export const handler: Handler = async (event) => {
     );
 
     // keep track of images with no camera information (this should never happen but just in case)
-    const noCamImgs: Image[] = [];
+    const noCamImgs: MinimalImage[] = [];
 
     // group images by camera
     const imagesByCamera = sortedImages.reduce((acc, image) => {
@@ -327,7 +377,7 @@ export const handler: Handler = async (event) => {
       acc[cameraId].push(image);
 
       return acc;
-    }, {} as Record<string, Image[]>);
+    }, {} as Record<string, MinimalImage[]>);
 
     const tasks: Array<() => Promise<SqsEntry | null>> = [];
     const seenPairs = new Set<string>();
