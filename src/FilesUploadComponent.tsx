@@ -326,18 +326,65 @@ export function FileUploadCore({
       );
 
       const allItems: { path: string }[] = [];
-      for (const prefix of prefixes) {
-        const { items } = await list({
-          path: `images/${prefix}/`,
-          options: { bucket: 'inputs', listAll: true },
-        });
-        allItems.push(...items);
+      // Try to use new key structure: images/{organizationId}/{projectId}/{originalPath}
+      let usedNewPrefix = false;
+      let projOrgId: string | undefined = undefined;
+      let projIsLegacy = true;
+      try {
+        if (!newProject && project?.id) {
+          const { data: proj } = await client.models.Project.get(
+            { id: project.id },
+            { selectionSet: ['id', 'organizationId', 'tags'] as const }
+          );
+          const orgId =
+            typeof proj?.organizationId === 'string'
+              ? proj.organizationId
+              : undefined;
+          const tagsVal = proj?.tags;
+          const isLegacy = Array.isArray(tagsVal)
+            ? tagsVal.some((t) => t === 'legacy')
+            : false;
+          projOrgId = orgId;
+          projIsLegacy = isLegacy;
+          if (orgId && !isLegacy) {
+            const listPrefix = `images/${orgId}/${project.id}/`;
+            const { items } = await list({
+              path: listPrefix,
+              options: { bucket: 'inputs', listAll: true },
+            });
+            allItems.push(...items);
+            usedNewPrefix = true;
+          }
+        }
+      } catch {
+        // Fallback to legacy listing below
+      }
+      // Legacy structure or fallback: list by top-level folder prefixes
+      if (!usedNewPrefix) {
+        for (const prefix of prefixes) {
+          const { items } = await list({
+            path: `images/${prefix}/`,
+            options: { bucket: 'inputs', listAll: true },
+          });
+          allItems.push(...items);
+        }
       }
 
       const existingFiles = allItems.reduce<Set<string>>((set, x) => {
-        const keyWithoutPrefix = x.path.substring('images/'.length);
-        if (localPaths.has(keyWithoutPrefix)) {
-          set.add(keyWithoutPrefix);
+        const keyWithoutImages = x.path.substring('images/'.length);
+        if (!projIsLegacy && projOrgId && project?.id) {
+          const newPrefix = `${projOrgId}/${project.id}/`;
+          if (!keyWithoutImages.startsWith(newPrefix)) return set;
+          const candidateOriginalPath = keyWithoutImages.substring(
+            newPrefix.length
+          );
+          if (localPaths.has(candidateOriginalPath)) {
+            set.add(candidateOriginalPath);
+          }
+        } else {
+          if (localPaths.has(keyWithoutImages)) {
+            set.add(keyWithoutImages);
+          }
         }
         return set;
       }, new Set());
@@ -398,9 +445,9 @@ export function FileUploadCore({
         } else {
           gpsToCSVData.push({
             timestamp: updatedExif.timestamp,
-            lat: (updatedExif.gpsData as any).lat as number,
-            lng: (updatedExif.gpsData as any).lng as number,
-            alt: (updatedExif.gpsData as any).alt as number,
+            lat: updatedExif.gpsData.lat as number,
+            lng: updatedExif.gpsData.lng as number,
+            alt: updatedExif.gpsData.alt as number,
           });
         }
       }
@@ -503,14 +550,12 @@ export function FileUploadCore({
     async function fetchExistingCameras() {
       try {
         setLoadingExistingCameras(true);
-        const { data } = (await (
-          client.models.Camera.camerasByProjectId as any
-        )({
+        const { data } = await client.models.Camera.camerasByProjectId({
           projectId,
-        })) as any;
+        });
         if (!cancelled) {
           setExistingCameraNames(
-            (data || []).map((c: any) => c.name).filter(Boolean)
+            (data || []).map((c) => c.name).filter(Boolean)
           );
         }
       } finally {
@@ -531,7 +576,7 @@ export function FileUploadCore({
   };
 
   async function getExifmeta(file: File) {
-    const tags = (await exifr.parse(file, {
+    const tags = await exifr.parse(file, {
       pick: [
         'DateTimeOriginal',
         'OffsetTimeOriginal',
@@ -550,7 +595,7 @@ export function FileUploadCore({
         'latitude',
         'longitude',
       ],
-    } as any)) as any;
+    });
 
     const orientation = tags?.Orientation ?? 1;
     const rotated = orientationRequiresSwap(orientation);
@@ -593,7 +638,9 @@ export function FileUploadCore({
       gpsData: {
         lat: lat?.toString(),
         lng: lng?.toString(),
-        alt: (tags?.GPSAltitude as any)?.toString?.() ?? (tags?.GPSAltitude as any),
+        alt:
+          (tags?.GPSAltitude as any)?.toString?.() ??
+          (tags?.GPSAltitude as any),
       },
     };
   }
@@ -688,7 +735,7 @@ export function FileUploadCore({
         'ExifImageHeight',
         'InternalSerialNumber',
       ],
-    } as any);
+    });
 
     const orientation = (tags as any)?.Orientation ?? 1;
     const rotated = orientationRequiresSwap(orientation);
@@ -778,26 +825,21 @@ export function FileUploadCore({
 
       const allCameras: Schema['Camera']['type'][] = [];
 
-      // @ts-ignore Amplify typed union is overly complex; cast to any for app usage
-      const existingCameras: any[] =
-        ((
-          (await (client.models.Camera.camerasByProjectId as any)({
+      const existingCameras =
+        (
+          await client.models.Camera.camerasByProjectId({
             projectId,
-          })) as any
-        ).data as any[]) || [];
+          })
+        ).data || [];
 
       for (const camera of existingCameras) {
         allCameras.push(camera);
       }
 
       for (const [name, spec] of Object.entries(cameraSpecs)) {
-        // @ts-ignore ignore amplify type unions on model results
-        const existingCamera = (existingCameras as any[]).find(
-          (c: any) => c.name === name
-        );
+        const existingCamera = existingCameras.find((c) => c.name === name);
         if (existingCamera) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (client.models.Camera.update as any)({
+          await client.models.Camera.update({
             id: existingCamera.id,
             name: name,
             focalLengthMm: spec.focalLengthMm || 0,
@@ -805,10 +847,7 @@ export function FileUploadCore({
             tiltDegrees: spec.tiltDegrees || 0,
           });
         } else {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: newCamera } = await (
-            client.models.Camera.create as any
-          )({
+          const { data: newCamera } = await client.models.Camera.create({
             name: name,
             projectId: projectId,
             focalLengthMm: spec.focalLengthMm || 0,
@@ -822,26 +861,20 @@ export function FileUploadCore({
       }
 
       for (const overlap of overlaps) {
-        const cameraA: any = (allCameras as any[]).find(
-          (c: any) => c.name === overlap.cameraA
-        );
+        const cameraA = allCameras.find((c) => c.name === overlap.cameraA);
 
-        const cameraB: any = (allCameras as any[]).find(
-          (c: any) => c.name === overlap.cameraB
-        );
+        const cameraB = allCameras.find((c) => c.name === overlap.cameraB);
 
         if (cameraA && cameraB) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const existingOverlap: any = (
-            (await (client.models.CameraOverlap.get as any)({
+          const existingOverlap = (
+            await client.models.CameraOverlap.get({
               cameraAId: cameraA.id,
               cameraBId: cameraB.id,
-            })) as any
+            })
           ).data;
 
           if (!existingOverlap) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (client.models.CameraOverlap.create as any)({
+            await client.models.CameraOverlap.create({
               cameraAId: cameraA.id,
               cameraBId: cameraB.id,
               projectId: projectId,
@@ -851,15 +884,14 @@ export function FileUploadCore({
       }
 
       // Simplify return type to avoid complex union
-      const imageSets: any[] = await (fetchAllPaginatedResults as any)(
+      const imageSets = await fetchAllPaginatedResults(
         client.models.ImageSet.list,
         { filter: { projectId: { eq: projectId } }, selectionSet: ['id'] }
       );
 
       // only one image set exists for a survey
       if (imageSets.length === 0) {
-        // Simplify return type to avoid complex union
-        await (client.models.ImageSet.create as any)({
+        await client.models.ImageSet.create({
           name: name,
           projectId: projectId,
         });
@@ -949,7 +981,11 @@ export function FileUploadCore({
             (row) => row.timestamp === exifmeta.timestamp
           );
           if (exactRow) {
-            gpsData = { lat: exactRow.lat, lng: exactRow.lng, alt: exactRow.alt };
+            gpsData = {
+              lat: exactRow.lat,
+              lng: exactRow.lng,
+              alt: exactRow.alt,
+            };
           } else if (
             exifmeta.timestamp >= minTimestamp &&
             exifmeta.timestamp <= maxTimestamp
@@ -1369,15 +1405,15 @@ export function FileUploadCore({
   return (
     <>
       <Form.Group>
-        <Form.Label className='mb-0'>Model</Form.Label>
+        <Form.Label className="mb-0">Model</Form.Label>
         <Form.Text
-          className='d-block text-muted mt-0 mb-1'
+          className="d-block text-muted mt-0 mb-1"
           style={{ fontSize: 12 }}
         >
           Select the model you wish to use to guide annotation.
         </Form.Text>
         <Select
-          className='text-black'
+          className="text-black"
           value={model}
           options={[
             { label: 'ScoutBot', value: 'scoutbot' },
@@ -1397,21 +1433,21 @@ export function FileUploadCore({
           onChange={(e) => {
             if (e) setModel(e);
           }}
-          placeholder='Select a model'
+          placeholder="Select a model"
         />
       </Form.Group>
       <Form.Group>
-        <Form.Label className='mb-0'>Files to Upload</Form.Label>
-        <p className='text-muted mb-1' style={{ fontSize: 12 }}>
+        <Form.Label className="mb-0">Files to Upload</Form.Label>
+        <p className="text-muted mb-1" style={{ fontSize: 12 }}>
           Upload the survey files by selecting the entire folder you wish to
           upload.
         </p>
         <div
-          className='p-2 mb-2 bg-white text-black'
+          className="p-2 mb-2 bg-white text-black"
           style={{ minHeight: '136px', overflow: 'auto' }}
         >
           {scannedFiles.length > 0 && (
-            <code className='m-0 text-dark'>
+            <code className="m-0 text-dark">
               Folder name: {name}
               <br />
               Total files: {scannedFiles.length}
@@ -1445,8 +1481,8 @@ export function FileUploadCore({
         >
           <Form.Group>
             <FileInput
-              id='filepicker'
-              webkitdirectory=''
+              id="filepicker"
+              webkitdirectory=""
               onFileChange={handleFileInputChange}
             >
               <p style={{ margin: 0 }}>
@@ -1489,18 +1525,18 @@ export function FileUploadCore({
         </div>
       </Form.Group>
       {scanningEXIF ? (
-        <div className='mt-3 mb-0'>
-          <p className='mb-0'>
+        <div className="mt-3 mb-0">
+          <p className="mb-0">
             Scanning images for GPS data: {`${scanCount}/${scanTotal}`}
           </p>
         </div>
       ) : Object.keys(exifData).length > 0 && imageFiles.length > 0 ? (
-        <Form.Group className='mt-3 d-flex flex-column gap-2'>
+        <Form.Group className="mt-3 d-flex flex-column gap-2">
           <div>
-            <Form.Label className='mb-0'>
+            <Form.Label className="mb-0">
               {missingGpsData ? 'Missing GPS data' : 'GPS data found'}
             </Form.Label>
-            <Form.Text className='d-block mb-0' style={{ fontSize: '12px' }}>
+            <Form.Text className="d-block mb-0" style={{ fontSize: '12px' }}>
               {missingGpsData
                 ? 'Some images do not have GPS data. Please upload the gpx or csv file containing the GPS data for all images.'
                 : 'The selected images have GPS data. Would you like to upload a separate file containing the GPS data for all images?'}
@@ -1518,34 +1554,34 @@ export function FileUploadCore({
             <Form.Text className='d-block mb-0' style={{ fontSize: '12px' }}>
               If your data contains file paths instead of timestamps, the format
               should be:{' '}
-              <code className='text-primary' style={{ fontSize: '14px' }}>
+              <code className="text-primary" style={{ fontSize: '14px' }}>
                 {imageFiles[0].webkitRelativePath}
               </code>
             </Form.Text>
           </div>
           <FileInput
-            id='gps-metadata-file'
-            fileType='.csv,.gpx'
+            id="gps-metadata-file"
+            fileType=".csv,.gpx"
             onFileChange={(files) => setFile(files[0])}
           >
-            <p className='mb-0'>Select GPS metadata file</p>
+            <p className="mb-0">Select GPS metadata file</p>
           </FileInput>
         </Form.Group>
       ) : null}
       {headerFields && !mappingConfirmed && (
-        <Form.Group className='mt-3'>
-          <Form.Label className='mb-0'>Confirm File Structure</Form.Label>
-          <p className='text-muted mb-1' style={{ fontSize: 12 }}>
+        <Form.Group className="mt-3">
+          <Form.Label className="mb-0">Confirm File Structure</Form.Label>
+          <p className="text-muted mb-1" style={{ fontSize: 12 }}>
             Select which columns from your file correspond to the following
             fields:
           </p>
           <div
-            className='d-flex flex-column gap-2 border border-dark p-2 shadow-sm'
+            className="d-flex flex-column gap-2 border border-dark p-2 shadow-sm"
             style={{ backgroundColor: '#697582' }}
           >
-            <div className='d-flex flex-row gap-2 align-items-center'>
+            <div className="d-flex flex-row gap-2 align-items-center">
               <div style={{ flex: 0.5 }}>
-                <Form.Label className='mb-0'>FilePath (optional)</Form.Label>
+                <Form.Label className="mb-0">FilePath (optional)</Form.Label>
                 <Select
                   options={[
                     { label: 'None', value: '' },
@@ -1565,24 +1601,24 @@ export function FileUploadCore({
                       filepath: opt ? opt.value : undefined,
                     })
                   }
-                  placeholder='Select FilePath column'
-                  className='text-black'
+                  placeholder="Select FilePath column"
+                  className="text-black"
                 />
               </div>
               <p
-                className='mb-0'
+                className="mb-0"
                 style={{ width: '50px', textAlign: 'center' }}
               >
                 or
               </p>
               <div style={{ flex: 0.5 }}>
-                <div className='d-flex flex-row gap-2 align-items-center justify-content-between'>
-                  <Form.Label className='mb-0'>Timestamp (optional)</Form.Label>
-                  <div className='d-flex flex-row gap-2 align-items-center'>
-                    <label className='me-2'>ms</label>
+                <div className="d-flex flex-row gap-2 align-items-center justify-content-between">
+                  <Form.Label className="mb-0">Timestamp (optional)</Form.Label>
+                  <div className="d-flex flex-row gap-2 align-items-center">
+                    <label className="me-2">ms</label>
                     <Form.Check
-                      type='switch'
-                      id='timestamp-in-ms'
+                      type="switch"
+                      id="timestamp-in-ms"
                       checked={!timestampInMs}
                       onChange={(e) => setTimestampInMs(!e.target.checked)}
                     />
@@ -1608,13 +1644,13 @@ export function FileUploadCore({
                       timestamp: opt ? opt.value : undefined,
                     })
                   }
-                  placeholder='Select Timestamp column'
-                  className='text-black'
+                  placeholder="Select Timestamp column"
+                  className="text-black"
                 />
               </div>
             </div>
             <div>
-              <Form.Label className='mb-0'>Latitude</Form.Label>
+              <Form.Label className="mb-0">Latitude</Form.Label>
               <Select
                 options={headerFields.map((f) => ({ label: f, value: f }))}
                 value={
@@ -1628,12 +1664,12 @@ export function FileUploadCore({
                     lat: opt ? opt.value : undefined,
                   })
                 }
-                placeholder='Select Latitude column'
-                className='text-black'
+                placeholder="Select Latitude column"
+                className="text-black"
               />
             </div>
             <div>
-              <Form.Label className='mb-0'>Longitude</Form.Label>
+              <Form.Label className="mb-0">Longitude</Form.Label>
               <Select
                 options={headerFields.map((f) => ({ label: f, value: f }))}
                 value={
@@ -1647,13 +1683,13 @@ export function FileUploadCore({
                     lng: opt ? opt.value : undefined,
                   })
                 }
-                placeholder='Select Longitude column'
-                className='text-black'
+                placeholder="Select Longitude column"
+                className="text-black"
               />
             </div>
             <div>
-              <Form.Label className='mb-0'>Altitude (optional)</Form.Label>
-              <div className='d-flex flex-row gap-2 align-items-center'>
+              <Form.Label className="mb-0">Altitude (optional)</Form.Label>
+              <div className="d-flex flex-row gap-2 align-items-center">
                 <Select
                   options={[
                     { label: 'None', value: '' },
@@ -1670,8 +1706,8 @@ export function FileUploadCore({
                       alt: opt && opt.value ? opt.value : undefined,
                     })
                   }
-                  placeholder='Select Altitude column'
-                  className='text-black flex-grow-1'
+                  placeholder="Select Altitude column"
+                  className="text-black flex-grow-1"
                 />
                 <Select
                   options={altitudeTypeOptions}
@@ -1679,15 +1715,15 @@ export function FileUploadCore({
                   onChange={(opt) =>
                     setAltitudeType(opt ?? { label: 'EGM96', value: 'egm96' })
                   }
-                  placeholder='Select Altitude Type'
-                  className='text-black'
+                  placeholder="Select Altitude Type"
+                  className="text-black"
                 />
               </div>
             </div>
           </div>
           <Button
-            variant='primary'
-            className='mt-2'
+            variant="primary"
+            className="mt-2"
             onClick={handleConfirmMapping}
           >
             Confirm File Structure
@@ -1709,23 +1745,23 @@ export function FileUploadCore({
               fullCsvData &&
               fullCsvData.some((row) => row.timestamp))) && (
             <Form.Group>
-              <Form.Label className='mb-0'>
+              <Form.Label className="mb-0">
                 Filter Data by Time Range (Optional)
               </Form.Label>
               <Form.Text
-                className='d-block mb-1 mt-0'
+                className="d-block mb-1 mt-0"
                 style={{ fontSize: '12px' }}
               >
                 Select the effective time range for each day. The default range
                 is the earliest and latest timestamp recorded for that day.
               </Form.Text>
               <Form.Text
-                className='d-block mb-1'
+                className="d-block mb-1"
                 style={{ fontSize: '12px', fontStyle: 'italic' }}
               >
                 All times shown in UTC.
               </Form.Text>
-              <div className='d-flex flex-column gap-2'>
+              <div className="d-flex flex-column gap-2">
                 {Array.from(
                   new Set(
                     (fullCsvData || csvData.data).map((row) =>
@@ -1744,29 +1780,29 @@ export function FileUploadCore({
                     return (
                       <div
                         key={`day-${day}`}
-                        className='d-flex flex-column gap-2 mt-2'
+                        className="d-flex flex-column gap-2 mt-2"
                       >
-                        <span className='fw-bold'>
+                        <span className="fw-bold">
                           {new Date(
                             (fullCsvData || csvData.data)[0].timestamp!
                           ).toLocaleDateString()}
                         </span>
-                        <div className='d-flex align-items-center gap-2'>
-                          <label className='mb-0'>Start:</label>
+                        <div className="d-flex align-items-center gap-2">
+                          <label className="mb-0">Start:</label>
                           <span
-                            className='badge bg-success'
+                            className="badge bg-success"
                             style={{ minWidth: '60px' }}
                           >
                             {minutesToTime(startMinutes)}
                           </span>
-                          <label className='mb-0'>End:</label>
+                          <label className="mb-0">End:</label>
                           <span
-                            className='badge bg-primary'
+                            className="badge bg-primary"
                             style={{ minWidth: '60px' }}
                           >
                             {minutesToTime(endMinutes)}
                           </span>
-                          <div className='flex-grow-1'>
+                          <div className="flex-grow-1">
                             <Slider
                               range
                               min={0}
@@ -1791,7 +1827,7 @@ export function FileUploadCore({
               </div>
             </Form.Group>
           )}
-          <div className='mt-3'>
+          <div className="mt-3">
             {(() => {
               let message = '';
               const hasTimestampData =
@@ -1856,17 +1892,17 @@ export function FileUploadCore({
               );
             })()}
           </div>
-          <Form.Group className='mt-3'>
-            <Form.Label className='mb-0'>Camera Definition</Form.Label>
+          <Form.Group className="mt-3">
+            <Form.Label className="mb-0">Camera Definition</Form.Label>
             <span
-              className='text-muted d-block mb-1'
+              className="text-muted d-block mb-1"
               style={{ fontSize: '12px' }}
             >
               Does your survey have only one camera or multiple cameras?
             </span>
             <LabeledToggleSwitch
-              leftLabel='Single Camera'
-              rightLabel='Multiple Cameras'
+              leftLabel="Single Camera"
+              rightLabel="Multiple Cameras"
               checked={multipleCameras}
               onChange={(e) => setMultipleCameras(e)}
             />
@@ -1895,15 +1931,15 @@ export function FileUploadCore({
               const hasAny = currentNames.length > 0;
               if (!hasAny || loadingExistingCameras) return null;
               return (
-                <div className='mt-2'>
+                <div className="mt-2">
                   {matched.length > 0 && (
-                    <div className='alert alert-info mb-2'>
+                    <div className="alert alert-info mb-2">
                       These cameras already exist and will be linked by name:{' '}
                       {matched.join(', ')}
                     </div>
                   )}
                   {matched.length === 0 && newOnes.length === 0 && (
-                    <div className='alert alert-warning mb-2'>
+                    <div className="alert alert-warning mb-2">
                       No cameras detected from folder structure.
                     </div>
                   )}
@@ -1970,18 +2006,21 @@ export default function FilesUploadComponent({
     ((projectId: string, fromStaleUpload?: boolean) => Promise<void>) | null
   >(null);
   const [readyToSubmit, setReadyToSubmit] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
 
   // Modal version needs to handle its own submit
   const handleModalSubmit = async () => {
-    if (uploadSubmitFn && project?.id) {
-      // Simplify return type to avoid complex union
+    if (!uploadSubmitFn || !project?.id) return;
+    setIsSubmitting(true);
+    try {
       try {
-        await (client.models.Project.update as any)({
+        await client.models.Project.update({
           id: project.id,
           status: 'uploading',
         });
         try {
-          await (client.mutations.updateProjectMemberships as any)({
+          await client.mutations.updateProjectMemberships({
             projectId: project.id,
           });
         } catch {
@@ -1994,12 +2033,20 @@ export default function FilesUploadComponent({
       handleClose();
 
       await uploadSubmitFn(project.id, fromStaleUpload);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <Modal show={show} onHide={handleClose} size='xl'>
-      <Modal.Header closeButton>
+    <Modal
+      show={show}
+      onHide={handleClose}
+      size="xl"
+      backdrop="static"
+      keyboard={false}
+    >
+      <Modal.Header>
         <Modal.Title>
           {fromStaleUpload ? 'Resume upload: ' : 'Add files: '}
           {project?.name}
@@ -2008,7 +2055,7 @@ export default function FilesUploadComponent({
       <Modal.Body>
         <Form>
           {fromStaleUpload && (
-            <p className='mb-2 text-warning'>
+            <p className="mb-2 text-warning">
               This survey&apos;s upload is stale.
               <br />
               Complete the form to continue - only the remaining images will be
@@ -2025,17 +2072,23 @@ export default function FilesUploadComponent({
       </Modal.Body>
       <Modal.Footer>
         <Button
-          variant='primary'
-          disabled={!readyToSubmit}
+          variant="primary"
+          disabled={!readyToSubmit || isSubmitting || isClosing}
           onClick={handleModalSubmit}
         >
           Submit
         </Button>
-        <Button variant='dark' onClick={handleClose}>
+        <Button
+          variant="dark"
+          disabled={isSubmitting || isClosing}
+          onClick={() => {
+            setIsClosing(true);
+            handleClose();
+          }}
+        >
           Cancel
         </Button>
       </Modal.Footer>
     </Modal>
   );
 }
-
