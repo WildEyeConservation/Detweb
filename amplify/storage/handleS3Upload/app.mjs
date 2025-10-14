@@ -49,6 +49,10 @@ import { env } from "$amplify/env/handleS3Upload";
 //   authMode: "iam",
 // });
 
+// Toggle deletion of existing tiles before upload.
+// Manually set to true when you want to clear previous tiles.
+const DELETE_S3_PREFIX_BEFORE_UPLOAD = false;
+
 async function uploadDir(localDir, s3Prefix) {
   const files = await fs.readdir(localDir);
 
@@ -293,14 +297,18 @@ export async function handler(event) {
       let deleteDurationMs = 0
       let uploadDurationMs = 0
       const totalStartMs = Date.now()
-      if (typeof process.env.AWS_SAM_LOCAL === 'undefined') {
+      if (typeof process.env.AWS_SAM_LOCAL === 'undefined' && DELETE_S3_PREFIX_BEFORE_UPLOAD) {
         console.log(`Clearing existing tiles at s3://${env.OUTPUTS_BUCKET_NAME}/${outputS3Prefix} before upload...`)
         const deleteStartMs = Date.now()
         await deleteS3Prefix(env.OUTPUTS_BUCKET_NAME, outputS3Prefix)
         deleteDurationMs = Date.now() - deleteStartMs
         console.log(`Delete completed in ${deleteDurationMs} ms`)
       } else {
-        console.log('Local testing mode: skipping S3 prefix deletion')
+        if (typeof process.env.AWS_SAM_LOCAL !== 'undefined') {
+          console.log('Local testing mode: skipping S3 prefix deletion')
+        } else if (!DELETE_S3_PREFIX_BEFORE_UPLOAD) {
+          console.log('Skipping S3 prefix deletion')
+        }
       }
       console.log(`Uploading ${localTmpPath}`)
       const uploadStartMs = Date.now()
