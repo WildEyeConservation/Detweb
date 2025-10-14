@@ -36,7 +36,9 @@ export default function EditShapeFile({ projectId }: { projectId: string }) {
   const [drawMode, setDrawMode] = useState<'shapefile' | 'exclusions'>(
     'shapefile'
   );
-  const [disabled, setDisabled] = useState(false);
+  // disabledClose: only disables Close during active save; saveDisabled: governs Save button enablement
+  const [disabledClose, setDisabledClose] = useState(false);
+  const [saveDisabled, setSaveDisabled] = useState(false);
 
   // Adaptive simplification shared utility is imported as simplifyPolygonToRange
 
@@ -176,11 +178,11 @@ export default function EditShapeFile({ projectId }: { projectId: string }) {
 
   // enable submit only when polygon defined
   useEffect(() => {
-    setDisabled(!polygonCoords);
-  }, [polygonCoords, setDisabled]);
+    setSaveDisabled(!polygonCoords);
+  }, [polygonCoords]);
 
   const saveShapefile = async () => {
-    setDisabled(true);
+    setDisabledClose(true);
     setSaving(true);
 
     if (!polygonCoords) return;
@@ -252,7 +254,7 @@ export default function EditShapeFile({ projectId }: { projectId: string }) {
       'You have successfully updated the shapefile. Please review your strata and transects on the next tab and save your work whether you made any changes or not.'
     );
 
-    setDisabled(false);
+    setDisabledClose(false);
     setSaving(false);
   };
 
@@ -440,13 +442,13 @@ export default function EditShapeFile({ projectId }: { projectId: string }) {
         </Form.Group>
       </Form>
       <Footer>
-        <Button variant='primary' onClick={saveShapefile} disabled={disabled}>
+        <Button variant='primary' onClick={saveShapefile} disabled={saveDisabled || saving}>
           Save Shapefile
         </Button>
         <Button
           variant='dark'
           onClick={() => showModal(null)}
-          disabled={disabled}
+          disabled={disabledClose}
         >
           Close
         </Button>

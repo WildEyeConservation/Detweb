@@ -295,7 +295,9 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
   const [saving, setSaving] = useState(false);
   const [savingImageCount, setSavingImageCount] = useState(0);
   const [savingProgress, setSavingProgress] = useState(0);
-  const [disabled, setDisabled] = useState(false);
+  // disabledClose: only disables Close during active save; saveDisabled: governs Save button enablement
+  const [disabledClose, setDisabledClose] = useState(false);
+  const [saveDisabled, setSaveDisabled] = useState(false);
   const [polygonCoords, setPolygonCoords] = useState<
     L.LatLngExpression[] | null
   >(null);
@@ -443,8 +445,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
   // submit handler: creates strata, transects, and assigns images
   const handleSubmit = async () => {
     if (!polygonCoords) return;
-
-    setDisabled(true);
+    setDisabledClose(true);
     setSaving(true);
 
     // Calculate how many images will be linked to transects
@@ -650,15 +651,15 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
       )
     );
 
-    setDisabled(false);
+    setDisabledClose(false);
     setSaving(false);
     setSavingImageCount(0);
     setSavingProgress(0);
   };
 
   useEffect(() => {
-    setDisabled(strataSections.length === 0);
-  }, [strataSections, setDisabled]);
+    setSaveDisabled(strataSections.length === 0);
+  }, [strataSections]);
 
   // fetch images for project
   useEffect(() => {
@@ -1605,13 +1606,13 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
         </Form.Group>
       </Form>
       <Footer>
-        <Button variant="primary" onClick={handleSubmit} disabled={disabled}>
+        <Button variant="primary" onClick={handleSubmit} disabled={saveDisabled || saving}>
           Save Transects and Strata
         </Button>
         <Button
           variant="dark"
           onClick={() => showModal(null)}
-          disabled={disabled}
+          disabled={disabledClose}
         >
           Close
         </Button>
