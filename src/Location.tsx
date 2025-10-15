@@ -6,7 +6,7 @@ import L from "leaflet";
 import "leaflet-contextmenu";
 import { LocationType } from "./schemaTypes";
 import { isHotkeyPressed, useHotkeys } from "react-hotkeys-hook";
-export default function Location({x,y,width,height,confidence}: LocationType) {
+export default function Location({x,y,width,height,confidence, strokeColor}: LocationType & { strokeColor?: string }) {
   const { xy2latLng } = useContext(ImageContext)!;
   const [enabled, setEnabled] = useState(true);
   width ||= 100
@@ -37,7 +37,7 @@ export default function Location({x,y,width,height,confidence}: LocationType) {
     const latLngBounds = xy2latLng(boundsxy) as unknown as L.LatLngBoundsLiteral;
     const rectangle = L.rectangle(latLngBounds, {
       // color: showTestCase && isTest ? "red" : "blue",
-      color: "blue",
+      color: strokeColor ?? "blue",
       fill: false,
     }).addTo(map);
 

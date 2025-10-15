@@ -35,6 +35,15 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
     number | ''
   >('');
   const [loadedCount, setLoadedCount] = useState(0);
+  const [locationSets, setLocationSets] = useState<any[]>([]);
+  const [loadingLocationSets, setLoadingLocationSets] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState<boolean>(false);
+  const [changeSize, setChangeSize] = useState<boolean>(false);
+  const [selectedSize, setSelectedSize] = useState<string>('');
+  const [customWidth, setCustomWidth] = useState<number | ''>('');
+  const [customHeight, setCustomHeight] = useState<number | ''>('');
+  const [offsetX, setOffsetX] = useState<number>(0);
+  const [offsetY, setOffsetY] = useState<number>(0);
   const candidatesRef = useRef<
     {
       annotationSetId: string;
@@ -231,6 +240,62 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
     [client, preset.id, surveyId]
   );
 
+  // Fetch project location sets for tiled sizes / testing set
+  useEffect(() => {
+    if (!show) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingLocationSets(true);
+        const { data } = (await (
+          (client as any).models.LocationSet.locationSetsByProjectId as any
+        )(
+          { projectId: surveyId },
+          { selectionSet: ['id', 'name', 'description'] as const }
+        )) as { data: any[] };
+        if (!cancelled) setLocationSets(Array.isArray(data) ? data : []);
+      } finally {
+        if (!cancelled) setLoadingLocationSets(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [show, client, surveyId]);
+
+  const tiledSizeOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const opts: { label: string; value: string; w: number; h: number }[] = [];
+    for (const s of locationSets || []) {
+      try {
+        if (!s?.description) continue;
+        const desc = JSON.parse(s.description);
+        if (
+          desc &&
+          desc.mode === 'tiled' &&
+          typeof desc.width === 'number' &&
+          typeof desc.height === 'number'
+        ) {
+          const key = `${desc.width}x${desc.height}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            opts.push({
+              label: `${desc.width} x ${desc.height} px`,
+              value: key,
+              w: desc.width,
+              h: desc.height,
+            });
+          }
+        }
+      } catch {
+        // ignore bad JSON
+      }
+    }
+    return opts.sort((a, b) => a.w * a.h - b.w * b.h);
+  }, [locationSets]);
+
+  const overlayEnabled = advancedOpen && (changeSize || offsetX !== 0 || offsetY !== 0);
+
   useEffect(() => {
     if (show) {
       refreshCandidates(selectedCategoryId, maxAnnotations);
@@ -253,6 +318,19 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
     setMaxAnnotations(pendingMaxAnnotations || '');
     refreshCandidates(pendingCategoryId, pendingMaxAnnotations);
   }, [pendingCategoryId, pendingMaxAnnotations, refreshCandidates]);
+
+  // Ensure a dedicated testing location set exists
+  const getOrCreateTestingLocationSetId = useCallback(async () => {
+    const TESTING_SET_NAME = 'Testing Locations';
+    const existing = (locationSets || []).find((s: any) => s?.name === TESTING_SET_NAME);
+    if (existing?.id) return existing.id as string;
+    const { data: created } = await (client as any).models.LocationSet.create({
+      name: TESTING_SET_NAME,
+      projectId: surveyId,
+    });
+    setLocationSets((prev) => (created ? [...prev, created] : prev));
+    return created?.id as string;
+  }, [client, surveyId, locationSets]);
 
   async function saveAnnotations(cand: {
     annotationSetId: string;
@@ -331,19 +409,53 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
     const cand = currentCandidate;
     if (!cand) return;
     setAdding(true);
-    // @ts-ignore
-    await client.models.TestPresetLocation.create({
-      testPresetId: preset.id,
-      locationId: cand.locationId,
-      annotationSetId: cand.annotationSetId,
-    });
-    // mark for effect
-    lastAddedRef.current = cand;
-    setAddedLocations((prev) => ({
-      ...prev,
-      [`${cand.annotationSetId}_${cand.locationId}`]: true,
-    }));
-    setAdding(false);
+    try {
+      // Load original location
+      // @ts-ignore
+      const { data: orig } = await client.models.Location.get({
+        id: cand.locationId,
+        selectionSet: ['imageId', 'x', 'y', 'width', 'height'] as const,
+      } as any);
+      if (!orig) throw new Error('Original location not found');
+
+      const testingSetId = await getOrCreateTestingLocationSetId();
+      const finalWidth = (changeSize ? customWidth : orig.width) ?? 100;
+      const finalHeight = (changeSize ? customHeight : orig.height) ?? 100;
+      const finalX = Math.round((orig.x as number) + (offsetX || 0));
+      const finalY = Math.round((orig.y as number) + (offsetY || 0));
+
+      // Create a new testing location
+      // @ts-ignore
+      const { data: newLoc } = await client.models.Location.create({
+        projectId: surveyId,
+        setId: testingSetId,
+        imageId: orig.imageId,
+        x: finalX,
+        y: finalY,
+        width: finalWidth,
+        height: finalHeight,
+        source: 'testing',
+      } as any);
+
+      if (!newLoc?.id) throw new Error('Failed to create testing location');
+
+      // Add the new location to the preset
+      // @ts-ignore
+      await client.models.TestPresetLocation.create({
+        testPresetId: preset.id,
+        locationId: newLoc.id,
+        annotationSetId: cand.annotationSetId,
+      });
+
+      // mark for effect using the new location
+      lastAddedRef.current = { annotationSetId: cand.annotationSetId, locationId: newLoc.id };
+      setAddedLocations((prev) => ({
+        ...prev,
+        [`${cand.annotationSetId}_${cand.locationId}`]: true,
+      }));
+    } finally {
+      setAdding(false);
+    }
   }
 
   useEffect(() => {
@@ -372,94 +484,198 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
             ) : candidates.length === 0 ? (
               <p>No available locations to add.</p>
             ) : (
-              <>
-                <Form.Group className='d-flex flex-row align-items-end gap-3 border-bottom pb-3 border-dark pt-2'>
-                  <Form.Group>
-                    <Form.Label className='mb-0'>Label filter</Form.Label>
-                    <Form.Select
-                      value={pendingCategoryId}
-                      onChange={(e) => setPendingCategoryId(e.target.value)}
+              <div className='d-flex flex-row gap-3 h-100'>
+                {/* Left controls column */}
+                <div className='d-flex flex-column gap-3 border-end border-dark mt-3 pe-3' style={{ width: '360px', maxWidth: '40%', overflowY: 'auto' }}>
+                  <Form.Group className='d-flex flex-column gap-2'>
+                    <Form.Group>
+                      <Form.Label className='mb-0'>Label filter</Form.Label>
+                      <Form.Select
+                        value={pendingCategoryId}
+                        onChange={(e) => setPendingCategoryId(e.target.value)}
+                      >
+                        <option value=''>All labels</option>
+                        {/* options loaded lazily below via current candidate's annotationSetId */}
+                        {currentCandidate && (
+                          // @ts-ignore: will be re-evaluated as index changes
+                          <CategoryOptions
+                            annotationSetId={currentCandidate.annotationSetId}
+                          />
+                        )}
+                      </Form.Select>
+                    </Form.Group>
+                    <Form.Group>
+                      <Form.Label className='mb-0'>Max annotations</Form.Label>
+                      <Form.Control
+                        type='number'
+                        min={0}
+                        placeholder='No limit'
+                        value={pendingMaxAnnotations}
+                        onChange={(e) =>
+                          setPendingMaxAnnotations(
+                            e.target.value === ''
+                              ? ''
+                              : Number(e.target.value) || ''
+                          )
+                        }
+                      />
+                    </Form.Group>
+                    <Button
+                      variant='primary'
+                      onClick={applyFilters}
+                      disabled={loading}
                     >
-                      <option value=''>All labels</option>
-                      {/* options loaded lazily below via current candidate's annotationSetId */}
-                      {currentCandidate && (
-                        // @ts-ignore: will be re-evaluated as index changes
-                        <CategoryOptions
-                          annotationSetId={currentCandidate.annotationSetId}
-                        />
-                      )}
-                    </Form.Select>
+                      Filter
+                    </Button>
                   </Form.Group>
-                  <Form.Group>
-                    <Form.Label className='mb-0'>Max annotations</Form.Label>
-                    <Form.Control
-                      type='number'
-                      min={0}
-                      placeholder='No limit'
-                      value={pendingMaxAnnotations}
-                      onChange={(e) =>
-                        setPendingMaxAnnotations(
-                          e.target.value === ''
-                            ? ''
-                            : Number(e.target.value) || ''
-                        )
-                      }
+                  <Form.Group className='d-flex flex-column gap-2 pb-3'>
+                    <Form.Check
+                      type='checkbox'
+                      label='Advanced options'
+                      checked={advancedOpen}
+                      onChange={(e) => setAdvancedOpen(e.target.checked)}
+                    />
+                    {advancedOpen && (
+                      <div className='d-flex flex-row align-items-end gap-2 flex-wrap'>
+                        <Form.Check
+                          type='checkbox'
+                          label='Change location size when adding'
+                          checked={changeSize}
+                          onChange={(e) => setChangeSize(e.target.checked)}
+                        />
+                        <Form.Group>
+                          <Form.Label className='mb-0'>From tiled sizes</Form.Label>
+                          <Form.Select
+                            disabled={loadingLocationSets || tiledSizeOptions.length === 0 || !changeSize}
+                            value={selectedSize}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSelectedSize(val);
+                              const found = tiledSizeOptions.find((o) => o.value === val);
+                              if (found) {
+                                setCustomWidth(found.w);
+                                setCustomHeight(found.h);
+                              }
+                            }}
+                          >
+                            <option value=''>Select size</option>
+                            {tiledSizeOptions.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </Form.Select>
+                        </Form.Group>
+                        <Form.Group>
+                          <Form.Label className='mb-0'>Width (px)</Form.Label>
+                          <Form.Control
+                            type='number'
+                            min={1}
+                            placeholder='e.g. 1024'
+                            disabled={!changeSize}
+                            value={customWidth}
+                            onChange={(e) =>
+                              setCustomWidth(
+                                e.target.value === '' ? '' : Math.max(1, Number(e.target.value) || 1)
+                              )
+                            }
+                          />
+                        </Form.Group>
+                        <Form.Group>
+                          <Form.Label className='mb-0'>Height (px)</Form.Label>
+                          <Form.Control
+                            type='number'
+                            min={1}
+                            placeholder='e.g. 1024'
+                            disabled={!changeSize}
+                            value={customHeight}
+                            onChange={(e) =>
+                              setCustomHeight(
+                                e.target.value === '' ? '' : Math.max(1, Number(e.target.value) || 1)
+                              )
+                            }
+                          />
+                        </Form.Group>
+                        <Form.Group>
+                          <Form.Label className='mb-0'>Offset X (px)</Form.Label>
+                          <Form.Control
+                            type='number'
+                            step={1}
+                            value={offsetX}
+                            onChange={(e) => setOffsetX(Number(e.target.value) || 0)}
+                          />
+                        </Form.Group>
+                        <Form.Group>
+                          <Form.Label className='mb-0'>Offset Y (px)</Form.Label>
+                          <Form.Control
+                            type='number'
+                            step={1}
+                            value={offsetY}
+                            onChange={(e) => setOffsetY(Number(e.target.value) || 0)}
+                          />
+                        </Form.Group>
+                      </div>
+                    )}
+                  </Form.Group>
+                </div>
+
+                {/* Right image column */}
+                <div className='d-flex flex-column flex-grow-1 h-100 w-100'>
+                  <Form.Group className='mt-3 h-100 w-100'>
+                    <Preloader
+                      index={index}
+                      setIndex={setIndex}
+                      fetcher={fetcher}
+                      preloadN={5}
+                      historyN={5}
+                      overlay={{
+                        enabled: overlayEnabled,
+                        width: changeSize ? (customWidth || undefined) : undefined,
+                        height: changeSize ? (customHeight || undefined) : undefined,
+                        offsetX,
+                        offsetY,
+                      }}
                     />
                   </Form.Group>
-                  <Button
-                    variant='primary'
-                    onClick={applyFilters}
-                    disabled={loading}
-                  >
-                    Filter
-                  </Button>
-                </Form.Group>
-                <Form.Group className='mt-3 h-100 w-100'>
-                  <Preloader
-                    index={index}
-                    setIndex={setIndex}
-                    fetcher={fetcher}
-                    preloadN={5}
-                    historyN={5}
-                  />
-                </Form.Group>
-                <div className='d-flex flex-column w-100 gap-2'>
-                  {currentCandidate && (
-                    <a
-                      className='btn btn-outline-info'
-                      target='_blank'
-                      href={`/surveys/${surveyId}/location/${
-                        currentCandidate!.locationId
-                      }/${currentCandidate!.annotationSetId}`}
-                    >
-                      Edit Location
-                    </a>
-                  )}
-                  <Button
-                    variant='success'
-                    onClick={handleAdd}
-                    disabled={
-                      adding ||
-                      !currentCandidate ||
-                      addedLocations[
-                        `${currentCandidate!.annotationSetId}_${
+                  <div className='d-flex flex-column w-100 gap-2 pt-3'>
+                    {currentCandidate && (
+                      <a
+                        className='btn btn-outline-info'
+                        target='_blank'
+                        href={`/surveys/${surveyId}/location/${
                           currentCandidate!.locationId
-                        }`
-                      ]
-                    }
-                  >
-                    {adding
-                      ? 'Adding...'
-                      : addedLocations[
+                        }/${currentCandidate!.annotationSetId}`}
+                      >
+                        Edit Location
+                      </a>
+                    )}
+                    <Button
+                      variant='success'
+                      onClick={handleAdd}
+                      disabled={
+                        adding ||
+                        !currentCandidate ||
+                        (changeSize && (customWidth === '' || customHeight === '')) ||
+                        addedLocations[
                           `${currentCandidate!.annotationSetId}_${
                             currentCandidate!.locationId
                           }`
                         ]
-                      ? 'Added'
-                      : 'Add to pool'}
-                  </Button>
+                      }
+                    >
+                      {adding
+                        ? 'Adding...'
+                        : addedLocations[
+                            `${currentCandidate!.annotationSetId}_${
+                              currentCandidate!.locationId
+                            }`
+                          ]
+                        ? 'Added'
+                        : 'Add to pool'}
+                    </Button>
+                  </div>
                 </div>
-              </>
+              </div>
             )}
           </div>
         </Body>
