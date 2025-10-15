@@ -24,11 +24,19 @@ export default function LightLocationView({
   visible,
   next,
   prev,
+  overlay,
 }: {
   location: MinimalLocationRef;
   visible: boolean;
   next?: () => void;
   prev?: () => void;
+  overlay?: {
+    enabled?: boolean;
+    width?: number;
+    height?: number;
+    offsetX?: number;
+    offsetY?: number;
+  };
 }) {
   const { client } = useContext(GlobalContext)!;
   // no-op: legend uses ProjectContext internally
@@ -124,6 +132,17 @@ export default function LightLocationView({
               isTest={true}
             >
               <Location {...(loaded as any)} />
+              {overlay?.enabled && (
+                <Location
+                  {...({
+                    x: (loaded as any).x + (overlay?.offsetX ?? 0),
+                    y: (loaded as any).y + (overlay?.offsetY ?? 0),
+                    width: overlay?.width ?? (loaded as any).width,
+                    height: overlay?.height ?? (loaded as any).height,
+                    strokeColor: 'red',
+                  } as any)}
+                />
+              )}
               <ShowMarkers annotationSetId={loaded.annotationSetId} />
             </BaseImage>
           </ImageContextFromHook>

@@ -298,75 +298,81 @@ export default function EditLocationsModal({ show, preset, surveyId }: Props) {
             ) : locations.length === 0 ? (
               <p>No locations in this preset.</p>
             ) : (
-              <>
-                <Form.Group className='d-flex flex-row align-items-end gap-3 border-bottom pb-3 border-dark pt-2'>
-                  <Form.Group>
-                    <Form.Label className='mb-0'>Label filter</Form.Label>
-                    <Form.Select
-                      value={pendingCategoryId}
-                      onChange={(e) => setPendingCategoryId(e.target.value)}
+              <div className='d-flex flex-row gap-3 h-100'>
+                {/* Left controls column */}
+                <div className='d-flex flex-column gap-3 border-end border-dark mt-3 pe-3' style={{ width: '360px', maxWidth: '40%', overflowY: 'auto' }}>
+                  <Form.Group className='d-flex flex-column gap-2'>
+                    <Form.Group>
+                      <Form.Label className='mb-0'>Label filter</Form.Label>
+                      <Form.Select
+                        value={pendingCategoryId}
+                        onChange={(e) => setPendingCategoryId(e.target.value)}
+                      >
+                        <option value=''>All labels</option>
+                        {locations[index] && (
+                          <CategoryOptions
+                            annotationSetId={locations[index].annotationSetId}
+                          />
+                        )}
+                      </Form.Select>
+                    </Form.Group>
+                    <Form.Group>
+                      <Form.Label className='mb-0'>Max annotations</Form.Label>
+                      <Form.Control
+                        type='number'
+                        min={0}
+                        placeholder='No limit'
+                        value={pendingMaxAnnotations}
+                        onChange={(e) =>
+                          setPendingMaxAnnotations(
+                            e.target.value === ''
+                              ? ''
+                              : Number(e.target.value) || ''
+                          )
+                        }
+                      />
+                    </Form.Group>
+                    <Button
+                      variant='primary'
+                      onClick={applyFilters}
+                      disabled={loading}
                     >
-                      <option value=''>All labels</option>
-                      {locations[index] && (
-                        <CategoryOptions
-                          annotationSetId={locations[index].annotationSetId}
-                        />
-                      )}
-                    </Form.Select>
+                      Filter
+                    </Button>
                   </Form.Group>
-                  <Form.Group>
-                    <Form.Label className='mb-0'>Max annotations</Form.Label>
-                    <Form.Control
-                      type='number'
-                      min={0}
-                      placeholder='No limit'
-                      value={pendingMaxAnnotations}
-                      onChange={(e) =>
-                        setPendingMaxAnnotations(
-                          e.target.value === ''
-                            ? ''
-                            : Number(e.target.value) || ''
-                        )
-                      }
+                </div>
+
+                {/* Right image column */}
+                <div className='d-flex flex-column flex-grow-1 h-100 w-100'>
+                  <Form.Group className='mt-3 h-100 w-100'>
+                    <Preloader
+                      index={index}
+                      setIndex={setIndex}
+                      fetcher={fetcher}
+                      preloadN={5}
+                      historyN={5}
                     />
                   </Form.Group>
-                  <Button
-                    variant='primary'
-                    onClick={applyFilters}
-                    disabled={loading}
-                  >
-                    Filter
-                  </Button>
-                </Form.Group>
-
-                <Form.Group className='mt-3 h-100 w-100'>
-                  <Preloader
-                    index={index}
-                    setIndex={setIndex}
-                    fetcher={fetcher}
-                    preloadN={5}
-                    historyN={5}
-                  />
-                </Form.Group>
-                <div className='d-flex flex-column w-100 gap-2'>
-                  {locations[index] && (
-                    <a
-                      className='btn btn-outline-info'
-                      target='_blank'
-                      href={`/surveys/${surveyId}/location/${locations[index].locationId}/${locations[index].annotationSetId}`}
+                  <div className='d-flex flex-column w-100 gap-2 pt-3'>
+                    {locations[index] && (
+                      <a
+                        className='btn btn-outline-info'
+                        target='_blank'
+                        href={`/surveys/${surveyId}/location/${locations[index].locationId}/${locations[index].annotationSetId}`}
+                      >
+                        Edit Location
+                      </a>
+                    )}
+                    <Button
+                      variant='danger'
+                      onClick={handleRemove}
+                      disabled={removing}
                     >
-                      Edit Location
-                    </a>
-                  )}
-                  <Button
-                    variant='danger'
-                    onClick={handleRemove}
-                    disabled={removing}
-                  >
-                    {removing ? 'Removing...' : 'Remove from pool'}
-                  </Button>
+                      {removing ? 'Removing...' : 'Remove from pool'}
+                    </Button>
+                  </div>
                 </div>
-              </>
+              </div>
             )}
           </div>
         </Body>

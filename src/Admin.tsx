@@ -1,23 +1,24 @@
-import { useContext } from "react";
-import { UserContext } from "./Context";
-import { Tabs, Tab } from "./Tabs";
-import { Card } from "react-bootstrap";
-import PendingOrganizations from "./PendingOrganizations";
-import ClientLogs from "./ClientLogs";
+import { useContext } from 'react';
+import { UserContext } from './Context';
+import { Tabs, Tab } from './Tabs';
+import { Card } from 'react-bootstrap';
+import PendingOrganizations from './PendingOrganizations';
+import ClientLogs from './ClientLogs';
+import AdminStats from './AdminStats';
 
 export default function Admin() {
   const { cognitoGroups } = useContext(UserContext)!;
 
-  if (!cognitoGroups.includes("sysadmin")) {
+  if (!cognitoGroups.includes('sysadmin')) {
     return <div>You are not authorized to access this page.</div>;
   }
   return (
     <div
       style={{
-        width: "100%",
-        maxWidth: "1555px",
-        marginTop: "16px",
-        marginBottom: "16px",
+        width: '100%',
+        maxWidth: '1555px',
+        marginTop: '16px',
+        marginBottom: '16px',
       }}
     >
       <Card>
@@ -38,10 +39,7 @@ export default function Admin() {
             </Tab>
             <Tab label="Statistics">
               <div className="m-2">
-                <h5>Statistics</h5>
-                <p className="mb-0">
-                  This is a placeholder for statistics.
-                </p>
+                <AdminStats />
               </div>
             </Tab>
           </Tabs>
