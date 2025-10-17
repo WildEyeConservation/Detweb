@@ -1,24 +1,78 @@
 import { useState, useMemo, useContext, useCallback, useEffect } from 'react';
 import { AnnotationSetDropdown } from './AnnotationSetDropDown';
 import Select from 'react-select';
-import { ProjectContext } from './Context';
+import { Card, Button, Form, Alert, ProgressBar, Badge } from 'react-bootstrap';
+import { ProjectContext, GlobalContext, UserContext } from './Context';
+import { ManagementContext } from './Context';
 import { useOptimisticUpdates } from './useOptimisticUpdates';
 import { Schema } from './amplify/client-schema';
 import { useQueries } from '@tanstack/react-query';
 import { makeTransform, array2Matrix } from './utils';
 import { inv } from 'mathjs';
-import { GlobalContext, ManagementContext } from './Context';
 import { RegisterPair } from './RegisterPair';
-import { Card, Button, Form } from 'react-bootstrap';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PanelBottom } from 'lucide-react';
 import { ManualHomographyEditor } from './ManualHomographyEditor';
 
+const HEARTBEAT_INTERVAL_MS = 1000 * 60 * 5;
+const STALE_THRESHOLD_MS = 1000 * 60 * 30;
+
+function categorySelectionsEqual(
+  a: { label: string; value: string }[],
+  b: { label: string; value: string }[]
+) {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].value !== b[i].value) return false;
+  }
+  return true;
+}
+
+function homographyQueuesEqual(
+  a: {
+    primary: Schema['Image']['type'];
+    secondary: Schema['Image']['type'];
+    neighbour: { noHomography: boolean };
+  }[],
+  b: {
+    primary: Schema['Image']['type'];
+    secondary: Schema['Image']['type'];
+    neighbour: { noHomography: boolean };
+  }[]
+) {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (
+      a[i].primary.id !== b[i].primary.id ||
+      a[i].secondary.id !== b[i].secondary.id
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+type RegistrationAssignment = Schema['RegistrationAssignment']['type'];
+
+type RegistrationJob = Schema['RegistrationJob']['type'] & {
+  annotationSet?: {
+    id: string;
+    name: string;
+  } | null;
+};
+
 export function Registration({ showAnnotationSetDropdown = true }) {
   const { client } = useContext(GlobalContext)!;
+  const { user } = useContext(UserContext)!;
   const navigate = useNavigate();
   const { annotationSetId } = useParams();
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [searchParams] = useSearchParams();
+  const transectIdFromUrl = searchParams.get('transect') ?? undefined;
+  const [selectedCategories, setSelectedCategories] = useState<
+    { label: string; value: string }[]
+  >([]);
   const [selectedAnnotationSet, setSelectedAnnotationSet] =
     useState<string>('');
   const {
@@ -35,15 +89,36 @@ export function Registration({ showAnnotationSetDropdown = true }) {
   } | null>(null);
   const [numLoaded, setNumLoaded] = useState(0);
   const [showFilters, setShowFilters] = useState(true);
-  const [points1, setPoints1] = useState<{ id: string; x: number; y: number }[]>(
-    []
-  );
-  const [points2, setPoints2] = useState<{ id: string; x: number; y: number }[]>(
-    []
-  );
+  const [points1, setPoints1] = useState<
+    { id: string; x: number; y: number }[]
+  >([]);
+  const [points2, setPoints2] = useState<
+    { id: string; x: number; y: number }[]
+  >([]);
   const [localTransforms, setLocalTransforms] = useState<
     Record<string, ((c: [number, number]) => [number, number])[]>
   >({});
+  const [registrationJob, setRegistrationJob] =
+    useState<RegistrationJob | null>(null);
+  const [assignment, setAssignment] = useState<RegistrationAssignment | null>(
+    null
+  );
+  const [heartbeatTimer, setHeartbeatTimer] = useState<NodeJS.Timeout | null>(
+    null
+  );
+  const [completionHandled, setCompletionHandled] = useState(false);
+  const [wizardStep, setWizardStep] = useState<1 | 2>(1);
+  const [homographyQueue, setHomographyQueue] = useState<
+    {
+      primary: Schema['Image']['type'];
+      secondary: Schema['Image']['type'];
+      neighbour: { noHomography: boolean };
+    }[]
+  >([]);
+  const [currentHomographyIndex, setCurrentHomographyIndex] = useState(0);
+  const currentHomographyPair = homographyQueue[currentHomographyIndex];
+  const hasHomographyPairs = homographyQueue.length > 0;
+
   const subscriptionFilter = useMemo(
     () => ({ filter: { setId: { eq: selectedAnnotationSet } } }),
     [selectedAnnotationSet]
@@ -109,28 +184,34 @@ export function Registration({ showAnnotationSetDropdown = true }) {
     return imageNeighboursQueries
       .filter((query) => query.isSuccess)
       .reduce((acc, query) => {
-        const neighbours = query.data;
+        const neighbours = query.data as Schema['ImageNeighbour']['type'][];
         const defaultHomography = [1, 0, 0, 0, 1, 0, 0, 0, 1];
         neighbours.forEach((n) => {
-          const isDefault = !(n.homography?.length === 9);
-          // if no valid homography, use identity
-          const rawH =
-            n.homography?.length === 9 ? n.homography : defaultHomography;
+          const hasCustomHomography = n.homography?.length === 9;
+          const rawH = hasCustomHomography ? n.homography! : defaultHomography;
           const M = array2Matrix(rawH);
 
           const acc2 = acc[n.image1Id] || {};
           acc[n.image1Id] = {
             ...acc2,
-            [n.image2Id]: { tf: makeTransform(M), noHomography: isDefault },
+            [n.image2Id]: {
+              tf: makeTransform(M),
+              noHomography: !hasCustomHomography,
+              raw: rawH,
+            },
           };
           const acc3 = acc[n.image2Id] || {};
           acc[n.image2Id] = {
             ...acc3,
-            [n.image1Id]: { tf: makeTransform(inv(M)), noHomography: isDefault },
+            [n.image1Id]: {
+              tf: makeTransform(inv(M)),
+              noHomography: !hasCustomHomography,
+              raw: rawH,
+            },
           };
         });
         return acc;
-      }, {} as Record<string, Record<string, { tf: Transform; noHomography: boolean }>>);
+      }, {} as Record<string, Record<string, { tf: Transform; noHomography: boolean; raw: number[] }>>);
   }, [imageNeighboursQueries]);
 
   // imageMetaDataQueries contains a list of queries that fetch the metadata of each relevant image (contains annotations or has overlap with an image that has annotations).
@@ -248,21 +329,283 @@ export function Registration({ showAnnotationSetDropdown = true }) {
     }
   }, [activePair, pairToRegister, nextPair]);
 
+  const homographyCandidates = useMemo(() => {
+    if (!registrationJob) return [];
+    const result: {
+      primary: Schema['Image']['type'];
+      secondary: Schema['Image']['type'];
+      neighbour: { noHomography: boolean };
+    }[] = [];
+    for (const t of targetData) {
+      const annotationsPrimary = annotationsByImage[t.id];
+      if (!annotationsPrimary?.length) continue;
+      for (const n of t.neighbours) {
+        const neighbourInfo = imageNeighbours[t.id]?.[n.id];
+        if (!neighbourInfo || !neighbourInfo.noHomography) continue;
+        const annotationsSecondary = annotationsByImage[n.id];
+        if (!annotationsSecondary?.length) continue;
+        const imageA = imageMetaData[t.id];
+        const imageB = imageMetaData[n.id];
+        if (!imageA || !imageB) continue;
+        result.push({
+          primary: imageA,
+          secondary: imageB,
+          neighbour: neighbourInfo,
+        });
+      }
+    }
+    return result;
+  }, [
+    targetData,
+    annotationsByImage,
+    imageNeighbours,
+    imageMetaData,
+    registrationJob,
+  ]);
+
+  useEffect(() => {
+    setHomographyQueue((prev) =>
+      homographyQueuesEqual(prev, homographyCandidates)
+        ? prev
+        : homographyCandidates
+    );
+    setCurrentHomographyIndex(0);
+  }, [homographyCandidates]);
+
+  useEffect(() => {
+    if (wizardStep === 1 && homographyQueue.length === 0) {
+      setWizardStep((prev) => (prev === 1 ? 2 : prev));
+    }
+  }, [wizardStep, homographyQueue.length]);
+
+  useEffect(() => {
+    if (
+      wizardStep === 1 &&
+      homographyQueue.length > 0 &&
+      currentHomographyIndex > homographyQueue.length - 1
+    ) {
+      setWizardStep((prev) => (prev === 1 ? 2 : prev));
+    }
+  }, [wizardStep, currentHomographyIndex, homographyQueue.length]);
+
+  const buildCategorySelection = useCallback(
+    (
+      ids: string[] | null | undefined,
+      names: (string | null)[] | null | undefined
+    ) => {
+      if (!ids?.length) return [];
+      return ids.map((id, index) => {
+        const cat = categories?.find((c) => c.id === id);
+        const nameFromHook = cat?.name;
+        const fallbackName = names?.[index] ?? id;
+        return {
+          value: id,
+          label: nameFromHook ?? fallbackName,
+        };
+      });
+    },
+    [categories]
+  );
+
+  useEffect(() => {
+    async function ensureRegistrationContext() {
+      const annotationSetToUse = annotationSetId ?? selectedAnnotationSet;
+      if (!annotationSetToUse) return;
+
+      const { data: job } = (await client.models.RegistrationJob.get({
+        annotationSetId: annotationSetToUse,
+      })) as { data: RegistrationJob | null };
+
+      if (!job) {
+        navigate(`/surveys/${project.id}`);
+        return;
+      }
+
+      setRegistrationJob(job);
+      if (!selectedAnnotationSet) {
+        setSelectedAnnotationSet(annotationSetToUse);
+      }
+
+      const defaultSelection = buildCategorySelection(
+        job.categoryIds,
+        job.categoryNames
+      );
+      if (defaultSelection.length) {
+        setSelectedCategories(defaultSelection);
+      }
+
+      if (job.mode === 'per-transect') {
+        const transectId = transectIdFromUrl;
+        if (!transectId) {
+          navigate(`/surveys/${project.id}/jobs`, { replace: true });
+          return;
+        }
+        const assignmentRecord = await client.models.RegistrationAssignment.get(
+          {
+            registrationJobId: annotationSetToUse,
+            transectId,
+          }
+        );
+        if (!assignmentRecord.data) {
+          navigate(`/surveys/${project.id}/jobs`, { replace: true });
+          return;
+        }
+        const lastHeartbeat = assignmentRecord.data.lastHeartbeatAt
+          ? new Date(assignmentRecord.data.lastHeartbeatAt).getTime()
+          : 0;
+        if (
+          assignmentRecord.data.assignedUserId &&
+          assignmentRecord.data.assignedUserId !== user.userId &&
+          Date.now() - lastHeartbeat < STALE_THRESHOLD_MS
+        ) {
+          alert('This transect is currently assigned to another user.');
+          navigate(`/surveys/${project.id}/jobs`, { replace: true });
+          return;
+        }
+        setAssignment(assignmentRecord.data);
+      } else {
+        setAssignment(null);
+      }
+    }
+
+    ensureRegistrationContext();
+  }, [
+    annotationSetId,
+    selectedAnnotationSet,
+    client.models,
+    categories,
+    project.id,
+    transectIdFromUrl,
+    navigate,
+    user.userId,
+    buildCategorySelection,
+  ]);
+
   useEffect(() => {
     if (annotationSetId && !showAnnotationSetDropdown) {
       setSelectedAnnotationSet(annotationSetId);
     }
-  }, [annotationSetId]);
+  }, [annotationSetId, showAnnotationSetDropdown]);
 
-  // Reset manual points when pair changes
+  useEffect(() => {
+    const selection = registrationJob?.categoryIds?.length
+      ? buildCategorySelection(
+          registrationJob.categoryIds,
+          registrationJob.categoryNames
+        )
+      : [];
+
+    setSelectedCategories((prev) =>
+      categorySelectionsEqual(prev, selection) ? prev : selection
+    );
+  }, [registrationJob, buildCategorySelection]);
+
   useEffect(() => {
     setPoints1([]);
     setPoints2([]);
   }, [activePair?.primary, activePair?.secondary]);
 
+  useEffect(() => {
+    if (!registrationJob) return;
+
+    async function sendHeartbeat() {
+      const nowIso = new Date().toISOString();
+      if (registrationJob.mode === 'per-transect' && assignment) {
+        await client.models.RegistrationAssignment.update({
+          registrationJobId: assignment.registrationJobId,
+          transectId: assignment.transectId,
+          assignedUserId: user.userId,
+          lastHeartbeatAt: nowIso,
+          status: 'active',
+        });
+      } else {
+        await client.models.RegistrationJob.update({
+          annotationSetId: registrationJob.annotationSetId,
+          assignedUserId: user.userId,
+          lastHeartbeatAt: nowIso,
+          status: 'active',
+        });
+      }
+    }
+
+    sendHeartbeat();
+    const timer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+    setHeartbeatTimer(timer);
+
+    return () => {
+      clearInterval(timer);
+      setHeartbeatTimer(null);
+    };
+  }, [registrationJob, assignment, client.models, user.userId]);
+
+  useEffect(() => {
+    return () => {
+      if (!registrationJob || wizardStep === 1) return;
+      (async () => {
+        if (completionHandled) return;
+        if (registrationJob.mode === 'per-transect' && assignment) {
+          await client.models.RegistrationAssignment.update({
+            registrationJobId: assignment.registrationJobId,
+            transectId: assignment.transectId,
+            assignedUserId: null,
+            status: 'available',
+          });
+        } else {
+          await client.models.RegistrationJob.update({
+            annotationSetId: registrationJob.annotationSetId,
+            assignedUserId: null,
+          });
+        }
+      })();
+    };
+  }, [
+    registrationJob,
+    assignment,
+    client.models,
+    completionHandled,
+    wizardStep,
+  ]);
+
+  const shouldShowFilters = showAnnotationSetDropdown;
+  const readOnlyFilters = registrationJob?.categoryIds?.length;
+  const homographyPairKey = currentHomographyPair
+    ? `${currentHomographyPair.primary.id}::${currentHomographyPair.secondary.id}`
+    : null;
+
+  const needsManualHomographyEditor = Boolean(
+    wizardStep === 1 && currentHomographyPair
+  );
+
   const pairKey = activePair
     ? `${activePair.primary}::${activePair.secondary}`
     : '';
+
+  // wizard navigation handlers
+  function gotoNextHomographyPair() {
+    setPoints1([]);
+    setPoints2([]);
+    setCurrentHomographyIndex((prev) =>
+      Math.min(prev + 1, homographyQueue.length)
+    );
+  }
+
+  function skipHomographyPair() {
+    if (
+      window.confirm('Skip fixing this homography? You can return to it later.')
+    ) {
+      gotoNextHomographyPair();
+    }
+  }
+
+  useEffect(() => {
+    if (
+      wizardStep === 1 &&
+      currentHomographyIndex >= homographyQueue.length &&
+      homographyQueue.length > 0
+    ) {
+      setWizardStep(2);
+    }
+  }, [wizardStep, currentHomographyIndex, homographyQueue.length]);
 
   return (
     <div
@@ -274,103 +617,182 @@ export function Registration({ showAnnotationSetDropdown = true }) {
         height: '100%',
       }}
     >
-      <div className='w-100 h-100 d-flex flex-column flex-md-row gap-3'>
-        <div className='d-flex flex-column gap-3 w-100' style={{ maxWidth: '360px' }}>
-          {activePair && imageNeighbours[activePair.primary]?.[activePair.secondary]?.noHomography &&
-          !localTransforms[pairKey] ? (
-            <div className='w-100'>
-              <ManualHomographyEditor
-                images={[
-                  imageMetaData[activePair.primary],
-                  imageMetaData[activePair.secondary],
-                ]}
-                points1={points1}
-                points2={points2}
-                setPoints1={setPoints1}
-                setPoints2={setPoints2}
-                onSaved={(H) => {
-                  // Optimistically enable linking with local transforms
-                  const fwd = makeTransform(H as any);
-                  const bwd = makeTransform(inv(H as any) as any);
-                  setLocalTransforms((old) => ({ ...old, [pairKey]: [fwd, bwd] }));
-                }}
-              />
-            </div>
-          ) : (
-            <>
-              <Card className='d-sm-block d-none w-100'>
-                <Card.Header>
-                  <Card.Title className='mb-0'>Information</Card.Title>
-                </Card.Header>
-                <Card.Body className='d-flex flex-column gap-2'>
-                  <InfoTag label='Survey' value={project.name} />
-                  <InfoTag
-                    label='Annotation Set'
-                    value={
-                      annotationSets?.find(
-                        (set) => set.id === selectedAnnotationSet
-                      )?.name ?? 'Unknown'
-                    }
-                  />
-                </Card.Body>
-              </Card>
-              <Card className='w-100 flex-grow-1'>
-                <Card.Header>
-                  <Card.Title className='mb-0 d-flex align-items-center'>
-                    <Button
-                      className='p-0 mb-0'
-                      variant='outline'
-                      onClick={() => setShowFilters(!showFilters)}
-                    >
-                      <PanelBottom
-                        className='d-sm-none'
-                        style={{
-                          transform: showFilters
-                            ? 'rotate(180deg)'
-                            : 'rotate(0deg)',
-                        }}
-                      />
-                    </Button>
-                    Filters
-                  </Card.Title>
-                </Card.Header>
-                {showFilters && (
-                  <Card.Body className='d-flex flex-column gap-2'>
-                    <div className='w-100'>
-                      <Form.Label>Labels</Form.Label>
-                      <Select
-                        value={selectedCategories}
-                        onChange={setSelectedCategories}
-                        isMulti
-                        name='Labels to register'
-                        options={categories
-                          ?.filter(
-                            (c) => c.annotationSetId === selectedAnnotationSet
-                          )
-                          .map((q) => ({
-                            label: q.name,
-                            value: q.id,
-                          }))}
-                        className='text-black w-100'
-                        closeMenuOnSelect={false}
-                      />
-                    </div>
-
-                    {showAnnotationSetDropdown && (
-                      <AnnotationSetDropdown
-                        selectedSet={selectedAnnotationSet}
-                        setAnnotationSet={setSelectedAnnotationSet}
-                        canCreate={false}
-                      />
-                    )}
-                  </Card.Body>
-                )}
-              </Card>
-            </>
-          )}
+      <div className="d-flex flex-column gap-3 mb-3">
+        <div className="d-flex align-items-center gap-3">
+          <h5 className="mb-0">Registration Wizard</h5>
+          <Badge bg={wizardStep === 1 ? 'primary' : 'secondary'}>
+            Step 1: Homographies
+          </Badge>
+          <Badge bg={wizardStep === 2 ? 'primary' : 'secondary'}>
+            Step 2: Registration
+          </Badge>
         </div>
-        <div className='d-flex flex-column align-items-center h-100 w-100'>
-          {annotationHook.meta?.isLoading ? (
+        {wizardStep === 1 && (
+          <ProgressBar
+            now={
+              wizardStep === 1
+                ? homographyQueue.length === 0
+                  ? 100
+                  : (currentHomographyIndex / homographyQueue.length) * 100
+                : 100
+            }
+            label={
+              wizardStep === 1
+                ? `Homographies ${Math.min(
+                    currentHomographyIndex + 1,
+                    homographyQueue.length
+                  )} / ${homographyQueue.length}`
+                : 'Complete'
+            }
+          />
+        )}
+      </div>
+
+      <div className="w-100 h-100 d-flex flex-column flex-md-row gap-3">
+        {wizardStep === 1 && (
+          <div
+            className="d-flex flex-column gap-2"
+            style={{ maxWidth: '360px', width: '100%' }}
+          >
+            <Card className="w-100">
+              <Card.Header>
+                <Card.Title className="mb-0">Homography Prep</Card.Title>
+              </Card.Header>
+              <Card.Body className="d-flex flex-column gap-3">
+                {homographyQueue.length === 0 ? (
+                  <Alert variant="success" className="mb-0">
+                    All relevant homographies are set.
+                  </Alert>
+                ) : (
+                  <>
+                    <p className="mb-0">
+                      Fix homographies for the listed image pairs before
+                      registering annotations.
+                    </p>
+                    <div className="d-flex flex-column gap-2">
+                      <p className="mb-0">
+                        Pairs remaining:{' '}
+                        {homographyQueue.length - currentHomographyIndex}
+                      </p>
+                      {currentHomographyPair ? (
+                        <div>
+                          <p className="mb-2">Current pair:</p>
+                          <div className="d-flex flex-column gap-1">
+                            <small className="text-muted">
+                              Image A:{' '}
+                              {currentHomographyPair.primary.originalPath ??
+                                currentHomographyPair.primary.id}
+                            </small>
+                            <small className="text-muted">
+                              Image B:{' '}
+                              {currentHomographyPair.secondary.originalPath ??
+                                currentHomographyPair.secondary.id}
+                            </small>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="d-flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => {
+                          setPoints1([]);
+                          setPoints2([]);
+                        }}
+                      >
+                        Reset Points
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="warning"
+                        onClick={skipHomographyPair}
+                      >
+                        Skip Pair
+                      </Button>
+                      {currentHomographyIndex >= homographyQueue.length - 1 && (
+                        <Button
+                          size="sm"
+                          variant="success"
+                          onClick={() => setWizardStep(2)}
+                        >
+                          Continue to Step 2
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </Card.Body>
+            </Card>
+          </div>
+        )}
+        <div className="d-flex flex-column align-items-center h-100 w-100">
+          {wizardStep === 1 ? (
+            homographyQueue.length === 0 ? (
+              <div className="text-center w-100">
+                <Alert variant="success">
+                  No homography issues detected. Proceed to registration.
+                </Alert>
+                <Button variant="primary" onClick={() => setWizardStep(2)}>
+                  Go to Step 2
+                </Button>
+              </div>
+            ) : currentHomographyIndex >= homographyQueue.length ? (
+              <div className="text-center w-100">
+                <Alert variant="info">
+                  No more pairs to fix. Proceed to the next step.
+                </Alert>
+                <Button variant="primary" onClick={() => setWizardStep(2)}>
+                  Go to Step 2
+                </Button>
+              </div>
+            ) : currentHomographyPair ? (
+              <div className="w-100 d-flex flex-column gap-3">
+                <Card>
+                  <Card.Header>
+                    <Card.Title className="mb-0">
+                      Manual Homography Editor
+                    </Card.Title>
+                  </Card.Header>
+                  <Card.Body>
+                    <p className="mb-3">
+                      Fix the alignment for the selected image pair.
+                    </p>
+                    <ManualHomographyEditor
+                      images={[
+                        currentHomographyPair.primary as any,
+                        currentHomographyPair.secondary as any,
+                      ]}
+                      points1={points1}
+                      points2={points2}
+                      setPoints1={setPoints1}
+                      setPoints2={setPoints2}
+                      onSaved={() => {
+                        setLocalTransforms((old) => ({
+                          ...old,
+                          [homographyPairKey ?? '']: [],
+                        }));
+                        gotoNextHomographyPair();
+                      }}
+                    />
+                  </Card.Body>
+                </Card>
+                <div className="d-flex justify-content-end gap-2">
+                  <Button variant="secondary" onClick={skipHomographyPair}>
+                    Skip Pair
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      gotoNextHomographyPair();
+                    }}
+                  >
+                    Next Pair
+                  </Button>
+                </div>
+              </div>
+            ) : null
+          ) : annotationHook.meta?.isLoading ? (
             <div>
               Phase 1/3: Loading annotations... {numLoaded} annotations loaded
               so far
@@ -408,17 +830,31 @@ export function Registration({ showAnnotationSetDropdown = true }) {
               selectedSet={selectedAnnotationSet}
               transforms={
                 localTransforms[pairKey] || [
-                  imageNeighbours[activePair.primary]?.[activePair.secondary]?.tf,
-                  imageNeighbours[activePair.secondary]?.[activePair.primary]?.tf,
+                  imageNeighbours[activePair.primary]?.[activePair.secondary]
+                    ?.tf,
+                  imageNeighbours[activePair.secondary]?.[activePair.primary]
+                    ?.tf,
                 ]
               }
               next={nextPair}
               prev={() => {}}
               visible={true}
-              ack={() => {}}
+              ack={async () => {
+                if (registrationJob?.mode === 'per-transect' && assignment) {
+                  await client.models.RegistrationAssignment.update({
+                    registrationJobId: assignment.registrationJobId,
+                    transectId: assignment.transectId,
+                    assignedUserId: user.userId,
+                    lastHeartbeatAt: new Date().toISOString(),
+                    status: 'active',
+                  });
+                }
+              }}
               noHomography={
-                (imageNeighbours[activePair.primary]?.[activePair.secondary]?.noHomography ??
-                  false) && !localTransforms[pairKey]
+                (imageNeighbours[activePair.primary]?.[activePair.secondary]
+                  ?.noHomography ??
+                  false) &&
+                !localTransforms[pairKey]
               }
               points1={points1}
               points2={points2}
@@ -436,7 +872,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
 
 function InfoTag({ label, value }: { label: string; value: string }) {
   return (
-    <p className='mb-0 d-flex flex-row gap-2 justify-content-between'>
+    <p className="mb-0 d-flex flex-row gap-2 justify-content-between">
       <span>{label}:</span>
       <span>{value}</span>
     </p>

@@ -2,6 +2,7 @@ import { useContext, useEffect, useState } from 'react';
 import { UserContext, GlobalContext } from '../Context';
 import { GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
 import { Spinner, ProgressBar } from 'react-bootstrap';
+import { Schema } from '@/types/schema';
 
 type ProjectProgressProps = {
   projectId: string;
@@ -18,6 +19,8 @@ export default function ProjectProgress({ projectId }: ProjectProgressProps) {
   } | null>(null);
   const [jobsRemaining, setJobsRemaining] = useState<number>(0);
   const [registering, setRegistering] = useState<boolean>(false);
+  const [registrationJob, setRegistrationJob] =
+    useState<Schema['RegistrationJob']['type'] | null>(null);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -33,14 +36,27 @@ export default function ProjectProgress({ projectId }: ProjectProgressProps) {
             'queues.batchSize',
             'queues.totalBatches',
             'annotationSets.register',
+            'registrationJobs.annotationSetId',
+            'registrationJobs.categoryNames',
+            'registrationJobs.mode',
+            'registrationJobs.status',
           ],
         }
       )).data;
 
-      const register = projectData.annotationSets.some((set) => set.register);
+      const activeRegistrationJob = projectData.registrationJobs?.find(
+        (job: Schema['RegistrationJob']['type']) =>
+          job.status !== 'complete' && job.status !== 'cancelled'
+      ) as Schema['RegistrationJob']['type'] | undefined;
+      setRegistrationJob(activeRegistrationJob ?? null);
+
+      const register =
+        projectData.annotationSets.some((set) => set.register) ||
+        Boolean(activeRegistrationJob);
 
       setRegistering(register);
       if (register) {
+        setIsLoading(false);
         return;
       }
 
@@ -82,8 +98,24 @@ export default function ProjectProgress({ projectId }: ProjectProgressProps) {
     };
   }, [projectId, client, getSqsClient]);
 
+  if (registering && registrationJob) {
+    return (
+      <div className='d-flex flex-column w-100'>
+        <p className='mb-0'>Registration job in progress</p>
+        {registrationJob.categoryNames?.length ? (
+          <p className='mb-0 text-muted' style={{ fontSize: '12px' }}>
+            Species: {registrationJob.categoryNames.join(', ')}
+          </p>
+        ) : null}
+        <p className='mb-0 text-muted' style={{ fontSize: '12px' }}>
+          Mode: {registrationJob.mode === 'per-transect' ? 'Per-transect' : 'Single worker'}
+        </p>
+      </div>
+    );
+  }
+
   if (registering) {
-    return <p className='mb-0 w-100'>Registering</p>;
+    return <p className='mb-0 w-100'>Registration job in progress</p>;
   }
 
   if (isLoading || !queueInfo) {

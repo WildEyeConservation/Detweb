@@ -59,6 +59,11 @@ const schema = a
         ),
         cameraOverlaps: a.hasMany('CameraOverlap', 'projectId'),
         shapefileExclusions: a.hasMany('ShapefileExclusions', 'projectId'),
+        registrationJobs: a.hasMany('RegistrationJob', 'projectId'),
+        registrationAssignments: a.hasMany(
+          'RegistrationAssignment',
+          'projectId'
+        ),
       })
       .authorization((allow) => [allow.authenticated()]),
     // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
@@ -157,6 +162,11 @@ const schema = a
         testResults: a.hasMany('TestResult', 'annotationSetId'),
         categories: a.hasMany('Category', 'annotationSetId'),
         register: a.boolean().default(false),
+        registrationJob: a.hasOne('RegistrationJob', 'annotationSetId'),
+        registrationAssignments: a.hasMany(
+          'RegistrationAssignment',
+          'annotationSetId'
+        ),
         jollyResultsMemberships: a.hasMany(
           'JollyResultsMembership',
           'annotationSetId'
@@ -396,6 +406,49 @@ const schema = a
       .secondaryIndexes((index) => [
         index('projectId').queryField('queuesByProjectId'),
       ]),
+    RegistrationJob: a
+      .model({
+        annotationSetId: a.id().required(),
+        annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
+        projectId: a.id().required(),
+        project: a.belongsTo('Project', 'projectId'),
+        categoryIds: a.string().array().required(),
+        categoryNames: a.string().array(),
+        mode: a.string().required(),
+        status: a.string().default('active'),
+        assignedUserId: a.string(),
+        lastHeartbeatAt: a.datetime(),
+        registrationAssignments: a.hasMany(
+          'RegistrationAssignment',
+          'registrationJobId'
+        ),
+      })
+      .identifier(['annotationSetId'])
+      .authorization((allow) => [allow.authenticated()])
+      .secondaryIndexes((index) => [
+        index('projectId').queryField('registrationJobsByProjectId'),
+        index('status').queryField('registrationJobsByStatus'),
+      ]),
+    RegistrationAssignment: a
+      .model({
+        registrationJobId: a.id().required(),
+        registrationJob: a.belongsTo('RegistrationJob', 'registrationJobId'),
+        projectId: a.id().required(),
+        project: a.belongsTo('Project', 'projectId'),
+        annotationSetId: a.id().required(),
+        annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
+        transectId: a.id().required(),
+        transect: a.belongsTo('Transect', 'transectId'),
+        assignedUserId: a.string(),
+        lastHeartbeatAt: a.datetime(),
+        status: a.string().default('active'),
+      })
+      .identifier(['registrationJobId', 'transectId'])
+      .authorization((allow) => [allow.authenticated()])
+      .secondaryIndexes((index) => [
+        index('registrationJobId').queryField('registrationAssignmentsByJobId'),
+        index('transectId').queryField('registrationAssignmentsByTransectId'),
+      ]),
     UserStats: a
       .model({
         projectId: a.id().required(),
@@ -569,6 +622,10 @@ const schema = a
         stratumId: a.id().required(),
         stratum: a.belongsTo('Stratum', 'stratumId'),
         images: a.hasMany('Image', 'transectId'),
+        registrationAssignments: a.hasMany(
+          'RegistrationAssignment',
+          'transectId'
+        ),
       })
       .authorization((allow) => [allow.authenticated()])
       .secondaryIndexes((index) => [
@@ -926,13 +983,26 @@ type MutationHandler<Args, Result = unknown> = (
   context: LambdaContext
 ) => Promise<Result>;
 
-export type AddUserToGroupHandler = MutationHandler<{ userId: string; groupName: string }>;
-export type RemoveUserFromGroupHandler = MutationHandler<{ userId: string; groupName: string }>;
+export type AddUserToGroupHandler = MutationHandler<{
+  userId: string;
+  groupName: string;
+}>;
+export type RemoveUserFromGroupHandler = MutationHandler<{
+  userId: string;
+  groupName: string;
+}>;
 export type CreateGroupHandler = MutationHandler<{ groupName: string }>;
 export type ListUsersHandler = MutationHandler<{ nextToken?: string | null }>;
-export type ListGroupsForUserHandler = MutationHandler<{ userId: string; nextToken?: string | null }>;
+export type ListGroupsForUserHandler = MutationHandler<{
+  userId: string;
+  nextToken?: string | null;
+}>;
 export type DeleteProjectInFullHandler = MutationHandler<{ projectId: string }>;
-export type GenerateSurveyResultsHandler = MutationHandler<{ surveyId: string; annotationSetId: string; categoryIds: string[] }>;
+export type GenerateSurveyResultsHandler = MutationHandler<{
+  surveyId: string;
+  annotationSetId: string;
+  categoryIds: string[];
+}>;
 export const data = defineData({
   schema,
   authorizationModes: {

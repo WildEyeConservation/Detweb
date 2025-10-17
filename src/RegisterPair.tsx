@@ -10,11 +10,17 @@ import { MapLegend } from './Legend';
 import { inv, Matrix } from 'mathjs';
 import { ShowMarkers } from './ShowMarkers';
 import { Map } from 'leaflet';
-import { GlobalContext, CRUDhook, AnnotationsHook } from './Context';
+import {
+  GlobalContext,
+  CRUDhook,
+  AnnotationsHook,
+  ProjectContext,
+} from './Context';
 import type {
   AnnotationType,
   ExtendedAnnotationType,
   ImageType,
+  CategoryType,
 } from './schemaTypes';
 import { useOptimisticUpdates } from './useOptimisticUpdates';
 import { useAnnotationNavigation } from './useAnnotationNavigation';
@@ -25,6 +31,7 @@ import {
   PointsOverlay,
 } from './ManualHomographyEditor';
 import { makeTransform } from './utils';
+import CreateAnnotationOnHotKey from './CreateAnnotationOnHotKey';
 
 type RegisterPairProps = {
   images: [ImageType, ImageType]; // The pair of images in which we need to register the annotations
@@ -93,6 +100,21 @@ export function RegisterPair({
   );
 
   const { client } = useContext(GlobalContext)!;
+  const {
+    categoriesHook: { data: projectCategories },
+    setCurrentCategory,
+  } = useContext(ProjectContext)!;
+
+  const hotkeyCategories = useMemo(
+    () =>
+      (projectCategories ?? [])
+        .filter((cat) => cat.annotationSetId === selectedSet)
+        .filter((cat) =>
+          selectedCategoryIDs?.length ? selectedCategoryIDs.includes(cat.id) : true
+        )
+        .filter((cat): cat is CategoryType & { shortcutKey: string } => !!cat.shortcutKey),
+    [projectCategories, selectedSet, selectedCategoryIDs]
+  );
 
   const annotationsHooks = [
     (useOptimisticUpdates as any)(
@@ -250,20 +272,34 @@ export function RegisterPair({
                     />
                   )}
                   {!noHomography && effectiveTransforms && (
-                    <CreateAnnotationOnClick
-                      setId={selectedSet}
-                      image={image as any}
-                      source='registerpair'
-                      disabled={!effectiveTransforms}
-                      location={{
-                        x: image.width / 2,
-                        y: image.height / 2,
-                        width: image.width,
-                        height: image.height,
-                        annotationSetId: selectedSet,
-                        image: image as any,
-                      }}
-                    />
+                    <>
+                      <CreateAnnotationOnClick
+                        setId={selectedSet}
+                        image={image as any}
+                        source='registerpair'
+                        disabled={!effectiveTransforms}
+                        location={{
+                          x: image.width / 2,
+                          y: image.height / 2,
+                          width: image.width,
+                          height: image.height,
+                          annotationSetId: selectedSet,
+                          image: image as any,
+                        }}
+                      />
+                      {hotkeyCategories.map((category) => (
+                        <CreateAnnotationOnHotKey
+                          key={`${category.id}-${image.id}`}
+                          hotkey={category.shortcutKey}
+                          category={category}
+                          setId={selectedSet}
+                          imageId={image.id}
+                          source='registerpair'
+                          enabled={visible}
+                          onAnnotate={() => setCurrentCategory(category)}
+                        />
+                      ))}
+                    </>
                   )}
                   <ShowMarkers
                     annotationSetId={selectedSet}

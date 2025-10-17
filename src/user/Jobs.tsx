@@ -1,5 +1,5 @@
 import { Card } from 'react-bootstrap';
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useState, useCallback } from 'react';
 import { UserContext, GlobalContext } from '../Context';
 import { Schema } from '../amplify/client-schema';
 import { Spinner, Button, ProgressBar } from 'react-bootstrap';
@@ -10,6 +10,13 @@ import { GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
 import ConfirmationModal from '../ConfirmationModal';
 import ProjectProgress from './ProjectProgress';
 
+type RegistrationJob = Schema['RegistrationJob']['type'] & {
+  annotationSet?: {
+    id: string;
+    name: string;
+  } | null;
+};
+
 type Project = {
   id: string;
   name: string;
@@ -19,8 +26,21 @@ type Project = {
   };
   annotationSets: {
     id: string;
+    name: string;
   }[];
   queues: Schema['Queue']['type'][];
+  registrationJobs: RegistrationJob[];
+};
+
+type RegistrationJobWithProject = RegistrationJob & {
+  project: {
+    id: string;
+    name: string;
+    organization: {
+      id: string;
+      name: string;
+    };
+  };
 };
 
 export default function Jobs() {
@@ -37,13 +57,7 @@ export default function Jobs() {
   const [jobsRemaining, setJobsRemaining] = useState<Record<string, string>>(
     {}
   );
-  const [registrationJobs, setRegistrationJobs] = useState<
-    {
-      id: string;
-      projectId: string;
-      register: boolean;
-    }[]
-  >([]);
+  const [registrationJobs, setRegistrationJobs] = useState<RegistrationJobWithProject[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [takingJob, setTakingJob] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<
@@ -69,8 +83,16 @@ export default function Jobs() {
               'organization.id',
               'organization.name',
               'annotationSets.id',
-              'annotationSets.register',
+              'annotationSets.name',
               'queues.*',
+              'registrationJobs.annotationSetId',
+              'registrationJobs.categoryIds',
+              'registrationJobs.categoryNames',
+              'registrationJobs.mode',
+              'registrationJobs.status',
+              'registrationJobs.assignedUserId',
+              'registrationJobs.annotationSet.id',
+              'registrationJobs.annotationSet.name',
             ],
           }
         )
@@ -80,10 +102,7 @@ export default function Jobs() {
       const validProjects = projectResults
         .map((result) => (result as { data: Project | null }).data)
         .filter(
-          (project): project is Project =>
-            project !== null &&
-            (project.queues.length > 0 ||
-              project.annotationSets.some((set) => set.register))
+          (project): project is Project => project !== null
         )
         .map((project) => ({
           ...project,
@@ -111,6 +130,7 @@ export default function Jobs() {
         const jobsRemaining = (
           await Promise.all(
             queueUrls.map(async (queueUrl) => {
+              if (!queueUrl) return { [queueUrl]: '0' };
               const params: GetQueueAttributesCommandInput = {
                 QueueUrl: queueUrl,
                 AttributeNames: ['ApproximateNumberOfMessages'],
@@ -131,23 +151,23 @@ export default function Jobs() {
 
         setJobsRemaining(jobsRemaining);
 
-        // check if registration jobs are available
-        const registrationJobs = validProjects.flatMap((project) =>
-          project.annotationSets.map((set) => {
-            return {
-              id: set.id,
-              projectId: project.id,
-              register: set.register || false,
-            };
-          })
+        const allRegistrationJobs = validProjects.flatMap((project) =>
+          project.registrationJobs
+            .filter((job) => job.status !== 'complete')
+            .map((job) => ({
+              ...job,
+              project: {
+                id: project.id,
+                name: project.name,
+                organization: project.organization,
+              },
+            }))
         );
-
-        setRegistrationJobs(registrationJobs.filter((job) => job.register));
+        setRegistrationJobs(allRegistrationJobs);
 
         const filteredProjects = validProjects.filter(
           (project) =>
-            project.queues.length > 0 ||
-            project.annotationSets.some((set) => set.register)
+            project.queues.length > 0 || project.registrationJobs.length > 0
         );
         setDisplayProjects(filteredProjects);
       }
@@ -169,42 +189,117 @@ export default function Jobs() {
     };
   }, [userProjectMembershipHook.data]);
 
+  async function handleTakeRegistrationJob(job: RegistrationJobWithProject) {
+    setTakingJob(true);
+    try {
+      if (job.mode === 'per-transect') {
+        const assignment = await claimTransectAssignment({
+          registrationJobId: job.annotationSetId,
+          userId: user.userId,
+        });
+        if (!assignment) {
+          alert('No available transects right now. Please try again.');
+          return;
+        }
+        navigate(
+          `/surveys/${job.project.id}/set/${job.annotationSetId}/registration?transect=${assignment.transectId}`
+        );
+        return;
+      }
+
+      // single assignment mode: reserve the job for the user
+      await client.models.RegistrationJob.update({
+        annotationSetId: job.annotationSetId,
+        assignedUserId: user.userId,
+        lastHeartbeatAt: new Date().toISOString(),
+        status: 'active',
+      });
+
+      navigate(
+        `/surveys/${job.project.id}/set/${job.annotationSetId}/registration`
+      );
+    } finally {
+      setTakingJob(false);
+    }
+  }
+
   async function handleTakeJob(job: { queueId: string; projectId: string }) {
     setTakingJob(true);
-
-    const currentMembership = userProjectMembershipHook.data.filter(
-      (membership) => membership.projectId === job.projectId
-    )[0];
-
-    if (currentMembership) {
-      userProjectMembershipHook.update(
-        { id: currentMembership.id, queueId: job.queueId },
-        {
-          onSuccess: () => {
-            navigate(`/surveys/${job.projectId}/annotate`);
-          },
-          onError: (error) => {
-            alert('Failed to take job');
-            console.error(error);
-          },
-        }
+    try {
+      const currentMembership = userProjectMembershipHook.data?.find(
+        (membership) => membership.projectId === job.projectId
       );
-    } else {
-      userProjectMembershipHook.create(
-        { userId: user.userId, projectId: job.projectId, queueId: job.queueId },
-        {
-          onSuccess: () => {
-            navigate(`/surveys/${job.projectId}/annotate`);
-          },
-          onError: (error) => {
-            alert('Failed to take job');
-            console.error(error);
-          },
-        }
-      );
+
+      if (currentMembership) {
+        await userProjectMembershipHook.update(
+          { id: currentMembership.id, queueId: job.queueId },
+          {
+            onSuccess: () => {
+              navigate(`/surveys/${job.projectId}/annotate`);
+            },
+            onError: (error) => {
+              alert('Failed to take job');
+              console.error(error);
+            },
+          }
+        );
+      } else {
+        await userProjectMembershipHook.create(
+          { userId: user.userId, projectId: job.projectId, queueId: job.queueId },
+          {
+            onSuccess: () => {
+              navigate(`/surveys/${job.projectId}/annotate`);
+            },
+            onError: (error) => {
+              alert('Failed to take job');
+              console.error(error);
+            },
+          }
+        );
+      }
+    } finally {
+      setTakingJob(false);
+    }
+  }
+
+  async function claimTransectAssignment({
+    registrationJobId,
+    userId,
+  }: {
+    registrationJobId: string;
+    userId: string;
+  }) {
+    const { data } = await client.models.RegistrationAssignment.registrationAssignmentsByJobId(
+      {
+        registrationJobId,
+        limit: 200,
+      }
+    );
+
+    const now = Date.now();
+    const staleCutoff = now - 1000 * 60 * 30;
+
+    for (const assignment of data) {
+      const lastHeartbeat = assignment.lastHeartbeatAt
+        ? new Date(assignment.lastHeartbeatAt).getTime()
+        : 0;
+      if (
+        !assignment.assignedUserId ||
+        lastHeartbeat < staleCutoff ||
+        assignment.assignedUserId === userId
+      ) {
+        await client.models.RegistrationAssignment.update({
+          registrationJobId,
+          transectId: assignment.transectId,
+          assignedUserId: userId,
+          lastHeartbeatAt: new Date().toISOString(),
+          status: 'active',
+        });
+        return assignment;
+      }
     }
 
-    setTakingJob(false);
+    return null;
   }
 
   const tableData = [
@@ -290,26 +385,21 @@ export default function Jobs() {
         .filter((item) => item !== null)
     ),
     ...registrationJobs.map((job) => {
-      const project = displayProjects.find(
-        (project) => project.id === job.projectId
-      );
-
-      if (!project) {
-        return <></>;
-      }
-
+      const transectMode = job.mode === 'per-transect';
       return {
-        id: job.id,
+        id: `${job.annotationSetId}-${job.project.id}`,
         rowData: [
           <div
             className='d-flex justify-content-between align-items-center p-2'
-            key={job.id}
+            key={job.annotationSetId}
           >
             <div className='d-flex flex-row gap-3 align-items-center'>
               <div>
-                <h5 className='mb-0'>{project.name}</h5>
+                <h5 className='mb-0'>
+                  {job.annotationSet?.name || 'Registration Job'}
+                </h5>
                 <i style={{ fontSize: '14px', display: 'block' }}>
-                  {project.organization.name}
+                  {job.project.name} • {job.project.organization.name}
                 </i>
                 <p
                   style={{
@@ -318,16 +408,23 @@ export default function Jobs() {
                     marginBottom: '0px',
                   }}
                 >
-                  Type: Registration
+                  Mode: {transectMode ? 'Per-transect' : 'Single Worker'}
                 </p>
+                {job.categoryNames?.length ? (
+                  <p
+                    className='mb-0 text-muted'
+                    style={{ fontSize: '12px' }}
+                  >
+                    Species: {job.categoryNames.join(', ')}
+                  </p>
+                ) : null}
               </div>
             </div>
             <Button
               className='ms-1'
               variant='primary'
-              onClick={() =>
-                navigate(`/surveys/${project.id}/set/${job.id}/registration`)
-              }
+              disabled={takingJob || deletingJob}
+              onClick={() => handleTakeRegistrationJob(job)}
             >
               Take Job
             </Button>

@@ -10,6 +10,17 @@ export default function CreateAnnotationOnHotKey({
   imageId,
   source,
   isTest = false,
+  enabled = true,
+  onAnnotate,
+}: {
+  hotkey: string;
+  category: any;
+  setId: string;
+  imageId: string;
+  source: string;
+  isTest?: boolean;
+  enabled?: boolean;
+  onAnnotate?: (category: any) => void;
 }) {
   const {
     annotationsHook: { create: createAnnotation },
@@ -35,14 +46,17 @@ export default function CreateAnnotationOnHotKey({
       source: source,
     });
     setCurrentCategory(category);
+    onAnnotate?.(category);
   }, [
-    category.id,
+    category,
     createAnnotation,
     currentPosition,
     imageId,
     setId,
     project.id,
     source,
+    setCurrentCategory,
+    onAnnotate,
   ]);
 
   useHotkeys(
@@ -52,8 +66,13 @@ export default function CreateAnnotationOnHotKey({
       event.stopPropagation();
       handleHotkey?.();
     },
-    { keydown: true, keyup: false },
-    [handleHotkey]
+    {
+      keydown: true,
+      keyup: false,
+      enabled,
+      enableOnFormTags: true,
+    },
+    [handleHotkey, enabled]
   );
 
   return null;

@@ -89,6 +89,8 @@ export default function Surveys() {
                     'updatedAt',
                     'createdAt',
                     'imageSets.imageCount',
+                    'registrationJobs.annotationSetId',
+                    'registrationJobs.status',
                   ],
                 }
               )
@@ -164,8 +166,71 @@ export default function Surveys() {
     );
 
     try {
+      const latestProject = (
+        await client.models.Project.get(
+          { id: selectedProject!.id },
+          {
+            selectionSet: [
+              'queues.id',
+              'queues.url',
+              'annotationSets.id',
+              'annotationSets.register',
+              'registrationJobs.annotationSetId',
+              'registrationJobs.status',
+            ],
+          }
+        )
+      ).data as Schema['Project']['type'];
+
+      const activeRegistrationJob = latestProject.registrationJobs?.find(
+        (job) => job.status !== 'complete' && job.status !== 'cancelled'
+      );
+
+      if (activeRegistrationJob) {
+        let nextToken: string | null | undefined = undefined;
+        do {
+          const { data, nextToken: nt } =
+            await client.models.RegistrationAssignment.registrationAssignmentsByJobId(
+              {
+                registrationJobId: activeRegistrationJob.annotationSetId,
+                limit: 200,
+                nextToken,
+              }
+            );
+          await Promise.all(
+            data.map((assignment) =>
+              client.models.RegistrationAssignment.delete({
+                registrationJobId: assignment.registrationJobId,
+                transectId: assignment.transectId,
+              })
+            )
+          );
+          nextToken = nt;
+        } while (nextToken);
+
+        await client.models.RegistrationJob.delete({
+          annotationSetId: activeRegistrationJob.annotationSetId,
+        });
+
+        setProjects((projects) =>
+          projects.map((project) =>
+            project.id === selectedProject!.id
+              ? {
+                  ...project,
+                  status: 'active',
+                  registrationJobs: (project.registrationJobs || []).filter(
+                    (job) =>
+                      job.annotationSetId !== activeRegistrationJob.annotationSetId
+                  ),
+                }
+              : project
+          )
+        );
+        return;
+      }
+
       // cancel registration job if it exists
-      const annotationSet = selectedProject?.annotationSets.find(
+      const annotationSet = latestProject.annotationSets.find(
         (set) => set.register
       );
 
@@ -174,10 +239,22 @@ export default function Surveys() {
           id: annotationSet.id,
           register: false,
         });
+        setProjects((projects) =>
+          projects.map((project) =>
+            project.id === selectedProject!.id
+              ? {
+                  ...project,
+                  annotationSets: project.annotationSets.map((set) =>
+                    set.id === annotationSet.id ? { ...set, register: false } : set
+                  ),
+                }
+              : project
+          )
+        );
         return;
       }
 
-      const job = selectedProject?.queues[0];
+      const job = latestProject.queues[0];
 
       if (!job?.url) {
         alert('An unknown error occurred. Please try again later.');
@@ -187,6 +264,16 @@ export default function Surveys() {
       const sqsClient = await getSqsClient();
       await sqsClient.send(new DeleteQueueCommand({ QueueUrl: job.url }));
       await client.models.Queue.delete({ id: job.id });
+      setProjects((projects) =>
+        projects.map((project) =>
+          project.id === selectedProject!.id
+            ? {
+                ...project,
+                queues: project.queues.filter((queue) => queue.id !== job.id),
+              }
+            : project
+        )
+      );
     } catch (error) {
       alert('An unknown error occurred. Please try again later.');
       console.error(error);
@@ -236,7 +323,10 @@ export default function Surveys() {
 
       const hasJobs =
         project.queues.length > 0 ||
-        project.annotationSets.some((set) => set.register);
+        project.annotationSets.some((set) => set.register) ||
+        (project.registrationJobs || []).some(
+          (job) => job.status !== 'complete' && job.status !== 'cancelled'
+        );
 
       const showResumeButton =
         !task.projectId &&
