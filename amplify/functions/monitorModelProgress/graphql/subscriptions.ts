@@ -71,6 +71,7 @@ export const onCreateAnnotation = /* GraphQL */ `subscription OnCreateAnnotation
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -133,6 +134,7 @@ export const onCreateAnnotationSet = /* GraphQL */ `subscription OnCreateAnnotat
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -176,6 +178,7 @@ export const onCreateCamera = /* GraphQL */ `subscription OnCreateCamera($filter
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -205,6 +208,7 @@ export const onCreateCameraOverlap = /* GraphQL */ `subscription OnCreateCameraO
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -331,6 +335,7 @@ export const onCreateImage = /* GraphQL */ `subscription OnCreateImage($filter: 
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -398,6 +403,7 @@ export const onCreateImageFile = /* GraphQL */ `subscription OnCreateImageFile($
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -491,6 +497,7 @@ export const onCreateImageSet = /* GraphQL */ `subscription OnCreateImageSet($fi
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -601,6 +608,7 @@ export const onCreateJollyResultsMembership = /* GraphQL */ `subscription OnCrea
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -660,12 +668,14 @@ export const onCreateLocation = /* GraphQL */ `subscription OnCreateLocation($fi
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
     projectId
     set {
       createdAt
+      description
       id
       locationCount
       name
@@ -757,6 +767,7 @@ export const onCreateLocationSet = /* GraphQL */ `subscription OnCreateLocationS
 ) {
   onCreateLocationSet(filter: $filter) {
     createdAt
+    description
     id
     locationCount
     locations {
@@ -776,6 +787,7 @@ export const onCreateLocationSet = /* GraphQL */ `subscription OnCreateLocationS
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -816,6 +828,7 @@ export const onCreateLocationSetMembership = /* GraphQL */ `subscription OnCreat
     locationId
     locationSet {
       createdAt
+      description
       id
       locationCount
       name
@@ -861,6 +874,7 @@ export const onCreateObject = /* GraphQL */ `subscription OnCreateObject($filter
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -918,6 +932,7 @@ export const onCreateObservation = /* GraphQL */ `subscription OnCreateObservati
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1122,6 +1137,7 @@ export const onCreateProject = /* GraphQL */ `subscription OnCreateProject($filt
       nextToken
       __typename
     }
+    tags
     testConfig {
       accuracy
       createdAt
@@ -1167,6 +1183,7 @@ export const onCreateProjectTestConfig = /* GraphQL */ `subscription OnCreatePro
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1205,6 +1222,7 @@ export const onCreateQueue = /* GraphQL */ `subscription OnCreateQueue($filter: 
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1254,6 +1272,7 @@ export const onCreateShapefile = /* GraphQL */ `subscription OnCreateShapefile($
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1281,6 +1300,7 @@ export const onCreateShapefileExclusions = /* GraphQL */ `subscription OnCreateS
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1309,6 +1329,7 @@ export const onCreateStratum = /* GraphQL */ `subscription OnCreateStratum($filt
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1344,6 +1365,7 @@ export const onCreateTasksOnAnnotationSet = /* GraphQL */ `subscription OnCreate
     id
     locationSet {
       createdAt
+      description
       id
       locationCount
       name
@@ -1526,6 +1548,7 @@ export const onCreateTestResult = /* GraphQL */ `subscription OnCreateTestResult
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1597,6 +1620,7 @@ export const onCreateTransect = /* GraphQL */ `subscription OnCreateTransect($fi
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1652,6 +1676,7 @@ export const onCreateUserProjectMembership = /* GraphQL */ `subscription OnCreat
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1767,6 +1792,7 @@ export const onDeleteAnnotation = /* GraphQL */ `subscription OnDeleteAnnotation
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1829,6 +1855,7 @@ export const onDeleteAnnotationSet = /* GraphQL */ `subscription OnDeleteAnnotat
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1872,6 +1899,7 @@ export const onDeleteCamera = /* GraphQL */ `subscription OnDeleteCamera($filter
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1901,6 +1929,7 @@ export const onDeleteCameraOverlap = /* GraphQL */ `subscription OnDeleteCameraO
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2027,6 +2056,7 @@ export const onDeleteImage = /* GraphQL */ `subscription OnDeleteImage($filter: 
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2094,6 +2124,7 @@ export const onDeleteImageFile = /* GraphQL */ `subscription OnDeleteImageFile($
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2187,6 +2218,7 @@ export const onDeleteImageSet = /* GraphQL */ `subscription OnDeleteImageSet($fi
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2297,6 +2329,7 @@ export const onDeleteJollyResultsMembership = /* GraphQL */ `subscription OnDele
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2356,12 +2389,14 @@ export const onDeleteLocation = /* GraphQL */ `subscription OnDeleteLocation($fi
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
     projectId
     set {
       createdAt
+      description
       id
       locationCount
       name
@@ -2453,6 +2488,7 @@ export const onDeleteLocationSet = /* GraphQL */ `subscription OnDeleteLocationS
 ) {
   onDeleteLocationSet(filter: $filter) {
     createdAt
+    description
     id
     locationCount
     locations {
@@ -2472,6 +2508,7 @@ export const onDeleteLocationSet = /* GraphQL */ `subscription OnDeleteLocationS
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2512,6 +2549,7 @@ export const onDeleteLocationSetMembership = /* GraphQL */ `subscription OnDelet
     locationId
     locationSet {
       createdAt
+      description
       id
       locationCount
       name
@@ -2557,6 +2595,7 @@ export const onDeleteObject = /* GraphQL */ `subscription OnDeleteObject($filter
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2614,6 +2653,7 @@ export const onDeleteObservation = /* GraphQL */ `subscription OnDeleteObservati
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2818,6 +2858,7 @@ export const onDeleteProject = /* GraphQL */ `subscription OnDeleteProject($filt
       nextToken
       __typename
     }
+    tags
     testConfig {
       accuracy
       createdAt
@@ -2863,6 +2904,7 @@ export const onDeleteProjectTestConfig = /* GraphQL */ `subscription OnDeletePro
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2901,6 +2943,7 @@ export const onDeleteQueue = /* GraphQL */ `subscription OnDeleteQueue($filter: 
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2950,6 +2993,7 @@ export const onDeleteShapefile = /* GraphQL */ `subscription OnDeleteShapefile($
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2977,6 +3021,7 @@ export const onDeleteShapefileExclusions = /* GraphQL */ `subscription OnDeleteS
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3005,6 +3050,7 @@ export const onDeleteStratum = /* GraphQL */ `subscription OnDeleteStratum($filt
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3040,6 +3086,7 @@ export const onDeleteTasksOnAnnotationSet = /* GraphQL */ `subscription OnDelete
     id
     locationSet {
       createdAt
+      description
       id
       locationCount
       name
@@ -3222,6 +3269,7 @@ export const onDeleteTestResult = /* GraphQL */ `subscription OnDeleteTestResult
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3293,6 +3341,7 @@ export const onDeleteTransect = /* GraphQL */ `subscription OnDeleteTransect($fi
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3348,6 +3397,7 @@ export const onDeleteUserProjectMembership = /* GraphQL */ `subscription OnDelet
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3463,6 +3513,7 @@ export const onUpdateAnnotation = /* GraphQL */ `subscription OnUpdateAnnotation
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3525,6 +3576,7 @@ export const onUpdateAnnotationSet = /* GraphQL */ `subscription OnUpdateAnnotat
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3568,6 +3620,7 @@ export const onUpdateCamera = /* GraphQL */ `subscription OnUpdateCamera($filter
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3597,6 +3650,7 @@ export const onUpdateCameraOverlap = /* GraphQL */ `subscription OnUpdateCameraO
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3723,6 +3777,7 @@ export const onUpdateImage = /* GraphQL */ `subscription OnUpdateImage($filter: 
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3790,6 +3845,7 @@ export const onUpdateImageFile = /* GraphQL */ `subscription OnUpdateImageFile($
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3883,6 +3939,7 @@ export const onUpdateImageSet = /* GraphQL */ `subscription OnUpdateImageSet($fi
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3993,6 +4050,7 @@ export const onUpdateJollyResultsMembership = /* GraphQL */ `subscription OnUpda
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4052,12 +4110,14 @@ export const onUpdateLocation = /* GraphQL */ `subscription OnUpdateLocation($fi
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
     projectId
     set {
       createdAt
+      description
       id
       locationCount
       name
@@ -4149,6 +4209,7 @@ export const onUpdateLocationSet = /* GraphQL */ `subscription OnUpdateLocationS
 ) {
   onUpdateLocationSet(filter: $filter) {
     createdAt
+    description
     id
     locationCount
     locations {
@@ -4168,6 +4229,7 @@ export const onUpdateLocationSet = /* GraphQL */ `subscription OnUpdateLocationS
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4208,6 +4270,7 @@ export const onUpdateLocationSetMembership = /* GraphQL */ `subscription OnUpdat
     locationId
     locationSet {
       createdAt
+      description
       id
       locationCount
       name
@@ -4253,6 +4316,7 @@ export const onUpdateObject = /* GraphQL */ `subscription OnUpdateObject($filter
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4310,6 +4374,7 @@ export const onUpdateObservation = /* GraphQL */ `subscription OnUpdateObservati
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4514,6 +4579,7 @@ export const onUpdateProject = /* GraphQL */ `subscription OnUpdateProject($filt
       nextToken
       __typename
     }
+    tags
     testConfig {
       accuracy
       createdAt
@@ -4559,6 +4625,7 @@ export const onUpdateProjectTestConfig = /* GraphQL */ `subscription OnUpdatePro
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4597,6 +4664,7 @@ export const onUpdateQueue = /* GraphQL */ `subscription OnUpdateQueue($filter: 
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4646,6 +4714,7 @@ export const onUpdateShapefile = /* GraphQL */ `subscription OnUpdateShapefile($
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4673,6 +4742,7 @@ export const onUpdateShapefileExclusions = /* GraphQL */ `subscription OnUpdateS
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4701,6 +4771,7 @@ export const onUpdateStratum = /* GraphQL */ `subscription OnUpdateStratum($filt
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4736,6 +4807,7 @@ export const onUpdateTasksOnAnnotationSet = /* GraphQL */ `subscription OnUpdate
     id
     locationSet {
       createdAt
+      description
       id
       locationCount
       name
@@ -4918,6 +4990,7 @@ export const onUpdateTestResult = /* GraphQL */ `subscription OnUpdateTestResult
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -4989,6 +5062,7 @@ export const onUpdateTransect = /* GraphQL */ `subscription OnUpdateTransect($fi
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -5044,6 +5118,7 @@ export const onUpdateUserProjectMembership = /* GraphQL */ `subscription OnUpdat
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }

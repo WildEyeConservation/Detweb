@@ -3,7 +3,11 @@ import { env } from '$amplify/env/runPointFinder';
 import { Amplify } from 'aws-amplify';
 import { SendMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
 import { generateClient, GraphQLResult } from 'aws-amplify/data';
-import { imagesByProjectId, locationSetsByProjectId } from './graphql/queries';
+import {
+  getProject,
+  imagesByProjectId,
+  locationSetsByProjectId,
+} from './graphql/queries';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 
 Amplify.configure(
@@ -78,6 +82,18 @@ export const handler: Handler = async (event, context) => {
     throw new Error('projectId not provided');
   }
   try {
+    const projectResponse = await client.graphql({
+      query: getProject,
+      variables: { id: projectId },
+    });
+
+    const organizationId = projectResponse.data?.getProject?.organizationId;
+    const tagsRaw = projectResponse.data?.getProject?.tags ?? [];
+    const tags = Array.isArray(tagsRaw)
+      ? tagsRaw.filter((t): t is string => typeof t === 'string')
+      : [];
+    const isLegacyProject = tags.includes('legacy');
+
     const images = await fetchAllPages<Image, 'imagesByProjectId'>(
       (nextToken) =>
         client.graphql({
@@ -142,7 +158,9 @@ export const handler: Handler = async (event, context) => {
                 MessageBody: JSON.stringify({
                   imageId: image.id,
                   projectId: image.projectId,
-                  key: 'heatmaps/' + image.originalPath + '.h5',
+                  key: isLegacyProject
+                    ? `heatmaps/${image.originalPath}.h5`
+                    : `heatmaps/${organizationId}/${projectId}/${image.originalPath}.h5`,
                   width: 1024,
                   height: 1024,
                   threshold: 0.95,

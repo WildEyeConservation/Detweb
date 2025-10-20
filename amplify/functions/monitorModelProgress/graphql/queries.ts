@@ -485,6 +485,7 @@ export const getAnnotation = /* GraphQL */ `query GetAnnotation($id: ID!) {
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -545,6 +546,7 @@ export const getAnnotationSet = /* GraphQL */ `query GetAnnotationSet($id: ID!) 
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -588,6 +590,7 @@ export const getCamera = /* GraphQL */ `query GetCamera($id: ID!) {
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -612,6 +615,7 @@ export const getCameraOverlap = /* GraphQL */ `query GetCameraOverlap($cameraAId
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -738,6 +742,7 @@ export const getImage = /* GraphQL */ `query GetImage($id: ID!) {
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -813,6 +818,7 @@ export const getImageFile = /* GraphQL */ `query GetImageFile($id: ID!) {
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -904,6 +910,7 @@ export const getImageSet = /* GraphQL */ `query GetImageSet($id: ID!) {
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1026,6 +1033,7 @@ export const getJollyResultsMembership = /* GraphQL */ `query GetJollyResultsMem
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1085,12 +1093,14 @@ export const getLocation = /* GraphQL */ `query GetLocation($id: ID!) {
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
     projectId
     set {
       createdAt
+      description
       id
       locationCount
       name
@@ -1186,6 +1196,7 @@ export const getLocationAnnotationCount = /* GraphQL */ `query GetLocationAnnota
 export const getLocationSet = /* GraphQL */ `query GetLocationSet($id: ID!) {
   getLocationSet(id: $id) {
     createdAt
+    description
     id
     locationCount
     locations {
@@ -1205,6 +1216,7 @@ export const getLocationSet = /* GraphQL */ `query GetLocationSet($id: ID!) {
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1243,6 +1255,7 @@ export const getLocationSetMembership = /* GraphQL */ `query GetLocationSetMembe
     locationId
     locationSet {
       createdAt
+      description
       id
       locationCount
       name
@@ -1288,6 +1301,7 @@ export const getObject = /* GraphQL */ `query GetObject($id: ID!) {
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1339,6 +1353,7 @@ export const getObservation = /* GraphQL */ `query GetObservation($id: ID!) {
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1535,6 +1550,7 @@ export const getProject = /* GraphQL */ `query GetProject($id: ID!) {
       nextToken
       __typename
     }
+    tags
     testConfig {
       accuracy
       createdAt
@@ -1578,6 +1594,7 @@ export const getProjectTestConfig = /* GraphQL */ `query GetProjectTestConfig($p
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1616,6 +1633,7 @@ export const getQueue = /* GraphQL */ `query GetQueue($id: ID!) {
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1663,6 +1681,7 @@ export const getShapefile = /* GraphQL */ `query GetShapefile($id: ID!) {
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1688,6 +1707,7 @@ export const getShapefileExclusions = /* GraphQL */ `query GetShapefileExclusion
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1716,6 +1736,7 @@ export const getStratum = /* GraphQL */ `query GetStratum($id: ID!) {
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -1749,6 +1770,7 @@ export const getTasksOnAnnotationSet = /* GraphQL */ `query GetTasksOnAnnotation
     id
     locationSet {
       createdAt
+      description
       id
       locationCount
       name
@@ -1931,6 +1953,7 @@ export const getTestResult = /* GraphQL */ `query GetTestResult($id: ID!) {
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2003,6 +2026,7 @@ export const getTransect = /* GraphQL */ `query GetTransect($id: ID!) {
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2056,6 +2080,7 @@ export const getUserProjectMembership = /* GraphQL */ `query GetUserProjectMembe
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -2918,6 +2943,7 @@ export const listLocationSets = /* GraphQL */ `query ListLocationSets(
   listLocationSets(filter: $filter, limit: $limit, nextToken: $nextToken) {
     items {
       createdAt
+      description
       id
       locationCount
       name
@@ -3171,6 +3197,7 @@ export const listProjects = /* GraphQL */ `query ListProjects(
       name
       organizationId
       status
+      tags
       updatedAt
       __typename
     }
@@ -3640,6 +3667,7 @@ export const locationSetsByProjectId = /* GraphQL */ `query LocationSetsByProjec
   ) {
     items {
       createdAt
+      description
       id
       locationCount
       name
