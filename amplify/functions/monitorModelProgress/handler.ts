@@ -68,6 +68,8 @@ interface Project {
   id: string;
   name: string;
   status?: string | null;
+  organizationId: string;
+  tags?: string[] | null;
 }
 
 interface Image {
@@ -308,6 +310,12 @@ export const handler: Handler = async (event, context) => {
     for (const project of processingProjects) {
       console.log(`Processing project ${project.name} (${project.id})`);
 
+      const tagsRaw = project.tags ?? [];
+      const tags = Array.isArray(tagsRaw)
+        ? tagsRaw.filter((t): t is string => typeof t === 'string')
+        : [];
+      const isLegacyProject = tags.includes('legacy');
+
       // 2.1 List all images for the project
       console.log(`Fetching images for project ${project.id}`);
       const projectImages = await fetchAllPages<Image, 'imagesByProjectId'>(
@@ -344,7 +352,9 @@ export const handler: Handler = async (event, context) => {
 
         const results = await Promise.all(
           imagePaths.map(async (path) => {
-            const heatmapFilePath = 'heatmaps/' + path + '.h5';
+            const heatmapFilePath = isLegacyProject
+              ? `heatmaps/${path}.h5`
+              : `heatmaps/${project.organizationId}/${project.id}/${path}.h5`;
             try {
               await s3Client.send(
                 new HeadObjectCommand({
