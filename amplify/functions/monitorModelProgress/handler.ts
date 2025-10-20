@@ -68,6 +68,7 @@ interface Project {
   id: string;
   name: string;
   status?: string | null;
+  organizationId: string;
 }
 
 interface Image {
@@ -344,7 +345,7 @@ export const handler: Handler = async (event, context) => {
 
         const results = await Promise.all(
           imagePaths.map(async (path) => {
-            const heatmapFilePath = 'heatmaps/' + path + '.h5';
+            const heatmapFilePath = `heatmaps/${project.organizationId}/${project.id}/${path}.h5`;
             try {
               await s3Client.send(
                 new HeadObjectCommand({
