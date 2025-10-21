@@ -124,6 +124,26 @@ export default function ProcessImages({ projectId }: { projectId: string }) {
       return;
     }
 
+    // Fetch project to determine organization and legacy handling
+    const { data: project } = await client.models.Project.get(
+      { id: projectId },
+      { selectionSet: ['id', 'organizationId', 'tags'] as const }
+    );
+    const projRecord = (project ?? {}) as Record<string, unknown>;
+    const organizationId: string | undefined =
+      typeof projRecord['organizationId'] === 'string'
+        ? (projRecord['organizationId'] as string)
+        : undefined;
+    const tagsVal = projRecord['tags'];
+    const isLegacyProject: boolean = Array.isArray(tagsVal)
+      ? (tagsVal as unknown[]).some((t) => t === 'legacy')
+      : false;
+
+    const makeKey = (orig: string): string =>
+      !isLegacyProject && organizationId
+        ? `${organizationId}/${projectId}/${orig}`
+        : orig;
+
     const BATCH_SIZE = 500;
 
     switch (model.value) {
@@ -131,7 +151,7 @@ export default function ProcessImages({ projectId }: { projectId: string }) {
         for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
           const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map(
-            (image) => `${image.id}---${image.originalPath}`
+            (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
 
           client.mutations.runScoutbot({
@@ -151,7 +171,9 @@ export default function ProcessImages({ projectId }: { projectId: string }) {
       case 'heatmap':
         for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
           const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
-          const batchStrings = batch.map((image) => image.originalPath);
+          const batchStrings = batch.map((image) =>
+            makeKey(image.originalPath)
+          );
 
           client.mutations.runHeatmapper({
             images: batchStrings,
@@ -167,7 +189,7 @@ export default function ProcessImages({ projectId }: { projectId: string }) {
         for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
           const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map(
-            (image) => `${image.id}---${image.originalPath}`
+            (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
 
           client.mutations.runMadDetector({
@@ -198,9 +220,9 @@ export default function ProcessImages({ projectId }: { projectId: string }) {
 
   return (
     <>
-      <Form className='p-3'>
+      <Form className="p-3">
         <Form.Group>
-          <Form.Label className='mb-0'>Model</Form.Label>
+          <Form.Label className="mb-0">Model</Form.Label>
           <Select
             value={model}
             onChange={(m) => setModel(m)}
@@ -209,46 +231,46 @@ export default function ProcessImages({ projectId }: { projectId: string }) {
               { label: 'Elephant Detection Nadir', value: 'heatmap' },
               { label: 'MAD', value: 'mad' },
             ]}
-            placeholder='Select a model'
-            className='text-black'
+            placeholder="Select a model"
+            className="text-black"
           />
           <Button
-            variant='primary'
+            variant="primary"
             onClick={scanImages}
             disabled={!model || loading}
-            className='mt-2'
+            className="mt-2"
           >
             Scan
           </Button>
           {loading ? (
-            <div className='d-flex flex-column align-items-center'>
-              <Spinner animation='border' role='status' />
-              <p className='mb-0'>Determining images to process...</p>
-              <p className='mb-1'>Found {imagesLoaded ?? 0} images</p>
+            <div className="d-flex flex-column align-items-center">
+              <Spinner animation="border" role="status" />
+              <p className="mb-0">Determining images to process...</p>
+              <p className="mb-1">Found {imagesLoaded ?? 0} images</p>
               {locationsLoaded !== null && (
                 <>
-                  <p className='mb-0'>Searching for detections on images...</p>
-                  <p className='mb-0'>Found {locationsLoaded} detections</p>
+                  <p className="mb-0">Searching for detections on images...</p>
+                  <p className="mb-0">Found {locationsLoaded} detections</p>
                 </>
               )}
             </div>
           ) : scanned ? (
             unprocessedImages.length > 0 ? (
-              <p className='mb-0 mt-2'>
+              <p className="mb-0 mt-2">
                 Found {unprocessedImages.length} unprocessed images
               </p>
             ) : (
-              <p className='mb-0 mt-2'>All images have been processed</p>
+              <p className="mb-0 mt-2">All images have been processed</p>
             )
           ) : null}
         </Form.Group>
       </Form>
       <Footer>
-        <Button variant='primary' onClick={processImages} disabled={disabled}>
+        <Button variant="primary" onClick={processImages} disabled={disabled}>
           Process Images
         </Button>
         <Button
-          variant='dark'
+          variant="dark"
           onClick={() => showModal(null)}
           disabled={disabled}
         >
