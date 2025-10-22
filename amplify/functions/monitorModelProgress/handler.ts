@@ -413,7 +413,7 @@ export const handler: Handler = async (event, context) => {
 
       if (project.status?.includes('pointFinder')) {
         console.log(`Project ${project.id} is running pointFinder`);
-        await updateProgress(project, projectImages, 'heatmap');
+        await updateProgress(project, projectImages, 'pointfinder');
       }
     }
 
