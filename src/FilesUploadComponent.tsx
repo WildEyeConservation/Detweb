@@ -23,6 +23,7 @@ import LabeledToggleSwitch from './LabeledToggleSwitch.tsx';
 import { Schema } from './amplify/client-schema.ts';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css';
+import UTM from 'utm-latlng';
 
 // Configure a dedicated storage instance for file paths
 const fileStore = localforage.createInstance({
@@ -79,6 +80,7 @@ type ExifData = Record<
     timestamp: number;
     cameraSerial: string;
     gpsData: GpsData | null;
+    timezone?: string;
   }
 >;
 
@@ -89,6 +91,7 @@ type ImageExif = {
   timestamp: number;
   cameraSerial: string;
   gpsData: GpsData | null;
+  timezone?: string;
 };
 
 type CsvFile = {
@@ -125,6 +128,9 @@ export function FileUploadCore({
   const [totalImageSize, setTotalImageSize] = useState(0);
   const [filteredImageSize, setFilteredImageSize] = useState(0);
   const [exifData, setExifData] = useState<ExifData>({});
+  const [commonTimezone, setCommonTimezone] = useState<string | undefined>(
+    undefined
+  );
   const [missingGpsData, setMissingGpsData] = useState(false);
   const [associateByTimestamp, setAssociateByTimestamp] = useState(false);
   const [minTimestamp, setMinTimestamp] = useState(0);
@@ -156,6 +162,7 @@ export function FileUploadCore({
     { cameraA: string; cameraB: string }[]
   >([]);
   const [multipleCameras, setMultipleCameras] = useState(false);
+  const [altitudeInMeters, setAltitudeInMeters] = useState(true);
   const [altitudeType, setAltitudeType] = useState({
     label: 'EGM96',
     value: 'egm96',
@@ -175,7 +182,18 @@ export function FileUploadCore({
     alt?: string;
   }>({});
   const [mappingConfirmed, setMappingConfirmed] = useState(false);
-  const [timestampInMs, setTimestampInMs] = useState(false);
+  // UTM handling
+  const [useUtm, setUseUtm] = useState(false);
+  const [utmColumn, setUtmColumn] = useState<string | undefined>(undefined);
+
+  // Helper function to convert altitude from feet to meters if needed
+  const convertAltitude = (altitude: number): number => {
+    if (!altitudeInMeters) {
+      // Convert feet to meters (1 foot = 0.3048 meters)
+      return altitude * 0.3048;
+    }
+    return altitude;
+  };
 
   // Prefetched existing cameras for the project (modal flow)
   const [existingCameraNames, setExistingCameraNames] = useState<string[]>([]);
@@ -193,9 +211,16 @@ export function FileUploadCore({
       lat: latCol,
       lng: lngCol,
     } = columnMapping;
-    if (!latCol || !lngCol) {
-      alert('Please map the Latitude and Longitude columns.');
-      return;
+    if (!useUtm) {
+      if (!latCol || !lngCol) {
+        alert('Please map the Latitude and Longitude columns.');
+        return;
+      }
+    } else {
+      if (!utmColumn) {
+        alert('Please select the UTM column.');
+        return;
+      }
     }
     if (!timestampCol && !filepathCol) {
       alert('Please map at least Timestamp or FilePath column.');
@@ -250,32 +275,16 @@ export function FileUploadCore({
           setColumnMapping(defaultMappings);
           setMappingConfirmed(false);
 
-          // Auto-detect if timestamp values are milliseconds or seconds using a small sample
-          const tsCol = defaultMappings.timestamp;
-          if (tsCol) {
-            Papa.parse(file, {
-              header: true,
-              preview: 50,
-              skipEmptyLines: true,
-              complete: (sample) => {
-                try {
-                  const values = (sample.data as any[])
-                    .map((row: any) => row[tsCol])
-                    .map((v: any) => (typeof v === 'string' ? v.trim() : v))
-                    .map((v: any) => Number(v))
-                    .filter((n: number) => Number.isFinite(n) && n > 0);
-                  if (values.length > 0) {
-                    const msCount = values.filter(
-                      (n: number) => n >= 1e12
-                    ).length;
-                    const msLikely = msCount / values.length >= 0.5;
-                    setTimestampInMs(msLikely);
-                  }
-                } catch {
-                  // noop: leave as user default if detection fails
-                }
-              },
-            });
+          // UTM auto-detect: choose a column that contains "utm" in its name
+          const utmCandidate = (results.meta.fields || []).find((f) =>
+            /utm/i.test(f)
+          );
+          if (utmCandidate) {
+            setUtmColumn(utmCandidate);
+            setUseUtm(true);
+          } else {
+            setUtmColumn(undefined);
+            setUseUtm(false);
           }
         },
       });
@@ -427,7 +436,7 @@ export function FileUploadCore({
                 ? {
                     lat: Number(exif.gpsData.lat),
                     lng: Number(exif.gpsData.lng),
-                    alt: Number(exif.gpsData.alt),
+                    alt: convertAltitude(Number(exif.gpsData.alt)),
                   }
                 : null,
           };
@@ -447,7 +456,7 @@ export function FileUploadCore({
             timestamp: updatedExif.timestamp,
             lat: updatedExif.gpsData.lat as number,
             lng: updatedExif.gpsData.lng as number,
-            alt: updatedExif.gpsData.alt as number,
+            alt: convertAltitude(updatedExif.gpsData.alt as number),
           });
         }
       }
@@ -470,7 +479,7 @@ export function FileUploadCore({
                 ? {
                     lat: Number((exif.gpsData as any).lat),
                     lng: Number((exif.gpsData as any).lng),
-                    alt: Number((exif.gpsData as any).alt),
+                    alt: convertAltitude(Number((exif.gpsData as any).alt)),
                   }
                 : null,
           };
@@ -487,7 +496,7 @@ export function FileUploadCore({
             timestamp: updatedExif.timestamp,
             lat: (updatedExif.gpsData as any).lat as number,
             lng: (updatedExif.gpsData as any).lng as number,
-            alt: (updatedExif.gpsData as any).alt as number,
+            alt: convertAltitude((updatedExif.gpsData as any).alt as number),
           });
         }
       }
@@ -517,6 +526,14 @@ export function FileUploadCore({
           return acc;
         }, {} as ExifData)
       );
+
+      // Extract common timezone from EXIF data
+      const timezones = (exifData as ImageExif[])
+        .map((e) => e.timezone)
+        .filter(Boolean) as string[];
+      const mostCommonTimezone =
+        timezones.length > 0 ? timezones[0] : undefined;
+      setCommonTimezone(mostCommonTimezone);
     }
     if (imageFiles.length > 0) {
       getExistingFiles();
@@ -642,7 +659,152 @@ export function FileUploadCore({
           (tags?.GPSAltitude as any)?.toString?.() ??
           (tags?.GPSAltitude as any),
       },
+      timezone: tz,
     };
+  }
+
+  // Detect and parse timestamp from various formats
+  function detectAndParseTimestamp(
+    value: any,
+    fallbackTimezone?: string
+  ): number | null {
+    if (!value) return null;
+    const str = typeof value === 'string' ? value.trim() : String(value);
+
+    // Try EXIF format: yyyy:MM:dd HH:mm:ss
+    const exifFormatMatch = /^\d{4}:\d{2}:\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(str);
+    if (exifFormatMatch) {
+      const dt = DateTime.fromFormat(str, 'yyyy:MM:dd HH:mm:ss', {
+        zone: fallbackTimezone,
+      });
+      if (dt.isValid) return dt.toMillis();
+    }
+
+    // Try ISO-like format: yyyy-MM-dd HH:mm:ss
+    const isoFormatMatch = /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(str);
+    if (isoFormatMatch) {
+      const dt = DateTime.fromFormat(str, 'yyyy-MM-dd HH:mm:ss', {
+        zone: fallbackTimezone,
+      });
+      if (dt.isValid) return dt.toMillis();
+    }
+
+    // Try US date format: M/d/yyyy h:mm:ss or MM/dd/yyyy HH:mm:ss
+    const usDateMatch = /^\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}:\d{2}$/.test(
+      str
+    );
+    if (usDateMatch) {
+      const dt = DateTime.fromFormat(str, 'M/d/yyyy h:mm:ss', {
+        zone: fallbackTimezone,
+      });
+      if (dt.isValid) return dt.toMillis();
+    }
+
+    // Try US date format with AM/PM: M/d/yyyy h:mm:ss a
+    const usDateAmPmMatch =
+      /^\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}:\d{2}\s+[AP]M$/i.test(str);
+    if (usDateAmPmMatch) {
+      const dt = DateTime.fromFormat(str, 'M/d/yyyy h:mm:ss a', {
+        zone: fallbackTimezone,
+      });
+      if (dt.isValid) return dt.toMillis();
+    }
+
+    // Try ISO 8601 format: yyyy-MM-ddTHH:mm:ss
+    const iso8601Match = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(str);
+    if (iso8601Match) {
+      const dt = DateTime.fromFormat(str, 'yyyy-MM-ddTHH:mm:ss', {
+        zone: fallbackTimezone,
+      });
+      if (dt.isValid) return dt.toMillis();
+    }
+
+    // Try ISO 8601 with Z: yyyy-MM-ddTHH:mm:ssZ
+    const iso8601ZMatch = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/i.test(str);
+    if (iso8601ZMatch) {
+      const dt = DateTime.fromFormat(str, 'yyyy-MM-ddTHH:mm:ssZ', {
+        zone: 'utc',
+      });
+      if (dt.isValid) return dt.toMillis();
+    }
+
+    // Try numeric (epoch timestamp)
+    const num = Number(str);
+    if (Number.isFinite(num) && num > 0) {
+      // Auto-detect ms vs seconds: >= 1e12 is milliseconds
+      return num >= 1e12 ? num : num * 1000;
+    }
+
+    return null;
+  }
+
+  // Parse common UTM string formats like: "33S 500000 4649776" or "500000 4649776 33S"
+  function parseUtmString(
+    utmStr: unknown
+  ): { lat: number; lng: number } | null {
+    if (!utmStr || typeof utmStr !== 'string') return null;
+    const s = utmStr.trim().replace(/,/g, ' ').replace(/\s+/g, ' ');
+    // Try patterns
+    // 1) ZoneLetter first: "33S 500000 4649776"
+    let m = s.match(
+      /^(\d{1,2})([C-HJ-NP-X])\s+([0-9]+(?:\.[0-9]+)?)\s+([0-9]+(?:\.[0-9]+)?)$/i
+    );
+    let zoneNum: number | null = null;
+    let zoneLetter: string | null = null;
+    let easting: number | null = null;
+    let northing: number | null = null;
+    if (m) {
+      zoneNum = Number(m[1]);
+      zoneLetter = m[2].toUpperCase();
+      easting = Number(m[3]);
+      northing = Number(m[4]);
+    } else {
+      // 2) Coordinates first: "500000 4649776 33S"
+      m = s.match(
+        /^([0-9]+(?:\.[0-9]+)?)\s+([0-9]+(?:\.[0-9]+)?)\s+(\d{1,2})([C-HJ-NP-X])$/i
+      );
+      if (m) {
+        easting = Number(m[1]);
+        northing = Number(m[2]);
+        zoneNum = Number(m[3]);
+        zoneLetter = m[4].toUpperCase();
+      } else {
+        // 3) Tokens fallback
+        const tokens = s.split(' ');
+        const zl = tokens.find((t) => /^(\d{1,2})([C-HJ-NP-X])$/i.test(t));
+        const nums = tokens.filter((t) => /^[0-9]+(?:\.[0-9]+)?$/.test(t));
+        if (zl && nums.length >= 2) {
+          const mm = zl.match(/^(\d{1,2})([C-HJ-NP-X])$/i)!;
+          zoneNum = Number(mm[1]);
+          zoneLetter = mm[2].toUpperCase();
+          easting = Number(nums[0]);
+          northing = Number(nums[1]);
+        }
+      }
+    }
+    if (
+      zoneNum === null ||
+      !zoneLetter ||
+      easting === null ||
+      northing === null
+    )
+      return null;
+    try {
+      const converter = new (UTM as any)();
+      const res = converter.convertUtmToLatLng(
+        easting,
+        northing,
+        zoneNum,
+        zoneLetter
+      );
+      // Library returns keys like lat/lng or Lat/Lon depending on version
+      const lat = typeof res.lat === 'number' ? res.lat : res.Lat;
+      const lng = typeof res.lng === 'number' ? res.lng : res.Lon;
+      if (typeof lat === 'number' && typeof lng === 'number') {
+        return { lat, lng };
+      }
+    } catch {}
+    return null;
   }
 
   // Helper function to convert DMS (Degrees, Minutes, Seconds) to decimal degrees
@@ -765,6 +927,7 @@ export function FileUploadCore({
       timestamp,
       cameraSerial: (tags as any)?.InternalSerialNumber ?? '',
       gpsData: null as GpsData | null,
+      timezone: tz,
     };
   }
 
@@ -1105,7 +1268,7 @@ export function FileUploadCore({
               timestamp: Number(point.time),
               lat: point.latitude,
               lng: point.longitude,
-              alt: point.elevation || 0,
+              alt: convertAltitude(point.elevation || 0),
             }))
           )
           .sort((a, b) => a.timestamp - b.timestamp);
@@ -1152,20 +1315,25 @@ export function FileUploadCore({
         // Initialize time ranges based on image timestamps
         const initialRanges: { [day: number]: { start: string; end: string } } =
           {};
+        const dayGroups: { [day: number]: number[] } = {};
+
         imagePoints.forEach(({ timestamp }) => {
           const date = new Date(timestamp!);
           const day = date.getUTCDate();
-          const hours = date.getUTCHours().toString().padStart(2, '0');
-          const minutes = date.getUTCMinutes().toString().padStart(2, '0');
-          const timeStr = `${hours}:${minutes}`;
-          if (!initialRanges[day]) {
-            initialRanges[day] = { start: timeStr, end: timeStr };
-          } else {
-            if (timeStr < initialRanges[day].start)
-              initialRanges[day].start = timeStr;
-            if (timeStr > initialRanges[day].end)
-              initialRanges[day].end = timeStr;
-          }
+          const minutes = date.getUTCHours() * 60 + date.getUTCMinutes();
+          if (!dayGroups[day]) dayGroups[day] = [];
+          dayGroups[day].push(minutes);
+        });
+
+        Object.keys(dayGroups).forEach((dayStr) => {
+          const day = parseInt(dayStr);
+          const times = dayGroups[day];
+          const minTime = Math.min(...times);
+          const maxTime = Math.max(...times);
+          initialRanges[day] = {
+            start: minutesToTime(minTime),
+            end: minutesToTime(maxTime),
+          };
         });
         setTimeRanges(initialRanges);
 
@@ -1183,8 +1351,14 @@ export function FileUploadCore({
               newRow['Timestamp'] = row[columnMapping.timestamp];
             if (columnMapping.filepath)
               newRow['FilePath'] = row[columnMapping.filepath];
-            if (columnMapping.lat) newRow['Latitude'] = row[columnMapping.lat];
-            if (columnMapping.lng) newRow['Longitude'] = row[columnMapping.lng];
+            if (!useUtm) {
+              if (columnMapping.lat)
+                newRow['Latitude'] = row[columnMapping.lat];
+              if (columnMapping.lng)
+                newRow['Longitude'] = row[columnMapping.lng];
+            } else if (utmColumn) {
+              newRow['UTM'] = row[utmColumn];
+            }
             if (columnMapping.alt) newRow['Altitude'] = row[columnMapping.alt];
             return newRow;
           });
@@ -1194,21 +1368,35 @@ export function FileUploadCore({
             (row: any) => row['Timestamp']
           );
           const hasFilepath = results.data.some((row: any) => row['FilePath']);
-
+          const hasUtm = useUtm && results.data.some((row: any) => row['UTM']);
           setAssociateByTimestamp(hasTimestamp && !hasFilepath);
           // Build raw CSV data
           const rawData = results.data
-            .map((row: any) => ({
-              timestamp: hasTimestamp
-                ? timestampInMs
-                  ? Number(row['Timestamp'])
-                  : Number(row['Timestamp']) * 1000
-                : undefined,
-              filepath: hasFilepath ? row['FilePath'] : undefined,
-              lat: Number(row['Latitude']),
-              lng: Number(row['Longitude']),
-              alt: Number(row['Altitude']),
-            }))
+            .map((row: any) => {
+              let lat: number | undefined;
+              let lng: number | undefined;
+              if (hasUtm) {
+                const conv = parseUtmString(row['UTM']);
+                if (conv) {
+                  lat = conv.lat;
+                  lng = conv.lng;
+                }
+              } else {
+                lat = Number(row['Latitude']);
+                lng = Number(row['Longitude']);
+              }
+              return {
+                timestamp: hasTimestamp
+                  ? detectAndParseTimestamp(row['Timestamp'], commonTimezone) ??
+                    undefined
+                  : undefined,
+                filepath: hasFilepath ? row['FilePath'] : undefined,
+                lat: lat as number,
+                lng: lng as number,
+                alt: convertAltitude(Number(row['Altitude'])),
+              };
+            })
+            .filter((row) => !hasTimestamp || row.timestamp !== null)
             .sort((a, b) =>
               hasTimestamp
                 ? a.timestamp! - b.timestamp!
@@ -1270,20 +1458,25 @@ export function FileUploadCore({
             const initialRanges: {
               [day: number]: { start: string; end: string };
             } = {};
+            const dayGroups: { [day: number]: number[] } = {};
+
             imagePoints.forEach(({ timestamp }) => {
               const date = new Date(timestamp!);
               const day = date.getUTCDate();
-              const hours = date.getUTCHours().toString().padStart(2, '0');
-              const minutes = date.getUTCMinutes().toString().padStart(2, '0');
-              const timeStr = `${hours}:${minutes}`;
-              if (!initialRanges[day]) {
-                initialRanges[day] = { start: timeStr, end: timeStr };
-              } else {
-                if (timeStr < initialRanges[day].start)
-                  initialRanges[day].start = timeStr;
-                if (timeStr > initialRanges[day].end)
-                  initialRanges[day].end = timeStr;
-              }
+              const minutes = date.getUTCHours() * 60 + date.getUTCMinutes();
+              if (!dayGroups[day]) dayGroups[day] = [];
+              dayGroups[day].push(minutes);
+            });
+
+            Object.keys(dayGroups).forEach((dayStr) => {
+              const day = parseInt(dayStr);
+              const times = dayGroups[day];
+              const minTime = Math.min(...times);
+              const maxTime = Math.max(...times);
+              initialRanges[day] = {
+                start: minutesToTime(minTime),
+                end: minutesToTime(maxTime),
+              };
             });
             setTimeRanges(initialRanges);
           } else if (!hasTimestamp && hasFilepath) {
@@ -1320,24 +1513,26 @@ export function FileUploadCore({
               const initialRanges: {
                 [day: number]: { start: string; end: string };
               } = {};
+              const dayGroups: { [day: number]: number[] } = {};
+
               rawData.forEach(({ timestamp }) => {
                 if (timestamp === undefined) return;
                 const date = new Date(timestamp!);
                 const day = date.getUTCDate();
-                const hours = date.getUTCHours().toString().padStart(2, '0');
-                const minutes = date
-                  .getUTCMinutes()
-                  .toString()
-                  .padStart(2, '0');
-                const timeStr = `${hours}:${minutes}`;
-                if (!initialRanges[day]) {
-                  initialRanges[day] = { start: timeStr, end: timeStr };
-                } else {
-                  if (timeStr < initialRanges[day].start)
-                    initialRanges[day].start = timeStr;
-                  if (timeStr > initialRanges[day].end)
-                    initialRanges[day].end = timeStr;
-                }
+                const minutes = date.getUTCHours() * 60 + date.getUTCMinutes();
+                if (!dayGroups[day]) dayGroups[day] = [];
+                dayGroups[day].push(minutes);
+              });
+
+              Object.keys(dayGroups).forEach((dayStr) => {
+                const day = parseInt(dayStr);
+                const times = dayGroups[day];
+                const minTime = Math.min(...times);
+                const maxTime = Math.max(...times);
+                initialRanges[day] = {
+                  start: minutesToTime(minTime),
+                  end: minutesToTime(maxTime),
+                };
               });
               setTimeRanges(initialRanges);
             }
@@ -1372,6 +1567,27 @@ export function FileUploadCore({
     return `${hours.toString().padStart(2, '0')}:${mins
       .toString()
       .padStart(2, '0')}`;
+  };
+
+  // Helper: gets the actual time range for a specific day from the data
+  const getDayTimeRange = (day: number, data: CsvFile) => {
+    const dayData = data.filter((row) => {
+      if (row.timestamp === undefined) return false;
+      const date = new Date(row.timestamp!);
+      return date.getUTCDate() === day;
+    });
+
+    if (dayData.length === 0) return { min: 0, max: 1439 }; // fallback to full day
+
+    const times = dayData.map((row) => {
+      const date = new Date(row.timestamp!);
+      return date.getUTCHours() * 60 + date.getUTCMinutes();
+    });
+
+    return {
+      min: Math.min(...times),
+      max: Math.max(...times),
+    };
   };
 
   // Filter csvData rows by each day's selected time range.
@@ -1541,17 +1757,17 @@ export function FileUploadCore({
                 ? 'Some images do not have GPS data. Please upload the gpx or csv file containing the GPS data for all images.'
                 : 'The selected images have GPS data. Would you like to upload a separate file containing the GPS data for all images?'}
             </Form.Text>
-            <Form.Text className='d-block mb-0' style={{ fontSize: '12px' }}>
+            <Form.Text className="d-block mb-0" style={{ fontSize: '12px' }}>
               Your CSV file should have the following columns (their headings
               may be different):
-              <ul className='mb-0'>
+              <ul className="mb-0">
                 <li>timestamp and/or filepath</li>
                 <li>lat</li>
                 <li>lng</li>
                 <li>alt</li>
               </ul>
             </Form.Text>
-            <Form.Text className='d-block mb-0' style={{ fontSize: '12px' }}>
+            <Form.Text className="d-block mb-0" style={{ fontSize: '12px' }}>
               If your data contains file paths instead of timestamps, the format
               should be:{' '}
               <code className="text-primary" style={{ fontSize: '14px' }}>
@@ -1581,7 +1797,7 @@ export function FileUploadCore({
           >
             <div className="d-flex flex-row gap-2 align-items-center">
               <div style={{ flex: 0.5 }}>
-                <Form.Label className="mb-0">FilePath (optional)</Form.Label>
+                <Form.Label className="mb-0">FilePath</Form.Label>
                 <Select
                   options={[
                     { label: 'None', value: '' },
@@ -1612,19 +1828,7 @@ export function FileUploadCore({
                 or
               </p>
               <div style={{ flex: 0.5 }}>
-                <div className="d-flex flex-row gap-2 align-items-center justify-content-between">
-                  <Form.Label className="mb-0">Timestamp (optional)</Form.Label>
-                  <div className="d-flex flex-row gap-2 align-items-center">
-                    <label className="me-2">ms</label>
-                    <Form.Check
-                      type="switch"
-                      id="timestamp-in-ms"
-                      checked={!timestampInMs}
-                      onChange={(e) => setTimestampInMs(!e.target.checked)}
-                    />
-                    <label>s</label>
-                  </div>
-                </div>
+                <Form.Label className="mb-0">Timestamp</Form.Label>
                 <Select
                   options={[
                     { label: 'None', value: '' },
@@ -1649,46 +1853,93 @@ export function FileUploadCore({
                 />
               </div>
             </div>
-            <div>
-              <Form.Label className="mb-0">Latitude</Form.Label>
-              <Select
-                options={headerFields.map((f) => ({ label: f, value: f }))}
-                value={
-                  columnMapping.lat
-                    ? { label: columnMapping.lat, value: columnMapping.lat }
-                    : null
-                }
-                onChange={(opt) =>
-                  setColumnMapping({
-                    ...columnMapping,
-                    lat: opt ? opt.value : undefined,
-                  })
-                }
-                placeholder="Select Latitude column"
-                className="text-black"
-              />
+            <div className="d-flex flex-row gap-2 align-items-start mt-2">
+              <div style={{ flex: 0.5 }}>
+                <Form.Label className="mb-0">Latitude</Form.Label>
+                <Select
+                  options={headerFields.map((f) => ({ label: f, value: f }))}
+                  value={
+                    columnMapping.lat
+                      ? { label: columnMapping.lat, value: columnMapping.lat }
+                      : null
+                  }
+                  onChange={(opt) => {
+                    setUseUtm(false);
+                    setColumnMapping({
+                      ...columnMapping,
+                      lat: opt ? opt.value : undefined,
+                    });
+                  }}
+                  placeholder="Select Latitude column"
+                  className="text-black"
+                />
+                <div className="mt-2">
+                  <Form.Label className="mb-0">Longitude</Form.Label>
+                  <Select
+                    options={headerFields.map((f) => ({ label: f, value: f }))}
+                    value={
+                      columnMapping.lng
+                        ? { label: columnMapping.lng, value: columnMapping.lng }
+                        : null
+                    }
+                    onChange={(opt) => {
+                      setUseUtm(false);
+                      setColumnMapping({
+                        ...columnMapping,
+                        lng: opt ? opt.value : undefined,
+                      });
+                    }}
+                    placeholder="Select Longitude column"
+                    className="text-black"
+                  />
+                </div>
+              </div>
+              <p
+                className="mb-0"
+                style={{
+                  width: '50px',
+                  textAlign: 'center',
+                  alignSelf: 'center',
+                }}
+              >
+                or
+              </p>
+              <div style={{ flex: 0.5, alignSelf: 'center' }}>
+                <Form.Label className="mb-0">UTM</Form.Label>
+                <Select
+                  options={[
+                    { label: 'None', value: '' },
+                    ...headerFields.map((f) => ({ label: f, value: f })),
+                  ]}
+                  value={
+                    utmColumn
+                      ? { label: utmColumn, value: utmColumn }
+                      : { label: 'None', value: '' }
+                  }
+                  onChange={(opt) => {
+                    const val = opt && opt.value ? opt.value : undefined;
+                    setUtmColumn(val);
+                    setUseUtm(Boolean(val));
+                  }}
+                  placeholder="None"
+                  className="text-black"
+                />
+              </div>
             </div>
             <div>
-              <Form.Label className="mb-0">Longitude</Form.Label>
-              <Select
-                options={headerFields.map((f) => ({ label: f, value: f }))}
-                value={
-                  columnMapping.lng
-                    ? { label: columnMapping.lng, value: columnMapping.lng }
-                    : null
-                }
-                onChange={(opt) =>
-                  setColumnMapping({
-                    ...columnMapping,
-                    lng: opt ? opt.value : undefined,
-                  })
-                }
-                placeholder="Select Longitude column"
-                className="text-black"
-              />
-            </div>
-            <div>
-              <Form.Label className="mb-0">Altitude (optional)</Form.Label>
+              <div className="d-flex flex-row gap-3 align-items-center">
+                <Form.Label className="mb-0">Altitude (optional)</Form.Label>
+                <div className="d-flex flex-row gap-1 align-items-center">
+                  <label className="me-2">ft</label>
+                  <Form.Check
+                    type="switch"
+                    id="altitude-in-meters"
+                    checked={altitudeInMeters}
+                    onChange={(e) => setAltitudeInMeters(e.target.checked)}
+                  />
+                  <label>m</label>
+                </div>
+              </div>
               <div className="d-flex flex-row gap-2 align-items-center">
                 <Select
                   options={[
@@ -1771,42 +2022,71 @@ export function FileUploadCore({
                 )
                   .sort((a: number, b: number) => a - b)
                   .map((day: number) => {
+                    const data = fullCsvData || csvData.data;
+                    const dayRange = getDayTimeRange(day, data);
                     const startMinutes = timeToMinutes(
-                      timeRanges[day]?.start || '00:00'
+                      timeRanges[day]?.start || minutesToTime(dayRange.min)
                     );
                     const endMinutes = timeToMinutes(
-                      timeRanges[day]?.end || '23:59'
+                      timeRanges[day]?.end || minutesToTime(dayRange.max)
                     );
+
+                    const handleStartTimeChange = (timeStr: string) => {
+                      const newStartMinutes = timeToMinutes(timeStr);
+                      if (newStartMinutes <= endMinutes) {
+                        updateTimeRange(
+                          day,
+                          timeStr,
+                          timeRanges[day]?.end || minutesToTime(dayRange.max)
+                        );
+                      }
+                    };
+
+                    const handleEndTimeChange = (timeStr: string) => {
+                      const newEndMinutes = timeToMinutes(timeStr);
+                      if (newEndMinutes >= startMinutes) {
+                        updateTimeRange(
+                          day,
+                          timeRanges[day]?.start || minutesToTime(dayRange.min),
+                          timeStr
+                        );
+                      }
+                    };
+
                     return (
                       <div
                         key={`day-${day}`}
                         className="d-flex flex-column gap-2 mt-2"
                       >
                         <span className="fw-bold">
-                          {new Date(
-                            (fullCsvData || csvData.data)[0].timestamp!
-                          ).toLocaleDateString()}
+                          {new Date(data[0].timestamp!).toLocaleDateString()}
                         </span>
                         <div className="d-flex align-items-center gap-2">
                           <label className="mb-0">Start:</label>
-                          <span
-                            className="badge bg-success"
-                            style={{ minWidth: '60px' }}
-                          >
-                            {minutesToTime(startMinutes)}
-                          </span>
+                          <input
+                            type="time"
+                            className="form-control"
+                            style={{ width: '120px' }}
+                            value={minutesToTime(startMinutes)}
+                            onChange={(e) =>
+                              handleStartTimeChange(e.target.value)
+                            }
+                          />
                           <label className="mb-0">End:</label>
-                          <span
-                            className="badge bg-primary"
-                            style={{ minWidth: '60px' }}
-                          >
-                            {minutesToTime(endMinutes)}
-                          </span>
+                          <input
+                            type="time"
+                            className="form-control"
+                            style={{ width: '120px' }}
+                            value={minutesToTime(endMinutes)}
+                            onChange={(e) =>
+                              handleEndTimeChange(e.target.value)
+                            }
+                          />
                           <div className="flex-grow-1">
                             <Slider
                               range
-                              min={0}
-                              max={1439}
+                              min={dayRange.min}
+                              max={dayRange.max}
                               value={[startMinutes, endMinutes]}
                               onChange={(vals) => {
                                 if (Array.isArray(vals)) {

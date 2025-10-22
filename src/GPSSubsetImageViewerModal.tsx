@@ -4,7 +4,7 @@ import { GPSData } from './GPSSubset';
 interface ImageData {
   currentImageIndex: number;
   currentFilteredPoints: GPSData[];
-  objectUrlMap: Record<string, string>;
+  getObjectUrl: (filepath: string) => string | null;
   imageRotation: number;
 }
 
@@ -30,7 +30,7 @@ export default function GPSSubsetImageViewerModal({
   const {
     currentImageIndex,
     currentFilteredPoints,
-    objectUrlMap,
+    getObjectUrl,
     imageRotation,
   } = imageData;
   const {
@@ -89,50 +89,62 @@ export default function GPSSubsetImageViewerModal({
               overflow: 'hidden',
             }}
           >
-            {currentFilteredPoints[currentImageIndex] && (
-              <>
-                {currentFilteredPoints[currentImageIndex].filepath &&
-                  objectUrlMap[
-                    currentFilteredPoints[
-                      currentImageIndex
-                    ].filepath!.toLowerCase()
-                  ] && (
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '100%',
-                        height: '100%',
-                        minHeight:
-                          imageRotation % 180 === 90 ? '200px' : 'auto',
-                      }}
-                    >
-                      <img
-                        src={
-                          objectUrlMap[
-                            currentFilteredPoints[
-                              currentImageIndex
-                            ].filepath!.toLowerCase()
-                          ]
-                        }
-                        alt={currentFilteredPoints[currentImageIndex].filepath}
-                        style={{
-                          maxWidth: imageRotation % 180 === 90 ? '65vh' : '95%',
-                          maxHeight:
-                            imageRotation % 180 === 90 ? '65vw' : '95%',
-                          width: 'auto',
-                          height: 'auto',
-                          objectFit: 'contain',
-                          transform: `rotate(${imageRotation}deg)`,
-                          transformOrigin: 'center center',
-                          transition: 'all 0.3s ease',
-                        }}
-                      />
+            {currentFilteredPoints[currentImageIndex] && (() => {
+              const currentPoint = currentFilteredPoints[currentImageIndex];
+              const imageUrl = currentPoint.filepath ? getObjectUrl(currentPoint.filepath) : null;
+              
+              if (!imageUrl) {
+                return (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '100%',
+                      height: '100%',
+                      minHeight: '200px',
+                    }}
+                  >
+                    <div style={{ textAlign: 'center' }}>
+                      <div>Loading image...</div>
+                      <small className="text-muted">
+                        {currentPoint.filepath}
+                      </small>
                     </div>
-                  )}
-              </>
-            )}
+                  </div>
+                );
+              }
+              
+              return (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '100%',
+                    height: '100%',
+                    minHeight:
+                      imageRotation % 180 === 90 ? '200px' : 'auto',
+                  }}
+                >
+                  <img
+                    src={imageUrl}
+                    alt={currentPoint.filepath}
+                    style={{
+                      maxWidth: imageRotation % 180 === 90 ? '65vh' : '95%',
+                      maxHeight:
+                        imageRotation % 180 === 90 ? '65vw' : '95%',
+                      width: 'auto',
+                      height: 'auto',
+                      objectFit: 'contain',
+                      transform: `rotate(${imageRotation}deg)`,
+                      transformOrigin: 'center center',
+                      transition: 'all 0.3s ease',
+                    }}
+                  />
+                </div>
+              );
+            })()}
           </Card.Body>
 
           {/* Footer */}

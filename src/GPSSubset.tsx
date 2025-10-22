@@ -106,23 +106,88 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
   const handleEditStart = useCallback(() => setIsDrawing(true), []);
   const handleEditStop = useCallback(() => setIsDrawing(false), []);
 
-  // Add object URL mapping for imageFiles to show thumbnails
+  // Lazy-loaded object URL mapping for imageFiles
   const [objectUrlMap, setObjectUrlMap] = useState<Record<string, string>>({});
-  useEffect(() => {
-    if (imageFiles) {
-      const map: Record<string, string> = {};
-      imageFiles.forEach((file) => {
-        const relativePath = (file as any).webkitRelativePath as string;
-        if (relativePath) {
-          map[relativePath.toLowerCase()] = URL.createObjectURL(file);
+  const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
+  
+  // Function to get or create object URL for a specific filepath
+  const getObjectUrl = useCallback((filepath: string): string | null => {
+    if (!imageFiles || !filepath) return null;
+    
+    const normalizedPath = filepath.toLowerCase();
+    
+    // Return existing URL if already loaded
+    if (objectUrlMap[normalizedPath]) {
+      return objectUrlMap[normalizedPath];
+    }
+    
+    // Find the corresponding file and create object URL
+    const file = imageFiles.find((f) => {
+      const relativePath = (f as any).webkitRelativePath as string;
+      return relativePath && relativePath.toLowerCase() === normalizedPath;
+    });
+    
+    if (file) {
+      // Mark as loading to prevent duplicate requests
+      if (!loadingImages.has(normalizedPath)) {
+        setLoadingImages(prev => new Set(prev).add(normalizedPath));
+        
+        // Create object URL asynchronously to avoid blocking
+        setTimeout(() => {
+          const url = URL.createObjectURL(file);
+          setObjectUrlMap(prev => ({
+            ...prev,
+            [normalizedPath]: url
+          }));
+          setLoadingImages(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(normalizedPath);
+            return newSet;
+          });
+        }, 0);
+      }
+      return null; // Return null while loading
+    }
+    
+    return null;
+  }, [imageFiles, objectUrlMap, loadingImages]);
+
+  // Cleanup function to revoke unused object URLs
+  const cleanupUnusedUrls = useCallback(() => {
+    if (!imageFiles) return;
+    
+    const currentFilePaths = new Set(
+      imageFiles.map(f => ((f as any).webkitRelativePath as string)?.toLowerCase()).filter(Boolean)
+    );
+    
+    setObjectUrlMap(prev => {
+      const newMap: Record<string, string> = {};
+      let hasChanges = false;
+      
+      Object.entries(prev).forEach(([path, url]) => {
+        if (currentFilePaths.has(path)) {
+          newMap[path] = url;
+        } else {
+          URL.revokeObjectURL(url);
+          hasChanges = true;
         }
       });
-      setObjectUrlMap(map);
-      return () => {
-        Object.values(map).forEach((url) => URL.revokeObjectURL(url));
-      };
-    }
+      
+      return hasChanges ? newMap : prev;
+    });
   }, [imageFiles]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(objectUrlMap).forEach(url => URL.revokeObjectURL(url));
+    };
+  }, []);
+
+  // Cleanup unused URLs when imageFiles change
+  useEffect(() => {
+    cleanupUnusedUrls();
+  }, [cleanupUnusedUrls]);
 
   const validGpsData = gpsData.filter(
     (point) => Number.isFinite(point.lat) && Number.isFinite(point.lng)
@@ -180,6 +245,44 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
     return Array.from(union.values());
   }, [deletedPointsStack, currentFilteredPoints, createPointKey]);
 
+  // Jitter duplicate coordinates slightly so overlapping markers are visible
+  const adjustedPositions = React.useMemo(() => {
+    const byCoordKey: Record<string, any[]> = {};
+    const adjusted: Record<string, { lat: number; lng: number }> = {};
+    const keyFor = (lat: number, lng: number) => `${lat},${lng}`;
+
+    allPoints.forEach((point) => {
+      if (point.lat != null && point.lng != null) {
+        const key = keyFor(point.lat, point.lng);
+        (byCoordKey[key] = byCoordKey[key] || []).push(point);
+      }
+    });
+
+    Object.values(byCoordKey).forEach((group) => {
+      if (group.length === 1) {
+        const point = group[0];
+        adjusted[createPointKey(point)] = { lat: point.lat, lng: point.lng };
+        return;
+      }
+
+      // Spread duplicates around a small circle (~5m radius)
+      group.forEach((point, index) => {
+        const latRad = (point.lat * Math.PI) / 180;
+        const radiusDeg = 0.00005; // ~5.5m in latitude
+        const angle = (2 * Math.PI * index) / group.length;
+        const dLat = radiusDeg * Math.sin(angle);
+        const dLng =
+          (radiusDeg * Math.cos(angle)) / Math.max(Math.cos(latRad), 1e-6);
+        adjusted[createPointKey(point)] = {
+          lat: point.lat + dLat,
+          lng: point.lng + dLng,
+        };
+      });
+    });
+
+    return adjusted;
+  }, [allPoints, createPointKey]);
+
   const removedPoints = useMemo(
     () => allPoints.filter((p) => !visibleKeys.has(createPointKey(p))),
     [allPoints, visibleKeys, createPointKey]
@@ -198,8 +301,17 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
     const nextVisible = validGpsData.filter(
       (p) => !manualRemovedKeys.has(createPointKey(p))
     );
-    setCurrentFilteredPoints(nextVisible);
-  }, [validGpsData, deletedPointsStack, createPointKey]);
+    
+    // Only update if the filtered points have actually changed
+    const currentKeys = new Set(currentFilteredPoints.map(p => createPointKey(p)));
+    const nextKeys = new Set(nextVisible.map(p => createPointKey(p)));
+    const hasChanged = currentKeys.size !== nextKeys.size || 
+      [...currentKeys].some(key => !nextKeys.has(key));
+    
+    if (hasChanged) {
+      setCurrentFilteredPoints(nextVisible);
+    }
+  }, [validGpsData, deletedPointsStack]);
   // When a polygon is created
   const handleCreated = useCallback((e: any) => {
     const { layer } = e;
@@ -522,7 +634,7 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
               </li>
               <li>Click "Undo" to reverse the last action.</li>
               <li>
-                <span style={{ color: 'blue' }}>Blue points</span> represent
+                <span style={{ color: 'orange' }}>Orange points</span> represent
                 images that are included.
               </li>
               <li>
@@ -558,14 +670,20 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
                 edit={editOptions}
               />
             </FeatureGroup>
-            {currentFilteredPoints.map((point, index) => (
-              <CircleMarker
-                key={index}
-                center={[point.lat, point.lng]}
-                radius={3}
-                color='blue'
-                interactive={!isDrawing}
-              >
+            {currentFilteredPoints.map((point, index) => {
+              const pointKey = createPointKey(point);
+              const pos = adjustedPositions[pointKey] || { lat: point.lat, lng: point.lng };
+              return (
+                <CircleMarker
+                  key={index}
+                  center={[pos.lat, pos.lng]}
+                  radius={5}
+                  color='orange'
+                  fillColor='orange'
+                  fillOpacity={0.7}
+                  weight={2}
+                  interactive={!isDrawing}
+                >
                 <Popup>
                   <div>
                     {point.timestamp && (
@@ -588,33 +706,58 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
                     <div>
                       <strong>Alt:</strong> {point.alt}
                     </div>
-                    {point.filepath &&
-                      objectUrlMap[point.filepath.toLowerCase()] && (
-                        <div style={{ textAlign: 'center', margin: '8px 0' }}>
-                          <img
-                            src={objectUrlMap[point.filepath.toLowerCase()]}
-                            alt={point.filepath}
-                            style={{
-                              maxWidth: '150px',
-                              maxHeight: '150px',
-                              objectFit: 'contain',
-                              display: 'block',
-                              margin: 'auto',
-                            }}
-                          />
-                        </div>
-                      )}
-                    {point.filepath &&
-                      objectUrlMap[point.filepath.toLowerCase()] && (
-                        <Button
-                          className='w-100 mt-2'
-                          variant='primary'
-                          size='sm'
-                          onClick={() => handleViewImage(index)}
-                        >
-                          View Image
-                        </Button>
-                      )}
+                    {point.filepath && (() => {
+                      const imageUrl = getObjectUrl(point.filepath);
+                      const isLoading = loadingImages.has(point.filepath.toLowerCase());
+                      
+                      if (isLoading) {
+                        return (
+                          <div style={{ textAlign: 'center', margin: '8px 0' }}>
+                            <div style={{ 
+                              width: '150px', 
+                              height: '150px', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              border: '1px dashed #ccc',
+                              margin: 'auto'
+                            }}>
+                              Loading...
+                            </div>
+                          </div>
+                        );
+                      }
+                      
+                      if (imageUrl) {
+                        return (
+                          <>
+                            <div style={{ textAlign: 'center', margin: '8px 0' }}>
+                              <img
+                                src={imageUrl}
+                                alt={point.filepath}
+                                style={{
+                                  maxWidth: '150px',
+                                  maxHeight: '150px',
+                                  objectFit: 'contain',
+                                  display: 'block',
+                                  margin: 'auto',
+                                }}
+                              />
+                            </div>
+                            <Button
+                              className='w-100 mt-2'
+                              variant='primary'
+                              size='sm'
+                              onClick={() => handleViewImage(index)}
+                            >
+                              View Image
+                            </Button>
+                          </>
+                        );
+                      }
+                      
+                      return null;
+                    })()}
                     <Button
                       className='w-100 mt-2'
                       variant='danger'
@@ -626,15 +769,22 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
                   </div>
                 </Popup>
               </CircleMarker>
-            ))}
-            {removedPoints.map((point, index) => (
-              <CircleMarker
-                key={`removed-${index}`}
-                center={[point.lat, point.lng]}
-                radius={3}
-                color='red'
-                interactive={!isDrawing}
-              >
+              );
+            })}
+            {removedPoints.map((point, index) => {
+              const pointKey = createPointKey(point);
+              const pos = adjustedPositions[pointKey] || { lat: point.lat, lng: point.lng };
+              return (
+                <CircleMarker
+                  key={`removed-${index}`}
+                  center={[pos.lat, pos.lng]}
+                  radius={5}
+                  color='red'
+                  fillColor='red'
+                  fillOpacity={0.7}
+                  weight={2}
+                  interactive={!isDrawing}
+                >
                 <Popup>
                   <div>
                     {point.timestamp && (
@@ -668,7 +818,8 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
                   </div>
                 </Popup>
               </CircleMarker>
-            ))}
+              );
+            })}
           </MapContainer>
           <div
             className='d-flex flex-row gap-2 p-2'
@@ -705,7 +856,7 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
         imageData={{
           currentImageIndex,
           currentFilteredPoints,
-          objectUrlMap,
+          getObjectUrl,
           imageRotation,
         }}
         handlers={{

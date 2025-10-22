@@ -58,6 +58,44 @@ export default function DensityMap({
   const [viewerImageId, setViewerImageId] = useState<string | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
 
+  // Jitter duplicate coordinates slightly so overlapping markers are visible
+  const adjustedPositions = React.useMemo(() => {
+    const byCoordKey: Record<string, any[]> = {};
+    const adjusted: Record<string, { latitude: number; longitude: number }> = {};
+    const keyFor = (lat: number, lng: number) => `${lat},${lng}`;
+
+    images.forEach((img) => {
+      if (img.latitude != null && img.longitude != null) {
+        const key = keyFor(img.latitude, img.longitude);
+        (byCoordKey[key] = byCoordKey[key] || []).push(img);
+      }
+    });
+
+    Object.values(byCoordKey).forEach((group) => {
+      if (group.length === 1) {
+        const img = group[0];
+        adjusted[img.id] = { latitude: img.latitude, longitude: img.longitude };
+        return;
+      }
+
+      // Spread duplicates around a small circle (~5m radius)
+      group.forEach((img, index) => {
+        const latRad = (img.latitude * Math.PI) / 180;
+        const radiusDeg = 0.00005; // ~5.5m in latitude
+        const angle = (2 * Math.PI * index) / group.length;
+        const dLat = radiusDeg * Math.sin(angle);
+        const dLng =
+          (radiusDeg * Math.cos(angle)) / Math.max(Math.cos(latRad), 1e-6);
+        adjusted[img.id] = {
+          latitude: img.latitude + dLat,
+          longitude: img.longitude + dLng,
+        };
+      });
+    });
+
+    return adjusted;
+  }, [images]);
+
   const openViewer = (imageId: string) => {
     // Exit fullscreen if currently active when opening image viewer
     if (document.fullscreenElement) {
@@ -215,7 +253,11 @@ export default function DensityMap({
         .forEach((a) => {
           const img = images.find((img) => img.id === a.imageId);
           if (!img || img.latitude == null || img.longitude == null) return;
-          const marker = L.circleMarker([img.latitude, img.longitude], {
+          const pos = adjustedPositions[img.id] || {
+            latitude: img.latitude,
+            longitude: img.longitude,
+          };
+          const marker = L.circleMarker([pos.latitude, pos.longitude], {
             color: 'orange',
             radius: 5,
           });
@@ -271,7 +313,11 @@ export default function DensityMap({
           const img = images.find((img) => img.id === a.imageId);
           if (!img || img.latitude == null || img.longitude == null)
             return null;
-          return [img.latitude, img.longitude] as [number, number];
+          const pos = adjustedPositions[img.id] || {
+            latitude: img.latitude,
+            longitude: img.longitude,
+          };
+          return [pos.latitude, pos.longitude] as [number, number];
         })
         .filter((x): x is [number, number] => x !== null);
       const heat = (L as any).heatLayer(latlngs, {
@@ -345,8 +391,12 @@ export default function DensityMap({
 
         const transectId = img.transectId || 'No Transect';
         const color = transectColors.get(transectId) || '#999999';
+        const pos = adjustedPositions[img.id] || {
+          latitude: img.latitude,
+          longitude: img.longitude,
+        };
 
-        const marker = L.circleMarker([img.latitude, img.longitude], {
+        const marker = L.circleMarker([pos.latitude, pos.longitude], {
           color: color,
           fillColor: color,
           fillOpacity: 0.7,
@@ -359,9 +409,9 @@ export default function DensityMap({
         const popupHtml = `
           <div>
             <strong>Transect:</strong> ${transectNumber}<br/>
-            <strong>Coordinates:</strong> ${img.latitude.toFixed(
+            <strong>Coordinates:</strong> ${pos.latitude.toFixed(
               4
-            )}, ${img.longitude.toFixed(4)}
+            )}, ${pos.longitude.toFixed(4)}
             <div style="margin-top:6px;"><button class="btn btn-sm btn-primary view-image-btn" data-imageid="${
               img.id
             }">View Image</button></div>
