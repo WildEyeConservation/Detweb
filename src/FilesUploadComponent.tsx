@@ -790,7 +790,7 @@ export function FileUploadCore({
     )
       return null;
     try {
-      const converter = new (UTM as any)();
+      const converter = new UTM();
       const res = converter.convertUtmToLatLng(
         easting,
         northing,

@@ -82,7 +82,8 @@
     "react-select": "^5.8.0",
     "sharp": "^0.33.5",
     "shpjs": "^6.1.0",
-    "unique-names-generator": "^4.7.1"
+    "unique-names-generator": "^4.7.1",
+    "utm-latlng": "^1.0.8"
   },
   "devDependencies": {
     "@aws-amplify/backend": "^1.4.0",
@@ -109,10 +110,10 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.6",
     "rollup-plugin-polyfill-node": "^0.13.0",
+    "rxjs": "^7.8.1",
     "tsx": "^4.7.2",
     "typescript": "^5.4.5",
-    "vite": "^5.2.0",
-    "rxjs": "^7.8.1"
+    "vite": "^5.2.0"
   },
   "overrides": {
     "@parcel/watcher": "2.4.1"
