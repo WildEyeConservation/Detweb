@@ -106,6 +106,13 @@ const BaseImage: React.FC<BaseImageProps> = memo(
       }
     }, [fullyLoaded]);
 
+    // Fix: If there are no image files, set fullyLoaded to true
+    useEffect(() => {
+      if (imageFiles.length === 0 && !fullyLoaded) {
+        setFullyLoaded(true);
+      }
+    }, [imageFiles.length, fullyLoaded]);
+
     useEffect(() => {
       if (visible) {
         setVisibleTimestamp(Date.now());
@@ -134,9 +141,13 @@ const BaseImage: React.FC<BaseImageProps> = memo(
     }, [props]);
 
     useEffect(() => {
-      client.models.ImageFile.imagesByimageId({ imageId: image.id }).then(
-        (response) => setImageFiles(response.data)
-      );
+      client.models.ImageFile.imagesByimageId({ imageId: image.id })
+        .then((response) => {
+          setImageFiles(response.data);
+        })
+        .catch((error) => {
+          console.error('Error fetching image files:', error);
+        });
     }, [image]);
 
     useHotkeys(
@@ -374,15 +385,15 @@ const BaseImage: React.FC<BaseImageProps> = memo(
 
     return useMemo(
       () => (
-        <div className='d-flex flex-column align-items-center w-100 h-100 gap-3'>
+        <div className="d-flex flex-column align-items-center w-100 h-100 gap-3">
           <div
-            className='d-flex flex-column align-items-center w-100 h-100'
+            className="d-flex flex-column align-items-center w-100 h-100"
             style={{
               visibility: visible && fullyLoaded ? 'visible' : 'hidden',
               position: 'relative',
             }}
           >
-            {queriesComplete && (
+            {queriesComplete ? (
               <MapContainer
                 key={`${location.id}-${location.annotationSetId}-${visible}-${zoom}`}
                 style={style}
@@ -396,33 +407,61 @@ const BaseImage: React.FC<BaseImageProps> = memo(
                 zoomDelta={1}
                 keyboardPanDelta={0}
               >
-                <LayersControl position='topright'>
-                  {imageFiles.map((image) => (
-                    <LayersControl.BaseLayer
-                      key={image.id}
-                      name={image.type}
-                      checked={true}
+                <LayersControl position="topright">
+                  {imageFiles.length > 0 ? (
+                    imageFiles.map((image) => (
+                      <LayersControl.BaseLayer
+                        key={image.id}
+                        name={image.type}
+                        checked={true}
+                      >
+                        <StorageLayer
+                          eventHandlers={{
+                            load: () => {
+                              setFullyLoaded(true);
+                            },
+                            error: (error) => {
+                              console.error('StorageLayer error:', error);
+                            },
+                          }}
+                          source={source}
+                          bounds={imageBounds}
+                          maxNativeZoom={5}
+                          noWrap={true}
+                        />
+                      </LayersControl.BaseLayer>
+                    ))
+                  ) : (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        background: 'rgba(255,255,255,0.9)',
+                        padding: '20px',
+                        borderRadius: '10px',
+                        textAlign: 'center',
+                        zIndex: 1000,
+                      }}
                     >
-                      {/* {fullImageTypes.includes(image.type) ? 
-              <S3ImageOverlay
-              bounds={imageBounds}
-              source={image.s3key} 
-              url={""} />: */}
-                      <StorageLayer
-                        eventHandlers={{
-                          load: () => {
-                            console.log('All visible tiles have loaded');
-                            setFullyLoaded(true);
-                          },
+                      <div
+                        style={{
+                          color: 'red',
+                          fontWeight: 'bold',
+                          marginBottom: '10px',
                         }}
-                        source={source}
-                        bounds={imageBounds}
-                        maxNativeZoom={5}
-                        noWrap={true}
-                        //getObject={getObject}
-                      />
-                    </LayersControl.BaseLayer>
-                  ))}
+                      >
+                        ⚠️ No Image Files Found
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        Image ID: {image.id}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        This image has no associated files in the database.
+                      </div>
+                    </div>
+                  )}
                   {!isAnnotatePath &&
                     prevImages?.toReversed()?.map((im, idx) => (
                       <LayersControl.Overlay
@@ -457,6 +496,24 @@ const BaseImage: React.FC<BaseImageProps> = memo(
                 {children}
                 <ZoomTracker />
               </MapContainer>
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '100%',
+                  background: '#f0f0f0',
+                  color: 'red',
+                  fontSize: '14px',
+                  textAlign: 'center',
+                  padding: '20px',
+                }}
+              >
+                <div>
+                  <div>Loading image...</div>
+                </div>
+              </div>
             )}
           </div>
           {(next || prev) && fullyLoaded && !hideNavButtons && (
