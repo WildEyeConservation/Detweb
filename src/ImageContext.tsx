@@ -136,6 +136,7 @@ export function ImageContextFromHook({
     prevNeighboursQuery.isSuccess &&
     nextNeighboursQuery.isSuccess;
 
+
   useEffect(() => {
     setCurrentTaskTag(taskTag);
   }, []);
