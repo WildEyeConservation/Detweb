@@ -57,16 +57,59 @@ def process_scoutbot(input_queue, output_queue):
     while True:
         startTime= time.time()
         task = input_queue.get()
-        logging.info(f'GPU Waited {time.time()-startTime} seconds for task {json.dumps(task)}')
+        logging.info(f'GPU Waited {time.time()-startTime} seconds for task enqueue -> dequeue')
         if task is None:  # Sentinel value to stop the process
             output_queue.put(None)
             logging.info('Scoutbot process received sentinel value. Exiting.')
             break
-        _, detects_list = scoutbot.batch_v3(task['files'], 'v3', torch.cuda.current_device())
+
+        files = task['files']
+        keys = task.get('keys', [])
+        if keys:
+            logging.info(f'Processing {len(files)} files. Keys: {keys}')
+        else:
+            logging.info(f'Processing {len(files)} files.')
+
+        detects_list = None
+        failed_flags = []
+        try:
+            _, detects_list = scoutbot.batch_v3(files, 'v3', torch.cuda.current_device())
+            failed_flags = [False] * len(files)
+        except Exception:
+            logging.exception('batch_v3 failed; attempting per-image fallback with validation')
+            detects_list = []
+            for idx, f in enumerate(files):
+                key_for_file = keys[idx] if idx < len(keys) else None
+                # Validate file exists and is readable
+                try:
+                    valid = os.path.exists(f) and os.path.getsize(f) > 0
+                except Exception:
+                    valid = False
+                if not valid:
+                    logging.warning(f'Invalid or unreadable image. key={key_for_file} path={f}. Marking as no-detects.')
+                    detects_list.append([])
+                    failed_flags.append(True)
+                    continue
+                try:
+                    _, dl = scoutbot.batch_v3([f], 'v3', torch.cuda.current_device())
+                    # dl may be list of one or similar structure
+                    if isinstance(dl, list) and dl:
+                        detects_list.append(dl[0])
+                    else:
+                        detects_list.append(dl)
+                    failed_flags.append(False)
+                except Exception:
+                    logging.exception(f'Detection failed for single image. key={key_for_file} path={f}. Marking as no-detects.')
+                    detects_list.append([])
+                    failed_flags.append(True)
+
         # Delete the files
-        for file in task['files']:
-            os.remove(file)
-        output_queue.put((detects_list, task['message']))
+        for file in files:
+            try:
+                os.remove(file)
+            except Exception:
+                pass
+        output_queue.put((detects_list, failed_flags, task['message']))
 
 def process_output(output_queue):
     while True:
@@ -74,11 +117,19 @@ def process_output(output_queue):
         if output is None:
             logging.info('Output process received sentinel value. Exiting.')
             break
-        detects_list, message = output
+        # Unpack with backward compatibility if needed
+        if isinstance(output, tuple) and len(output) == 3:
+            detects_list, failed_flags, message = output
+        else:
+            detects_list, message = output
+            failed_flags = [False] * len(detects_list)
         body = json.loads(message['Body'])
-        for detects, image in zip(detects_list, body['images']):
+        for idx, image in enumerate(body['images']):
+            detects = detects_list[idx] if idx < len(detects_list) else []
+            failed = failed_flags[idx] if idx < len(failed_flags) else False
             logging.info(f"Image {image['imageId']} detects: {detects}")
             if not detects:
+                src = 'scoutbotv3-failed' if failed else 'scoutbotv3'
                 resp = client.execute(createLocation, variable_values=json.dumps({
                     'height': 0,
                     'imageId': image['imageId'],
@@ -88,7 +139,7 @@ def process_output(output_queue):
                     'width': 0,
                     'setId': body['setId'],
                     'confidence': 0,
-                    'source': 'scoutbotv3'
+                    'source': src
                 }))
                 logging.info(f"Added zero location for image {image['imageId']}.")
             else:
@@ -144,8 +195,8 @@ def main():
                     for key,file in zip(keys,files):
                         s3_client.download_file(body['bucket'], key, file)
                     
-                    # Put task in the input queue
-                    input_queue.put({'files':files, 'message': message})
+                    # Put task in the input queue (also include keys for better logging/debugging)
+                    input_queue.put({'files':files, 'keys': keys, 'message': message})
             else:
                 print('Queue empty.')
                 time.sleep(30)

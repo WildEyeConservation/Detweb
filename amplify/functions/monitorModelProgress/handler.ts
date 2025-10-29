@@ -143,15 +143,9 @@ async function updateProgress(
 
   // 2.3 Process each image using the project's locations
   for (const image of projectImages) {
-    console.log(`Checking locations for image ${image.id}`);
-
     // Filter locations for this specific image
     const imageLocations = projectLocations.filter(
       (location) => location.imageId === image.id
-    );
-
-    console.log(
-      `Found ${imageLocations.length} locations for image ${image.id}`
     );
 
     // Check if any location has the correct source
@@ -202,25 +196,34 @@ async function updateProgress(
     console.log(
       `Found ${duplicateLocationIds.length} duplicate locations to delete`
     );
-    for (const locationId of duplicateLocationIds) {
-      try {
-        await client.graphql({
-          query: deleteLocation,
-          variables: {
-            input: {
-              id: locationId,
-            },
-          },
-        });
-        console.log(`Successfully deleted duplicate location ${locationId}`);
-      } catch (error) {
-        console.error(
-          `Failed to delete duplicate location ${locationId}:`,
-          error
-        );
-      }
-    }
+    // Batch deletion in groups of 20, using Promise.all, continue regardless of failures
+    const BATCH_SIZE = 20;
+    for (let i = 0; i < duplicateLocationIds.length; i += BATCH_SIZE) {
+      const batch = duplicateLocationIds.slice(i, i + BATCH_SIZE);
 
+      const deletePromises = batch.map(async (locationId) => {
+        try {
+          await client.graphql({
+            query: deleteLocation,
+            variables: {
+              input: {
+                id: locationId,
+              },
+            },
+          });
+          console.log(`Successfully deleted duplicate location ${locationId}`);
+        } catch (error) {
+          console.error(
+            `Failed to delete duplicate location ${locationId}:`,
+            error
+          );
+        }
+      });
+
+      // Wait for the current batch to complete, even if some fail
+      await Promise.all(deletePromises);
+    }
+    
     console.log(
       `All images processed for project ${project.id}, updating status to "active"`
     );
