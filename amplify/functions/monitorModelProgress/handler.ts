@@ -149,8 +149,8 @@ async function updateProgress(
     );
 
     // Check if any location has the correct source
-    const hasCorrectSource = imageLocations.some(
-      (location) => location.source === source
+    const hasCorrectSource = imageLocations.some((location) =>
+      location.source.includes(source)
     );
 
     if (hasCorrectSource) {
@@ -223,7 +223,7 @@ async function updateProgress(
       // Wait for the current batch to complete, even if some fail
       await Promise.all(deletePromises);
     }
-    
+
     console.log(
       `All images processed for project ${project.id}, updating status to "active"`
     );

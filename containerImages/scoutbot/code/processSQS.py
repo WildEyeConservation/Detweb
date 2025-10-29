@@ -76,32 +76,9 @@ def process_scoutbot(input_queue, output_queue):
             _, detects_list = scoutbot.batch_v3(files, 'v3', torch.cuda.current_device())
             failed_flags = [False] * len(files)
         except Exception:
-            logging.exception('batch_v3 failed; attempting per-image fallback with validation')
-            detects_list = []
-            for idx, f in enumerate(files):
-                key_for_file = keys[idx] if idx < len(keys) else None
-                # Validate file exists and is readable
-                try:
-                    valid = os.path.exists(f) and os.path.getsize(f) > 0
-                except Exception:
-                    valid = False
-                if not valid:
-                    logging.warning(f'Invalid or unreadable image. key={key_for_file} path={f}. Marking as no-detects.')
-                    detects_list.append([])
-                    failed_flags.append(True)
-                    continue
-                try:
-                    _, dl = scoutbot.batch_v3([f], 'v3', torch.cuda.current_device())
-                    # dl may be list of one or similar structure
-                    if isinstance(dl, list) and dl:
-                        detects_list.append(dl[0])
-                    else:
-                        detects_list.append(dl)
-                    failed_flags.append(False)
-                except Exception:
-                    logging.exception(f'Detection failed for single image. key={key_for_file} path={f}. Marking as no-detects.')
-                    detects_list.append([])
-                    failed_flags.append(True)
+            logging.exception('batch_v3 failed; marking all images as failed and continuing')
+            detects_list = [[] for _ in files]
+            failed_flags = [True] * len(files)
 
         # Delete the files
         for file in files:
