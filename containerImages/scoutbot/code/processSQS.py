@@ -57,36 +57,16 @@ def process_scoutbot(input_queue, output_queue):
     while True:
         startTime= time.time()
         task = input_queue.get()
-        logging.info(f'GPU Waited {time.time()-startTime} seconds for task enqueue -> dequeue')
+        logging.info(f'GPU Waited {time.time()-startTime} seconds for task {json.dumps(task)}')
         if task is None:  # Sentinel value to stop the process
             output_queue.put(None)
             logging.info('Scoutbot process received sentinel value. Exiting.')
             break
-
-        files = task['files']
-        keys = task.get('keys', [])
-        if keys:
-            logging.info(f'Processing {len(files)} files. Keys: {keys}')
-        else:
-            logging.info(f'Processing {len(files)} files.')
-
-        detects_list = None
-        failed_flags = []
-        try:
-            _, detects_list = scoutbot.batch_v3(files, 'v3', torch.cuda.current_device())
-            failed_flags = [False] * len(files)
-        except Exception:
-            logging.exception('batch_v3 failed; marking all images as failed and continuing')
-            detects_list = [[] for _ in files]
-            failed_flags = [True] * len(files)
-
+        _, detects_list = scoutbot.batch_v3(task['files'], 'v3', torch.cuda.current_device())
         # Delete the files
-        for file in files:
-            try:
-                os.remove(file)
-            except Exception:
-                pass
-        output_queue.put((detects_list, failed_flags, task['message']))
+        for file in task['files']:
+            os.remove(file)
+        output_queue.put((detects_list, task['message']))
 
 def process_output(output_queue):
     while True:
@@ -94,19 +74,11 @@ def process_output(output_queue):
         if output is None:
             logging.info('Output process received sentinel value. Exiting.')
             break
-        # Unpack with backward compatibility if needed
-        if isinstance(output, tuple) and len(output) == 3:
-            detects_list, failed_flags, message = output
-        else:
-            detects_list, message = output
-            failed_flags = [False] * len(detects_list)
+        detects_list, message = output
         body = json.loads(message['Body'])
-        for idx, image in enumerate(body['images']):
-            detects = detects_list[idx] if idx < len(detects_list) else []
-            failed = failed_flags[idx] if idx < len(failed_flags) else False
+        for detects, image in zip(detects_list, body['images']):
             logging.info(f"Image {image['imageId']} detects: {detects}")
             if not detects:
-                src = 'scoutbotv3-failed' if failed else 'scoutbotv3'
                 resp = client.execute(createLocation, variable_values=json.dumps({
                     'height': 0,
                     'imageId': image['imageId'],
@@ -116,7 +88,7 @@ def process_output(output_queue):
                     'width': 0,
                     'setId': body['setId'],
                     'confidence': 0,
-                    'source': src
+                    'source': 'scoutbotv3'
                 }))
                 logging.info(f"Added zero location for image {image['imageId']}.")
             else:
@@ -172,8 +144,8 @@ def main():
                     for key,file in zip(keys,files):
                         s3_client.download_file(body['bucket'], key, file)
                     
-                    # Put task in the input queue (also include keys for better logging/debugging)
-                    input_queue.put({'files':files, 'keys': keys, 'message': message})
+                    # Put task in the input queue
+                    input_queue.put({'files':files, 'message': message})
             else:
                 print('Queue empty.')
                 time.sleep(30)
