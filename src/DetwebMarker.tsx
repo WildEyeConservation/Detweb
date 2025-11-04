@@ -30,6 +30,7 @@ interface DetwebMarkerProps {
   ) => L.LatLng | L.LatLng[];
   onShadowDrag?: (id: string, x: number, y: number) => void;
   hideIdenticon?: boolean;
+  onClick?: (annotation: ExtendedAnnotationType) => void;
 }
 
 function createIcon(
@@ -119,6 +120,7 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
       latLng2xy,
       xy2latLng,
       onShadowDrag,
+      onClick,
     } = props;
     const { allUsers } = useContext(ManagementContext)!;
     const { client } = useContext(GlobalContext)!;
@@ -297,6 +299,11 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
                 onShadowDrag(annotation.id, x, y);
               } else {
                 updateAnnotation({ ...annotation, x, y });
+              }
+            },
+            click: () => {
+              if (onClick) {
+                onClick(annotation);
               }
             },
             mouseover: (e) => {

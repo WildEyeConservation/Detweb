@@ -22,6 +22,11 @@ export function LocationLoader() {
           "image.id",
           "image.width",
           "image.height",
+          "image.latitude",
+          "image.longitude",
+          "image.altitude_wgs84",
+          "image.altitude_egm96",
+          "image.altitude_agl",
         ],
       }
     ).then(({ data }) => {

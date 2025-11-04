@@ -86,10 +86,28 @@ const BaseImage: React.FC<BaseImageProps> = memo(
       otherImageId,
       hideNavButtons,
       isTest,
+      image: imageProp,
     } = props;
-    const { image } = location;
+    // Use location.image if available, otherwise fall back to props.image
+    const image = location?.image || imageProp;
     const prevPropsRef = useRef(props);
-    const source = imageFiles.find((file) => file.type == 'image/jpeg')?.key;
+    const sourceKey = imageFiles.find((file) => file.type == 'image/jpeg')?.key;
+    const isLegacyProject = useMemo(() => {
+      const tags = project?.tags;
+      return Array.isArray(tags) ? tags.includes('legacy') : false;
+    }, [project?.tags]);
+    const displaySource = useMemo(() => {
+      if (!sourceKey) return undefined;
+      if (isLegacyProject) return sourceKey;
+      const orgId = project?.organizationId;
+      const projectId = project?.id;
+      const prefixParts = [orgId, projectId].filter(Boolean);
+      if (!prefixParts.length) return sourceKey;
+      const prefix = `${prefixParts.join('/')}/`;
+      return sourceKey.startsWith(prefix)
+        ? sourceKey.slice(prefix.length)
+        : sourceKey;
+    }, [sourceKey, isLegacyProject, project?.organizationId, project?.id]);
     const belongsToCurrentProject = projectMemberships?.find(
       (pm) => pm.userId == user.userId && pm.projectId == project.id
     );
@@ -162,15 +180,18 @@ const BaseImage: React.FC<BaseImageProps> = memo(
 
     const contextMenuItems = useMemo(() => {
       const items = [];
-      if (source) {
+      const hasPrevNeighbour = Boolean(prevImages?.length);
+      const hasNextNeighbour = Boolean(nextImages?.length);
+
+      if (sourceKey) {
         items.push(
           ...[
             {
-              text: source,
+              text: displaySource ?? sourceKey,
               index: 0,
               callback: () => {
                 navigator.clipboard
-                  .writeText(source || '')
+                  .writeText(displaySource ?? sourceKey ?? '')
                   .catch((err) =>
                     console.error('Failed to copy to clipboard:', err)
                   );
@@ -180,7 +201,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
               text: 'Download this image',
               callback: () => {
                 getUrl({
-                  path: 'images/' + source,
+                  path: 'images/' + sourceKey,
                   options: {
                     bucket: 'inputs',
                     validateObjectExistence: true,
@@ -199,7 +220,8 @@ const BaseImage: React.FC<BaseImageProps> = memo(
                   // Setup download link
                   const a = document.createElement('a');
                   a.href = objectUrl;
-                  a.download = source.split('/').pop() || 'image.jpg'; // Get filename from source
+                  const filenameSource = displaySource ?? sourceKey;
+                  a.download = filenameSource.split('/').pop() || 'image.jpg';
 
                   // Trigger download
                   document.body.appendChild(a);
@@ -219,7 +241,9 @@ const BaseImage: React.FC<BaseImageProps> = memo(
             ...[
               {
                 text: `Open previous image`,
+                disabled: !hasPrevNeighbour,
                 callback: async () => {
+                  if (!hasPrevNeighbour) return;
                   const newUrl = window.location.href.replace(
                     /^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/,
                     `$1/image/${prevImages?.[0]?.image?.id}/${location?.annotationSetId}`
@@ -229,7 +253,9 @@ const BaseImage: React.FC<BaseImageProps> = memo(
               },
               {
                 text: `Open next image`,
+                disabled: !hasNextNeighbour,
                 callback: async () => {
+                  if (!hasNextNeighbour) return;
                   const newUrl = window.location.href.replace(
                     /^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/,
                     `$1/image/${nextImages?.[0]?.image?.id}/${location?.annotationSetId}`
@@ -239,7 +265,9 @@ const BaseImage: React.FC<BaseImageProps> = memo(
               },
               {
                 text: `Register against previous image`,
+                disabled: !hasPrevNeighbour,
                 callback: async () => {
+                  if (!hasPrevNeighbour) return;
                   const newUrl = window.location.href.replace(
                     /^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/,
                     `$1/register/${prevImages?.[0]?.image?.id}/${image.id}/${location?.annotationSetId}`
@@ -249,7 +277,9 @@ const BaseImage: React.FC<BaseImageProps> = memo(
               },
               {
                 text: `Register against next image`,
+                disabled: !hasNextNeighbour,
                 callback: async () => {
+                  if (!hasNextNeighbour) return;
                   const newUrl = window.location.href.replace(
                     /^(.*?\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*$/,
                     `$1/register/${image.id}/${nextImages?.[0]?.image?.id}/${location?.annotationSetId}`
@@ -287,10 +317,44 @@ const BaseImage: React.FC<BaseImageProps> = memo(
                   // now replace the last part of the url with the location id
                   const newUrl = url.replace(
                     /\/[^/]+\/?$/,
-                    `/image/${location.image.id}/${location?.annotationSetId}`
+                    `/image/${image.id}/${location?.annotationSetId}`
                   );
                   navigator.clipboard
                     .writeText(newUrl)
+                    .catch((err) =>
+                      console.error('Failed to copy to clipboard:', err)
+                    );
+                },
+              },
+              {
+                text: 'Copy GPS data',
+                disabled: !belongsToCurrentProject?.isAdmin || (!image.latitude && !image.longitude),
+                callback: () => {
+                  const gpsData: string[] = [];
+                  
+                  if (image.latitude != null && image.longitude != null) {
+                    gpsData.push(`Latitude: ${image.latitude}`);
+                    gpsData.push(`Longitude: ${image.longitude}`);
+                  }
+                  
+                  if (image.altitude_wgs84 != null) {
+                    gpsData.push(`Altitude (WGS84): ${image.altitude_wgs84}`);
+                  }
+                  
+                  if (image.altitude_egm96 != null) {
+                    gpsData.push(`Altitude (EGM96): ${image.altitude_egm96}`);
+                  }
+                  
+                  if (image.altitude_agl != null) {
+                    gpsData.push(`Altitude (AGL): ${image.altitude_agl}`);
+                  }
+                  
+                  const gpsText = gpsData.length > 0 
+                    ? gpsData.join('\n')
+                    : 'No GPS data available';
+                  
+                  navigator.clipboard
+                    .writeText(gpsText)
                     .catch((err) =>
                       console.error('Failed to copy to clipboard:', err)
                     );
@@ -305,13 +369,18 @@ const BaseImage: React.FC<BaseImageProps> = memo(
     }, [
       isTest,
       belongsToCurrentProject,
-      source,
+      sourceKey,
+      displaySource,
       location?.id,
       client.models.ImageNeighbour,
       image.id,
+      image.latitude,
+      image.longitude,
+      image.altitude_wgs84,
+      image.altitude_egm96,
+      image.altitude_agl,
       stats,
-      location.annotationSetId,
-      location.image.id,
+      location?.annotationSetId,
       prevImages,
       nextImages,
     ]);
@@ -424,7 +493,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
                               console.error('StorageLayer error:', error);
                             },
                           }}
-                          source={source}
+                          source={sourceKey}
                           bounds={imageBounds}
                           maxNativeZoom={5}
                           noWrap={true}
@@ -524,14 +593,15 @@ const BaseImage: React.FC<BaseImageProps> = memo(
       [
         visible,
         fullyLoaded,
-        source,
+        sourceKey,
+        displaySource,
         style,
         zoom,
         viewBounds,
         viewCenter,
         location?.id,
         location?.annotationSetId,
-        location.image.id,
+        image.id,
         imageFiles,
         image,
         children,

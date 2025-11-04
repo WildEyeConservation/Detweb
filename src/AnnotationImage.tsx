@@ -46,7 +46,16 @@ export default function AnnotationImage(props: any) {
     useContext(UserContext)!;
   const navigate = useNavigate();
   const { surveyId } = useParams();
-  const [defaultZoom, setDefaultZoom] = useState<number | null>(zoom);
+  // Read localStorage synchronously during initialization to avoid loading tiles at wrong zoom
+  const [defaultZoom, setDefaultZoom] = useState<number | null>(() => {
+    if (surveyId) {
+      const storedZoom = localStorage.getItem(`defaultZoom-${surveyId}`);
+      if (storedZoom) {
+        return Number(storedZoom);
+      }
+    }
+    return zoom;
+  });
   const [isFalseNegativesJob, setIsFalseNegativesJob] =
     useState<boolean>(false);
   useEffect(() => {
@@ -295,6 +304,7 @@ export default function AnnotationImage(props: any) {
             stats={stats}
             visible={visible}
             location={location}
+            image={location.image}
             taskTag={props.taskTag}
             zoom={defaultZoom}
             viewBoundsScale={props.viewBoundsScale}
@@ -346,15 +356,23 @@ function SetDefaultZoom({
   const { zoom, setZoom } = useContext(ImageContext)!;
   const { surveyId } = useParams();
   const { client } = useContext(GlobalContext)!;
-  const [storedZoom, setStoredZoom] = useState<boolean>(false);
-
-  useEffect(() => {
-    const storedZoom = localStorage.getItem(`defaultZoom-${surveyId!}`);
-    if (storedZoom) {
-      setStoredZoom(true);
-      setDefaultZoom(Number(storedZoom));
+  // Initialize storedZoom flag synchronously to match parent's initialization
+  const [storedZoom, setStoredZoom] = useState<boolean>(() => {
+    if (surveyId) {
+      return localStorage.getItem(`defaultZoom-${surveyId}`) !== null;
     }
-  }, [zoom]);
+    return false;
+  });
+
+  // Note: localStorage zoom is now read synchronously in parent component,
+  // so this effect is mainly for keeping storedZoom flag in sync if localStorage changes externally
+  useEffect(() => {
+    const storedZoomValue = localStorage.getItem(`defaultZoom-${surveyId!}`);
+    const hasStoredZoom = storedZoomValue !== null;
+    if (hasStoredZoom !== storedZoom) {
+      setStoredZoom(hasStoredZoom);
+    }
+  }, [surveyId, storedZoom]);
 
   const saveDefaultZoom = async () => {
     if (!storedZoom) {

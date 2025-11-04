@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { ExtendedAnnotationType } from "./schemaTypes";
 import { square, sqrt } from "mathjs";
 
@@ -30,7 +30,13 @@ export function useAnnotationNavigation(input: UseAnnotationNavigationInput) {
     annotationHooks
   } = input
   
-  const annotations = annotationHooks.map(hook => hook.data).map(annos => input.selectedCategoryIDs ? annos.filter(anno => input.selectedCategoryIDs.includes(anno.categoryId)) : annos)
+  const annotations = annotationHooks
+    .map((hook) => hook.data)
+    .map((annos) =>
+      input.selectedCategoryIDs && input.selectedCategoryIDs.length > 0
+        ? annos.filter((anno) => input.selectedCategoryIDs.includes(anno.categoryId))
+        : annos
+    );
   //Calculate the seto of objectIds that appear in both images.
   const objectIds = annotations.map(annos => annos.map(anno => anno.objectId || anno.proposedObjectId))
   const pairedObjectIds = objectIds[0].filter(id => objectIds[1].includes(id))
@@ -100,5 +106,19 @@ export function useAnnotationNavigation(input: UseAnnotationNavigationInput) {
     })
     next()
   }
-  return {next, prev, confirmMatch, activeObjectId}
+  const setActiveObject = useCallback((objectId?: string) => {
+    if (!objectId) return;
+    setHistory((prev) => {
+      const existingIndex = prev.indexOf(objectId);
+      if (existingIndex !== -1) {
+        setHistoryIndex(existingIndex);
+        return prev;
+      }
+      const nextHistory = [...prev, objectId];
+      setHistoryIndex(nextHistory.length - 1);
+      return nextHistory;
+    });
+  }, []);
+
+  return {next, prev, confirmMatch, activeObjectId, setActiveObject}
 }
