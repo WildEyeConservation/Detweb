@@ -1,4 +1,11 @@
-import { useState, useCallback, useMemo, useContext } from 'react';
+import {
+  useState,
+  useCallback,
+  useMemo,
+  useContext,
+  Dispatch,
+  SetStateAction,
+} from 'react';
 import BaseImage from './BaseImage';
 import LinkMaps from './LinkMaps';
 import CreateAnnotationOnClick from './CreateAnnotationOnClick';
@@ -43,6 +50,8 @@ type RegisterPairProps = {
   setPoints2?: (updater: any) => void;
 };
 
+type PointStateSetter = Dispatch<SetStateAction<{ id: string; x: number; y: number }[]>>;
+
 // Function to transform a point using a homography matrix
 export function RegisterPair({
   images,
@@ -67,6 +76,18 @@ export function RegisterPair({
   );
   const [leniency, setLeniency] = useState(400);
   const effectiveTransforms = transforms;
+  const [localPoints1, setLocalPoints1] = useState<{ id: string; x: number; y: number }[]>([]);
+  const [localPoints2, setLocalPoints2] = useState<{ id: string; x: number; y: number }[]>([]);
+
+  const resolvedPoints: [{ id: string; x: number; y: number }[], { id: string; x: number; y: number }[]] = [
+    points1 ?? localPoints1,
+    points2 ?? localPoints2,
+  ];
+
+  const resolvedSetters: [PointStateSetter, PointStateSetter] = [
+    (setPoints1 as PointStateSetter | undefined) ?? setLocalPoints1,
+    (setPoints2 as PointStateSetter | undefined) ?? setLocalPoints2,
+  ];
 
   const subscriptionFilter1 = useMemo(
     () => ({
@@ -160,6 +181,7 @@ export function RegisterPair({
     prev: prevAnnotation,
     activeObjectId,
     confirmMatch,
+    setActiveObject,
   } = (useAnnotationNavigation as any)({
     annotationHooks: enhancedAnnotationHooks as any,
     // The hook expects create/update but only uses update; provide no-op create to satisfy type
@@ -169,6 +191,16 @@ export function RegisterPair({
     prev,
     selectedCategoryIDs: selectedCategoryIDs || [],
   });
+  const handleAnnotationSelect = useCallback(
+    (annotation: ExtendedAnnotationType) => {
+      const objectId = annotation.objectId || annotation.proposedObjectId;
+      if (objectId) {
+        setActiveObject(objectId);
+      }
+    },
+    [setActiveObject]
+  );
+
 
   const activeAnnotation = useMemo<ExtendedAnnotationType | undefined>(() => {
     if (!activeObjectId) return undefined;
@@ -245,8 +277,8 @@ export function RegisterPair({
                   )}
                   {(noHomography || !effectiveTransforms) && (
                     <PointsOverlay
-                      points={[points1, points2][i] as any}
-                      setPoints={[setPoints1, setPoints2][i] as any}
+                      points={resolvedPoints[i]}
+                      setPoints={resolvedSetters[i]}
                     />
                   )}
                   {!noHomography && effectiveTransforms && (
@@ -269,6 +301,7 @@ export function RegisterPair({
                     annotationSetId={selectedSet}
                     activeAnnotation={activeAnnotation}
                     onShadowDrag={(id, x, y) => repositionShadow(i, id, x, y)}
+                    onSelectAnnotation={handleAnnotationSelect}
                   />
                   {effectiveTransforms && linkImages && (
                     <LinkMaps
@@ -293,6 +326,10 @@ export function RegisterPair({
       </div>
       {effectiveTransforms && (
         <div className='w-100 d-flex flex-column gap-2 bg-secondary p-3'>
+          <span style={{ fontSize: '12px', color: '#f8f9fa' }}>
+            Tip: click a suggested marker or use Arrow keys to focus it, then press Space to
+            confirm the match.
+          </span>
           <label
             style={{
               display: 'flex',

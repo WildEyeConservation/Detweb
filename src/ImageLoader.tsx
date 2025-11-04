@@ -11,7 +11,18 @@ export function ImageLoader() {
   useEffect(() => {
     client.models.Image.get(
       { id: imageId! },
-      { selectionSet: ["id", "width", "height"] }
+      {
+        selectionSet: [
+          "id",
+          "width",
+          "height",
+          "latitude",
+          "longitude",
+          "altitude_wgs84",
+          "altitude_egm96",
+          "altitude_agl",
+        ],
+      }
     ).then(({ data }) => {
       setElement(
         <AnnotationImage

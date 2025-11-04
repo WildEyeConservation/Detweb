@@ -55,7 +55,7 @@ export default function LightLocationView({
       // @ts-ignore selectionSet typing is complex in client
       const { data: image } = await client.models.Image.get({
         id: loc.imageId,
-        selectionSet: ['id', 'width', 'height'] as const,
+        selectionSet: ['id', 'width', 'height', 'latitude', 'longitude', 'altitude_wgs84', 'altitude_egm96', 'altitude_agl'] as const,
       } as any);
       if (!image) return;
       if (!cancelled) {
