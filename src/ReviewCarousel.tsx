@@ -226,7 +226,7 @@ export default function ReviewCarousel({
 
   if (!selectedAnnotationSet) {
     return (
-      <div className="d-flex flex-column align-items-center justify-content-center h-100 w-100">
+      <div className='d-flex flex-column align-items-center justify-content-center h-100 w-100'>
         Select an annotation set to begin.
       </div>
     );
@@ -235,11 +235,11 @@ export default function ReviewCarousel({
   return (
     <>
       {!annotations.length && isLoading ? (
-        <div className="d-flex flex-column align-items-center justify-content-center h-100 w-100 p-4">
-          <div className="text-center">
-            <div className="d-flex flex-row align-items-center justify-content-center h-100 w-100">
-              <Spinner size="sm" />
-              <span className="ms-2">
+        <div className='d-flex flex-column align-items-center justify-content-center h-100 w-100 p-4'>
+          <div className='text-center'>
+            <div className='d-flex flex-row align-items-center justify-content-center h-100 w-100'>
+              <Spinner size='sm' />
+              <span className='ms-2'>
                 {locationsLoaded > 0
                   ? `${locationsLoaded} items loaded so far`
                   : 'Preparing to load data'}
@@ -249,7 +249,7 @@ export default function ReviewCarousel({
         </div>
       ) : (
         bufferSource && (
-          <div className="d-flex flex-column align-items-center h-100 w-100 mt-3">
+          <div className='d-flex flex-column align-items-center h-100 w-100 mt-3'>
             <Preloader
               key={
                 selectedAnnotationSet +
@@ -264,14 +264,14 @@ export default function ReviewCarousel({
               // Tight fit around locations for review; 0.55 keeps a small margin
               viewBoundsScale={0.55}
             />
-            <div className="mt-2 w-100">
+            <div className='mt-2 w-100'>
               <input
-                type="range"
+                type='range'
                 value={index}
                 onChange={(e) => setIndex(parseInt(e.target.value))}
                 min={0}
                 max={Math.max(annotations.length - 1, 0)}
-                className="form-range"
+                className='form-range'
               />
               <div style={{ textAlign: 'center' }}>
                 Done with {index} out of {annotations.length} locations

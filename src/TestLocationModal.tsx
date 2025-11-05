@@ -181,7 +181,7 @@ export default function TestLocationModal({
           <Form.Group>
             <Form.Label>Presets that use this location</Form.Label>
             <Select
-              className="text-black"
+              className='text-black'
               value={selectedPresets}
               options={presets.map((p) => ({ label: p.name, value: p.id }))}
               onChange={setSelectedPresets}
@@ -197,10 +197,10 @@ export default function TestLocationModal({
         </Form>
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant='secondary' onClick={onClose}>
           Cancel
         </Button>
-        <Button variant="primary" onClick={handleSubmit}>
+        <Button variant='primary' onClick={handleSubmit}>
           Save
         </Button>
       </Modal.Footer>

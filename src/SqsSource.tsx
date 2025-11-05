@@ -41,7 +41,6 @@ export default function useSQS(
     isRegistering,
   } = useContext(UserContext)!;
 
-
   // Track unannotated jobs
   useEffect(() => {
     const userAnnotations = Object.entries(currentAnnoCount).filter(

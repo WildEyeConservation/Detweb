@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { WithCreateObservationProps } from "./useCreateObservation"; // Import the interface
-import { BaseImageProps } from "./BaseImage";
+import React, { useEffect, useState, useCallback } from 'react';
+import { WithCreateObservationProps } from './useCreateObservation'; // Import the interface
+import { BaseImageProps } from './BaseImage';
 
 export interface UseAckOnTimeoutProps {
   next?: () => void;
@@ -20,11 +20,15 @@ Obviously, the hook needs access to an attribute indicating whether the componen
 We also need to hook into the onNext function, we do this by taking onNext as an input and yielding an instrumented version of onNext as output
 */
 
-export default function useAckOnTimeout({ next, visible, ack }: UseAckOnTimeoutProps) {
+export default function useAckOnTimeout({
+  next,
+  visible,
+  ack,
+}: UseAckOnTimeoutProps) {
   const [timer, setTimer] = useState<number | undefined>(undefined);
   const [done, setDone] = useState(false);
   const [wasHidden, setWasHidden] = useState<boolean>(false);
-  const [id,setId]=useState<string>(crypto.randomUUID());
+  const [id, setId] = useState<string>(crypto.randomUUID());
 
   const onNext = useCallback(() => {
     console.log(`timer set for ${id}`);
@@ -34,7 +38,7 @@ export default function useAckOnTimeout({ next, visible, ack }: UseAckOnTimeoutP
       next();
     } else {
       alert(
-        "You seem to have reached the end of the current Task queue. Thanks for your contribution. Please check back later to see if more work has been loaded. Alternatively you can close the notification, but leave the window open and you will get notified via another popup when new work has been loaded.",
+        'You seem to have reached the end of the current Task queue. Thanks for your contribution. Please check back later to see if more work has been loaded. Alternatively you can close the notification, but leave the window open and you will get notified via another popup when new work has been loaded.'
       );
       setDone(true);
     }
@@ -45,14 +49,14 @@ export default function useAckOnTimeout({ next, visible, ack }: UseAckOnTimeoutP
     // This is intended to cancel timers in the event where the user paged back to the item after initially paging past it.
     // However, just checking for visible && timer is vulnerable to race conditions (where we have paged past, and set the timer, but
     // the rest of the system hasn't updated the visibility state yet). So we need to check for a rising edge on visible, thus wasHidden && visible && timer && next.
-    
+
     if (wasHidden && visible && timer && next) {
       // Read the number of milliseconds left on the timer
       console.log(`timer cleared for ${id}`);
       clearTimeout(timer); // Cancel the timer
       setTimer(undefined);
       setWasHidden(false);
-    } else if (!wasHidden && !visible) { 
+    } else if (!wasHidden && !visible) {
       setWasHidden(true);
       console.log(`wasHidden set for ${id}`);
     }
@@ -62,7 +66,7 @@ export default function useAckOnTimeout({ next, visible, ack }: UseAckOnTimeoutP
     // If the provided onNext has changed, new work may have been loaded to the queue. In this case we need to clear the done flag again
     if (next && done) {
       setDone(false);
-      alert("New work has been loaded to the queue.");
+      alert('New work has been loaded to the queue.');
     }
   }, [next, done]);
 
@@ -72,17 +76,19 @@ export default function useAckOnTimeout({ next, visible, ack }: UseAckOnTimeoutP
 // interface WithAckOnTimeoutProps extends UseAckOnTimeoutProps {
 //   [key: string]: any; // To allow any other props to be passed
 // }
-interface CombinedProps extends WithCreateObservationProps, UseAckOnTimeoutProps, BaseImageProps {}
+interface CombinedProps
+  extends WithCreateObservationProps,
+    UseAckOnTimeoutProps,
+    BaseImageProps {}
 
 export function withAckOnTimeout<T extends CombinedProps>(
   WrappedComponent: React.ComponentType<T>
 ) {
   const WithAckOnTimeout: React.FC<T> = (props) => {
-    const { next, visible, location} = props;
-    const {ack = () => {}} = location;
+    const { next, visible, location } = props;
+    const { ack = () => {} } = location;
     const newNext = useAckOnTimeout({ next, visible, ack });
     return <WrappedComponent {...props} next={newNext} />;
   };
   return WithAckOnTimeout;
 }
-

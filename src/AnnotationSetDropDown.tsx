@@ -39,10 +39,10 @@ export function AnnotationSetDropdown({
 
   return (
     <Select
-      className="annotation-set-dropdown text-black"
+      className='annotation-set-dropdown text-black'
       value={options.find((o) => o.value == selectedSet)}
       onChange={onSelect}
-      name="Select annotation set"
+      name='Select annotation set'
       options={options}
     />
   );

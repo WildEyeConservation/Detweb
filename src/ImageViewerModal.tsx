@@ -56,13 +56,13 @@ export default function ImageViewerModal({
           <div>No image selected.</div>
         )}
       </Modal.Body>
-    <Modal.Footer className='d-flex justify-content-between'>
+      <Modal.Footer className='d-flex justify-content-between'>
         <div className='d-flex flex-row gap-2'>
           <Button
             className='d-flex flex-row align-items-center justify-content-center h-100'
             variant='primary'
             onClick={handlePrevious}
-            disabled={!hasPrevious} 
+            disabled={!hasPrevious}
             style={{ width: '110px' }}
           >
             <ChevronLeft />

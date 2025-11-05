@@ -1,11 +1,11 @@
-import { useParams } from "react-router-dom";
-import { useContext, useEffect, useMemo, useState, useCallback } from "react";
-import { GlobalContext } from "./Context";
-import { RegisterPair } from "./RegisterPair";
-import { ManualHomographyEditor } from "./ManualHomographyEditor";
-import { array2Matrix, makeTransform } from "./utils";
-import { inv } from "mathjs";
-import type { ImageType } from "./schemaTypes";
+import { useParams } from 'react-router-dom';
+import { useContext, useEffect, useMemo, useState, useCallback } from 'react';
+import { GlobalContext } from './Context';
+import { RegisterPair } from './RegisterPair';
+import { ManualHomographyEditor } from './ManualHomographyEditor';
+import { array2Matrix, makeTransform } from './utils';
+import { inv } from 'mathjs';
+import type { ImageType } from './schemaTypes';
 
 type Point = { id: string; x: number; y: number };
 
@@ -42,15 +42,11 @@ export function PairLoader() {
       setPoints1([]);
       setPoints2([]);
 
-      const attempt = async (
-        id1: string,
-        id2: string,
-        reversed: boolean
-      ) => {
+      const attempt = async (id1: string, id2: string, reversed: boolean) => {
         try {
           const response = await client.models.ImageNeighbour.get(
             { image1Id: id1, image2Id: id2 },
-            { selectionSet: ["homography", "image1.*", "image2.*"] }
+            { selectionSet: ['homography', 'image1.*', 'image2.*'] }
           );
           const data = response?.data;
           if (!data?.image1 || !data?.image2) {
@@ -132,24 +128,35 @@ export function PairLoader() {
     }
 
     if (error) {
-      return <div className="text-danger">{error}</div>;
+      return <div className='text-danger'>{error}</div>;
     }
 
     if (!pair || !selectedSet) {
-      return <div className="text-danger">Unable to display this registration pair.</div>;
+      return (
+        <div className='text-danger'>
+          Unable to display this registration pair.
+        </div>
+      );
     }
 
     const showManualEditor = !pair.hasHomography;
 
     return (
       <div
-        className="d-flex flex-column flex-grow-1 w-100"
-        style={{ maxWidth: '1555px', padding: '16px', minHeight: 'calc(100vh - 120px)' }}
+        className='d-flex flex-column flex-grow-1 w-100'
+        style={{
+          maxWidth: '1555px',
+          padding: '16px',
+          minHeight: 'calc(100vh - 120px)',
+        }}
       >
-        <div className="d-flex flex-column flex-md-row gap-3 flex-grow-1 w-100" style={{ minHeight: 0 }}>
+        <div
+          className='d-flex flex-column flex-md-row gap-3 flex-grow-1 w-100'
+          style={{ minHeight: 0 }}
+        >
           {showManualEditor && (
             <div
-              className="w-100 h-100 d-flex flex-column flex-grow-0"
+              className='w-100 h-100 d-flex flex-column flex-grow-0'
               style={{ maxWidth: '360px' }}
             >
               <ManualHomographyEditor
@@ -162,7 +169,7 @@ export function PairLoader() {
               />
             </div>
           )}
-          <div className="flex-grow-1 d-flex" style={{ minHeight: 0 }}>
+          <div className='flex-grow-1 d-flex' style={{ minHeight: 0 }}>
             <RegisterPair
               images={pair.images}
               selectedSet={selectedSet}
@@ -181,7 +188,15 @@ export function PairLoader() {
         </div>
       </div>
     );
-  }, [error, handleHomographySaved, loading, pair, points1, points2, selectedSet]);
+  }, [
+    error,
+    handleHomographySaved,
+    loading,
+    pair,
+    points1,
+    points2,
+    selectedSet,
+  ]);
 
   return content;
 }

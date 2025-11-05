@@ -68,9 +68,9 @@ export default function Settings({ signOut }: { signOut: () => void }) {
   };
 
   return (
-    <div className="position-relative">
+    <div className='position-relative'>
       <button
-        className="text-muted px-2 d-flex align-items-center justify-content-center"
+        className='text-muted px-2 d-flex align-items-center justify-content-center'
         style={{
           backgroundColor: 'transparent',
           border: 'none',
@@ -79,9 +79,9 @@ export default function Settings({ signOut }: { signOut: () => void }) {
         onClick={() => setShow(!show)}
       >
         {/* <SettingsIcon className="d-none d-lg-block" /> */}
-        <UserIcon className="d-none d-lg-block" />
+        <UserIcon className='d-none d-lg-block' />
         {/* <span className="d-block d-lg-none">Settings</span> */}
-        <span className="d-block d-lg-none">User</span>
+        <span className='d-block d-lg-none'>User</span>
       </button>
       {show && (
         <div
@@ -98,7 +98,7 @@ export default function Settings({ signOut }: { signOut: () => void }) {
       )}
       {username && (
         <Card
-          className="position-fixed w-100 mt-lg-3"
+          className='position-fixed w-100 mt-lg-3'
           style={{
             maxWidth: '400px',
             right: 0,
@@ -109,27 +109,27 @@ export default function Settings({ signOut }: { signOut: () => void }) {
             zIndex: 2,
           }}
         >
-          <Card.Header className="d-flex justify-content-between align-items-center">
+          <Card.Header className='d-flex justify-content-between align-items-center'>
             {/* <Card.Title className="mb-0">Settings</Card.Title> */}
-            <Card.Title className="mb-0">User</Card.Title>
+            <Card.Title className='mb-0'>User</Card.Title>
             <X onClick={() => setShow(false)} style={{ cursor: 'pointer' }} />
           </Card.Header>
           <Card.Body>
-            <div className="d-flex flex-column gap-2">
-              <p className="mb-0">Username: {username}</p>
-              <p className="mb-0">Email: {email}</p>
+            <div className='d-flex flex-column gap-2'>
+              <p className='mb-0'>Username: {username}</p>
+              <p className='mb-0'>Email: {email}</p>
             </div>
 
             <Button
-              className="w-100 mt-2"
-              variant="outline-danger"
+              className='w-100 mt-2'
+              variant='outline-danger'
               onClick={signOut}
             >
               Sign Out
             </Button>
             <Button
-              className="w-100 mt-2"
-              variant="outline-warning"
+              className='w-100 mt-2'
+              variant='outline-warning'
               onClick={clearSiteData}
             >
               Clear Cache

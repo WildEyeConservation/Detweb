@@ -109,61 +109,66 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
   // Lazy-loaded object URL mapping for imageFiles
   const [objectUrlMap, setObjectUrlMap] = useState<Record<string, string>>({});
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
-  
+
   // Function to get or create object URL for a specific filepath
-  const getObjectUrl = useCallback((filepath: string): string | null => {
-    if (!imageFiles || !filepath) return null;
-    
-    const normalizedPath = filepath.toLowerCase();
-    
-    // Return existing URL if already loaded
-    if (objectUrlMap[normalizedPath]) {
-      return objectUrlMap[normalizedPath];
-    }
-    
-    // Find the corresponding file and create object URL
-    const file = imageFiles.find((f) => {
-      const relativePath = (f as any).webkitRelativePath as string;
-      return relativePath && relativePath.toLowerCase() === normalizedPath;
-    });
-    
-    if (file) {
-      // Mark as loading to prevent duplicate requests
-      if (!loadingImages.has(normalizedPath)) {
-        setLoadingImages(prev => new Set(prev).add(normalizedPath));
-        
-        // Create object URL asynchronously to avoid blocking
-        setTimeout(() => {
-          const url = URL.createObjectURL(file);
-          setObjectUrlMap(prev => ({
-            ...prev,
-            [normalizedPath]: url
-          }));
-          setLoadingImages(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(normalizedPath);
-            return newSet;
-          });
-        }, 0);
+  const getObjectUrl = useCallback(
+    (filepath: string): string | null => {
+      if (!imageFiles || !filepath) return null;
+
+      const normalizedPath = filepath.toLowerCase();
+
+      // Return existing URL if already loaded
+      if (objectUrlMap[normalizedPath]) {
+        return objectUrlMap[normalizedPath];
       }
-      return null; // Return null while loading
-    }
-    
-    return null;
-  }, [imageFiles, objectUrlMap, loadingImages]);
+
+      // Find the corresponding file and create object URL
+      const file = imageFiles.find((f) => {
+        const relativePath = (f as any).webkitRelativePath as string;
+        return relativePath && relativePath.toLowerCase() === normalizedPath;
+      });
+
+      if (file) {
+        // Mark as loading to prevent duplicate requests
+        if (!loadingImages.has(normalizedPath)) {
+          setLoadingImages((prev) => new Set(prev).add(normalizedPath));
+
+          // Create object URL asynchronously to avoid blocking
+          setTimeout(() => {
+            const url = URL.createObjectURL(file);
+            setObjectUrlMap((prev) => ({
+              ...prev,
+              [normalizedPath]: url,
+            }));
+            setLoadingImages((prev) => {
+              const newSet = new Set(prev);
+              newSet.delete(normalizedPath);
+              return newSet;
+            });
+          }, 0);
+        }
+        return null; // Return null while loading
+      }
+
+      return null;
+    },
+    [imageFiles, objectUrlMap, loadingImages]
+  );
 
   // Cleanup function to revoke unused object URLs
   const cleanupUnusedUrls = useCallback(() => {
     if (!imageFiles) return;
-    
+
     const currentFilePaths = new Set(
-      imageFiles.map(f => ((f as any).webkitRelativePath as string)?.toLowerCase()).filter(Boolean)
+      imageFiles
+        .map((f) => ((f as any).webkitRelativePath as string)?.toLowerCase())
+        .filter(Boolean)
     );
-    
-    setObjectUrlMap(prev => {
+
+    setObjectUrlMap((prev) => {
       const newMap: Record<string, string> = {};
       let hasChanges = false;
-      
+
       Object.entries(prev).forEach(([path, url]) => {
         if (currentFilePaths.has(path)) {
           newMap[path] = url;
@@ -172,7 +177,7 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
           hasChanges = true;
         }
       });
-      
+
       return hasChanges ? newMap : prev;
     });
   }, [imageFiles]);
@@ -180,7 +185,7 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      Object.values(objectUrlMap).forEach(url => URL.revokeObjectURL(url));
+      Object.values(objectUrlMap).forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
 
@@ -301,13 +306,16 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
     const nextVisible = validGpsData.filter(
       (p) => !manualRemovedKeys.has(createPointKey(p))
     );
-    
+
     // Only update if the filtered points have actually changed
-    const currentKeys = new Set(currentFilteredPoints.map(p => createPointKey(p)));
-    const nextKeys = new Set(nextVisible.map(p => createPointKey(p)));
-    const hasChanged = currentKeys.size !== nextKeys.size || 
-      [...currentKeys].some(key => !nextKeys.has(key));
-    
+    const currentKeys = new Set(
+      currentFilteredPoints.map((p) => createPointKey(p))
+    );
+    const nextKeys = new Set(nextVisible.map((p) => createPointKey(p)));
+    const hasChanged =
+      currentKeys.size !== nextKeys.size ||
+      [...currentKeys].some((key) => !nextKeys.has(key));
+
     if (hasChanged) {
       setCurrentFilteredPoints(nextVisible);
     }
@@ -672,7 +680,10 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
             </FeatureGroup>
             {currentFilteredPoints.map((point, index) => {
               const pointKey = createPointKey(point);
-              const pos = adjustedPositions[pointKey] || { lat: point.lat, lng: point.lng };
+              const pos = adjustedPositions[pointKey] || {
+                lat: point.lat,
+                lng: point.lng,
+              };
               return (
                 <CircleMarker
                   key={index}
@@ -684,96 +695,111 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
                   weight={2}
                   interactive={!isDrawing}
                 >
-                <Popup>
-                  <div>
-                    {point.timestamp && (
+                  <Popup>
+                    <div>
+                      {point.timestamp && (
+                        <div>
+                          <strong>Timestamp:</strong>{' '}
+                          {new Date(point.timestamp).toISOString()}
+                        </div>
+                      )}
+                      {point.filepath && (
+                        <div>
+                          <strong>Filepath:</strong> {point.filepath}
+                        </div>
+                      )}
                       <div>
-                        <strong>Timestamp:</strong>{' '}
-                        {new Date(point.timestamp).toISOString()}
+                        <strong>Lng:</strong> {point.lng}
                       </div>
-                    )}
-                    {point.filepath && (
                       <div>
-                        <strong>Filepath:</strong> {point.filepath}
+                        <strong>Lat:</strong> {point.lat}
                       </div>
-                    )}
-                    <div>
-                      <strong>Lng:</strong> {point.lng}
+                      <div>
+                        <strong>Alt:</strong> {point.alt}
+                      </div>
+                      {point.filepath &&
+                        (() => {
+                          const imageUrl = getObjectUrl(point.filepath);
+                          const isLoading = loadingImages.has(
+                            point.filepath.toLowerCase()
+                          );
+
+                          if (isLoading) {
+                            return (
+                              <div
+                                style={{ textAlign: 'center', margin: '8px 0' }}
+                              >
+                                <div
+                                  style={{
+                                    width: '150px',
+                                    height: '150px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    border: '1px dashed #ccc',
+                                    margin: 'auto',
+                                  }}
+                                >
+                                  Loading...
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          if (imageUrl) {
+                            return (
+                              <>
+                                <div
+                                  style={{
+                                    textAlign: 'center',
+                                    margin: '8px 0',
+                                  }}
+                                >
+                                  <img
+                                    src={imageUrl}
+                                    alt={point.filepath}
+                                    style={{
+                                      maxWidth: '150px',
+                                      maxHeight: '150px',
+                                      objectFit: 'contain',
+                                      display: 'block',
+                                      margin: 'auto',
+                                    }}
+                                  />
+                                </div>
+                                <Button
+                                  className='w-100 mt-2'
+                                  variant='primary'
+                                  size='sm'
+                                  onClick={() => handleViewImage(index)}
+                                >
+                                  View Image
+                                </Button>
+                              </>
+                            );
+                          }
+
+                          return null;
+                        })()}
+                      <Button
+                        className='w-100 mt-2'
+                        variant='danger'
+                        size='sm'
+                        onClick={() => handleRemovePoint(index)}
+                      >
+                        Remove
+                      </Button>
                     </div>
-                    <div>
-                      <strong>Lat:</strong> {point.lat}
-                    </div>
-                    <div>
-                      <strong>Alt:</strong> {point.alt}
-                    </div>
-                    {point.filepath && (() => {
-                      const imageUrl = getObjectUrl(point.filepath);
-                      const isLoading = loadingImages.has(point.filepath.toLowerCase());
-                      
-                      if (isLoading) {
-                        return (
-                          <div style={{ textAlign: 'center', margin: '8px 0' }}>
-                            <div style={{ 
-                              width: '150px', 
-                              height: '150px', 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              justifyContent: 'center',
-                              border: '1px dashed #ccc',
-                              margin: 'auto'
-                            }}>
-                              Loading...
-                            </div>
-                          </div>
-                        );
-                      }
-                      
-                      if (imageUrl) {
-                        return (
-                          <>
-                            <div style={{ textAlign: 'center', margin: '8px 0' }}>
-                              <img
-                                src={imageUrl}
-                                alt={point.filepath}
-                                style={{
-                                  maxWidth: '150px',
-                                  maxHeight: '150px',
-                                  objectFit: 'contain',
-                                  display: 'block',
-                                  margin: 'auto',
-                                }}
-                              />
-                            </div>
-                            <Button
-                              className='w-100 mt-2'
-                              variant='primary'
-                              size='sm'
-                              onClick={() => handleViewImage(index)}
-                            >
-                              View Image
-                            </Button>
-                          </>
-                        );
-                      }
-                      
-                      return null;
-                    })()}
-                    <Button
-                      className='w-100 mt-2'
-                      variant='danger'
-                      size='sm'
-                      onClick={() => handleRemovePoint(index)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                </Popup>
-              </CircleMarker>
+                  </Popup>
+                </CircleMarker>
               );
             })}
             {removedPoints.map((point, index) => {
               const pointKey = createPointKey(point);
-              const pos = adjustedPositions[pointKey] || { lat: point.lat, lng: point.lng };
+              const pos = adjustedPositions[pointKey] || {
+                lat: point.lat,
+                lng: point.lng,
+              };
               return (
                 <CircleMarker
                   key={`removed-${index}`}
@@ -785,39 +811,39 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
                   weight={2}
                   interactive={!isDrawing}
                 >
-                <Popup>
-                  <div>
-                    {point.timestamp && (
+                  <Popup>
+                    <div>
+                      {point.timestamp && (
+                        <div>
+                          <strong>Timestamp:</strong>{' '}
+                          {new Date(point.timestamp).toISOString()}
+                        </div>
+                      )}
+                      {point.filepath && (
+                        <div>
+                          <strong>Filepath:</strong> {point.filepath}
+                        </div>
+                      )}
                       <div>
-                        <strong>Timestamp:</strong>{' '}
-                        {new Date(point.timestamp).toISOString()}
+                        <strong>Lng:</strong> {point.lng}
                       </div>
-                    )}
-                    {point.filepath && (
                       <div>
-                        <strong>Filepath:</strong> {point.filepath}
+                        <strong>Lat:</strong> {point.lat}
                       </div>
-                    )}
-                    <div>
-                      <strong>Lng:</strong> {point.lng}
+                      <div>
+                        <strong>Alt:</strong> {point.alt}
+                      </div>
+                      <Button
+                        className='w-100 mt-2'
+                        variant='success'
+                        size='sm'
+                        onClick={() => handleRestorePoint(point)}
+                      >
+                        Add Back
+                      </Button>
                     </div>
-                    <div>
-                      <strong>Lat:</strong> {point.lat}
-                    </div>
-                    <div>
-                      <strong>Alt:</strong> {point.alt}
-                    </div>
-                    <Button
-                      className='w-100 mt-2'
-                      variant='success'
-                      size='sm'
-                      onClick={() => handleRestorePoint(point)}
-                    >
-                      Add Back
-                    </Button>
-                  </div>
-                </Popup>
-              </CircleMarker>
+                  </Popup>
+                </CircleMarker>
               );
             })}
           </MapContainer>

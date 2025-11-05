@@ -1,8 +1,8 @@
 import pLimit from 'p-limit';
-import { Amplify } from 'aws-amplify'
-import outputs from '../amplify_outputs.json'
-Amplify.configure(outputs)
-import { generateClient } from "aws-amplify/api";
+import { Amplify } from 'aws-amplify';
+import outputs from '../amplify_outputs.json';
+Amplify.configure(outputs);
+import { generateClient } from 'aws-amplify/api';
 import { Schema } from './amplify/client-schema'; // Path to your backend resource definition
 import type { DataClient } from '../amplify/shared/data-schema.generated';
 
@@ -16,7 +16,9 @@ for error responses from the server.
 The pLimit module is used to limit the number of concurrent requests to the GraphQL API. 
 */
 
-const client = generateClient<Schema>({ authMode: "userPool" }) as unknown as DataClient;
+const client = generateClient<Schema>({
+  authMode: 'userPool',
+}) as unknown as DataClient;
 
 // Create a pLimit instance with a concurrency limit (adjust as needed)
 const limit = pLimit(15);
@@ -71,7 +73,7 @@ async function executeWithRetry<T>(
         maxDelay
       );
       console.warn(`Retry ${retryCount}/${maxRetries} after ${delay}ms`);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 
@@ -87,20 +89,23 @@ function wrapClientMethods(obj: any): any {
   for (const [key, value] of Object.entries(obj)) {
     if (typeof value === 'function') {
       if (key.startsWith('on') || key.startsWith('observe')) {
-        // Do not wrap the onCreate, onUpdate, onDelete, functions as these are sync methods (no 
-        // underlying network request). It would have been better make the distinction based on 
-        // the return type, but that info is not available at runtime without invoking the method.  
+        // Do not wrap the onCreate, onUpdate, onDelete, functions as these are sync methods (no
+        // underlying network request). It would have been better make the distinction based on
+        // the return type, but that info is not available at runtime without invoking the method.
         wrappedObj[key] = value;
       } else {
         wrappedObj[key] = async (...args: any[]) => {
-          const result = await executeWithRetry(() => limit(() => value(...args)));
+          const result = await executeWithRetry(() =>
+            limit(() => value(...args))
+          );
           const checkedResult = checkForErrors(result);
           return wrapClientMethods(checkedResult);
         };
       }
     } else if (typeof value === 'object') {
-      if (Array.isArray(value)) {// Do not wrap arrays.
-        wrappedObj[key] = value;  
+      if (Array.isArray(value)) {
+        // Do not wrap arrays.
+        wrappedObj[key] = value;
       } else {
         wrappedObj[key] = wrapClientMethods(value);
       }
@@ -113,4 +118,3 @@ function wrapClientMethods(obj: any): any {
 
 // Create the limited client with wrapped methods
 export const limitedClient = wrapClientMethods(client) as DataClient;
-

@@ -1,4 +1,4 @@
-import { Modal, Button } from "react-bootstrap";
+import { Modal, Button } from 'react-bootstrap';
 
 interface ConfirmationModalProps {
   show: boolean;
@@ -23,7 +23,7 @@ export default function ConfirmationModal({
       <Modal.Body>{body}</Modal.Body>
       <Modal.Footer>
         <Button
-          variant="primary"
+          variant='primary'
           onClick={() => {
             onConfirm();
             onClose();
@@ -31,7 +31,7 @@ export default function ConfirmationModal({
         >
           Confirm
         </Button>
-        <Button variant="dark" onClick={onClose}>
+        <Button variant='dark' onClick={onClose}>
           Cancel
         </Button>
       </Modal.Footer>

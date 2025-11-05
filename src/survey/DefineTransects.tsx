@@ -1188,11 +1188,11 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
 
   return (
     <>
-      <Form className="p-3">
-        <Form.Group className="d-flex flex-column">
-          <Form.Label className="mb-0">Define Transects and Strata</Form.Label>
-          <span className="text-muted mb-2" style={{ fontSize: '14px' }}>
-            <ul className="mb-0">
+      <Form className='p-3'>
+        <Form.Group className='d-flex flex-column'>
+          <Form.Label className='mb-0'>Define Transects and Strata</Form.Label>
+          <span className='text-muted mb-2' style={{ fontSize: '14px' }}>
+            <ul className='mb-0'>
               <li>
                 Single-click a point to select its transect (Ctrl-click for
                 multi-select). Clicking a selected transect will deselect it.
@@ -1227,8 +1227,8 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
           </span>
           {existingData && (
             <Button
-              variant="outline-primary"
-              className="mb-2"
+              variant='outline-primary'
+              className='mb-2'
               onClick={clearStrata}
             >
               Clear Strata
@@ -1236,9 +1236,9 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
           )}
           <div style={{ height: '600px', width: '100%', position: 'relative' }}>
             {partsLoading !== null ? (
-              <div className="d-flex justify-content-center align-items-center mt-3">
-                <Spinner animation="border" />
-                <span className="ms-2">Loading data</span>
+              <div className='d-flex justify-content-center align-items-center mt-3'>
+                <Spinner animation='border' />
+                <span className='ms-2'>Loading data</span>
               </div>
             ) : (
               <MapContainer
@@ -1250,8 +1250,8 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
                 preferCanvas={false}
               >
                 <TileLayer
-                  attribution="&copy; OpenStreetMap contributors"
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution='&copy; OpenStreetMap contributors'
+                  url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
                 />
                 {polygonCoords && (
                   <Polygon
@@ -1262,7 +1262,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
                 {/* Polygon selection tool - always available */}
                 <FeatureGroup>
                   <EditControl
-                    position="topright"
+                    position='topright'
                     draw={{
                       rectangle: false,
                       circle: false,
@@ -1345,7 +1345,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
                 {!existingData && (
                   <FeatureGroup>
                     <EditControl
-                      position="topright"
+                      position='topright'
                       draw={{
                         rectangle: false,
                         circle: false,
@@ -1424,7 +1424,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
                     const isSelected = selectedTransectIds.has(img.transectId);
                     return (
                       <CircleMarker
-                        pane="markerPane"
+                        pane='markerPane'
                         key={img.id}
                         center={[
                           adjustedPositions[img.id]?.latitude ?? img.latitude,
@@ -1539,14 +1539,14 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
                       remove: () => clearPendingSelection(false),
                     }}
                   >
-                    <div className="d-flex flex-column gap-2">
-                      <div className="mb-1">
+                    <div className='d-flex flex-column gap-2'>
+                      <div className='mb-1'>
                         <strong>{pendingPolygon.enclosedImageIds.size}</strong>{' '}
                         points selected
                       </div>
                       <Button
-                        variant="primary"
-                        size="sm"
+                        variant='primary'
+                        size='sm'
                         onClick={assignPendingToNewTransect}
                       >
                         Merge points
@@ -1557,7 +1557,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
                 {/* Merge Selected Transects Button */}
                 {selectedTransectIds.size >= 2 && (
                   <div
-                    className="d-flex flex-row gap-2 p-2"
+                    className='d-flex flex-row gap-2 p-2'
                     style={{
                       position: 'absolute',
                       bottom: '10px',
@@ -1570,7 +1570,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
                     }}
                   >
                     <Button
-                      variant="primary"
+                      variant='primary'
                       onClick={() => {
                         const selected = Array.from(selectedTransectIds);
                         const primary = Math.min(...selected);
@@ -1592,9 +1592,9 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
             )}
           </div>
           {saving && (
-            <div className="d-flex justify-content-center align-items-center mt-3">
-              <Spinner animation="border" size="sm" />
-              <span className="ms-2">
+            <div className='d-flex justify-content-center align-items-center mt-3'>
+              <Spinner animation='border' size='sm' />
+              <span className='ms-2'>
                 Saving images to transects:{' '}
                 {savingImageCount > 0
                   ? Math.round((savingProgress / savingImageCount) * 100)
@@ -1606,11 +1606,15 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
         </Form.Group>
       </Form>
       <Footer>
-        <Button variant="primary" onClick={handleSubmit} disabled={saveDisabled || saving}>
+        <Button
+          variant='primary'
+          onClick={handleSubmit}
+          disabled={saveDisabled || saving}
+        >
           Save Transects and Strata
         </Button>
         <Button
-          variant="dark"
+          variant='dark'
           onClick={() => showModal(null)}
           disabled={disabledClose}
         >

@@ -176,22 +176,22 @@ export default function AnnotationSetResults({
 
   return (
     <>
-      <Modal show={show} onHide={onClose} strict={true} size="lg">
+      <Modal show={show} onHide={onClose} strict={true} size='lg'>
         <Header>
           <Title>{annotationSet.name} Results</Title>
         </Header>
         <Body>
-          <div className="d-flex flex-column gap-4 p-3">
+          <div className='d-flex flex-column gap-4 p-3'>
             <div>
-              <h5 className="mb-0">Explore</h5>
-              <span className="text-muted" style={{ fontSize: '14px' }}>
+              <h5 className='mb-0'>Explore</h5>
+              <span className='text-muted' style={{ fontSize: '14px' }}>
                 Explore your annotation set by searching for all sightings of a
                 specific specific species. Can be used to find and correct
                 errors, and reannotate unknown sightings.
               </span>
               <Button
-                className="d-block mt-1"
-                variant="primary"
+                className='d-block mt-1'
+                variant='primary'
                 onClick={() =>
                   navigate(
                     `/surveys/${surveyId}/set/${annotationSet.id}/review`
@@ -202,13 +202,13 @@ export default function AnnotationSetResults({
               </Button>
             </div>
             <div>
-              <h5 className="mb-0">CSV File</h5>
-              <span className="text-muted" style={{ fontSize: '14px' }}>
+              <h5 className='mb-0'>CSV File</h5>
+              <span className='text-muted' style={{ fontSize: '14px' }}>
                 Download a CSV file of your annotation set.
               </span>
               <Button
-                className="d-block mt-1"
-                variant="primary"
+                className='d-block mt-1'
+                variant='primary'
                 onClick={() => {
                   onClose();
                   exportData([annotationSet]);
@@ -218,14 +218,14 @@ export default function AnnotationSetResults({
               </Button>
             </div>
             <div>
-              <h5 className="mb-0">Jolly II</h5>
-              <span className="text-muted" style={{ fontSize: '14px' }}>
+              <h5 className='mb-0'>Jolly II</h5>
+              <span className='text-muted' style={{ fontSize: '14px' }}>
                 Generate and view the Jolly results for this annotation set.
               </span>
-              <div className="d-flex flex-row gap-2">
+              <div className='d-flex flex-row gap-2'>
                 <Button
-                  className="d-block mt-1"
-                  variant="primary"
+                  className='d-block mt-1'
+                  variant='primary'
                   disabled={loading}
                   onClick={() => {
                     if (
@@ -242,8 +242,8 @@ export default function AnnotationSetResults({
                   Generate Results
                 </Button>
                 <Button
-                  className="d-block mt-1"
-                  variant="primary"
+                  className='d-block mt-1'
+                  variant='primary'
                   disabled={loading || !jollyResultsExists}
                   onClick={() => {
                     viewSurveyResults(annotationSet.id);
@@ -256,7 +256,7 @@ export default function AnnotationSetResults({
           </div>
         </Body>
         <Footer>
-          <Button variant="dark" onClick={onClose} disabled={loading}>
+          <Button variant='dark' onClick={onClose} disabled={loading}>
             Close
           </Button>
         </Footer>

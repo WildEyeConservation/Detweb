@@ -10,7 +10,7 @@ To debug this further I am creating this component which creates a observable co
 and on the screen by changing a message. This will hopefully confirm that the main loop is running to schedule just fine and tell me whether the
 rendering hang is global or only confined to my leaflet maps.*/
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 
 export function LivenessIndicator() {
   const [time, setTime] = useState(0);
@@ -22,5 +22,5 @@ export function LivenessIndicator() {
     };
   }, []);
   //console.log(`Running for : ${time}s`);
-  return <p style={{ textAlign: "center" }}> {`Running for : ${time}s`}</p>;
+  return <p style={{ textAlign: 'center' }}> {`Running for : ${time}s`}</p>;
 }

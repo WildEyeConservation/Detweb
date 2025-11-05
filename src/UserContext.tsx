@@ -1,10 +1,10 @@
-import { useState, useEffect, useContext, useMemo, useCallback } from "react";
-import { SQSClient } from "@aws-sdk/client-sqs";
-import { LambdaClient } from "@aws-sdk/client-lambda";
-import { S3Client } from "@aws-sdk/client-s3";
-import { AuthUser, fetchAuthSession } from "aws-amplify/auth";
-import { Schema } from "../amplify/data/resource"; // Path to your backend resource definition
-import { useUsers } from "./apiInterface.tsx";
+import { useState, useEffect, useContext, useMemo, useCallback } from 'react';
+import { SQSClient } from '@aws-sdk/client-sqs';
+import { LambdaClient } from '@aws-sdk/client-lambda';
+import { S3Client } from '@aws-sdk/client-s3';
+import { AuthUser, fetchAuthSession } from 'aws-amplify/auth';
+import { Schema } from '../amplify/data/resource'; // Path to your backend resource definition
+import { useUsers } from './apiInterface.tsx';
 import {
   GlobalContext,
   ProjectContext,
@@ -14,20 +14,20 @@ import {
   ProgressType,
   OrganizationContext,
   UploadContext,
-} from "./Context.tsx";
-import { generateClient } from "aws-amplify/api";
+} from './Context.tsx';
+import { generateClient } from 'aws-amplify/api';
 import type { DataClient } from '../amplify/shared/data-schema.generated';
-import outputs from "../amplify_outputs.json";
-import { useOptimisticUpdates, useQueues } from "./useOptimisticUpdates.tsx";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { useQuery } from "@tanstack/react-query";
+import outputs from '../amplify_outputs.json';
+import { useOptimisticUpdates, useQueues } from './useOptimisticUpdates.tsx';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { useQuery } from '@tanstack/react-query';
 
 export function Project({
   children,
   currentPM,
 }: {
   children: React.ReactNode;
-  currentPM: Schema["UserProjectMembership"]["type"];
+  currentPM: Schema['UserProjectMembership']['type'];
 }) {
   const { client } = useContext(GlobalContext)!;
   const [expandLegend, setExpandLegend] = useState<boolean>(true);
@@ -40,10 +40,10 @@ export function Project({
   );
   //const [currentProject, setCurrentProject] = useState<Schema['Project']['type'] | undefined>(undefined)
   const categoriesHook = useOptimisticUpdates<
-    Schema["Category"]["type"],
-    "Category"
+    Schema['Category']['type'],
+    'Category'
   >(
-    "Category",
+    'Category',
     async (nextToken) =>
       client.models.Category.list({
         filter: { projectId: { eq: currentPM?.projectId } },
@@ -52,7 +52,7 @@ export function Project({
     subscriptionFilter
   );
   const [currentCategory, setCurrentCategory] = useState<
-    Schema["Category"]["type"] | undefined
+    Schema['Category']['type'] | undefined
   >(categoriesHook.data?.[0]);
   // useEffect(() => {
   // if (currentPM) {
@@ -64,7 +64,7 @@ export function Project({
   // }, [currentPM])
 
   const projectQuery = useQuery({
-    queryKey: ["project", currentPM?.projectId],
+    queryKey: ['project', currentPM?.projectId],
     queryFn: () => client.models.Project.get({ id: currentPM?.projectId }),
   });
 
@@ -108,7 +108,7 @@ export function Upload({ children }: { children: React.ReactNode }) {
     fromStaleUpload?: boolean;
     newProject: boolean;
   }>({
-    projectId: "",
+    projectId: '',
     files: [],
     retryDelay: 0,
     resumeId: undefined,
@@ -154,17 +154,19 @@ export function User({
 }) {
   const [jobsCompleted, setJobsCompleted] = useState<number>(0);
   const [unannotatedJobs, setUnannotatedJobs] = useState<number>(0);
-  const [currentTaskTag, setCurrentTaskTag] = useState<string>("");
+  const [currentTaskTag, setCurrentTaskTag] = useState<string>('');
   const [isRegistering, setIsRegistering] = useState<boolean>(false);
   const [currentAnnoCount, setCurrentAnnoCount] = useState<{
     [key: string]: number;
   }>({});
   const [isAnnotatePath, setIsAnnotatePath] = useState<boolean>(false);
-  const [sessionTestsResults, setSessionTestsResults] = useState<{
-    id: string;
-    locationId: string;
-    annotationSetId: string;
-  }[]>([]);
+  const [sessionTestsResults, setSessionTestsResults] = useState<
+    {
+      id: string;
+      locationId: string;
+      annotationSetId: string;
+    }[]
+  >([]);
   const { client, region } = useContext(GlobalContext)!;
   //const { items: myMemberships } = useObserveQuery('UserProjectMembership', { filter: { userId: { eq: user!.username } } });
   // const { data: myMemberships } = useOptimisticUpdates(
@@ -183,10 +185,10 @@ export function User({
   //   subscriptionFilter)
 
   const myMembershipHook = useOptimisticUpdates<
-    Schema["UserProjectMembership"]["type"],
-    "UserProjectMembership"
+    Schema['UserProjectMembership']['type'],
+    'UserProjectMembership'
   >(
-    "UserProjectMembership",
+    'UserProjectMembership',
     async (nextToken) =>
       client.models.UserProjectMembership.list({
         filter: { userId: { eq: user!.username } },
@@ -196,10 +198,10 @@ export function User({
   );
 
   const myOrganizationHook = useOptimisticUpdates<
-    Schema["OrganizationMembership"]["type"],
-    "OrganizationMembership"
+    Schema['OrganizationMembership']['type'],
+    'OrganizationMembership'
   >(
-    "OrganizationMembership",
+    'OrganizationMembership',
     async (nextToken) =>
       client.models.OrganizationMembership.list({
         filter: { userId: { eq: user!.username } },
@@ -298,10 +300,10 @@ export function Management({ children }: { children: React.ReactNode }) {
   //   async (nextToken) => client.models.UserProjectMembership.list({ filter: subscriptionFilter,nextToken }),
   //   subscriptionFilter)
   const projectMembershipHook = useOptimisticUpdates<
-    Schema["UserProjectMembership"]["type"],
-    "UserProjectMembership"
+    Schema['UserProjectMembership']['type'],
+    'UserProjectMembership'
   >(
-    "UserProjectMembership",
+    'UserProjectMembership',
     async (nextToken) =>
       client.models.UserProjectMembership.list({
         filter: subscriptionFilter.filter,
@@ -310,10 +312,10 @@ export function Management({ children }: { children: React.ReactNode }) {
     subscriptionFilter
   );
   const imageSetsHook = useOptimisticUpdates<
-    Schema["ImageSet"]["type"],
-    "ImageSet"
+    Schema['ImageSet']['type'],
+    'ImageSet'
   >(
-    "ImageSet",
+    'ImageSet',
     async (nextToken) =>
       client.models.ImageSet.list({
         filter: subscriptionFilter.filter,
@@ -322,10 +324,10 @@ export function Management({ children }: { children: React.ReactNode }) {
     subscriptionFilter
   );
   const locationSetsHook = useOptimisticUpdates<
-    Schema["LocationSet"]["type"],
-    "LocationSet"
+    Schema['LocationSet']['type'],
+    'LocationSet'
   >(
-    "LocationSet",
+    'LocationSet',
     async (nextToken) =>
       client.models.LocationSet.list({
         filter: subscriptionFilter.filter,
@@ -334,10 +336,10 @@ export function Management({ children }: { children: React.ReactNode }) {
     subscriptionFilter
   );
   const annotationSetsHook = useOptimisticUpdates<
-    Schema["AnnotationSet"]["type"],
-    "AnnotationSet"
+    Schema['AnnotationSet']['type'],
+    'AnnotationSet'
   >(
-    "AnnotationSet",
+    'AnnotationSet',
     async (nextToken) =>
       client.models.AnnotationSet.list({
         filter: subscriptionFilter.filter,

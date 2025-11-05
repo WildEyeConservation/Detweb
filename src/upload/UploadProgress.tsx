@@ -1,6 +1,6 @@
-import { useContext, useState, useEffect, useRef } from "react";
-import { UploadContext } from "../Context";
-import { WifiOff } from "lucide-react";
+import { useContext, useState, useEffect, useRef } from 'react';
+import { UploadContext } from '../Context';
+import { WifiOff } from 'lucide-react';
 
 export default function UploadProgress() {
   const {
@@ -14,11 +14,11 @@ export default function UploadProgress() {
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
     return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
@@ -131,41 +131,43 @@ export default function UploadProgress() {
   const percent = Math.round((processed / total) * 100) || 0;
 
   return (
-    <div className="px-2">
+    <div className='px-2'>
       {!isOnline ? (
-        <div className="d-flex flex-row align-items-center gap-2">
-          <WifiOff className="text-warning" />
-          <p className="m-0 text-warning m-0">Waiting for connection...</p>
+        <div className='d-flex flex-row align-items-center gap-2'>
+          <WifiOff className='text-warning' />
+          <p className='m-0 text-warning m-0'>Waiting for connection...</p>
         </div>
       ) : (
-        <div className="d-flex flex-row align-items-center gap-2">
+        <div className='d-flex flex-row align-items-center gap-2'>
           <div
             style={{
               width: 10,
               height: 10,
               backgroundColor: error
-                ? "red"
+                ? 'red'
                 : retryDelay > 0
-                ? "yellow"
-                : "lime",
+                ? 'yellow'
+                : 'lime',
               borderRadius: 5,
             }}
           />
           {error ? (
-            <p className="m-0">Error</p>
+            <p className='m-0'>Error</p>
           ) : deleteId ? (
-            <p className="m-0">{`Deleting project: ${processed}/${total}`}</p>
+            <p className='m-0'>{`Deleting project: ${processed}/${total}`}</p>
           ) : retryDelay > 0 ? (
-            <p className="m-0">Retrying failed images...</p>
+            <p className='m-0'>Retrying failed images...</p>
           ) : !isComplete ? (
-            <div className="d-flex flex-column">
-              <p className="m-0">{`${processed}/${total} (${percent}%) images`}</p>
+            <div className='d-flex flex-column'>
+              <p className='m-0'>{`${processed}/${total} (${percent}%) images`}</p>
               {estimatedTimeRemaining && (
-                <p className="m-0">{`${(estimatedTimeRemaining / 3600).toFixed(2)} hours remaining`}</p>
+                <p className='m-0'>{`${(estimatedTimeRemaining / 3600).toFixed(
+                  2
+                )} hours remaining`}</p>
               )}
             </div>
           ) : (
-            <p className="m-0">Finished</p>
+            <p className='m-0'>Finished</p>
           )}
         </div>
       )}

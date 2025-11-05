@@ -35,12 +35,12 @@ export function Registration({ showAnnotationSetDropdown = true }) {
   } | null>(null);
   const [numLoaded, setNumLoaded] = useState(0);
   const [showFilters, setShowFilters] = useState(true);
-  const [points1, setPoints1] = useState<{ id: string; x: number; y: number }[]>(
-    []
-  );
-  const [points2, setPoints2] = useState<{ id: string; x: number; y: number }[]>(
-    []
-  );
+  const [points1, setPoints1] = useState<
+    { id: string; x: number; y: number }[]
+  >([]);
+  const [points2, setPoints2] = useState<
+    { id: string; x: number; y: number }[]
+  >([]);
   const [localTransforms, setLocalTransforms] = useState<
     Record<string, ((c: [number, number]) => [number, number])[]>
   >({});
@@ -126,7 +126,10 @@ export function Registration({ showAnnotationSetDropdown = true }) {
           const acc3 = acc[n.image2Id] || {};
           acc[n.image2Id] = {
             ...acc3,
-            [n.image1Id]: { tf: makeTransform(inv(M)), noHomography: isDefault },
+            [n.image1Id]: {
+              tf: makeTransform(inv(M)),
+              noHomography: isDefault,
+            },
           };
         });
         return acc;
@@ -275,8 +278,13 @@ export function Registration({ showAnnotationSetDropdown = true }) {
       }}
     >
       <div className='w-100 h-100 d-flex flex-column flex-md-row gap-3'>
-        <div className='d-flex flex-column gap-3 w-100' style={{ maxWidth: '360px' }}>
-          {activePair && imageNeighbours[activePair.primary]?.[activePair.secondary]?.noHomography &&
+        <div
+          className='d-flex flex-column gap-3 w-100'
+          style={{ maxWidth: '360px' }}
+        >
+          {activePair &&
+          imageNeighbours[activePair.primary]?.[activePair.secondary]
+            ?.noHomography &&
           !localTransforms[pairKey] ? (
             <div className='w-100'>
               <ManualHomographyEditor
@@ -292,7 +300,10 @@ export function Registration({ showAnnotationSetDropdown = true }) {
                   // Optimistically enable linking with local transforms
                   const fwd = makeTransform(H as any);
                   const bwd = makeTransform(inv(H as any) as any);
-                  setLocalTransforms((old) => ({ ...old, [pairKey]: [fwd, bwd] }));
+                  setLocalTransforms((old) => ({
+                    ...old,
+                    [pairKey]: [fwd, bwd],
+                  }));
                 }}
               />
             </div>
@@ -408,8 +419,10 @@ export function Registration({ showAnnotationSetDropdown = true }) {
               selectedSet={selectedAnnotationSet}
               transforms={
                 localTransforms[pairKey] || [
-                  imageNeighbours[activePair.primary]?.[activePair.secondary]?.tf,
-                  imageNeighbours[activePair.secondary]?.[activePair.primary]?.tf,
+                  imageNeighbours[activePair.primary]?.[activePair.secondary]
+                    ?.tf,
+                  imageNeighbours[activePair.secondary]?.[activePair.primary]
+                    ?.tf,
                 ]
               }
               next={nextPair}
@@ -417,8 +430,10 @@ export function Registration({ showAnnotationSetDropdown = true }) {
               visible={true}
               ack={() => {}}
               noHomography={
-                (imageNeighbours[activePair.primary]?.[activePair.secondary]?.noHomography ??
-                  false) && !localTransforms[pairKey]
+                (imageNeighbours[activePair.primary]?.[activePair.secondary]
+                  ?.noHomography ??
+                  false) &&
+                !localTransforms[pairKey]
               }
               points1={points1}
               points2={points2}

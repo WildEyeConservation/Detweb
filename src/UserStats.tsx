@@ -16,7 +16,8 @@ import SnapshotStatsModal from './SnapshotStatsModal';
 export default function UserStats() {
   const { getDynamoClient, myOrganizationHook, myMembershipHook } =
     useContext(UserContext)!;
-  const { client, backend, modalToShow, showModal } = useContext(GlobalContext)!;
+  const { client, backend, modalToShow, showModal } =
+    useContext(GlobalContext)!;
   const { users: allUsers } = useUsers();
   const [projects, setProjects] = useState<
     {
@@ -53,7 +54,8 @@ export default function UserStats() {
 
   // Check if user is admin for the selected project
   const isProjectAdmin = project
-    ? myMembershipHook.data?.find((m) => m.projectId === project.value)?.isAdmin || false
+    ? myMembershipHook.data?.find((m) => m.projectId === project.value)
+        ?.isAdmin || false
     : false;
 
   const startString = startDate

@@ -290,7 +290,10 @@ export default function Surveys() {
                         showModal('editSurvey');
                       }
                     }}
-                    disabled={disabled || hasJobs}
+                    disabled={
+                      process.env.NODE_ENV !== 'development' &&
+                      (disabled || hasJobs)
+                    }
                   >
                     Edit
                   </Button>

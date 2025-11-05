@@ -243,20 +243,25 @@ export const useQueues = () => {
     subscriptionFilter
   );
   const create = (name: string) => {
-    const safeName = makeSafeQueueName(name+crypto.randomUUID());
-    const id = originalHook.create({ name, projectId: project.id});
-    getSqsClient().then(sqsClient => sqsClient.send(new CreateQueueCommand({
-      QueueName: safeName+'.fifo',
-      Attributes: {
-        MessageRetentionPeriod: '1209600', //This value is in seconds. 1209600 corresponds to 14 days and is the maximum AWS supports      
-        FifoQueue: "true",
-      },
-    }))
-    ).then(({ QueueUrl: url }) => {
-      originalHook.update({ id, url });
-      return id;
-    })
-  }
+    const safeName = makeSafeQueueName(name + crypto.randomUUID());
+    const id = originalHook.create({ name, projectId: project.id });
+    getSqsClient()
+      .then((sqsClient) =>
+        sqsClient.send(
+          new CreateQueueCommand({
+            QueueName: safeName + '.fifo',
+            Attributes: {
+              MessageRetentionPeriod: '1209600', //This value is in seconds. 1209600 corresponds to 14 days and is the maximum AWS supports
+              FifoQueue: 'true',
+            },
+          })
+        )
+      )
+      .then(({ QueueUrl: url }) => {
+        originalHook.update({ id, url });
+        return id;
+      });
+  };
   const remove = ({ id }: { id: string }) => {
     const url = originalHook.data.find((x) => x.id == id)?.url;
     if (url) {

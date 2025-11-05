@@ -1,16 +1,16 @@
-import { useState, useContext, useEffect, useCallback } from "react";
-import { Form } from "react-bootstrap";
-import { GlobalContext } from "./Context";
-import { fetchAllPaginatedResults } from "./utils";
-import { useUpdateProgress } from "./useUpdateProgress";
-import LabeledToggleSwitch from "./LabeledToggleSwitch";
-import { useUsers } from "./apiInterface";
-import { Schema } from "./amplify/client-schema";
-import Select from "react-select";
+import { useState, useContext, useEffect, useCallback } from 'react';
+import { Form } from 'react-bootstrap';
+import { GlobalContext } from './Context';
+import { fetchAllPaginatedResults } from './utils';
+import { useUpdateProgress } from './useUpdateProgress';
+import LabeledToggleSwitch from './LabeledToggleSwitch';
+import { useUsers } from './apiInterface';
+import { Schema } from './amplify/client-schema';
+import Select from 'react-select';
 
 type MoveObservationsProps = {
   annotationSetId: string;
-  project: Schema["Project"]["type"];
+  project: Schema['Project']['type'];
   setHandleMove: React.Dispatch<
     React.SetStateAction<(() => Promise<void>) | null>
   >;
@@ -28,7 +28,7 @@ export default function MoveObservations({
     useUpdateProgress({
       taskId: `Fetching observations`,
       indeterminateTaskName: `Fetching observations`,
-      determinateTaskName: "Fetching observations",
+      determinateTaskName: 'Fetching observations',
       stepFormatter: (count) => `${count} observations`,
     });
 
@@ -36,7 +36,7 @@ export default function MoveObservations({
     useUpdateProgress({
       taskId: `Updating observations`,
       indeterminateTaskName: `Updating observations`,
-      determinateTaskName: "Updating observations",
+      determinateTaskName: 'Updating observations',
       stepFormatter: (count) => `${count} observations`,
     });
 
@@ -44,14 +44,18 @@ export default function MoveObservations({
     value: string;
     label: string;
   } | null>(null);
-  const [observationTime, setObservationTime] = useState<number | "">("");
-  const [existingAnnotationSet, setExistingAnnotationSet] =
-    useState<{ value: string; label: string } | null>(null);
-  const [filterByUser, setFilterByUser] = useState<boolean>(true);
-  const [selectedLocationSets, setSelectedLocationSets] = useState<{
+  const [observationTime, setObservationTime] = useState<number | ''>('');
+  const [existingAnnotationSet, setExistingAnnotationSet] = useState<{
     value: string;
     label: string;
-  }[]>([]);
+  } | null>(null);
+  const [filterByUser, setFilterByUser] = useState<boolean>(true);
+  const [selectedLocationSets, setSelectedLocationSets] = useState<
+    {
+      value: string;
+      label: string;
+    }[]
+  >([]);
   const [moveToNewAnnotationSet, setMoveToNewAnnotationSet] =
     useState<boolean>(true);
 
@@ -63,7 +67,7 @@ export default function MoveObservations({
       !moveToNewAnnotationSet &&
       existingAnnotationSetId === annotationSetId
     ) {
-      alert("Cannot move observations to the same annotation set");
+      alert('Cannot move observations to the same annotation set');
       return;
     }
 
@@ -88,7 +92,7 @@ export default function MoveObservations({
         client.models.Observation.observationsByAnnotationSetId,
         {
           annotationSetId,
-          selectionSet: ["id", "location.setId"] as const,
+          selectionSet: ['id', 'location.setId'] as const,
           filter: criteria,
         },
         setObservationsFetched
@@ -100,7 +104,7 @@ export default function MoveObservations({
       const filteredObservations =
         setIds.length > 0
           ? observations.filter((observation) =>
-              setIds.includes(observation.location?.setId || "")
+              setIds.includes(observation.location?.setId || '')
             )
           : observations;
 
@@ -108,9 +112,7 @@ export default function MoveObservations({
         !confirm(
           `Are you sure you want to move ${
             filteredObservations.length
-          } observations${
-            setIds.length > 0 ? ` (filtered)` : ""
-          }?`
+          } observations${setIds.length > 0 ? ` (filtered)` : ''}?`
         )
       ) {
         return;
@@ -118,10 +120,10 @@ export default function MoveObservations({
 
       const previousAnnotationSetName = (
         project.annotationSets.find((set) => set.id === annotationSetId)
-          ?.name || "set"
-      ).replace(/ /g, "_");
+          ?.name || 'set'
+      ).replace(/ /g, '_');
       const user = allUsers.find((user) => user.id === selectedUserId)?.name;
-      let targetAnnotationSetId = "";
+      let targetAnnotationSetId = '';
       if (moveToNewAnnotationSet) {
         const { data: result } = await client.models.AnnotationSet.create({
           // name format: M(moved observation) - previous annotation set name - criteria
@@ -133,7 +135,7 @@ export default function MoveObservations({
                   5
                 )}_${previousAnnotationSetName.slice(-4)}`
           }_${
-            criteria.owner ? user : criteria.timeTaken ? observationTime : ""
+            criteria.owner ? user : criteria.timeTaken ? observationTime : ''
           }`,
           projectId: project.id,
         });
@@ -160,8 +162,8 @@ export default function MoveObservations({
 
       await Promise.all(updateObservationQ);
     } catch (error) {
-      console.error("Error moving observations:", error);
-      alert("Error moving observations. (See console for details)");
+      console.error('Error moving observations:', error);
+      alert('Error moving observations. (See console for details)');
     }
   }, [
     allUsers,
@@ -181,11 +183,11 @@ export default function MoveObservations({
   }, [handleMove]);
 
   return (
-    <div className="d-flex flex-column gap-3">
-      <Form.Group controlId="formLocationSets">
+    <div className='d-flex flex-column gap-3'>
+      <Form.Group controlId='formLocationSets'>
         <Form.Label>Select Location Sets (Tasks)</Form.Label>
         <Select
-          className="text-black"
+          className='text-black'
           options={project.locationSets.map((set) => ({
             value: set.id,
             label: set.name,
@@ -197,9 +199,9 @@ export default function MoveObservations({
       </Form.Group>
       <Form.Group>
         <LabeledToggleSwitch
-          className="m-0"
-          leftLabel="Filter by User"
-          rightLabel="Filter by Time"
+          className='m-0'
+          leftLabel='Filter by User'
+          rightLabel='Filter by Time'
           checked={!filterByUser}
           onChange={(checked) => {
             setFilterByUser(!checked);
@@ -207,12 +209,12 @@ export default function MoveObservations({
         />
       </Form.Group>
       {filterByUser ? (
-        <Form.Group controlId="formUser">
-          <Form.Label style={{ display: filterByUser ? "block" : "none" }}>
+        <Form.Group controlId='formUser'>
+          <Form.Label style={{ display: filterByUser ? 'block' : 'none' }}>
             Select User
           </Form.Label>
           <Select
-            className="text-black"
+            className='text-black'
             value={selectedUser}
             onChange={(option) => setSelectedUser(option)}
             options={allUsers.map((user) => ({
@@ -221,22 +223,22 @@ export default function MoveObservations({
             }))}
             isDisabled={!filterByUser}
             isClearable
-            placeholder="Choose..."
+            placeholder='Choose...'
           />
         </Form.Group>
       ) : (
-        <Form.Group controlId="formTime">
-          <Form.Label style={{ display: !filterByUser ? "block" : "none" }}>
+        <Form.Group controlId='formTime'>
+          <Form.Label style={{ display: !filterByUser ? 'block' : 'none' }}>
             Maximum Observation Time (milliseconds)
           </Form.Label>
           <Form.Control
-            type="number"
-            placeholder="Enter time taken"
+            type='number'
+            placeholder='Enter time taken'
             value={observationTime}
             onChange={(e) =>
               setObservationTime(
-                e.target.value === ""
-                  ? ""
+                e.target.value === ''
+                  ? ''
                   : Number(e.target.value) < 0
                   ? 0
                   : Number(e.target.value)
@@ -249,9 +251,9 @@ export default function MoveObservations({
 
       <Form.Group>
         <LabeledToggleSwitch
-          className="m-0"
-          leftLabel="Existing Annotation Set"
-          rightLabel="New Annotation Set"
+          className='m-0'
+          leftLabel='Existing Annotation Set'
+          rightLabel='New Annotation Set'
           checked={moveToNewAnnotationSet}
           onChange={(checked) => {
             setMoveToNewAnnotationSet(checked);
@@ -259,10 +261,10 @@ export default function MoveObservations({
         />
       </Form.Group>
       <Form.Group
-        style={{ display: !moveToNewAnnotationSet ? "block" : "none" }}
+        style={{ display: !moveToNewAnnotationSet ? 'block' : 'none' }}
       >
         <Select
-          className="text-black"
+          className='text-black'
           options={project.annotationSets.map((set) => ({
             value: set.id,
             label: set.name,

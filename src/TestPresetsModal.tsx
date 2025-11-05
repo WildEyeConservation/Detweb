@@ -193,16 +193,16 @@ export default function TestPresetsModal({
         <Form.Group>
           <Form.Label>Pool name</Form.Label>
           <Form.Control
-            type="text"
-            placeholder="Enter pool name"
+            type='text'
+            placeholder='Enter pool name'
             value={presetName}
             onChange={(e) => setPresetName(e.target.value)}
           />
         </Form.Group>
-        <Form.Group className="mt-2">
+        <Form.Group className='mt-2'>
           <Form.Label>Labels</Form.Label>
           <Select
-            className="text-black"
+            className='text-black'
             value={selectedCategories}
             options={categories?.map((q) => ({ label: q.name, value: q.id }))}
             isMulti
@@ -215,10 +215,10 @@ export default function TestPresetsModal({
             }}
           />
         </Form.Group>
-        <Form.Group className="mt-2">
+        <Form.Group className='mt-2'>
           <Form.Label>Annotation Accuracy (%)</Form.Label>
           <Form.Control
-            type="number"
+            type='number'
             value={annotationAccuracy}
             onChange={(e) => setAnnotationAccuracy(e.target.value)}
             min={0}
@@ -226,17 +226,17 @@ export default function TestPresetsModal({
           />
         </Form.Group>
       </Modal.Body>
-      <Modal.Footer className="d-flex justify-content-end">
-        <span className="d-flex gap-2">
+      <Modal.Footer className='d-flex justify-content-end'>
+        <span className='d-flex gap-2'>
           <Button
-            variant="primary"
+            variant='primary'
             onClick={() => {
               handleSubmit();
             }}
           >
             {isNewPreset ? 'Create' : 'Save'}
           </Button>
-          <Button variant="dark" onClick={onClose}>
+          <Button variant='dark' onClick={onClose}>
             Cancel
           </Button>
         </span>

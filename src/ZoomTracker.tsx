@@ -1,10 +1,10 @@
-import { useEffect, useState,useContext } from 'react';
+import { useEffect, useState, useContext } from 'react';
 import { useMap } from 'react-leaflet';
 import { ImageContext } from './Context';
 
 const ZoomTracker = () => {
   const map = useMap();
-  const {setZoom} = useContext(ImageContext)!;
+  const { setZoom } = useContext(ImageContext)!;
 
   useEffect(() => {
     const handleZoomChange = () => {

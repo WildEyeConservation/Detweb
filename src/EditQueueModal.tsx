@@ -48,11 +48,11 @@ export default function EditQueueModal({
       </Modal.Header>
       <Modal.Body>
         <Form>
-          <Form.Group className="mb-3">
+          <Form.Group className='mb-3'>
             <Form.Label>Batch size</Form.Label>
             <LabeledToggleSwitch
-              leftLabel="Infinite"
-              rightLabel="Limited"
+              leftLabel='Infinite'
+              rightLabel='Limited'
               checked={limitedBatchSize}
               onChange={(checked) => {
                 setLimitedBatchSize(checked);
@@ -60,22 +60,22 @@ export default function EditQueueModal({
             />
             {limitedBatchSize && (
               <Form.Control
-                type="number"
+                type='number'
                 value={batchSize}
                 onChange={(e) => setBatchSize(e.target.value)}
               />
             )}
           </Form.Group>
-          <Form.Group className="mb-3">
+          <Form.Group className='mb-3'>
             <Form.Switch
-              label="Hidden"
+              label='Hidden'
               checked={hidden}
               onChange={() => {
                 setHidden((h) => !h);
               }}
             />
           </Form.Group>
-          <Form.Group className="mb-3">
+          <Form.Group className='mb-3'>
             <Form.Label>Zoom level</Form.Label>
             <Form.Select
               value={zoom}
@@ -86,7 +86,7 @@ export default function EditQueueModal({
                 console.log(zoom);
               }}
             >
-              <option value="auto">Auto</option>
+              <option value='auto'>Auto</option>
               {[...Array(13)].map((_, i) => (
                 <option key={i} value={i}>
                   Level {i}
@@ -97,10 +97,10 @@ export default function EditQueueModal({
         </Form>
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="primary" onClick={handleSave}>
+        <Button variant='primary' onClick={handleSave}>
           Save
         </Button>
-        <Button variant="dark" onClick={onClose}>
+        <Button variant='dark' onClick={onClose}>
           Cancel
         </Button>
       </Modal.Footer>

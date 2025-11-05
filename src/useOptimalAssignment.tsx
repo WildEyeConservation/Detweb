@@ -1,8 +1,12 @@
-import computeMunkres from "munkres-js";
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { square, sqrt } from "mathjs";
-import { AnnotationType, ImageType , ExtendedAnnotationType } from "./schemaTypes";
-import { CRUDhook } from "./Context";
+import computeMunkres from 'munkres-js';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { square, sqrt } from 'mathjs';
+import {
+  AnnotationType,
+  ImageType,
+  ExtendedAnnotationType,
+} from './schemaTypes';
+import { CRUDhook } from './Context';
 interface TransformFunction {
   (coordinates: [number, number]): [number, number];
 }
@@ -18,7 +22,7 @@ interface UseOptimalAssignmentProps {
 const MISMATCH_TOLERANCE = 400;
 /* This parameter determines the minimum distance between two annotations (in pixels), for which the algorithm will consider 
 proposing a match. It may need to be adjusted in future based on resolution of input images and expected accuracy of 
-annotations/regsitration.*/ 
+annotations/regsitration.*/
 
 /* This is a custom hook that assists us with performing optimal assignment between two sets of annotations, based on the 
 distances between them. It is used by the RegisterPair component. Because the annotations may be in two different coordinate 
@@ -40,26 +44,31 @@ export function useOptimalAssignment({
   getMatchStatus,
   transforms,
   images,
-  leniency
+  leniency,
 }: UseOptimalAssignmentProps) {
   const [dataLoaded, setDataLoaded] = useState(false);
   // Log when the hook is called
-  console.log("useOptimalAssignment called");
-  
+  console.log('useOptimalAssignment called');
+
   const annotations = useMemo(() => {
-    console.log("annotations memo recalculating", {
+    console.log('annotations memo recalculating', {
       data0Length: annotationsHooks[0].data.length,
-      data1Length: annotationsHooks[1].data.length
+      data1Length: annotationsHooks[1].data.length,
     });
     return [annotationsHooks[0].data, annotationsHooks[1].data];
   }, [dataLoaded, annotationsHooks[0].data, annotationsHooks[1].data]);
-  
+
   useEffect(() => {
-      setDataLoaded(annotationsHooks[0].meta.status=='success' && annotationsHooks[1].meta.status=='success');
+    setDataLoaded(
+      annotationsHooks[0].meta.status == 'success' &&
+        annotationsHooks[1].meta.status == 'success'
+    );
   }, [annotationsHooks[0].meta.status, annotationsHooks[1].meta.status]);
 
-  const [enhancedAnnotations, setEnhancedAnnotations] = useState<[ExtendedAnnotationType[], ExtendedAnnotationType[]]>([[], []]);
-  
+  const [enhancedAnnotations, setEnhancedAnnotations] = useState<
+    [ExtendedAnnotationType[], ExtendedAnnotationType[]]
+  >([[], []]);
+
   /* This function creates a new annotation, which is used when we are proposing new matches. It is used to create new annotations
   in the case that a match is proposed, but the corresponding annotation in the other image has not yet been annotated.
   */
@@ -77,21 +86,25 @@ export function useOptimalAssignment({
     return {
       id: crypto.randomUUID(),
       projectId: anno.projectId,
-      shadow: true, /* Indicates that this is a shadow annotation, in other words, it corresponds to an annotation that we think 
+      shadow:
+        true /* Indicates that this is a shadow annotation, in other words, it corresponds to an annotation that we think 
       should exist, but it doesn't (yet), either because an animal was missed by annotators/algorithms or because the animal in 
       question is not visible in the relevant image (outside FOV or obscured)
-      */
+      */,
       categoryId: anno.categoryId,
       x: Math.round(projected[0]),
       y: Math.round(projected[1]),
-      source: "proposedByMunkres",
+      source: 'proposedByMunkres',
       obscured,
       imageId: image.id,
       setId: anno.setId,
     };
   }
 
-  function dist(a: { x: number, y: number }, b: { x: number, y: number }): number {
+  function dist(
+    a: { x: number; y: number },
+    b: { x: number; y: number }
+  ): number {
     return sqrt(square(a.x - b.x) + square(a.y - b.y)) as number;
   }
 
@@ -105,16 +118,16 @@ export function useOptimalAssignment({
   // As output this effect updates the proposedAnnotations and matches state variables.
   // proposedAnnotations containe two arrays. The first contains all the shadow annotations proposed for image 1, and the second
   // contains all the shadow annotations proposed for image 2.
-  // matches contains the list of matches proposed by the munkres algorithm. it is a list of pairs of annotations, 
+  // matches contains the list of matches proposed by the munkres algorithm. it is a list of pairs of annotations,
   useEffect(() => {
-    console.log("Main effect running", {
+    console.log('Main effect running', {
       annotations0Length: annotations[0]?.length,
       annotations1Length: annotations[1]?.length,
-      transformsPresent: !!transforms
+      transformsPresent: !!transforms,
     });
 
     if (transforms && dataLoaded) {
-      console.log("calcCostMatrix triggered");
+      console.log('calcCostMatrix triggered');
       const N = annotations[0]?.length + annotations[1]?.length;
       if (N) {
         const proposedObjectIdMap: Record<string, string> = {}; // maps annotation ids to proposed object ids.
@@ -137,101 +150,148 @@ export function useOptimalAssignment({
                 default:
                   distMatrix[i][j] = // Alternatively, we set the cost to the distance between the annotations if they are of the same category.
                     annoI.categoryId === annoJ.categoryId
-                      ? dist({ ...annoI, x: projected[0], y: projected[1] }, annoJ)
+                      ? dist(
+                          { ...annoI, x: projected[0], y: projected[1] },
+                          annoJ
+                        )
                       : Infinity; // If they are of different categories, we set the cost to a large number.
                   break;
               }
             }
           }
         }
-        const proposed: [ExtendedAnnotationType[], ExtendedAnnotationType[]] = [[], []];
+        const proposed: [ExtendedAnnotationType[], ExtendedAnnotationType[]] = [
+          [],
+          [],
+        ];
         computeMunkres(distMatrix)
-          .map(([matchI, matchJ]: [number, number]): [AnnotationType, AnnotationType] => [
-            annotations[0]?.[matchI],
-            annotations[1]?.[matchJ],
-          ])
+          .map(
+            ([matchI, matchJ]: [number, number]): [
+              AnnotationType,
+              AnnotationType
+            ] => [annotations[0]?.[matchI], annotations[1]?.[matchJ]]
+          )
           .forEach(([a, b]) => {
-            // Here we add proposedObjectIds to the annotations. We use objectIds if they exist to generate unique identicons for 
-            // each object, so that the user can visually identify the matches. We also want to generate identicons for proposed 
-            // matches, but without assigning objectIDs (because that will make the algorithm think that these matches have been 
+            // Here we add proposedObjectIds to the annotations. We use objectIds if they exist to generate unique identicons for
+            // each object, so that the user can visually identify the matches. We also want to generate identicons for proposed
+            // matches, but without assigning objectIDs (because that will make the algorithm think that these matches have been
             // accepted). Thus we add the proposedObjectId field to the type and try to generate an id that will be somewhat stable.
-            // We could also just use crypto.randomUUID(), but that causes the identicon of a proposed matched pair to change on 
+            // We could also just use crypto.randomUUID(), but that causes the identicon of a proposed matched pair to change on
             // every rerender, which is visually distracting. Thus the need for stability.
-            const id =
-              a?.objectId || b?.objectId || a?.id || b?.id;
+            const id = a?.objectId || b?.objectId || a?.id || b?.id;
             if (a && b) {
               // if both annotations exist we just add the proposedObjectId to the map under each id.
               proposedObjectIdMap[a.id] = id;
               proposedObjectIdMap[b.id] = id;
-              return
+              return;
             }
             if (a) {
-              // If the first annotation exists, but the second does not, 
+              // If the first annotation exists, but the second does not,
               //we create a new shadow annotation for the second image.
-              const shadowAnnotation = createNewAnnotation(a, transforms[0], images[1]);  
-              if (shadowAnnotation.obscured) {return}
+              const shadowAnnotation = createNewAnnotation(
+                a,
+                transforms[0],
+                images[1]
+              );
+              if (shadowAnnotation.obscured) {
+                return;
+              }
               proposed[1].push(shadowAnnotation);
               proposedObjectIdMap[a.id] = id;
               proposedObjectIdMap[shadowAnnotation.id] = id;
-              return
+              return;
             }
             if (b) {
-              // If the second annotation exists, but the first does not, 
+              // If the second annotation exists, but the first does not,
               //we create a new shadow annotation for the first image.
-              const shadowAnnotation = createNewAnnotation(b, transforms[1], images[0]);
-              if (shadowAnnotation.obscured) { return }
+              const shadowAnnotation = createNewAnnotation(
+                b,
+                transforms[1],
+                images[0]
+              );
+              if (shadowAnnotation.obscured) {
+                return;
+              }
               proposed[0].push(shadowAnnotation);
               proposedObjectIdMap[b.id] = shadowAnnotation.id;
               proposedObjectIdMap[shadowAnnotation.id] = shadowAnnotation.id;
-              return
+              return;
             }
-          })
+          });
         setEnhancedAnnotations([
-          annotations[0].concat(proposed[0]).map(anno => {
+          annotations[0].concat(proposed[0]).map((anno) => {
             return { ...anno, proposedObjectId: proposedObjectIdMap[anno.id] };
           }),
-          annotations[1].concat(proposed[1]).map(anno => {
+          annotations[1].concat(proposed[1]).map((anno) => {
             return { ...anno, proposedObjectId: proposedObjectIdMap[anno.id] };
-          })
+          }),
         ]);
-      }
-      else{
-        setEnhancedAnnotations([[],[]]);
+      } else {
+        setEnhancedAnnotations([[], []]);
       }
     }
-  }, [annotations[0],annotations[1], transforms, dataLoaded,leniency]);
+  }, [annotations[0], annotations[1], transforms, dataLoaded, leniency]);
 
   // Add repositionShadow callback to reposition shadow annotations in UI without creating new annotations
-  const repositionShadow = useCallback((index: number, id: string, x: number, y: number) => {
-    setEnhancedAnnotations(prev => {
-      const newEnhanced: [ExtendedAnnotationType[], ExtendedAnnotationType[]] = [...prev];
-      newEnhanced[index] = newEnhanced[index].map(anno =>
-        anno.id === id ? { ...anno, x, y } : anno
-      );
-      return newEnhanced;
-    });
-  }, []);
+  const repositionShadow = useCallback(
+    (index: number, id: string, x: number, y: number) => {
+      setEnhancedAnnotations((prev) => {
+        const newEnhanced: [
+          ExtendedAnnotationType[],
+          ExtendedAnnotationType[]
+        ] = [...prev];
+        newEnhanced[index] = newEnhanced[index].map((anno) =>
+          anno.id === id ? { ...anno, x, y } : anno
+        );
+        return newEnhanced;
+      });
+    },
+    []
+  );
 
   return {
-    enhancedAnnotationHooks: [0, 1].map(i => ({
+    enhancedAnnotationHooks: [0, 1].map((i) => ({
       data: enhancedAnnotations[i],
       create: annotationsHooks[i].create,
-      update: useCallback((anno: ExtendedAnnotationType) => {
-        console.log(`Update called for hook ${i}`, { 
-          id: anno.id, 
-          shadow: anno.shadow,
-          proposedObjectId: anno.proposedObjectId,
-          objectId: anno.objectId 
-        });
-        const { shadow, proposedObjectId, image, object, project, set, createdAt, updatedAt,owner,category,id, ...annoStripped } = anno;
-        if (shadow) {
-          annotationsHooks[i].create({...annoStripped, objectId:anno.objectId || anno.proposedObjectId});
-        } else {
-          annotationsHooks[i].update({...annoStripped, id, objectId:anno.objectId || anno.proposedObjectId});
-        }
-      }, [annotationsHooks[i]]),
+      update: useCallback(
+        (anno: ExtendedAnnotationType) => {
+          console.log(`Update called for hook ${i}`, {
+            id: anno.id,
+            shadow: anno.shadow,
+            proposedObjectId: anno.proposedObjectId,
+            objectId: anno.objectId,
+          });
+          const {
+            shadow,
+            proposedObjectId,
+            image,
+            object,
+            project,
+            set,
+            createdAt,
+            updatedAt,
+            owner,
+            category,
+            id,
+            ...annoStripped
+          } = anno;
+          if (shadow) {
+            annotationsHooks[i].create({
+              ...annoStripped,
+              objectId: anno.objectId || anno.proposedObjectId,
+            });
+          } else {
+            annotationsHooks[i].update({
+              ...annoStripped,
+              id,
+              objectId: anno.objectId || anno.proposedObjectId,
+            });
+          }
+        },
+        [annotationsHooks[i]]
+      ),
       delete: annotationsHooks[i].delete,
     })),
     repositionShadow,
-  }
+  };
 }

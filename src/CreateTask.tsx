@@ -823,9 +823,9 @@ function CreateTask({
                       className='me-3 text-white'
                       style={{ fontSize: '14px' }}
                     >
-                      Transect{showTransectId ? ` ${g.transectId}` : ''}: {g.imageCount} images -{' '}
-                      {g.distanceKm.toFixed(2)} km - {g.speedKmh.toFixed(2)}{' '}
-                      km/h
+                      Transect{showTransectId ? ` ${g.transectId}` : ''}:{' '}
+                      {g.imageCount} images - {g.distanceKm.toFixed(2)} km -{' '}
+                      {g.speedKmh.toFixed(2)} km/h
                     </div>
                     <div className='d-flex align-items-center gap-2'>
                       <div className='d-flex align-items-center'>
@@ -879,8 +879,8 @@ function CreateTask({
                 >
                   {transectGroupStats.map((g: any) => (
                     <div key={`exp-${g.transectId}`}>
-                      Transect{showTransectId ? ` ${g.transectId}` : ''} expected images:{' '}
-                      {expectedCounts.per[g.transectId] ?? 0}
+                      Transect{showTransectId ? ` ${g.transectId}` : ''}{' '}
+                      expected images: {expectedCounts.per[g.transectId] ?? 0}
                     </div>
                   ))}
                   <div className='fw-bold'>

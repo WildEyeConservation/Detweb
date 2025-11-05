@@ -62,35 +62,35 @@ export default function Info({ organizationId }: { organizationId: string }) {
   }, [organizationId]);
 
   return (
-    <div className="d-flex flex-column gap-2 mt-3 w-100">
+    <div className='d-flex flex-column gap-2 mt-3 w-100'>
       <h5>Organisation Info</h5>
       <Form onSubmit={handleSubmit}>
-        <Form.Group className="mb-2" controlId="formBasicEmail">
+        <Form.Group className='mb-2' controlId='formBasicEmail'>
           <Form.Label>Name</Form.Label>
           <Form.Control
-            type="text"
-            placeholder="Enter organisation name"
+            type='text'
+            placeholder='Enter organisation name'
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={loading}
           />
         </Form.Group>
-        <Form.Group className="mb-3" controlId="formBasicEmail">
+        <Form.Group className='mb-3' controlId='formBasicEmail'>
           <Form.Label>Description</Form.Label>
           <Form.Control
-            as="textarea"
+            as='textarea'
             rows={3}
-            placeholder="Enter organisation description"
+            placeholder='Enter organisation description'
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             disabled={loading}
           />
         </Form.Group>
-        <div className="d-flex gap-2 justify-content-end">
-          <Button variant="primary" type="submit" disabled={isSaving}>
+        <div className='d-flex gap-2 justify-content-end'>
+          <Button variant='primary' type='submit' disabled={isSaving}>
             Save
           </Button>
-          <Button variant="dark" type="button" onClick={handleCancel}>
+          <Button variant='dark' type='button' onClick={handleCancel}>
             Cancel
           </Button>
         </div>

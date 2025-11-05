@@ -50,7 +50,9 @@ type RegisterPairProps = {
   setPoints2?: (updater: any) => void;
 };
 
-type PointStateSetter = Dispatch<SetStateAction<{ id: string; x: number; y: number }[]>>;
+type PointStateSetter = Dispatch<
+  SetStateAction<{ id: string; x: number; y: number }[]>
+>;
 
 // Function to transform a point using a homography matrix
 export function RegisterPair({
@@ -76,13 +78,17 @@ export function RegisterPair({
   );
   const [leniency, setLeniency] = useState(400);
   const effectiveTransforms = transforms;
-  const [localPoints1, setLocalPoints1] = useState<{ id: string; x: number; y: number }[]>([]);
-  const [localPoints2, setLocalPoints2] = useState<{ id: string; x: number; y: number }[]>([]);
+  const [localPoints1, setLocalPoints1] = useState<
+    { id: string; x: number; y: number }[]
+  >([]);
+  const [localPoints2, setLocalPoints2] = useState<
+    { id: string; x: number; y: number }[]
+  >([]);
 
-  const resolvedPoints: [{ id: string; x: number; y: number }[], { id: string; x: number; y: number }[]] = [
-    points1 ?? localPoints1,
-    points2 ?? localPoints2,
-  ];
+  const resolvedPoints: [
+    { id: string; x: number; y: number }[],
+    { id: string; x: number; y: number }[]
+  ] = [points1 ?? localPoints1, points2 ?? localPoints2];
 
   const resolvedSetters: [PointStateSetter, PointStateSetter] = [
     (setPoints1 as PointStateSetter | undefined) ?? setLocalPoints1,
@@ -201,7 +207,6 @@ export function RegisterPair({
     [setActiveObject]
   );
 
-
   const activeAnnotation = useMemo<ExtendedAnnotationType | undefined>(() => {
     if (!activeObjectId) return undefined;
     return (
@@ -253,7 +258,9 @@ export function RegisterPair({
                 <BaseImage
                   visible={visible}
                   activeAnnotation={activeAnnotation}
-                  location={{ image: image as any, annotationSetId: selectedSet } as any}
+                  location={
+                    { image: image as any, annotationSetId: selectedSet } as any
+                  }
                   fullImage={false}
                   otherImageId={images[1 - i].id}
                   boundsxy={[
@@ -327,8 +334,8 @@ export function RegisterPair({
       {effectiveTransforms && (
         <div className='w-100 d-flex flex-column gap-2 bg-secondary p-3'>
           <span style={{ fontSize: '12px', color: '#f8f9fa' }}>
-            Tip: click a suggested marker or use Arrow keys to focus it, then press Space to
-            confirm the match.
+            Tip: click a suggested marker or use Arrow keys to focus it, then
+            press Space to confirm the match.
           </span>
           <label
             style={{

@@ -25,17 +25,19 @@ export default function ProjectProgress({ projectId }: ProjectProgressProps) {
 
     async function fetchQueueAndStartPolling() {
       setIsLoading(true);
-      const projectData = (await client.models.Project.get(
-        { id: projectId },
-        {
-          selectionSet: [
-            'queues.url',
-            'queues.batchSize',
-            'queues.totalBatches',
-            'annotationSets.register',
-          ],
-        }
-      )).data;
+      const projectData = (
+        await client.models.Project.get(
+          { id: projectId },
+          {
+            selectionSet: [
+              'queues.url',
+              'queues.batchSize',
+              'queues.totalBatches',
+              'annotationSets.register',
+            ],
+          }
+        )
+      ).data;
 
       const register = projectData.annotationSets.some((set) => set.register);
 
@@ -48,7 +50,7 @@ export default function ProjectProgress({ projectId }: ProjectProgressProps) {
         setIsLoading(false);
         return;
       }
-      
+
       const q = projectData.queues[0];
       const url = q.url || '';
       const batchSize = q.batchSize || 0;

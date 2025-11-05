@@ -44,12 +44,12 @@ export function MultiAnnotationSetDropdown({
         value={selectedOptions}
         onChange={handleChange}
         isMulti
-        name="Annotation Sets"
+        name='Annotation Sets'
         options={options}
-        className="basic-multi-select text-black"
-        classNamePrefix="select"
+        className='basic-multi-select text-black'
+        classNamePrefix='select'
         closeMenuOnSelect={false}
-        placeholder="Select annotation sets..."
+        placeholder='Select annotation sets...'
       />
     </Form.Group>
   );

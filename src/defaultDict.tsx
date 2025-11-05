@@ -7,10 +7,10 @@ export class DefaultDict<T> {
           name in target
             ? target[name]
             : (target[name] =
-                typeof defaultInit === "function"
+                typeof defaultInit === 'function'
                   ? (defaultInit as () => T)()
                   : defaultInit),
-      },
+      }
     );
   }
 }

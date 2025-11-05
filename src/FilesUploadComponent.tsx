@@ -117,7 +117,10 @@ const isFiniteWithinRange = (
   min: number,
   max: number
 ): value is number =>
-  typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+  typeof value === 'number' &&
+  Number.isFinite(value) &&
+  value >= min &&
+  value <= max;
 
 const hasValidLatLng = (lat: unknown, lng: unknown): boolean =>
   isFiniteWithinRange(lat, -90, 90) && isFiniteWithinRange(lng, -180, 180);
@@ -320,7 +323,6 @@ export function FileUploadCore({
   useEffect(() => {
     setTotalImageSize(imageFiles.reduce((acc, file) => acc + file.size, 0));
   }, [imageFiles]);
-
 
   useEffect(() => {
     if (!multipleCameras) {
@@ -980,7 +982,9 @@ export function FileUploadCore({
         const latNum = typeof gps.lat === 'number' ? gps.lat : Number(gps.lat);
         const lngNum = typeof gps.lng === 'number' ? gps.lng : Number(gps.lng);
         const altNum =
-          gps.alt === undefined || gps.alt === null ? undefined : Number(gps.alt);
+          gps.alt === undefined || gps.alt === null
+            ? undefined
+            : Number(gps.alt);
         if (!hasValidLatLng(latNum, lngNum)) {
           return null;
         }
@@ -1001,7 +1005,9 @@ export function FileUploadCore({
 
       if (associateByTimestamp) {
         const timestamp = exifmeta.timestamp;
-        const exactRow = csvData.data.find((row) => row.timestamp === timestamp);
+        const exactRow = csvData.data.find(
+          (row) => row.timestamp === timestamp
+        );
         if (exactRow && hasValidLatLng(exactRow.lat, exactRow.lng)) {
           const alt =
             typeof exactRow.alt === 'number' && Number.isFinite(exactRow.alt)
@@ -1023,8 +1029,15 @@ export function FileUploadCore({
         ) {
           try {
             const interpolationSource = csvData.data
-              .filter((row): row is { timestamp: number; lat: number; lng: number; alt: number } =>
-                typeof row.timestamp === 'number'
+              .filter(
+                (
+                  row
+                ): row is {
+                  timestamp: number;
+                  lat: number;
+                  lng: number;
+                  alt: number;
+                } => typeof row.timestamp === 'number'
               )
               .map((row) => ({
                 timestamp: row.timestamp,
@@ -1171,9 +1184,11 @@ export function FileUploadCore({
       if (invalidGpsFiles.length > 0) {
         const sample = invalidGpsFiles.slice(0, 5);
         alert(
-          `GPS coordinates are missing or invalid for ${invalidGpsFiles.length} image${
-            invalidGpsFiles.length === 1 ? '' : 's'
-          }. Example${sample.length === 1 ? '' : 's'}: ${sample.join(', ')}`
+          `GPS coordinates are missing or invalid for ${
+            invalidGpsFiles.length
+          } image${invalidGpsFiles.length === 1 ? '' : 's'}. Example${
+            sample.length === 1 ? '' : 's'
+          }: ${sample.join(', ')}`
         );
         return;
       }
@@ -1822,15 +1837,15 @@ export function FileUploadCore({
   return (
     <>
       <Form.Group>
-        <Form.Label className="mb-0">Model</Form.Label>
+        <Form.Label className='mb-0'>Model</Form.Label>
         <Form.Text
-          className="d-block text-muted mt-0 mb-1"
+          className='d-block text-muted mt-0 mb-1'
           style={{ fontSize: 12 }}
         >
           Select the model you wish to use to guide annotation.
         </Form.Text>
         <Select
-          className="text-black"
+          className='text-black'
           value={model}
           options={[
             { label: 'ScoutBot', value: 'scoutbot' },
@@ -1850,21 +1865,21 @@ export function FileUploadCore({
           onChange={(e) => {
             if (e) setModel(e);
           }}
-          placeholder="Select a model"
+          placeholder='Select a model'
         />
       </Form.Group>
       <Form.Group>
-        <Form.Label className="mb-0">Files to Upload</Form.Label>
-        <p className="text-muted mb-1" style={{ fontSize: 12 }}>
+        <Form.Label className='mb-0'>Files to Upload</Form.Label>
+        <p className='text-muted mb-1' style={{ fontSize: 12 }}>
           Upload the survey files by selecting the entire folder you wish to
           upload.
         </p>
         <div
-          className="p-2 mb-2 bg-white text-black"
+          className='p-2 mb-2 bg-white text-black'
           style={{ minHeight: '136px', overflow: 'auto' }}
         >
           {scannedFiles.length > 0 && (
-            <code className="m-0 text-dark">
+            <code className='m-0 text-dark'>
               Folder name: {name}
               <br />
               Total files: {scannedFiles.length}
@@ -1898,8 +1913,8 @@ export function FileUploadCore({
         >
           <Form.Group>
             <FileInput
-              id="filepicker"
-              webkitdirectory=""
+              id='filepicker'
+              webkitdirectory=''
               onFileChange={handleFileInputChange}
             >
               <p style={{ margin: 0 }}>
@@ -1942,63 +1957,63 @@ export function FileUploadCore({
         </div>
       </Form.Group>
       {scanningEXIF ? (
-        <div className="mt-3 mb-0">
-          <p className="mb-0">
+        <div className='mt-3 mb-0'>
+          <p className='mb-0'>
             Scanning images for GPS data: {`${scanCount}/${scanTotal}`}
           </p>
         </div>
       ) : Object.keys(exifData).length > 0 && imageFiles.length > 0 ? (
-        <Form.Group className="mt-3 d-flex flex-column gap-2">
+        <Form.Group className='mt-3 d-flex flex-column gap-2'>
           <div>
-            <Form.Label className="mb-0">
+            <Form.Label className='mb-0'>
               {missingGpsData ? 'Missing GPS data' : 'GPS data found'}
             </Form.Label>
-            <Form.Text className="d-block mb-0" style={{ fontSize: '12px' }}>
+            <Form.Text className='d-block mb-0' style={{ fontSize: '12px' }}>
               {missingGpsData
                 ? 'Some images do not have GPS data. Please upload the gpx or csv file containing the GPS data for all images.'
                 : 'The selected images have GPS data. Would you like to upload a separate file containing the GPS data for all images?'}
             </Form.Text>
-            <Form.Text className="d-block mb-0" style={{ fontSize: '12px' }}>
+            <Form.Text className='d-block mb-0' style={{ fontSize: '12px' }}>
               Your CSV file should have the following columns (their headings
               may be different):
-              <ul className="mb-0">
+              <ul className='mb-0'>
                 <li>timestamp and/or filepath</li>
                 <li>lat</li>
                 <li>lng</li>
                 <li>alt</li>
               </ul>
             </Form.Text>
-            <Form.Text className="d-block mb-0" style={{ fontSize: '12px' }}>
+            <Form.Text className='d-block mb-0' style={{ fontSize: '12px' }}>
               If your data contains file paths instead of timestamps, the format
               should be:{' '}
-              <code className="text-primary" style={{ fontSize: '14px' }}>
+              <code className='text-primary' style={{ fontSize: '14px' }}>
                 {imageFiles[0].webkitRelativePath}
               </code>
             </Form.Text>
           </div>
           <FileInput
-            id="gps-metadata-file"
-            fileType=".csv,.gpx"
+            id='gps-metadata-file'
+            fileType='.csv,.gpx'
             onFileChange={(files) => setFile(files[0])}
           >
-            <p className="mb-0">Select GPS metadata file</p>
+            <p className='mb-0'>Select GPS metadata file</p>
           </FileInput>
         </Form.Group>
       ) : null}
       {headerFields && !mappingConfirmed && (
-        <Form.Group className="mt-3">
-          <Form.Label className="mb-0">Confirm File Structure</Form.Label>
-          <p className="text-muted mb-1" style={{ fontSize: 12 }}>
+        <Form.Group className='mt-3'>
+          <Form.Label className='mb-0'>Confirm File Structure</Form.Label>
+          <p className='text-muted mb-1' style={{ fontSize: 12 }}>
             Select which columns from your file correspond to the following
             fields:
           </p>
           <div
-            className="d-flex flex-column gap-2 border border-dark p-2 shadow-sm"
+            className='d-flex flex-column gap-2 border border-dark p-2 shadow-sm'
             style={{ backgroundColor: '#697582' }}
           >
-            <div className="d-flex flex-row gap-2 align-items-center">
+            <div className='d-flex flex-row gap-2 align-items-center'>
               <div style={{ flex: 0.5 }}>
-                <Form.Label className="mb-0">FilePath</Form.Label>
+                <Form.Label className='mb-0'>FilePath</Form.Label>
                 <Select
                   options={[
                     { label: 'None', value: '' },
@@ -2018,18 +2033,18 @@ export function FileUploadCore({
                       filepath: opt ? opt.value : undefined,
                     })
                   }
-                  placeholder="Select FilePath column"
-                  className="text-black"
+                  placeholder='Select FilePath column'
+                  className='text-black'
                 />
               </div>
               <p
-                className="mb-0"
+                className='mb-0'
                 style={{ width: '50px', textAlign: 'center' }}
               >
                 or
               </p>
               <div style={{ flex: 0.5 }}>
-                <Form.Label className="mb-0">Timestamp</Form.Label>
+                <Form.Label className='mb-0'>Timestamp</Form.Label>
                 <Select
                   options={[
                     { label: 'None', value: '' },
@@ -2049,14 +2064,14 @@ export function FileUploadCore({
                       timestamp: opt ? opt.value : undefined,
                     })
                   }
-                  placeholder="Select Timestamp column"
-                  className="text-black"
+                  placeholder='Select Timestamp column'
+                  className='text-black'
                 />
               </div>
             </div>
-            <div className="d-flex flex-row gap-2 align-items-start mt-2">
+            <div className='d-flex flex-row gap-2 align-items-start mt-2'>
               <div style={{ flex: 0.5 }}>
-                <Form.Label className="mb-0">Latitude</Form.Label>
+                <Form.Label className='mb-0'>Latitude</Form.Label>
                 <Select
                   options={headerFields.map((f) => ({ label: f, value: f }))}
                   value={
@@ -2071,11 +2086,11 @@ export function FileUploadCore({
                       lat: opt ? opt.value : undefined,
                     });
                   }}
-                  placeholder="Select Latitude column"
-                  className="text-black"
+                  placeholder='Select Latitude column'
+                  className='text-black'
                 />
-                <div className="mt-2">
-                  <Form.Label className="mb-0">Longitude</Form.Label>
+                <div className='mt-2'>
+                  <Form.Label className='mb-0'>Longitude</Form.Label>
                   <Select
                     options={headerFields.map((f) => ({ label: f, value: f }))}
                     value={
@@ -2090,13 +2105,13 @@ export function FileUploadCore({
                         lng: opt ? opt.value : undefined,
                       });
                     }}
-                    placeholder="Select Longitude column"
-                    className="text-black"
+                    placeholder='Select Longitude column'
+                    className='text-black'
                   />
                 </div>
               </div>
               <p
-                className="mb-0"
+                className='mb-0'
                 style={{
                   width: '50px',
                   textAlign: 'center',
@@ -2106,7 +2121,7 @@ export function FileUploadCore({
                 or
               </p>
               <div style={{ flex: 0.5, alignSelf: 'center' }}>
-                <Form.Label className="mb-0">UTM</Form.Label>
+                <Form.Label className='mb-0'>UTM</Form.Label>
                 <Select
                   options={[
                     { label: 'None', value: '' },
@@ -2122,26 +2137,26 @@ export function FileUploadCore({
                     setUtmColumn(val);
                     setUseUtm(Boolean(val));
                   }}
-                  placeholder="None"
-                  className="text-black"
+                  placeholder='None'
+                  className='text-black'
                 />
               </div>
             </div>
             <div>
-              <div className="d-flex flex-row gap-3 align-items-center">
-                <Form.Label className="mb-0">Altitude (optional)</Form.Label>
-                <div className="d-flex flex-row gap-1 align-items-center">
-                  <label className="me-2">ft</label>
+              <div className='d-flex flex-row gap-3 align-items-center'>
+                <Form.Label className='mb-0'>Altitude (optional)</Form.Label>
+                <div className='d-flex flex-row gap-1 align-items-center'>
+                  <label className='me-2'>ft</label>
                   <Form.Check
-                    type="switch"
-                    id="altitude-in-meters"
+                    type='switch'
+                    id='altitude-in-meters'
                     checked={altitudeInMeters}
                     onChange={(e) => setAltitudeInMeters(e.target.checked)}
                   />
                   <label>m</label>
                 </div>
               </div>
-              <div className="d-flex flex-row gap-2 align-items-center">
+              <div className='d-flex flex-row gap-2 align-items-center'>
                 <Select
                   options={[
                     { label: 'None', value: '' },
@@ -2158,8 +2173,8 @@ export function FileUploadCore({
                       alt: opt && opt.value ? opt.value : undefined,
                     })
                   }
-                  placeholder="Select Altitude column"
-                  className="text-black flex-grow-1"
+                  placeholder='Select Altitude column'
+                  className='text-black flex-grow-1'
                 />
                 <Select
                   options={altitudeTypeOptions}
@@ -2167,15 +2182,15 @@ export function FileUploadCore({
                   onChange={(opt) =>
                     setAltitudeType(opt ?? { label: 'EGM96', value: 'egm96' })
                   }
-                  placeholder="Select Altitude Type"
-                  className="text-black"
+                  placeholder='Select Altitude Type'
+                  className='text-black'
                 />
               </div>
             </div>
           </div>
           <Button
-            variant="primary"
-            className="mt-2"
+            variant='primary'
+            className='mt-2'
             onClick={handleConfirmMapping}
           >
             Confirm File Structure
@@ -2197,23 +2212,23 @@ export function FileUploadCore({
               fullCsvData &&
               fullCsvData.some((row) => row.timestamp))) && (
             <Form.Group>
-              <Form.Label className="mb-0">
+              <Form.Label className='mb-0'>
                 Filter Data by Time Range (Optional)
               </Form.Label>
               <Form.Text
-                className="d-block mb-1 mt-0"
+                className='d-block mb-1 mt-0'
                 style={{ fontSize: '12px' }}
               >
                 Select the effective time range for each day. The default range
                 is the earliest and latest timestamp recorded for that day.
               </Form.Text>
               <Form.Text
-                className="d-block mb-1"
+                className='d-block mb-1'
                 style={{ fontSize: '12px', fontStyle: 'italic' }}
               >
                 All times shown in UTC.
               </Form.Text>
-              <div className="d-flex flex-column gap-2">
+              <div className='d-flex flex-column gap-2'>
                 {Array.from(
                   new Set(
                     (fullCsvData || csvData.data).map((row) =>
@@ -2257,33 +2272,33 @@ export function FileUploadCore({
                     return (
                       <div
                         key={`day-${day}`}
-                        className="d-flex flex-column gap-2 mt-2"
+                        className='d-flex flex-column gap-2 mt-2'
                       >
-                        <span className="fw-bold">
+                        <span className='fw-bold'>
                           {new Date(data[0].timestamp!).toLocaleDateString()}
                         </span>
-                        <div className="d-flex align-items-center gap-2">
-                          <label className="mb-0">Start:</label>
+                        <div className='d-flex align-items-center gap-2'>
+                          <label className='mb-0'>Start:</label>
                           <input
-                            type="time"
-                            className="form-control"
+                            type='time'
+                            className='form-control'
                             style={{ width: '120px' }}
                             value={minutesToTime(startMinutes)}
                             onChange={(e) =>
                               handleStartTimeChange(e.target.value)
                             }
                           />
-                          <label className="mb-0">End:</label>
+                          <label className='mb-0'>End:</label>
                           <input
-                            type="time"
-                            className="form-control"
+                            type='time'
+                            className='form-control'
                             style={{ width: '120px' }}
                             value={minutesToTime(endMinutes)}
                             onChange={(e) =>
                               handleEndTimeChange(e.target.value)
                             }
                           />
-                          <div className="flex-grow-1">
+                          <div className='flex-grow-1'>
                             <Slider
                               range
                               min={dayRange.min}
@@ -2308,12 +2323,12 @@ export function FileUploadCore({
               </div>
             </Form.Group>
           )}
-          <div className="mt-3">
+          <div className='mt-3'>
             {(() => {
               if (invalidGpsFiles.length > 0) {
                 const sample = invalidGpsFiles.slice(0, 5);
                 return (
-                  <div className="alert alert-danger mb-0">
+                  <div className='alert alert-danger mb-0'>
                     Missing GPS coordinates for {invalidGpsFiles.length} image
                     {invalidGpsFiles.length === 1 ? '' : 's'}. Example
                     {sample.length === 1 ? '' : 's'}: {sample.join(', ')}
@@ -2383,17 +2398,17 @@ export function FileUploadCore({
               );
             })()}
           </div>
-          <Form.Group className="mt-3">
-            <Form.Label className="mb-0">Camera Definition</Form.Label>
+          <Form.Group className='mt-3'>
+            <Form.Label className='mb-0'>Camera Definition</Form.Label>
             <span
-              className="text-muted d-block mb-1"
+              className='text-muted d-block mb-1'
               style={{ fontSize: '12px' }}
             >
               Does your survey have only one camera or multiple cameras?
             </span>
             <LabeledToggleSwitch
-              leftLabel="Single Camera"
-              rightLabel="Multiple Cameras"
+              leftLabel='Single Camera'
+              rightLabel='Multiple Cameras'
               checked={multipleCameras}
               onChange={(e) => setMultipleCameras(e)}
             />
@@ -2422,15 +2437,15 @@ export function FileUploadCore({
               const hasAny = currentNames.length > 0;
               if (!hasAny || loadingExistingCameras) return null;
               return (
-                <div className="mt-2">
+                <div className='mt-2'>
                   {matched.length > 0 && (
-                    <div className="alert alert-info mb-2">
+                    <div className='alert alert-info mb-2'>
                       These cameras already exist and will be linked by name:{' '}
                       {matched.join(', ')}
                     </div>
                   )}
                   {matched.length === 0 && newOnes.length === 0 && (
-                    <div className="alert alert-warning mb-2">
+                    <div className='alert alert-warning mb-2'>
                       No cameras detected from folder structure.
                     </div>
                   )}
@@ -2533,8 +2548,8 @@ export default function FilesUploadComponent({
     <Modal
       show={show}
       onHide={handleClose}
-      size="xl"
-      backdrop="static"
+      size='xl'
+      backdrop='static'
       keyboard={false}
     >
       <Modal.Header>
@@ -2546,7 +2561,7 @@ export default function FilesUploadComponent({
       <Modal.Body>
         <Form>
           {fromStaleUpload && (
-            <p className="mb-2 text-warning">
+            <p className='mb-2 text-warning'>
               This survey&apos;s upload is stale.
               <br />
               Complete the form to continue - only the remaining images will be
@@ -2563,14 +2578,14 @@ export default function FilesUploadComponent({
       </Modal.Body>
       <Modal.Footer>
         <Button
-          variant="primary"
+          variant='primary'
           disabled={!readyToSubmit || isSubmitting || isClosing}
           onClick={handleModalSubmit}
         >
           Submit
         </Button>
         <Button
-          variant="dark"
+          variant='dark'
           disabled={isSubmitting || isClosing}
           onClick={() => {
             setIsClosing(true);

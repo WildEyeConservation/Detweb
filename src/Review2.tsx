@@ -1,11 +1,11 @@
-import { useState, useEffect, useContext } from "react";
-import "./Registration.css";
-import BaseImage from "./BaseImage";
+import { useState, useEffect, useContext } from 'react';
+import './Registration.css';
+import BaseImage from './BaseImage';
 //import Legend from "./Legend";
-import CreateAnnotationOnClick from "./CreateAnnotationOnClick";
-import { AnnotationSetDropdown } from "./AnnotationSetDropDown";
-import { Stack } from "react-bootstrap";
-import { UserContext } from "./Context";
+import CreateAnnotationOnClick from './CreateAnnotationOnClick';
+import { AnnotationSetDropdown } from './AnnotationSetDropDown';
+import { Stack } from 'react-bootstrap';
+import { UserContext } from './Context';
 // import CreateBatchRectangle from './createBatchRectangle';
 
 /**
@@ -26,7 +26,6 @@ type Annotation = {
   image: Image;
 };
 
-
 type AnnotationsResponse = {
   annotationsByAnnotationSetId: {
     items: Annotation[];
@@ -34,10 +33,11 @@ type AnnotationsResponse = {
   };
 };
 
-
 function Review() {
   const [images, setImages] = useState<Image[] | undefined>(undefined);
-  const [selectedAnnotationSet, selectAnnotationSet] = useState<string | undefined>(undefined);
+  const [selectedAnnotationSet, selectAnnotationSet] = useState<
+    string | undefined
+  >(undefined);
   const { gqlSend } = useContext(UserContext)!;
   const [index, setIndex] = useState(0);
 
@@ -63,10 +63,10 @@ function Review() {
       const images: Record<string, Image> = {};
       do {
         let annotations;
-        const res = await gqlSend(getAnnotations, {
+        const res = (await gqlSend(getAnnotations, {
           annotationSetId: selectedAnnotationSet,
           nextToken,
-        }) as { data: AnnotationsResponse };
+        })) as { data: AnnotationsResponse };
         ({
           data: {
             annotationsByAnnotationSetId: { items: annotations, nextToken },
@@ -81,7 +81,7 @@ function Review() {
           .sort()
           .map((x) => {
             return { ...images[x], key: x };
-          }),
+          })
       );
       setIndex(0);
     };
@@ -90,8 +90,8 @@ function Review() {
   }, [selectedAnnotationSet]);
 
   const annotationsHook = useAnnotations(
-    images?.[index]?.key ?? "",
-    selectedAnnotationSet ?? "",
+    images?.[index]?.key ?? '',
+    selectedAnnotationSet ?? ''
   );
 
   //const annhash=hash([annotationsHooks?.[0]?.annotations,annotationsHooks?.[1]?.annotations])
@@ -104,8 +104,8 @@ function Review() {
         canCreate={false}
       />
       {/* <CategoriesDropdown setSelectedCategories={setSelectedCategories} selectedSet={selectedCategories}/> */}
-      <div className="d-flex flex-column flex-grow-1">
-        <div className="d-flex flex-row flex-grow-1">
+      <div className='d-flex flex-column flex-grow-1'>
+        <div className='d-flex flex-row flex-grow-1'>
           {images && (
             <BaseImage
               setId={selectedAnnotationSet}
@@ -116,8 +116,8 @@ function Review() {
                 [0, 0],
                 [images[index].width, images[index].height],
               ]}
-              containerwidth="90vw"
-              containerheight="80vh"
+              containerwidth='90vw'
+              containerheight='80vh'
               img={images[index]}
               x={images[index].width / 2}
               y={images[index].height / 2}
@@ -141,10 +141,15 @@ function Review() {
             >
               {/* <CreateBatchRectangle setId={selectedAnnotationSet} image={images[index]} annotationsHook={annotationsHook}/> */}
               <CreateAnnotationOnClick
-                setId={selectedAnnotationSet ?? ""}
+                setId={selectedAnnotationSet ?? ''}
                 image={images[index]}
                 annotationsHook={annotationsHook}
-                location={{ x: images[index].width / 2, y: images[index].height / 2, width: images[index].width, height: images[index].height }}
+                location={{
+                  x: images[index].width / 2,
+                  y: images[index].height / 2,
+                  width: images[index].width,
+                  height: images[index].height,
+                }}
               />
             </BaseImage>
           )}
