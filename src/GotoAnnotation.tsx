@@ -1,7 +1,7 @@
-import { useContext, useEffect } from "react";
-import { useMap } from "react-leaflet";
-import { ImageContext } from "./Context";
-import { ExtendedAnnotationType, ImageType } from "./schemaTypes";
+import { useContext, useEffect } from 'react';
+import { useMap } from 'react-leaflet';
+import { ImageContext } from './Context';
+import { ExtendedAnnotationType, ImageType } from './schemaTypes';
 
 interface GotoAnnotationProps {
   activeAnnotation?: ExtendedAnnotationType;
@@ -9,14 +9,21 @@ interface GotoAnnotationProps {
   transform: (coords: [number, number]) => [number, number];
 }
 
-export function GotoAnnotation({ activeAnnotation, image, transform }: GotoAnnotationProps) {
+export function GotoAnnotation({
+  activeAnnotation,
+  image,
+  transform,
+}: GotoAnnotationProps) {
   const map = useMap();
   const { xy2latLng } = useContext(ImageContext)!;
 
   useEffect(() => {
     if (activeAnnotation) {
       if (image.id == activeAnnotation.imageId) {
-        const latLng = xy2latLng([activeAnnotation.x, activeAnnotation.y]) as L.LatLng; 
+        const latLng = xy2latLng([
+          activeAnnotation.x,
+          activeAnnotation.y,
+        ]) as L.LatLng;
         map.setView(latLng, 6, {
           animate: false,
         });
@@ -30,7 +37,7 @@ export function GotoAnnotation({ activeAnnotation, image, transform }: GotoAnnot
       };
     }
     //else {
-      //map.fitBounds([xy2latLng([0, 0]), xy2latLng([image.width, image.height])]);
+    //map.fitBounds([xy2latLng([0, 0]), xy2latLng([image.width, image.height])]);
     //}
   }, [activeAnnotation, transform, map, image]);
 

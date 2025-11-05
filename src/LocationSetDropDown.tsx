@@ -58,10 +58,10 @@ export function LocationSetDropdown<IsMulti extends boolean = true>({
         value={selectedOptions}
         onChange={handleChange}
         isMulti={isMulti}
-        name="Image sets"
+        name='Image sets'
         options={options}
-        className="basic-multi-select text-black"
-        classNamePrefix="select"
+        className='basic-multi-select text-black'
+        classNamePrefix='select'
         closeMenuOnSelect={false}
       />
     </Form.Group>

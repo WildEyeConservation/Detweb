@@ -300,7 +300,10 @@ export default function EditLocationsModal({ show, preset, surveyId }: Props) {
             ) : (
               <div className='d-flex flex-row gap-3 h-100'>
                 {/* Left controls column */}
-                <div className='d-flex flex-column gap-3 border-end border-dark mt-3 pe-3' style={{ width: '360px', maxWidth: '40%', overflowY: 'auto' }}>
+                <div
+                  className='d-flex flex-column gap-3 border-end border-dark mt-3 pe-3'
+                  style={{ width: '360px', maxWidth: '40%', overflowY: 'auto' }}
+                >
                   <Form.Group className='d-flex flex-column gap-2'>
                     <Form.Group>
                       <Form.Label className='mb-0'>Label filter</Form.Label>

@@ -48,7 +48,9 @@ export default function SnapshotStatsModal({
 }: Props) {
   const [snapshotStartTime, setSnapshotStartTime] = useState('00:00');
   const [snapshotEndTime, setSnapshotEndTime] = useState('23:59');
-  const [snapshotStats, setSnapshotStats] = useState<Record<string, StatsEntry>>({});
+  const [snapshotStats, setSnapshotStats] = useState<
+    Record<string, StatsEntry>
+  >({});
   const [snapshotLoading, setSnapshotLoading] = useState(false);
 
   const tableHeadings = [
@@ -76,9 +78,15 @@ export default function SnapshotStatsModal({
     const lowerLimit = lowerLimitDate.toISOString();
     const upperLimit = upperLimitDate.toISOString();
     for (const s of selectedSets || []) {
-      const observations = await queryObservations(s.value, lowerLimit, upperLimit);
+      const observations = await queryObservations(
+        s.value,
+        lowerLimit,
+        upperLimit
+      );
       observations.forEach((o: any) => {
-        const userId = o.owner.includes('::') ? o.owner.split('::')[1] : o.owner;
+        const userId = o.owner.includes('::')
+          ? o.owner.split('::')[1]
+          : o.owner;
         if (!tempStats[userId]) {
           tempStats[userId] = {
             observationCount: 0,
@@ -248,4 +256,4 @@ export default function SnapshotStatsModal({
       </Modal.Footer>
     </Modal>
   );
-} 
+}

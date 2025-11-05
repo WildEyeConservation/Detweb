@@ -8,13 +8,13 @@
  *
  **/
 
-import React, { ReactNode } from "react";
+import React, { ReactNode } from 'react';
 
 interface Session {
   tokens?: {
     accessToken?: {
       payload?: {
-        "cognito:groups"?: string[];
+        'cognito:groups'?: string[];
       };
     };
   };
@@ -31,10 +31,10 @@ const IfAdmin: React.FC<IfAdminProps> = ({ session, children }) => {
     session.tokens &&
     session.tokens.accessToken &&
     session.tokens.accessToken.payload &&
-    session.tokens.accessToken.payload["cognito:groups"]
+    session.tokens.accessToken.payload['cognito:groups']
   ) {
-    const groups = session.tokens.accessToken.payload["cognito:groups"];
-    if (groups.includes("admin")) {
+    const groups = session.tokens.accessToken.payload['cognito:groups'];
+    if (groups.includes('admin')) {
       return <>{children}</>;
     }
   }

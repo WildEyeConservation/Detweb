@@ -1,8 +1,8 @@
-import { useContext, useEffect,useState, useMemo } from "react";
-import Form from "react-bootstrap/Form";
-import { GlobalContext,UserContext } from "./Context";
-import { Schema } from "./amplify/client-schema";
-import { useNavigate,useParams } from "react-router-dom";
+import { useContext, useEffect, useState, useMemo } from 'react';
+import Form from 'react-bootstrap/Form';
+import { GlobalContext, UserContext } from './Context';
+import { Schema } from './amplify/client-schema';
+import { useNavigate, useParams } from 'react-router-dom';
 import NavDropdown from 'react-bootstrap/NavDropdown';
 interface ProjectSelectorProps {
   currentPM: Schema['UserProjectMembership']['type'] | undefined;
@@ -34,13 +34,19 @@ function ProjectSelector({ currentPM, setCurrentPM }: ProjectSelectorProps) {
   // }, [myMemberships.length])
 
   const projectsQueries = useQueries({
-    queries: myMemberships.map(membership => ({
-      queryKey: ["project", membership.id],
-      queryFn: () => client.models.Project.get({ id: membership.projectId })
-    }))
-  })
+    queries: myMemberships.map((membership) => ({
+      queryKey: ['project', membership.id],
+      queryFn: () => client.models.Project.get({ id: membership.projectId }),
+    })),
+  });
 
-  const projects = useMemo(() => projectsQueries.filter(query=>query.isSuccess).map(query=>query.data?.data), [projectsQueries])
+  const projects = useMemo(
+    () =>
+      projectsQueries
+        .filter((query) => query.isSuccess)
+        .map((query) => query.data?.data),
+    [projectsQueries]
+  );
 
   useEffect(() => {
     console.log('myMemberships', myMemberships);
@@ -90,7 +96,7 @@ function ProjectSelector({ currentPM, setCurrentPM }: ProjectSelectorProps) {
           ? projects.find((p) => p.id === currentPM.projectId)?.name
           : 'Select a Project'
       }
-      id="project-nav-dropdown"
+      id='project-nav-dropdown'
       onSelect={(projectId) => {
         if (projectId === 'new') {
           onNewProject().then((value) => {
@@ -114,7 +120,7 @@ function ProjectSelector({ currentPM, setCurrentPM }: ProjectSelectorProps) {
       }}
     >
       {!currentPM && (
-        <NavDropdown.Item key="none" disabled>
+        <NavDropdown.Item key='none' disabled>
           Select a Project to work on
         </NavDropdown.Item>
       )}
@@ -127,7 +133,7 @@ function ProjectSelector({ currentPM, setCurrentPM }: ProjectSelectorProps) {
           {project.name}
         </NavDropdown.Item>
       ))}
-      <NavDropdown.Item eventKey="new">Create a new Project</NavDropdown.Item>
+      <NavDropdown.Item eventKey='new'>Create a new Project</NavDropdown.Item>
     </NavDropdown>
   ) : null;
 }

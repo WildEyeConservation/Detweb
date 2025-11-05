@@ -43,7 +43,9 @@ export const Tabs: React.FC<TabsProps> = ({
         {childrenArray.map((child, index) => (
           <div
             key={index}
-            className={`tab-label py-2 px-3 ${activeTab === index ? 'bg-primary' : ''}`}
+            className={`tab-label py-2 px-3 ${
+              activeTab === index ? 'bg-primary' : ''
+            }`}
             onClick={() => {
               if (disableSwitching) return;
               setActiveTab(index);

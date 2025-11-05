@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Form, Spinner } from 'react-bootstrap';
 import Select, { SingleValue } from 'react-select';
 import { Schema } from '../amplify/client-schema';
@@ -73,7 +67,8 @@ export default function FalseNegatives({
 
   // Sampling
   const [samplePercent, setSamplePercent] = useState<number>(5);
-  const [showAdvancedOptions, setShowAdvancedOptions] = useState<boolean>(false);
+  const [showAdvancedOptions, setShowAdvancedOptions] =
+    useState<boolean>(false);
   const [scanning, setScanning] = useState<boolean>(false);
   const [scanMessage, setScanMessage] = useState<string>('');
   const [totalTiles, setTotalTiles] = useState<number>(0);
@@ -98,7 +93,8 @@ export default function FalseNegatives({
       // Derive model options from location set names the user actually has
       const modelOpts: Option[] = [];
       const pushOnce = (label: string, value: string) => {
-        if (!modelOpts.some((o) => o.value === value)) modelOpts.push({ label, value });
+        if (!modelOpts.some((o) => o.value === value))
+          modelOpts.push({ label, value });
       };
       for (const ls of data || []) {
         const n = String(ls.name || '').toLowerCase();
@@ -503,7 +499,6 @@ export default function FalseNegatives({
   return (
     <div className='px-3 pb-3 pt-1'>
       <div className='d-flex flex-column gap-3 mt-2'>
-        
         <div
           className='border border-dark shadow-sm p-2'
           style={{ backgroundColor: '#697582' }}
@@ -615,12 +610,16 @@ export default function FalseNegatives({
               <Form.Control
                 type='text'
                 value={queueTag}
-                onChange={(e) => setQueueTag((e.target as HTMLInputElement).value)}
+                onChange={(e) =>
+                  setQueueTag((e.target as HTMLInputElement).value)
+                }
                 disabled={launching}
               />
             </Form.Group>
             <Form.Group>
-              <Form.Label className='mb-0'>Confidence threshold (&gt;=)</Form.Label>
+              <Form.Label className='mb-0'>
+                Confidence threshold (&gt;=)
+              </Form.Label>
               <Form.Control
                 type='number'
                 min={0}

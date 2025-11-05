@@ -71,22 +71,22 @@ function FolderNode({ folder, isOpen, onToggle }: FolderNodeProps) {
               {folder.images
                 .sort((a, b) => a.originalPath.localeCompare(b.originalPath))
                 .map((image) => (
-                <div
-                  key={image.id}
-                  className='badge p-2 d-flex align-items-center bg-dark'
-                  style={{
-                    fontSize: '0.75rem',
-                    borderRadius: '4px',
-                    maxWidth: '200px',
-                  }}
-                  title={image.originalPath}
-                >
-                  <span className='me-1'>🖼️</span>
-                  <span className='fw-medium text-truncate'>
-                    {getFileName(image.originalPath)}
-                  </span>
-                </div>
-              ))}
+                  <div
+                    key={image.id}
+                    className='badge p-2 d-flex align-items-center bg-dark'
+                    style={{
+                      fontSize: '0.75rem',
+                      borderRadius: '4px',
+                      maxWidth: '200px',
+                    }}
+                    title={image.originalPath}
+                  >
+                    <span className='me-1'>🖼️</span>
+                    <span className='fw-medium text-truncate'>
+                      {getFileName(image.originalPath)}
+                    </span>
+                  </div>
+                ))}
             </div>
           )}
         </div>

@@ -8,8 +8,8 @@
  *
  **/
 
-import React, { ReactNode } from "react";
-import { Schema } from "./amplify/client-schema";
+import React, { ReactNode } from 'react';
+import { Schema } from './amplify/client-schema';
 
 interface IfAdminProps {
   currentPM?: Schema['UserProjectMembership']['type'];
@@ -17,12 +17,9 @@ interface IfAdminProps {
 }
 
 const IfProjectAdmin: React.FC<IfAdminProps> = ({ currentPM, children }) => {
-  if (
-    currentPM?.isAdmin
-  ) {
-      return <>{children}</>;
-    }
-  else return null;
+  if (currentPM?.isAdmin) {
+    return <>{children}</>;
+  } else return null;
 };
 
 export default IfProjectAdmin;

@@ -42,14 +42,14 @@ export function QueueDropdown({
 
   return (
     <Form.Select value={currentQueue || 'none'} onChange={onSelect}>
-      {currentQueue ? null : <option value="none">Select a job</option>}
+      {currentQueue ? null : <option value='none'>Select a job</option>}
       {queues?.map((q) => (
         <option key={q.id} value={q.id}>
           {q.name}
         </option>
       ))}
-      {allowNoneOption && <option value="none">None</option>}
-      {allowNewOption && <option value="new">Add new job</option>}
+      {allowNoneOption && <option value='none'>None</option>}
+      {allowNewOption && <option value='new'>Add new job</option>}
     </Form.Select>
   );
 }

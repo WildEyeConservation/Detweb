@@ -1,9 +1,9 @@
-import { useState } from "react";
-import React from "react";
-import useSQS from "./useSQS";
+import { useState } from 'react';
+import React from 'react';
+import useSQS from './useSQS';
 //import { useTesting } from "./useTesting";
-import { Modal, Row, Col, Button } from "react-bootstrap";
-import BaseImage from "./BaseImage";
+import { Modal, Row, Col, Button } from 'react-bootstrap';
+import BaseImage from './BaseImage';
 
 interface WithPreloadingProps {
   historyN?: number;
@@ -12,7 +12,11 @@ interface WithPreloadingProps {
 }
 
 export function withPreloading2(WrappedComponent: React.ComponentType<any>) {
-  let WithPreloading = function ({ historyN = 2, preloadN= 3, ...rest }: WithPreloadingProps) {
+  let WithPreloading = function ({
+    historyN = 2,
+    preloadN = 3,
+    ...rest
+  }: WithPreloadingProps) {
     // let [index,setIndex]=useState(0)
     // let _index=0
     // let el=undefined
@@ -38,32 +42,34 @@ export function withPreloading2(WrappedComponent: React.ComponentType<any>) {
     // });
     const { buffer, index, next, prev, inject } = useSQS();
     const [errorprops, setErrorprops] = useState<any>(false);
-    console.log('preloading render runs')
+    console.log('preloading render runs');
     //useTesting(inject, setErrorprops);
     //useSQS(3)
     const subsetStart = Math.max(index - historyN, 0); // Keep at the least the last historyN entries in memory
     const subset = buffer.slice(subsetStart, index + preloadN);
-    console.log(`subset ${subset.length}`)
+    console.log(`subset ${subset.length}`);
     // buffer.forEach((msg,i)=>{console.log(`Buffer [${i}].id=${msg.id}`)})
     if (subset?.length) {
       return (
-        <div style={{ 
-          position: 'relative',  // Add this container
-          width: '100%',
-          minHeight: '820px'     // Adjust this value based on your needs
-        }}>
+        <div
+          style={{
+            position: 'relative', // Add this container
+            width: '100%',
+            minHeight: '820px', // Adjust this value based on your needs
+          }}
+        >
           {subset.map((entry, i) => (
             <div
               key={entry.message_id}
               style={{
-                visibility: i === index - subsetStart ? "visible" : "hidden",
-                position: "absolute",
-                justifyContent: "center",
-                display: "flex",
-                width: "80%",
-                left: '50%',                    // Add these positioning properties
-                transform: 'translateX(-50%)',   // to maintain horizontal centering
-                top: 0
+                visibility: i === index - subsetStart ? 'visible' : 'hidden',
+                position: 'absolute',
+                justifyContent: 'center',
+                display: 'flex',
+                width: '80%',
+                left: '50%', // Add these positioning properties
+                transform: 'translateX(-50%)', // to maintain horizontal centering
+                top: 0,
               }}
             >
               <WrappedComponent
@@ -71,17 +77,17 @@ export function withPreloading2(WrappedComponent: React.ComponentType<any>) {
                 {...entry}
                 visible={i === index - subsetStart}
                 next={i < subset.length - 1 ? next : undefined}
-                prev={i > 0 ? prev : undefined} 
+                prev={i > 0 ? prev : undefined}
               />
               <div></div>
             </div>
           ))}
 
           <Modal
-            size="xl"
+            size='xl'
             centered
             show={errorprops}
-            backdrop="static"
+            backdrop='static'
             onHide={() => setErrorprops(false)}
           >
             <Modal.Header closeButton>
@@ -93,12 +99,12 @@ export function withPreloading2(WrappedComponent: React.ComponentType<any>) {
             <Modal.Body>
               <Row>
                 <Col />
-                <Col xs={10} className="align-middle justify-content-center">
+                <Col xs={10} className='align-middle justify-content-center'>
                   {errorprops && (
                     <BaseImage
                       {...errorprops}
-                      containerwidth="100%"
-                      containerheight="800px"
+                      containerwidth='100%'
+                      containerheight='800px'
                     >
                       {/* <Location {...errorprops} /> */}
                     </BaseImage>
@@ -109,7 +115,7 @@ export function withPreloading2(WrappedComponent: React.ComponentType<any>) {
             </Modal.Body>
             <Modal.Footer>
               <Button
-                variant="primary"
+                variant='primary'
                 onClick={() => {
                   setErrorprops(false);
                 }}

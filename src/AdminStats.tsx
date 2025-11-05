@@ -14,14 +14,14 @@ function SummaryTile(props: {
   thisMonth: number;
 }) {
   return (
-    <Card className="mb-3">
+    <Card className='mb-3'>
       <Card.Body>
-        <div className="d-flex justify-content-between align-items-baseline">
+        <div className='d-flex justify-content-between align-items-baseline'>
           <div>
-            <div className="text-muted small">{props.title}</div>
-            <div className="h4 mb-0">{props.total.toLocaleString()}</div>
+            <div className='text-muted small'>{props.title}</div>
+            <div className='h4 mb-0'>{props.total.toLocaleString()}</div>
           </div>
-          <div className="text-success">
+          <div className='text-success'>
             +{props.thisMonth.toLocaleString()} this month
           </div>
         </div>
@@ -36,9 +36,9 @@ function MetricChart(props: {
   values: number[];
 }) {
   return (
-    <Card className="mb-3">
-      <Card.Header className="py-2">
-        <div className="fw-semibold">{props.title}</div>
+    <Card className='mb-3'>
+      <Card.Header className='py-2'>
+        <div className='fw-semibold'>{props.title}</div>
       </Card.Header>
       <Card.Body>
         <div style={{ height: 260 }}>
@@ -58,21 +58,21 @@ function OrgBreakdownTable(props: {
 }) {
   const rows = props.breakdown;
   return (
-    <Card className="mb-3">
-      <Card.Header className="py-2">
-        <div className="fw-semibold">Organizations and Surveys</div>
+    <Card className='mb-3'>
+      <Card.Header className='py-2'>
+        <div className='fw-semibold'>Organizations and Surveys</div>
       </Card.Header>
-      <Card.Body className="p-0">
-        <div className="table-responsive">
-          <table className="table table-sm mb-0">
+      <Card.Body className='p-0'>
+        <div className='table-responsive'>
+          <table className='table table-sm mb-0'>
             <thead>
               <tr>
                 <th style={{ width: 28 }}></th>
                 <th>Organization</th>
-                <th className="text-end">Surveys</th>
-                <th className="text-end">Images</th>
-                <th className="text-end">Annotations</th>
-                <th className="text-end">This month</th>
+                <th className='text-end'>Surveys</th>
+                <th className='text-end'>Images</th>
+                <th className='text-end'>Annotations</th>
+                <th className='text-end'>This month</th>
               </tr>
             </thead>
             <tbody>
@@ -98,7 +98,7 @@ function OrgRow(props: {
         <td>
           {org.projects.length > 0 ? (
             <button
-              className="btn btn-sm btn-outline-secondary"
+              className='btn btn-sm btn-outline-secondary'
               onClick={() => setOpen((o) => !o)}
             >
               {open ? '−' : '+'}
@@ -106,10 +106,10 @@ function OrgRow(props: {
           ) : null}
         </td>
         <td>{org.organizationName}</td>
-        <td className="text-end">{org.totals.surveys.toLocaleString()}</td>
-        <td className="text-end">{org.totals.images.toLocaleString()}</td>
-        <td className="text-end">{org.totals.annotations.toLocaleString()}</td>
-        <td className="text-end">
+        <td className='text-end'>{org.totals.surveys.toLocaleString()}</td>
+        <td className='text-end'>{org.totals.images.toLocaleString()}</td>
+        <td className='text-end'>{org.totals.annotations.toLocaleString()}</td>
+        <td className='text-end'>
           {org.thisMonth.surveys.toLocaleString()} /{' '}
           {org.thisMonth.images.toLocaleString()} /{' '}
           {org.thisMonth.annotations.toLocaleString()}
@@ -117,15 +117,15 @@ function OrgRow(props: {
       </tr>
       {open &&
         org.projects.map((p) => (
-          <tr key={p.projectId} className="table-light">
+          <tr key={p.projectId} className='table-light'>
             <td></td>
-            <td className="ps-4">{p.projectName}</td>
-            <td className="text-end">{p.totals.surveys}</td>
-            <td className="text-end">{p.totals.images.toLocaleString()}</td>
-            <td className="text-end">
+            <td className='ps-4'>{p.projectName}</td>
+            <td className='text-end'>{p.totals.surveys}</td>
+            <td className='text-end'>{p.totals.images.toLocaleString()}</td>
+            <td className='text-end'>
               {p.totals.annotations.toLocaleString()}
             </td>
-            <td className="text-end">
+            <td className='text-end'>
               {p.thisMonth.surveys} / {p.thisMonth.images.toLocaleString()} /{' '}
               {p.thisMonth.annotations.toLocaleString()}
             </td>
@@ -172,9 +172,9 @@ export default function AdminStats() {
 
   return (
     <div>
-      <div className="d-flex align-items-end gap-3 mb-3">
+      <div className='d-flex align-items-end gap-3 mb-3'>
         <div>
-          <Form.Label className="mb-1">Timeframe</Form.Label>
+          <Form.Label className='mb-1'>Timeframe</Form.Label>
           <Form.Select
             value={timeframe}
             onChange={(e) => setTimeframe(parseInt(e.target.value, 10))}
@@ -185,10 +185,10 @@ export default function AdminStats() {
           </Form.Select>
         </div>
         <div>
-          <Form.Label className="mb-1">Actions</Form.Label>
+          <Form.Label className='mb-1'>Actions</Form.Label>
           <div>
             <button
-              className="btn btn-outline-primary"
+              className='btn btn-outline-primary'
               onClick={data.refresh}
               disabled={data.loading}
             >
@@ -199,19 +199,19 @@ export default function AdminStats() {
       </div>
 
       {data.error && (
-        <Alert variant="danger" className="mb-3">
+        <Alert variant='danger' className='mb-3'>
           {data.error}
         </Alert>
       )}
 
       {data.loading ? (
-        <div className="d-flex align-items-center gap-2 mb-3">
-          <Spinner animation="border" size="sm" />
+        <div className='d-flex align-items-center gap-2 mb-3'>
+          <Spinner animation='border' size='sm' />
           <span>Loading statistics…</span>
         </div>
       ) : null}
 
-      <Row xs={1} md={3} lg={5} className="g-3">
+      <Row xs={1} md={3} lg={5} className='g-3'>
         {summary.map((m) => (
           <Col key={m.title}>
             <SummaryTile
@@ -223,45 +223,45 @@ export default function AdminStats() {
         ))}
       </Row>
 
-      <Row className="g-3 mt-1">
+      <Row className='g-3 mt-1'>
         <Col md={6}>
           <MetricChart
-            title="New users"
+            title='New users'
             months={data.months}
             values={data.users.series.values}
           />
         </Col>
         <Col md={6}>
           <MetricChart
-            title="Unique monthly logins"
+            title='Unique monthly logins'
             months={data.months}
             values={data.users.uniqueLoginSeries.values}
           />
         </Col>
         <Col md={6}>
           <MetricChart
-            title="New organizations"
+            title='New organizations'
             months={data.months}
             values={data.organizations.series.values}
           />
         </Col>
         <Col md={6}>
           <MetricChart
-            title="New surveys"
+            title='New surveys'
             months={data.months}
             values={data.surveys.series.values}
           />
         </Col>
         <Col md={6}>
           <MetricChart
-            title="New images"
+            title='New images'
             months={data.months}
             values={data.images.series.values}
           />
         </Col>
         <Col md={6}>
           <MetricChart
-            title="New annotations"
+            title='New annotations'
             months={data.months}
             values={data.annotations.series.values}
           />

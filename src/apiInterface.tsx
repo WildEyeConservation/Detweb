@@ -1,10 +1,10 @@
-import {useState, useEffect} from 'react';
+import { useState, useEffect } from 'react';
 import { Schema } from './amplify/client-schema'; // Path to your backend resource definition
 import { useContext } from 'react';
 import { GlobalContext } from './Context';
 
 export const useUsers = () => {
-  const {client} = useContext(GlobalContext)!;
+  const { client } = useContext(GlobalContext)!;
   let [result, setResult] = useState<Schema['UserType']['type'][]>([]);
   useEffect(() => {
     client.queries.listUsers({}).then(({ data }) => {

@@ -4,29 +4,29 @@ import React, {
   useEffect,
   useMemo,
   useCallback,
-} from "react";
-import { UserContext, ImageContext } from "./Context";
-import "./index.css";
-import { isHotkeyPressed, useHotkeys } from "react-hotkeys-hook";
-import { Marker, Tooltip } from "react-leaflet";
+} from 'react';
+import { UserContext, ImageContext } from './Context';
+import './index.css';
+import { isHotkeyPressed, useHotkeys } from 'react-hotkeys-hook';
+import { Marker, Tooltip } from 'react-leaflet';
 import {
   uniqueNamesGenerator,
   adjectives,
   names,
-} from "unique-names-generator";
-import * as L from "leaflet";
-import * as jdenticon from "jdenticon";
-import { useMap } from "react-leaflet";
-import { ProjectContext } from "./Context";
+} from 'unique-names-generator';
+import * as L from 'leaflet';
+import * as jdenticon from 'jdenticon';
+import { useMap } from 'react-leaflet';
+import { ProjectContext } from './Context';
 import type {
   AnnotationType,
   CategoryType,
   ExtendedAnnotationType,
-} from "./schemaTypes";
-import type { AnnotationsHook } from "./Context";
-import DetwebMarker from "./DetwebMarker";
-import { random } from "mathjs";
-import DummyMarkers from "./DummyMarkers";
+} from './schemaTypes';
+import type { AnnotationsHook } from './Context';
+import DetwebMarker from './DetwebMarker';
+import { random } from 'mathjs';
+import DummyMarkers from './DummyMarkers';
 
 interface ShowMarkersProps {
   activeAnnotation?: AnnotationType;
@@ -53,7 +53,8 @@ export function ShowMarkers(props: ShowMarkersProps) {
   } = useContext(ProjectContext)!;
   const effectiveCategories = props.categoriesOverride ?? categories;
   const [enabled, setEnabled] = useState(true);
-  const { annotationsHook, latLng2xy, xy2latLng, prevImages } = useContext(ImageContext)!;
+  const { annotationsHook, latLng2xy, xy2latLng, prevImages } =
+    useContext(ImageContext)!;
   const {
     data: annotations,
     delete: deleteAnnotation,
@@ -66,25 +67,28 @@ export function ShowMarkers(props: ShowMarkersProps) {
       return (prevImages || []).some((im) => {
         if (!im?.transform?.fwd) return false;
         const [tx, ty] = im.transform.fwd([x, y]);
-        return tx >= 0 && ty >= 0 && tx <= im.image.width && ty <= im.image.height;
+        return (
+          tx >= 0 && ty >= 0 && tx <= im.image.width && ty <= im.image.height
+        );
       });
     },
     [prevImages]
   );
 
   useHotkeys(
-    "Tab",
+    'Tab',
     (event) => {
       event.preventDefault();
-      setEnabled(!isHotkeyPressed("Tab"));
+      setEnabled(!isHotkeyPressed('Tab'));
     },
     { keyup: true, keydown: true }
   );
 
   const getType = useCallback(
     (annotation) =>
-      effectiveCategories?.find((category) => category.id === annotation.categoryId)
-        ?.name ?? "Unknown",
+      effectiveCategories?.find(
+        (category) => category.id === annotation.categoryId
+      )?.name ?? 'Unknown',
     [effectiveCategories]
   );
 

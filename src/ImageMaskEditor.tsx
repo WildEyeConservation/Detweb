@@ -1,23 +1,17 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
-import {
-  MapContainer,
-  ImageOverlay,
-  FeatureGroup,
-} from "react-leaflet";
-import { CRS } from "leaflet";
-import { EditControl } from "react-leaflet-draw";
-import L from "leaflet";
-import "leaflet-draw/dist/leaflet.draw.css";
-import FileInput from "./FileInput";
-import { Form } from "react-bootstrap";
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { MapContainer, ImageOverlay, FeatureGroup } from 'react-leaflet';
+import { CRS } from 'leaflet';
+import { EditControl } from 'react-leaflet-draw';
+import L from 'leaflet';
+import 'leaflet-draw/dist/leaflet.draw.css';
+import FileInput from './FileInput';
+import { Form } from 'react-bootstrap';
 
 interface ImageMaskEditorProps {
   setMasks: (masks: number[][][]) => void;
 }
 
-const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({
-  setMasks,
-}) => {
+const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({ setMasks }) => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageDimensions, setImageDimensions] = useState<{
     width: number;
@@ -25,7 +19,9 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({
   } | null>(null);
 
   const featureGroupRef = useRef<L.FeatureGroup>(null);
-  const mapRef = useRef<L.Map | null>(null) as React.MutableRefObject<L.Map | null>;
+  const mapRef = useRef<L.Map | null>(
+    null
+  ) as React.MutableRefObject<L.Map | null>;
 
   // Handle file input change
   const handleFileChange = (file: File[]) => {
@@ -74,23 +70,23 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({
           layer.setLatLngs([clampedLatLngs]);
           const polyAny = layer as any;
           // Attempt to force a visual update
-          if (typeof polyAny.redraw === "function") {
+          if (typeof polyAny.redraw === 'function') {
             polyAny.redraw();
           }
-          if (typeof polyAny._updatePath === "function") {
+          if (typeof polyAny._updatePath === 'function') {
             polyAny._updatePath();
           }
           if (
             polyAny._renderer &&
-            typeof polyAny._renderer._updatePath === "function"
+            typeof polyAny._renderer._updatePath === 'function'
           ) {
             polyAny._renderer._updatePath(layer);
           }
           if (polyAny.editing) {
-            if (typeof polyAny.editing.updateMarkers === "function") {
+            if (typeof polyAny.editing.updateMarkers === 'function') {
               polyAny.editing.updateMarkers();
             } else if (
-              typeof polyAny.editing._updateMarkerPositions === "function"
+              typeof polyAny.editing._updateMarkerPositions === 'function'
             ) {
               polyAny.editing._updateMarkerPositions();
             }
@@ -130,7 +126,7 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({
       });
       if (hasChanged) {
         featureGroupRef.current!.removeLayer(layer);
-        const newPoly = L.polygon(clampedLatLngs, { color: "#97009c" });
+        const newPoly = L.polygon(clampedLatLngs, { color: '#97009c' });
         featureGroupRef.current!.addLayer(newPoly);
       }
     }
@@ -162,7 +158,7 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({
         });
         if (hasChanged) {
           featureGroupRef.current!.removeLayer(layer);
-          const newPoly = L.polygon(clampedLatLngs, { color: "#97009c" });
+          const newPoly = L.polygon(clampedLatLngs, { color: '#97009c' });
           featureGroupRef.current!.addLayer(newPoly);
         }
       }
@@ -180,19 +176,19 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({
       mapRef.current.invalidateSize();
       mapRef.current.fitBounds([
         [0, 0],
-        [imageDimensions.height, imageDimensions.width]
+        [imageDimensions.height, imageDimensions.width],
       ]);
     }
   }, [imageDimensions, mapRef]);
 
   return (
-    <Form.Group className="mt-3">
-      <Form.Label className="d-block mb-0">
+    <Form.Group className='mt-3'>
+      <Form.Label className='d-block mb-0'>
         Create Image Masks (optional)
       </Form.Label>
       <Form.Text
-        className="d-block text-muted m-0 mb-2"
-        style={{ fontSize: "12px" }}
+        className='d-block text-muted m-0 mb-2'
+        style={{ fontSize: '12px' }}
       >
         Use this tool to create masks for your images. Masks are used to remove
         static objects such as a wheel from your images when processing. Use the
@@ -201,17 +197,17 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({
       {imageUrl && imageDimensions && (
         <div
           style={{
-            height: "600px",
-            width: "100%",
-            position: "relative",
-            marginTop: "8px",
-            marginBottom: "12px",
+            height: '600px',
+            width: '100%',
+            position: 'relative',
+            marginTop: '8px',
+            marginBottom: '12px',
           }}
         >
           <MapContainer
             key={imageUrl}
             ref={mapRef}
-            style={{ height: "100%", width: "100%" }}
+            style={{ height: '100%', width: '100%' }}
             crs={CRS.Simple}
             center={[imageDimensions.height / 2, imageDimensions.width / 2]}
             zoom={-4}
@@ -226,14 +222,14 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({
             />
             <FeatureGroup ref={featureGroupRef}>
               <EditControl
-                position="topright"
+                position='topright'
                 onCreated={handleCreated}
                 onEdited={handleEdited}
                 onDeleted={handleDeleted}
                 draw={{
                   polygon: {
                     allowIntersection: false,
-                    shapeOptions: { color: "#97009c" },
+                    shapeOptions: { color: '#97009c' },
                   },
                   rectangle: false,
                   circle: false,
@@ -247,12 +243,12 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({
         </div>
       )}
       <FileInput
-        id="mask-image-input"
+        id='mask-image-input'
         onFileChange={handleFileChange}
-        accept="image/*"
+        accept='image/*'
       >
-        <p className="mb-0">
-          {imageUrl ? "Change Image" : "Select Sample Image"}
+        <p className='mb-0'>
+          {imageUrl ? 'Change Image' : 'Select Sample Image'}
         </p>
       </FileInput>
     </Form.Group>

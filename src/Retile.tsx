@@ -1,24 +1,25 @@
-import React, { useState } from "react";
-import { Stack, Modal, Form, Button } from "react-bootstrap";
+import React, { useState } from 'react';
+import { Stack, Modal, Form, Button } from 'react-bootstrap';
 //import { UserContext } from "./UserContext";
-import { ImageSetDropdown } from "./ImageSetDropDown";
+import { ImageSetDropdown } from './ImageSetDropDown';
 //import { imageSetMembershipsByImageSetName } from "./graphql/queries";
 //import backend from "../amplify_outputs.json";
 
-interface RetileProps{
+interface RetileProps {
   show: boolean;
-  handleClose: ()=> void;
+  handleClose: () => void;
 }
 
-const Retile: React.FC<RetileProps> = ({ show, handleClose }) =>{
-  const [selectedSets, setImageSets] = useState<string[] | undefined>(undefined);
+const Retile: React.FC<RetileProps> = ({ show, handleClose }) => {
+  const [selectedSets, setImageSets] = useState<string[] | undefined>(
+    undefined
+  );
   //const { invoke, gqlSend } = useContext(UserContext)!;
 
   async function handleSubmit() {
     // if(!selectedSets) return;
     // handleClose();
     // let allItems: ImageSetMembershipType[] = [];
-
     // for (const imageSet of selectedSets) {
     //   let nextToken: string | null = null;
     //   do {
@@ -31,7 +32,6 @@ const Retile: React.FC<RetileProps> = ({ show, handleClose }) =>{
     //     nextToken = newNextToken;
     //   } while (nextToken);
     // }
-
     // allItems.map((imageSetMembership) => {
     //   const params = {
     //     FunctionName:
@@ -50,7 +50,7 @@ const Retile: React.FC<RetileProps> = ({ show, handleClose }) =>{
     //   };
     //   invoke(params);
     // });
-    }
+  }
 
   return (
     <Modal show={show} onHide={handleClose}>
@@ -73,18 +73,18 @@ const Retile: React.FC<RetileProps> = ({ show, handleClose }) =>{
       </Modal.Body>
       <Modal.Footer>
         <Button
-          variant="primary"
+          variant='primary'
           onClick={handleSubmit}
           disabled={!selectedSets}
         >
           Retile
         </Button>
-        <Button variant="primary" onClick={handleClose}>
+        <Button variant='primary' onClick={handleClose}>
           Cancel
         </Button>
       </Modal.Footer>
     </Modal>
   );
-}
+};
 
 export default Retile;

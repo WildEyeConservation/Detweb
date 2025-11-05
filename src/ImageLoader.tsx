@@ -1,7 +1,7 @@
-import { useParams } from "react-router-dom";
-import { useContext, useEffect, useState } from "react";
-import { GlobalContext } from "./Context";
-import AnnotationImage from "./AnnotationImage";
+import { useParams } from 'react-router-dom';
+import { useContext, useEffect, useState } from 'react';
+import { GlobalContext } from './Context';
+import AnnotationImage from './AnnotationImage';
 
 export function ImageLoader() {
   const { imageId, annotationSetId } = useParams();
@@ -13,14 +13,14 @@ export function ImageLoader() {
       { id: imageId! },
       {
         selectionSet: [
-          "id",
-          "width",
-          "height",
-          "latitude",
-          "longitude",
-          "altitude_wgs84",
-          "altitude_egm96",
-          "altitude_agl",
+          'id',
+          'width',
+          'height',
+          'latitude',
+          'longitude',
+          'altitude_wgs84',
+          'altitude_egm96',
+          'altitude_agl',
         ],
       }
     ).then(({ data }) => {
@@ -43,8 +43,8 @@ export function ImageLoader() {
 
   return (
     <div
-      className="d-flex flex-column align-items-center w-100 h-100"
-      style={{ paddingTop: "12px", paddingBottom: "12px" }}
+      className='d-flex flex-column align-items-center w-100 h-100'
+      style={{ paddingTop: '12px', paddingBottom: '12px' }}
     >
       {element}
     </div>

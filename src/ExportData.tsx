@@ -1,30 +1,34 @@
-import React, { useContext, useState } from "react";
-import { Stack, Modal, Form, Button } from "react-bootstrap";
-import { AnnotationSetDropdown } from "./AnnotationSetDropDown";
+import React, { useContext, useState } from 'react';
+import { Stack, Modal, Form, Button } from 'react-bootstrap';
+import { AnnotationSetDropdown } from './AnnotationSetDropDown';
 //import { UserContext } from "./UserContext";
-import { GlobalContext } from "./Context";
-import { fetchAllPaginatedResults } from "./utils";
+import { GlobalContext } from './Context';
+import { fetchAllPaginatedResults } from './utils';
 import exportFromJSON from 'export-from-json';
-import { useUpdateProgress } from "./useUpdateProgress";
+import { useUpdateProgress } from './useUpdateProgress';
 interface ExportDataProps {
   show: boolean;
   handleClose: () => void;
 }
 
-export const ExportData: React.FC<ExportDataProps> = ({ show, handleClose }) => {
-  const [annotationSet, setAnnotationSet] = useState<string | undefined>(undefined);
+export const ExportData: React.FC<ExportDataProps> = ({
+  show,
+  handleClose,
+}) => {
+  const [annotationSet, setAnnotationSet] = useState<string | undefined>(
+    undefined
+  );
   const { client } = useContext(GlobalContext)!;
   const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
     taskId: `Export data`,
     indeterminateTaskName: `Exporting data`,
-    determinateTaskName: "Exporting data",
-    stepFormatter: (count)=>`${count} annotations`,
-  }); 
-
+    determinateTaskName: 'Exporting data',
+    stepFormatter: (count) => `${count} annotations`,
+  });
 
   async function handleSubmit() {
     handleClose();
-    
+
     setStepsCompleted(0);
     setTotalSteps(0);
 
@@ -32,13 +36,24 @@ export const ExportData: React.FC<ExportDataProps> = ({ show, handleClose }) => 
       client.models.Annotation.annotationsByAnnotationSetId,
       {
         setId: annotationSet,
-        selectionSet: ['y', 'x', 'category.name','owner','source','obscured', 'image.originalPath', 'image.timestamp', 'image.latitude', 'image.longitude'] as const
+        selectionSet: [
+          'y',
+          'x',
+          'category.name',
+          'owner',
+          'source',
+          'obscured',
+          'image.originalPath',
+          'image.timestamp',
+          'image.latitude',
+          'image.longitude',
+        ] as const,
       },
       setStepsCompleted
     );
 
     setTotalSteps(annotations.length);
-    
+
     const fileName = `DetWebExport-${annotationSet}`;
     const exportType = exportFromJSON.types.csv;
     exportFromJSON({
@@ -82,18 +97,18 @@ export const ExportData: React.FC<ExportDataProps> = ({ show, handleClose }) => 
       </Modal.Body>
       <Modal.Footer>
         <Button
-          variant="primary"
+          variant='primary'
           onClick={handleSubmit}
           disabled={!annotationSet}
         >
           Export
         </Button>
-        <Button variant="primary" onClick={handleClose}>
+        <Button variant='primary' onClick={handleClose}>
           Cancel
         </Button>
       </Modal.Footer>
     </Modal>
   );
-}
+};
 
 export default ExportData;

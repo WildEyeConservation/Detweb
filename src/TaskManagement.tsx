@@ -32,8 +32,8 @@ export default function TaskManagement() {
         id,
         rowData: [
           <Form.Check // prettier-ignore
-            type="switch"
-            id="custom-switch"
+            type='switch'
+            id='custom-switch'
             checked={selectedTasks.includes(id)}
             onChange={(x) => {
               console.log(x.target.checked);
@@ -48,8 +48,8 @@ export default function TaskManagement() {
           locationCount || 'Unknown',
           <span>
             <Button
-              variant="info"
-              className="me-2 fixed-width-button"
+              variant='info'
+              className='me-2 fixed-width-button'
               onClick={() => {
                 showModal('launchTask');
               }}
@@ -57,8 +57,8 @@ export default function TaskManagement() {
               Launch
             </Button>
             <Button
-              variant="danger"
-              className="me-2 fixed-width-button"
+              variant='danger'
+              className='me-2 fixed-width-button'
               onClick={() => {
                 if (confirm(`Are you sure you want to delete task ${name}?`))
                   deleteTask({ id: id });
@@ -99,7 +99,7 @@ export default function TaskManagement() {
         selectedTasks={selectedTasks}
         setSelectedTasks={setSelectedTasks}
       />
-      <Row className="justify-content-center mt-3">
+      <Row className='justify-content-center mt-3'>
         <div>
           <h5>Task Management</h5>
           <MyTable tableHeadings={tableHeadings} tableData={tableData} />

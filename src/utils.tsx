@@ -1,12 +1,17 @@
-import { GraphQLResult, GraphqlSubscriptionResult } from '@aws-amplify/api-graphql';
-import { Matrix,multiply } from 'mathjs';
+import {
+  GraphQLResult,
+  GraphqlSubscriptionResult,
+} from '@aws-amplify/api-graphql';
+import { Matrix, multiply } from 'mathjs';
 
-export type UnknownGraphQLResponse = GraphQLResult<any> | GraphqlSubscriptionResult<any>;
+export type UnknownGraphQLResponse =
+  | GraphQLResult<any>
+  | GraphqlSubscriptionResult<any>;
 
 //The name of a FIFO queue can only include alphanumeric characters, hyphens, or underscores, must end with .fifo suffix and be 1 to 80 in length.
 export function makeSafeQueueName(input: string): string {
   // Remove disallowed characters
-  let sanitized = input.replace(/[^a-zA-Z0-9-_]/g, "_");
+  let sanitized = input.replace(/[^a-zA-Z0-9-_]/g, '_');
   // Ensure length is within limits (1 to 80 including .fifo)
   const maxMainLength = 75;
   if (sanitized.length > maxMainLength) {
@@ -26,7 +31,14 @@ function splitInputAndOptions(params: any): { input?: any; options: any } {
   if (!params) {
     return { input: undefined, options: {} };
   }
-  const { filter, sortDirection, limit, nextToken: _nt, selectionSet, ...rest } = params;
+  const {
+    filter,
+    sortDirection,
+    limit,
+    nextToken: _nt,
+    selectionSet,
+    ...rest
+  } = params;
   const input = Object.keys(rest).length ? rest : undefined;
   const options: any = {};
   if (filter !== undefined) options.filter = filter;
@@ -67,23 +79,22 @@ export async function fetchAllPaginatedResults<T>(
   return allResults;
 }
 // ReturnTypeOfFirstElementWithX is inferred as number
-export const makeTransform = (H: Matrix) => (c1: [number, number]): [number, number] => {
-  const result = multiply(H, [c1[0], c1[1], 1]).valueOf() as number[];
-  return [result[0] / result[2], result[1] / result[2]]; 
-};
+export const makeTransform =
+  (H: Matrix) =>
+  (c1: [number, number]): [number, number] => {
+    const result = multiply(H, [c1[0], c1[1], 1]).valueOf() as number[];
+    return [result[0] / result[2], result[1] / result[2]];
+  };
 
 export const array2Matrix = (hc: number[] | null): number[][] | null => {
   if (hc && hc.length == 9) {
-      const hcCopy = [...hc];  // Create a shallow copy of the input array
-      const matrix = [];
-      while (hcCopy.length) matrix.push(hcCopy.splice(0, 3));
-      return matrix;  // Removed unnecessary intermediate variable
+    const hcCopy = [...hc]; // Create a shallow copy of the input array
+    const matrix = [];
+    while (hcCopy.length) matrix.push(hcCopy.splice(0, 3));
+    return matrix; // Removed unnecessary intermediate variable
   } else {
-      return null;
+    return null;
   }
-};  
-
+};
 
 // ReturnTypeOfFirstElementWithX is inferred as number
-
-

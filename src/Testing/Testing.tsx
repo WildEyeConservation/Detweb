@@ -1,13 +1,13 @@
-import { Card } from "react-bootstrap";
-import OrganizationSelector from "../OrganizationSelector";
-import { useState, useContext } from "react";
-import { Tab, Tabs } from "../Tabs";
-import Surveys from "./Surveys";
-import { TestingContext, GlobalContext } from "../Context";
-import { Schema } from "../amplify/client-schema";
-import { useOptimisticUpdates } from "../useOptimisticUpdates";
-import Users from "./Users";
-import Results from "./Results";
+import { Card } from 'react-bootstrap';
+import OrganizationSelector from '../OrganizationSelector';
+import { useState, useContext } from 'react';
+import { Tab, Tabs } from '../Tabs';
+import Surveys from './Surveys';
+import { TestingContext, GlobalContext } from '../Context';
+import { Schema } from '../amplify/client-schema';
+import { useOptimisticUpdates } from '../useOptimisticUpdates';
+import Users from './Users';
+import Results from './Results';
 
 export default function Testing() {
   const { client } = useContext(GlobalContext)!;
@@ -15,13 +15,13 @@ export default function Testing() {
   const [organization, setOrganization] = useState<{
     id: string;
     name: string;
-  }>({ id: "", name: "" });
+  }>({ id: '', name: '' });
 
   const { data: projects } = useOptimisticUpdates<
-    Schema["Project"]["type"],
-    "Project"
+    Schema['Project']['type'],
+    'Project'
   >(
-    "Project",
+    'Project',
     async (nextToken) =>
       client.models.Project.list({
         nextToken,
@@ -33,10 +33,10 @@ export default function Testing() {
   );
 
   const { data: testPresets } = useOptimisticUpdates<
-    Schema["TestPreset"]["type"],
-    "TestPreset"
+    Schema['TestPreset']['type'],
+    'TestPreset'
   >(
-    "TestPreset",
+    'TestPreset',
     async (nextToken) =>
       client.models.TestPreset.list({
         nextToken,
@@ -48,10 +48,10 @@ export default function Testing() {
   );
 
   const membershipsHook = useOptimisticUpdates<
-    Schema["OrganizationMembership"]["type"],
-    "OrganizationMembership"
+    Schema['OrganizationMembership']['type'],
+    'OrganizationMembership'
   >(
-    "OrganizationMembership",
+    'OrganizationMembership',
     async (nextToken) =>
       client.models.OrganizationMembership.list({
         nextToken,
@@ -76,16 +76,16 @@ export default function Testing() {
     >
       <div
         style={{
-          width: "100%",
-          maxWidth: "1555px",
-          marginTop: "16px",
-          marginBottom: "16px",
+          width: '100%',
+          maxWidth: '1555px',
+          marginTop: '16px',
+          marginBottom: '16px',
         }}
       >
         <Card>
-          <Card.Header className="d-flex justify-content-between mb-0">
-            <Card.Title className="mb-0">
-              <h4 className="mb-0">User Testing</h4>
+          <Card.Header className='d-flex justify-content-between mb-0'>
+            <Card.Title className='mb-0'>
+              <h4 className='mb-0'>User Testing</h4>
             </Card.Title>
             <OrganizationSelector
               organization={organization}
@@ -95,13 +95,13 @@ export default function Testing() {
           <Card.Body>
             {organization.id && (
               <Tabs defaultTab={0}>
-                <Tab label="Surveys">
+                <Tab label='Surveys'>
                   <Surveys />
                 </Tab>
-                <Tab label="Users">
+                <Tab label='Users'>
                   <Users />
                 </Tab>
-                <Tab label="Results">
+                <Tab label='Results'>
                   <Results />
                 </Tab>
               </Tabs>

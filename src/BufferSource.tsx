@@ -12,13 +12,13 @@ export default class BufferSource {
     console.log(`fetching ${this.index} of ${this.buffer.length}`);
     const annotation = this.buffer[this.index];
     this.index++;
-    
+
     if (annotation) {
       return annotation;
     } else {
       //await forever
       while (true) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
   }

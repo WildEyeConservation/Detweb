@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Button } from "react-bootstrap";
+import { useState } from 'react';
+import { Button } from 'react-bootstrap';
 
 /**
  * A file input component that wraps a button and displays selected file names.
@@ -38,7 +38,7 @@ import { Button } from "react-bootstrap";
   This can probably solved in a better way. I am moving on for now.
 */
 
-declare module "react" {
+declare module 'react' {
   interface InputHTMLAttributes<T> extends HTMLAttributes<T> {
     webkitdirectory?: string;
   }
@@ -70,29 +70,29 @@ export default function FileInput({
       setFileNames(filesArray.map((file) => file.name));
       onFileChange(filesArray);
     }
-    if (typeof additionalOnChange === "function") {
+    if (typeof additionalOnChange === 'function') {
       additionalOnChange(event);
     }
   };
 
   return (
-    <div className="d-flex flex-row align-items-center gap-2">
-      <Button style={{ width: "fit-content" }} as="label" htmlFor={id}>
+    <div className='d-flex flex-row align-items-center gap-2'>
+      <Button style={{ width: 'fit-content' }} as='label' htmlFor={id}>
         {children}
         <input
           id={id}
-          type="file"
-          accept={fileType || "*"}
+          type='file'
+          accept={fileType || '*'}
           multiple={true}
           onChange={handleChange}
-          style={{ display: "none", ...additionalStyle }}
+          style={{ display: 'none', ...additionalStyle }}
           {...otherProps}
         />
       </Button>
       {fileNames.length > 0 && (
-        <i className="mb-0">
-          {fileNames.join(", ").slice(0, 50)}
-          {fileNames.join(", ").length > 50 ? "..." : ""}
+        <i className='mb-0'>
+          {fileNames.join(', ').slice(0, 50)}
+          {fileNames.join(', ').length > 50 ? '...' : ''}
         </i>
       )}
     </div>

@@ -1,8 +1,7 @@
-import { Polygon } from "react-leaflet";
-import { isHotkeyPressed, useHotkeys } from "react-hotkeys-hook";
-import { useContext, useState } from "react";
-import { ImageContext } from "./Context";
-
+import { Polygon } from 'react-leaflet';
+import { isHotkeyPressed, useHotkeys } from 'react-hotkeys-hook';
+import { useContext, useState } from 'react';
+import { ImageContext } from './Context';
 
 interface OverlapOutlineProps {
   transform: (coords: [number, number]) => [number, number];
@@ -12,14 +11,19 @@ interface OverlapOutlineProps {
   } | null;
 }
 
-
-export default function OverlapOutline({ transform, image }: OverlapOutlineProps) {
+export default function OverlapOutline({
+  transform,
+  image,
+}: OverlapOutlineProps) {
   const { xy2latLng } = useContext(ImageContext)!;
   const [enabled, setEnabled] = useState(true);
 
   useHotkeys(
-    "Tab",
-    (event) => {event.preventDefault(); setEnabled(!isHotkeyPressed("Tab"))},
+    'Tab',
+    (event) => {
+      event.preventDefault();
+      setEnabled(!isHotkeyPressed('Tab'));
+    },
     { keyup: true, keydown: true }
   );
 
@@ -33,7 +37,7 @@ export default function OverlapOutline({ transform, image }: OverlapOutlineProps
 
     return (
       <Polygon
-        pathOptions={{ color: "purple", fillOpacity: 0.1 }}
+        pathOptions={{ color: 'purple', fillOpacity: 0.1 }}
         positions={xy2latLng(polygon.map(transform)) as L.LatLng[]}
       />
     );

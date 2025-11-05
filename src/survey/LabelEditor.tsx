@@ -1,10 +1,10 @@
-import { Form, Button } from "react-bootstrap";
-import { useRecordHotkeys } from "react-hotkeys-hook";
-import MyTable from "../Table";
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useContext } from "react";
-import { GlobalContext } from "../Context";
-import { useQueryClient } from "@tanstack/react-query";
+import { Form, Button } from 'react-bootstrap';
+import { useRecordHotkeys } from 'react-hotkeys-hook';
+import MyTable from '../Table';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useContext } from 'react';
+import { GlobalContext } from '../Context';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface Label {
   id: string;
@@ -42,13 +42,17 @@ export default function LabelEditor({
   const handleSave = useCallback(
     async (annotationSetId: string, projectId: string) => {
       const filteredLabels = labels.filter(
-        (l) => l.name !== "" && l.shortcutKey !== ""
+        (l) => l.name !== '' && l.shortcutKey !== ''
       );
 
       if (isEditing) {
         const currentDefaultLabels: Label[] = defaultLabelsRef.current;
-        const filteredLabelIdsArray: string[] = filteredLabels.map((l: Label) => l.id);
-        const defaultLabelIdsArray: string[] = currentDefaultLabels.map((l: Label) => l.id);
+        const filteredLabelIdsArray: string[] = filteredLabels.map(
+          (l: Label) => l.id
+        );
+        const defaultLabelIdsArray: string[] = currentDefaultLabels.map(
+          (l: Label) => l.id
+        );
         const filteredLabelIds = new Set<string>(filteredLabelIdsArray);
         const defaultLabelIds = new Set<string>(defaultLabelIdsArray);
         // labels to delete
@@ -104,7 +108,7 @@ export default function LabelEditor({
 
       await client.models.Project.update({
         id: projectId,
-        status: "active",
+        status: 'active',
       });
 
       await client.mutations.updateProjectMemberships({
@@ -112,7 +116,7 @@ export default function LabelEditor({
       });
 
       // Ensure any persisted/react-query caches for categories are refreshed
-      await queryClient.invalidateQueries({ queryKey: ["Category"] });
+      await queryClient.invalidateQueries({ queryKey: ['Category'] });
     },
     [client, labels, isEditing]
   );
@@ -129,26 +133,26 @@ export default function LabelEditor({
 
   return (
     <Form.Group>
-      <Form.Label className="mb-0">Labels</Form.Label>
+      <Form.Label className='mb-0'>Labels</Form.Label>
       <span
-        className="text-muted d-block mb-1"
+        className='text-muted d-block mb-1'
         style={{ fontSize: 12, lineHeight: 1.2 }}
       >
         Set up the labels based on the species you expect to encounter.
       </span>
       <MyTable
         tableHeadings={[
-          { content: "Name", style: { width: "25%" } },
-          { content: "Shortcut Key", style: { width: "25%" } },
-          { content: "Color", style: { width: "25%" } },
-          { content: "Remove Label", style: { width: "25%" } },
+          { content: 'Name', style: { width: '25%' } },
+          { content: 'Shortcut Key', style: { width: '25%' } },
+          { content: 'Color', style: { width: '25%' } },
+          { content: 'Remove Label', style: { width: '25%' } },
         ]}
         tableData={labels.map((label) => ({
           id: label.id,
           rowData: [
             <Form.Control
-              type="text"
-              placeholder="Enter label name"
+              type='text'
+              placeholder='Enter label name'
               value={label.name}
               onChange={(e) =>
                 setLabels(
@@ -159,19 +163,25 @@ export default function LabelEditor({
               }
             />,
             <Form.Control
-              type="text"
-              placeholder="Record shortcut key"
+              type='text'
+              placeholder='Record shortcut key'
               value={
                 isRecording && activeRowId === label.id
-                  ? Array.from(keys).join("+")
+                  ? Array.from(keys).join('+')
                   : label.shortcutKey
               }
               onFocus={start}
               onBlur={() => {
                 stop();
-                const newShortcutKey = Array.from(keys).join("+");
-                if (labels.some((l) => l.id !== label.id && l.shortcutKey === newShortcutKey)) {
-                  alert("This shortcut key is already in use by another label.");
+                const newShortcutKey = Array.from(keys).join('+');
+                if (
+                  labels.some(
+                    (l) => l.id !== label.id && l.shortcutKey === newShortcutKey
+                  )
+                ) {
+                  alert(
+                    'This shortcut key is already in use by another label.'
+                  );
                   return;
                 }
                 setLabels(
@@ -194,11 +204,11 @@ export default function LabelEditor({
               onChange={() => {}}
             />,
             <Form.Control
-              type="color"
-              id="exampleColorInput"
-              size="sm"
+              type='color'
+              id='exampleColorInput'
+              size='sm'
               value={label.color}
-              title="Label color"
+              title='Label color'
               onChange={(event) => {
                 setLabels(
                   labels.map((l) =>
@@ -208,8 +218,8 @@ export default function LabelEditor({
               }}
             />,
             <Button
-              variant="danger"
-              size="sm"
+              variant='danger'
+              size='sm'
               onClick={() => {
                 setLabels(labels.filter((l) => l.id !== label.id));
               }}
@@ -220,20 +230,20 @@ export default function LabelEditor({
         }))}
       />
       <Button
-        variant="info"
-        size="sm"
+        variant='info'
+        size='sm'
         onClick={() => {
-          if (labels.some((l) => l.name === "" || l.shortcutKey === "")) {
-            alert("Please complete the current label before adding another");
+          if (labels.some((l) => l.name === '' || l.shortcutKey === '')) {
+            alert('Please complete the current label before adding another');
             return;
           }
           setLabels([
             ...labels,
             {
               id: crypto.randomUUID(),
-              name: "",
-              shortcutKey: "",
-              color: "#000000",
+              name: '',
+              shortcutKey: '',
+              color: '#000000',
             },
           ]);
         }}

@@ -35,7 +35,9 @@ async function getTileBlob(path: string): Promise<Blob> {
       cache: 'no-store',
     });
     if (!response.ok) {
-      throw new Error(`Failed to fetch tile: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `Failed to fetch tile: ${response.status} ${response.statusText}`
+      );
     }
     const blob = await response.blob();
     await tileCache.setItem(path, blob);
@@ -89,7 +91,13 @@ L.GridLayer.Storage = L.GridLayer.extend({
     const minZoom = this.options.minZoom ?? 0;
     const tileSize = size.x; // assume square tiles
 
-    const drawFromBlob = (blob: Blob, sx: number, sy: number, sWidth: number, sHeight: number) => {
+    const drawFromBlob = (
+      blob: Blob,
+      sx: number,
+      sy: number,
+      sWidth: number,
+      sHeight: number
+    ) => {
       const url = URL.createObjectURL(blob);
       const img = new Image();
       img.onload = () => {
@@ -97,7 +105,17 @@ L.GridLayer.Storage = L.GridLayer.extend({
           context.clearRect(0, 0, tileSize, tileSize);
           context.imageSmoothingEnabled = true;
           context.imageSmoothingQuality = 'high';
-          context.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, tileSize, tileSize);
+          context.drawImage(
+            img,
+            sx,
+            sy,
+            sWidth,
+            sHeight,
+            0,
+            0,
+            tileSize,
+            tileSize
+          );
           done(undefined, canvas);
         } finally {
           URL.revokeObjectURL(url);

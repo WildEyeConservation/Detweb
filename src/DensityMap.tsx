@@ -61,7 +61,8 @@ export default function DensityMap({
   // Jitter duplicate coordinates slightly so overlapping markers are visible
   const adjustedPositions = React.useMemo(() => {
     const byCoordKey: Record<string, any[]> = {};
-    const adjusted: Record<string, { latitude: number; longitude: number }> = {};
+    const adjusted: Record<string, { latitude: number; longitude: number }> =
+      {};
     const keyFor = (lat: number, lng: number) => `${lat},${lng}`;
 
     images.forEach((img) => {

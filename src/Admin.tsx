@@ -23,22 +23,22 @@ export default function Admin() {
     >
       <Card>
         <Card.Header>
-          <Card.Title className="mb-0">
-            <h4 className="mb-0">Admin</h4>
+          <Card.Title className='mb-0'>
+            <h4 className='mb-0'>Admin</h4>
           </Card.Title>
         </Card.Header>
         <Card.Body>
           <Tabs>
-            <Tab label="Pending Organisations">
+            <Tab label='Pending Organisations'>
               <PendingOrganizations />
             </Tab>
-            <Tab label="Client Logs">
-              <div className="m-2">
+            <Tab label='Client Logs'>
+              <div className='m-2'>
                 <ClientLogs />
               </div>
             </Tab>
-            <Tab label="Statistics">
-              <div className="m-2">
+            <Tab label='Statistics'>
+              <div className='m-2'>
                 <AdminStats />
               </div>
             </Tab>

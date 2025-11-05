@@ -62,10 +62,10 @@ export function ImageSetDropdown({
         value={selectedOptions}
         onChange={handleChange}
         isMulti
-        name="Image sets"
+        name='Image sets'
         options={options}
-        className="basic-multi-select text-black"
-        classNamePrefix="select"
+        className='basic-multi-select text-black'
+        classNamePrefix='select'
         closeMenuOnSelect={false}
       />
     </Form.Group>

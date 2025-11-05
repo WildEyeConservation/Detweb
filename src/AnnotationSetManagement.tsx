@@ -151,8 +151,8 @@ export default function AnnotationSetManagement() {
         id,
         rowData: [
           <Form.Check // prettier-ignore
-            type="switch"
-            id="custom-switch"
+            type='switch'
+            id='custom-switch'
             checked={selectedSets.includes(id)}
             onChange={(x) => {
               console.log(x.target.checked);
@@ -173,8 +173,8 @@ export default function AnnotationSetManagement() {
           >
             {annotationCount != null ? Math.max(0, annotationCount) : 'Unknown'}
             <Button
-              variant="outline-info"
-              size="sm"
+              variant='outline-info'
+              size='sm'
               style={{
                 marginLeft: '10px',
               }}
@@ -296,20 +296,20 @@ export default function AnnotationSetManagement() {
         show={modalToShow == 'annotationCountModal'}
         handleClose={() => showModal(null)}
       />
-      <Row className="justify-content-center mt-3">
+      <Row className='justify-content-center mt-3'>
         <div>
           <h5>Annotation Sets Management</h5>
           <MyTable
-            key="hannes"
+            key='hannes'
             tableHeadings={tableHeadings}
             tableData={tableData}
           />
-          <Col className="d-flex justify-content-center mt-3 border-top pt-3 border-dark">
+          <Col className='d-flex justify-content-center mt-3 border-top pt-3 border-dark'>
             <span>
               <Button
-                variant="primary"
+                variant='primary'
                 disabled={selectedSets.length == 0}
-                className="me-2"
+                className='me-2'
                 onClick={() => showModal('launchRegistration')}
               >
                 Launch registration task

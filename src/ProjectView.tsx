@@ -18,7 +18,7 @@ export default function ProjectView() {
       if (!surveyId || !user.userId) {
         return;
       }
-      
+
       const {
         data: [currentPM],
       } =

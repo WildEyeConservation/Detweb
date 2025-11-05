@@ -93,12 +93,12 @@ const AnnotationCountModal: React.FC<Props> = ({
   );
 
   return (
-    <Modal show={show} onHide={handleClose} size="lg">
+    <Modal show={show} onHide={handleClose} size='lg'>
       <Header>
         <Title>Annotation Set Details</Title>
       </Header>
       <Body>
-        <div className="p-3">
+        <div className='p-3'>
           {loading ? (
             <div
               style={{
@@ -109,19 +109,19 @@ const AnnotationCountModal: React.FC<Props> = ({
               }}
             >
               <Spinner
-                animation="border"
-                variant="light"
-                size="sm"
-                className="me-2"
+                animation='border'
+                variant='light'
+                size='sm'
+                className='me-2'
               />
               Fetching annotations...
             </div>
           ) : (
-            <div className="d-flex flex-column gap-2 w-100">
+            <div className='d-flex flex-column gap-2 w-100'>
               <LabeledToggleSwitch
-                className="mb-2"
-                leftLabel="All annotations"
-                rightLabel="Primary only"
+                className='mb-2'
+                leftLabel='All annotations'
+                rightLabel='Primary only'
                 checked={primaryOnly}
                 onChange={(checked) => {
                   setPrimaryOnly(checked);
@@ -140,14 +140,14 @@ const AnnotationCountModal: React.FC<Props> = ({
                     : []
                 )}
                 tableData={tableData}
-                emptyMessage="No annotations found"
+                emptyMessage='No annotations found'
               />
             </div>
           )}
         </div>
       </Body>
       <Footer>
-        <Button variant="dark" onClick={handleClose}>
+        <Button variant='dark' onClick={handleClose}>
           Close
         </Button>
       </Footer>

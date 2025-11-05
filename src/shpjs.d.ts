@@ -1,1 +1,1 @@
-declare module 'shpjs'; 
+declare module 'shpjs';

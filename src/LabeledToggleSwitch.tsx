@@ -19,21 +19,24 @@ const LabeledToggleSwitch: React.FC<LabeledToggleSwitchProps> = ({
   disabled,
 }) => {
   return (
-    <Form.Group as={Row} className={`${className || 'mb-3 align-items-center'}`}>
-      <Col xs={4} className="text-end">
-        <Form.Label className="mb-0">{leftLabel}</Form.Label>
+    <Form.Group
+      as={Row}
+      className={`${className || 'mb-3 align-items-center'}`}
+    >
+      <Col xs={4} className='text-end'>
+        <Form.Label className='mb-0'>{leftLabel}</Form.Label>
       </Col>
-      <Col xs={4} className="d-flex justify-content-center">
+      <Col xs={4} className='d-flex justify-content-center'>
         <Form.Check
-          type="switch"
-          id="custom-switch"
+          type='switch'
+          id='custom-switch'
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
           disabled={disabled}
         />
       </Col>
       <Col xs={4}>
-        <Form.Label className="mb-0">{rightLabel}</Form.Label>
+        <Form.Label className='mb-0'>{rightLabel}</Form.Label>
       </Col>
     </Form.Group>
   );

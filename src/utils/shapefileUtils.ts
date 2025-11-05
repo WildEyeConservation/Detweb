@@ -14,8 +14,10 @@ export function simplifyPolygonToRange(
   let coords: [number, number][] = rawLonLat;
   while (true) {
     const simplified = turf.simplify(turf.polygon([coords]), { tolerance });
-    const simplifiedCoords = simplified.geometry
-      .coordinates[0] as [number, number][];
+    const simplifiedCoords = simplified.geometry.coordinates[0] as [
+      number,
+      number
+    ][];
     coords = simplifiedCoords;
     if (coords.length <= maxPoints || tolerance > 1) {
       break;
@@ -26,7 +28,9 @@ export function simplifyPolygonToRange(
 }
 
 // Ensure the linear ring is closed (first equals last)
-export function ensureClosedRing(coords: [number, number][]): [number, number][] {
+export function ensureClosedRing(
+  coords: [number, number][]
+): [number, number][] {
   if (
     coords.length &&
     (coords[0][0] !== coords[coords.length - 1][0] ||
@@ -42,9 +46,11 @@ export async function parseShapefileToLatLngs(
   shapefileBuffer: ArrayBuffer
 ): Promise<LatLngTuple[] | null> {
   const geojson: any = await shp(shapefileBuffer);
-  const features = geojson.features || (geojson.type === 'Feature' ? [geojson] : []);
+  const features =
+    geojson.features || (geojson.type === 'Feature' ? [geojson] : []);
   const poly = features.find(
-    (f: any) => f.geometry?.type === 'Polygon' || f.geometry?.type === 'MultiPolygon'
+    (f: any) =>
+      f.geometry?.type === 'Polygon' || f.geometry?.type === 'MultiPolygon'
   );
   if (!poly) return null;
 
@@ -58,7 +64,10 @@ export async function parseShapefileToLatLngs(
 
   const closed = ensureClosedRing(coordsList);
   const simplifiedLonLat = simplifyPolygonToRange(closed);
-  const latLngs: LatLngTuple[] = simplifiedLonLat.map(([lng, lat]) => [lat, lng]);
+  const latLngs: LatLngTuple[] = simplifiedLonLat.map(([lng, lat]) => [
+    lat,
+    lng,
+  ]);
   return latLngs;
 }
 
@@ -87,10 +96,11 @@ export async function saveShapefileForProject(
   })) as any;
   const existing = updateResult.data as Array<{ id: string }>;
   if (existing && existing.length > 0) {
-    await client.models.Shapefile.update({ id: existing[0].id, coordinates: flattened });
+    await client.models.Shapefile.update({
+      id: existing[0].id,
+      coordinates: flattened,
+    });
   } else {
     await client.models.Shapefile.create({ projectId, coordinates: flattened });
   }
 }
-
-

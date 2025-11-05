@@ -92,7 +92,7 @@ export default function MyTable(input: TableObject) {
 
   if (tableData.length <= 0 && emptyMessage) {
     return (
-      <div className="text-center">
+      <div className='text-center'>
         <h5>{emptyMessage}</h5>
       </div>
     );
@@ -100,18 +100,18 @@ export default function MyTable(input: TableObject) {
 
   return (
     <div>
-      <Table striped bordered hover className="border border-dark">
+      <Table striped bordered hover className='border border-dark'>
         {tableHeadings && (
           <thead>
             <tr>
               {tableHeadings.map(({ content, style, sort }, index) => (
                 <th
                   key={`heading${index}`}
-                  className="bg-dark"
+                  className='bg-dark'
                   onClick={sort ? () => handleSort(index) : undefined}
                   style={{ cursor: sort ? 'pointer' : 'default', ...style }}
                 >
-                  <div className="d-flex align-items-center justify-content-between">
+                  <div className='d-flex align-items-center justify-content-between'>
                     {content}
                     {sort && renderSortIndicator(index)}
                   </div>
@@ -122,7 +122,7 @@ export default function MyTable(input: TableObject) {
         )}
         <tbody>
           {paginatedData?.map((row) => (
-            <tr key={row.id} className="align-middle">
+            <tr key={row.id} className='align-middle'>
               {row.rowData.map((content, index) => (
                 <td
                   key={`column${index}`}
@@ -136,13 +136,13 @@ export default function MyTable(input: TableObject) {
         </tbody>
       </Table>
       {pagination && (
-        <div className="text-end d-flex justify-content-between align-items-center">
-          <p className="d-inline mb-0">
+        <div className='text-end d-flex justify-content-between align-items-center'>
+          <p className='d-inline mb-0'>
             Page {currentPage + 1} of {totalPages}
           </p>
-          <div className="d-flex gap-1">
+          <div className='d-flex gap-1'>
             <Button
-              variant="info"
+              variant='info'
               onClick={() => {
                 setCurrentPage((c) => c - 1);
               }}
@@ -151,7 +151,7 @@ export default function MyTable(input: TableObject) {
               &lt;
             </Button>
             <Button
-              variant="info"
+              variant='info'
               onClick={() => setCurrentPage(currentPage + 1)}
               disabled={
                 currentPage === Math.ceil(sortedData.length / itemsPerPage) - 1

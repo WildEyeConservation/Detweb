@@ -1,15 +1,15 @@
-import { useContext, useEffect, useState, useCallback } from "react";
-import { UserContext } from "./UserContext";
-import * as subs from "./graphql/subscriptions";
+import { useContext, useEffect, useState, useCallback } from 'react';
+import { UserContext } from './UserContext';
+import * as subs from './graphql/subscriptions';
 import {
   annotationsByAnnotationSetId,
   getLocation,
   locationSetsByProjectName,
-} from "./graphql/queries";
+} from './graphql/queries';
 
-import { latestObservation, testLocations } from "./gqlQueries";
-import { GraphQLResult } from "@aws-amplify/api";
-import {gqlClient, graphqlOperation} from "./App";
+import { latestObservation, testLocations } from './gqlQueries';
+import { GraphQLResult } from '@aws-amplify/api';
+import { gqlClient, graphqlOperation } from './App';
 
 interface LocationSet {
   id: string;
@@ -55,7 +55,10 @@ export function useTesting(
           nextToken,
         })
       )) as GraphQLResult<{
-        locationSetsByProjectName: { items: LocationSet[]; nextToken: string | null };
+        locationSetsByProjectName: {
+          items: LocationSet[];
+          nextToken: string | null;
+        };
       }>;
 
       if (locationSetResult.data) {
@@ -73,7 +76,9 @@ export function useTesting(
               setId: locationSet.id,
               nextToken: locationNextToken,
             })
-          )) as GraphQLResult<{ testLocations: { items: Location[]; nextToken: string | null } }>;
+          )) as GraphQLResult<{
+            testLocations: { items: Location[]; nextToken: string | null };
+          }>;
 
           if (locationResult.data) {
             locations = locationResult.data.testLocations.items;
@@ -87,11 +92,15 @@ export function useTesting(
                 owner: user.id,
               })
             )) as GraphQLResult<{
-              observationsByLocationIdAndOwnerAndCreatedAt: { items: Observation[] };
+              observationsByLocationIdAndOwnerAndCreatedAt: {
+                items: Observation[];
+              };
             }>;
 
             if (observationResult.data) {
-              const observations = observationResult.data.observationsByLocationIdAndOwnerAndCreatedAt.items;
+              const observations =
+                observationResult.data
+                  .observationsByLocationIdAndOwnerAndCreatedAt.items;
               if (observations.length === 0) {
                 return id;
               } else {
@@ -113,7 +122,7 @@ export function useTesting(
     )) as GraphQLResult<{ getLocation: any }>;
 
     if (!locationResult.data) {
-      throw new Error("Failed to fetch location data.");
+      throw new Error('Failed to fetch location data.');
     }
 
     const body = locationResult.data.getLocation;
@@ -127,7 +136,10 @@ export function useTesting(
         })
       )) as GraphQLResult<{ annotationsByAnnotationSetId: { items: any[] } }>;
 
-      if (annotationResult.data && annotationResult.data.annotationsByAnnotationSetId.items.length === 0) {
+      if (
+        annotationResult.data &&
+        annotationResult.data.annotationsByAnnotationSetId.items.length === 0
+      ) {
         body.ack = undefined;
         testFailed(body);
       }

@@ -1,10 +1,10 @@
-import Button from "react-bootstrap/Button";
-import Card from "react-bootstrap/Card";
-import Form from "react-bootstrap/Form";
-import { useContext, useState } from "react";
-import { GlobalContext, UserContext } from "./Context";
-import { fetchAllPaginatedResults } from "./utils";
-import { useNavigate } from "react-router-dom";
+import Button from 'react-bootstrap/Button';
+import Card from 'react-bootstrap/Card';
+import Form from 'react-bootstrap/Form';
+import { useContext, useState } from 'react';
+import { GlobalContext, UserContext } from './Context';
+import { fetchAllPaginatedResults } from './utils';
+import { useNavigate } from 'react-router-dom';
 
 /*
     todo: Notify sysadmin
@@ -21,13 +21,13 @@ export default function RegisterOrganization() {
     setIsLoading(true);
 
     const formData = new FormData(event.target as HTMLFormElement);
-    const organizationName = formData.get("organizationName") as string;
-    const briefDescription = formData.get("briefDescription") as string;
+    const organizationName = formData.get('organizationName') as string;
+    const briefDescription = formData.get('briefDescription') as string;
 
     const organizations = await fetchAllPaginatedResults(
       client.models.Organization.list,
       {
-        selectionSet: ["id"],
+        selectionSet: ['id'],
         filter: {
           name: {
             eq: organizationName,
@@ -37,27 +37,27 @@ export default function RegisterOrganization() {
     );
 
     if (organizations.length > 0) {
-      alert("An organisation with this name already exists");
+      alert('An organisation with this name already exists');
       return;
     }
 
     const registrations = await fetchAllPaginatedResults(
       client.models.OrganizationRegistration.list,
       {
-        selectionSet: ["id"],
+        selectionSet: ['id'],
         filter: {
           requestedBy: {
             contains: user.userId,
           },
           status: {
-            eq: "pending",
+            eq: 'pending',
           },
         },
       }
     );
 
     if (registrations.length > 0) {
-      alert("You have already requested an organisation registration");
+      alert('You have already requested an organisation registration');
       setIsLoading(false);
       return;
     }
@@ -70,17 +70,17 @@ export default function RegisterOrganization() {
       });
 
     if (!organizationRegistration) {
-      alert("An error occurred while submitting your request");
+      alert('An error occurred while submitting your request');
       setIsLoading(false);
       return;
     }
 
-    alert("Your request has been submitted");
+    alert('Your request has been submitted');
 
-    if (cognitoGroups.includes("sysadmin")) {
-      navigate("/SSAdmin");
+    if (cognitoGroups.includes('sysadmin')) {
+      navigate('/SSAdmin');
     } else {
-      navigate("/");
+      navigate('/');
     }
 
     setIsLoading(false);
@@ -88,22 +88,22 @@ export default function RegisterOrganization() {
 
   return (
     <Card
-      className="w-100"
+      className='w-100'
       style={{
-        marginTop: "12px",
-        marginBottom: "12px",
-        height: "fit-content",
-        maxWidth: "960px",
+        marginTop: '12px',
+        marginBottom: '12px',
+        height: 'fit-content',
+        maxWidth: '960px',
       }}
     >
       <Card.Header>
-        <Card.Title className="mb-0">
-          <h4 className="mb-0">Register Organisation</h4>
+        <Card.Title className='mb-0'>
+          <h4 className='mb-0'>Register Organisation</h4>
         </Card.Title>
       </Card.Header>
       <Card.Body>
-        <Form className="d-flex flex-column gap-3" onSubmit={handleSubmit}>
-          <span className="text-muted">
+        <Form className='d-flex flex-column gap-3' onSubmit={handleSubmit}>
+          <span className='text-muted'>
             Here you can register your organisation for SurveyScope - you will
             automatically be redirected after a successful manual review of your
             details.
@@ -111,24 +111,24 @@ export default function RegisterOrganization() {
           <Form.Group>
             <Form.Label>Organisation Name</Form.Label>
             <Form.Control
-              name="organizationName"
-              type="text"
-              placeholder="Enter organisation name"
+              name='organizationName'
+              type='text'
+              placeholder='Enter organisation name'
               required
             />
           </Form.Group>
           <Form.Group>
             <Form.Label>Brief Description of Work</Form.Label>
             <Form.Control
-              name="briefDescription"
-              as="textarea"
+              name='briefDescription'
+              as='textarea'
               rows={3}
-              placeholder="Enter brief description of work"
+              placeholder='Enter brief description of work'
               required
             />
           </Form.Group>
-          <Button type="submit" variant="primary" disabled={isLoading}>
-            {isLoading ? "Submitting..." : "Submit"}
+          <Button type='submit' variant='primary' disabled={isLoading}>
+            {isLoading ? 'Submitting...' : 'Submit'}
           </Button>
         </Form>
       </Card.Body>

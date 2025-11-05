@@ -173,22 +173,22 @@ export default function AnnotationImage(props: any) {
       : baseSource;
     return [
       <CreateAnnotationOnClick
-        key="caok"
+        key='caok'
         allowOutside={allowOutside}
         location={location}
         source={source}
         setId={testSetId}
       />,
       <ShowMarkers
-        key="showMarkers"
+        key='showMarkers'
         annotationSetId={testSetId}
         realAnnotationSetId={annotationSetId}
         categoriesOverride={legendCategories ?? undefined}
       />,
-      <Location key="location" {...location} />,
+      <Location key='location' {...location} />,
       <MapLegend
-        key="legend"
-        position="bottomright"
+        key='legend'
+        position='bottomright'
         annotationSetId={annotationSetId}
         categoriesOverride={legendCategories ?? undefined}
       />,
@@ -253,7 +253,7 @@ export default function AnnotationImage(props: any) {
       secondaryQueueUrl={props.secondaryQueueUrl}
       taskTag={props.taskTag}
     >
-      <div className="d-flex flex-md-row flex-column justify-content-center w-100 h-100 gap-3 overflow-auto">
+      <div className='d-flex flex-md-row flex-column justify-content-center w-100 h-100 gap-3 overflow-auto'>
         <div
           className={`d-flex flex-column align-items-center w-100 h-100 gap-3`}
           style={{
@@ -261,7 +261,7 @@ export default function AnnotationImage(props: any) {
           }}
         >
           <div
-            className="d-flex flex-row justify-content-center align-items-center w-100 gap-3 overflow-hidden"
+            className='d-flex flex-row justify-content-center align-items-center w-100 gap-3 overflow-hidden'
             style={{ position: 'relative', height: '26px' }}
           >
             <div
@@ -279,7 +279,7 @@ export default function AnnotationImage(props: any) {
             </div>
             {visible && (
               <>
-                <Badge bg="secondary">
+                <Badge bg='secondary'>
                   Working on:{' '}
                   {props.taskTag || currentTaskTag
                     ? `${props.taskTag || currentTaskTag}`
@@ -322,18 +322,18 @@ export default function AnnotationImage(props: any) {
             {visible && memoizedChildren}
           </Image>
         </div>
-        <div className="d-flex flex-column align-items-center gap-3">
+        <div className='d-flex flex-column align-items-center gap-3'>
           <SideLegend
             annotationSetId={annotationSetId}
             categoriesOverride={legendCategories ?? undefined}
           />
           {isAnnotatePath && (
             <Button
-              variant="success"
+              variant='success'
               onClick={() => {
                 navigate('/jobs');
               }}
-              className="w-100"
+              className='w-100'
             >
               Save & Exit
             </Button>
@@ -417,7 +417,7 @@ function SetDefaultZoom({
 
   return (
     <button
-      className="p-0 m-0 border-0 bg-transparent d-flex align-items-center text-white"
+      className='p-0 m-0 border-0 bg-transparent d-flex align-items-center text-white'
       style={{
         position: 'absolute',
         top: 0,
@@ -426,7 +426,7 @@ function SetDefaultZoom({
       onClick={saveDefaultZoom}
     >
       {storedZoom ? <RotateCcw size={24} /> : <SearchCheck size={24} />}
-      <span className="ms-2 mb-0 d-none d-md-block">
+      <span className='ms-2 mb-0 d-none d-md-block'>
         {storedZoom ? 'Reset zoom' : 'Set as default zoom'}
       </span>
     </button>

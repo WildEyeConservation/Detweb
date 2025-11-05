@@ -1,4 +1,3 @@
-
 interface Image {
   name: string;
   s3key?: string;
@@ -12,7 +11,6 @@ interface Entry {
 
 let getterCache: Record<string, () => Promise<string>> = {};
 let promiseCache: Record<string, Promise<string>> = {};
-
 
 interface CustomStorage {
   get(key: string, options: { expires: number }): Promise<string>;
@@ -30,7 +28,7 @@ export async function getUrl(image: Image): Promise<string | void> {
         promiseCache[name] = Storage.get(s3key, { expires: 3600 });
       } else {
         alert(
-          `Could not find a local or remote source for the image ${image.name}`,
+          `Could not find a local or remote source for the image ${image.name}`
         );
       }
     }

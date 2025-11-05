@@ -26,6 +26,17 @@ const metadataStore = localforage.createInstance({
   storeName: 'metadata',
 });
 
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+const hasValidLatLng = (lat: unknown, lng: unknown): boolean =>
+  isFiniteNumber(lat) &&
+  lat >= -90 &&
+  lat <= 90 &&
+  isFiniteNumber(lng) &&
+  lng >= -180 &&
+  lng <= 180;
+
 export default function UploadManager() {
   const {
     task: { projectId, files, retryDelay, resumeId, deleteId, pauseId },
@@ -188,8 +199,30 @@ export default function UploadManager() {
         projectId: projectId,
       });
 
-      const allImages =
+      const storedImages =
         ((await fileStore.getItem(projectId)) as ImageData[]) ?? [];
+
+      const { validImages: allImages, invalidPaths } = storedImages.reduce(
+        (acc: { validImages: ImageData[]; invalidPaths: string[] }, image) => {
+          if (hasValidLatLng(image.latitude, image.longitude)) {
+            acc.validImages.push(image);
+          } else {
+            acc.invalidPaths.push(image.originalPath);
+          }
+          return acc;
+        },
+        { validImages: [] as ImageData[], invalidPaths: [] as string[] }
+      );
+
+      if (invalidPaths.length > 0) {
+        console.warn(
+          `Skipping ${invalidPaths.length} image${
+            invalidPaths.length === 1 ? '' : 's'
+          } with missing GPS coordinates:`,
+          invalidPaths
+        );
+        await fileStore.setItem(projectId, allImages);
+      }
 
       // Fetch cameras for this project and build a name -> id map
       const { data: existingCameras } =
@@ -668,10 +701,16 @@ export default function UploadManager() {
     } else {
       finalizeAfterMaxAttemptsRef.current = false;
       // finish upload
-      const createdImages =
+      const allCreatedImages =
         ((await createdImagesStore.getItem(projectId)) as CreatedImage[]) ?? [];
 
-      createdImages.sort((a, b) => a.timestamp - b.timestamp);
+      // Only process images that were part of this upload session
+      const sessionOriginalPaths = new Set(
+        uploadedFiles.map((f) => f.originalPath)
+      );
+      const createdImages = allCreatedImages
+        .filter((img) => sessionOriginalPaths.has(img.originalPath))
+        .sort((a, b) => a.timestamp - b.timestamp);
 
       const {
         data: [imageSet],
@@ -679,9 +718,10 @@ export default function UploadManager() {
         projectId: projectId,
       });
 
+      // Preserve correct total image count by using all created images
       await client.models.ImageSet.update({
         id: imageSet.id,
-        imageCount: createdImages.length,
+        imageCount: allCreatedImages.length,
       });
 
       // Determine legacy vs new key structure
@@ -717,7 +757,8 @@ export default function UploadManager() {
         // include 10 prior images to enable adjacency linking across batch boundaries (and across cameras)
         const overlapCount = 10;
         const overlapStart = Math.max(0, i - overlapCount);
-        const overlap: CreatedImage[] = i > 0 ? createdImages.slice(overlapStart, i) : [];
+        const overlap: CreatedImage[] =
+          i > 0 ? createdImages.slice(overlapStart, i) : [];
         const payload = overlap.concat(batch).map((img) => ({
           id: img.id,
           originalPath: img.originalPath,
@@ -1073,10 +1114,10 @@ export default function UploadManager() {
     <>
       <input
         ref={fileInputRef}
-        type="file"
-        webkitdirectory="true"
+        type='file'
+        webkitdirectory='true'
         // @ts-expect-error - nonstandard attribute supported by Chromium for directory selection
-        directory="true"
+        directory='true'
         multiple
         onChange={handleFileSelect}
         style={{ display: 'none' }}
@@ -1085,7 +1126,7 @@ export default function UploadManager() {
         show={showConfirmationModal}
         onClose={() => setShowConfirmationModal(false)}
         onConfirm={() => fileInputRef.current?.click()}
-        title="Found interrupted uploads"
+        title='Found interrupted uploads'
         body={`Uploads were interrupted for ${pendingResumeProjectIdRef.current?.name}. Would you like to resume? After confirming, please select the files again. If the upload was started on this device you won't have to filter the data again. Only the files that were interrupted will be uploaded.`}
       />
       <ConfirmationModal
@@ -1100,7 +1141,7 @@ export default function UploadManager() {
           pausedRef.current = true;
           handlePause();
         }}
-        title="Pause upload"
+        title='Pause upload'
         body={`Are you sure you want to pause the upload? The in flight uploads will be completed and the remaining files will be uploaded when you resume.`}
       />
       <ConfirmationModal
@@ -1115,7 +1156,7 @@ export default function UploadManager() {
           deletingRef.current = true;
           handleDelete();
         }}
-        title="Delete Survey"
+        title='Delete Survey'
         body={`This will cancel the upload and delete the survey. This action cannot be undone.`}
       />
     </>

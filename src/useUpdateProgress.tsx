@@ -1,7 +1,13 @@
-import { useContext, useState, useEffect, Dispatch, SetStateAction } from "react";
-import { DateTime } from "luxon";
-import humanizeDuration from "humanize-duration";
-import { ProgressContext } from "./Context";
+import {
+  useContext,
+  useState,
+  useEffect,
+  Dispatch,
+  SetStateAction,
+} from 'react';
+import { DateTime } from 'luxon';
+import humanizeDuration from 'humanize-duration';
+import { ProgressContext } from './Context';
 
 interface UseUpdateProgressParams {
   taskId: string;
@@ -34,8 +40,8 @@ export function useUpdateProgress({
   // Whenever the user adjusts stepsCompleted or totalSteps, we may need to adjust the output that goes to ProgressContext.
   // This effect handles that update
   useEffect(() => {
-    console.log("totalSteps", totalSteps);
-    console.log("stepsCompleted", stepsCompleted);
+    console.log('totalSteps', totalSteps);
+    console.log('stepsCompleted', stepsCompleted);
     if (totalSteps || stepsCompleted) {
       setProgress((progress) => {
         const newProgress = { ...progress };
@@ -43,7 +49,9 @@ export function useUpdateProgress({
         // Make a copy so that react can pick up the change
         if (totalSteps) {
           const millis = startTime ? DateTime.now().toMillis() - startTime : 0;
-          const remaining = (stepsCompleted > 0 ? (totalSteps * millis) / stepsCompleted : 0) - millis;
+          const remaining =
+            (stepsCompleted > 0 ? (totalSteps * millis) / stepsCompleted : 0) -
+            millis;
 
           newProgress[taskId] = {
             value: (stepsCompleted / totalSteps) * 100,
@@ -51,21 +59,25 @@ export function useUpdateProgress({
               <p>
                 {determinateTaskName}
                 <br />
-                {`Done with ${stepFormatter(stepsCompleted)}/${stepFormatter(totalSteps)}`}
+                {`Done with ${stepFormatter(stepsCompleted)}/${stepFormatter(
+                  totalSteps
+                )}`}
                 <br />
                 {`Elapsed time: ${humanizeDuration(millis, {
-                  units: ["d", "h", "m", "s"],
+                  units: ['d', 'h', 'm', 's'],
                   round: true,
                   largest: 2,
                 })}`}
                 <br />
                 {`Estimated remaining time: ${humanizeDuration(remaining, {
-                  units: ["d", "h", "m", "s"],
+                  units: ['d', 'h', 'm', 's'],
                   round: true,
                   largest: 1,
                 })}`}
                 <br />
-                {`Average rate ${stepFormatter(stepsCompleted/millis*1000)}/s`}
+                {`Average rate ${stepFormatter(
+                  (stepsCompleted / millis) * 1000
+                )}/s`}
                 <br />
               </p>
             ),
@@ -102,8 +114,15 @@ export function useUpdateProgress({
         return updated;
       });
     }
-  }, [stepsCompleted, totalSteps, setProgress, taskId, determinateTaskName, indeterminateTaskName, startTime]);
+  }, [
+    stepsCompleted,
+    totalSteps,
+    setProgress,
+    taskId,
+    determinateTaskName,
+    indeterminateTaskName,
+    startTime,
+  ]);
 
   return [setStepsCompleted, setTotalSteps];
 }
-

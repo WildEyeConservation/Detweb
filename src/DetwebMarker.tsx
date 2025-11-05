@@ -56,7 +56,9 @@ function createIcon(
       : annotation.objectId
       ? '#888888'
       : '#000000';
-  const isFalseNegative = String((annotation as { source?: string }).source || '')
+  const isFalseNegative = String(
+    (annotation as { source?: string }).source || ''
+  )
     .toLowerCase()
     .includes('false-negative');
   const markerLabel = isFalseNegative
@@ -324,7 +326,12 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
           position={xy2latLng(annotation)}
           draggable={true}
           autopan={true}
-          icon={createIcon(categories, annotation, activeAnnotation, props.hideIdenticon)}
+          icon={createIcon(
+            categories,
+            annotation,
+            activeAnnotation,
+            props.hideIdenticon
+          )}
           contextmenu={true}
           contextmenuInheritItems={false}
           contextmenuItems={getContextMenuItems(annotation)}

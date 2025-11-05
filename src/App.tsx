@@ -94,7 +94,7 @@ function App({ signOut = () => {}, user }: AppProps) {
       <>
         <BrowserView>
           <User user={user!} cognitoGroups={cognitoGroups}>
-          {user?.userId && <ClientLogger userId={user.userId} />}
+            {user?.userId && <ClientLogger userId={user.userId} />}
             <Upload>
               <UploadManager />
               <MainNavigation signOut={signOut} />

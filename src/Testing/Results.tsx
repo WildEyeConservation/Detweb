@@ -132,7 +132,7 @@ export default function Results() {
         passedForResult(result) ? 'Yes' : 'No',
         <a
           href={`/surveys/${surveyId}/location/${result.locationId}/${result.annotationSetId}`}
-          target="_blank"
+          target='_blank'
         >
           Link
         </a>,
@@ -314,11 +314,11 @@ export default function Results() {
   }
 
   return (
-    <div className="d-flex flex-column gap-2 mt-3 w-100">
+    <div className='d-flex flex-column gap-2 mt-3 w-100'>
       <div>
-        <label className="mb-2">Select Survey</label>
+        <label className='mb-2'>Select Survey</label>
         <Select
-          className="text-black"
+          className='text-black'
           value={selectedProject}
           options={organizationProjects
             .filter((p) => !p.hidden)
@@ -340,9 +340,9 @@ export default function Results() {
         />
       </div>
       <div>
-        <label className="mb-2">Select user</label>
+        <label className='mb-2'>Select user</label>
         <Select
-          className="mb-3 text-black"
+          className='mb-3 text-black'
           value={selectedUser}
           options={organizationMembershipsHook.data?.map((m) => ({
             label: allUsers.find((user) => user.id === m.userId)?.name || '',
@@ -361,23 +361,23 @@ export default function Results() {
       </div>
       {selectedProject && selectedUser && (
         <>
-          <div className="overflow-x-auto overflow-y-visible">
+          <div className='overflow-x-auto overflow-y-visible'>
             {results.length === 0 ? (
-              <p className="mt-2">
+              <p className='mt-2'>
                 {isLoading ? 'Loading...' : 'No test results'}
               </p>
             ) : (
               <Tabs defaultTab={0}>
-                <Tab label="All Results">
-                  <div className="d-flex flex-column mb-1">
-                    <p className="mt-2 mb-1">Rules</p>
+                <Tab label='All Results'>
+                  <div className='d-flex flex-column mb-1'>
+                    <p className='mt-2 mb-1'>Rules</p>
                     <div>
-                      <label className="mb-1">Pass rate (%)</label>
+                      <label className='mb-1'>Pass rate (%)</label>
                       <Form.Control
-                        type="number"
+                        type='number'
                         min={1}
                         max={100}
-                        className="text-black"
+                        className='text-black'
                         value={rules.accuracyPercent}
                         onChange={(e) =>
                           setRules({
@@ -389,9 +389,9 @@ export default function Results() {
                       />
                     </div>
                     <Form.Check
-                      type="checkbox"
-                      id="ignore-overcounts"
-                      label="Ignore overcounts"
+                      type='checkbox'
+                      id='ignore-overcounts'
+                      label='Ignore overcounts'
                       className='mt-2'
                       checked={rules.ignoreOvercounts}
                       onChange={(e) =>
@@ -402,13 +402,13 @@ export default function Results() {
                       }
                     />
                   </div>
-                  <p className="my-2">Summary</p>
-                  <div className="d-flex gap-3 mb-3">
+                  <p className='my-2'>Summary</p>
+                  <div className='d-flex gap-3 mb-3'>
                     {summaryCards.map((card, index) => (
                       <SummaryCard key={index} content={card.content} />
                     ))}
                   </div>
-                  <p className="mb-2">All Results</p>
+                  <p className='mb-2'>All Results</p>
                   <MyTable
                     tableHeadings={headings}
                     tableData={tableData}
@@ -416,9 +416,9 @@ export default function Results() {
                     itemsPerPage={5}
                   />
                 </Tab>
-                <Tab label="Label Accuracy">
+                <Tab label='Label Accuracy'>
                   <p
-                    className="text-center mb-0 mt-3"
+                    className='text-center mb-0 mt-3'
                     style={{ fontSize: '1.5rem' }}
                   >
                     Over/Under Count Percentage By Label
@@ -480,15 +480,15 @@ export default function Results() {
             )}
           </div>
           {results.length > 0 && (
-            <div className="d-flex gap-2 justify-content-end mt-2">
+            <div className='d-flex gap-2 justify-content-end mt-2'>
               <Button
-                variant="danger"
+                variant='danger'
                 onClick={purgeResults}
                 disabled={isPurging}
               >
                 Purge Results
               </Button>
-              <Button variant="primary" onClick={exportResults}>
+              <Button variant='primary' onClick={exportResults}>
                 Export Results
               </Button>
             </div>
@@ -501,9 +501,9 @@ export default function Results() {
 
 function SummaryCard({ content }: { content: (string | JSX.Element)[] }) {
   return (
-    <div className="rounded-3 p-3 bg-dark text-white d-flex flex-column gap-1">
+    <div className='rounded-3 p-3 bg-dark text-white d-flex flex-column gap-1'>
       {content.map((item, index) => (
-        <p key={index} className="mb-0">
+        <p key={index} className='mb-0'>
           {item}
         </p>
       ))}

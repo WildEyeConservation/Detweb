@@ -39,10 +39,10 @@ export function CategoriesDropdown({
         defaultValue={[]}
         onChange={handleChange}
         isMulti
-        name="Categories"
+        name='Categories'
         options={options}
-        className="basic-multi-select text-black"
-        classNamePrefix="select"
+        className='basic-multi-select text-black'
+        classNamePrefix='select'
         closeMenuOnSelect={false}
       />
     </Form.Group>

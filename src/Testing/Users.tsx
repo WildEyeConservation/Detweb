@@ -16,9 +16,9 @@ export default function Users() {
       rowData: [
         user?.name,
         <LabeledToggleSwitch
-          className="mb-0"
-          leftLabel="No"
-          rightLabel="Yes"
+          className='mb-0'
+          leftLabel='No'
+          rightLabel='Yes'
           checked={membership.isTested ?? false}
           onChange={async (checked) => {
             hook.update({
@@ -33,8 +33,8 @@ export default function Users() {
   });
 
   return (
-    <div className="d-flex flex-column gap-2 mt-3 w-100">
-      <h5 className="mb-0">Organisation Users</h5>
+    <div className='d-flex flex-column gap-2 mt-3 w-100'>
+      <h5 className='mb-0'>Organisation Users</h5>
       <MyTable
         tableHeadings={[
           { content: 'Name', style: { width: '50%' }, sort: true },
@@ -43,7 +43,7 @@ export default function Users() {
         tableData={tableData}
         pagination={true}
         itemsPerPage={5}
-        emptyMessage="Loading users..."
+        emptyMessage='Loading users...'
       />
     </div>
   );

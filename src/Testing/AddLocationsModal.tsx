@@ -294,7 +294,8 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
     return opts.sort((a, b) => a.w * a.h - b.w * b.h);
   }, [locationSets]);
 
-  const overlayEnabled = advancedOpen && (changeSize || offsetX !== 0 || offsetY !== 0);
+  const overlayEnabled =
+    advancedOpen && (changeSize || offsetX !== 0 || offsetY !== 0);
 
   useEffect(() => {
     if (show) {
@@ -322,7 +323,9 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
   // Ensure a dedicated testing location set exists
   const getOrCreateTestingLocationSetId = useCallback(async () => {
     const TESTING_SET_NAME = 'Testing Locations';
-    const existing = (locationSets || []).find((s: any) => s?.name === TESTING_SET_NAME);
+    const existing = (locationSets || []).find(
+      (s: any) => s?.name === TESTING_SET_NAME
+    );
     if (existing?.id) return existing.id as string;
     const { data: created } = await (client as any).models.LocationSet.create({
       name: TESTING_SET_NAME,
@@ -448,7 +451,10 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
       });
 
       // mark for effect using the new location
-      lastAddedRef.current = { annotationSetId: cand.annotationSetId, locationId: newLoc.id };
+      lastAddedRef.current = {
+        annotationSetId: cand.annotationSetId,
+        locationId: newLoc.id,
+      };
       setAddedLocations((prev) => ({
         ...prev,
         [`${cand.annotationSetId}_${cand.locationId}`]: true,
@@ -486,7 +492,10 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
             ) : (
               <div className='d-flex flex-row gap-3 h-100'>
                 {/* Left controls column */}
-                <div className='d-flex flex-column gap-3 border-end border-dark mt-3 pe-3' style={{ width: '360px', maxWidth: '40%', overflowY: 'auto' }}>
+                <div
+                  className='d-flex flex-column gap-3 border-end border-dark mt-3 pe-3'
+                  style={{ width: '360px', maxWidth: '40%', overflowY: 'auto' }}
+                >
                   <Form.Group className='d-flex flex-column gap-2'>
                     <Form.Group>
                       <Form.Label className='mb-0'>Label filter</Form.Label>
@@ -544,14 +553,22 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
                           onChange={(e) => setChangeSize(e.target.checked)}
                         />
                         <Form.Group>
-                          <Form.Label className='mb-0'>From tiled sizes</Form.Label>
+                          <Form.Label className='mb-0'>
+                            From tiled sizes
+                          </Form.Label>
                           <Form.Select
-                            disabled={loadingLocationSets || tiledSizeOptions.length === 0 || !changeSize}
+                            disabled={
+                              loadingLocationSets ||
+                              tiledSizeOptions.length === 0 ||
+                              !changeSize
+                            }
                             value={selectedSize}
                             onChange={(e) => {
                               const val = e.target.value;
                               setSelectedSize(val);
-                              const found = tiledSizeOptions.find((o) => o.value === val);
+                              const found = tiledSizeOptions.find(
+                                (o) => o.value === val
+                              );
                               if (found) {
                                 setCustomWidth(found.w);
                                 setCustomHeight(found.h);
@@ -576,7 +593,9 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
                             value={customWidth}
                             onChange={(e) =>
                               setCustomWidth(
-                                e.target.value === '' ? '' : Math.max(1, Number(e.target.value) || 1)
+                                e.target.value === ''
+                                  ? ''
+                                  : Math.max(1, Number(e.target.value) || 1)
                               )
                             }
                           />
@@ -591,27 +610,37 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
                             value={customHeight}
                             onChange={(e) =>
                               setCustomHeight(
-                                e.target.value === '' ? '' : Math.max(1, Number(e.target.value) || 1)
+                                e.target.value === ''
+                                  ? ''
+                                  : Math.max(1, Number(e.target.value) || 1)
                               )
                             }
                           />
                         </Form.Group>
                         <Form.Group>
-                          <Form.Label className='mb-0'>Offset X (px)</Form.Label>
+                          <Form.Label className='mb-0'>
+                            Offset X (px)
+                          </Form.Label>
                           <Form.Control
                             type='number'
                             step={1}
                             value={offsetX}
-                            onChange={(e) => setOffsetX(Number(e.target.value) || 0)}
+                            onChange={(e) =>
+                              setOffsetX(Number(e.target.value) || 0)
+                            }
                           />
                         </Form.Group>
                         <Form.Group>
-                          <Form.Label className='mb-0'>Offset Y (px)</Form.Label>
+                          <Form.Label className='mb-0'>
+                            Offset Y (px)
+                          </Form.Label>
                           <Form.Control
                             type='number'
                             step={1}
                             value={offsetY}
-                            onChange={(e) => setOffsetY(Number(e.target.value) || 0)}
+                            onChange={(e) =>
+                              setOffsetY(Number(e.target.value) || 0)
+                            }
                           />
                         </Form.Group>
                       </div>
@@ -630,8 +659,12 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
                       historyN={5}
                       overlay={{
                         enabled: overlayEnabled,
-                        width: changeSize ? (customWidth || undefined) : undefined,
-                        height: changeSize ? (customHeight || undefined) : undefined,
+                        width: changeSize
+                          ? customWidth || undefined
+                          : undefined,
+                        height: changeSize
+                          ? customHeight || undefined
+                          : undefined,
                         offsetX,
                         offsetY,
                       }}
@@ -655,7 +688,8 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
                       disabled={
                         adding ||
                         !currentCandidate ||
-                        (changeSize && (customWidth === '' || customHeight === '')) ||
+                        (changeSize &&
+                          (customWidth === '' || customHeight === '')) ||
                         addedLocations[
                           `${currentCandidate!.annotationSetId}_${
                             currentCandidate!.locationId

@@ -220,9 +220,9 @@ export default function ProcessImages({ projectId }: { projectId: string }) {
 
   return (
     <>
-      <Form className="p-3">
+      <Form className='p-3'>
         <Form.Group>
-          <Form.Label className="mb-0">Model</Form.Label>
+          <Form.Label className='mb-0'>Model</Form.Label>
           <Select
             value={model}
             onChange={(m) => setModel(m)}
@@ -231,46 +231,46 @@ export default function ProcessImages({ projectId }: { projectId: string }) {
               { label: 'Elephant Detection Nadir', value: 'heatmap' },
               { label: 'MAD', value: 'mad' },
             ]}
-            placeholder="Select a model"
-            className="text-black"
+            placeholder='Select a model'
+            className='text-black'
           />
           <Button
-            variant="primary"
+            variant='primary'
             onClick={scanImages}
             disabled={!model || loading}
-            className="mt-2"
+            className='mt-2'
           >
             Scan
           </Button>
           {loading ? (
-            <div className="d-flex flex-column align-items-center">
-              <Spinner animation="border" role="status" />
-              <p className="mb-0">Determining images to process...</p>
-              <p className="mb-1">Found {imagesLoaded ?? 0} images</p>
+            <div className='d-flex flex-column align-items-center'>
+              <Spinner animation='border' role='status' />
+              <p className='mb-0'>Determining images to process...</p>
+              <p className='mb-1'>Found {imagesLoaded ?? 0} images</p>
               {locationsLoaded !== null && (
                 <>
-                  <p className="mb-0">Searching for detections on images...</p>
-                  <p className="mb-0">Found {locationsLoaded} detections</p>
+                  <p className='mb-0'>Searching for detections on images...</p>
+                  <p className='mb-0'>Found {locationsLoaded} detections</p>
                 </>
               )}
             </div>
           ) : scanned ? (
             unprocessedImages.length > 0 ? (
-              <p className="mb-0 mt-2">
+              <p className='mb-0 mt-2'>
                 Found {unprocessedImages.length} unprocessed images
               </p>
             ) : (
-              <p className="mb-0 mt-2">All images have been processed</p>
+              <p className='mb-0 mt-2'>All images have been processed</p>
             )
           ) : null}
         </Form.Group>
       </Form>
       <Footer>
-        <Button variant="primary" onClick={processImages} disabled={disabled}>
+        <Button variant='primary' onClick={processImages} disabled={disabled}>
           Process Images
         </Button>
         <Button
-          variant="dark"
+          variant='dark'
           onClick={() => showModal(null)}
           disabled={disabled}
         >

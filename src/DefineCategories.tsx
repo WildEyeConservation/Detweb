@@ -81,17 +81,17 @@ export default function DefineCategories() {
           <Form.Control
             key={0}
             disabled
-            type="color"
-            id="exampleColorInput"
-            size="lg"
+            type='color'
+            id='exampleColorInput'
+            size='lg'
             value={color || 'red'}
-            title="Category color"
+            title='Category color'
           />,
           Math.max(annotationCount || 0, 0),
           <>
             <Button
-              variant="info"
-              className="me-2 fixed-width-button"
+              variant='info'
+              className='me-2 fixed-width-button'
               onClick={() => {
                 editCategory(item);
               }}
@@ -100,8 +100,8 @@ export default function DefineCategories() {
             </Button>
             <span>
               <Button
-                variant="danger"
-                className="me-2 fixed-width-button"
+                variant='danger'
+                className='me-2 fixed-width-button'
                 onClick={() => {
                   if (
                     confirm(`Are you sure you want to delete label ${name}?`)
@@ -131,7 +131,7 @@ export default function DefineCategories() {
             <Form.Group>
               <Form.Label>Label Name</Form.Label>
               <Form.Control
-                type="text"
+                type='text'
                 value={category.name}
                 onChange={(x) => setName(x.target.value)}
               />
@@ -139,7 +139,7 @@ export default function DefineCategories() {
             <Form.Group>
               <Form.Label>Shortcut key</Form.Label>
               <Form.Control
-                type="text"
+                type='text'
                 disabled={false}
                 value={
                   isRecording
@@ -157,11 +157,11 @@ export default function DefineCategories() {
             <Form.Group>
               <Form.Label>Label color</Form.Label>
               <Form.Control
-                type="color"
-                id="exampleColorInput"
-                size="sm"
+                type='color'
+                id='exampleColorInput'
+                size='sm'
                 value={category.color}
-                title="Label color"
+                title='Label color'
                 onChange={(event) => {
                   setColor(event.currentTarget.value);
                 }}
@@ -170,15 +170,15 @@ export default function DefineCategories() {
           </Form>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="primary" onClick={handleSubmit}>
+          <Button variant='primary' onClick={handleSubmit}>
             Submit
           </Button>
-          <Button variant="dark" onClick={() => setShowModal(false)}>
+          <Button variant='dark' onClick={() => setShowModal(false)}>
             Cancel
           </Button>
         </Modal.Footer>
       </Modal>
-      <Row className="justify-content-center mt-3">
+      <Row className='justify-content-center mt-3'>
         <div>
           <h5>Label Management</h5>
           {tableData && (
@@ -195,9 +195,9 @@ export default function DefineCategories() {
           )}
         </div>
       </Row>
-      <Col className="d-flex justify-content-center border-top pt-3 border-dark">
+      <Col className='d-flex justify-content-center border-top pt-3 border-dark'>
         <Button
-          variant="primary"
+          variant='primary'
           onClick={() => {
             setCategory(initialCategoryState);
             setModalType('create');

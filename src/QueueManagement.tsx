@@ -168,15 +168,15 @@ export default function QueueManagement() {
               ]}
             />
             <OverlayTrigger
-              placement="top"
+              placement='top'
               overlay={deleteTooltip}
               trigger={['hover', 'focus']}
               show={isDeleteDisabled ? undefined : false}
             >
               <span>
                 <Button
-                  className="me-2 fixed-width-button"
-                  variant="danger"
+                  className='me-2 fixed-width-button'
+                  variant='danger'
                   onClick={() => deleteQueueHandler(queue)}
                   disabled={isDeleteDisabled}
                 >
@@ -208,12 +208,12 @@ export default function QueueManagement() {
   };
 
   return (
-    <Row className="justify-content-center mt-3">
+    <Row className='justify-content-center mt-3'>
       <div>
         <h5>Job Management</h5>
         <MyTable tableHeadings={tableHeadings} tableData={tableData || []} />
-        <Col className="d-flex justify-content-center mt-3 border-top pt-3 border-dark">
-          <Button variant="primary" onClick={addQueue}>
+        <Col className='d-flex justify-content-center mt-3 border-top pt-3 border-dark'>
+          <Button variant='primary' onClick={addQueue}>
             Add New Job
           </Button>
         </Col>

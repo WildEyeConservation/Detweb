@@ -53,7 +53,8 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     //check if the user already completed this test (in the case where the user accidentally skips over the animal and navigates back to the test)
     const existingTestResult = sessionTestsResults.find(
       (result) =>
-        result.locationId === id && result.annotationSetId === annotationSetToUse
+        result.locationId === id &&
+        result.annotationSetId === annotationSetToUse
     );
 
     const userAnnotations = Object.entries(currentAnnoCount).filter(
@@ -214,7 +215,11 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     if (!existingTestResult) {
       setSessionTestsResults((prev) => [
         ...prev,
-        { id: testResult.id, locationId: id, annotationSetId: annotationSetToUse },
+        {
+          id: testResult.id,
+          locationId: id,
+          annotationSetId: annotationSetToUse,
+        },
       ]);
     }
   }
@@ -277,7 +282,14 @@ export function withCreateObservation<T extends CombinedProps>(
   const WithCreateObservation: React.FC<T> = (props) => {
     const { location, ack, isTest, config, testPresetId, testSetId } = props;
     const newAck = location.id
-      ? useCreateObservation({ location, ack, isTest, config, testPresetId, testSetId })
+      ? useCreateObservation({
+          location,
+          ack,
+          isTest,
+          config,
+          testPresetId,
+          testSetId,
+        })
       : ack;
     return (
       <WrappedComponent {...props} location={{ ...location, ack: newAck }} />

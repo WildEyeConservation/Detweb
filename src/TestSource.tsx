@@ -1,6 +1,6 @@
-import { useContext, useCallback, useState, useEffect, useRef } from "react";
-import { ProjectContext, GlobalContext, UserContext } from "./Context";
-import { fetchAllPaginatedResults } from "./utils";
+import { useContext, useCallback, useState, useEffect, useRef } from 'react';
+import { ProjectContext, GlobalContext, UserContext } from './Context';
+import { fetchAllPaginatedResults } from './utils';
 
 export default function useTesting() {
   const { currentPM, project, categoriesHook } = useContext(ProjectContext)!;
@@ -45,7 +45,7 @@ export default function useTesting() {
         client.models.TestPresetProject.testPresetsByProjectId,
         {
           projectId: project.id,
-          selectionSet: ["testPresetId"],
+          selectionSet: ['testPresetId'],
         }
       );
 
@@ -63,10 +63,10 @@ export default function useTesting() {
       {
         userId: currentPM.userId,
         selectionSet: [
-          "locationId",
-          "createdAt",
-          "testPresetId",
-          "annotationSetId",
+          'locationId',
+          'createdAt',
+          'testPresetId',
+          'annotationSetId',
         ] as const,
       }
     );
@@ -92,7 +92,7 @@ export default function useTesting() {
         client.models.TestPresetLocation.locationsByTestPresetId,
         {
           testPresetId: preset.testPresetId,
-          selectionSet: ["locationId", "createdAt", "annotationSetId"] as const,
+          selectionSet: ['locationId', 'createdAt', 'annotationSetId'] as const,
         }
       );
 
@@ -148,9 +148,9 @@ export default function useTesting() {
   async function getTestLocation() {
     const candidateEntries = [...primaryCandidates.current];
     if (candidateEntries.length === 0) {
-      throw new Error("No primary candidates available for testing");
+      throw new Error('No primary candidates available for testing');
     }
-    console.log("candidates", candidateEntries);
+    console.log('candidates', candidateEntries);
     const length = candidateEntries.length;
     // Try each candidate once, wrapping around if necessary
     for (let attempt = 0; attempt < length; attempt++) {
@@ -163,7 +163,7 @@ export default function useTesting() {
         {
           locationId: entry.locationId,
           annotationSetId: { eq: entry.annotationSetId },
-          selectionSet: ["category.name"],
+          selectionSet: ['category.name'],
         }
       );
       const testCategories = categoryCounts.map((c) =>
@@ -184,7 +184,7 @@ export default function useTesting() {
     // If no valid candidate found, fallback to the next in sequence
     const fallbackIndex = i % length;
     console.warn(
-      "No valid test location found, defaulting to candidate",
+      'No valid test location found, defaulting to candidate',
       candidateEntries[fallbackIndex]
     );
     setI(fallbackIndex + 1);
@@ -197,7 +197,7 @@ export default function useTesting() {
     currentLocation.current = location;
 
     if (!location) {
-      console.warn("No location found for testing");
+      console.warn('No location found for testing');
     }
 
     const id = crypto.randomUUID();
@@ -209,13 +209,13 @@ export default function useTesting() {
         annotationSetId: location.annotationSetId,
       },
       allowOutside: true,
-      taskTag: "",
+      taskTag: '',
       secondaryQueueUrl: undefined,
       skipLocationWithAnnotations: false,
       zoom: zoom,
       testPresetId: location.testPresetId,
       ack: () => {
-        console.log("Ack successful for test");
+        console.log('Ack successful for test');
       },
       isTest: true,
     };
@@ -223,10 +223,7 @@ export default function useTesting() {
   }, [i, primaryCandidates, zoom]);
 
   return {
-    fetcher:
-      !loading && hasPrimaryCandidates
-        ? fetcher
-        : undefined,
+    fetcher: !loading && hasPrimaryCandidates ? fetcher : undefined,
     fetchedLocation: currentLocation.current,
   };
 }

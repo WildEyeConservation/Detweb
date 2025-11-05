@@ -1,31 +1,31 @@
-import MyTable from "./Table";
-import { useContext, useState } from "react";
-import { GlobalContext } from "./Context";
-import { useOptimisticUpdates } from "./useOptimisticUpdates";
-import { Schema } from "../amplify/data/resource";
-import { useUsers } from "./apiInterface";
-import { Button } from "react-bootstrap";
-import CreateOrganization from "./organization/CreateOrganization";
+import MyTable from './Table';
+import { useContext, useState } from 'react';
+import { GlobalContext } from './Context';
+import { useOptimisticUpdates } from './useOptimisticUpdates';
+import { Schema } from '../amplify/data/resource';
+import { useUsers } from './apiInterface';
+import { Button } from 'react-bootstrap';
+import CreateOrganization from './organization/CreateOrganization';
 
 export default function PendingOrganizations() {
   const { client, showModal, modalToShow } = useContext(GlobalContext);
   const { users } = useUsers();
 
   const [selectedRequest, setSelectedRequest] = useState<
-    Schema["OrganizationRegistration"]["type"] | null
+    Schema['OrganizationRegistration']['type'] | null
   >(null);
 
   const { data: requests } = useOptimisticUpdates<
-    Schema["OrganizationRegistration"]["type"],
-    "OrganizationRegistration"
-  >("OrganizationRegistration", async (nextToken) =>
+    Schema['OrganizationRegistration']['type'],
+    'OrganizationRegistration'
+  >('OrganizationRegistration', async (nextToken) =>
     client.models.OrganizationRegistration.list({
       nextToken,
     })
   );
 
   const tableData = requests
-    .filter((request) => request.status === "pending")
+    .filter((request) => request.status === 'pending')
     .map((request) => {
       const requestedBy = users.find((user) => user.id === request.requestedBy);
 
@@ -39,13 +39,13 @@ export default function PendingOrganizations() {
           </div>,
           <div>{new Date(request.createdAt).toLocaleDateString()}</div>,
           <Button
-            variant="primary"
+            variant='primary'
             onClick={() => {
               setSelectedRequest({
                 ...request,
-                requestedByEmail: requestedBy?.email || "",
+                requestedByEmail: requestedBy?.email || '',
               });
-              showModal("createOrganization");
+              showModal('createOrganization');
             }}
           >
             Review
@@ -55,33 +55,33 @@ export default function PendingOrganizations() {
     });
 
   const tableHeadings = [
-    { content: "Organisation Name", style: { width: "20%" }, sort: true },
-    { content: "Brief Description", style: { width: "20%" }, sort: true },
-    { content: "Requested By", style: { width: "20%" }, sort: true },
-    { content: "Date", style: { width: "20%" }, sort: true },
-    { content: "Review Request", style: { width: "20%" } },
+    { content: 'Organisation Name', style: { width: '20%' }, sort: true },
+    { content: 'Brief Description', style: { width: '20%' }, sort: true },
+    { content: 'Requested By', style: { width: '20%' }, sort: true },
+    { content: 'Date', style: { width: '20%' }, sort: true },
+    { content: 'Review Request', style: { width: '20%' } },
   ];
 
   return (
-    <div className="m-2">
+    <div className='m-2'>
       <h5>Pending Organisations</h5>
       <MyTable
         tableData={tableData}
         tableHeadings={tableHeadings}
         pagination={true}
         itemsPerPage={10}
-        emptyMessage="No pending organisations"
+        emptyMessage='No pending organisations'
       />
-      <div className="d-flex justify-content-center align-items-center border-top pt-3 border-dark mt-3">
+      <div className='d-flex justify-content-center align-items-center border-top pt-3 border-dark mt-3'>
         <Button
-          variant="primary"
-          onClick={() => showModal("createOrganization")}
+          variant='primary'
+          onClick={() => showModal('createOrganization')}
         >
           Create Organisation
         </Button>
       </div>
       <CreateOrganization
-        show={modalToShow === "createOrganization"}
+        show={modalToShow === 'createOrganization'}
         onHide={() => {
           showModal(null);
           setSelectedRequest(null);

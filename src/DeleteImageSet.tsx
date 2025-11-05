@@ -1,10 +1,10 @@
-import { useContext, useState } from "react";
-import { Stack, Modal, Form, Button } from "react-bootstrap";
-import { useUpdateProgress } from "./useUpdateProgress";
-import { ImageSetDropdown } from "./ImageSetDropDown";
-import { UserContext } from "./Context";
-import { graphqlOperation } from "./App";
-import { GraphQLResult } from "aws-amplify/api";
+import { useContext, useState } from 'react';
+import { Stack, Modal, Form, Button } from 'react-bootstrap';
+import { useUpdateProgress } from './useUpdateProgress';
+import { ImageSetDropdown } from './ImageSetDropDown';
+import { UserContext } from './Context';
+import { graphqlOperation } from './App';
+import { GraphQLResult } from 'aws-amplify/api';
 
 interface DeleteImageSetProps {
   show: boolean;
@@ -23,8 +23,10 @@ interface ImageSetMembershipsByImageSetNameResponse {
 }
 
 function DeleteImageSet({ show, handleClose }: DeleteImageSetProps) {
-  const [selectedSets, setSelectedSets] = useState<string[] | undefined>(undefined);
-  
+  const [selectedSets, setSelectedSets] = useState<string[] | undefined>(
+    undefined
+  );
+
   const handleSelectSet = (selected: string[]) => {
     setSelectedSets(selected.length > 0 ? selected : undefined);
   };
@@ -37,8 +39,8 @@ function DeleteImageSet({ show, handleClose }: DeleteImageSetProps) {
   const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
     taskId: `Deleting Image set`,
     indeterminateTaskName: `Loading image set memberships`,
-    determinateTaskName: "Deleting image set memberships",
-    stepName: "memberships",
+    determinateTaskName: 'Deleting image set memberships',
+    stepName: 'memberships',
   });
 
   const imageSetMembershipsByImageSetName = /* GraphQL */ `
@@ -75,7 +77,7 @@ function DeleteImageSet({ show, handleClose }: DeleteImageSetProps) {
   async function handleSubmit() {
     let nextToken: string | null = null,
       items: { id: string }[] = [],
-      allItems : { id: string }[] = [];
+      allItems: { id: string }[] = [];
     handleClose();
     setTotalSteps(0);
     do {
@@ -83,7 +85,7 @@ function DeleteImageSet({ show, handleClose }: DeleteImageSetProps) {
         graphqlOperation(imageSetMembershipsByImageSetName, {
           imageSetName: selectedSets ? selectedSets[0] : undefined,
           nextToken,
-        }),
+        })
       )) as GraphQLResult<ImageSetMembershipsByImageSetNameResponse>;
 
       const data = response.data?.imageSetMembershipsByImageSetName;
@@ -103,7 +105,9 @@ function DeleteImageSet({ show, handleClose }: DeleteImageSetProps) {
       i += 1;
       setStepsCompleted(i);
     }
-    await gqlSend(deleteImageSet, { name: selectedSets ? selectedSets[0] : undefined });
+    await gqlSend(deleteImageSet, {
+      name: selectedSets ? selectedSets[0] : undefined,
+    });
   }
 
   return (
@@ -117,7 +121,7 @@ function DeleteImageSet({ show, handleClose }: DeleteImageSetProps) {
             <Form.Group>
               <Form.Label>Image Set to delete</Form.Label>
               <ImageSetDropdown
-                setImageSets={handleSelectSet} 
+                setImageSets={handleSelectSet}
                 selectedSets={selectedSets}
               />
             </Form.Group>
@@ -126,13 +130,13 @@ function DeleteImageSet({ show, handleClose }: DeleteImageSetProps) {
       </Modal.Body>
       <Modal.Footer>
         <Button
-          variant="primary"
+          variant='primary'
           onClick={handleSubmit}
           disabled={!selectedSets}
         >
           Submit
         </Button>
-        <Button variant="primary" onClick={handleClose}>
+        <Button variant='primary' onClick={handleClose}>
           Cancel
         </Button>
       </Modal.Footer>

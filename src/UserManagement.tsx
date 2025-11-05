@@ -1,11 +1,7 @@
 import MyTable from './Table';
 import Button from 'react-bootstrap/Button';
 import { Row, Col } from 'react-bootstrap';
-import {
-  ProjectContext,
-  ManagementContext,
-  GlobalContext,
-} from './Context';
+import { ProjectContext, ManagementContext, GlobalContext } from './Context';
 import { useContext } from 'react';
 import { QueueDropdown } from './QueueDropDown';
 import ConfigureUserTestModal from './ConfigureUserTestModal';
@@ -89,46 +85,54 @@ export default function UserManagement() {
           // ) : (
           //   <p>To select a backup queue, first add user to this project</p>
           // ),
-          <ActionsDropdown actions={[
-            {label: "Configure testing", onClick: () => {
-              setUserId(user.id);
-              showModal("userTestModal");
-            }},
-            {label: "Test results", onClick: () => {
-              setUserId(user.id);
-              showModal("userTestResultsModal");
-            }},
-        ]} />
+          <ActionsDropdown
+            actions={[
+              {
+                label: 'Configure testing',
+                onClick: () => {
+                  setUserId(user.id);
+                  showModal('userTestModal');
+                },
+              },
+              {
+                label: 'Test results',
+                onClick: () => {
+                  setUserId(user.id);
+                  showModal('userTestResultsModal');
+                },
+              },
+            ]}
+          />,
         ],
       };
     });
 
   const tableHeadings = [
-    { content: "Name" },
-    { content: "Email" },
+    { content: 'Name' },
+    { content: 'Email' },
     // { content: "Queue", style: { width: "400px" } },
     // { content: "Backup Queue", style: { width: "400px" } },
-    { content: "Actions" },
+    { content: 'Actions' },
   ];
   return (
     <>
-      <Row className="justify-content-center mt-3 mb-3">
+      <Row className='justify-content-center mt-3 mb-3'>
         <div>
           <h2>User Management</h2>
           <MyTable
-            key="hannes"
+            key='hannes'
             tableHeadings={tableHeadings}
             tableData={tableData}
           />
-          <Col className="text-center mt-3 d-flex justify-content-center gap-2">
+          <Col className='text-center mt-3 d-flex justify-content-center gap-2'>
             <Button
-              variant="primary"
+              variant='primary'
               onClick={() => showModal('testPresetsModal')}
             >
               Test presets
             </Button>
             <Button
-              variant="primary"
+              variant='primary'
               onClick={() => showModal('reviewTestsModal')}
             >
               Test locations

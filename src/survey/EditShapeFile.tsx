@@ -442,7 +442,11 @@ export default function EditShapeFile({ projectId }: { projectId: string }) {
         </Form.Group>
       </Form>
       <Footer>
-        <Button variant='primary' onClick={saveShapefile} disabled={saveDisabled || saving}>
+        <Button
+          variant='primary'
+          onClick={saveShapefile}
+          disabled={saveDisabled || saving}
+        >
           Save Shapefile
         </Button>
         <Button

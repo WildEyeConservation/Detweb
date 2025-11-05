@@ -29,8 +29,8 @@ export default function ImageSetManagement() {
         id,
         rowData: [
           <Form.Check // prettier-ignore
-            type="switch"
-            id="custom-switch"
+            type='switch'
+            id='custom-switch'
             checked={selectedSets.includes(id)}
             onChange={(x) => {
               console.log(x.target.checked);
@@ -45,8 +45,8 @@ export default function ImageSetManagement() {
           imageCount || 'Unknown',
           <span>
             <Button
-              variant="info"
-              className="me-2 fixed-width-button"
+              variant='info'
+              className='me-2 fixed-width-button'
               onClick={() => {
                 const newName = prompt('Enter new name for image set', name);
                 if (newName) {
@@ -57,8 +57,8 @@ export default function ImageSetManagement() {
               Rename
             </Button>
             <Button
-              variant="danger"
-              className="me-2 fixed-width-button"
+              variant='danger'
+              className='me-2 fixed-width-button'
               onClick={() => {
                 if (
                   confirm(`Are you sure you want to delete image set ${name}?`)
@@ -144,11 +144,11 @@ export default function ImageSetManagement() {
         selectedImageSets={selectedSets}
       /> */}
 
-      <Row className="justify-content-center mt-3">
+      <Row className='justify-content-center mt-3'>
         <div>
           <h5>Image Sets Management</h5>
           <MyTable
-            key="hannes"
+            key='hannes'
             tableHeadings={tableHeadings}
             tableData={tableData}
           />

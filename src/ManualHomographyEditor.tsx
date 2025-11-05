@@ -173,13 +173,25 @@ export function ManualHomographyEditor({
     // Force-refetch neighbours for both images so Registration and BaseImage overlays recompute
     await Promise.all([
       // Registration's aggregate neighbours
-      queryClient.refetchQueries({ queryKey: ['imageNeighbours', images[0].id] }),
-      queryClient.refetchQueries({ queryKey: ['imageNeighbours', images[1].id] }),
+      queryClient.refetchQueries({
+        queryKey: ['imageNeighbours', images[0].id],
+      }),
+      queryClient.refetchQueries({
+        queryKey: ['imageNeighbours', images[1].id],
+      }),
       // ImageContext overlays
-      queryClient.refetchQueries({ queryKey: ['prevNeighbours', images[0].id] }),
-      queryClient.refetchQueries({ queryKey: ['prevNeighbours', images[1].id] }),
-      queryClient.refetchQueries({ queryKey: ['nextNeighbours', images[0].id] }),
-      queryClient.refetchQueries({ queryKey: ['nextNeighbours', images[1].id] }),
+      queryClient.refetchQueries({
+        queryKey: ['prevNeighbours', images[0].id],
+      }),
+      queryClient.refetchQueries({
+        queryKey: ['prevNeighbours', images[1].id],
+      }),
+      queryClient.refetchQueries({
+        queryKey: ['nextNeighbours', images[0].id],
+      }),
+      queryClient.refetchQueries({
+        queryKey: ['nextNeighbours', images[1].id],
+      }),
     ]);
 
     setIsSaving(false);
@@ -205,13 +217,25 @@ export function ManualHomographyEditor({
     // Force-refetch neighbours for both images so Registration and BaseImage overlays recompute
     await Promise.all([
       // Registration's aggregate neighbours
-      queryClient.refetchQueries({ queryKey: ['imageNeighbours', images[0].id] }),
-      queryClient.refetchQueries({ queryKey: ['imageNeighbours', images[1].id] }),
+      queryClient.refetchQueries({
+        queryKey: ['imageNeighbours', images[0].id],
+      }),
+      queryClient.refetchQueries({
+        queryKey: ['imageNeighbours', images[1].id],
+      }),
       // ImageContext overlays
-      queryClient.refetchQueries({ queryKey: ['prevNeighbours', images[0].id] }),
-      queryClient.refetchQueries({ queryKey: ['prevNeighbours', images[1].id] }),
-      queryClient.refetchQueries({ queryKey: ['nextNeighbours', images[0].id] }),
-      queryClient.refetchQueries({ queryKey: ['nextNeighbours', images[1].id] }),
+      queryClient.refetchQueries({
+        queryKey: ['prevNeighbours', images[0].id],
+      }),
+      queryClient.refetchQueries({
+        queryKey: ['prevNeighbours', images[1].id],
+      }),
+      queryClient.refetchQueries({
+        queryKey: ['nextNeighbours', images[0].id],
+      }),
+      queryClient.refetchQueries({
+        queryKey: ['nextNeighbours', images[1].id],
+      }),
     ]);
   }, [client, images]);
 

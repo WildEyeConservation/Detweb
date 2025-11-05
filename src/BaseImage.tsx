@@ -328,31 +328,34 @@ const BaseImage: React.FC<BaseImageProps> = memo(
               },
               {
                 text: 'Copy GPS data',
-                disabled: !belongsToCurrentProject?.isAdmin || (!image.latitude && !image.longitude),
+                disabled:
+                  !belongsToCurrentProject?.isAdmin ||
+                  (!image.latitude && !image.longitude),
                 callback: () => {
                   const gpsData: string[] = [];
-                  
+
                   if (image.latitude != null && image.longitude != null) {
                     gpsData.push(`Latitude: ${image.latitude}`);
                     gpsData.push(`Longitude: ${image.longitude}`);
                   }
-                  
+
                   if (image.altitude_wgs84 != null) {
                     gpsData.push(`Altitude (WGS84): ${image.altitude_wgs84}`);
                   }
-                  
+
                   if (image.altitude_egm96 != null) {
                     gpsData.push(`Altitude (EGM96): ${image.altitude_egm96}`);
                   }
-                  
+
                   if (image.altitude_agl != null) {
                     gpsData.push(`Altitude (AGL): ${image.altitude_agl}`);
                   }
-                  
-                  const gpsText = gpsData.length > 0 
-                    ? gpsData.join('\n')
-                    : 'No GPS data available';
-                  
+
+                  const gpsText =
+                    gpsData.length > 0
+                      ? gpsData.join('\n')
+                      : 'No GPS data available';
+
                   navigator.clipboard
                     .writeText(gpsText)
                     .catch((err) =>
@@ -454,9 +457,9 @@ const BaseImage: React.FC<BaseImageProps> = memo(
 
     return useMemo(
       () => (
-        <div className="d-flex flex-column align-items-center w-100 h-100 gap-3">
+        <div className='d-flex flex-column align-items-center w-100 h-100 gap-3'>
           <div
-            className="d-flex flex-column align-items-center w-100 h-100"
+            className='d-flex flex-column align-items-center w-100 h-100'
             style={{
               visibility: visible && fullyLoaded ? 'visible' : 'hidden',
               position: 'relative',
@@ -476,7 +479,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
                 zoomDelta={1}
                 keyboardPanDelta={0}
               >
-                <LayersControl position="topright">
+                <LayersControl position='topright'>
                   {imageFiles.length > 0 ? (
                     imageFiles.map((image) => (
                       <LayersControl.BaseLayer

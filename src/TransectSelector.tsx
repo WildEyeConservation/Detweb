@@ -1,7 +1,9 @@
-import { LayerGroup, Polyline, useMap } from "react-leaflet";
-import React, { useEffect } from "react";
+import { LayerGroup, Polyline, useMap } from 'react-leaflet';
+import React, { useEffect } from 'react';
 
-function getBounds(input: [number, number][]): [[number, number], [number, number]] {
+function getBounds(
+  input: [number, number][]
+): [[number, number], [number, number]] {
   return input.reduce(
     (x, y) => [
       [Math.min(x[0][0], y[0]), Math.min(x[0][1], y[1])],
@@ -13,7 +15,6 @@ function getBounds(input: [number, number][]): [[number, number], [number, numbe
     ] as [[number, number], [number, number]]
   );
 }
-
 
 interface TransectSelectorProps {
   coords: [number, number][];
@@ -35,15 +36,15 @@ const TransectSelector: React.FC<TransectSelectorProps> = (props) => {
   return (
     <LayerGroup>
       <Polyline
-        pathOptions={{ color: "blue" }}
+        pathOptions={{ color: 'blue' }}
         positions={props.coords.slice(0, props.startIndex)}
       />
       <Polyline
-        pathOptions={{ color: "red" }}
+        pathOptions={{ color: 'red' }}
         positions={props.coords.slice(props.startIndex, props.index)}
       />
       <Polyline
-        pathOptions={{ color: "lightblue" }}
+        pathOptions={{ color: 'lightblue' }}
         positions={props.coords.slice(props.index)}
       />
     </LayerGroup>

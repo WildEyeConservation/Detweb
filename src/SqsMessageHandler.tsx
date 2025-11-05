@@ -1,11 +1,11 @@
-import { useContext, useEffect, useState } from "react";
-import Modal from "react-bootstrap/Modal";
-import Row from "react-bootstrap/Row";
-import Col from "react-bootstrap/Col";
-import Button from "react-bootstrap/Button";
-import BaseImage from "./BaseImage";
-import { UserContext } from "./UserContext";
-import { ShowMarkers } from "./ShowMarkers";
+import { useContext, useEffect, useState } from 'react';
+import Modal from 'react-bootstrap/Modal';
+import Row from 'react-bootstrap/Row';
+import Col from 'react-bootstrap/Col';
+import Button from 'react-bootstrap/Button';
+import BaseImage from './BaseImage';
+import { UserContext } from './UserContext';
+import { ShowMarkers } from './ShowMarkers';
 
 const Image = BaseImage;
 
@@ -34,8 +34,8 @@ export function MessageHandler() {
   const [message, setMessage] = useState<Message | null>(null);
   const triggerRetry = () => setRetry((r) => r + 1);
   const { annotations } = useAnnotations(
-    message?.errData.image.key || "",
-    message?.errData?.setId || ""
+    message?.errData.image.key || '',
+    message?.errData?.setId || ''
   );
 
   useEffect(() => {
@@ -43,14 +43,16 @@ export function MessageHandler() {
       const tryGetUrl = async () => {
         try {
           console.log(
-            `trying to get the SQS queue URL for ${user.id}_${currentProject}`,
+            `trying to get the SQS queue URL for ${user.id}_${currentProject}`
           );
-          const result = await getQueueUrl({ QueueName: `${user.id}_${currentProject}` });
+          const result = await getQueueUrl({
+            QueueName: `${user.id}_${currentProject}`,
+          });
           if (result.QueueUrl) {
             setQueueUrl(result.QueueUrl);
-            console.log("URL set!");
+            console.log('URL set!');
           } else {
-            throw new Error("QueueUrl not found in the response");
+            throw new Error('QueueUrl not found in the response');
           }
         } catch (err) {
           console.error(`Failed to get URL: ${err.message}`);
@@ -58,7 +60,7 @@ export function MessageHandler() {
           const timer = setTimeout(triggerRetry, 30000);
           return () => {
             console.log(
-              "User or project has changed. Clearing URL and stopping scheduled retries",
+              'User or project has changed. Clearing URL and stopping scheduled retries'
             );
             clearTimeout(timer);
             setQueueUrl(null);
@@ -73,13 +75,13 @@ export function MessageHandler() {
     if (queueUrl && !message) {
       const checkForMessage = () =>
         getFromQueue({
-          AttributeNames: ["SentTimestamp"],
+          AttributeNames: ['SentTimestamp'],
           MaxNumberOfMessages: 1,
-          MessageAttributeNames: ["All"],
+          MessageAttributeNames: ['All'],
           QueueUrl: queueUrl,
           VisibilityTimeout: 6000,
         }).then((response) => {
-          if ("Messages" in response) {
+          if ('Messages' in response) {
             const entity = response.Messages[0];
             const body = JSON.parse(entity.Body);
             setMessage({
@@ -111,7 +113,7 @@ export function MessageHandler() {
   }, [queueUrl, message]);
 
   return (
-    <Modal size="lg" show={message?.showModal} backdrop="static">
+    <Modal size='lg' show={message?.showModal} backdrop='static'>
       {message?.errData && (
         <>
           <Modal.Header>
@@ -120,10 +122,10 @@ export function MessageHandler() {
           <Modal.Body text-center>
             <Row>
               <Col />
-              <Col xs={10} className="align-middle justify-content-center">
+              <Col xs={10} className='align-middle justify-content-center'>
                 <Image
-                  containerwidth="512px"
-                  containerheight="512px"
+                  containerwidth='512px'
+                  containerheight='512px'
                   img={{
                     key: message.errData.image.key,
                     width: message.errData.width,
@@ -131,7 +133,13 @@ export function MessageHandler() {
                   }}
                   visible={true}
                   //id="image-id"
-                  boundsxy={[[message.errData.x, message.errData.y], [message.errData.x + message.errData.width, message.errData.y + message.errData.height]]}
+                  boundsxy={[
+                    [message.errData.x, message.errData.y],
+                    [
+                      message.errData.x + message.errData.width,
+                      message.errData.y + message.errData.height,
+                    ],
+                  ]}
                   {...message.errData}
                 >
                   <ShowMarkers annotations={annotations} />
@@ -141,7 +149,7 @@ export function MessageHandler() {
             </Row>
           </Modal.Body>
           <Modal.Footer>
-            <Button variant="secondary" onClick={message.errData.ack}>
+            <Button variant='secondary' onClick={message.errData.ack}>
               OK
             </Button>
           </Modal.Footer>

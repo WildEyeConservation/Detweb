@@ -1,9 +1,9 @@
-import { useContext, useState, useMemo } from "react";
-import { GlobalContext } from "./Context";
-import { fetchAllPaginatedResults } from "./utils";
-import useSQS from "./SqsSource";
-import { PreloaderFactory } from "./Preloader";
-import { TaskSelector } from "./TaskSelector";
+import { useContext, useState, useMemo } from 'react';
+import { GlobalContext } from './Context';
+import { fetchAllPaginatedResults } from './utils';
+import useSQS from './SqsSource';
+import { PreloaderFactory } from './Preloader';
+import { TaskSelector } from './TaskSelector';
 
 interface Message {
   location: {
@@ -18,7 +18,11 @@ interface Message {
   skipLocationWithAnnotations: boolean;
 }
 
-export default function SqsPreloader({ visible = true }: { visible?: boolean }) {
+export default function SqsPreloader({
+  visible = true,
+}: {
+  visible?: boolean;
+}) {
   const [index, setIndex] = useState(0);
   const { client } = useContext(GlobalContext)!;
 
@@ -32,7 +36,7 @@ export default function SqsPreloader({ visible = true }: { visible?: boolean }) 
         id: message.location.id,
       },
       {
-        selectionSet: ["x", "y", "width", "height", "imageId"] as const,
+        selectionSet: ['x', 'y', 'width', 'height', 'imageId'] as const,
       }
     );
 
@@ -41,7 +45,7 @@ export default function SqsPreloader({ visible = true }: { visible?: boolean }) 
       {
         imageId: location.imageId,
         setId: { eq: message.location.annotationSetId },
-        selectionSet: ["x", "y"] as const,
+        selectionSet: ['x', 'y'] as const,
       }
     );
 

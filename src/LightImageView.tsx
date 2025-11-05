@@ -228,8 +228,12 @@ export default function LightImageView({
                 >
                   <Popup>
                     <div>
-                      <div><strong>Label:</strong> {a.category?.name || 'Unknown'}</div>
-                      <div><strong>Sighting:</strong> {sightingType}</div>
+                      <div>
+                        <strong>Label:</strong> {a.category?.name || 'Unknown'}
+                      </div>
+                      <div>
+                        <strong>Sighting:</strong> {sightingType}
+                      </div>
                     </div>
                   </Popup>
                 </CircleMarker>

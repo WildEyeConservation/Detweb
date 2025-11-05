@@ -1,7 +1,7 @@
-import { ImageOverlay, ImageOverlayProps } from "react-leaflet";
-import { useState, useContext, useEffect } from "react";
-import { UserContext } from "./Context";
-import backend from "../amplify_outputs.json";
+import { ImageOverlay, ImageOverlayProps } from 'react-leaflet';
+import { useState, useContext, useEffect } from 'react';
+import { UserContext } from './Context';
+import backend from '../amplify_outputs.json';
 
 interface S3ImageOverlayProps extends ImageOverlayProps {
   bounds: [[number, number], [number, number]];
@@ -27,7 +27,7 @@ export function S3ImageOverlay({ bounds, source }: S3ImageOverlayProps) {
         }
         // Add other conditions if needed
         else {
-          throw new Error("Unexpected response body type");
+          throw new Error('Unexpected response body type');
         }
       })
       .then((blob) => URL.createObjectURL(blob))
