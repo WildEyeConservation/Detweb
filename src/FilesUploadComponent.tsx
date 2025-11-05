@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext, useCallback } from 'react';
+import { useEffect, useState, useContext, useCallback, useMemo } from 'react';
 // import moment from 'moment'
 // import {MD5,enc} from 'crypto-js'
 import Modal from 'react-bootstrap/Modal';
@@ -106,6 +106,22 @@ type CsvData = {
   data: CsvFile;
 };
 
+type NormalizedGps = {
+  lat: number;
+  lng: number;
+  alt?: number;
+};
+
+const isFiniteWithinRange = (
+  value: unknown,
+  min: number,
+  max: number
+): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+
+const hasValidLatLng = (lat: unknown, lng: unknown): boolean =>
+  isFiniteWithinRange(lat, -90, 90) && isFiniteWithinRange(lng, -180, 180);
+
 // Core functionality shared between modal and form versions
 export function FileUploadCore({
   setOnSubmit,
@@ -115,7 +131,6 @@ export function FileUploadCore({
   onShapefileParsed,
   project,
 }: FilesUploadBaseProps) {
-  const [upload] = useState(true);
   const [name, setName] = useState('');
   const { client } = useContext(GlobalContext)!;
   const [scannedFiles, setScannedFiles] = useState<File[]>([]);
@@ -126,7 +141,6 @@ export function FileUploadCore({
   const [filteredImageFiles, setFilteredImageFiles] = useState<File[]>([]);
   const { setTask } = useContext(UploadContext)!;
   const [totalImageSize, setTotalImageSize] = useState(0);
-  const [filteredImageSize, setFilteredImageSize] = useState(0);
   const [exifData, setExifData] = useState<ExifData>({});
   const [commonTimezone, setCommonTimezone] = useState<string | undefined>(
     undefined
@@ -294,7 +308,6 @@ export function FileUploadCore({
   }, [file]);
 
   useEffect(() => {
-    setFilteredImageSize(0);
     setFilteredImageFiles([]);
   }, [name]);
 
@@ -308,11 +321,6 @@ export function FileUploadCore({
     setTotalImageSize(imageFiles.reduce((acc, file) => acc + file.size, 0));
   }, [imageFiles]);
 
-  useEffect(() => {
-    setFilteredImageSize(
-      filteredImageFiles.reduce((acc, file) => acc + file.size, 0)
-    );
-  }, [filteredImageFiles]);
 
   useEffect(() => {
     if (!multipleCameras) {
@@ -427,18 +435,33 @@ export function FileUploadCore({
         sampleFiles.map(async (file) => {
           const exif = await getExifmeta(file);
 
+          // Validate and convert GPS data
+          let gpsData: GpsData | null = null;
+          if (exif.gpsData.alt && exif.gpsData.lat && exif.gpsData.lng) {
+            const lat = Number(exif.gpsData.lat);
+            const lng = Number(exif.gpsData.lng);
+            // Only set GPS data if coordinates are valid and in range
+            if (
+              Number.isFinite(lat) &&
+              Number.isFinite(lng) &&
+              lat >= -90 &&
+              lat <= 90 &&
+              lng >= -180 &&
+              lng <= 180
+            ) {
+              gpsData = {
+                lat,
+                lng,
+                alt: convertAltitude(Number(exif.gpsData.alt)),
+              };
+            }
+          }
+
           const updatedExif: ImageExif = {
             ...exif,
             width: exif.width || 0,
             height: exif.height || 0,
-            gpsData:
-              exif.gpsData.alt && exif.gpsData.lat && exif.gpsData.lng
-                ? {
-                    lat: Number(exif.gpsData.lat),
-                    lng: Number(exif.gpsData.lng),
-                    alt: convertAltitude(Number(exif.gpsData.alt)),
-                  }
-                : null,
+            gpsData,
           };
           return updatedExif;
         })
@@ -467,21 +490,39 @@ export function FileUploadCore({
         4,
         async (file) => {
           const exif = (await extractor(file as File)) as ImageExif;
+
+          // Validate and convert GPS data
+          let gpsData: GpsData | null = null;
+          if (
+            exif.gpsData &&
+            (exif.gpsData as any).alt !== undefined &&
+            (exif.gpsData as any).lat !== undefined &&
+            (exif.gpsData as any).lng !== undefined
+          ) {
+            const lat = Number((exif.gpsData as any).lat);
+            const lng = Number((exif.gpsData as any).lng);
+            // Only set GPS data if coordinates are valid and in range
+            if (
+              Number.isFinite(lat) &&
+              Number.isFinite(lng) &&
+              lat >= -90 &&
+              lat <= 90 &&
+              lng >= -180 &&
+              lng <= 180
+            ) {
+              gpsData = {
+                lat,
+                lng,
+                alt: convertAltitude(Number((exif.gpsData as any).alt)),
+              };
+            }
+          }
+
           const updatedExif: ImageExif = {
             ...exif,
             width: exif.width || 0,
             height: exif.height || 0,
-            gpsData:
-              exif.gpsData &&
-              (exif.gpsData as any).alt !== undefined &&
-              (exif.gpsData as any).lat !== undefined &&
-              (exif.gpsData as any).lng !== undefined
-                ? {
-                    lat: Number((exif.gpsData as any).lat),
-                    lng: Number((exif.gpsData as any).lng),
-                    alt: convertAltitude(Number((exif.gpsData as any).alt)),
-                  }
-                : null,
+            gpsData,
           };
           return updatedExif;
         },
@@ -539,16 +580,6 @@ export function FileUploadCore({
       getExistingFiles();
     }
   }, [imageFiles, name, newProject]);
-
-  useEffect(() => {
-    if (setGpsDataReady) {
-      setGpsDataReady(
-        !scanningEXIF &&
-          filteredImageFiles.length > 0 &&
-          (!missingGpsData || Boolean(csvData))
-      );
-    }
-  }, [filteredImageFiles, missingGpsData, csvData, setGpsDataReady]);
 
   useEffect(() => {
     if (!multipleCameras) {
@@ -797,11 +828,16 @@ export function FileUploadCore({
         zoneNum,
         zoneLetter
       );
-      // Library returns keys like lat/lng or Lat/Lon depending on version
-      const lat = typeof res.lat === 'number' ? res.lat : res.Lat;
-      const lng = typeof res.lng === 'number' ? res.lng : res.Lon;
-      if (typeof lat === 'number' && typeof lng === 'number') {
-        return { lat, lng };
+      if (res && typeof res === 'object') {
+        const record = res as Record<string, unknown>;
+        const latCandidate = record.lat ?? record.Lat;
+        const lngCandidate = record.lng ?? record.Lon;
+        if (hasValidLatLng(latCandidate, lngCandidate)) {
+          return {
+            lat: latCandidate as number,
+            lng: lngCandidate as number,
+          };
+        }
       }
     } catch {}
     return null;
@@ -931,6 +967,152 @@ export function FileUploadCore({
     };
   }
 
+  const getGpsForFile = useCallback(
+    (sourceFile: File): NormalizedGps | null => {
+      const exifmeta = exifData[sourceFile.webkitRelativePath];
+      if (!exifmeta) {
+        return null;
+      }
+
+      const pickFromExif = () => {
+        const gps = exifmeta.gpsData;
+        if (!gps) return null;
+        const latNum = typeof gps.lat === 'number' ? gps.lat : Number(gps.lat);
+        const lngNum = typeof gps.lng === 'number' ? gps.lng : Number(gps.lng);
+        const altNum =
+          gps.alt === undefined || gps.alt === null ? undefined : Number(gps.alt);
+        if (!hasValidLatLng(latNum, lngNum)) {
+          return null;
+        }
+        const normalized: NormalizedGps = {
+          lat: latNum,
+          lng: lngNum,
+          alt:
+            altNum !== undefined && Number.isFinite(altNum)
+              ? convertAltitude(altNum)
+              : undefined,
+        };
+        return normalized;
+      };
+
+      if (!csvData || csvData.data.length === 0) {
+        return pickFromExif();
+      }
+
+      if (associateByTimestamp) {
+        const timestamp = exifmeta.timestamp;
+        const exactRow = csvData.data.find((row) => row.timestamp === timestamp);
+        if (exactRow && hasValidLatLng(exactRow.lat, exactRow.lng)) {
+          const alt =
+            typeof exactRow.alt === 'number' && Number.isFinite(exactRow.alt)
+              ? exactRow.alt
+              : undefined;
+          const normalized: NormalizedGps = {
+            lat: exactRow.lat,
+            lng: exactRow.lng,
+            alt,
+          };
+          return normalized;
+        }
+
+        if (
+          typeof timestamp === 'number' &&
+          csvData.data.some((row) => typeof row.timestamp === 'number') &&
+          timestamp >= minTimestamp &&
+          timestamp <= maxTimestamp
+        ) {
+          try {
+            const interpolationSource = csvData.data
+              .filter((row): row is { timestamp: number; lat: number; lng: number; alt: number } =>
+                typeof row.timestamp === 'number'
+              )
+              .map((row) => ({
+                timestamp: row.timestamp,
+                lat: row.lat,
+                lng: row.lng,
+                alt: row.alt,
+              }));
+
+            if (interpolationSource.length >= 2) {
+              const interpolated = interpolateGpsData(
+                interpolationSource,
+                timestamp
+              );
+              if (hasValidLatLng(interpolated.lat, interpolated.lng)) {
+                const alt =
+                  typeof interpolated.alt === 'number' &&
+                  Number.isFinite(interpolated.alt)
+                    ? interpolated.alt
+                    : undefined;
+                const normalized: NormalizedGps = {
+                  lat: interpolated.lat,
+                  lng: interpolated.lng,
+                  alt,
+                };
+                return normalized;
+              }
+            }
+          } catch {
+            return null;
+          }
+        }
+
+        return null;
+      }
+
+      const csvRow = csvData.data.find(
+        (row) =>
+          row.filepath?.toLowerCase() ===
+          sourceFile.webkitRelativePath.toLowerCase()
+      );
+
+      if (csvRow && hasValidLatLng(csvRow.lat, csvRow.lng)) {
+        const alt =
+          typeof csvRow.alt === 'number' && Number.isFinite(csvRow.alt)
+            ? csvRow.alt
+            : undefined;
+        const normalized: NormalizedGps = {
+          lat: csvRow.lat,
+          lng: csvRow.lng,
+          alt,
+        };
+        return normalized;
+      }
+
+      return null;
+    },
+    [associateByTimestamp, csvData, exifData, minTimestamp, maxTimestamp]
+  );
+
+  const invalidGpsFiles = useMemo(() => {
+    if (filteredImageFiles.length === 0) {
+      return [] as string[];
+    }
+
+    return filteredImageFiles
+      .filter((file) => !getGpsForFile(file))
+      .map((file) => file.webkitRelativePath);
+  }, [filteredImageFiles, getGpsForFile]);
+
+  const hasValidGpsForAllImages =
+    filteredImageFiles.length > 0 && invalidGpsFiles.length === 0;
+
+  useEffect(() => {
+    if (setGpsDataReady) {
+      setGpsDataReady(
+        !scanningEXIF &&
+          hasValidGpsForAllImages &&
+          Boolean(csvData && csvData.data.length > 0)
+      );
+    }
+  }, [setGpsDataReady, scanningEXIF, hasValidGpsForAllImages, csvData]);
+
+  useEffect(() => {
+    const hasData =
+      hasValidGpsForAllImages && Boolean(csvData && csvData.data.length > 0);
+    setReadyToSubmit(hasData);
+  }, [hasValidGpsForAllImages, csvData, setReadyToSubmit]);
+
   // Simple concurrency limiter for mapping large arrays without blocking UI
   async function mapWithLimit<T, U>(
     items: T[],
@@ -983,6 +1165,16 @@ export function FileUploadCore({
 
       if (!csvData) {
         alert('GPS metadata is required');
+        return;
+      }
+
+      if (invalidGpsFiles.length > 0) {
+        const sample = invalidGpsFiles.slice(0, 5);
+        alert(
+          `GPS coordinates are missing or invalid for ${invalidGpsFiles.length} image${
+            invalidGpsFiles.length === 1 ? '' : 's'
+          }. Example${sample.length === 1 ? '' : 's'}: ${sample.join(', ')}`
+        );
         return;
       }
 
@@ -1132,51 +1324,31 @@ export function FileUploadCore({
         }
       });
 
-      const images = [];
+      const images = [] as {
+        width: number;
+        height: number;
+        timestamp: number;
+        cameraSerial: string;
+        originalPath: string;
+        latitude: number;
+        longitude: number;
+        altitude_egm96?: number;
+        altitude_wgs84?: number;
+        altitude_agl?: number;
+      }[];
 
       for (const file of gpsFilteredImageFiles) {
         const exifmeta = exifData[file.webkitRelativePath];
-        let gpsData = null;
+        const gpsData = getGpsForFile(file);
 
-        if (associateByTimestamp) {
-          // Prefer exact match first to handle endpoints (first/last CSV timestamp)
-          const exactRow = csvData.data.find(
-            (row) => row.timestamp === exifmeta.timestamp
+        if (!exifmeta || !gpsData) {
+          console.warn(
+            `Skipping image ${file.webkitRelativePath} due to missing GPS metadata.`
           );
-          if (exactRow) {
-            gpsData = {
-              lat: exactRow.lat,
-              lng: exactRow.lng,
-              alt: exactRow.alt,
-            };
-          } else if (
-            exifmeta.timestamp >= minTimestamp &&
-            exifmeta.timestamp <= maxTimestamp
-          ) {
-            gpsData = interpolateGpsData(
-              csvData.data.map((row) => ({
-                timestamp: row.timestamp!,
-                lat: row.lat,
-                lng: row.lng,
-                alt: row.alt,
-              })),
-              exifmeta.timestamp
-            );
-          } else {
-            console.warn('Timestamp outside of GPS data range');
-          }
-        } else {
-          const csvRow = csvData.data.find(
-            (row) => row.filepath === file.webkitRelativePath
-          );
-          if (csvRow) {
-            gpsData = { lat: csvRow.lat, lng: csvRow.lng, alt: csvRow.alt };
-          } else {
-            console.warn(
-              `No GPS data found for image ${file.webkitRelativePath}`
-            );
-          }
+          continue;
         }
+
+        const altitudeValue = gpsData.alt;
 
         images.push({
           width: exifmeta.width,
@@ -1184,14 +1356,14 @@ export function FileUploadCore({
           timestamp: Math.floor(exifmeta.timestamp / 1000),
           cameraSerial: exifmeta.cameraSerial,
           originalPath: file.webkitRelativePath,
-          latitude: gpsData ? gpsData.lat : undefined,
-          longitude: gpsData ? gpsData.lng : undefined,
+          latitude: gpsData.lat,
+          longitude: gpsData.lng,
           altitude_egm96:
-            gpsData && altitudeType.value === 'egm96' ? gpsData.alt : undefined,
+            altitudeType.value === 'egm96' ? altitudeValue : undefined,
           altitude_wgs84:
-            gpsData && altitudeType.value === 'wgs84' ? gpsData.alt : undefined,
+            altitudeType.value === 'wgs84' ? altitudeValue : undefined,
           altitude_agl:
-            gpsData && altitudeType.value === 'agl' ? gpsData.alt : undefined,
+            altitudeType.value === 'agl' ? altitudeValue : undefined,
         });
       }
 
@@ -1212,23 +1384,22 @@ export function FileUploadCore({
       });
     },
     [
-      upload,
       filteredImageFiles,
-      name,
-      client,
-      filteredImageSize,
+      exifData,
+      getGpsForFile,
+      altitudeType,
       csvData,
+      invalidGpsFiles,
       cameraSpecs,
       overlaps,
+      client,
+      name,
+      model,
+      masks,
+      setTask,
+      newProject,
     ]
   );
-
-  useEffect(() => {
-    // Disable submit if no images or if CSV loaded but no georeferenced points
-    const hasData =
-      filteredImageFiles.length > 0 && (!csvData || csvData.data.length > 0);
-    setReadyToSubmit(hasData);
-  }, [filteredImageFiles, csvData]);
 
   // Register the submit handler with the parent form if provided
   useEffect(() => {
@@ -1271,6 +1442,18 @@ export function FileUploadCore({
               alt: convertAltitude(point.elevation || 0),
             }))
           )
+          .filter((point) => {
+            // Validate GPS coordinates are valid numbers and in range
+            return (
+              Number.isFinite(point.lat) &&
+              Number.isFinite(point.lng) &&
+              Number.isFinite(point.alt) &&
+              point.lat >= -90 &&
+              point.lat <= 90 &&
+              point.lng >= -180 &&
+              point.lng <= 180
+            );
+          })
           .sort((a, b) => a.timestamp - b.timestamp);
 
         // Georeference each image by EXIF timestamp
@@ -1396,7 +1579,25 @@ export function FileUploadCore({
                 alt: convertAltitude(Number(row['Altitude'])),
               };
             })
-            .filter((row) => !hasTimestamp || row.timestamp !== null)
+            .filter((row) => {
+              // Validate timestamp if present
+              if (hasTimestamp && row.timestamp === null) {
+                return false;
+              }
+              // Validate GPS coordinates are valid numbers
+              if (!Number.isFinite(row.lat) || !Number.isFinite(row.lng)) {
+                return false;
+              }
+              // Validate lat is in valid range (-90 to 90)
+              if (row.lat < -90 || row.lat > 90) {
+                return false;
+              }
+              // Validate lng is in valid range (-180 to 180)
+              if (row.lng < -180 || row.lng > 180) {
+                return false;
+              }
+              return true;
+            })
             .sort((a, b) =>
               hasTimestamp
                 ? a.timestamp! - b.timestamp!
@@ -2109,6 +2310,16 @@ export function FileUploadCore({
           )}
           <div className="mt-3">
             {(() => {
+              if (invalidGpsFiles.length > 0) {
+                const sample = invalidGpsFiles.slice(0, 5);
+                return (
+                  <div className="alert alert-danger mb-0">
+                    Missing GPS coordinates for {invalidGpsFiles.length} image
+                    {invalidGpsFiles.length === 1 ? '' : 's'}. Example
+                    {sample.length === 1 ? '' : 's'}: {sample.join(', ')}
+                  </div>
+                );
+              }
               let message = '';
               const hasTimestampData =
                 csvData &&
