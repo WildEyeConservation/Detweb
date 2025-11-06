@@ -14,7 +14,6 @@ import { useHotkeys } from 'react-hotkeys-hook';
 import { GotoAnnotation } from './GotoAnnotation';
 import { useOptimalAssignment } from './useOptimalAssignment';
 import { MapLegend } from './Legend';
-import { inv, Matrix } from 'mathjs';
 import { ShowMarkers } from './ShowMarkers';
 import { Map } from 'leaflet';
 import { GlobalContext, CRUDhook, AnnotationsHook } from './Context';
@@ -27,11 +26,7 @@ import { useOptimisticUpdates } from './useOptimisticUpdates';
 import { useAnnotationNavigation } from './useAnnotationNavigation';
 import { ImageContextFromHook } from './ImageContext';
 // import { Schema } from "../amplify/data/resource";
-import {
-  ManualHomographyEditor,
-  PointsOverlay,
-} from './ManualHomographyEditor';
-import { makeTransform } from './utils';
+import { PointsOverlay } from './ManualHomographyEditor';
 
 type RegisterPairProps = {
   images: [ImageType, ImageType]; // The pair of images in which we need to register the annotations
@@ -55,21 +50,21 @@ type PointStateSetter = Dispatch<
 >;
 
 // Function to transform a point using a homography matrix
-export function RegisterPair({
-  images,
-  selectedSet,
-  transforms,
-  next,
-  prev,
-  visible,
-  selectedCategoryIDs,
-  ack,
-  noHomography,
-  points1,
-  points2,
-  setPoints1,
-  setPoints2,
-}: RegisterPairProps) {
+export function RegisterPair(props: RegisterPairProps) {
+  const {
+    images,
+    selectedSet,
+    transforms,
+    next,
+    prev,
+    visible,
+    selectedCategoryIDs,
+    noHomography,
+    points1,
+    points2,
+    setPoints1,
+    setPoints2,
+  } = props;
   const [map1, setMap1] = useState<Map | null>(null);
   const [map2, setMap2] = useState<Map | null>(null);
   const [blocked, setBlocked] = useState(false);
@@ -155,8 +150,6 @@ export function RegisterPair({
   ] as unknown as [CRUDhook<'Annotation'>, CRUDhook<'Annotation'>];
 
   const [matchStatus] = useState<Record<string, number>>({});
-
-  const setMatch = useCallback(() => {}, []);
 
   // const rejectMatch = useCallback(
   //   ([anno1, anno2]: [ExtendedAnnotationType, ExtendedAnnotationType]) => {
@@ -248,86 +241,99 @@ export function RegisterPair({
               }}
               key={image.id}
             >
-              <ImageContextFromHook
-                key={i}
-                hook={enhancedAnnotationHooks[i] as unknown as AnnotationsHook}
-                image={image as any}
-                locationId={crypto.randomUUID()}
-                taskTag={'RegisterPair'}
-              >
-                <BaseImage
-                  visible={visible}
-                  activeAnnotation={activeAnnotation}
-                  location={
-                    { image: image as any, annotationSetId: selectedSet } as any
-                  }
-                  fullImage={false}
-                  otherImageId={images[1 - i].id}
-                  boundsxy={[
-                    [0, 0],
-                    [image.width, image.height],
-                  ]}
-                  // containerwidth="45vw"
-                  // containerheight="80vh"
-                  img={image as any}
-                  x={image.width / 2}
-                  y={image.height / 2}
-                  width={image.width}
-                  height={image.height}
-                >
-                  {effectiveTransforms && (
-                    <GotoAnnotation
-                      image={image as any}
-                      activeAnnotation={activeAnnotation}
-                      transform={effectiveTransforms![1 - i]}
-                    />
-                  )}
-                  {(noHomography || !effectiveTransforms) && (
-                    <PointsOverlay
-                      points={resolvedPoints[i]}
-                      setPoints={resolvedSetters[i]}
-                    />
-                  )}
-                  {!noHomography && effectiveTransforms && (
-                    <CreateAnnotationOnClick
-                      setId={selectedSet}
-                      image={image as any}
-                      source='registerpair'
-                      disabled={!effectiveTransforms}
-                      location={{
-                        x: image.width / 2,
-                        y: image.height / 2,
-                        width: image.width,
-                        height: image.height,
-                        annotationSetId: selectedSet,
-                        image: image as any,
-                      }}
-                    />
-                  )}
-                  <ShowMarkers
-                    annotationSetId={selectedSet}
-                    activeAnnotation={activeAnnotation}
-                    onShadowDrag={(id, x, y) => repositionShadow(i, id, x, y)}
-                    onSelectAnnotation={handleAnnotationSelect}
-                  />
-                  {effectiveTransforms && linkImages && (
-                    <LinkMaps
-                      otherMap={[map2, map1][i]}
-                      setMap={[setMap1, setMap2][i]}
-                      transform={effectiveTransforms![i]}
-                      blocked={blocked}
-                      setBlocked={setBlocked}
-                    />
-                  )}
-                  {i == 1 && (
-                    <MapLegend
-                      position='bottomright'
-                      annotationSetId={selectedSet}
-                      alwaysVisible={true}
-                    />
-                  )}
-                </BaseImage>
-              </ImageContextFromHook>
+              {(() => {
+                const fallbackLocation = {
+                  id: `registerpair-${image.id}-${i}`,
+                  projectId: image.projectId ?? '',
+                  setId: selectedSet,
+                  annotationSetId: selectedSet,
+                  source: 'registerpair',
+                  x: image.width / 2,
+                  y: image.height / 2,
+                  width: image.width,
+                  height: image.height,
+                  image,
+                } as any;
+                const fallbackAnnotationSet = { id: selectedSet } as any;
+                const baseImageProps: any = {
+                  image,
+                  visible,
+                  otherImageId: images[1 - i].id,
+                  annotationSet: fallbackAnnotationSet,
+                  location: fallbackLocation,
+                };
+                return (
+                  <ImageContextFromHook
+                    key={i}
+                    hook={
+                      enhancedAnnotationHooks[i] as unknown as AnnotationsHook
+                    }
+                    image={image as any}
+                    locationId={crypto.randomUUID()}
+                    taskTag={'RegisterPair'}
+                  >
+                    <BaseImage {...(baseImageProps as any)}>
+                      {effectiveTransforms && (
+                        <GotoAnnotation
+                          image={image as any}
+                          activeAnnotation={activeAnnotation}
+                          transform={effectiveTransforms![1 - i]}
+                        />
+                      )}
+                      {(noHomography || !effectiveTransforms) && (
+                        <PointsOverlay
+                          points={resolvedPoints[i]}
+                          setPoints={resolvedSetters[i]}
+                        />
+                      )}
+                      {!noHomography && effectiveTransforms && (
+                        <CreateAnnotationOnClick
+                          setId={selectedSet}
+                          image={image as any}
+                          source='registerpair'
+                          disabled={!effectiveTransforms}
+                          location={
+                            {
+                              x: image.width / 2,
+                              y: image.height / 2,
+                              width: image.width,
+                              height: image.height,
+                              annotationSetId: selectedSet,
+                              image: image as any,
+                            } as any
+                          }
+                        />
+                      )}
+                      {!noHomography && effectiveTransforms && (
+                        <ShowMarkers
+                          annotationSetId={selectedSet}
+                          activeAnnotation={activeAnnotation}
+                          onShadowDrag={(id, x, y) =>
+                            repositionShadow(i, id, x, y)
+                          }
+                          onSelectAnnotation={handleAnnotationSelect}
+                        />
+                      )}
+                      {effectiveTransforms && linkImages && (
+                        <LinkMaps
+                          otherMap={[map2, map1][i]}
+                          setMap={[setMap1, setMap2][i]}
+                          transform={effectiveTransforms![i]}
+                          blocked={blocked}
+                          setBlocked={setBlocked}
+                        />
+                      )}
+                      {i == 1 && (
+                        <MapLegend
+                          position='bottomright'
+                          annotationSetId={selectedSet}
+                          alwaysVisible={true}
+                        />
+                      )}
+                    </BaseImage>
+                  </ImageContextFromHook>
+                );
+              })()}
             </div>
           ))}
       </div>
