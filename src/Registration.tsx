@@ -150,16 +150,21 @@ export function Registration({ showAnnotationSetDropdown = true }) {
 
   // imageMetaData contains a map of image ids to their metadata.
   const imageMetaData = useMemo(() => {
-    // First check if all queries are successfull
     if (imageMetaDataQueries.some((query) => !query.isSuccess)) {
       return {};
     }
-    return imageMetaDataQueries
+
+    const images = imageMetaDataQueries
       .filter((query) => query.isSuccess)
-      .reduce((acc, { data: { data } }) => {
-        acc[data.id] = data;
-        return acc;
-      }, {} as Record<string, Image>);
+      .map((query) => query.data?.data)
+      .filter(
+        (image): image is Schema['Image']['type'] => Boolean(image)
+      );
+
+    return images.reduce((acc, image) => {
+      acc[image.id] = image;
+      return acc;
+    }, {} as Record<string, Schema['Image']['type']>);
   }, [imageMetaDataQueries]);
 
   // targetData contains a list of images sorted by timestamp, and for each image, a list of its neighbours sorted by timestamp.
@@ -189,16 +194,26 @@ export function Registration({ showAnnotationSetDropdown = true }) {
 
   const pairToRegister = useMemo(() => {
     for (const t of targetData) {
+      if (!imageMetaData[t.id]) {
+        continue;
+      }
       const annotationsPrimary = annotationsByImage[t.id];
       for (const n of t.neighbours) {
-        const tf = imageNeighbours[t.id][n.id].tf;
+        const forward = imageNeighbours[t.id]?.[n.id];
+        const backward = imageNeighbours[n.id]?.[t.id];
+        const secondaryImage = imageMetaData[n.id];
+        if (!forward || !backward || !secondaryImage) {
+          continue;
+        }
+
+        const tf = forward.tf;
         const annotationsSecondary = annotationsByImage[n.id]?.map(
           (a) => a.objectId
         );
-        const width = imageMetaData[n.id]?.width;
-        const height = imageMetaData[n.id]?.height;
+        const width = secondaryImage.width;
+        const height = secondaryImage.height;
         const annotationsToLink = annotationsPrimary
-          // Only keep annotations that are not allready matched to some object in the secondary image
+          // Only keep annotations that are not already matched to some object in the secondary image
           ?.filter((a) =>
             a.objectId ? !annotationsSecondary?.includes(a.objectId) : true
           )
@@ -252,6 +267,22 @@ export function Registration({ showAnnotationSetDropdown = true }) {
   }, [activePair, pairToRegister, nextPair]);
 
   useEffect(() => {
+    if (!activePair) {
+      return;
+    }
+
+    const primaryMeta = imageMetaData[activePair.primary];
+    const secondaryMeta = imageMetaData[activePair.secondary];
+    const forward = imageNeighbours[activePair.primary]?.[activePair.secondary];
+    const backward =
+      imageNeighbours[activePair.secondary]?.[activePair.primary];
+
+    if (!primaryMeta || !secondaryMeta || !forward || !backward) {
+      nextPair();
+    }
+  }, [activePair, imageMetaData, imageNeighbours, nextPair]);
+
+  useEffect(() => {
     if (annotationSetId && !showAnnotationSetDropdown) {
       setSelectedAnnotationSet(annotationSetId);
     }
@@ -266,6 +297,28 @@ export function Registration({ showAnnotationSetDropdown = true }) {
   const pairKey = activePair
     ? `${activePair.primary}::${activePair.secondary}`
     : '';
+
+  const activePrimaryImage = activePair
+    ? imageMetaData[activePair.primary]
+    : undefined;
+  const activeSecondaryImage = activePair
+    ? imageMetaData[activePair.secondary]
+    : undefined;
+  const activeForwardNeighbour = activePair
+    ? imageNeighbours[activePair.primary]?.[activePair.secondary]
+    : undefined;
+  const activeBackwardNeighbour = activePair
+    ? imageNeighbours[activePair.secondary]?.[activePair.primary]
+    : undefined;
+
+  const canRenderRegisterPair =
+    !!(
+      activePair &&
+      activePrimaryImage &&
+      activeSecondaryImage &&
+      activeForwardNeighbour &&
+      activeBackwardNeighbour
+    );
 
   return (
     <div
@@ -283,14 +336,15 @@ export function Registration({ showAnnotationSetDropdown = true }) {
           style={{ maxWidth: '360px' }}
         >
           {activePair &&
-          imageNeighbours[activePair.primary]?.[activePair.secondary]
-            ?.noHomography &&
+          activePrimaryImage &&
+          activeSecondaryImage &&
+          activeForwardNeighbour?.noHomography &&
           !localTransforms[pairKey] ? (
             <div className='w-100'>
               <ManualHomographyEditor
                 images={[
-                  imageMetaData[activePair.primary],
-                  imageMetaData[activePair.secondary],
+                  activePrimaryImage,
+                  activeSecondaryImage,
                 ]}
                 points1={points1}
                 points2={points2}
@@ -406,23 +460,19 @@ export function Registration({ showAnnotationSetDropdown = true }) {
             </div>
           ) : selectedCategories.length === 0 ? (
             <div>No label selected</div>
-          ) : activePair &&
-            imageNeighbours[activePair.primary]?.[activePair.secondary] &&
-            imageNeighbours[activePair.secondary]?.[activePair.primary] ? (
+          ) : canRenderRegisterPair ? (
             <RegisterPair
               key={activePair.primary + activePair.secondary}
               images={[
-                imageMetaData[activePair.primary],
-                imageMetaData[activePair.secondary],
+                activePrimaryImage!,
+                activeSecondaryImage!,
               ]}
               selectedCategoryIDs={selectedCategoryIDs}
               selectedSet={selectedAnnotationSet}
               transforms={
                 localTransforms[pairKey] || [
-                  imageNeighbours[activePair.primary]?.[activePair.secondary]
-                    ?.tf,
-                  imageNeighbours[activePair.secondary]?.[activePair.primary]
-                    ?.tf,
+                  activeForwardNeighbour!.tf,
+                  activeBackwardNeighbour!.tf,
                 ]
               }
               next={nextPair}
@@ -430,9 +480,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
               visible={true}
               ack={() => {}}
               noHomography={
-                (imageNeighbours[activePair.primary]?.[activePair.secondary]
-                  ?.noHomography ??
-                  false) &&
+                (activeForwardNeighbour?.noHomography ?? false) &&
                 !localTransforms[pairKey]
               }
               points1={points1}
