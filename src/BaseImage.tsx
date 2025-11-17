@@ -72,6 +72,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
     const { user, isAnnotatePath } = useContext(UserContext)!;
     const [fullyLoaded, setFullyLoaded] = useState(false);
     const [imageFiles, setImageFiles] = useState<ImageFileType[]>([]);
+    const [imageFilesLoading, setImageFilesLoading] = useState(true);
     const [canAdvance, setCanAdvance] = useState(false);
     const {
       next,
@@ -126,10 +127,10 @@ const BaseImage: React.FC<BaseImageProps> = memo(
 
     // Fix: If there are no image files, set fullyLoaded to true
     useEffect(() => {
-      if (imageFiles.length === 0 && !fullyLoaded) {
+      if (!imageFilesLoading && imageFiles.length === 0 && !fullyLoaded) {
         setFullyLoaded(true);
       }
-    }, [imageFiles.length, fullyLoaded]);
+    }, [imageFiles.length, imageFilesLoading, fullyLoaded]);
 
     useEffect(() => {
       if (visible) {
@@ -159,14 +160,28 @@ const BaseImage: React.FC<BaseImageProps> = memo(
     }, [props]);
 
     useEffect(() => {
+      let isMounted = true;
+      setImageFiles([]);
+      setImageFilesLoading(true);
+
       client.models.ImageFile.imagesByimageId({ imageId: image.id })
         .then((response) => {
+          if (!isMounted) return;
           setImageFiles(response.data);
         })
         .catch((error) => {
+          if (!isMounted) return;
           console.error('Error fetching image files:', error);
+        })
+        .finally(() => {
+          if (!isMounted) return;
+          setImageFilesLoading(false);
         });
-    }, [image]);
+
+      return () => {
+        isMounted = false;
+      };
+    }, [client, image.id]);
 
     useHotkeys(
       'RightArrow',
@@ -480,7 +495,34 @@ const BaseImage: React.FC<BaseImageProps> = memo(
                 keyboardPanDelta={0}
               >
                 <LayersControl position='topright'>
-                  {imageFiles.length > 0 ? (
+                  {imageFilesLoading ? (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        background: 'rgba(255,255,255,0.9)',
+                        padding: '20px',
+                        borderRadius: '10px',
+                        textAlign: 'center',
+                        zIndex: 1000,
+                      }}
+                    >
+                      <div
+                        style={{
+                          color: '#333',
+                          fontWeight: 'bold',
+                          marginBottom: '10px',
+                        }}
+                      >
+                        Loading image files...
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        Please wait while we fetch the available layers.
+                      </div>
+                    </div>
+                  ) : imageFiles.length > 0 ? (
                     imageFiles.map((image) => (
                       <LayersControl.BaseLayer
                         key={image.id}
@@ -607,6 +649,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
         image.id,
         imageFiles,
         image,
+        imageFilesLoading,
         children,
         next,
         prev,
