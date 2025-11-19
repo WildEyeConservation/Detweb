@@ -5,6 +5,8 @@ import { Card } from 'react-bootstrap';
 import PendingOrganizations from './PendingOrganizations';
 import ClientLogs from './ClientLogs';
 import AdminStats from './AdminStats';
+import AwsServiceHealth from './AwsServiceHealth';
+import AdminSurveys from './AdminSurveys';
 
 export default function Admin() {
   const { cognitoGroups } = useContext(UserContext)!;
@@ -40,6 +42,16 @@ export default function Admin() {
             <Tab label='Statistics'>
               <div className='m-2'>
                 <AdminStats />
+              </div>
+            </Tab>
+            <Tab label='Surveys'>
+              <div className='m-2'>
+                <AdminSurveys />
+              </div>
+            </Tab>
+            <Tab label='AWS Health'>
+              <div className='m-2'>
+                <AwsServiceHealth />
               </div>
             </Tab>
           </Tabs>
