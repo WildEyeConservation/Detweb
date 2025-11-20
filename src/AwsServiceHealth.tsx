@@ -54,6 +54,7 @@ type QueueDescriptor = {
   label: string;
   url?: string | null;
   scope: 'project' | 'system';
+  projectName?: string | null;
 };
 
 type QueueHealthRow = {
@@ -67,6 +68,7 @@ type QueueHealthRow = {
   dlq?: DlqSummary;
   error?: string | null;
   scope: QueueDescriptor['scope'];
+  projectName?: string | null;
 };
 
 const NUMBER_ATTRIBUTES = [
@@ -192,19 +194,31 @@ export default function AwsServiceHealth() {
       }));
   }, [global?.backend?.custom]);
 
+  type QueueWithProject = Schema['Queue']['type'] & {
+    project?: { name?: string | null } | null;
+  };
+
   const listAllQueues = useCallback(async () => {
     if (!client) {
       return [];
     }
     let nextToken: string | undefined;
-    const allQueues: Schema['Queue']['type'][] = [];
+    const allQueues: QueueWithProject[] = [];
     do {
       const response = await client.models.Queue.list({
         limit: 200,
         nextToken,
+        selectionSet: [
+          'id',
+          'name',
+          'tag',
+          'url',
+          'projectId',
+          'project.name',
+        ],
       });
       if (response?.data) {
-        allQueues.push(...response.data);
+        allQueues.push(...(response.data as QueueWithProject[]));
       }
       nextToken = response?.nextToken ?? undefined;
     } while (nextToken);
@@ -290,6 +304,7 @@ export default function AwsServiceHealth() {
           label: queue.tag || queue.name,
           url: queue.url,
           scope: 'project' as const,
+          projectName: queue.project?.name || queue.projectId || null,
         })),
         ...systemQueues,
       ];
@@ -312,6 +327,7 @@ export default function AwsServiceHealth() {
               label: descriptor.label,
               url: descriptor.url,
               scope: descriptor.scope,
+              projectName: descriptor.projectName,
               available: null,
               inflight: null,
               delayed: null,
@@ -367,6 +383,7 @@ export default function AwsServiceHealth() {
               ),
               dlq: dlqSummary,
               scope: descriptor.scope,
+              projectName: descriptor.projectName,
             };
           } catch (error) {
             console.error('Unable to describe queue attributes', {
@@ -384,6 +401,7 @@ export default function AwsServiceHealth() {
               delayed: null,
               error: message,
               scope: descriptor.scope,
+              projectName: descriptor.projectName,
             };
           }
         })
@@ -753,6 +771,11 @@ function QueueTable({
                     <div className='text-muted small'>
                       {row.url || 'No queue URL configured.'}
                     </div>
+                    {row.scope === 'project' && row.projectName && (
+                      <div className='text-muted small'>
+                        Project: {row.projectName}
+                      </div>
+                    )}
                     {row.error && (
                       <div className='text-danger small mt-1'>{row.error}</div>
                     )}
