@@ -35,7 +35,17 @@ export default function AdminSurveys() {
     try {
       const [allProjects, allOrganizations] = await Promise.all([
         fetchAllPaginatedResults<ProjectType>(client.models.Project.list, {
-          selectionSet: ['id', 'name', 'createdAt', 'updatedAt', 'status', 'organizationId'],
+          selectionSet: [
+            'id',
+            'name',
+            'createdAt',
+            'updatedAt',
+            'status',
+            'organizationId',
+            'imageSets.id',
+            'imageSets.name',
+            'imageSets.imageCount',
+          ],
         }),
         fetchAllPaginatedResults<Schema['Organization']['type']>(client.models.Organization.list, {
           selectionSet: ['id', 'name'],
@@ -187,6 +197,7 @@ export default function AdminSurveys() {
                     <thead>
                       <tr>
                         <th>Name</th>
+                        <th className='text-end'>Total Images</th>
                         <th className='text-nowrap'>Created</th>
                         <th className='text-nowrap'>Updated</th>
                         <th>Status</th>
@@ -203,6 +214,7 @@ export default function AdminSurveys() {
                         .map((survey) => (
                           <tr key={survey.id}>
                             <td>{survey.name}</td>
+                            <td className='text-end'>{formatImageCount(survey)}</td>
                             <td className='text-nowrap'>
                               {formatDate(survey.createdAt)}
                             </td>
@@ -250,5 +262,14 @@ function formatDate(value?: string | null): string {
     return value;
   }
   return date.toLocaleString();
+}
+
+function formatImageCount(project: ProjectType): string {
+  const sets = (project.imageSets as { imageCount?: number | null }[] | undefined) ?? [];
+  if (!sets.length) {
+    return '0';
+  }
+  const total = sets.reduce((sum, set) => sum + (set.imageCount ?? 0), 0);
+  return total.toLocaleString();
 }
 
