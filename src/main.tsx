@@ -28,6 +28,7 @@ import Admin from './Admin';
 import { DevActions } from './DevActions';
 import JollyResults from './JollyResults';
 import SharedResults from './SharedResults.tsx';
+import ImageNeighbourViewer from './ImageNeighbourViewer';
 
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
@@ -76,6 +77,10 @@ const router = createBrowserRouter([
       {
         path: 'shared-results',
         element: <SharedResults />,
+      },
+      {
+        path: 'image-neighbour-viewer',
+        element: <ImageNeighbourViewer />,
       },
       {
         path: 'surveys/:surveyId',

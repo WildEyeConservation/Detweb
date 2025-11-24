@@ -68,6 +68,33 @@ export default function UploadManager() {
   const pausedRef = useRef<boolean>(false);
   const finalizeAfterMaxAttemptsRef = useRef<boolean>(false);
 
+  async function findLocationSetByName(name: string) {
+    let nextToken: string | null | undefined = undefined;
+    do {
+      const res = await client.models.LocationSet.locationSetsByProjectId(
+        {
+          projectId,
+          nextToken,
+        } as {
+          projectId: string;
+          nextToken?: string | null;
+        },
+        {
+          selectionSet: ['id', 'name'],
+          limit: 1000,
+        }
+      );
+      const match =
+        res.data?.find((ls: { name?: string | null }) => ls?.name === name) ??
+        null;
+      if (match) {
+        return match;
+      }
+      nextToken = res.nextToken as string | null | undefined;
+    } while (nextToken);
+    return null;
+  }
+
   function computeElevationFromBuffer(
     buffer: ArrayBuffer,
     lat: number,
@@ -784,10 +811,17 @@ export default function UploadManager() {
       }
 
       if (model === 'scoutbot') {
-        const { data: locationSet } = await client.models.LocationSet.create({
-          name: projectId + `_${model}`,
-          projectId: projectId,
-        });
+        const scoutbotSetName = `${projectId}_scoutbot`;
+        let locationSet =
+          (await findLocationSetByName(scoutbotSetName))?.id ?? null;
+        if (!locationSet) {
+          const { data: createdLocationSet } =
+            await client.models.LocationSet.create({
+              name: scoutbotSetName,
+              projectId: projectId,
+            });
+          locationSet = createdLocationSet?.id ?? null;
+        }
 
         if (!locationSet) {
           console.error('Failed to create location set');
@@ -803,7 +837,7 @@ export default function UploadManager() {
           client.mutations.runScoutbot({
             projectId: projectId,
             images: batchStrings,
-            setId: locationSet.id,
+            setId: locationSet,
             bucket: backend.storage.buckets[1].bucket_name,
             queueUrl: backend.custom.scoutbotTaskQueueUrl,
           });
