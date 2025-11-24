@@ -4,6 +4,7 @@ import Spinner from 'react-bootstrap/Spinner';
 import { GlobalContext } from './Context';
 import { fetchAllPaginatedResults } from './utils';
 import LabeledToggleSwitch from './LabeledToggleSwitch';
+import type { TiledLaunchRequest } from './types/LaunchTask';
 
 type Nullable<T> = T | null;
 
@@ -12,7 +13,7 @@ interface CreateTaskProps {
   name: string;
   projectId: string;
   setHandleCreateTask?: React.Dispatch<
-    React.SetStateAction<(() => Promise<string>) | null>
+    React.SetStateAction<(() => Promise<TiledLaunchRequest>) | null>
   >;
   setLaunchDisabled: React.Dispatch<React.SetStateAction<boolean>>;
   disabled?: boolean;
@@ -64,9 +65,6 @@ function CreateTask({
   const effectiveImageHeight = maxY - minY;
   const [loadingImages, setLoadingImages] = useState<boolean>(false);
   const [imagesLoaded, setImagesLoaded] = useState<number>(0);
-  const [launching, setLaunching] = useState<boolean>(false);
-  const [numLocationsCreated, setNumLocationsCreated] = useState<number>(0);
-  const [numLocationsPlanned, setNumLocationsPlanned] = useState<number>(0);
   // Dev only: global subset and per-transect subsetting
   const [subsetN, setSubsetN] = useState<number>(1);
 
@@ -318,42 +316,6 @@ function CreateTask({
     return (getOverlapPixels() / height) * 100;
   }
 
-  // Exponential backoff retry helper (3 attempts by default)
-  function isTransientNetworkError(error: unknown) {
-    const message = String((error as any)?.message ?? error ?? '');
-    return /ERR_NETWORK_CHANGED|Failed to fetch|NetworkError|Network request failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN|fetch failed|socket hang up/i.test(
-      message
-    );
-  }
-
-  function sleep(ms: number) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  async function retryWithBackoff<T>(
-    fn: () => Promise<T>,
-    maxAttempts: number = 3,
-    baseDelayMs: number = 500
-  ): Promise<T> {
-    let attempt = 1;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let lastError: any;
-    while (attempt <= maxAttempts) {
-      try {
-        return await fn();
-      } catch (error) {
-        lastError = error;
-        if (attempt >= maxAttempts || !isTransientNetworkError(error)) {
-          throw error;
-        }
-        const delay = baseDelayMs * Math.pow(2, attempt - 1);
-        await sleep(delay);
-        attempt += 1;
-      }
-    }
-    throw lastError;
-  }
-
   useEffect(() => {
     if (!specifyOverlapInPercentage) {
       if (!specifyTileDimensions) {
@@ -575,17 +537,7 @@ function CreateTask({
     return expectedImagesToUse * horizontalTiles * verticalTiles;
   }, [expectedImagesToUse, horizontalTiles, verticalTiles]);
 
-  const handleSubmit = useCallback(
-    async ({
-      setLocationsCompleted,
-      setTotalLocations,
-    }: {
-      setLocationsCompleted: (steps: number) => void;
-      setTotalLocations: (steps: number) => void;
-    }) => {
-      setLaunching(true);
-      setNumLocationsCreated(0);
-
+  const buildTiledRequest = useCallback(() => {
       let imagesToUse = allImages;
       if (process.env.NODE_ENV === 'development') {
         if (hasDevGeoTransect) {
@@ -647,142 +599,49 @@ function CreateTask({
           : undefined,
       });
 
-      const createResp = await (client as any).models.LocationSet.create({
+      return {
         name,
-        projectId: projectId,
         description,
+        horizontalTiles,
+        verticalTiles,
+        width,
+        height,
+        minX,
+        minY,
+        maxX,
+        maxY,
         locationCount: imagesToUse.length * horizontalTiles * verticalTiles,
-      });
-      const locationSetId = (createResp.data as any).id as string;
-
-      const totalPlanned = imagesToUse.length * horizontalTiles * verticalTiles;
-      setTotalLocations(totalPlanned);
-      setNumLocationsPlanned(totalPlanned);
-      const promises: Promise<void>[] = [];
-      let completedCount = 0;
-      let createdCount = 0;
-      for (const { id, width: imgWidth, height: imgHeight } of imagesToUse) {
-        const effW = imgWidth;
-        const effH = imgHeight;
-
-        // Determine if this image's orientation differs from the baseline selection
-        const baselineWidth =
-          Number.isFinite(effectiveImageWidth) && effectiveImageWidth > 0
-            ? effectiveImageWidth
-            : (imageWidth as number) ?? (allImages[0]?.width as number);
-        const baselineHeight =
-          Number.isFinite(effectiveImageHeight) && effectiveImageHeight > 0
-            ? effectiveImageHeight
-            : (imageHeight as number) ?? (allImages[0]?.height as number);
-
-        const baselineIsLandscape =
-          (baselineWidth ?? effW) >= (baselineHeight ?? effH);
-        const imageIsLandscape = effW >= effH;
-        const swapTileForImage = baselineIsLandscape !== imageIsLandscape;
-
-        const tileWidthForImage = swapTileForImage ? height : width;
-        const tileHeightForImage = swapTileForImage ? width : height;
-
-        // When an image's orientation differs from the baseline, swap the tile
-        // counts as well so the grid orientation matches the swapped axes.
-        const horizontalTilesForImage = swapTileForImage
-          ? verticalTiles
-          : horizontalTiles;
-        const verticalTilesForImage = swapTileForImage
-          ? horizontalTiles
-          : verticalTiles;
-
-        // Compute ROI for this image (swap axes if orientation differs)
-        const roiMinXForImage = swapTileForImage ? minY : minX;
-        const roiMinYForImage = swapTileForImage ? minX : minY;
-        const roiMaxXForImage = swapTileForImage ? maxY : maxX;
-        const roiMaxYForImage = swapTileForImage ? maxX : maxY;
-
-        const effectiveW = Math.max(0, roiMaxXForImage - roiMinXForImage);
-        const effectiveH = Math.max(0, roiMaxYForImage - roiMinYForImage);
-
-        const xStepSize =
-          horizontalTilesForImage > 1
-            ? (effectiveW - tileWidthForImage) / (horizontalTilesForImage - 1)
-            : 0;
-        const yStepSize =
-          verticalTilesForImage > 1
-            ? (effectiveH - tileHeightForImage) / (verticalTilesForImage - 1)
-            : 0;
-
-        for (let xStep = 0; xStep < horizontalTilesForImage; xStep++) {
-          for (let yStep = 0; yStep < verticalTilesForImage; yStep++) {
-            const x = Math.round(
-              roiMinXForImage +
-                (horizontalTilesForImage > 1 ? xStep * xStepSize : 0) +
-                tileWidthForImage / 2
-            );
-            const y = Math.round(
-              roiMinYForImage +
-                (verticalTilesForImage > 1 ? yStep * yStepSize : 0) +
-                tileHeightForImage / 2
-            );
-            promises.push(
-              retryWithBackoff(() =>
-                (client as any).models.Location.create({
-                  x,
-                  y,
-                  width: tileWidthForImage,
-                  height: tileHeightForImage,
-                  imageId: id,
-                  projectId,
-                  confidence: 1,
-                  source: 'manual',
-                  setId: locationSetId,
-                })
-              ).then(() => {
-                completedCount += 1;
-                createdCount += 1;
-                setLocationsCompleted(completedCount);
-                setNumLocationsCreated(createdCount);
-              })
-            );
-          }
-        }
-      }
-      await Promise.all(promises);
-
-      setLaunching(false);
-
-      return locationSetId;
+        images: imagesToUse.map((img) => ({
+          id: img.id,
+          width: img.width,
+          height: img.height,
+        })),
+      } as TiledLaunchRequest;
     },
     [
       allImages,
-      client,
-      effectiveImageHeight,
-      effectiveImageWidth,
       hasDevGeoTransect,
       height,
       horizontalTiles,
+      maxX,
+      maxY,
       minX,
       minY,
       name,
-      projectId,
+      subsetN,
       transectGroupStats,
-      transectSubsetSteps,
       transectSubsetOffsets,
+      transectSubsetSteps,
       verticalTiles,
       width,
-      subsetN,
     ]
   );
 
   useEffect(() => {
     if (setHandleCreateTask) {
-      setHandleCreateTask(
-        () => () =>
-          handleSubmit({
-            setLocationsCompleted: () => {},
-            setTotalLocations: () => {},
-          })
-      );
+      setHandleCreateTask(() => () => Promise.resolve(buildTiledRequest()));
     }
-  }, [setHandleCreateTask, handleSubmit]);
+  }, [setHandleCreateTask, buildTiledRequest]);
 
   return (
     <>
@@ -1149,12 +1008,6 @@ function CreateTask({
             </>
           )}
         </Form.Group>
-        {launching && (
-          <div className='d-flex justify-content-center align-items-center'>
-            <Spinner animation='border' size='sm' className='me-2' />
-            {`Creating tile ${numLocationsCreated} of ${numLocationsPlanned}`}
-          </div>
-        )}
       </Form.Group>
     </>
   );

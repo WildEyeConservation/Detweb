@@ -1,50 +1,53 @@
 import { useContext, useCallback } from 'react';
-import {
-  GetQueueAttributesCommand,
-  SendMessageBatchCommand,
-} from '@aws-sdk/client-sqs';
 import { QueryCommand } from '@aws-sdk/client-dynamodb';
-import pLimit from 'p-limit';
 import { GlobalContext, UserContext } from './Context';
+import type {
+  LaunchQueueOptions,
+  TiledLaunchRequest,
+} from './types/LaunchTask';
 
 // Types for options and function arguments
 export type LaunchTaskOptions = {
   taskTag: string;
   annotationSetId: string;
+  projectId: string;
   skipLocationWithAnnotations: boolean;
   allowOutside: boolean;
   filterObserved: boolean;
   lowerLimit: number;
   upperLimit: number;
-  createQueue: (
-    name: string,
-    hidden: boolean,
-    fifo: boolean,
-    taskTag: string
-  ) => Promise<{ id: string; url: string; batchSize: number } | null>;
+  batchSize: number;
+  zoom?: number;
 };
 
 export type LaunchTaskArgs = {
   selectedTasks: string[];
   onProgress?: (message: string) => void;
-  queueOptions: {
-    name: string;
-    hidden: boolean;
-    fifo: boolean;
-  };
-  secondaryQueueOptions?: {
-    name: string;
-    hidden: boolean;
-    fifo: boolean;
-  };
+  queueOptions: LaunchQueueOptions;
+  secondaryQueueOptions?: LaunchQueueOptions;
+  tiledRequest?: TiledLaunchRequest | null;
+};
+
+type LaunchLambdaPayload = {
+  projectId: string;
+  annotationSetId: string;
+  queueOptions: LaunchQueueOptions;
+  secondaryQueueOptions?: LaunchQueueOptions | null;
+  allowOutside: boolean;
+  skipLocationWithAnnotations: boolean;
+  taskTag: string;
+  batchSize: number;
+  zoom?: number | null;
+  locationIds?: string[];
+  locationSetIds?: string[];
+  tiledRequest?: TiledLaunchRequest | null;
 };
 
 export function useLaunchTask(
   options: LaunchTaskOptions
 ): (args: LaunchTaskArgs) => Promise<void> {
   const { client, backend } = useContext(GlobalContext)!;
-  const { getSqsClient, getDynamoClient } = useContext(UserContext)!;
-  const limitConnections = pLimit(10);
+  const { getDynamoClient } = useContext(UserContext)!;
 
   async function queryLocations(
     locationSetId: string,
@@ -138,35 +141,18 @@ export function useLaunchTask(
     return locationIds;
   }
 
-  async function getQueueType(queueUrl: string): Promise<string> {
-    const sqsClient = await getSqsClient();
-    const command = new GetQueueAttributesCommand({
-      QueueUrl: queueUrl,
-      AttributeNames: ['All'],
-    });
-    try {
-      const response = await sqsClient.send(command);
-      if (response.Attributes && response.Attributes.FifoQueue) {
-        return 'FIFO';
-      }
-      return 'Standard';
-    } catch (error) {
-      console.warn(
-        'Error fetching queue attributes, assuming Standard queue:',
-        error
-      );
-      return 'Standard';
-    }
-  }
-
   const launchTask = useCallback(
     async ({
       selectedTasks,
       onProgress,
       queueOptions,
       secondaryQueueOptions,
+      tiledRequest,
     }: LaunchTaskArgs) => {
-      onProgress?.('Launching tasks');
+      onProgress?.('Preparing launch request');
+      let collectedLocations: string[] | undefined;
+
+      if (!tiledRequest) {
       const allSeenLocations = options.filterObserved
         ? await queryObservations(options.annotationSetId, onProgress)
         : [];
@@ -177,7 +163,7 @@ export function useLaunchTask(
       )
         .flat()
         .filter((l) => !allSeenLocations.includes(l));
-      // Interleave locations in fixed chunks of 100 to keep users engaged
+
       const chunkSize = 100;
       const passes = Math.ceil(allLocations.length / chunkSize);
       const interleavedLocations: string[] = [];
@@ -193,7 +179,6 @@ export function useLaunchTask(
       onProgress?.(`Found ${allLocations.length} locations to launch`);
 
       if (allLocations.length === 0) {
-        // Notify user when no unobserved locations (or no locations at all)
         if (options.filterObserved) {
           alert('No unobserved locations to launch');
         } else {
@@ -202,105 +187,64 @@ export function useLaunchTask(
         return;
       }
 
-      const mainQueue = await options.createQueue(
-        queueOptions.name,
-        queueOptions.hidden,
-        queueOptions.fifo,
-        options.taskTag
-      );
-      if (!mainQueue) {
-        throw new Error('Primary queue creation failed');
+        collectedLocations = allLocations;
       }
 
-      const secondaryQueue = secondaryQueueOptions
-        ? await options.createQueue(
-            secondaryQueueOptions.name,
-            secondaryQueueOptions.hidden,
-            secondaryQueueOptions.fifo,
-            options.taskTag
-          )
-        : null;
-
-      const queueType = await getQueueType(mainQueue.url);
-      const groupId = crypto.randomUUID();
-      const batchSize = 10;
-      // Compute number of SQS send chunks for progress
-      const progressChunks = Math.ceil(allLocations.length / batchSize);
-      const batchPromises: Promise<any>[] = [];
-
-      for (let i = 0; i < allLocations.length; i += batchSize) {
-        const batchNumber = Math.floor(i / batchSize) + 1;
-        const locationBatch = allLocations.slice(i, i + batchSize);
-        const batchEntries: any[] = [];
-        for (const locationId of locationBatch) {
-          const location = {
-            id: locationId,
+      const payload: LaunchLambdaPayload = {
+        projectId: options.projectId,
             annotationSetId: options.annotationSetId,
-          };
-          const body = JSON.stringify({
-            location,
+        queueOptions,
+        secondaryQueueOptions: secondaryQueueOptions ?? null,
             allowOutside: options.allowOutside,
+        skipLocationWithAnnotations: options.skipLocationWithAnnotations,
             taskTag: options.taskTag,
-            secondaryQueueUrl: secondaryQueue?.url,
-            skipLocationWithAnnotations: options.skipLocationWithAnnotations,
-          });
-          if (queueType === 'FIFO') {
-            batchEntries.push({
-              Id: `msg-${locationId}`,
-              MessageBody: body,
-              MessageGroupId: groupId,
-              MessageDeduplicationId: body
-                .replace(/[^a-zA-Z0-9\-_\.]/g, '')
-                .substring(0, 128),
-            });
-          } else {
-            batchEntries.push({
-              Id: `msg-${locationId}`,
-              MessageBody: body,
-            });
-          }
-        }
+        batchSize: options.batchSize,
+        zoom: options.zoom ?? null,
+        locationIds: collectedLocations,
+        locationSetIds: selectedTasks,
+        tiledRequest: tiledRequest ?? null,
+      };
 
-        if (batchEntries.length > 0) {
-          const sendTask = limitConnections(() =>
-            getSqsClient()
-              .then((sqsClient) =>
-                sqsClient.send(
-                  new SendMessageBatchCommand({
-                    QueueUrl: mainQueue.url,
-                    Entries: batchEntries,
-                  })
-                )
-              )
-              .then(() =>
-                onProgress?.(
-                  `Creating job ${Math.floor(
-                    (batchNumber / progressChunks) * 100
-                  )}%`
-                )
-              )
-          );
-          batchPromises.push(sendTask);
-        }
-      }
-
-      await Promise.all(batchPromises);
-      // Update DB with total worker batches (based on UI batch size)
-      await client.models.Queue.update({
-        id: mainQueue.id,
-        totalBatches: Math.ceil(allLocations.length / mainQueue.batchSize),
-      });
-
-      for (const taskId of selectedTasks) {
-        await client.models.TasksOnAnnotationSet.create({
-          annotationSetId: options.annotationSetId,
-          locationSetId: taskId,
-        });
-      }
-      onProgress?.('Launch complete');
+      onProgress?.('Enqueuing jobs...');
+      sendLaunchLambdaRequest(client, payload);
+      onProgress?.('Launch request submitted');
     },
-    [options, client, backend, getSqsClient, getDynamoClient, limitConnections]
+    [options, client, backend, getDynamoClient]
   );
 
   return launchTask;
+}
+
+async function sendLaunchLambdaRequest(
+  client: any,
+  payload: LaunchLambdaPayload
+) {
+  try {
+    await (client.mutations as any).launchAnnotationSet({
+      request: JSON.stringify(payload),
+    });
+  } catch (error: any) {
+    if (shouldIgnoreLaunchError(error)) {
+      console.warn('Ignoring launch lambda timeout response', error);
+      return;
+    }
+    throw error;
+  }
+}
+
+function shouldIgnoreLaunchError(error: any): boolean {
+  const messages: string[] = [];
+  if (error?.message) {
+    messages.push(String(error.message));
+  }
+  if (Array.isArray(error?.errors)) {
+    for (const err of error.errors) {
+      if (err?.message) {
+        messages.push(String(err.message));
+      }
+    }
+  }
+  return messages.some((msg) =>
+    /timed out|timeout|Task timed out|socket hang up/i.test(msg)
+  );
 }

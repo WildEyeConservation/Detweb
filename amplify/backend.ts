@@ -22,8 +22,15 @@ import { monitorModelProgress } from './functions/monitorModelProgress/resource'
 import { cleanupJobs } from './functions/cleanupJobs/resource';
 import { runHeatmapper } from './functions/runHeatmapper/resource';
 import { runPointFinder } from './functions/runPointFinder/resource';
+import { runImageRegistration } from './functions/runImageRegistration/resource';
+import { runScoutbot } from './functions/runScoutbot/resource';
+import { runMadDetector } from './functions/runMadDetector/resource';
+import { launchAnnotationSet } from './functions/launchAnnotationSet/resource';
+import { launchFalseNegatives } from './functions/launchFalseNegatives/resource';
+import { requeueProjectQueues } from './functions/requeueProjectQueues/resource';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 
+// Register all Amplify-managed resources in a single backend definition.
 const backend = defineBackend({
   auth,
   data,
@@ -37,11 +44,18 @@ const backend = defineBackend({
   monitorModelProgress,
   runHeatmapper,
   runPointFinder,
+  runImageRegistration,
+  runScoutbot,
+  runMadDetector,
   cleanupJobs,
+  launchAnnotationSet,
+  launchFalseNegatives,
+  requeueProjectQueues,
 });
 
 const observationTable = backend.data.resources.tables['Observation'];
 const annotationTable = backend.data.resources.tables['Annotation'];
+// Allow the updateUserStats Lambda to read Observation DynamoDB streams.
 const policy = new Policy(
   Stack.of(observationTable),
   'MyDynamoDBFunctionStreamingPolicy',
@@ -62,6 +76,7 @@ const policy = new Policy(
 );
 backend.updateUserStats.resources.lambda.role?.attachInlinePolicy(policy);
 
+// Pipe Observation table stream records into the stats updater Lambda.
 const mapping1 = new EventSourceMapping(
   Stack.of(observationTable),
   'ObservationEventStreamMapping',
@@ -73,6 +88,7 @@ const mapping1 = new EventSourceMapping(
 );
 mapping1.node.addDependency(policy);
 
+// Expand the default authenticated Cognito role with data-plane permissions.
 const authenticatedRole = backend.auth.resources.authenticatedUserIamRole;
 const dynamoDbPolicy = new iam.PolicyStatement({
   actions: ['dynamodb:Query'],
@@ -82,6 +98,7 @@ const dynamoDbPolicy = new iam.PolicyStatement({
 //Attach the dynamoDbPolicy to the authenticatedRole
 authenticatedRole.addToPrincipalPolicy(dynamoDbPolicy);
 
+// Shared SQS permissions for Lambdas and groups that spin up task queues.
 const sqsCreateQueueStatement = new iam.PolicyStatement({
   actions: [
     'sqs:CreateQueue',
@@ -115,11 +132,40 @@ const lambdaInvoke = new iam.PolicyStatement({
   resources: ['*'],
 });
 
+// Direct access to the legacy surveyscope bucket outside Amplify storage.
 const generalBucketArn = 'arn:aws:s3:::surveyscope';
 const generalBucketArn2 = 'arn:aws:s3:::surveyscope/*';
 const generalBucketPolicy = new iam.PolicyStatement({
   actions: ['s3:ListBucket', 's3:GetObject'],
   resources: [generalBucketArn, generalBucketArn2],
+});
+
+// Grant S3 permissions to Cognito user pool group roles without referencing the storage resource
+// to avoid circular dependencies between stacks.
+const groupS3ListPolicy = new iam.PolicyStatement({
+  actions: ['s3:ListBucket'],
+  resources: ['arn:aws:s3:::*'],
+});
+
+const groupS3ObjectsPolicy = new iam.PolicyStatement({
+  actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+  resources: ['arn:aws:s3:::*/images/*'],
+});
+
+// Allow reading tiles and results from the outputs bucket prefixes
+const groupS3OutputsReadPolicy = new iam.PolicyStatement({
+  actions: ['s3:GetObject'],
+  resources: ['arn:aws:s3:::*/slippymaps/*', 'arn:aws:s3:::*/heatmaps/*'],
+});
+
+// Allow Cognito group roles to query DynamoDB tables and GSIs without
+// referencing specific data resources to avoid circular dependencies.
+const groupDynamoDbQueryPolicy = new iam.PolicyStatement({
+  actions: ['dynamodb:Query'],
+  resources: [
+    'arn:aws:dynamodb:*:*:table/*',
+    'arn:aws:dynamodb:*:*:table/*/index/*',
+  ],
 });
 
 authenticatedRole.addToPrincipalPolicy(sqsCreateQueueStatement);
@@ -128,10 +174,19 @@ authenticatedRole.addToPrincipalPolicy(cognitoAdmin);
 authenticatedRole.addToPrincipalPolicy(lambdaInvoke);
 authenticatedRole.addToPrincipalPolicy(generalBucketPolicy);
 
+// Ensure every Cognito group role has consistent S3/Dynamo/SQS capabilities.
 Object.values(backend.auth.resources.groups).forEach(({ role }) => {
   role.addToPrincipalPolicy(generalBucketPolicy);
+  role.addToPrincipalPolicy(groupS3ListPolicy);
+  role.addToPrincipalPolicy(groupS3ObjectsPolicy);
+  role.addToPrincipalPolicy(groupDynamoDbQueryPolicy);
+  // Also allow group roles to create and consume SQS queues
+  role.addToPrincipalPolicy(sqsCreateQueueStatement);
+  role.addToPrincipalPolicy(sqsConsumeQueueStatement);
+  role.addToPrincipalPolicy(groupS3OutputsReadPolicy);
 });
 
+// Add the Sharp layer and throttle concurrency on the image upload Lambda.
 const lambdaFunction = backend.handleS3Upload.resources
   .lambda as lambda.Function;
 const layerVersion = new lambda.LayerVersion(
@@ -149,139 +204,198 @@ backend.handleS3Upload.resources.cfnResources.cfnFunction.addPropertyOverride(
   5
 );
 
+// Additional stack for bespoke EC2/ECS compute and shared infra.
 const customStack = backend.createStack('DetwebCustom');
-const ecsStack = backend.createStack('DetwebECS');
-//const custom = createDetwebResources(customStack, backend)
-const ecsTaskRole = new iam.Role(ecsStack, 'EcsTaskRole', {
-  assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
-});
+const enableEcs = true;
+const enablePointFinder =
+  (process.env.AMPLIFY_ENABLE_ECS_POINTFINDER ?? 'true').toLowerCase() ===
+  'true';
+const enableLightGlue =
+  (process.env.AMPLIFY_ENABLE_ECS_LIGHTGLUE ?? 'true').toLowerCase() === 'true';
+const enableScoutbot =
+  (process.env.AMPLIFY_ENABLE_ECS_SCOUTBOT ?? 'true').toLowerCase() === 'true';
+const enableMadDetector =
+  (process.env.AMPLIFY_ENABLE_ECS_MAD ?? 'true').toLowerCase() === 'true';
 
+// Base VPC that hosts the EC2 queue processor.
 const vpc = new ec2.Vpc(customStack, 'my-cdk-vpc');
-const ecsvpc = new ec2.Vpc(ecsStack, 'my-cdk-vpc');
-ecsTaskRole.addManagedPolicy(
-  iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppSyncInvokeFullAccess')
-);
-const pointFinderAutoProcessor = new AutoProcessor(
-  ecsStack,
-  'CpuAutoProcessor',
-  {
-    vpc: ecsvpc,
-    instanceType: ec2.InstanceType.of(
-      ec2.InstanceClass.T3,
-      ec2.InstanceSize.SMALL
-    ),
-    ecsImage: ecs.ContainerImage.fromAsset('containerImages/pointFinderImage'),
-    ecsTaskRole,
-    environment: {
-      API_ENDPOINT: backend.data.graphqlUrl,
-      API_KEY: backend.data.apiKey || '',
-    },
-    machineImage: ecs.EcsOptimizedImage.amazonLinux2(),
-  }
-);
 
+// Derive an environment name for parameter paths and tagging.
 const envName =
   process.env.AMPLIFY_ENV ?? process.env.AWS_BRANCH ?? 'production'; // use AWS_BRANCH or default if AMPLIFY_ENV is undefined
 
-new ssm.StringParameter(ecsStack, 'PointFinderQueueUrlParameter', {
-  parameterName: `/${envName}/runPointFinder/QueueUrl`,
-  stringValue: pointFinderAutoProcessor.queue.queueUrl,
-});
+// Collect queue URLs so they can be exposed as stack outputs.
+let pointFinderQueueUrl: string | undefined;
+let lightglueQueueUrl: string | undefined;
+let scoutbotQueueUrl: string | undefined;
+let madDetectorQueueUrl: string | undefined;
 
-ecsTaskRole.addToPrincipalPolicy(
-  new iam.PolicyStatement({
-    actions: ['s3:ListBucket', 's3:GetObject', 's3:PutObject'],
-    resources: ['arn:aws:s3:::*'],
-  })
-);
+if (enableEcs) {
+  // Provision ECS auto-processors when the feature flags are enabled.
+  const ecsStack = backend.createStack('DetwebECS');
+  //const custom = createDetwebResources(customStack, backend)
+  const ecsTaskRole = new iam.Role(ecsStack, 'EcsTaskRole', {
+    assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+  });
 
-pointFinderAutoProcessor.asg.role.addManagedPolicy(
-  iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppSyncInvokeFullAccess')
-);
+  const ecsvpc = new ec2.Vpc(ecsStack, 'my-cdk-vpc');
+  ecsTaskRole.addManagedPolicy(
+    iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppSyncInvokeFullAccess')
+  );
+  // Common S3 access for tasks
+  ecsTaskRole.addToPrincipalPolicy(
+    new iam.PolicyStatement({
+      actions: ['s3:ListBucket', 's3:GetObject', 's3:PutObject'],
+      resources: ['arn:aws:s3:::*'],
+    })
+  );
 
-const lightGlueAutoProcessor = new AutoProcessor(ecsStack, 'GpuAutoProcessor', {
-  vpc,
-  instanceType: ec2.InstanceType.of(
-    ec2.InstanceClass.G4DN,
-    ec2.InstanceSize.XLARGE
-  ),
-  ecsImage: ecs.ContainerImage.fromAsset('containerImages/lightGlueImage'),
-  ecsTaskRole,
-  memoryLimitMiB: 1024 * 12,
-  gpuCount: 1,
-  environment: {
-    API_ENDPOINT: backend.data.graphqlUrl,
-    API_KEY: backend.data.apiKey || '',
-    BUCKET: backend.inputBucket.resources.bucket.bucketName,
-  },
-  machineImage: ecs.EcsOptimizedImage.amazonLinux2(ecs.AmiHardwareType.GPU),
-});
+  if (enablePointFinder) {
+    // CPU-backed auto processor for Point Finder jobs.
+    const pointFinderAutoProcessor = new AutoProcessor(
+      ecsStack,
+      'CpuAutoProcessor',
+      {
+        vpc: ecsvpc,
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.SMALL
+        ),
+        ecsImage: ecs.ContainerImage.fromAsset(
+          'containerImages/pointFinderImage'
+        ),
+        ecsTaskRole,
+        environment: {
+          API_ENDPOINT: backend.data.graphqlUrl,
+          API_KEY: backend.data.apiKey || '',
+        },
+        machineImage: ecs.EcsOptimizedImage.amazonLinux2(),
+      }
+    );
 
-lightGlueAutoProcessor.asg.role.addManagedPolicy(
-  iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppSyncInvokeFullAccess')
-);
+    new ssm.StringParameter(ecsStack, 'PointFinderQueueUrlParameter', {
+      parameterName: `/${envName}/runPointFinder/QueueUrl`,
+      stringValue: pointFinderAutoProcessor.queue.queueUrl,
+    });
 
-const repo = Repository.fromRepositoryArn(
-  ecsStack,
-  'ScoutbotRepo',
-  'arn:aws:ecr:eu-west-2:275736403632:repository/cdk-hnb659fds-container-assets-275736403632-eu-west-2'
-);
+    pointFinderAutoProcessor.asg.role.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppSyncInvokeFullAccess')
+    );
 
-const scoutbotAutoProcessor = new AutoProcessor(
-  ecsStack,
-  'ScoutbotAutoProcessor',
-  {
-    vpc,
-    instanceType: ec2.InstanceType.of(
-      ec2.InstanceClass.G4DN,
-      ec2.InstanceSize.XLARGE
-    ),
-    ecsImage: ecs.ContainerImage.fromAsset('containerImages/scoutbot'),
-    ecsTaskRole,
-    memoryLimitMiB: 1024 * 12,
-    gpuCount: 1,
-    environment: {
-      API_ENDPOINT: backend.data.graphqlUrl,
-      API_KEY: backend.data.apiKey || '',
-      BUCKET: backend.inputBucket.resources.bucket.bucketName,
-    },
-    machineImage: ecs.EcsOptimizedImage.amazonLinux2(ecs.AmiHardwareType.GPU),
-    rootVolumeSize: 100,
+    pointFinderQueueUrl = pointFinderAutoProcessor.queue.queueUrl;
   }
-);
 
-scoutbotAutoProcessor.asg.role.addManagedPolicy(
-  iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppSyncInvokeFullAccess')
-);
+  if (enableLightGlue) {
+    // GPU-backed auto processor tailored for LightGlue workloads.
+    const lightGlueAutoProcessor = new AutoProcessor(
+      ecsStack,
+      'GpuAutoProcessor',
+      {
+        vpc: ecsvpc,
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.G4DN,
+          ec2.InstanceSize.XLARGE
+        ),
+        ecsImage: ecs.ContainerImage.fromAsset(
+          'containerImages/lightGlueImage'
+        ),
+        ecsTaskRole,
+        memoryLimitMiB: 1024 * 12,
+        gpuCount: 1,
+        environment: {
+          API_ENDPOINT: backend.data.graphqlUrl,
+          API_KEY: backend.data.apiKey || '',
+          BUCKET: backend.inputBucket.resources.bucket.bucketName,
+        },
+        machineImage: ecs.EcsOptimizedImage.amazonLinux2(
+          ecs.AmiHardwareType.GPU
+        ),
+      }
+    );
 
-// MAD Detector AutoProcessor (GPU)
-const madDetectorAutoProcessor = new AutoProcessor(
-  ecsStack,
-  'MadDetectorAutoProcessor',
-  {
-    vpc,
-    instanceType: ec2.InstanceType.of(
-      ec2.InstanceClass.G4DN,
-      ec2.InstanceSize.XLARGE
-    ),
-    ecsImage: ecs.ContainerImage.fromAsset('containerImages/madDetector'),
-    ecsTaskRole,
-    memoryLimitMiB: 1024 * 12,
-    gpuCount: 1,
-    environment: {
-      API_ENDPOINT: backend.data.graphqlUrl,
-      API_KEY: backend.data.apiKey || '',
-      BUCKET: backend.inputBucket.resources.bucket.bucketName,
-      MAD_CHECKPOINT_S3: 's3://surveyscope/2024-mad-v2/checkpoint.pth',
-    },
-    machineImage: ecs.EcsOptimizedImage.amazonLinux2(ecs.AmiHardwareType.GPU),
-    rootVolumeSize: 200,
+    lightGlueAutoProcessor.asg.role.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppSyncInvokeFullAccess')
+    );
+
+    lightglueQueueUrl = lightGlueAutoProcessor.queue.queueUrl;
   }
-);
 
-madDetectorAutoProcessor.asg.role.addManagedPolicy(
-  iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppSyncInvokeFullAccess')
-);
+  if (enableScoutbot) {
+    // ECR repo reference required by Scoutbot image
+    Repository.fromRepositoryArn(
+      ecsStack,
+      'ScoutbotRepo',
+      'arn:aws:ecr:eu-west-2:275736403632:repository/cdk-hnb659fds-container-assets-275736403632-eu-west-2'
+    );
+
+    // GPU-backed auto processor for Scoutbot inference.
+    const scoutbotAutoProcessor = new AutoProcessor(
+      ecsStack,
+      'ScoutbotAutoProcessor',
+      {
+        vpc: ecsvpc,
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.G4DN,
+          ec2.InstanceSize.XLARGE
+        ),
+        ecsImage: ecs.ContainerImage.fromAsset('containerImages/scoutbot'),
+        ecsTaskRole,
+        memoryLimitMiB: 1024 * 12,
+        gpuCount: 1,
+        environment: {
+          API_ENDPOINT: backend.data.graphqlUrl,
+          API_KEY: backend.data.apiKey || '',
+          BUCKET: backend.inputBucket.resources.bucket.bucketName,
+        },
+        machineImage: ecs.EcsOptimizedImage.amazonLinux2(
+          ecs.AmiHardwareType.GPU
+        ),
+        rootVolumeSize: 100,
+      }
+    );
+
+    scoutbotAutoProcessor.asg.role.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppSyncInvokeFullAccess')
+    );
+
+    scoutbotQueueUrl = scoutbotAutoProcessor.queue.queueUrl;
+  }
+
+  if (enableMadDetector) {
+    // MAD Detector AutoProcessor (GPU)
+    const madDetectorAutoProcessor = new AutoProcessor(
+      ecsStack,
+      'MadDetectorAutoProcessor',
+      {
+        vpc: ecsvpc,
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.G4DN,
+          ec2.InstanceSize.XLARGE
+        ),
+        ecsImage: ecs.ContainerImage.fromAsset('containerImages/madDetector'),
+        ecsTaskRole,
+        memoryLimitMiB: 1024 * 12,
+        gpuCount: 1,
+        environment: {
+          API_ENDPOINT: backend.data.graphqlUrl,
+          API_KEY: backend.data.apiKey || '',
+          BUCKET: backend.inputBucket.resources.bucket.bucketName,
+          MAD_CHECKPOINT_S3: 's3://surveyscope/2024-mad-v2/checkpoint.pth',
+        },
+        machineImage: ecs.EcsOptimizedImage.amazonLinux2(
+          ecs.AmiHardwareType.GPU
+        ),
+        rootVolumeSize: 200,
+      }
+    );
+
+    madDetectorAutoProcessor.asg.role.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppSyncInvokeFullAccess')
+    );
+
+    madDetectorQueueUrl = madDetectorAutoProcessor.queue.queueUrl;
+  }
+}
 
 //const devRole = iam.Role.fromRoleArn(scope, "DevRole", devUserArn);
 
@@ -293,6 +407,7 @@ madDetectorAutoProcessor.asg.role.addManagedPolicy(
 //   })],
 // }));
 
+// Legacy EC2 queue processor that feeds the general image pipeline.
 const processor = new EC2QueueProcessor(customStack, 'MyProcessor', {
   vpc: vpc, // Your VPC
   instanceType: ec2.InstanceType.of(
@@ -303,6 +418,7 @@ const processor = new EC2QueueProcessor(customStack, 'MyProcessor', {
   keyName: 'surveyscope', // Optional: Your EC2 key pair name
 });
 
+// Inject queue URLs and function names into the runtime environment.
 backend.processImages.addEnvironment(
   'PROCESS_QUEUE_URL',
   processor.queue.queueUrl
@@ -323,6 +439,7 @@ backend.runPointFinder.addEnvironment(
   `/${envName}/runPointFinder/QueueUrl`
 );
 
+// Allow processImages to publish Digests into SQS.
 const statement = new iam.PolicyStatement({
   sid: 'AllowPublishToDigest',
   actions: ['sqs:SendMessage'],
@@ -330,15 +447,102 @@ const statement = new iam.PolicyStatement({
 });
 backend.processImages.resources.lambda.addToRolePolicy(statement);
 
+// Allow lambdas that enqueue work to SQS to send messages
+backend.runImageRegistration.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes', 'sqs:GetQueueUrl'],
+    resources: ['*'],
+  })
+);
+backend.runScoutbot.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes', 'sqs:GetQueueUrl'],
+    resources: ['*'],
+  })
+);
+backend.runScoutbot.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['lambda:InvokeFunction'],
+    resources: ['*'],
+  })
+);
+backend.runMadDetector.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes', 'sqs:GetQueueUrl'],
+    resources: ['*'],
+  })
+);
+backend.runMadDetector.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['lambda:InvokeFunction'],
+    resources: ['*'],
+  })
+);
+backend.cleanupJobs.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['sqs:DeleteQueue', 'sqs:GetQueueAttributes'],
+    resources: ['*'],
+  })
+);
+backend.launchAnnotationSet.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'sqs:CreateQueue',
+      'sqs:SendMessage',
+      'sqs:GetQueueAttributes',
+      'sqs:GetQueueUrl',
+    ],
+    resources: ['*'],
+  })
+);
+backend.launchFalseNegatives.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'sqs:CreateQueue',
+      'sqs:SendMessage',
+      'sqs:GetQueueAttributes',
+      'sqs:GetQueueUrl',
+    ],
+    resources: ['*'],
+  })
+);
+backend.runPointFinder.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes', 'sqs:GetQueueUrl'],
+    resources: ['*'],
+  })
+);
+backend.requeueProjectQueues.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'sqs:GetQueueAttributes',
+      'sqs:GetQueueUrl',
+      'sqs:ReceiveMessage',
+      'sqs:DeleteMessage',
+      'sqs:SendMessage',
+      'sqs:ChangeMessageVisibility',
+    ],
+    resources: ['*'],
+  })
+);
+// runPointFinder also reads the SSM parameter for its queue URL
+backend.runPointFinder.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['ssm:GetParameter'],
+    resources: ['arn:aws:ssm:*:*:parameter/*'],
+  })
+);
+
 const generalBucketName = 'surveyscope';
 
+// Expose useful resource identifiers for downstream tooling.
 backend.addOutput({
   custom: {
-    lightglueTaskQueueUrl: lightGlueAutoProcessor.queue.queueUrl,
-    scoutbotTaskQueueUrl: scoutbotAutoProcessor.queue.queueUrl,
-    madDetectorTaskQueueUrl: madDetectorAutoProcessor.queue.queueUrl,
+    lightglueTaskQueueUrl: lightglueQueueUrl ?? '',
+    scoutbotTaskQueueUrl: scoutbotQueueUrl ?? '',
+    madDetectorTaskQueueUrl: madDetectorQueueUrl ?? '',
     processTaskQueueUrl: processor.queue.queueUrl,
-    pointFinderTaskQueueUrl: pointFinderAutoProcessor.queue.queueUrl,
+    pointFinderTaskQueueUrl: pointFinderQueueUrl ?? '',
     annotationTable: backend.data.resources.tables['Annotation'].tableName,
     locationTable: backend.data.resources.tables['Location'].tableName,
     imageTable: backend.data.resources.tables['Image'].tableName,

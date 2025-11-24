@@ -1,21 +1,22 @@
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { Form, Spinner } from 'react-bootstrap';
 import Select, { SingleValue } from 'react-select';
 import { Schema } from '../amplify/client-schema';
-import { GlobalContext, UserContext } from '../Context';
+import { GlobalContext } from '../Context';
 import CreateTask from '../CreateTask';
-import { makeSafeQueueName } from '../utils';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
-import {
-  CreateQueueCommand,
-  SendMessageBatchCommand,
-} from '@aws-sdk/client-sqs';
+import type { TiledLaunchRequest } from '../types/LaunchTask';
 
 type LaunchHandler = (onProgress: (msg: string) => void) => Promise<void>;
 
-type Nullable<T> = T | null;
-
 type Option = { label: string; value: string };
+
+type TiledOption = {
+  label: string;
+  value: string;
+  locationCount?: number;
+  tilesPerImage?: number;
+};
 
 type MinimalTile = {
   id: string;
@@ -42,18 +43,14 @@ export default function FalseNegatives({
   >;
 }) {
   const { client } = useContext(GlobalContext)!;
-  const { getSqsClient } = useContext(UserContext)!;
 
   // Tile set selection/creation
   const [useExistingTiled, setUseExistingTiled] = useState<boolean>(false);
-  const [tiledSetOptions, setTiledSetOptions] = useState<
-    { label: string; value: string }[]
-  >([]);
+  const [tiledSetOptions, setTiledSetOptions] = useState<TiledOption[]>([]);
   const [selectedTiledSetId, setSelectedTiledSetId] = useState<string>('');
   const [handleCreateTask, setHandleCreateTask] = useState<
-    (() => Promise<string>) | null
+    (() => Promise<TiledLaunchRequest>) | null
   >(null);
-  const [workingTileSetId, setWorkingTileSetId] = useState<string>('');
 
   // Model selection and threshold
   const [model, setModel] = useState<Option | null>(null);
@@ -69,12 +66,19 @@ export default function FalseNegatives({
   const [samplePercent, setSamplePercent] = useState<number>(5);
   const [showAdvancedOptions, setShowAdvancedOptions] =
     useState<boolean>(false);
-  const [scanning, setScanning] = useState<boolean>(false);
-  const [scanMessage, setScanMessage] = useState<string>('');
-  const [totalTiles, setTotalTiles] = useState<number>(0);
-  const [candidateCount, setCandidateCount] = useState<number>(0);
-  const [selectedCount, setSelectedCount] = useState<number>(0);
-  const selectedLocationIdsRef = useRef<string[]>([]);
+  const [summaryLoading, setSummaryLoading] = useState<boolean>(false);
+  const [summaryMessage, setSummaryMessage] = useState<string>('');
+  const [expectedTiles, setExpectedTiles] = useState<number | null>(null);
+  const [candidateTiles, setCandidateTiles] = useState<number | null>(null);
+  const [estimatedSampleTiles, setEstimatedSampleTiles] = useState<
+    number | null
+  >(null);
+  const [aggregateSummary, setAggregateSummary] = useState<{
+    detectionImages: number;
+    annotationImages: number;
+    detectionTotal: number;
+    annotationTotal: number;
+  } | null>(null);
 
   // Load all tiled location sets for the project
   useEffect(() => {
@@ -83,12 +87,13 @@ export default function FalseNegatives({
       setLoadingModels(true);
       const resp1 = await client.models.LocationSet.locationSetsByProjectId(
         { projectId: project.id },
-        { selectionSet: ['id', 'name', 'description'] as const }
+        { selectionSet: ['id', 'name', 'description', 'locationCount'] as const }
       );
       const data = resp1.data as Array<{
         id: string;
         name: string;
         description?: string | null;
+        locationCount?: number | null;
       }>;
       // Derive model options from location set names the user actually has
       const modelOpts: Option[] = [];
@@ -117,7 +122,7 @@ export default function FalseNegatives({
         (taskMappings || []).map((m) => m.locationSetId)
       );
 
-      const options: { label: string; value: string }[] = [];
+      const options: TiledOption[] = [];
       for (const ls of data || []) {
         const descRaw = ls.description as string | undefined;
         if (!descRaw) continue;
@@ -138,7 +143,18 @@ export default function FalseNegatives({
             ) {
               parts.push(`${desc.width}x${desc.height}px`);
             }
-            options.push({ label: parts.join(' • '), value: ls.id });
+            const horizontal = Number(desc.horizontalTiles ?? 0);
+            const vertical = Number(desc.verticalTiles ?? 0);
+            options.push({
+              label: parts.join(' • '),
+              value: ls.id,
+              locationCount:
+                typeof ls.locationCount === 'number'
+                  ? ls.locationCount
+                  : undefined,
+              tilesPerImage:
+                horizontal > 0 && vertical > 0 ? horizontal * vertical : undefined,
+            });
           }
         } catch {}
       }
@@ -167,9 +183,7 @@ export default function FalseNegatives({
       !model ||
       (useExistingTiled
         ? !selectedTiledSetId
-        : typeof handleCreateTask !== 'function') ||
-      scanning ||
-      selectedLocationIdsRef.current.length === 0;
+        : typeof handleCreateTask !== 'function');
     setLaunchDisabled(shouldDisable);
   }, [
     launching,
@@ -178,303 +192,157 @@ export default function FalseNegatives({
     useExistingTiled,
     selectedTiledSetId,
     handleCreateTask,
-    scanning,
     setLaunchDisabled,
-    selectedCount,
   ]);
 
-  // Helpers
-  function isInsideTile(px: number, py: number, tile: MinimalTile): boolean {
-    const halfW = (tile.width ?? 0) / 2;
-    const halfH = (tile.height ?? 0) / 2;
-    const minX = tile.x - halfW;
-    const maxX = tile.x + halfW;
-    const minY = tile.y - halfH;
-    const maxY = tile.y + halfH;
-    return px >= minX && px <= maxX && py >= minY && py <= maxY;
-  }
-
-  function randomSample<T>(arr: T[], count: number): T[] {
-    if (count <= 0) return [];
-    if (count >= arr.length) return arr.slice();
-    const a = arr.slice();
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a.slice(0, count);
-  }
-
-  const computeFalseNegativeTiles = useCallback(async () => {
+  const computeSummary = useCallback(async () => {
     if (!model) return;
-    setScanning(true);
-    setScanMessage('Preparing tile set...');
+    setSummaryLoading(true);
+    setSummaryMessage('Preparing tile data...');
+    setAggregateSummary(null);
+    setCandidateTiles(null);
+    setEstimatedSampleTiles(null);
+    setExpectedTiles(null);
     try {
-      let tileSetId = workingTileSetId;
-      if (!useExistingTiled) {
-        if (typeof handleCreateTask !== 'function') return;
-        // Create tiles first to be able to fetch them
-        tileSetId = await handleCreateTask();
-        setWorkingTileSetId(tileSetId);
+      let tiles: MinimalTile[] = [];
+
+      if (useExistingTiled) {
+        if (!selectedTiledSetId) {
+          throw new Error('Select an existing tiled set');
+        }
+        setSummaryMessage('Fetching tiles...');
+        tiles = await fetchTilesFromLocationSet(client, selectedTiledSetId);
       } else {
-        tileSetId = selectedTiledSetId;
-      }
-      if (!tileSetId) return;
-
-      setScanMessage('Fetching tiles...');
-      const tiles: MinimalTile[] = [];
-      {
-        let nextToken: string | null | undefined = undefined;
-        do {
-          const { data, nextToken: nt } =
-            await client.models.Location.locationsBySetIdAndConfidence(
-              { setId: tileSetId },
-              {
-                selectionSet: [
-                  'id',
-                  'imageId',
-                  'x',
-                  'y',
-                  'width',
-                  'height',
-                ] as const,
-                limit: 1000,
-                nextToken,
-              }
-            );
-          const page = (data || [])
-            .filter(
-              (l) => typeof l.id === 'string' && typeof l.imageId === 'string'
-            )
-            .map((l) => ({
-              id: l.id as string,
-              imageId: l.imageId as string,
-              x: l.x as number,
-              y: l.y as number,
-              width: (l.width ?? 0) as number,
-              height: (l.height ?? 0) as number,
-            }));
-          tiles.push(...page);
-          nextToken = nt as string | null | undefined;
-        } while (nextToken);
-      }
-      setTotalTiles(tiles.length);
-
-      setScanMessage('Fetching model detections...');
-      const modelLocs: Array<{ imageId: string; x: number; y: number }> = [];
-      {
-        let nextToken: string | null | undefined = undefined;
-        do {
-          const { data, nextToken: nt } =
-            await client.models.Location.locationsByProjectIdAndSource(
-              { projectId: project.id, source: { beginsWith: model.value } },
-              {
-                selectionSet: ['imageId', 'x', 'y'] as const,
-                filter: {
-                  confidence: { ge: threshold },
-                },
-                limit: 1000,
-                nextToken,
-              }
-            );
-          const page = (data || [])
-            .filter((l) => typeof l.imageId === 'string')
-            .map((l) => ({
-              imageId: l.imageId as string,
-              x: l.x as number,
-              y: l.y as number,
-            }));
-          modelLocs.push(...page);
-          nextToken = nt as string | null | undefined;
-        } while (nextToken);
+        if (typeof handleCreateTask !== 'function') return;
+        setSummaryMessage('Generating tiles...');
+        const request = await handleCreateTask();
+        tiles = generateTilesFromRequest(request);
       }
 
-      setScanMessage('Fetching annotations...');
-      const annotations: Array<{ imageId: string; x: number; y: number }> = [];
-      {
-        let nextToken: string | null | undefined = undefined;
-        do {
-          const { data, nextToken: nt } =
-            await client.models.Annotation.annotationsByAnnotationSetId(
-              { setId: annotationSet.id },
-              {
-                selectionSet: ['imageId', 'x', 'y'] as const,
-                limit: 1000,
-                nextToken,
-              }
-            );
-          const page = (data || [])
-            .filter((a) => typeof a.imageId === 'string')
-            .map((a) => ({
-              imageId: a.imageId as string,
-              x: a.x as number,
-              y: a.y as number,
-            }));
-          annotations.push(...page);
-          nextToken = nt as string | null | undefined;
-        } while (nextToken);
-      }
+      setExpectedTiles(tiles.length);
 
-      setScanMessage('Fetching image timestamps...');
-      const images: Array<{ id: string; timestamp?: Nullable<number> }> = [];
-      {
-        let nextToken: string | null | undefined = undefined;
-        do {
-          const { data, nextToken: nt } =
-            await client.models.Image.imagesByProjectId(
-              { projectId: project.id },
-              {
-                selectionSet: ['id', 'timestamp'] as const,
-                limit: 1000,
-                nextToken,
-              }
-            );
-          const page = (data || []).map((im) => ({
-            id: im.id as string,
-            timestamp: (im as { timestamp?: number | null }).timestamp ?? null,
-          }));
-          images.push(...page);
-          nextToken = nt as string | null | undefined;
-        } while (nextToken);
-      }
-
-      const imgTs = new Map<string, number>();
-      for (const im of images) {
-        imgTs.set(im.id, Number(im.timestamp ?? 0));
-      }
-
-      // Group detections and annotations by imageId
-      const detByImage = new Map<string, Array<{ x: number; y: number }>>();
-      for (const d of modelLocs) {
-        const list = detByImage.get(d.imageId) || [];
-        list.push({ x: d.x, y: d.y });
-        detByImage.set(d.imageId, list);
-      }
-      const annByImage = new Map<string, Array<{ x: number; y: number }>>();
-      for (const a of annotations) {
-        const list = annByImage.get(a.imageId) || [];
-        list.push({ x: a.x, y: a.y });
-        annByImage.set(a.imageId, list);
-      }
-
-      setScanMessage('Computing candidate tiles...');
-      const candidates: MinimalTile[] = [];
-      for (const t of tiles) {
-        const dets = detByImage.get(t.imageId) || [];
-        const anns = annByImage.get(t.imageId) || [];
-        const hasModel = dets.some((p) => isInsideTile(p.x, p.y, t));
-        const hasAnn = anns.some((p) => isInsideTile(p.x, p.y, t));
-        if (!hasModel && !hasAnn) candidates.push(t);
-      }
-
-      // Sort by parent image timestamp
-      candidates.sort((a, b) => imgTs.get(a.imageId)! - imgTs.get(b.imageId)!);
-      setCandidateCount(candidates.length);
-
-      const count = Math.floor(
-        (candidates.length * Math.max(0, Math.min(samplePercent, 100))) / 100
+      setSummaryMessage('Fetching model detections...');
+      const detectionPoints = await fetchDetectionPointsDetailed(
+        client,
+        project.id,
+        model.value,
+        threshold
       );
-      const sampled = randomSample(candidates, count);
-      selectedLocationIdsRef.current = sampled.map((t) => t.id);
-      setSelectedCount(selectedLocationIdsRef.current.length);
+
+      setSummaryMessage('Fetching annotations...');
+      const annotationPoints = await fetchAnnotationPointsDetailed(
+        client,
+        annotationSet.id
+      );
+
+      setSummaryMessage('Evaluating tiles...');
+      const candidates = tiles.filter((tile) => {
+        const dets = detectionPoints.get(tile.imageId) || [];
+        const anns = annotationPoints.get(tile.imageId) || [];
+        const hasDetection = dets.some((pt) =>
+          isInsideTile(pt.x, pt.y, tile)
+        );
+        const hasAnnotation = anns.some((pt) =>
+          isInsideTile(pt.x, pt.y, tile)
+        );
+        return !hasDetection && !hasAnnotation;
+      });
+      setCandidateTiles(candidates.length);
+
+      const detectionImages = Array.from(detectionPoints.values()).filter(
+        (arr) => arr.length > 0
+      ).length;
+      const detectionTotal = Array.from(detectionPoints.values()).reduce(
+        (sum, arr) => sum + arr.length,
+        0
+      );
+      const annotationImages = Array.from(annotationPoints.values()).filter(
+        (arr) => arr.length > 0
+      ).length;
+      const annotationTotal = Array.from(annotationPoints.values()).reduce(
+        (sum, arr) => sum + arr.length,
+        0
+      );
+      setAggregateSummary({
+        detectionImages,
+        annotationImages,
+        detectionTotal,
+        annotationTotal,
+      });
+
+      const normalizedPercent = Math.min(
+        Math.max(samplePercent, 0),
+        100
+      );
+      const availableTiles = candidates.length;
+      let estimatedSamples = Math.floor(
+        (availableTiles * normalizedPercent) / 100
+      );
+      if (
+        normalizedPercent > 0 &&
+        estimatedSamples === 0 &&
+        availableTiles > 0
+      ) {
+        estimatedSamples = 1;
+      }
+      setEstimatedSampleTiles(estimatedSamples);
+
+      setSummaryMessage('');
+    } catch (error) {
+      console.error('Summary calculation failed', error);
+      setSummaryMessage('Unable to compute summary');
     } finally {
-      setScanMessage('');
-      setScanning(false);
+      setSummaryLoading(false);
     }
   }, [
-    model,
-    threshold,
-    samplePercent,
-    useExistingTiled,
-    selectedTiledSetId,
-    handleCreateTask,
-    workingTileSetId,
-    client,
-    project.id,
     annotationSet.id,
+    client,
+    handleCreateTask,
+    model,
+    project.id,
+    samplePercent,
+    selectedTiledSetId,
+    threshold,
+    useExistingTiled,
   ]);
-
-  // Create queue helper similar to SpeciesLabelling
-  const createQueue = useCallback(
-    async (
-      name: string,
-      isHidden: boolean,
-      tag: string
-    ): Promise<{ id: string; url: string; batchSize: number } | null> => {
-      const safeName = makeSafeQueueName(name + '-' + crypto.randomUUID());
-      const sqsClient = await getSqsClient();
-      const result = await sqsClient.send(
-        new CreateQueueCommand({
-          QueueName: safeName,
-          Attributes: {
-            MessageRetentionPeriod: '1209600',
-          },
-        })
-      );
-      const url = result.QueueUrl as string | undefined;
-      if (!url) return null;
-      const { data: queue } = await client.models.Queue.create({
-        url,
-        name,
-        projectId: project.id,
-        batchSize: 200,
-        hidden: isHidden,
-        tag,
-        approximateSize: 1,
-      });
-      if (!queue) return null;
-      return { id: queue.id, url, batchSize: 200 };
-    },
-    [client.models.Queue, getSqsClient, project.id]
-  );
 
   // Expose launch handler to parent
   useEffect(() => {
     setFalseNegativesLaunchHandler(
       () => async (onProgress: (msg: string) => void) => {
-        const ids = selectedLocationIdsRef.current;
-        if (!ids || ids.length === 0) return;
-        const name = 'False Negatives';
-        onProgress('Creating queue...');
-        const queue = await createQueue(name, false, queueTag);
-        if (!queue) return;
+        if (!model) return;
+        let locationSetId: string | undefined;
+        let tiledRequestPayload: TiledLaunchRequest | null = null;
 
-        onProgress('Sending jobs...');
-        const batchSize = 10;
-        const sqsClient = await getSqsClient();
-        const totalBatches = Math.ceil(ids.length / queue.batchSize);
-        let sent = 0;
-        for (let i = 0; i < ids.length; i += batchSize) {
-          const batch = ids.slice(i, i + batchSize);
-          const entries = batch.map((locationId) => ({
-            Id: `msg-${locationId}`,
-            MessageBody: JSON.stringify({
-              location: { id: locationId, annotationSetId: annotationSet.id },
-              allowOutside: true,
-              taskTag: queueTag,
-              skipLocationWithAnnotations: false,
-            }),
-          }));
-          await sqsClient.send(
-            new SendMessageBatchCommand({
-              QueueUrl: queue.url,
-              Entries: entries,
-            })
-          );
-          sent += batch.length;
-          onProgress(`Queued ${sent} of ${ids.length}`);
+        if (useExistingTiled) {
+          if (!selectedTiledSetId) return;
+          locationSetId = selectedTiledSetId;
+        } else {
+          if (typeof handleCreateTask !== 'function') return;
+          onProgress('Preparing tiling request...');
+          tiledRequestPayload = await handleCreateTask();
         }
 
-        // Update queue info and link the task to the annotation set and tile set
-        await client.models.Queue.update({ id: queue.id, totalBatches });
-        const setId = useExistingTiled ? selectedTiledSetId : workingTileSetId;
-        if (setId) {
-          await client.models.TasksOnAnnotationSet.create({
+        const payload = {
+          projectId: project.id,
             annotationSetId: annotationSet.id,
-            locationSetId: setId,
-          });
-        }
-        onProgress('Launch complete');
+          queueOptions: {
+            name: 'False Negatives',
+            hidden: false,
+            fifo: false,
+          },
+          queueTag,
+          samplePercent,
+          threshold,
+          modelValue: model.value,
+          locationSetId,
+          tiledRequest: tiledRequestPayload,
+          batchSize: 200,
+        };
+
+        onProgress('Enqueuing jobs...');
+        sendLaunchFalseNegativesRequest(client, payload);
+        onProgress('Launch request submitted');
       }
     );
     return () => {
@@ -482,16 +350,16 @@ export default function FalseNegatives({
     };
   }, [
     annotationSet.id,
-    annotationSet.name,
-    createQueue,
-    client.models.Queue,
-    client.models.TasksOnAnnotationSet,
-    getSqsClient,
-    setFalseNegativesLaunchHandler,
-    useExistingTiled,
-    selectedTiledSetId,
-    workingTileSetId,
+    client,
+    handleCreateTask,
+    model,
+    project.id,
     queueTag,
+    samplePercent,
+    selectedTiledSetId,
+    setFalseNegativesLaunchHandler,
+    threshold,
+    useExistingTiled,
   ]);
 
   // modelOptions now derived from actual location sets; when exactly one, it's auto-selected
@@ -641,9 +509,14 @@ export default function FalseNegatives({
         >
           <div className='d-flex align-items-center justify-content-between'>
             <div className='text-white' style={{ fontSize: '12px' }}>
-              <div>Total tiles: {totalTiles}</div>
-              <div>Candidate tiles: {candidateCount}</div>
-              <div>Selected tiles: {selectedCount}</div>
+              <div>Expected tiles: {expectedTiles ?? '—'}</div>
+              <div>
+                Estimated candidate tiles: {candidateTiles ?? '—'}
+              </div>
+              <div>
+                Estimated launch ({samplePercent}%):{' '}
+                {estimatedSampleTiles ?? '—'}
+              </div>
             </div>
             <button
               type='button'
@@ -654,27 +527,242 @@ export default function FalseNegatives({
                 (useExistingTiled
                   ? !selectedTiledSetId
                   : typeof handleCreateTask !== 'function') ||
-                scanning
+                summaryLoading
               }
-              onClick={computeFalseNegativeTiles}
+              onClick={computeSummary}
             >
-              {scanning ? (
+              {summaryLoading ? (
                 <span className='d-inline-flex align-items-center'>
                   <Spinner animation='border' size='sm' className='me-2' />{' '}
-                  Scanning...
+                  Computing summary...
                 </span>
               ) : (
-                'Scan Tiles'
+                'Compute Summary'
               )}
             </button>
           </div>
-          {scanMessage && (
+          {summaryMessage && (
             <div className='mt-2 text-muted' style={{ fontSize: '12px' }}>
-              {scanMessage}
+              {summaryMessage}
+            </div>
+          )}
+          {aggregateSummary && (
+            <div className='mt-3 text-white' style={{ fontSize: '12px' }}>
+              <div>
+                Images with model detections:{' '}
+                {aggregateSummary.detectionImages} (
+                {aggregateSummary.detectionTotal} total detections)
+              </div>
+              <div>
+                Images with annotations: {aggregateSummary.annotationImages} (
+                {aggregateSummary.annotationTotal} total annotations)
+              </div>
             </div>
           )}
         </div>
       </div>
     </div>
   );
+}
+
+async function fetchTilesFromLocationSet(
+  client: any,
+  locationSetId: string
+): Promise<MinimalTile[]> {
+  const tiles: MinimalTile[] = [];
+  let nextToken: string | null | undefined = undefined;
+  do {
+    const { data, nextToken: nt } =
+      await client.models.Location.locationsBySetIdAndConfidence(
+        { setId: locationSetId },
+        {
+          selectionSet: ['id', 'imageId', 'x', 'y', 'width', 'height'] as const,
+          limit: 1000,
+          nextToken,
+        }
+      );
+    for (const item of data || []) {
+      if (!item?.id || !item?.imageId) continue;
+      tiles.push({
+        id: item.id as string,
+        imageId: item.imageId as string,
+        x: Number(item.x ?? 0),
+        y: Number(item.y ?? 0),
+        width: Number(item.width ?? 0),
+        height: Number(item.height ?? 0),
+      });
+    }
+    nextToken = nt as string | null | undefined;
+  } while (nextToken);
+  return tiles;
+}
+
+function generateTilesFromRequest(
+  request: TiledLaunchRequest
+): MinimalTile[] {
+  const tiles: MinimalTile[] = [];
+  const baselineWidth = Math.max(0, request.maxX - request.minX);
+  const baselineHeight = Math.max(0, request.maxY - request.minY);
+  const baselineIsLandscape = baselineWidth >= baselineHeight;
+  let counter = 0;
+
+  for (const image of request.images) {
+    const imageIsLandscape = image.width >= image.height;
+    const swapTileForImage = baselineIsLandscape !== imageIsLandscape;
+    const tileWidthForImage = swapTileForImage ? request.height : request.width;
+    const tileHeightForImage = swapTileForImage ? request.width : request.height;
+    const horizontalTilesForImage = swapTileForImage
+      ? request.verticalTiles
+      : request.horizontalTiles;
+    const verticalTilesForImage = swapTileForImage
+      ? request.horizontalTiles
+      : request.verticalTiles;
+    const roiMinXForImage = swapTileForImage ? request.minY : request.minX;
+    const roiMinYForImage = swapTileForImage ? request.minX : request.minY;
+    const roiMaxXForImage = swapTileForImage ? request.maxY : request.maxX;
+    const roiMaxYForImage = swapTileForImage ? request.maxX : request.maxY;
+
+    const effectiveW = Math.max(0, roiMaxXForImage - roiMinXForImage);
+    const effectiveH = Math.max(0, roiMaxYForImage - roiMinYForImage);
+    const xStepSize =
+      horizontalTilesForImage > 1
+        ? (effectiveW - tileWidthForImage) / (horizontalTilesForImage - 1)
+        : 0;
+    const yStepSize =
+      verticalTilesForImage > 1
+        ? (effectiveH - tileHeightForImage) / (verticalTilesForImage - 1)
+        : 0;
+
+    for (let xStep = 0; xStep < horizontalTilesForImage; xStep++) {
+      for (let yStep = 0; yStep < verticalTilesForImage; yStep++) {
+        const x = Math.round(
+          roiMinXForImage +
+            (horizontalTilesForImage > 1 ? xStep * xStepSize : 0) +
+            tileWidthForImage / 2
+        );
+        const y = Math.round(
+          roiMinYForImage +
+            (verticalTilesForImage > 1 ? yStep * yStepSize : 0) +
+            tileHeightForImage / 2
+        );
+        tiles.push({
+          id: `${image.id}-${counter++}`,
+          imageId: image.id,
+          x,
+          y,
+          width: tileWidthForImage,
+          height: tileHeightForImage,
+        });
+      }
+    }
+  }
+
+  return tiles;
+}
+
+async function fetchDetectionPointsDetailed(
+  client: any,
+  projectId: string,
+  modelValue: string,
+  threshold: number
+): Promise<Map<string, Array<{ x: number; y: number }>>> {
+  const map = new Map<string, Array<{ x: number; y: number }>>();
+  let nextToken: string | null | undefined = undefined;
+  do {
+    const { data, nextToken: nt } =
+      await client.models.Location.locationsByProjectIdAndSource(
+        { projectId, source: { beginsWith: modelValue } },
+        {
+          selectionSet: ['imageId', 'x', 'y'] as const,
+          filter: {
+            confidence: { ge: threshold },
+          },
+          limit: 1000,
+          nextToken,
+        }
+      );
+    for (const item of data || []) {
+      const imageId = item?.imageId as string | undefined;
+      if (!imageId) continue;
+      const list = map.get(imageId) || [];
+      list.push({
+        x: Number(item.x ?? 0),
+        y: Number(item.y ?? 0),
+      });
+      map.set(imageId, list);
+    }
+    nextToken = nt as string | null | undefined;
+  } while (nextToken);
+  return map;
+}
+
+async function fetchAnnotationPointsDetailed(
+  client: any,
+  annotationSetId: string
+): Promise<Map<string, Array<{ x: number; y: number }>>> {
+  const map = new Map<string, Array<{ x: number; y: number }>>();
+  let nextToken: string | null | undefined = undefined;
+  do {
+    const { data, nextToken: nt } =
+      await client.models.Annotation.annotationsByAnnotationSetId(
+        { setId: annotationSetId },
+        {
+          selectionSet: ['imageId', 'x', 'y'] as const,
+          limit: 1000,
+          nextToken,
+        }
+      );
+    for (const item of data || []) {
+      const imageId = item?.imageId as string | undefined;
+      if (!imageId) continue;
+      const list = map.get(imageId) || [];
+      list.push({
+        x: Number(item.x ?? 0),
+        y: Number(item.y ?? 0),
+      });
+      map.set(imageId, list);
+    }
+    nextToken = nt as string | null | undefined;
+  } while (nextToken);
+  return map;
+}
+
+async function sendLaunchFalseNegativesRequest(
+  client: any,
+  payload: Record<string, unknown>
+) {
+  try {
+    await (client.mutations as any).launchFalseNegatives({
+      request: JSON.stringify(payload),
+    });
+  } catch (error: any) {
+    if (shouldIgnoreLaunchError(error)) {
+      console.warn('Ignoring launch lambda timeout response', error);
+      return;
+    }
+    throw error;
+  }
+}
+
+function shouldIgnoreLaunchError(error: any): boolean {
+  const messages: string[] = [];
+  if (error?.message) messages.push(String(error.message));
+  if (Array.isArray(error?.errors)) {
+    for (const err of error.errors) {
+      if (err?.message) messages.push(String(err.message));
+    }
+  }
+  return messages.some((msg) =>
+    /timed out|timeout|Task timed out|socket hang up/i.test(msg)
+  );
+}
+
+function isInsideTile(px: number, py: number, tile: MinimalTile): boolean {
+  const halfW = tile.width / 2;
+  const halfH = tile.height / 2;
+  const minX = tile.x - halfW;
+  const maxX = tile.x + halfW;
+  const minY = tile.y - halfH;
+  const maxY = tile.y + halfH;
+  return px >= minX && px <= maxX && py >= minY && py <= maxY;
 }
