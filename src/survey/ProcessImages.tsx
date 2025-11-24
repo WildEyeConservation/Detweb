@@ -1,12 +1,11 @@
 import { Form, Spinner, Button } from 'react-bootstrap';
 import { Footer } from '../Modal';
 import { useState, useContext, useEffect, useCallback, useRef } from 'react';
-import { GlobalContext, UserContext } from '../Context';
+import { GlobalContext } from '../Context';
 import Select from 'react-select';
 
 export default function ProcessImages({ projectId }: { projectId: string }) {
   const { client, backend, showModal } = useContext(GlobalContext)!;
-  const { getSqsClient } = useContext(UserContext)!;
   const [model, setModel] = useState<{ label: string; value: string } | null>(
     null
   );
@@ -30,6 +29,36 @@ export default function ProcessImages({ projectId }: { projectId: string }) {
     };
   }, []);
 
+  const findLocationSetByName = useCallback(
+    async (name: string) => {
+      let nextToken: string | null | undefined = undefined;
+      do {
+        const res = await client.models.LocationSet.locationSetsByProjectId(
+          {
+            projectId,
+            nextToken,
+          } as {
+            projectId: string;
+            nextToken?: string | null;
+          },
+          {
+            selectionSet: ['id', 'name'],
+            limit: 1000,
+          }
+        );
+        const match =
+          res.data?.find((ls: { name?: string | null }) => ls?.name === name) ??
+          null;
+        if (match) {
+          return match;
+        }
+        nextToken = res.nextToken as string | null | undefined;
+      } while (nextToken);
+      return null;
+    },
+    [client.models.LocationSet, projectId]
+  );
+
   const scanImages = useCallback(async () => {
     if (!model) return;
     setLoading(true);
@@ -46,7 +75,12 @@ export default function ProcessImages({ projectId }: { projectId: string }) {
         { projectId },
         { selectionSet: ['id', 'originalPath'], nextToken, limit: 1000 }
       );
-      const page: { id: string; originalPath: string }[] = res.data ?? [];
+      const page =
+        (res.data ?? []).flatMap((img) =>
+          img?.id && img?.originalPath
+            ? [{ id: img.id, originalPath: img.originalPath }]
+            : []
+        );
       allImages = allImages.concat(page);
       nextToken = res.nextToken as string | null | undefined;
       imgCount += page.length;
@@ -72,8 +106,12 @@ export default function ProcessImages({ projectId }: { projectId: string }) {
           limit: 1000,
         }
       );
-      const page: { id: string; imageId: string; source: string }[] =
-        res.data ?? [];
+      const page =
+        (res.data ?? []).flatMap((loc) =>
+          loc?.id && loc?.imageId && loc?.source
+            ? [{ id: loc.id, imageId: loc.imageId, source: loc.source }]
+            : []
+        );
       allLocations = allLocations.concat(page);
       nextToken = res.nextToken as string | null | undefined;
       locCount += page.length;
@@ -113,12 +151,20 @@ export default function ProcessImages({ projectId }: { projectId: string }) {
     setDisabled(true);
     setLoading(true);
 
-    const { data: locationSet } = await client.models.LocationSet.create({
-      name: projectId + `_${model.value}`,
-      projectId: projectId,
-    });
-
+    const scoutbotSetName = `${projectId}_scoutbot`;
+    let locationSet =
+      (await findLocationSetByName(scoutbotSetName)) ??
+      null;
     if (!locationSet) {
+      const { data: createdLocationSet } =
+        await client.models.LocationSet.create({
+          name: scoutbotSetName,
+          projectId: projectId,
+        });
+      locationSet = createdLocationSet ?? null;
+    }
+
+    if (!locationSet?.id) {
       console.error('Failed to create location set');
       alert('Something went wrong, please try again.');
       return;
