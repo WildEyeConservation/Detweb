@@ -1,6 +1,6 @@
 import { Button, Form } from 'react-bootstrap';
 import { Modal, Body, Header, Footer, Title } from '../Modal';
-import { useState, useContext } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import { Tabs, Tab } from '../Tabs';
 import { Schema } from '../amplify/client-schema';
 import { GlobalContext } from '../Context';
@@ -13,10 +13,15 @@ export default function LaunchAnnotationSetModal({
   show,
   project,
   annotationSet,
+  onOptimisticStatus,
 }: {
   show: boolean;
   project: Schema['Project']['type'];
   annotationSet: Schema['AnnotationSet']['type'];
+  onOptimisticStatus?: (
+    projectId: string,
+    status: Schema['Project']['type']['status']
+  ) => void;
 }) {
   const [taskType, setTaskType] = useState<TaskType>('species-labelling');
   const [launching, setLaunching] = useState(false);
@@ -33,6 +38,12 @@ export default function LaunchAnnotationSetModal({
   // set up queue creation helper
   const { client, showModal } = useContext(GlobalContext)! as any;
 
+  useEffect(() => {
+    if (taskType === 'registration') {
+      setLaunchDisabled(false);
+    }
+  }, [taskType]);
+
   function onClose() {
     setTaskType('species-labelling');
     setProgressMessage('');
@@ -46,9 +57,14 @@ export default function LaunchAnnotationSetModal({
       id: annotationSet.id,
       register: true,
     });
+    await client.mutations.updateProjectMemberships({
+      projectId: project.id,
+    });
   }
 
   async function handleSubmit() {
+    const originalStatus = project.status ?? 'active';
+    let optimisticStatusApplied = false;
     if (
       taskType === 'species-labelling' &&
       typeof speciesLaunchHandler !== 'function'
@@ -61,46 +77,50 @@ export default function LaunchAnnotationSetModal({
       return;
     setLaunching(true);
 
-    await client.models.Project.update({
-      id: project.id,
-      status: 'launching',
-    });
+    let dispatched: Promise<void> | null = null;
 
-    await client.mutations.updateProjectMemberships({
-      projectId: project.id,
-    });
+    try {
+      switch (taskType) {
+        case 'species-labelling':
+          if (typeof speciesLaunchHandler === 'function') {
+            setProgressMessage('Initializing launch...');
+            onOptimisticStatus?.(project.id, 'launching');
+            optimisticStatusApplied = true;
+            dispatched = speciesLaunchHandler(
+              setProgressMessage
+            ) as Promise<void>;
+          }
+          break;
+        case 'false-negatives':
+          if (typeof falseNegativesLaunchHandler === 'function') {
+            setProgressMessage('Initializing launch...');
+            onOptimisticStatus?.(project.id, 'launching');
+            optimisticStatusApplied = true;
+            dispatched = falseNegativesLaunchHandler(
+              setProgressMessage
+            ) as Promise<void>;
+          }
+          break;
+        case 'registration':
+          await createRegistrationTask();
+          break;
+      }
 
-    switch (taskType) {
-      case 'species-labelling':
-        if (typeof speciesLaunchHandler === 'function') {
-          setProgressMessage('Initializing launch...');
-          await speciesLaunchHandler(setProgressMessage);
-        }
-        break;
-      case 'false-negatives':
-        if (typeof falseNegativesLaunchHandler === 'function') {
-          setProgressMessage('Initializing launch...');
-          await falseNegativesLaunchHandler(setProgressMessage);
-        }
-        break;
-      case 'registration':
-        await createRegistrationTask();
-        break;
+      if (dispatched) {
+        await dispatched;
+      }
+    } catch (error) {
+      console.error('Launch error', error);
+      if (optimisticStatusApplied) {
+        onOptimisticStatus?.(project.id, originalStatus);
+      }
+      throw error;
+    } finally {
+      setLaunching(false);
+      onClose();
+      setTaskType('species-labelling');
+      setProgressMessage('');
     }
-
-    await client.models.Project.update({
-      id: project.id,
-      status: 'active',
-    });
-
-    await client.mutations.updateProjectMemberships({
-      projectId: project.id,
-    });
-
-    setLaunching(false);
-    onClose();
-    setTaskType('species-labelling');
-    setProgressMessage('');
   }
 
   return (
@@ -155,7 +175,12 @@ export default function LaunchAnnotationSetModal({
           </Tabs>
         </Form>
         {progressMessage && (
-          <p className='mt-3 text-center text-muted'>{progressMessage}</p>
+          <div className='mt-3 text-center text-muted d-flex justify-content-center align-items-center gap-2'>
+            <span role='status' aria-live='polite'>
+              <span className='spinner-border spinner-border-sm me-2' />
+              {progressMessage}
+            </span>
+          </div>
         )}
         <Footer>
           <Button

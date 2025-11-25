@@ -2,11 +2,9 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { Form } from 'react-bootstrap';
 import Select from 'react-select';
-import { CreateQueueCommand } from '@aws-sdk/client-sqs';
 import { Schema } from '../amplify/client-schema';
-import { GlobalContext, UserContext } from '../Context';
+import { GlobalContext } from '../Context';
 import { useLaunchTask } from '../useLaunchTask';
-import { makeSafeQueueName } from '../utils';
 import CreateTask from '../CreateTask';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
 
@@ -28,7 +26,6 @@ export default function SpeciesLabelling({
   >;
 }) {
   const { client } = useContext(GlobalContext)!;
-  const { getSqsClient } = useContext(UserContext)!;
 
   const [batchSize, setBatchSize] = useState<number>(200);
   const [showAdvancedOptions, setShowAdvancedOptions] =
@@ -62,50 +59,6 @@ export default function SpeciesLabelling({
     { label: string; value: string }[]
   >([]);
 
-  // queue helper used by useLaunchTask
-  const createQueue = async (
-    name: string,
-    isHidden: boolean,
-    fifo: boolean,
-    tag: string
-  ): Promise<{ id: string; url: string; batchSize: number } | null> => {
-    const safeName =
-      makeSafeQueueName(name + crypto.randomUUID()) + (fifo ? '.fifo' : '');
-
-    return getSqsClient()
-      .then((sqsClient) =>
-        sqsClient.send(
-          new CreateQueueCommand({
-            QueueName: safeName,
-            Attributes: {
-              MessageRetentionPeriod: '1209600',
-              FifoQueue: fifo ? 'true' : undefined,
-            },
-          })
-        )
-      )
-      .then(async (result: any) => {
-        const url = (result && result.QueueUrl) as string | undefined;
-        if (url) {
-          const { data: queue } = await (client.models.Queue.create as any)({
-            url,
-            name: name,
-            projectId: project.id,
-            batchSize: batchSize,
-            hidden: isHidden,
-            zoom: zoom,
-            tag: tag,
-            approximateSize: 1,
-          });
-
-          if (queue) {
-            return { id: queue.id, url: url, batchSize: batchSize };
-          }
-        }
-        return null;
-      });
-  };
-
   const launchTask = useLaunchTask({
     allowOutside: allowAnnotationsOutsideLocationBoundaries,
     filterObserved: viewUnobservedLocationsOnly,
@@ -114,7 +67,9 @@ export default function SpeciesLabelling({
     skipLocationWithAnnotations: skipLocationsWithAnnotations,
     taskTag: taskTag,
     annotationSetId: annotationSet.id,
-    createQueue,
+    projectId: project.id,
+    batchSize,
+    zoom: zoom as number | undefined,
   });
 
   // load model options from location sets
@@ -361,27 +316,26 @@ export default function SpeciesLabelling({
           },
         });
       } else {
-        let tiledSetIdToUse: string | null = null;
+        const selectedTaskIds: string[] = [];
+        let tiledRequest: any = null;
         if (useExistingTiledRef.current && selectedTiledSetIdRef.current) {
-          tiledSetIdToUse = selectedTiledSetIdRef.current;
+          selectedTaskIds.push(selectedTiledSetIdRef.current);
         } else {
           const createTask = handleCreateTaskRef.current;
           if (!createTask) return;
-          tiledSetIdToUse = await createTask({
-            setLocationsCompleted: () => {},
-            setTotalLocations: () => {},
-          });
+          tiledRequest = await createTask();
         }
-        if (!tiledSetIdToUse) return;
+        if (!tiledRequest && selectedTaskIds.length === 0) return;
         onProgress('Initializing launch...');
         await launchTaskRef.current({
-          selectedTasks: [tiledSetIdToUse],
+          selectedTasks: selectedTaskIds,
           onProgress,
           queueOptions: {
             name: 'Tiled Annotation',
             hidden: hiddenRef.current,
             fifo: false,
           },
+          tiledRequest,
         });
       }
     });

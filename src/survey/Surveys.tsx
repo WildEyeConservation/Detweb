@@ -269,7 +269,9 @@ export default function Surveys() {
                   style={{ fontSize: '14px', width: 'fit-content' }}
                   bg={'info'}
                 >
-                  {project.status.includes('processing')
+                  {project.status === 'launching'
+                    ? 'Launching - please wait'
+                    : project.status.includes('processing')
                     ? 'Processing'
                     : project.status.replace(/\b\w/g, (char) =>
                         char.toUpperCase()
@@ -726,6 +728,16 @@ export default function Surveys() {
           onClose={() => showModal(null)}
           annotationSet={selectedAnnotationSet}
           project={selectedProject}
+          onOptimisticStatus={(projectId, status) => {
+            setProjects((prevProjects) =>
+              prevProjects.map((project) =>
+                project.id === projectId ? { ...project, status } : project
+              )
+            );
+            setSelectedProject((prev) =>
+              prev && prev.id === projectId ? { ...prev, status } : prev
+            );
+          }}
         />
       )}
       {selectedProject && (

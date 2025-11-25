@@ -16,6 +16,9 @@ import { deleteProject } from '../functions/deleteProject/resource';
 import { generateSurveyResults } from '../functions/generateSurveyResults/resource';
 import { getJwtSecret } from '../functions/getJwtSecret/resource';
 import { runMadDetector } from '../functions/runMadDetector/resource';
+import { launchAnnotationSet } from '../functions/launchAnnotationSet/resource';
+import { launchFalseNegatives } from '../functions/launchFalseNegatives/resource';
+import { requeueProjectQueues } from '../functions/requeueProjectQueues/resource';
 // import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
@@ -368,6 +371,7 @@ const schema = a
         image2Id: a.id().required(),
         image2: a.belongsTo('Image', 'image2Id'),
         homography: a.float().array(),
+        homographySource: a.string(),
       })
       .authorization((allow) => [allow.authenticated()])
       .identifier(['image1Id', 'image2Id'])
@@ -390,6 +394,8 @@ const schema = a
         // used in conjuction with the cleanupJobs function (every 15m) to determine if the queue is still active
         approximateSize: a.integer(),
         tag: a.string(),
+        requeueAt: a.string(),
+        updatedAt: a.string(),
       })
       .authorization((allow) => [allow.authenticated()])
       //.authorization(allow => [allow.groupDefinedIn('projectId')])
@@ -890,6 +896,22 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(generateSurveyResults)),
+    launchAnnotationSet: a
+      .mutation()
+      .arguments({
+        request: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(launchAnnotationSet)),
+    launchFalseNegatives: a
+      .mutation()
+      .arguments({
+        request: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(launchFalseNegatives)),
     getJwtSecret: a
       .mutation()
       .returns(a.string())
@@ -907,6 +929,9 @@ const schema = a
     allow.resource(runHeatmapper),
     allow.resource(runPointFinder),
     allow.resource(runMadDetector),
+    allow.resource(launchAnnotationSet),
+    allow.resource(launchFalseNegatives),
+    allow.resource(requeueProjectQueues),
     allow.resource(deleteProject),
     allow.resource(generateSurveyResults),
     allow.resource(getJwtSecret),

@@ -625,6 +625,26 @@ export function FileUploadCore({
     }
   };
 
+  // Helper to get image dimensions from the file itself (fallback when EXIF is missing)
+  async function getImageDimensionsFromFile(file: File): Promise<{
+    width: number;
+    height: number;
+  }> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve({ width: 0, height: 0 });
+      };
+      img.src = url;
+    });
+  }
+
   async function getExifmeta(file: File) {
     const tags = await exifr.parse(file, {
       pick: [
@@ -663,8 +683,17 @@ export function FileUploadCore({
       timestamp = file.lastModified;
     }
 
-    const imageWidth = tags?.ImageWidth ?? tags?.ExifImageWidth ?? 0;
-    const imageHeight = tags?.ImageHeight ?? tags?.ExifImageHeight ?? 0;
+    let imageWidth = tags?.ImageWidth ?? tags?.ExifImageWidth ?? 0;
+    let imageHeight = tags?.ImageHeight ?? tags?.ExifImageHeight ?? 0;
+
+    // Fallback to reading dimensions from the file if EXIF doesn't have them
+    if (imageWidth === 0 || imageHeight === 0) {
+      const fileDims = await getImageDimensionsFromFile(file);
+      if (fileDims.width > 0 && fileDims.height > 0) {
+        imageWidth = fileDims.width;
+        imageHeight = fileDims.height;
+      }
+    }
 
     // GPS handling: prefer decimal latitude/longitude if provided, else compute from DMS
     let lat: any = tags?.latitude ?? tags?.GPSLatitude;
@@ -953,10 +982,19 @@ export function FileUploadCore({
       timestamp = file.lastModified;
     }
 
-    const imageWidth =
+    let imageWidth =
       (tags as any)?.ImageWidth ?? (tags as any)?.ExifImageWidth ?? 0;
-    const imageHeight =
+    let imageHeight =
       (tags as any)?.ImageHeight ?? (tags as any)?.ExifImageHeight ?? 0;
+
+    // Fallback to reading dimensions from the file if EXIF doesn't have them
+    if (imageWidth === 0 || imageHeight === 0) {
+      const fileDims = await getImageDimensionsFromFile(file);
+      if (fileDims.width > 0 && fileDims.height > 0) {
+        imageWidth = fileDims.width;
+        imageHeight = fileDims.height;
+      }
+    }
 
     return {
       key: file.webkitRelativePath,
@@ -1363,11 +1401,26 @@ export function FileUploadCore({
           continue;
         }
 
+        // Validate width and height are valid positive numbers
+        const width = exifmeta.width;
+        const height = exifmeta.height;
+        if (
+          !Number.isFinite(width) ||
+          !Number.isFinite(height) ||
+          width <= 0 ||
+          height <= 0
+        ) {
+          console.warn(
+            `Skipping image ${file.webkitRelativePath} due to invalid dimensions (width: ${width}, height: ${height}).`
+          );
+          continue;
+        }
+
         const altitudeValue = gpsData.alt;
 
         images.push({
-          width: exifmeta.width,
-          height: exifmeta.height,
+          width,
+          height,
           timestamp: Math.floor(exifmeta.timestamp / 1000),
           cameraSerial: exifmeta.cameraSerial,
           originalPath: file.webkitRelativePath,
