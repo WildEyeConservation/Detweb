@@ -168,6 +168,7 @@ export function ManualHomographyEditor({
       image1Id: images[nb1 ? 0 : 1].id,
       image2Id: images[nb1 ? 1 : 0].id,
       homography: nb1 ? flat : flatInverse,
+      homographySource: 'manual',
     });
 
     // Force-refetch neighbours for both images so Registration and BaseImage overlays recompute

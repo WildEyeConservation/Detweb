@@ -371,6 +371,7 @@ const schema = a
         image2Id: a.id().required(),
         image2: a.belongsTo('Image', 'image2Id'),
         homography: a.float().array(),
+        homographySource: a.string(),
       })
       .authorization((allow) => [allow.authenticated()])
       .identifier(['image1Id', 'image2Id'])
