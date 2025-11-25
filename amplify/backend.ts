@@ -168,11 +168,17 @@ const groupDynamoDbQueryPolicy = new iam.PolicyStatement({
   ],
 });
 
+const groupEcsListPolicy = new iam.PolicyStatement({
+  actions: ['ecs:ListClusters', 'ecs:DescribeClusters', 'ecs:ListServices', 'ecs:DescribeServices'],
+  resources: ['*'],
+});
+
 authenticatedRole.addToPrincipalPolicy(sqsCreateQueueStatement);
 authenticatedRole.addToPrincipalPolicy(sqsConsumeQueueStatement);
 authenticatedRole.addToPrincipalPolicy(cognitoAdmin);
 authenticatedRole.addToPrincipalPolicy(lambdaInvoke);
 authenticatedRole.addToPrincipalPolicy(generalBucketPolicy);
+authenticatedRole.addToPrincipalPolicy(groupEcsListPolicy);
 
 // Ensure every Cognito group role has consistent S3/Dynamo/SQS capabilities.
 Object.values(backend.auth.resources.groups).forEach(({ role }) => {
@@ -184,6 +190,7 @@ Object.values(backend.auth.resources.groups).forEach(({ role }) => {
   role.addToPrincipalPolicy(sqsCreateQueueStatement);
   role.addToPrincipalPolicy(sqsConsumeQueueStatement);
   role.addToPrincipalPolicy(groupS3OutputsReadPolicy);
+  role.addToPrincipalPolicy(groupEcsListPolicy);
 });
 
 // Add the Sharp layer and throttle concurrency on the image upload Lambda.
