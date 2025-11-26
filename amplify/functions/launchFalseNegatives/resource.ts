@@ -4,5 +4,6 @@ export const launchFalseNegatives = defineFunction({
   name: 'launchFalseNegatives',
   timeoutSeconds: 900,
   runtime: 20,
+  memoryMB: 2048,
 });
 
