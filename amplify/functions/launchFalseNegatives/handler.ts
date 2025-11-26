@@ -121,6 +121,25 @@ type MinimalTile = {
   height: number;
 };
 
+// Simple timer helper to keep logging consistent.
+async function withTiming<T>(label: string, action: () => Promise<T>): Promise<T> {
+  const start = Date.now();
+  console.log(`[Timing] ${label} start`);
+  try {
+    const result = await action();
+    console.log(`[Timing] ${label} complete`, {
+      durationMs: Date.now() - start,
+    });
+    return result;
+  } catch (error) {
+    console.error(`[Timing] ${label} failed`, {
+      durationMs: Date.now() - start,
+      error: (error as Error)?.message ?? 'unknown error',
+    });
+    throw error;
+  }
+}
+
 // AppSync resolver entry; wraps orchestration in error handling.
 export const handler: Handler = async (event) => {
   try {
@@ -168,21 +187,46 @@ async function handleLaunch(payload: LaunchFalseNegativesPayload) {
 
   const locationSetId =
     (payload.locationSetId as string | undefined) ??
-    (await createTiledLocationSet(projectId, payload.tiledRequest));
+    (await withTiming('createTiledLocationSet', () =>
+      createTiledLocationSet(projectId, payload.tiledRequest)
+    ));
 
-  const tiles = await fetchTiles(locationSetId);
+  const tiles = await withTiming('fetchTiles', () => fetchTiles(locationSetId));
+  console.log('Fetched tiles', {
+    locationSetId,
+    tileCount: tiles.length,
+  });
   if (tiles.length === 0) {
     throw new Error('No tiles available for false negatives workflow');
   }
 
-  const detectionMap = await fetchDetectionPoints(
-    projectId,
-    payload.modelValue,
-    payload.threshold
+  const detectionMap = await withTiming('fetchDetectionPoints', () =>
+    fetchDetectionPoints(projectId, payload.modelValue, payload.threshold)
   );
-  const annotationMap = await fetchAnnotationPoints(annotationSetId);
-  const imageTimestamps = await fetchImageTimestamps(projectId);
+  console.log('Fetched detection points', {
+    projectId,
+    modelValue: payload.modelValue,
+    threshold: payload.threshold,
+    detectionImageCount: detectionMap.size,
+  });
 
+  const annotationMap = await withTiming('fetchAnnotationPoints', () =>
+    fetchAnnotationPoints(annotationSetId)
+  );
+  console.log('Fetched annotations', {
+    annotationSetId,
+    annotationImageCount: annotationMap.size,
+  });
+
+  const imageTimestamps = await withTiming('fetchImageTimestamps', () =>
+    fetchImageTimestamps(projectId)
+  );
+  console.log('Fetched image timestamps', {
+    projectId,
+    imageCount: imageTimestamps.size,
+  });
+
+  const candidateTimingStart = Date.now();
   const candidates = tiles.filter((tile) => {
     const detections = detectionMap.get(tile.imageId) || [];
     const annotations = annotationMap.get(tile.imageId) || [];
@@ -193,6 +237,11 @@ async function handleLaunch(payload: LaunchFalseNegativesPayload) {
       isInsideTile(point.x, point.y, tile)
     );
     return !hasDetection && !hasAnnotation;
+  });
+  console.log('Candidate filtering complete', {
+    totalTiles: tiles.length,
+    candidateCount: candidates.length,
+    durationMs: Date.now() - candidateTimingStart,
   });
 
   candidates.sort((a, b) => {
@@ -212,10 +261,18 @@ async function handleLaunch(payload: LaunchFalseNegativesPayload) {
     sampleCount = 1;
   }
 
+  const selectionStart = Date.now();
   const selectedTiles =
     sampleCount > 0 && sampleCount < candidates.length
       ? randomSample(candidates, sampleCount)
       : candidates.slice();
+  console.log('Tile sampling complete', {
+    requestedPercent: payload.samplePercent,
+    normalizedPercent,
+    sampleCount,
+    selectedTiles: selectedTiles.length,
+    durationMs: Date.now() - selectionStart,
+  });
 
   if (selectedTiles.length === 0) {
     await setProjectStatus(projectId, 'active');
@@ -232,39 +289,41 @@ async function handleLaunch(payload: LaunchFalseNegativesPayload) {
     selectedTiles: selectedTiles.length,
   });
 
-  const queue = await createQueue(
-    payload.queueOptions,
-    payload.queueTag,
-    projectId,
-    workerBatchSize
+  const queue = await withTiming('createQueue', () =>
+    createQueue(payload.queueOptions, payload.queueTag, projectId, workerBatchSize)
   );
 
-  await enqueueTiles(queue.url, selectedTiles, annotationSetId, payload.queueTag);
+  await withTiming('enqueueTiles', () =>
+    enqueueTiles(queue.url, selectedTiles, annotationSetId, payload.queueTag)
+  );
 
-  await executeGraphql<{ updateQueue?: { id: string } }>(
-    updateQueueMutation,
-    {
+  await withTiming('updateQueueMetadata', () =>
+    executeGraphql<{ updateQueue?: { id: string } }>(updateQueueMutation, {
       input: {
         id: queue.id,
         totalBatches: Math.ceil(selectedTiles.length / workerBatchSize),
       },
-    }
+    })
   );
 
-  await executeGraphql<{ createTasksOnAnnotationSet?: { id: string } }>(
-    createTasksOnAnnotationSetMutation,
-    {
-      input: {
-        annotationSetId,
-        locationSetId,
-      },
-    }
+  await withTiming('createTasksOnAnnotationSet', () =>
+    executeGraphql<{ createTasksOnAnnotationSet?: { id: string } }>(
+      createTasksOnAnnotationSetMutation,
+      {
+        input: {
+          annotationSetId,
+          locationSetId,
+        },
+      }
+    )
   );
 
   await setProjectStatus(projectId, 'active');
-  await executeGraphql<{ updateProjectMemberships?: string | null }>(
-    updateProjectMembershipsMutation,
-    { projectId }
+  await withTiming('refreshProjectMemberships', () =>
+    executeGraphql<{ updateProjectMemberships?: string | null }>(
+      updateProjectMembershipsMutation,
+      { projectId }
+    )
   );
 
   console.log('False negatives launch complete', {
@@ -555,6 +614,7 @@ async function enqueueTiles(
   const limit = pLimit(10);
   const tasks: Array<Promise<void>> = [];
   const groupId = randomUUID();
+  const dispatchStart = Date.now();
 
   console.log('Dispatching SQS batches', {
     queueUrl,
@@ -596,6 +656,11 @@ async function enqueueTiles(
   }
 
   await Promise.all(tasks);
+  console.log('Finished dispatching SQS batches', {
+    queueUrl,
+    totalTiles: tiles.length,
+    durationMs: Date.now() - dispatchStart,
+  });
 }
 
 // Query SQS to see if the queue expects FIFO behavior.
@@ -632,6 +697,14 @@ async function createTiledLocationSet(
     throw new Error('Tiled launch requires at least one image');
   }
 
+  console.log('Creating tiled location set', {
+    projectId,
+    name: tiledRequest.name,
+    imageCount: tiledRequest.images.length,
+    locationCount: tiledRequest.locationCount,
+  });
+
+  const creationStart = Date.now();
   const locationSetData = await executeGraphql<{
     createLocationSet?: { id: string };
   }>(createLocationSetMutation, {
@@ -648,7 +721,8 @@ async function createTiledLocationSet(
     throw new Error('Unable to create location set');
   }
 
-  const limit = pLimit(10);
+  const creationConcurrency = 100;
+  const creationLimit = pLimit(creationConcurrency);
   const creationTasks: Array<Promise<void>> = [];
 
   const baselineWidth = Math.max(0, tiledRequest.maxX - tiledRequest.minX);
@@ -708,7 +782,7 @@ async function createTiledLocationSet(
         );
 
         creationTasks.push(
-          limit(async () => {
+          creationLimit(async () => {
             await executeGraphql<{
               createLocation?: { id: string };
             }>(createLocationMutation, {
@@ -734,6 +808,8 @@ async function createTiledLocationSet(
   console.log('Created tiled locations', {
     locationSetId,
     total: creationTasks.length,
+    durationMs: Date.now() - creationStart,
+    concurrency: creationConcurrency,
   });
   return locationSetId;
 }
@@ -772,14 +848,13 @@ function makeSafeQueueName(input: string): string {
 
 // Persist project status transitions for UI feedback.
 async function setProjectStatus(projectId: string, status: string) {
-  await executeGraphql<{ updateProject?: { id: string } }>(
-    updateProjectMutation,
-    {
+  await withTiming(`setProjectStatus:${status}`, () =>
+    executeGraphql<{ updateProject?: { id: string } }>(updateProjectMutation, {
       input: {
         id: projectId,
         status,
       },
-    }
+    })
   );
 }
 

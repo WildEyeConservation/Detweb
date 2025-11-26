@@ -235,6 +235,8 @@ export default function useSQS(
             );
           }
         };
+        // Attach revalidate function for last-resort filtering when shown to user
+        body.revalidate = () => filterPredicate(body);
         if (await filterPredicate(body)) {
           return body;
         } else {
