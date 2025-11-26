@@ -6,6 +6,7 @@ import { GlobalContext } from '../Context';
 import CreateTask from '../CreateTask';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
 import type { TiledLaunchRequest } from '../types/LaunchTask';
+import { DataClient } from '../../amplify/shared/data-schema.generated';
 
 type LaunchHandler = (onProgress: (msg: string) => void) => Promise<void>;
 
@@ -87,7 +88,9 @@ export default function FalseNegatives({
       setLoadingModels(true);
       const resp1 = await client.models.LocationSet.locationSetsByProjectId(
         { projectId: project.id },
-        { selectionSet: ['id', 'name', 'description', 'locationCount'] as const }
+        {
+          selectionSet: ['id', 'name', 'description', 'locationCount'] as const,
+        }
       );
       const data = resp1.data as Array<{
         id: string;
@@ -153,7 +156,9 @@ export default function FalseNegatives({
                   ? ls.locationCount
                   : undefined,
               tilesPerImage:
-                horizontal > 0 && vertical > 0 ? horizontal * vertical : undefined,
+                horizontal > 0 && vertical > 0
+                  ? horizontal * vertical
+                  : undefined,
             });
           }
         } catch {}
@@ -239,12 +244,8 @@ export default function FalseNegatives({
       const candidates = tiles.filter((tile) => {
         const dets = detectionPoints.get(tile.imageId) || [];
         const anns = annotationPoints.get(tile.imageId) || [];
-        const hasDetection = dets.some((pt) =>
-          isInsideTile(pt.x, pt.y, tile)
-        );
-        const hasAnnotation = anns.some((pt) =>
-          isInsideTile(pt.x, pt.y, tile)
-        );
+        const hasDetection = dets.some((pt) => isInsideTile(pt.x, pt.y, tile));
+        const hasAnnotation = anns.some((pt) => isInsideTile(pt.x, pt.y, tile));
         return !hasDetection && !hasAnnotation;
       });
       setCandidateTiles(candidates.length);
@@ -270,10 +271,7 @@ export default function FalseNegatives({
         annotationTotal,
       });
 
-      const normalizedPercent = Math.min(
-        Math.max(samplePercent, 0),
-        100
-      );
+      const normalizedPercent = Math.min(Math.max(samplePercent, 0), 100);
       const availableTiles = candidates.length;
       let estimatedSamples = Math.floor(
         (availableTiles * normalizedPercent) / 100
@@ -325,7 +323,7 @@ export default function FalseNegatives({
 
         const payload = {
           projectId: project.id,
-            annotationSetId: annotationSet.id,
+          annotationSetId: annotationSet.id,
           queueOptions: {
             name: 'False Negatives',
             hidden: false,
@@ -510,9 +508,7 @@ export default function FalseNegatives({
           <div className='d-flex align-items-center justify-content-between'>
             <div className='text-white' style={{ fontSize: '12px' }}>
               <div>Expected tiles: {expectedTiles ?? '—'}</div>
-              <div>
-                Estimated candidate tiles: {candidateTiles ?? '—'}
-              </div>
+              <div>Estimated candidate tiles: {candidateTiles ?? '—'}</div>
               <div>
                 Estimated launch ({samplePercent}%):{' '}
                 {estimatedSampleTiles ?? '—'}
@@ -549,9 +545,8 @@ export default function FalseNegatives({
           {aggregateSummary && (
             <div className='mt-3 text-white' style={{ fontSize: '12px' }}>
               <div>
-                Images with model detections:{' '}
-                {aggregateSummary.detectionImages} (
-                {aggregateSummary.detectionTotal} total detections)
+                Images with model detections: {aggregateSummary.detectionImages}{' '}
+                ({aggregateSummary.detectionTotal} total detections)
               </div>
               <div>
                 Images with annotations: {aggregateSummary.annotationImages} (
@@ -566,7 +561,7 @@ export default function FalseNegatives({
 }
 
 async function fetchTilesFromLocationSet(
-  client: any,
+  client: DataClient,
   locationSetId: string
 ): Promise<MinimalTile[]> {
   const tiles: MinimalTile[] = [];
@@ -597,9 +592,7 @@ async function fetchTilesFromLocationSet(
   return tiles;
 }
 
-function generateTilesFromRequest(
-  request: TiledLaunchRequest
-): MinimalTile[] {
+function generateTilesFromRequest(request: TiledLaunchRequest): MinimalTile[] {
   const tiles: MinimalTile[] = [];
   const baselineWidth = Math.max(0, request.maxX - request.minX);
   const baselineHeight = Math.max(0, request.maxY - request.minY);
@@ -610,7 +603,9 @@ function generateTilesFromRequest(
     const imageIsLandscape = image.width >= image.height;
     const swapTileForImage = baselineIsLandscape !== imageIsLandscape;
     const tileWidthForImage = swapTileForImage ? request.height : request.width;
-    const tileHeightForImage = swapTileForImage ? request.width : request.height;
+    const tileHeightForImage = swapTileForImage
+      ? request.width
+      : request.height;
     const horizontalTilesForImage = swapTileForImage
       ? request.verticalTiles
       : request.horizontalTiles;
@@ -661,7 +656,7 @@ function generateTilesFromRequest(
 }
 
 async function fetchDetectionPointsDetailed(
-  client: any,
+  client: DataClient,
   projectId: string,
   modelValue: string,
   threshold: number
@@ -697,7 +692,7 @@ async function fetchDetectionPointsDetailed(
 }
 
 async function fetchAnnotationPointsDetailed(
-  client: any,
+  client: DataClient,
   annotationSetId: string
 ): Promise<Map<string, Array<{ x: number; y: number }>>> {
   const map = new Map<string, Array<{ x: number; y: number }>>();
@@ -728,11 +723,11 @@ async function fetchAnnotationPointsDetailed(
 }
 
 async function sendLaunchFalseNegativesRequest(
-  client: any,
+  client: DataClient,
   payload: Record<string, unknown>
 ) {
   try {
-    await (client.mutations as any).launchFalseNegatives({
+    await client.mutations.launchFalseNegatives({
       request: JSON.stringify(payload),
     });
   } catch (error: any) {

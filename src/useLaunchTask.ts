@@ -5,6 +5,7 @@ import type {
   LaunchQueueOptions,
   TiledLaunchRequest,
 } from './types/LaunchTask';
+import type { DataClient } from '../amplify/shared/data-schema.generated';
 
 // Types for options and function arguments
 export type LaunchTaskOptions = {
@@ -216,11 +217,11 @@ export function useLaunchTask(
 }
 
 async function sendLaunchLambdaRequest(
-  client: any,
+  client: DataClient,
   payload: LaunchLambdaPayload
 ) {
   try {
-    await (client.mutations as any).launchAnnotationSet({
+    await client.mutations.launchAnnotationSet({
       request: JSON.stringify(payload),
     });
   } catch (error: any) {

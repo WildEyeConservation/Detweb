@@ -958,6 +958,8 @@ export type ListUsersHandler = MutationHandler<{ nextToken?: string | null }>;
 export type ListGroupsForUserHandler = MutationHandler<{ userId: string; nextToken?: string | null }>;
 export type DeleteProjectInFullHandler = MutationHandler<{ projectId: string }>;
 export type GenerateSurveyResultsHandler = MutationHandler<{ surveyId: string; annotationSetId: string; categoryIds: string[] }>;
+export type LaunchAnnotationSetHandler = MutationHandler<{ request: string }>;
+export type LaunchFalseNegativesHandler = MutationHandler<{ request: string }>;
 export const data = defineData({
   schema,
   authorizationModes: {
