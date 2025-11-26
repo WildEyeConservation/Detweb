@@ -1,4 +1,4 @@
-import { useContext, useState, useEffect } from 'react';
+import { useContext, useState, useEffect, useRef } from 'react';
 import AnnotationImage from './AnnotationImage';
 import { RegisterPair } from './RegisterPair';
 import { GlobalContext, UserContext } from './Context';
@@ -19,6 +19,22 @@ interface TaskSelectorProps {
 export function TaskSelector(props: TaskSelectorProps) {
   const { client } = useContext(GlobalContext)!;
   const [element, setElement] = useState<JSX.Element | null>(null);
+  const hasRevalidated = useRef(false);
+
+  // Last-resort revalidation when this item becomes visible
+  // This catches cases where annotations were added after the initial filter passed
+  useEffect(() => {
+    if (props.visible && props.revalidate && !hasRevalidated.current) {
+      hasRevalidated.current = true;
+      props.revalidate().then((isValid: boolean) => {
+        if (!isValid) {
+          console.log('Revalidation failed - skipping location with new annotations');
+          props.ack?.();
+          props.next?.();
+        }
+      });
+    }
+  }, [props.visible, props.revalidate, props.ack, props.next]);
 
   useEffect(() => {
     if (props.location) {
