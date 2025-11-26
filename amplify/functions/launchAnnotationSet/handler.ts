@@ -9,6 +9,11 @@ import {
   SendMessageBatchCommand,
   SQSClient,
 } from '@aws-sdk/client-sqs';
+import {
+  S3Client,
+  GetObjectCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
 import pLimit from 'p-limit';
 import {
@@ -65,6 +70,16 @@ const sqsClient = new SQSClient({
   },
 });
 
+// S3 client for reading large payloads uploaded by the frontend.
+const s3Client = new S3Client({
+  region: env.AWS_REGION,
+  credentials: {
+    accessKeyId: env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+    sessionToken: env.AWS_SESSION_TOKEN,
+  },
+});
+
 // Minimal type helpers for payload parsing and validation.
 type LaunchQueueOptions = {
   name: string;
@@ -106,6 +121,8 @@ type LaunchLambdaPayload = {
   locationIds?: string[];
   locationSetIds?: string[];
   tiledRequest?: TiledLaunchRequest | null;
+  /** S3 key where the full payload is stored (for large payloads). */
+  payloadS3Key?: string;
 };
 
 type QueueRecord = {
@@ -115,8 +132,17 @@ type QueueRecord = {
 
 // Entry point invoked by AppSync resolver.
 export const handler: Handler = async (event) => {
+  let payloadS3Key: string | undefined;
   try {
-    const payload = parsePayload(event.arguments?.request);
+    let payload = parsePayload(event.arguments?.request);
+
+    // If a payloadS3Key is provided, fetch the full payload from S3.
+    if (payload.payloadS3Key) {
+      payloadS3Key = payload.payloadS3Key;
+      console.log('Reading payload from S3', { key: payloadS3Key });
+      payload = await readPayloadFromS3(payloadS3Key);
+    }
+
     console.log(
       'launchAnnotationSet invoked',
       JSON.stringify({
@@ -133,12 +159,26 @@ export const handler: Handler = async (event) => {
       { projectId: payload.projectId }
     );
     const result = await handleLaunch(payload);
+
+    // Clean up the S3 payload file after successful processing.
+    if (payloadS3Key) {
+      await deletePayloadFromS3(payloadS3Key);
+    }
+
     return {
       statusCode: 200,
       body: JSON.stringify(result),
     };
   } catch (error: any) {
     console.error('Error launching annotation set', error);
+    // Attempt to clean up even on error to avoid orphaned files.
+    if (payloadS3Key) {
+      try {
+        await deletePayloadFromS3(payloadS3Key);
+      } catch (cleanupError) {
+        console.warn('Failed to clean up S3 payload after error', cleanupError);
+      }
+    }
     return {
       statusCode: 500,
       body: JSON.stringify({
@@ -244,10 +284,53 @@ function parsePayload(request: unknown): LaunchLambdaPayload {
     throw new Error('Launch payload is required');
   }
   const parsed = JSON.parse(request);
+  // Allow a minimal payload with just payloadS3Key for S3-based large payloads.
+  if (parsed?.payloadS3Key) {
+    return parsed as LaunchLambdaPayload;
+  }
   if (!parsed?.projectId || !parsed?.annotationSetId || !parsed?.queueOptions) {
     throw new Error('Launch payload missing required fields');
   }
   return parsed as LaunchLambdaPayload;
+}
+
+// Read the full payload from S3 when it exceeds inline limits.
+async function readPayloadFromS3(key: string): Promise<LaunchLambdaPayload> {
+  const bucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!bucketName) {
+    throw new Error('OUTPUTS_BUCKET_NAME environment variable not set');
+  }
+  const response = await s3Client.send(
+    new GetObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    })
+  );
+  const bodyStr = await response.Body?.transformToString();
+  if (!bodyStr) {
+    throw new Error('Empty payload from S3');
+  }
+  const parsed = JSON.parse(bodyStr);
+  if (!parsed?.projectId || !parsed?.annotationSetId || !parsed?.queueOptions) {
+    throw new Error('S3 payload missing required fields');
+  }
+  return parsed as LaunchLambdaPayload;
+}
+
+// Delete the payload file from S3 after processing.
+async function deletePayloadFromS3(key: string): Promise<void> {
+  const bucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!bucketName) {
+    console.warn('OUTPUTS_BUCKET_NAME not set, cannot delete payload');
+    return;
+  }
+  await s3Client.send(
+    new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    })
+  );
+  console.log('Deleted S3 payload', { key });
 }
 
 // Create an SQS queue plus the matching AppSync metadata row.

@@ -1,5 +1,6 @@
 import { useContext, useCallback } from 'react';
 import { QueryCommand } from '@aws-sdk/client-dynamodb';
+import { uploadData } from 'aws-amplify/storage';
 import { GlobalContext, UserContext } from './Context';
 import type {
   LaunchQueueOptions,
@@ -216,13 +217,42 @@ export function useLaunchTask(
   return launchTask;
 }
 
+// Threshold in bytes above which we upload the payload to S3.
+// Lambda sync limit is 6MB, but we use a conservative threshold.
+const PAYLOAD_SIZE_THRESHOLD = 200 * 1024; // 200KB
+
 async function sendLaunchLambdaRequest(
   client: DataClient,
   payload: LaunchLambdaPayload
 ) {
+  const payloadStr = JSON.stringify(payload);
+  const payloadSize = new Blob([payloadStr]).size;
+
+  let requestPayload: string;
+
+  if (payloadSize > PAYLOAD_SIZE_THRESHOLD) {
+    // Upload large payload to S3 and send only the reference.
+    const s3Key = `launch-payloads/${crypto.randomUUID()}.json`;
+    console.log(
+      `Payload size ${payloadSize} exceeds threshold, uploading to S3`,
+      { key: s3Key }
+    );
+    await uploadData({
+      path: s3Key,
+      data: payloadStr,
+      options: {
+        bucket: 'outputs',
+        contentType: 'application/json',
+      },
+    }).result;
+    requestPayload = JSON.stringify({ payloadS3Key: s3Key });
+  } else {
+    requestPayload = payloadStr;
+  }
+
   try {
     await client.mutations.launchAnnotationSet({
-      request: JSON.stringify(payload),
+      request: requestPayload,
     });
   } catch (error: any) {
     if (shouldIgnoreLaunchError(error)) {

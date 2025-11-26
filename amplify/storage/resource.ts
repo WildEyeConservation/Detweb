@@ -4,6 +4,8 @@ import { processImages } from "../functions/processImages/resource"
 import { runPointFinder } from "../functions/runPointFinder/resource"
 import { runHeatmapper } from "../functions/runHeatmapper/resource"
 import { monitorModelProgress } from "../functions/monitorModelProgress/resource"
+import { launchAnnotationSet } from "../functions/launchAnnotationSet/resource"
+import { launchFalseNegatives } from "../functions/launchFalseNegatives/resource"
 
 export const outputBucket = defineStorage({
   name: "outputs",
@@ -19,6 +21,11 @@ export const outputBucket = defineStorage({
       allow.resource(runHeatmapper).to(['read']),
       allow.resource(monitorModelProgress).to(['read']),
       allow.authenticated.to(['read'])
+    ],
+    'launch-payloads/*': [
+      allow.authenticated.to(['write']),
+      allow.resource(launchAnnotationSet).to(['read', 'delete']),
+      allow.resource(launchFalseNegatives).to(['read', 'delete'])
     ]
   })
 })
