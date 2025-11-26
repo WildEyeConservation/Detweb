@@ -74,8 +74,8 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
     setLoadingStatus('Fetching images...');
 
     try {
-      const images = await fetchAllPaginatedResults<any, any>(
-        client.models.Image.imagesByProjectId as any,
+      const images = await fetchAllPaginatedResults(
+        client.models.Image.imagesByProjectId,
         {
           projectId,
           selectionSet: [
@@ -101,7 +101,7 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
       const pathMap: Record<string, string | undefined> = {};
       for (const img of images) {
         sizeMap[img.id] = { width: img.width, height: img.height };
-        pathMap[img.id] = img.originalPath;
+        pathMap[img.id] = img.originalPath ?? '';
       }
 
       const unique: Map<string, NeighbourGeoJSON> = new Map();
@@ -185,7 +185,7 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
 
       exportFromJSON({
         data: Array.from(unique.values()),
-        fileName: `${project.name}_neighbours`,
+        fileName: `${project!.name}_neighbours`,
         exportType: exportFromJSON.types.csv,
       });
     } catch (e: any) {
@@ -196,10 +196,64 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
     }
   }, [client, projectId, buildGeoJSON]);
 
+  async function exportScoutbotResults() {
+    setLoading(true);
+    setError(null);
+    setLoadingStatus('Exporting scoutbot results...');
+
+    try {
+      const { data: project } = await client.models.Project.get(
+        { id: projectId },
+        { selectionSet: ['name'] }
+      );
+
+      const locations = await fetchAllPaginatedResults(
+        client.models.Location.locationsByProjectIdAndSource,
+        {
+          projectId: projectId,
+          source: { beginsWith: 'scoutbotv3' },
+          selectionSet: [
+            'image.originalPath',
+            'confidence',
+            'x',
+            'y',
+            'width',
+            'height',
+          ],
+          limit: 1000,
+        },
+        (stepsCompleted) => {
+          setLoadingStatus(
+            `Fetching scoutbot results... (${stepsCompleted} fetched)`
+          );
+        }
+      );
+
+      exportFromJSON({
+        data: locations.map((location) => ({
+          image: location.image.originalPath ?? '',
+          confidence: location.confidence ?? 0,
+          x: location.x,
+          y: location.y,
+          width: location.width ?? 0,
+          height: location.height ?? 0,
+        })),
+        fileName: `${project!.name}_scoutbot_results`,
+        exportType: exportFromJSON.types.csv,
+      });
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to export scoutbot results');
+    } finally {
+      setLoading(false);
+      setLoadingStatus('');
+    }
+  }
+
   return (
     <>
       <div className='d-flex flex-column gap-2 p-3'>
-        <div>
+        {/* Export image neighbours */}
+        {/* <div>
           <h5 className='mb-0'>Export image neighbours</h5>
           <span className='text-muted' style={{ fontSize: '14px' }}>
             Export the image neighbours of all images in GeoJSON format.
@@ -212,6 +266,23 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
             {loading ? loadingStatus || 'Exporting...' : 'Export'}
           </Button>
           {error && <span className='text-danger'>{error}</span>}
+        </div> */}
+        {/* Export scoutbot results */}
+        <div>
+          <h5 className='mb-0'>Export scoutbot detections</h5>
+          <span className='text-muted' style={{ fontSize: '14px' }}>
+            Export the scoutbot detections for all images in the survey.
+          </span>
+          <Button
+            className='d-block mt-2'
+            onClick={exportScoutbotResults}
+            disabled={loading}
+          >
+            {loading ? 'Exporting...' : 'Export'}
+          </Button>
+          <span className='text-muted' style={{ fontSize: '14px' }}>
+            {loadingStatus}
+          </span>
         </div>
       </div>
       <Footer>

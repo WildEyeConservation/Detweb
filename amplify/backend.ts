@@ -158,6 +158,12 @@ const groupS3OutputsReadPolicy = new iam.PolicyStatement({
   resources: ['arn:aws:s3:::*/slippymaps/*', 'arn:aws:s3:::*/heatmaps/*'],
 });
 
+// Allow writing launch payloads to the outputs bucket
+const groupS3LaunchPayloadsPolicy = new iam.PolicyStatement({
+  actions: ['s3:PutObject'],
+  resources: ['arn:aws:s3:::*/launch-payloads/*'],
+});
+
 // Allow Cognito group roles to query DynamoDB tables and GSIs without
 // referencing specific data resources to avoid circular dependencies.
 const groupDynamoDbQueryPolicy = new iam.PolicyStatement({
@@ -179,6 +185,7 @@ authenticatedRole.addToPrincipalPolicy(cognitoAdmin);
 authenticatedRole.addToPrincipalPolicy(lambdaInvoke);
 authenticatedRole.addToPrincipalPolicy(generalBucketPolicy);
 authenticatedRole.addToPrincipalPolicy(groupEcsListPolicy);
+authenticatedRole.addToPrincipalPolicy(groupS3LaunchPayloadsPolicy);
 
 // Ensure every Cognito group role has consistent S3/Dynamo/SQS capabilities.
 Object.values(backend.auth.resources.groups).forEach(({ role }) => {
@@ -191,6 +198,7 @@ Object.values(backend.auth.resources.groups).forEach(({ role }) => {
   role.addToPrincipalPolicy(sqsConsumeQueueStatement);
   role.addToPrincipalPolicy(groupS3OutputsReadPolicy);
   role.addToPrincipalPolicy(groupEcsListPolicy);
+  role.addToPrincipalPolicy(groupS3LaunchPayloadsPolicy);
 });
 
 // Add the Sharp layer and throttle concurrency on the image upload Lambda.
