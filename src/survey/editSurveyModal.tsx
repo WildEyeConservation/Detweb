@@ -8,6 +8,7 @@ import DefineTransects from './DefineTransects';
 import EditInformation from './EditInformation';
 import EditCameras from './EditCameras';
 import AdvancedOptions from './AdvancedOptions';
+import DeleteImages from './DeleteImages';
 
 export default function EditSurveyModal({
   show,
@@ -42,6 +43,9 @@ export default function EditSurveyModal({
           </Tab>
           <Tab label='Define Transects & Strata'>
             <DefineTransects key={project.id} projectId={project.id} />
+          </Tab>
+          <Tab label='Delete Images'>
+            <DeleteImages key={project.id} projectId={project.id} />
           </Tab>
           <Tab label='Advanced Options'>
             <AdvancedOptions key={project.id} projectId={project.id} />
