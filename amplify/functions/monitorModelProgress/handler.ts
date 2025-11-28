@@ -94,7 +94,8 @@ async function fetchAllPages<T, K extends string>(
   queryFn: (
     nextToken?: string
   ) => Promise<GraphQLResult<{ [key in K]: PagedList<T> }>>,
-  queryName: K
+  queryName: K,
+  onProgress?: (count: number) => void
 ): Promise<T[]> {
   const allItems: T[] = [];
   let nextToken: string | undefined;
@@ -104,6 +105,11 @@ async function fetchAllPages<T, K extends string>(
     const items = response.data?.[queryName]?.items ?? [];
     allItems.push(...(items as T[]));
     nextToken = response.data?.[queryName]?.nextToken ?? undefined;
+    
+    // Log progress at 1000 intervals if callback provided
+    if (onProgress && allItems.length % 1000 === 0) {
+      onProgress(allItems.length);
+    }
   } while (nextToken);
 
   console.log(
@@ -133,7 +139,10 @@ async function updateProgress(
           nextToken,
         },
       }) as Promise<GraphQLResult<{ listLocations: PagedList<Location> }>>,
-    'listLocations'
+    'listLocations',
+    (count) => {
+      console.log(`Fetched ${count} locations for project ${project.id}`);
+    }
   );
 
   console.log(
