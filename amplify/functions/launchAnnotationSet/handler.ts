@@ -499,6 +499,7 @@ async function createTiledLocationSet(
 
   const limit = pLimit(10);
   const createTasks: Array<Promise<string>> = [];
+  let createdCount = 0;
 
   const baselineWidth = Math.max(0, tiledRequest.maxX - tiledRequest.minX);
   const baselineHeight = Math.max(0, tiledRequest.maxY - tiledRequest.minY);
@@ -576,6 +577,13 @@ async function createTiledLocationSet(
             const locationId = locationData.createLocation?.id;
             if (!locationId) {
               throw new Error('Failed to create location');
+            }
+            createdCount += 1;
+            if (createdCount % 1000 === 0) {
+              console.log('Created tiled locations progress', {
+                locationSetId,
+                createdCount,
+              });
             }
             return locationId;
           })

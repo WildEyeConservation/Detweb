@@ -199,7 +199,7 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
           fetchAllPaginatedResults<Schema['Project']['type']>(
             client.models.Project.list,
             {
-              selectionSet: ['id', 'name', 'createdAt', 'organizationId'],
+              selectionSet: ['id', 'name', 'createdAt', 'organizationId', 'tags'],
             }
           ),
           fetchAllPaginatedResults<Schema['Image']['type']>(
@@ -216,17 +216,17 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
               selectionSet: ['id', 'createdAt', 'projectId'],
             }
           ),
-          // Totals (all-time): fetch only ids to minimize payload
-          fetchAllPaginatedResults<Pick<Schema['Image']['type'], 'id'>>(
+          // Totals (all-time): fetch ids and projectId to allow filtering
+          fetchAllPaginatedResults<Pick<Schema['Image']['type'], 'id' | 'projectId'>>(
             client.models.Image.list,
             {
-              selectionSet: ['id'],
+              selectionSet: ['id', 'projectId'],
             } as any
           ),
-          fetchAllPaginatedResults<Pick<Schema['Annotation']['type'], 'id'>>(
+          fetchAllPaginatedResults<Pick<Schema['Annotation']['type'], 'id' | 'projectId'>>(
             client.models.Annotation.list,
             {
-              selectionSet: ['id'],
+              selectionSet: ['id', 'projectId'],
             } as any
           ),
           fetchAllPaginatedResults<Schema['ClientLog']['type']>(
@@ -239,6 +239,30 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
         ]);
 
         if (cancelled) return;
+
+        // Filter out projects with "test" tag
+        const projectsFiltered = projectsAll.filter(
+          (p) => !p.tags?.includes('test')
+        );
+        const testProjectIds = new Set(
+          projectsAll
+            .filter((p) => p.tags?.includes('test'))
+            .map((p) => p.id)
+        );
+
+        // Filter out images and annotations belonging to test projects
+        const imagesWindowFiltered = imagesWindow.filter(
+          (img) => !testProjectIds.has(img.projectId as string)
+        );
+        const annotationsWindowFiltered = annotationsWindow.filter(
+          (ann) => !testProjectIds.has(ann.projectId as string)
+        );
+        const imagesAllIdsFiltered = imagesAllIds.filter(
+          (img) => !testProjectIds.has((img as any).projectId as string)
+        );
+        const annotationsAllIdsFiltered = annotationsAllIds.filter(
+          (ann) => !testProjectIds.has((ann as any).projectId as string)
+        );
 
         // Users total from Cognito
         const usersTotal = cognitoUsers.length;
@@ -328,11 +352,11 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
           series: { months, values: orgSeriesArr },
         });
 
-        // Surveys (Projects)
-        const projTotals = projectsAll.length;
+        // Surveys (Projects) - excluding test projects
+        const projTotals = projectsFiltered.length;
         const projSeriesArr = Array(months.length).fill(0);
         let projThisMonth = 0;
-        for (const p of projectsAll) {
+        for (const p of projectsFiltered) {
           const mk = monthKeyFromISO(p.createdAt);
           if (mk && monthIndex.has(mk)) {
             projSeriesArr[monthIndex.get(mk)!] += 1;
@@ -345,14 +369,14 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
           series: { months, values: projSeriesArr },
         });
 
-        // Images
+        // Images - excluding those from test projects
         const imageSeriesArr = Array(months.length).fill(0);
-        for (const img of imagesWindow) {
+        for (const img of imagesWindowFiltered) {
           const mk = monthKeyFromISO(img.createdAt);
           if (mk && monthIndex.has(mk))
             imageSeriesArr[monthIndex.get(mk)!] += 1;
         }
-        const imageTotal = imagesAllIds.length;
+        const imageTotal = imagesAllIdsFiltered.length;
         const imageThisMonth =
           imageSeriesArr[monthIndex.get(thisMonthKey)!] || 0;
         setImageMetric({
@@ -361,13 +385,13 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
           series: { months, values: imageSeriesArr },
         });
 
-        // Annotations
+        // Annotations - excluding those from test projects
         const annSeriesArr = Array(months.length).fill(0);
-        for (const ann of annotationsWindow) {
+        for (const ann of annotationsWindowFiltered) {
           const mk = monthKeyFromISO(ann.createdAt);
           if (mk && monthIndex.has(mk)) annSeriesArr[monthIndex.get(mk)!] += 1;
         }
-        const annTotal = annotationsAllIds.length;
+        const annTotal = annotationsAllIdsFiltered.length;
         const annThisMonth = annSeriesArr[monthIndex.get(thisMonthKey)!] || 0;
         setAnnotationMetric({
           total: annTotal,
@@ -375,19 +399,19 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
           series: { months, values: annSeriesArr },
         });
 
-        // Breakdown by Organization → Project with totals and thisMonth
+        // Breakdown by Organization → Project with totals and thisMonth (excluding test projects)
         const orgNameById = new Map(orgsAll.map((o) => [o.id, o.name]));
         const projectsByOrg = new Map<string, Schema['Project']['type'][]>();
-        for (const p of projectsAll) {
+        for (const p of projectsFiltered) {
           const list = projectsByOrg.get(p.organizationId) || [];
           list.push(p);
           projectsByOrg.set(p.organizationId, list);
         }
 
-        // Pre-aggregate counts by project
+        // Pre-aggregate counts by project (using filtered data)
         const imagesByProjectTotal = new Map<string, number>();
         const imagesByProjectThisMonth = new Map<string, number>();
-        for (const img of imagesWindow) {
+        for (const img of imagesWindowFiltered) {
           const pid = (img.projectId || '') as string;
           const mk = monthKeyFromISO(img.createdAt);
           imagesByProjectTotal.set(
@@ -405,7 +429,7 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
 
         const annsByProjectTotal = new Map<string, number>();
         const annsByProjectThisMonth = new Map<string, number>();
-        for (const ann of annotationsWindow) {
+        for (const ann of annotationsWindowFiltered) {
           const pid = (ann.projectId || '') as string;
           const mk = monthKeyFromISO(ann.createdAt);
           annsByProjectTotal.set(pid, (annsByProjectTotal.get(pid) || 0) + 1);
@@ -519,15 +543,42 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
 
   const refresh = () => setVersion((v) => v + 1);
 
+  // Ensure series values always match current months length to prevent chart errors during timeframe transitions
+  const normalizeSeries = (series: MetricSeries): MetricSeries => {
+    if (series.values.length === months.length) return series;
+    return {
+      months,
+      values: Array(months.length)
+        .fill(0)
+        .map((_, i) => series.values[i] ?? 0),
+    };
+  };
+
   return {
     loading,
     error,
     months,
-    users: usersMetric,
-    organizations: orgMetric,
-    surveys: surveyMetric,
-    images: imageMetric,
-    annotations: annotationMetric,
+    users: {
+      ...usersMetric,
+      series: normalizeSeries(usersMetric.series),
+      uniqueLoginSeries: normalizeSeries(usersMetric.uniqueLoginSeries),
+    },
+    organizations: {
+      ...orgMetric,
+      series: normalizeSeries(orgMetric.series),
+    },
+    surveys: {
+      ...surveyMetric,
+      series: normalizeSeries(surveyMetric.series),
+    },
+    images: {
+      ...imageMetric,
+      series: normalizeSeries(imageMetric.series),
+    },
+    annotations: {
+      ...annotationMetric,
+      series: normalizeSeries(annotationMetric.series),
+    },
     breakdown,
     refresh,
   };
