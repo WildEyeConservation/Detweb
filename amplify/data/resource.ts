@@ -117,6 +117,7 @@ const schema = a
         camera: a.belongsTo('Camera', 'cameraId'),
         transectId: a.id(),
         transect: a.belongsTo('Transect', 'transectId'),
+        processedBy: a.hasMany('ImageProcessedBy', 'imageId'),
         // sets: [ImageSet] @manyToMany(relationName: "ImageSetMembership")
         //   leftNeighbours: [ImageNeighbour] @hasMany(indexName:"bySecondNeighbour",fields:["key"])
         //   rightNeighbours: [ImageNeighbour] @hasMany(indexName:"byFirstNeighbour",fields:["key"])
@@ -142,6 +143,21 @@ const schema = a
       .secondaryIndexes((index) => [
         index('imageId').queryField('imagesByimageId'),
         index('path').queryField('imagesByPath'),
+      ]),
+    // Tracks which models have processed each image
+    ImageProcessedBy: a
+      .model({
+        imageId: a.id().required(),
+        image: a.belongsTo('Image', 'imageId'),
+        source: a.string().required(), // e.g., 'scoutbotv3', 'mad-v2', 'pointfinder'
+        projectId: a.id().required(),
+      })
+      .identifier(['imageId', 'source'])
+      .authorization((allow) => [allow.authenticated()])
+      .secondaryIndexes((index) => [
+        index('projectId')
+          .sortKeys(['source'])
+          .queryField('processedByProjectIdAndSource'),
       ]),
     AnnotationSet: a
       .model({

@@ -51,12 +51,14 @@ export function useLaunchTask(
   const { client, backend } = useContext(GlobalContext)!;
   const { getDynamoClient } = useContext(UserContext)!;
 
+  type LocationWithConfidence = { id: string; confidence: number };
+
   async function queryLocations(
     locationSetId: string,
     onProgress?: (message: string) => void
-  ): Promise<string[]> {
+  ): Promise<LocationWithConfidence[]> {
     const dynamoClient = await getDynamoClient();
-    const locationIds: string[] = [];
+    const locations: LocationWithConfidence[] = [];
     let lastEvaluatedKey: Record<string, any> | undefined = undefined;
     onProgress?.(`Querying locations...`);
     do {
@@ -71,13 +73,14 @@ export function useLaunchTask(
           ':upperLimit': { N: options.upperLimit.toString() },
         },
         ProjectionExpression: 'id, x, y, width, height, confidence',
+        ScanIndexForward: false, // Descending order by confidence
         ExclusiveStartKey: lastEvaluatedKey,
         Limit: 1000,
       });
       try {
         const response = await dynamoClient.send(command);
         const items = response.Items || [];
-        const pageLocationIds = items
+        const pageLocations = items
           .filter((item: any) => {
             const x = parseFloat(item.x?.N || '0');
             const y = parseFloat(item.y?.N || '0');
@@ -92,9 +95,12 @@ export function useLaunchTask(
               confidence !== 0
             );
           })
-          .map((item: any) => item.id.S);
-        locationIds.push(...pageLocationIds);
-        onProgress?.(`Loaded ${locationIds.length} locations`);
+          .map((item: any) => ({
+            id: item.id.S as string,
+            confidence: parseFloat(item.confidence?.N || '0'),
+          }));
+        locations.push(...pageLocations);
+        onProgress?.(`Loaded ${locations.length} locations`);
         lastEvaluatedKey = response.LastEvaluatedKey as
           | Record<string, any>
           | undefined;
@@ -103,7 +109,7 @@ export function useLaunchTask(
         throw error;
       }
     } while (lastEvaluatedKey);
-    return locationIds;
+    return locations;
   }
 
   async function queryObservations(
@@ -156,31 +162,38 @@ export function useLaunchTask(
 
       if (!tiledRequest) {
       const allSeenLocations = options.filterObserved
-        ? await queryObservations(options.annotationSetId, onProgress)
-        : [];
-      let allLocations = (
+        ? new Set(await queryObservations(options.annotationSetId, onProgress))
+        : new Set<string>();
+
+      // Collect locations from all sets, filter observed, and sort by confidence (descending)
+      const allLocationsWithConfidence = (
         await Promise.all(
           selectedTasks.map((task) => queryLocations(task, onProgress))
         )
       )
         .flat()
-        .filter((l) => !allSeenLocations.includes(l));
+        .filter((l) => !allSeenLocations.has(l.id))
+        .sort((a, b) => b.confidence - a.confidence); // High confidence first
 
+      // Extract IDs for interleaving (now sorted by confidence)
+      let allLocationIds = allLocationsWithConfidence.map((l) => l.id);
+
+      // Interleave locations to distribute across confidence levels
       const chunkSize = 100;
-      const passes = Math.ceil(allLocations.length / chunkSize);
+      const passes = Math.ceil(allLocationIds.length / chunkSize);
       const interleavedLocations: string[] = [];
       for (let i = 0; i < chunkSize; i++) {
         for (let j = 0; j < passes; j++) {
           const index = j * chunkSize + i;
-          if (index < allLocations.length) {
-            interleavedLocations.push(allLocations[index]);
+          if (index < allLocationIds.length) {
+            interleavedLocations.push(allLocationIds[index]);
           }
         }
       }
-      allLocations = interleavedLocations.reverse();
-      onProgress?.(`Found ${allLocations.length} locations to launch`);
+      allLocationIds = interleavedLocations.reverse();
+      onProgress?.(`Found ${allLocationIds.length} locations to launch`);
 
-      if (allLocations.length === 0) {
+      if (allLocationIds.length === 0) {
         if (options.filterObserved) {
           alert('No unobserved locations to launch');
         } else {
@@ -189,7 +202,7 @@ export function useLaunchTask(
         return;
       }
 
-        collectedLocations = allLocations;
+        collectedLocations = allLocationIds;
       }
 
       const payload: LaunchLambdaPayload = {

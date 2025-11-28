@@ -14,7 +14,7 @@ function SummaryTile(props: {
   thisMonth: number;
 }) {
   return (
-    <Card className='mb-3'>
+    <Card className='mb-3 h-100'>
       <Card.Body>
         <div className='d-flex justify-content-between align-items-baseline'>
           <div>
@@ -166,6 +166,11 @@ export default function AdminStats() {
         total: data.annotations.total,
         thisMonth: data.annotations.thisMonth,
       },
+      {
+        title: 'Primary Annotations',
+        total: data.primaryAnnotations.total,
+        thisMonth: data.primaryAnnotations.thisMonth,
+      },
     ],
     [data]
   );
@@ -211,7 +216,7 @@ export default function AdminStats() {
         </div>
       ) : null}
 
-      <Row xs={1} md={3} lg={5} className='g-3'>
+      <Row xs={1} md={3} lg={6} className='g-3'>
         {summary.map((m) => (
           <Col key={m.title}>
             <SummaryTile

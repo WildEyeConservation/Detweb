@@ -4,17 +4,15 @@ import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 import {
   listProjects,
-  locationsByProjectIdAndSource,
   userProjectMembershipsByProjectId,
+  imagesByProjectId,
 } from './graphql/queries';
 import {
   updateProject,
   updateUserProjectMembership,
-  deleteLocation,
 } from './graphql/mutations';
 import type { GraphQLResult } from '@aws-amplify/api-graphql';
 import { UserProjectMembership } from './graphql/API';
-import { imagesByProjectId } from './graphql/queries';
 import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 
@@ -78,16 +76,63 @@ interface Image {
   originalPath: string;
 }
 
-interface Location {
+interface ImageWithDetails {
   id: string;
-  imageId?: string | null;
-  setId: string;
-  height?: number | null;
-  width?: number | null;
-  x: number;
-  y: number;
-  source: string;
+  projectId: string;
+  originalPath: string;
+  locations?: {
+    items: { id: string; source: string }[];
+  };
+  processedBy?: {
+    items: { source: string }[];
+  };
 }
+
+
+// Custom query to fetch images with nested locations and processedBy records
+const imagesByProjectIdWithDetails = /* GraphQL */ `query ImagesByProjectIdWithDetails(
+  $projectId: ID!
+  $limit: Int
+  $nextToken: String
+  $source: String!
+) {
+  imagesByProjectId(
+    projectId: $projectId
+    limit: $limit
+    nextToken: $nextToken
+  ) {
+    items {
+      id
+      projectId
+      originalPath
+      locations(filter: { source: { contains: $source } }, limit: 1) {
+        items {
+          id
+          source
+        }
+      }
+      processedBy(filter: { source: { eq: $source } }, limit: 1) {
+        items {
+          source
+        }
+      }
+    }
+    nextToken
+  }
+}
+`;
+
+// Mutation to create ImageProcessedBy record
+const createImageProcessedBy = /* GraphQL */ `mutation CreateImageProcessedBy(
+  $input: CreateImageProcessedByInput!
+) {
+  createImageProcessedBy(input: $input) {
+    imageId
+    source
+    projectId
+  }
+}
+`;
 
 // Helper function to handle pagination for GraphQL queries
 async function fetchAllPages<T, K extends string>(
@@ -123,113 +168,85 @@ async function updateProgress(
   projectImages: Image[],
   source: string
 ) {
-  // 2.2 Fetch all locations for the project at once using indexed query
-  console.log(`Fetching all locations for project ${project.id}`);
-  const projectLocations = await fetchAllPages<Location, 'locationsByProjectIdAndSource'>(
+  // Optimized approach: Fetch images with nested locations and processedBy in selection set
+  // This avoids fetching all locations separately and just checks if at least one exists per image
+  console.log(`Fetching images with processing status for project ${project.id} (source: ${source})`);
+  
+  const imagesWithDetails = await fetchAllPages<ImageWithDetails, 'imagesByProjectId'>(
     (nextToken) =>
       client.graphql({
-        query: locationsByProjectIdAndSource,
+        query: imagesByProjectIdWithDetails,
         variables: {
           projectId: project.id,
-          // Omitting source to get all locations for the project (uses GSI efficiently)
+          source: source,
           limit: 1000,
           nextToken,
         },
-      }) as Promise<GraphQLResult<{ locationsByProjectIdAndSource: PagedList<Location> }>>,
-    'locationsByProjectIdAndSource',
+      }) as Promise<GraphQLResult<{ imagesByProjectId: PagedList<ImageWithDetails> }>>,
+    'imagesByProjectId',
     (count) => {
-      console.log(`Fetched ${count} locations for project ${project.id}`);
+      console.log(`Fetched ${count} images with details for project ${project.id}`);
     }
   );
 
-  console.log(
-    `Found ${projectLocations.length} total locations for project ${project.id}`
-  );
-  const processedImages = new Set();
+  console.log(`Found ${imagesWithDetails.length} total images for project ${project.id}`);
+  
+  const processedImageIds = new Set<string>();
+  const imagesToUpdateProcessedBy: ImageWithDetails[] = [];
 
-  // 2.3 Process each image using the project's locations
-  for (const image of projectImages) {
-    // Filter locations for this specific image
-    const imageLocations = projectLocations.filter(
-      (location) => location.imageId === image.id
-    );
+  // Check each image for processing status
+  for (const image of imagesWithDetails) {
+    const hasLocation = (image.locations?.items?.length ?? 0) > 0;
+    const hasProcessedByRecord = (image.processedBy?.items?.length ?? 0) > 0;
 
-    // Check if any location has the correct source
-    const hasCorrectSource = imageLocations.some((location) =>
-      location.source.includes(source)
-    );
-
-    if (hasCorrectSource) {
-      console.log(`Image ${image.id} has been processed by ${source}`);
-      processedImages.add(image.id);
-    } else {
-      console.log(`Image ${image.id} has not been processed by ${source} yet`);
+    if (hasLocation || hasProcessedByRecord) {
+      processedImageIds.add(image.id);
+      
+      // If it has a location but no processedBy record, we need to create one
+      if (hasLocation && !hasProcessedByRecord) {
+        imagesToUpdateProcessedBy.push(image);
+      }
     }
   }
 
-  // 2.4 Check if all images are processed
-  const allImagesProcessed = projectImages.every((image) =>
-    processedImages.has(image.id)
-  );
+  console.log(`Processed images: ${processedImageIds.size}/${imagesWithDetails.length}`);
+  console.log(`Images needing processedBy record update: ${imagesToUpdateProcessedBy.length}`);
 
-  // Update project status if all images are processed
-  if (allImagesProcessed) {
-    // Delete all duplicate locations
-    console.log(`Checking for duplicate locations in project ${project.id}`);
-
-    // Create a map to track unique locations
-    const uniqueLocations = new Map<string, Location>();
-    const duplicateLocationIds: string[] = [];
-
-    // Process each location
-    for (const location of projectLocations) {
-      // Skip locations without required fields
-      if (!location.imageId || !location.setId) continue;
-
-      // Create a unique key based on the specified criteria
-      const locationKey = `${location.imageId}-${location.setId}-${location.height}-${location.width}-${location.x}-${location.y}`;
-
-      if (uniqueLocations.has(locationKey)) {
-        // This is a duplicate, add to deletion list
-        duplicateLocationIds.push(location.id);
-      } else {
-        // This is a unique location, add to our map
-        uniqueLocations.set(locationKey, location);
-      }
-    }
-
-    // Delete all duplicate locations
-    console.log(
-      `Found ${duplicateLocationIds.length} duplicate locations to delete`
-    );
-    // Batch deletion in groups of 20, using Promise.all, continue regardless of failures
-    const BATCH_SIZE = 100;
-    for (let i = 0; i < duplicateLocationIds.length; i += BATCH_SIZE) {
-      const batch = duplicateLocationIds.slice(i, i + BATCH_SIZE);
-
-      const deletePromises = batch.map(async (locationId) => {
+  // Create processedBy records for images that have locations but no record
+  if (imagesToUpdateProcessedBy.length > 0) {
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < imagesToUpdateProcessedBy.length; i += BATCH_SIZE) {
+      const batch = imagesToUpdateProcessedBy.slice(i, i + BATCH_SIZE);
+      
+      const createPromises = batch.map(async (image) => {
         try {
           await client.graphql({
-            query: deleteLocation,
+            query: createImageProcessedBy,
             variables: {
               input: {
-                id: locationId,
+                imageId: image.id,
+                source: source,
+                projectId: project.id,
               },
             },
           });
-          console.log(`Successfully deleted duplicate location ${locationId}`);
+          console.log(`Created processedBy record for image ${image.id}`);
         } catch (error) {
-          console.error(
-            `Failed to delete duplicate location ${locationId}:`,
-            error
-          );
+          // Ignore duplicate key errors (record already exists)
+          console.warn(`Could not create processedBy record for image ${image.id}:`, error);
         }
       });
 
-      // Wait for the current batch to complete, even if some fail
-      await Promise.all(deletePromises);
+      await Promise.all(createPromises);
     }
+  }
 
+  // Check if all images are processed
+  const allImagesProcessed = imagesWithDetails.length > 0 && 
+    imagesWithDetails.every((image) => processedImageIds.has(image.id));
+
+  // Update project status if all images are processed
+  if (allImagesProcessed) {
     console.log(
       `All images processed for project ${project.id}, updating status to "active"`
     );
@@ -243,7 +260,7 @@ async function updateProgress(
       },
     });
 
-    //get all UserProjectMembership records for the project using indexed query
+    // Get all UserProjectMembership records for the project using indexed query
     const memberships = await fetchAllPages<
       UserProjectMembership,
       'userProjectMembershipsByProjectId'
@@ -253,6 +270,7 @@ async function updateProgress(
           query: userProjectMembershipsByProjectId,
           variables: {
             projectId: project.id,
+            limit: 1000,
             nextToken,
           },
         }) as Promise<
@@ -263,7 +281,7 @@ async function updateProgress(
       'userProjectMembershipsByProjectId'
     );
 
-    //dummy update the project memberships
+    // Dummy update the project memberships
     for (const membership of memberships) {
       await client.graphql({
         query: updateUserProjectMembership,
@@ -280,7 +298,7 @@ async function updateProgress(
   } else {
     console.log(
       `Project ${project.id} still has ${
-        projectImages.length - processedImages.size
+        imagesWithDetails.length - processedImageIds.size
       } images to process`
     );
   }
@@ -301,6 +319,7 @@ export const handler: Handler = async (event, context) => {
                 contains: 'processing',
               },
             },
+            limit: 1000,
             nextToken,
           },
         }) as Promise<GraphQLResult<{ listProjects: PagedList<Project> }>>,
