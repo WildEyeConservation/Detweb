@@ -4,8 +4,8 @@ import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 import {
   listProjects,
-  listLocations,
-  listUserProjectMemberships,
+  locationsByProjectIdAndSource,
+  userProjectMembershipsByProjectId,
 } from './graphql/queries';
 import {
   updateProject,
@@ -123,23 +123,20 @@ async function updateProgress(
   projectImages: Image[],
   source: string
 ) {
-  // 2.2 Fetch all locations for the project at once
+  // 2.2 Fetch all locations for the project at once using indexed query
   console.log(`Fetching all locations for project ${project.id}`);
-  const projectLocations = await fetchAllPages<Location, 'listLocations'>(
+  const projectLocations = await fetchAllPages<Location, 'locationsByProjectIdAndSource'>(
     (nextToken) =>
       client.graphql({
-        query: listLocations,
+        query: locationsByProjectIdAndSource,
         variables: {
-          filter: {
-            projectId: {
-              eq: project.id,
-            },
-          },
+          projectId: project.id,
+          // Omitting source to get all locations for the project (uses GSI efficiently)
           limit: 1000,
           nextToken,
         },
-      }) as Promise<GraphQLResult<{ listLocations: PagedList<Location> }>>,
-    'listLocations',
+      }) as Promise<GraphQLResult<{ locationsByProjectIdAndSource: PagedList<Location> }>>,
+    'locationsByProjectIdAndSource',
     (count) => {
       console.log(`Fetched ${count} locations for project ${project.id}`);
     }
@@ -206,7 +203,7 @@ async function updateProgress(
       `Found ${duplicateLocationIds.length} duplicate locations to delete`
     );
     // Batch deletion in groups of 20, using Promise.all, continue regardless of failures
-    const BATCH_SIZE = 20;
+    const BATCH_SIZE = 100;
     for (let i = 0; i < duplicateLocationIds.length; i += BATCH_SIZE) {
       const batch = duplicateLocationIds.slice(i, i + BATCH_SIZE);
 
@@ -246,28 +243,24 @@ async function updateProgress(
       },
     });
 
-    //get all UserProjectMembership records for the project
+    //get all UserProjectMembership records for the project using indexed query
     const memberships = await fetchAllPages<
       UserProjectMembership,
-      'listUserProjectMemberships'
+      'userProjectMembershipsByProjectId'
     >(
       (nextToken) =>
         client.graphql({
-          query: listUserProjectMemberships,
+          query: userProjectMembershipsByProjectId,
           variables: {
-            filter: {
-              projectId: {
-                eq: project.id,
-              },
-            },
+            projectId: project.id,
             nextToken,
           },
         }) as Promise<
           GraphQLResult<{
-            listUserProjectMemberships: PagedList<UserProjectMembership>;
+            userProjectMembershipsByProjectId: PagedList<UserProjectMembership>;
           }>
         >,
-      'listUserProjectMemberships'
+      'userProjectMembershipsByProjectId'
     );
 
     //dummy update the project memberships
