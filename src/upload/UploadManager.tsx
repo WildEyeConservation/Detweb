@@ -828,8 +828,30 @@ export default function UploadManager() {
           alert('Something went wrong, please try again.');
           return;
         }
-        for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
-          const batch = createdImages.slice(i, i + BATCH_SIZE);
+
+        // Fetch images already processed by scoutbot to avoid reprocessing
+        // Note: ImageProcessedBy model types will be available after schema deployment
+        const processedRecords = await fetchAllPaginatedResults(
+          client.models.ImageProcessedBy.processedByProjectIdAndSource ??
+            (async () => ({ data: [] })),
+          {
+            projectId,
+            source: { eq: 'scoutbotv3' },
+            selectionSet: ['imageId'],
+            limit: 1000,
+          }
+        );
+        const processedImageIds = new Set(
+          (processedRecords as { imageId: string }[]).map((r) => r.imageId)
+        );
+
+        // Filter out images that are already processed (createdImages minus processedImageIds)
+        const unprocessedImages = createdImages.filter(
+          (img) => !processedImageIds.has(img.id)
+        );
+
+        for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
+          const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map(
             (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
@@ -868,18 +890,46 @@ export default function UploadManager() {
       }
 
       if (model === 'mad') {
-        const { data: locationSet } = await client.models.LocationSet.create({
-          name: projectId + `_${model}`,
-          projectId: projectId,
-        });
+        const madSetName = `${projectId}_${model}`;
+        let locationSet = (await findLocationSetByName(madSetName))?.id ?? null;
+        if (!locationSet) {
+          const { data: createdLocationSet } =
+            await client.models.LocationSet.create({
+              name: madSetName,
+              projectId: projectId,
+            });
+          locationSet = createdLocationSet?.id ?? null;
+        }
 
         if (!locationSet) {
           console.error('Failed to create location set');
           alert('Something went wrong, please try again.');
           return;
         }
-        for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
-          const batch = createdImages.slice(i, i + BATCH_SIZE);
+
+        // Fetch images already processed by MAD to avoid reprocessing
+        // Note: ImageProcessedBy model types will be available after schema deployment
+        const processedRecords = await fetchAllPaginatedResults(
+          (client.models as any).ImageProcessedBy
+            ?.processedByProjectIdAndSource ?? (async () => ({ data: [] })),
+          {
+            projectId,
+            source: { eq: 'mad-v2' },
+            selectionSet: ['imageId'],
+            limit: 1000,
+          }
+        );
+        const processedImageIds = new Set(
+          (processedRecords as { imageId: string }[]).map((r) => r.imageId)
+        );
+
+        // Filter out images that are already processed (createdImages minus processedImageIds)
+        const unprocessedImages = createdImages.filter(
+          (img) => !processedImageIds.has(img.id)
+        );
+
+        for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
+          const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map(
             (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
@@ -887,7 +937,7 @@ export default function UploadManager() {
           client.mutations.runMadDetector({
             projectId: projectId,
             images: batchStrings,
-            setId: locationSet.id,
+            setId: locationSet,
             bucket: backend.storage.buckets[1].bucket_name,
             queueUrl: backend.custom.madDetectorTaskQueueUrl,
           });
