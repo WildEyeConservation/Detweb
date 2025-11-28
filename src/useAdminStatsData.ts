@@ -69,6 +69,7 @@ export interface AdminStatsData {
   surveys: SummaryMetric; // Projects
   images: SummaryMetric;
   annotations: SummaryMetric;
+  primaryAnnotations: SummaryMetric; // Annotations where id === objectId (first observation)
   breakdown: OrganizationBreakdownMetric[];
   refresh: () => void;
 }
@@ -142,6 +143,12 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
     thisMonth: 0,
     series: { months, values: Array(months.length).fill(0) },
   });
+  const [primaryAnnotationMetric, setPrimaryAnnotationMetric] =
+    useState<SummaryMetric>({
+      total: 0,
+      thisMonth: 0,
+      series: { months, values: Array(months.length).fill(0) },
+    });
   const [breakdown, setBreakdown] = useState<OrganizationBreakdownMetric[]>([]);
 
   // Remap months when the prop changes
@@ -168,6 +175,11 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
       series: { months, values: Array(months.length).fill(0) },
     }));
     setAnnotationMetric((prev) => ({
+      total: prev.total,
+      thisMonth: prev.thisMonth,
+      series: { months, values: Array(months.length).fill(0) },
+    }));
+    setPrimaryAnnotationMetric((prev) => ({
       total: prev.total,
       thisMonth: prev.thisMonth,
       series: { months, values: Array(months.length).fill(0) },
@@ -213,7 +225,7 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
             client.models.Annotation.list,
             {
               filter: { createdAt: { ge: windowStartISO } },
-              selectionSet: ['id', 'createdAt', 'projectId'],
+              selectionSet: ['id', 'createdAt', 'projectId', 'objectId'],
             }
           ),
           // Totals (all-time): fetch ids and projectId to allow filtering
@@ -223,12 +235,11 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
               selectionSet: ['id', 'projectId'],
             } as any
           ),
-          fetchAllPaginatedResults<Pick<Schema['Annotation']['type'], 'id' | 'projectId'>>(
-            client.models.Annotation.list,
-            {
-              selectionSet: ['id', 'projectId'],
-            } as any
-          ),
+          fetchAllPaginatedResults<
+            Pick<Schema['Annotation']['type'], 'id' | 'projectId' | 'objectId'>
+          >(client.models.Annotation.list, {
+            selectionSet: ['id', 'projectId', 'objectId'],
+          } as any),
           fetchAllPaginatedResults<Schema['ClientLog']['type']>(
             client.models.ClientLog.list,
             {
@@ -397,6 +408,26 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
           total: annTotal,
           thisMonth: annThisMonth,
           series: { months, values: annSeriesArr },
+        });
+
+        // Primary Annotations (id === objectId) - first observation of an object
+        const primaryAnnSeriesArr = Array(months.length).fill(0);
+        for (const ann of annotationsWindowFiltered) {
+          if (ann.id === ann.objectId) {
+            const mk = monthKeyFromISO(ann.createdAt);
+            if (mk && monthIndex.has(mk))
+              primaryAnnSeriesArr[monthIndex.get(mk)!] += 1;
+          }
+        }
+        const primaryAnnTotal = annotationsAllIdsFiltered.filter(
+          (ann) => ann.id === ann.objectId
+        ).length;
+        const primaryAnnThisMonth =
+          primaryAnnSeriesArr[monthIndex.get(thisMonthKey)!] || 0;
+        setPrimaryAnnotationMetric({
+          total: primaryAnnTotal,
+          thisMonth: primaryAnnThisMonth,
+          series: { months, values: primaryAnnSeriesArr },
         });
 
         // Breakdown by Organization → Project with totals and thisMonth (excluding test projects)
@@ -578,6 +609,10 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
     annotations: {
       ...annotationMetric,
       series: normalizeSeries(annotationMetric.series),
+    },
+    primaryAnnotations: {
+      ...primaryAnnotationMetric,
+      series: normalizeSeries(primaryAnnotationMetric.series),
     },
     breakdown,
     refresh,
