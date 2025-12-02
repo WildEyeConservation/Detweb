@@ -19,6 +19,7 @@ import { runMadDetector } from '../functions/runMadDetector/resource';
 import { launchAnnotationSet } from '../functions/launchAnnotationSet/resource';
 import { launchFalseNegatives } from '../functions/launchFalseNegatives/resource';
 import { requeueProjectQueues } from '../functions/requeueProjectQueues/resource';
+import { monitorScoutbotDlq } from '../functions/monitorScoutbotDlq/resource';
 // import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
@@ -951,6 +952,7 @@ const schema = a
     allow.resource(deleteProject),
     allow.resource(generateSurveyResults),
     allow.resource(getJwtSecret),
+    allow.resource(monitorScoutbotDlq),
     // allow.resource(consolidateUserStats),
   ]);
 
