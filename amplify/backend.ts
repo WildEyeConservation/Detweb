@@ -28,6 +28,7 @@ import { runMadDetector } from './functions/runMadDetector/resource';
 import { launchAnnotationSet } from './functions/launchAnnotationSet/resource';
 import { launchFalseNegatives } from './functions/launchFalseNegatives/resource';
 import { requeueProjectQueues } from './functions/requeueProjectQueues/resource';
+import { monitorScoutbotDlq } from './functions/monitorScoutbotDlq/resource';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 
 // Register all Amplify-managed resources in a single backend definition.
@@ -51,6 +52,7 @@ const backend = defineBackend({
   launchAnnotationSet,
   launchFalseNegatives,
   requeueProjectQueues,
+  monitorScoutbotDlq,
 });
 
 const observationTable = backend.data.resources.tables['Observation'];
@@ -374,6 +376,11 @@ if (enableEcs) {
     );
 
     scoutbotQueueUrl = scoutbotAutoProcessor.queue.queueUrl;
+
+    new ssm.StringParameter(ecsStack, 'ScoutbotQueueUrlParameter', {
+      parameterName: `/${envName}/monitorScoutbotDlq/QueueUrl`,
+      stringValue: scoutbotAutoProcessor.queue.queueUrl,
+    });
   }
 
   if (enableMadDetector) {
@@ -542,6 +549,45 @@ backend.requeueProjectQueues.resources.lambda.addToRolePolicy(
 );
 // runPointFinder also reads the SSM parameter for its queue URL
 backend.runPointFinder.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['ssm:GetParameter'],
+    resources: ['arn:aws:ssm:*:*:parameter/*'],
+  })
+);
+
+// monitorScoutbotDlq needs SQS permissions for queue manipulation
+backend.monitorScoutbotDlq.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'sqs:GetQueueAttributes',
+      'sqs:GetQueueUrl',
+      'sqs:ReceiveMessage',
+      'sqs:DeleteMessage',
+      'sqs:SendMessage',
+      'sqs:ChangeMessageVisibility',
+    ],
+    resources: ['*'],
+  })
+);
+// monitorScoutbotDlq needs ECS permissions to check service status
+backend.monitorScoutbotDlq.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'ecs:ListClusters',
+      'ecs:DescribeClusters',
+      'ecs:ListServices',
+      'ecs:DescribeServices',
+    ],
+    resources: ['*'],
+  })
+);
+// Set the scoutbot queue URL SSM parameter path as an environment variable
+backend.monitorScoutbotDlq.addEnvironment(
+  'SCOUTBOT_QUEUE_URL_PARAM',
+  `/${envName}/monitorScoutbotDlq/QueueUrl`
+);
+// monitorScoutbotDlq needs to read the SSM parameter for the queue URL
+backend.monitorScoutbotDlq.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: ['ssm:GetParameter'],
     resources: ['arn:aws:ssm:*:*:parameter/*'],
