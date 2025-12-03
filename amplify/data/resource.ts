@@ -20,6 +20,8 @@ import { launchAnnotationSet } from '../functions/launchAnnotationSet/resource';
 import { launchFalseNegatives } from '../functions/launchFalseNegatives/resource';
 import { requeueProjectQueues } from '../functions/requeueProjectQueues/resource';
 import { monitorScoutbotDlq } from '../functions/monitorScoutbotDlq/resource';
+import { processTilingBatch } from '../functions/processTilingBatch/resource';
+import { monitorTilingTasks } from '../functions/monitorTilingTasks/resource';
 // import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
@@ -310,6 +312,7 @@ const schema = a
         description: a.string(),
         locationCount: a.integer().default(0),
         tasks: a.hasMany('TasksOnAnnotationSet', 'locationSetId'),
+        tilingTasks: a.hasMany('TilingTask', 'locationSetId'),
       })
       .authorization((allow) => [allow.authenticated()])
       // .authorization(allow => [allow.groupDefinedIn('projectId')])
@@ -842,6 +845,52 @@ const schema = a
       .secondaryIndexes((index) => [
         index('userId').queryField('clientLogsByUserId'),
       ]),
+    // Tiling Task - tracks the whole launch process for tiled tasks
+    TilingTask: a
+      .model({
+        projectId: a.id().required(),
+        locationSetId: a.id().required(),
+        locationSet: a.belongsTo('LocationSet', 'locationSetId'),
+        annotationSetId: a.id().required(),
+        // 'pending' | 'processing' | 'completed' | 'failed'
+        status: a.string().default('pending'),
+        // JSON string with queue options and other launch parameters
+        launchConfig: a.string().required(),
+        totalBatches: a.integer().default(0),
+        completedBatches: a.integer().default(0),
+        totalLocations: a.integer().default(0),
+        // S3 key for the merged output file with all created location IDs
+        outputS3Key: a.string(),
+        errorMessage: a.string(),
+        batches: a.hasMany('TilingBatch', 'tilingTaskId'),
+      })
+      .authorization((allow) => [allow.authenticated()])
+      .secondaryIndexes((index) => [
+        index('status').queryField('tilingTasksByStatus'),
+        index('projectId').queryField('tilingTasksByProjectId'),
+      ]),
+    // Tiling Batch - tracks each batch's progress
+    TilingBatch: a
+      .model({
+        tilingTaskId: a.id().required(),
+        tilingTask: a.belongsTo('TilingTask', 'tilingTaskId'),
+        batchIndex: a.integer().required(),
+        // 'pending' | 'processing' | 'completed' | 'failed'
+        status: a.string().default('pending'),
+        // S3 key for input file containing location data to create
+        inputS3Key: a.string().required(),
+        // S3 key for output file containing created location IDs
+        outputS3Key: a.string(),
+        locationCount: a.integer().default(0),
+        createdCount: a.integer().default(0),
+        errorMessage: a.string(),
+      })
+      .authorization((allow) => [allow.authenticated()])
+      .secondaryIndexes((index) => [
+        index('tilingTaskId')
+          .sortKeys(['batchIndex'])
+          .queryField('tilingBatchesByTaskId'),
+      ]),
     updateProjectMemberships: a
       .mutation()
       .arguments({
@@ -953,6 +1002,8 @@ const schema = a
     allow.resource(generateSurveyResults),
     allow.resource(getJwtSecret),
     allow.resource(monitorScoutbotDlq),
+    allow.resource(processTilingBatch),
+    allow.resource(monitorTilingTasks),
     // allow.resource(consolidateUserStats),
   ]);
 
