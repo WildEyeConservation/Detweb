@@ -53,12 +53,8 @@ export default function FalseNegatives({
     (() => Promise<TiledLaunchRequest>) | null
   >(null);
 
-  // Model selection and threshold
-  const [model, setModel] = useState<Option | null>(null);
-  const [modelOptions, setModelOptions] = useState<Option[]>([]);
-  // Internal flag during initial model derivation; not used in UI yet
+  // Queue tag
   const [loadingModels, setLoadingModels] = useState<boolean>(false);
-  const [threshold, setThreshold] = useState<number>(0.6);
   const [queueTag, setQueueTag] = useState<string>(
     `${annotationSet.name} - False Negatives`
   );
@@ -74,12 +70,6 @@ export default function FalseNegatives({
   const [estimatedSampleTiles, setEstimatedSampleTiles] = useState<
     number | null
   >(null);
-  const [aggregateSummary, setAggregateSummary] = useState<{
-    detectionImages: number;
-    annotationImages: number;
-    detectionTotal: number;
-    annotationTotal: number;
-  } | null>(null);
 
   // Load all tiled location sets for the project
   useEffect(() => {
@@ -98,23 +88,7 @@ export default function FalseNegatives({
         description?: string | null;
         locationCount?: number | null;
       }>;
-      // Derive model options from location set names the user actually has
-      const modelOpts: Option[] = [];
-      const pushOnce = (label: string, value: string) => {
-        if (!modelOpts.some((o) => o.value === value))
-          modelOpts.push({ label, value });
-      };
-      for (const ls of data || []) {
-        const n = String(ls.name || '').toLowerCase();
-        if (n.includes('scoutbot')) pushOnce('ScoutBot', 'scoutbot');
-        if (n.includes('mad')) pushOnce('MAD AI', 'mad');
-        if (n.includes('elephant-detection-nadir'))
-          pushOnce('Elephant Detection Nadir', 'heatmap');
-      }
-      if (!cancelled) {
-        setModelOptions(modelOpts);
-        if (modelOpts.length === 1) setModel(modelOpts[0]);
-      }
+
       // Restrict tiled sets to those mapped to the current annotation set
       const resp2 =
         await client.models.TasksOnAnnotationSet.locationSetsByAnnotationSetId({
@@ -185,7 +159,6 @@ export default function FalseNegatives({
     const shouldDisable =
       launching ||
       loadingModels ||
-      !model ||
       (useExistingTiled
         ? !selectedTiledSetId
         : typeof handleCreateTask !== 'function');
@@ -193,7 +166,6 @@ export default function FalseNegatives({
   }, [
     launching,
     loadingModels,
-    model,
     useExistingTiled,
     selectedTiledSetId,
     handleCreateTask,
@@ -201,10 +173,8 @@ export default function FalseNegatives({
   ]);
 
   const computeSummary = useCallback(async () => {
-    if (!model) return;
     setSummaryLoading(true);
     setSummaryMessage('Preparing tile data...');
-    setAggregateSummary(null);
     setCandidateTiles(null);
     setEstimatedSampleTiles(null);
     setExpectedTiles(null);
@@ -226,12 +196,10 @@ export default function FalseNegatives({
 
       setExpectedTiles(tiles.length);
 
-      setSummaryMessage('Fetching model detections...');
-      const detectionPoints = await fetchDetectionPointsDetailed(
+      setSummaryMessage('Fetching reviewed locations...');
+      const observationPoints = await fetchObservationPointsDetailed(
         client,
-        project.id,
-        model.value,
-        threshold
+        annotationSet.id
       );
 
       setSummaryMessage('Fetching annotations...');
@@ -242,34 +210,14 @@ export default function FalseNegatives({
 
       setSummaryMessage('Evaluating tiles...');
       const candidates = tiles.filter((tile) => {
-        const dets = detectionPoints.get(tile.imageId) || [];
+        const obs = observationPoints.get(tile.imageId) || [];
         const anns = annotationPoints.get(tile.imageId) || [];
-        const hasDetection = dets.some((pt) => isInsideTile(pt.x, pt.y, tile));
+        // Check if any observed location overlaps with this tile
+        const hasObservation = obs.some((o) => tilesOverlap(tile, o));
         const hasAnnotation = anns.some((pt) => isInsideTile(pt.x, pt.y, tile));
-        return !hasDetection && !hasAnnotation;
+        return !hasObservation && !hasAnnotation;
       });
       setCandidateTiles(candidates.length);
-
-      const detectionImages = Array.from(detectionPoints.values()).filter(
-        (arr) => arr.length > 0
-      ).length;
-      const detectionTotal = Array.from(detectionPoints.values()).reduce(
-        (sum, arr) => sum + arr.length,
-        0
-      );
-      const annotationImages = Array.from(annotationPoints.values()).filter(
-        (arr) => arr.length > 0
-      ).length;
-      const annotationTotal = Array.from(annotationPoints.values()).reduce(
-        (sum, arr) => sum + arr.length,
-        0
-      );
-      setAggregateSummary({
-        detectionImages,
-        annotationImages,
-        detectionTotal,
-        annotationTotal,
-      });
 
       const normalizedPercent = Math.min(Math.max(samplePercent, 0), 100);
       const availableTiles = candidates.length;
@@ -296,11 +244,8 @@ export default function FalseNegatives({
     annotationSet.id,
     client,
     handleCreateTask,
-    model,
-    project.id,
     samplePercent,
     selectedTiledSetId,
-    threshold,
     useExistingTiled,
   ]);
 
@@ -308,7 +253,6 @@ export default function FalseNegatives({
   useEffect(() => {
     setFalseNegativesLaunchHandler(
       () => async (onProgress: (msg: string) => void) => {
-        if (!model) return;
         let locationSetId: string | undefined;
         let tiledRequestPayload: TiledLaunchRequest | null = null;
 
@@ -331,8 +275,6 @@ export default function FalseNegatives({
           },
           queueTag,
           samplePercent,
-          threshold,
-          modelValue: model.value,
           locationSetId,
           tiledRequest: tiledRequestPayload,
           batchSize: 200,
@@ -350,13 +292,11 @@ export default function FalseNegatives({
     annotationSet.id,
     client,
     handleCreateTask,
-    model,
     project.id,
     queueTag,
     samplePercent,
     selectedTiledSetId,
     setFalseNegativesLaunchHandler,
-    threshold,
     useExistingTiled,
   ]);
 
@@ -406,34 +346,13 @@ export default function FalseNegatives({
           )}
         </div>
 
-        {loadingModels ? (
+        {loadingModels && (
           <p
             className='text-muted mb-0 mt-2 text-center'
             style={{ fontSize: '12px' }}
           >
-            Loading models...
+            Loading tile sets...
           </p>
-        ) : modelOptions.length > 1 ? (
-          <Form.Group>
-            <Form.Label className='mb-0'>Model</Form.Label>
-            <Select<Option>
-              value={model}
-              onChange={(m: SingleValue<Option>) => setModel(m ?? null)}
-              options={modelOptions}
-              placeholder='Select a model'
-              className='text-black'
-              isDisabled={launching}
-            />
-          </Form.Group>
-        ) : (
-          modelOptions.length === 0 && (
-            <p
-              className='text-muted mb-0 mt-2 text-center'
-              style={{ fontSize: '12px' }}
-            >
-              You must first process your images before launching this task.
-            </p>
-          )
         )}
         <Form.Group>
           <Form.Label className='mb-0'>Sample size (%)</Form.Label>
@@ -482,22 +401,6 @@ export default function FalseNegatives({
                 disabled={launching}
               />
             </Form.Group>
-            <Form.Group>
-              <Form.Label className='mb-0'>
-                Confidence threshold (&gt;=)
-              </Form.Label>
-              <Form.Control
-                type='number'
-                min={0}
-                max={1}
-                step={0.01}
-                value={threshold}
-                onChange={(e) =>
-                  setThreshold(Number((e.target as HTMLInputElement).value))
-                }
-                disabled={launching}
-              />
-            </Form.Group>
           </div>
         )}
 
@@ -519,7 +422,6 @@ export default function FalseNegatives({
               className='btn btn-primary'
               disabled={
                 launching ||
-                !model ||
                 (useExistingTiled
                   ? !selectedTiledSetId
                   : typeof handleCreateTask !== 'function') ||
@@ -540,18 +442,6 @@ export default function FalseNegatives({
           {summaryMessage && (
             <div className='mt-2 text-muted' style={{ fontSize: '12px' }}>
               {summaryMessage}
-            </div>
-          )}
-          {aggregateSummary && (
-            <div className='mt-3 text-white' style={{ fontSize: '12px' }}>
-              <div>
-                Images with model detections: {aggregateSummary.detectionImages}{' '}
-                ({aggregateSummary.detectionTotal} total detections)
-              </div>
-              <div>
-                Images with annotations: {aggregateSummary.annotationImages} (
-                {aggregateSummary.annotationTotal} total annotations)
-              </div>
             </div>
           )}
         </div>
@@ -655,39 +545,64 @@ function generateTilesFromRequest(request: TiledLaunchRequest): MinimalTile[] {
   return tiles;
 }
 
-async function fetchDetectionPointsDetailed(
+// Fetch observation points - locations that humans have reviewed
+// Returns a map of imageId -> array of tile bounds (locations that were observed)
+async function fetchObservationPointsDetailed(
   client: DataClient,
-  projectId: string,
-  modelValue: string,
-  threshold: number
-): Promise<Map<string, Array<{ x: number; y: number }>>> {
-  const map = new Map<string, Array<{ x: number; y: number }>>();
+  annotationSetId: string
+): Promise<Map<string, Array<{ x: number; y: number; width: number; height: number }>>> {
+  const map = new Map<string, Array<{ x: number; y: number; width: number; height: number }>>();
+  
+  // First, fetch all observations to get location IDs
+  const locationIds: string[] = [];
   let nextToken: string | null | undefined = undefined;
   do {
     const { data, nextToken: nt } =
-      await client.models.Location.locationsByProjectIdAndSource(
-        { projectId, source: { beginsWith: modelValue } },
+      await client.models.Observation.observationsByAnnotationSetId(
+        { annotationSetId },
         {
-          selectionSet: ['imageId', 'x', 'y'] as const,
-          filter: {
-            confidence: { ge: threshold },
-          },
+          selectionSet: ['locationId'] as const,
           limit: 1000,
           nextToken,
         }
       );
     for (const item of data || []) {
-      const imageId = item?.imageId as string | undefined;
-      if (!imageId) continue;
-      const list = map.get(imageId) || [];
-      list.push({
-        x: Number(item.x ?? 0),
-        y: Number(item.y ?? 0),
-      });
-      map.set(imageId, list);
+      const locationId = item?.locationId as string | undefined;
+      if (locationId) {
+        locationIds.push(locationId);
+      }
     }
     nextToken = nt as string | null | undefined;
   } while (nextToken);
+
+  // Now fetch the location details for each observed location
+  // Process in parallel with some batching
+  const batchSize = 50;
+  for (let i = 0; i < locationIds.length; i += batchSize) {
+    const batch = locationIds.slice(i, i + batchSize);
+    const locationPromises = batch.map(async (locationId) => {
+      try {
+        const { data } = await client.models.Location.get({ id: locationId });
+        return data;
+      } catch {
+        return null;
+      }
+    });
+    
+    const locations = await Promise.all(locationPromises);
+    for (const loc of locations) {
+      if (!loc?.imageId) continue;
+      const list = map.get(loc.imageId as string) || [];
+      list.push({
+        x: Number(loc.x ?? 0),
+        y: Number(loc.y ?? 0),
+        width: Number(loc.width ?? 0),
+        height: Number(loc.height ?? 0),
+      });
+      map.set(loc.imageId as string, list);
+    }
+  }
+
   return map;
 }
 
@@ -760,4 +675,28 @@ function isInsideTile(px: number, py: number, tile: MinimalTile): boolean {
   const minY = tile.y - halfH;
   const maxY = tile.y + halfH;
   return px >= minX && px <= maxX && py >= minY && py <= maxY;
+}
+
+// Check if two tiles overlap (both have center x,y and width,height)
+function tilesOverlap(
+  tile1: MinimalTile,
+  tile2: { x: number; y: number; width: number; height: number }
+): boolean {
+  const halfW1 = tile1.width / 2;
+  const halfH1 = tile1.height / 2;
+  const halfW2 = tile2.width / 2;
+  const halfH2 = tile2.height / 2;
+  
+  const minX1 = tile1.x - halfW1;
+  const maxX1 = tile1.x + halfW1;
+  const minY1 = tile1.y - halfH1;
+  const maxY1 = tile1.y + halfH1;
+  
+  const minX2 = tile2.x - halfW2;
+  const maxX2 = tile2.x + halfW2;
+  const minY2 = tile2.y - halfH2;
+  const maxY2 = tile2.y + halfH2;
+  
+  // Check if rectangles overlap
+  return minX1 < maxX2 && maxX1 > minX2 && minY1 < maxY2 && maxY1 > minY2;
 }

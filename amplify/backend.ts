@@ -29,6 +29,8 @@ import { launchAnnotationSet } from './functions/launchAnnotationSet/resource';
 import { launchFalseNegatives } from './functions/launchFalseNegatives/resource';
 import { requeueProjectQueues } from './functions/requeueProjectQueues/resource';
 import { monitorScoutbotDlq } from './functions/monitorScoutbotDlq/resource';
+import { processTilingBatch } from './functions/processTilingBatch/resource';
+import { monitorTilingTasks } from './functions/monitorTilingTasks/resource';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 
 // Register all Amplify-managed resources in a single backend definition.
@@ -53,6 +55,8 @@ const backend = defineBackend({
   launchFalseNegatives,
   requeueProjectQueues,
   monitorScoutbotDlq,
+  processTilingBatch,
+  monitorTilingTasks,
 });
 
 const observationTable = backend.data.resources.tables['Observation'];
@@ -461,6 +465,16 @@ backend.runPointFinder.addEnvironment(
   `/${envName}/runPointFinder/QueueUrl`
 );
 
+// Inject tiling batch lambda function name for orchestrating lambdas
+backend.launchAnnotationSet.addEnvironment(
+  'PROCESS_TILING_BATCH_FUNCTION_NAME',
+  backend.processTilingBatch.resources.lambda.functionName
+);
+backend.launchFalseNegatives.addEnvironment(
+  'PROCESS_TILING_BATCH_FUNCTION_NAME',
+  backend.processTilingBatch.resources.lambda.functionName
+);
+
 // Allow processImages to publish Digests into SQS.
 const statement = new iam.PolicyStatement({
   sid: 'AllowPublishToDigest',
@@ -518,6 +532,31 @@ backend.launchAnnotationSet.resources.lambda.addToRolePolicy(
   })
 );
 backend.launchFalseNegatives.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'sqs:CreateQueue',
+      'sqs:SendMessage',
+      'sqs:GetQueueAttributes',
+      'sqs:GetQueueUrl',
+    ],
+    resources: ['*'],
+  })
+);
+// launchAnnotationSet and launchFalseNegatives need Lambda invoke for tiling batches
+backend.launchAnnotationSet.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['lambda:InvokeFunction'],
+    resources: ['*'],
+  })
+);
+backend.launchFalseNegatives.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['lambda:InvokeFunction'],
+    resources: ['*'],
+  })
+);
+// monitorTilingTasks needs SQS permissions for queue creation and messaging
+backend.monitorTilingTasks.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: [
       'sqs:CreateQueue',

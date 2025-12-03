@@ -6,6 +6,8 @@ import { runHeatmapper } from "../functions/runHeatmapper/resource"
 import { monitorModelProgress } from "../functions/monitorModelProgress/resource"
 import { launchAnnotationSet } from "../functions/launchAnnotationSet/resource"
 import { launchFalseNegatives } from "../functions/launchFalseNegatives/resource"
+import { processTilingBatch } from "../functions/processTilingBatch/resource"
+import { monitorTilingTasks } from "../functions/monitorTilingTasks/resource"
 
 export const outputBucket = defineStorage({
   name: "outputs",
@@ -26,6 +28,17 @@ export const outputBucket = defineStorage({
       allow.authenticated.to(['write']),
       allow.resource(launchAnnotationSet).to(['read', 'delete']),
       allow.resource(launchFalseNegatives).to(['read', 'delete'])
+    ],
+    // Tiling batch input files - location data to be created
+    'tiling-batches/*': [
+      allow.resource(launchAnnotationSet).to(['write']),
+      allow.resource(launchFalseNegatives).to(['write']),
+      allow.resource(processTilingBatch).to(['read', 'delete'])
+    ],
+    // Tiling batch output files - created location IDs
+    'tiling-outputs/*': [
+      allow.resource(processTilingBatch).to(['write']),
+      allow.resource(monitorTilingTasks).to(['read', 'delete'])
     ]
   })
 })
