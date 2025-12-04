@@ -236,47 +236,6 @@ export function ManualHomographyEditor({
     onSaved(H);
   }, [client, images, points1, points2, onSaved]);
 
-  // remove image neighbour record if the images aren't actually neighbours
-  const handleUnlink = useCallback(async () => {
-    if (!window.confirm('Are you sure you want to unlink these images?'))
-      return;
-
-    const nb1Resp: any = await (client.models.ImageNeighbour.get as any)({
-      image1Id: images[0].id,
-      image2Id: images[1].id,
-    });
-    const nb1 = nb1Resp?.data;
-
-    await client.models.ImageNeighbour.delete({
-      image1Id: images[nb1 ? 0 : 1].id,
-      image2Id: images[nb1 ? 1 : 0].id,
-    });
-
-    // Force-refetch neighbours for both images so Registration and BaseImage overlays recompute
-    await Promise.all([
-      // Registration's aggregate neighbours
-      queryClient.refetchQueries({
-        queryKey: ['imageNeighbours', images[0].id],
-      }),
-      queryClient.refetchQueries({
-        queryKey: ['imageNeighbours', images[1].id],
-      }),
-      // ImageContext overlays
-      queryClient.refetchQueries({
-        queryKey: ['prevNeighbours', images[0].id],
-      }),
-      queryClient.refetchQueries({
-        queryKey: ['prevNeighbours', images[1].id],
-      }),
-      queryClient.refetchQueries({
-        queryKey: ['nextNeighbours', images[0].id],
-      }),
-      queryClient.refetchQueries({
-        queryKey: ['nextNeighbours', images[1].id],
-      }),
-    ]);
-  }, [client, images, queryClient]);
-
   // Skip this image pair - mark as skipped so it won't be shown again
   const handleSkip = useCallback(async () => {
     if (
@@ -471,8 +430,7 @@ export function ManualHomographyEditor({
         </div>
         <div className='mt-3 border-top border-dark pt-3'>
           <Form.Label>
-            If these images overlap but don't need to be registered, you can
-            skip this pair.
+            If this pair doesn't need to be registered, you can skip it.
           </Form.Label>
           <Button
             size='sm'
@@ -482,20 +440,6 @@ export function ManualHomographyEditor({
             disabled={isSkipping}
           >
             {isSkipping ? 'Skipping...' : 'Skip this pair'}
-          </Button>
-        </div>
-        <div className='mt-3 border-top border-dark pt-3'>
-          <Form.Label>
-            If there is no overlap between the images, you can unlink them by
-            pressing the button below.
-          </Form.Label>
-          <Button
-            size='sm'
-            className='w-100'
-            variant='outline-danger'
-            onClick={() => handleUnlink()}
-          >
-            Unlink images
           </Button>
         </div>
       </Card.Body>
