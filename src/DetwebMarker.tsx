@@ -153,45 +153,55 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
             updateAnnotation({ ...annotation, objectId: undefined });
           },
         });
-        if (activeAnnotation) {
+        if (activeAnnotation && activeAnnotation.objectId !== annotation.objectId) {
+          const oldName = uniqueNamesGenerator({
+            dictionaries: [adjectives, names],
+            seed: annotation.objectId,
+            style: 'capital',
+            separator: ' ',
+          });
+          const newName = uniqueNamesGenerator({
+            dictionaries: [adjectives, names],
+            seed: activeAnnotation.objectId,
+            style: 'capital',
+            separator: ' ',
+          });
           contextmenuItems.push({
-            text: `Rename to ${uniqueNamesGenerator({
-              dictionaries: [adjectives, names],
-              seed: activeAnnotation.objectId,
-              style: 'capital',
-              separator: ' ',
-            })}`,
+            text: `Rename "${oldName}" to "${newName}"`,
             index: contextmenuItems.length,
             callback: async () => {
               if (annotation.objectId) {
-                client.models.Annotation.annotationsByObjectId({
-                  objectId: annotation.objectId,
-                }).then((annotations) => {
-                  console.log(
-                    `Found ${
-                      annotations.data.length
-                    } annotations with name ${uniqueNamesGenerator({
-                      dictionaries: [adjectives, names],
-                      seed: annotation.objectId,
-                      style: 'capital',
-                      separator: ' ',
-                    })}`
-                  );
-                  console.log(
-                    `Renaming them to ${uniqueNamesGenerator({
-                      dictionaries: [adjectives, names],
-                      seed: activeAnnotation.objectId,
-                      style: 'capital',
-                      separator: ' ',
-                    })}`
-                  );
-                  annotations.data.forEach((a) => {
+                const oldObjectId = annotation.objectId;
+                const newObjectId = activeAnnotation.objectId;
+                
+                // Collect all annotations with the old objectId (handling pagination)
+                const allAnnotations: any[] = [];
+                let nextToken: string | null = null;
+                
+                do {
+                  const result = await client.models.Annotation.annotationsByObjectId({
+                    objectId: oldObjectId,
+                  }, { nextToken: nextToken || undefined });
+                  
+                  allAnnotations.push(...result.data);
+                  nextToken = result.nextToken || null;
+                } while (nextToken);
+                
+                console.log(
+                  `Found ${allAnnotations.length} annotations with name "${oldName}". Renaming to "${newName}".`
+                );
+                
+                // Update all annotations in parallel, awaiting completion
+                await Promise.all(
+                  allAnnotations.map((a) =>
                     client.models.Annotation.update({
                       id: a.id,
-                      objectId: activeAnnotation.objectId,
-                    });
-                  });
-                });
+                      objectId: newObjectId,
+                    })
+                  )
+                );
+                
+                console.log(`Successfully renamed ${allAnnotations.length} annotations.`);
               }
             },
           });

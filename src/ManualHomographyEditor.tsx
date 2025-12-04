@@ -9,12 +9,34 @@ import { useQueryClient } from '@tanstack/react-query';
 
 type Point = { id: string; x: number; y: number };
 
-function useClickToAddPoint(onAdd: (xy: { x: number; y: number }) => void) {
+const MIN_POINT_DISTANCE = 20; // Minimum pixel distance between points
+
+function useClickToAddPoint(
+  onAdd: (xy: { x: number; y: number }) => void,
+  existingPoints: Point[]
+) {
   const { latLng2xy } = useContext(ImageContext)!;
   useMapEvents({
     click: (e) => {
       const p = latLng2xy(e.latlng) as L.Point;
+      
+      // Check if click is too close to an existing point
+      const isTooClose = existingPoints.some((existing) => {
+        const dx = existing.x - p.x;
+        const dy = existing.y - p.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        return distance < MIN_POINT_DISTANCE;
+      });
+      
+      if (isTooClose) {
+        return; // Don't add point if too close to existing one
+      }
+      
       onAdd({ x: p.x, y: p.y });
+    },
+    dblclick: (e) => {
+      // Prevent double-click zoom from also adding points
+      L.DomEvent.stopPropagation(e);
     },
   });
   return null;
@@ -45,7 +67,14 @@ export function PointsOverlay({
     [setPoints]
   );
 
-  useClickToAddPoint(handleAdd);
+  const handleRemovePoint = useCallback(
+    (pointId: string) => {
+      setPoints((prev) => prev.filter((p) => p.id !== pointId));
+    },
+    [setPoints]
+  );
+
+  useClickToAddPoint(handleAdd, points);
 
   return (
     <>
@@ -64,6 +93,11 @@ export function PointsOverlay({
                   q.id === p.id ? { ...q, x: pt.x, y: pt.y } : q
                 )
               );
+            },
+            contextmenu: (e) => {
+              L.DomEvent.stopPropagation(e);
+              L.DomEvent.preventDefault(e);
+              handleRemovePoint(p.id);
             },
           }}
         >
@@ -124,6 +158,7 @@ export function ManualHomographyEditor({
   setPoints1,
   setPoints2,
   onSaved,
+  onSkipped,
 }: {
   images: [ImageType, ImageType];
   points1: Point[];
@@ -131,10 +166,12 @@ export function ManualHomographyEditor({
   setPoints1: (updater: Point[] | ((prev: Point[]) => Point[])) => void;
   setPoints2: (updater: Point[] | ((prev: Point[]) => Point[])) => void;
   onSaved: (H: Matrix) => void;
+  onSkipped?: () => void;
 }) {
   const { client } = useContext(GlobalContext)!;
   const [moreInformation, setMoreInformation] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSkipping, setIsSkipping] = useState(false);
   const queryClient = useQueryClient();
   const canCompute =
     points1.length >= 12 &&
@@ -199,10 +236,16 @@ export function ManualHomographyEditor({
     onSaved(H);
   }, [client, images, points1, points2, onSaved]);
 
-  // remove image neighbour record if the images aren't actually neighbours
-  const handleUnlink = useCallback(async () => {
-    if (!window.confirm('Are you sure you want to unlink these images?'))
+  // Skip this image pair - mark as skipped so it won't be shown again
+  const handleSkip = useCallback(async () => {
+    if (
+      !window.confirm(
+        'Are you sure you want to skip this pair? The images will remain neighbours but won\'t require registration.'
+      )
+    )
       return;
+
+    setIsSkipping(true);
 
     const nb1Resp: any = await (client.models.ImageNeighbour.get as any)({
       image1Id: images[0].id,
@@ -210,21 +253,20 @@ export function ManualHomographyEditor({
     });
     const nb1 = nb1Resp?.data;
 
-    await client.models.ImageNeighbour.delete({
+    await client.models.ImageNeighbour.update({
       image1Id: images[nb1 ? 0 : 1].id,
       image2Id: images[nb1 ? 1 : 0].id,
+      skipped: true,
     });
 
-    // Force-refetch neighbours for both images so Registration and BaseImage overlays recompute
+    // Force-refetch neighbours for both images
     await Promise.all([
-      // Registration's aggregate neighbours
       queryClient.refetchQueries({
         queryKey: ['imageNeighbours', images[0].id],
       }),
       queryClient.refetchQueries({
         queryKey: ['imageNeighbours', images[1].id],
       }),
-      // ImageContext overlays
       queryClient.refetchQueries({
         queryKey: ['prevNeighbours', images[0].id],
       }),
@@ -238,13 +280,32 @@ export function ManualHomographyEditor({
         queryKey: ['nextNeighbours', images[1].id],
       }),
     ]);
-  }, [client, images]);
 
-  const pairs = useMemo(() => {
-    const n = Math.min(points1.length, points2.length);
-    return new Array(n)
-      .fill(0)
-      .map((_, i) => ({ i, p1: points1[i], p2: points2[i] }));
+    setIsSkipping(false);
+    onSkipped?.();
+  }, [client, images, queryClient, onSkipped]);
+
+  const handleRemovePoint1 = useCallback(
+    (index: number) => {
+      setPoints1((prev) => prev.filter((_, i) => i !== index));
+    },
+    [setPoints1]
+  );
+
+  const handleRemovePoint2 = useCallback(
+    (index: number) => {
+      setPoints2((prev) => prev.filter((_, i) => i !== index));
+    },
+    [setPoints2]
+  );
+
+  const tableRows = useMemo(() => {
+    const maxLen = Math.max(points1.length, points2.length);
+    return new Array(maxLen).fill(0).map((_, i) => ({
+      i,
+      p1: points1[i] ?? null,
+      p2: points2[i] ?? null,
+    }));
   }, [points1, points2]);
 
   return (
@@ -270,6 +331,9 @@ export function ManualHomographyEditor({
             <ul>
               <li>Select 12 corresponding points on both images.</li>
               <li>Drag markers to adjust.</li>
+              <li>
+                <strong>Right-click</strong> a marker to remove it.
+              </li>
               <li>Points should be distributed across the images.</li>
               <li>Aim to cover as much area as possible.</li>
               <li>Avoid straight lines.</li>
@@ -288,27 +352,63 @@ export function ManualHomographyEditor({
               </tr>
             </thead>
             <tbody>
-              {pairs.map(({ i, p1, p2 }) => (
-                <tr key={p1.id + '_' + p2.id}>
+              {tableRows.map(({ i, p1, p2 }) => (
+                <tr key={`row-${i}`}>
                   <td>{i + 1}</td>
                   <td>
-                    {Math.round(p1.x)}, {Math.round(p1.y)}
+                    {p1 ? (
+                      <span className='d-flex align-items-center gap-2'>
+                        <span>
+                          {Math.round(p1.x)}, {Math.round(p1.y)}
+                        </span>
+                        <Button
+                          size='sm'
+                          variant='outline-danger'
+                          className='py-0 px-1'
+                          onClick={() => handleRemovePoint1(i)}
+                          title='Remove this point'
+                        >
+                          ×
+                        </Button>
+                      </span>
+                    ) : (
+                      <span className='text-muted fst-italic'>—</span>
+                    )}
                   </td>
                   <td>
-                    {Math.round(p2.x)}, {Math.round(p2.y)}
+                    {p2 ? (
+                      <span className='d-flex align-items-center gap-2'>
+                        <span>
+                          {Math.round(p2.x)}, {Math.round(p2.y)}
+                        </span>
+                        <Button
+                          size='sm'
+                          variant='outline-danger'
+                          className='py-0 px-1'
+                          onClick={() => handleRemovePoint2(i)}
+                          title='Remove this point'
+                        >
+                          ×
+                        </Button>
+                      </span>
+                    ) : (
+                      <span className='text-muted fst-italic'>—</span>
+                    )}
                   </td>
                   <td className='text-end'>
-                    <Button
-                      size='sm'
-                      variant='danger'
-                      onClick={() => handleRemovePair(i)}
-                    >
-                      Remove
-                    </Button>
+                    {p1 && p2 && (
+                      <Button
+                        size='sm'
+                        variant='danger'
+                        onClick={() => handleRemovePair(i)}
+                      >
+                        Remove pair
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}
-              {pairs.length === 0 && (
+              {tableRows.length === 0 && (
                 <tr>
                   <td colSpan={4} className='text-center'>
                     No points yet. Click on both images to add matching points.
@@ -330,16 +430,16 @@ export function ManualHomographyEditor({
         </div>
         <div className='mt-3 border-top border-dark pt-3'>
           <Form.Label>
-            If there is no overlap between the images, you can unlink them by
-            pressing the button below.
+            If this pair doesn't need to be registered, you can skip it.
           </Form.Label>
           <Button
             size='sm'
             className='w-100'
-            variant='outline-danger'
-            onClick={() => handleUnlink()}
+            variant='outline-warning'
+            onClick={() => handleSkip()}
+            disabled={isSkipping}
           >
-            Unlink images
+            {isSkipping ? 'Skipping...' : 'Skip this pair'}
           </Button>
         </div>
       </Card.Body>

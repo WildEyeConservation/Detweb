@@ -1,6 +1,5 @@
 import MyTable from './Table';
 import { useContext, useEffect, useState } from 'react';
-import humanizeDuration from 'humanize-duration';
 import { GlobalContext, UserContext } from './Context';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -157,39 +156,32 @@ export default function UserStats() {
     }
   }, [project, startDate, endDate, userStats, selectedSets]);
 
+  // Format duration in milliseconds to H:MM:SS format
+  const formatDuration = (ms: number): string => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  };
+
   const tableData = Object.keys(stats).map((userId) => ({
     id: userId,
     rowData: [
       allUsers.find((u) => u.id == userId)?.name,
-      humanizeDuration(stats[userId].activeTime, {
-        units: ['h', 'm', 's'],
-        round: true,
-        largest: 2,
-      }),
+      formatDuration(stats[userId].activeTime),
       stats[userId].observationCount,
       (
         stats[userId].searchTime / 1000 / stats[userId].observationCount || 0
       ).toFixed(1),
       stats[userId].annotationCount,
       stats[userId].sightingCount,
-      humanizeDuration(stats[userId].searchTime, {
-        units: ['h', 'm', 's'],
-        round: true,
-        largest: 2,
-      }),
-      humanizeDuration(stats[userId].annotationTime, {
-        units: ['h', 'm', 's'],
-        round: true,
-        largest: 2,
-      }),
+      formatDuration(stats[userId].searchTime),
+      formatDuration(stats[userId].annotationTime),
       (
         stats[userId].observationCount / stats[userId].sightingCount || 0
       ).toFixed(1),
-      humanizeDuration(stats[userId].waitingTime, {
-        units: ['h', 'm', 's'],
-        round: true,
-        largest: 2,
-      }),
+      formatDuration(stats[userId].waitingTime),
     ],
   }));
 

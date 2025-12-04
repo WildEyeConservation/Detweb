@@ -105,33 +105,37 @@ export function Registration({ showAnnotationSetDropdown = true }) {
   // imageNeighbours contains a two level map to easily find the transform from imageA to imageB
   // tf = imageNeighbours[imageA][imageB].tf
   // It contains each transform (and its inverse) represented in imageNeighboursQueries.
+  // Skipped pairs are excluded from this map.
   const imageNeighbours = useMemo(() => {
     return imageNeighboursQueries
       .filter((query) => query.isSuccess)
       .reduce((acc, query) => {
         const neighbours = query.data;
         const defaultHomography = [1, 0, 0, 0, 1, 0, 0, 0, 1];
-        neighbours.forEach((n) => {
-          const isDefault = !(n.homography?.length === 9);
-          // if no valid homography, use identity
-          const rawH =
-            n.homography?.length === 9 ? n.homography : defaultHomography;
-          const M = array2Matrix(rawH);
+        neighbours
+          // Filter out skipped pairs - they don't need registration
+          .filter((n) => !n.skipped)
+          .forEach((n) => {
+            const isDefault = !(n.homography?.length === 9);
+            // if no valid homography, use identity
+            const rawH =
+              n.homography?.length === 9 ? n.homography : defaultHomography;
+            const M = array2Matrix(rawH);
 
-          const acc2 = acc[n.image1Id] || {};
-          acc[n.image1Id] = {
-            ...acc2,
-            [n.image2Id]: { tf: makeTransform(M), noHomography: isDefault },
-          };
-          const acc3 = acc[n.image2Id] || {};
-          acc[n.image2Id] = {
-            ...acc3,
-            [n.image1Id]: {
-              tf: makeTransform(inv(M)),
-              noHomography: isDefault,
-            },
-          };
-        });
+            const acc2 = acc[n.image1Id] || {};
+            acc[n.image1Id] = {
+              ...acc2,
+              [n.image2Id]: { tf: makeTransform(M), noHomography: isDefault },
+            };
+            const acc3 = acc[n.image2Id] || {};
+            acc[n.image2Id] = {
+              ...acc3,
+              [n.image1Id]: {
+                tf: makeTransform(inv(M)),
+                noHomography: isDefault,
+              },
+            };
+          });
         return acc;
       }, {} as Record<string, Record<string, { tf: Transform; noHomography: boolean }>>);
   }, [imageNeighboursQueries]);
@@ -358,6 +362,10 @@ export function Registration({ showAnnotationSetDropdown = true }) {
                     ...old,
                     [pairKey]: [fwd, bwd],
                   }));
+                }}
+                onSkipped={() => {
+                  // Move to next pair when this one is skipped
+                  nextPair();
                 }}
               />
             </div>
