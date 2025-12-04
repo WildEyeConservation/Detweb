@@ -392,6 +392,9 @@ const schema = a
         image2: a.belongsTo('Image', 'image2Id'),
         homography: a.float().array(),
         homographySource: a.string(),
+        // When true, this pair is intentionally skipped for registration
+        // (images are neighbours but don't need homography computed)
+        skipped: a.boolean().default(false),
       })
       .authorization((allow) => [allow.authenticated()])
       .identifier(['image1Id', 'image2Id'])

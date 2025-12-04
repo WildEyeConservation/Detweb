@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import { GlobalContext } from './Context';
 import { RegisterPair } from './RegisterPair';
@@ -19,11 +19,13 @@ type PairState = {
 export function PairLoader() {
   const { image1Id, image2Id, selectedSet } = useParams();
   const { client } = useContext(GlobalContext)!;
+  const navigate = useNavigate();
   const [pair, setPair] = useState<PairState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [points1, setPoints1] = useState<Point[]>([]);
   const [points2, setPoints2] = useState<Point[]>([]);
+  const [skipped, setSkipped] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +124,10 @@ export function PairLoader() {
     setPoints2([]);
   }, []);
 
+  const handleSkipped = useCallback(() => {
+    setSkipped(true);
+  }, []);
+
   const content = useMemo(() => {
     if (loading) {
       return <div>Loading registration pair...</div>;
@@ -129,6 +135,20 @@ export function PairLoader() {
 
     if (error) {
       return <div className='text-danger'>{error}</div>;
+    }
+
+    if (skipped) {
+      return (
+        <div className='d-flex flex-column align-items-center gap-3 p-4'>
+          <div className='text-warning'>This pair has been skipped.</div>
+          <button
+            className='btn btn-outline-secondary'
+            onClick={() => navigate(-1)}
+          >
+            Go back
+          </button>
+        </div>
+      );
     }
 
     if (!pair || !selectedSet) {
@@ -166,6 +186,7 @@ export function PairLoader() {
                 setPoints1={setPoints1}
                 setPoints2={setPoints2}
                 onSaved={handleHomographySaved}
+                onSkipped={handleSkipped}
               />
             </div>
           )}
@@ -191,11 +212,14 @@ export function PairLoader() {
   }, [
     error,
     handleHomographySaved,
+    handleSkipped,
     loading,
+    navigate,
     pair,
     points1,
     points2,
     selectedSet,
+    skipped,
   ]);
 
   return content;
