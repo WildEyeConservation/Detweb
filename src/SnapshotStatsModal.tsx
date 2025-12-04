@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Modal, Button } from 'react-bootstrap';
 import MyTable from './Table';
-import humanizeDuration from 'humanize-duration';
 import exportFromJSON from 'export-from-json';
 
 type AnnotationSet = { label: string; value: string };
@@ -52,6 +51,15 @@ export default function SnapshotStatsModal({
     Record<string, StatsEntry>
   >({});
   const [snapshotLoading, setSnapshotLoading] = useState(false);
+
+  // Format duration in milliseconds to H:MM:SS format
+  const formatDuration = (ms: number): string => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  };
 
   const tableHeadings = [
     { content: 'Username' },
@@ -119,35 +127,19 @@ export default function SnapshotStatsModal({
       const statsEntry = snapshotStats[userId];
       return {
         Username: allUsers.find((u) => u.id == userId)?.name || userId,
-        'Time spent': humanizeDuration(statsEntry.activeTime, {
-          units: ['h', 'm', 's'],
-          round: true,
-          largest: 2,
-        }),
+        'Time spent': formatDuration(statsEntry.activeTime),
         'Jobs completed': statsEntry.observationCount,
         'Average search time (s/job)': (
           statsEntry.searchTime / 1000 / statsEntry.observationCount || 0
         ).toFixed(1),
         'Total Annotations': statsEntry.annotationCount,
         'Total Sightings': statsEntry.sightingCount,
-        'Total Search Time': humanizeDuration(statsEntry.searchTime, {
-          units: ['h', 'm', 's'],
-          round: true,
-          largest: 2,
-        }),
-        'Total Annotation Time': humanizeDuration(statsEntry.annotationTime, {
-          units: ['h', 'm', 's'],
-          round: true,
-          largest: 2,
-        }),
+        'Total Search Time': formatDuration(statsEntry.searchTime),
+        'Total Annotation Time': formatDuration(statsEntry.annotationTime),
         'Locations/Sighting': (
           statsEntry.observationCount / statsEntry.sightingCount || 0
         ).toFixed(1),
-        'Waiting time': humanizeDuration(statsEntry.waitingTime, {
-          units: ['h', 'm', 's'],
-          round: true,
-          largest: 2,
-        }),
+        'Waiting time': formatDuration(statsEntry.waitingTime),
       };
     });
     const fileName =
@@ -197,11 +189,7 @@ export default function SnapshotStatsModal({
               id: userId,
               rowData: [
                 allUsers.find((u) => u.id == userId)?.name,
-                humanizeDuration(snapshotStats[userId].activeTime, {
-                  units: ['h', 'm', 's'],
-                  round: true,
-                  largest: 2,
-                }),
+                formatDuration(snapshotStats[userId].activeTime),
                 snapshotStats[userId].observationCount,
                 (
                   snapshotStats[userId].searchTime /
@@ -210,25 +198,13 @@ export default function SnapshotStatsModal({
                 ).toFixed(1),
                 snapshotStats[userId].annotationCount,
                 snapshotStats[userId].sightingCount,
-                humanizeDuration(snapshotStats[userId].searchTime, {
-                  units: ['h', 'm', 's'],
-                  round: true,
-                  largest: 2,
-                }),
-                humanizeDuration(snapshotStats[userId].annotationTime, {
-                  units: ['h', 'm', 's'],
-                  round: true,
-                  largest: 2,
-                }),
+                formatDuration(snapshotStats[userId].searchTime),
+                formatDuration(snapshotStats[userId].annotationTime),
                 (
                   snapshotStats[userId].observationCount /
                     snapshotStats[userId].sightingCount || 0
                 ).toFixed(1),
-                humanizeDuration(snapshotStats[userId].waitingTime, {
-                  units: ['h', 'm', 's'],
-                  round: true,
-                  largest: 2,
-                }),
+                formatDuration(snapshotStats[userId].waitingTime),
               ],
             }))}
             emptyMessage="No snapshot stats. Please select time range and click 'Run Snapshot'."
