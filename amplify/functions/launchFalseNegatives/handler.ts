@@ -656,8 +656,6 @@ async function fetchTiles(locationSetId: string): Promise<MinimalTile[]> {
       query: locationsBySetIdAndConfidence,
       variables: {
         setId: locationSetId,
-        lowerLimit: 0,
-        upperLimit: 1,
         limit: 1000,
         nextToken,
       },
