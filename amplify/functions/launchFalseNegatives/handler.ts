@@ -20,6 +20,7 @@ import {
   createQueue as createQueueMutation,
   updateQueue as updateQueueMutation,
   createLocationSet as createLocationSetMutation,
+  updateLocationSet as updateLocationSetMutation,
   createLocation as createLocationMutation,
   createTasksOnAnnotationSet as createTasksOnAnnotationSetMutation,
   updateProject as updateProjectMutation,
@@ -387,6 +388,32 @@ async function handleDistributedFalseNegativesLaunch(payload: LaunchFalseNegativ
   const tiledRequest = payload.tiledRequest!;
   const workerBatchSize = payload.batchSize ?? 200;
 
+  // Fetch filtering data BEFORE generating tiles (so we can filter before creating DB records)
+  console.log('Fetching filtering data for false negatives...');
+  const observationMap = await withTiming('fetchObservationPoints', () =>
+    fetchObservationPoints(payload.annotationSetId)
+  );
+  console.log('Fetched observation points', {
+    annotationSetId: payload.annotationSetId,
+    observationImageCount: observationMap.size,
+  });
+
+  const annotationMap = await withTiming('fetchAnnotationPoints', () =>
+    fetchAnnotationPoints(payload.annotationSetId)
+  );
+  console.log('Fetched annotations', {
+    annotationSetId: payload.annotationSetId,
+    annotationImageCount: annotationMap.size,
+  });
+
+  const imageTimestamps = await withTiming('fetchImageTimestamps', () =>
+    fetchImageTimestamps(payload.projectId)
+  );
+  console.log('Fetched image timestamps', {
+    projectId: payload.projectId,
+    imageCount: imageTimestamps.size,
+  });
+
   // Create the location set first
   const locationSetData = await executeGraphql<{
     createLocationSet?: { id: string };
@@ -407,15 +434,124 @@ async function handleDistributedFalseNegativesLaunch(payload: LaunchFalseNegativ
   console.log('Created location set', { locationSetId });
 
   // Generate all tile locations in memory
-  const locations = generateTiledLocations(payload.projectId, locationSetId, tiledRequest);
-  console.log('Generated locations in memory', { count: locations.length });
+  const allLocations = generateTiledLocations(payload.projectId, locationSetId, tiledRequest);
+  console.log('Generated locations in memory', { count: allLocations.length });
 
-  // Batch locations and write to S3
-  const batches = batchLocations(locations, TILING_BATCH_SIZE);
-  console.log('Created batches', { batchCount: batches.length });
+  // Convert to MinimalTile format for filtering
+  const allTiles: MinimalTile[] = allLocations.map((loc) => ({
+    id: '', // Will be assigned after DB creation
+    imageId: loc.imageId,
+    x: loc.x,
+    y: loc.y,
+    width: loc.width,
+    height: loc.height,
+  }));
+
+  // Filter tiles: keep only those without observations and without annotations
+  console.log('Filtering false negative candidates...');
+  const candidateTimingStart = Date.now();
+  const candidates = allTiles.filter((tile) => {
+    const observations = observationMap.get(tile.imageId) || [];
+    const annotations = annotationMap.get(tile.imageId) || [];
+    // Check if any observed location overlaps with this tile
+    const hasObservation = observations.some((obs) =>
+      tilesOverlap(tile, obs)
+    );
+    const hasAnnotation = annotations.some((point) =>
+      isInsideTile(point.x, point.y, tile)
+    );
+    return !hasObservation && !hasAnnotation;
+  });
+  console.log('Filtered candidates', {
+    totalTiles: allTiles.length,
+    candidateCount: candidates.length,
+    durationMs: Date.now() - candidateTimingStart,
+  });
+
+  // Sort by image timestamp
+  candidates.sort((a, b) => {
+    const tsA = imageTimestamps.get(a.imageId) ?? 0;
+    const tsB = imageTimestamps.get(b.imageId) ?? 0;
+    return tsA - tsB;
+  });
+
+  // Apply sampling
+  const normalizedPercent = Math.min(
+    Math.max(payload.samplePercent, 0),
+    100
+  );
+  let sampleCount = Math.floor(
+    (candidates.length * normalizedPercent) / 100
+  );
+  if (normalizedPercent > 0 && sampleCount === 0 && candidates.length > 0) {
+    sampleCount = 1;
+  }
+
+  const selectionStart = Date.now();
+  const selectedTiles =
+    sampleCount > 0 && sampleCount < candidates.length
+      ? randomSample(candidates, sampleCount)
+      : candidates.slice();
+  console.log('Tile sampling complete', {
+    requestedPercent: payload.samplePercent,
+    normalizedPercent,
+    sampleCount,
+    selectedTiles: selectedTiles.length,
+    durationMs: Date.now() - selectionStart,
+  });
+
+  if (selectedTiles.length === 0) {
+    await setProjectStatus(payload.projectId, 'active');
+    console.log('No false-negative candidate tiles were found');
+    return {
+      message: 'No candidate tiles discovered',
+      locationCount: 0,
+      queueId: null,
+    };
+  }
+
+  // Map filtered tiles back to LocationInput format, preserving order
+  const filteredLocations: LocationInput[] = [];
+  const tileMap = new Map<string, LocationInput>();
+  for (const loc of allLocations) {
+    const key = `${loc.imageId}-${loc.x}-${loc.y}-${loc.width}-${loc.height}`;
+    tileMap.set(key, loc);
+  }
+
+  for (const tile of selectedTiles) {
+    const key = `${tile.imageId}-${tile.x}-${tile.y}-${tile.width}-${tile.height}`;
+    const loc = tileMap.get(key);
+    if (loc) {
+      filteredLocations.push(loc);
+    }
+  }
+
+  console.log('Filtered locations', {
+    originalCount: allLocations.length,
+    filteredCount: filteredLocations.length,
+  });
+
+  // Update location set with filtered count
+  await executeGraphql<{ updateLocationSet?: { id: string } }>(
+    updateLocationSetMutation,
+    {
+      input: {
+        id: locationSetId,
+        locationCount: filteredLocations.length,
+      },
+    }
+  );
+  console.log('Updated location set count', {
+    locationSetId,
+    locationCount: filteredLocations.length,
+  });
+
+  // Batch only the filtered locations and write to S3
+  const batches = batchLocations(filteredLocations, TILING_BATCH_SIZE);
+  console.log('Created batches from filtered locations', { batchCount: batches.length });
 
   // Create the launch config for the control lambda to use later
-  // Note: For false negatives, we store extra info needed for filtering
+  // Note: filteringAlreadyDone indicates filtering was done before batching
   const launchConfig = JSON.stringify({
     queueOptions: payload.queueOptions,
     secondaryQueueOptions: null,
@@ -441,7 +577,7 @@ async function handleDistributedFalseNegativesLaunch(payload: LaunchFalseNegativ
       launchConfig,
       totalBatches: batches.length,
       completedBatches: 0,
-      totalLocations: locations.length,
+      totalLocations: filteredLocations.length, // Use filtered count, not original
     },
   });
 
@@ -493,7 +629,8 @@ async function handleDistributedFalseNegativesLaunch(payload: LaunchFalseNegativ
   console.log('Distributed tiling initiated for false negatives', {
     tilingTaskId,
     totalBatches: batches.length,
-    totalLocations: locations.length,
+    totalLocations: filteredLocations.length,
+    originalLocationCount: allLocations.length,
   });
 
   return {
@@ -501,7 +638,8 @@ async function handleDistributedFalseNegativesLaunch(payload: LaunchFalseNegativ
     tilingTaskId,
     locationSetId,
     totalBatches: batches.length,
-    totalLocations: locations.length,
+    totalLocations: filteredLocations.length,
+    originalLocationCount: allLocations.length,
   };
 }
 
