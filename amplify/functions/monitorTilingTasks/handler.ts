@@ -315,11 +315,13 @@ async function processTask(task: TilingTaskRecord) {
     await updateTaskCompleted(task.id);
     console.log('Task completed successfully', { taskId: task.id });
   } catch (error: any) {
+    const errorMessage = error?.message ?? (typeof error === 'string' ? error : JSON.stringify(error));
     console.error('Error processing task', {
       taskId: task.id,
-      error: error?.message,
+      error: errorMessage,
+      stack: error?.stack,
     });
-    await updateTaskFailed(task.id, error?.message ?? 'Unknown error');
+    await updateTaskFailed(task.id, errorMessage ?? 'Unknown error');
     await setProjectStatus(task.projectId, 'active');
   }
 }
@@ -674,130 +676,164 @@ async function applyFalseNegativesFiltering(
   locationSetId: string,
   launchConfig: LaunchConfig
 ): Promise<string[]> {
-  console.log('Applying false negatives filtering', {
-    projectId,
-    annotationSetId,
-    locationSetId,
-    samplePercent: launchConfig.samplePercent,
-  });
+  try {
+    console.log('Applying false negatives filtering', {
+      projectId,
+      annotationSetId,
+      locationSetId,
+      samplePercent: launchConfig.samplePercent,
+    });
 
-  // Fetch all tiles for the location set
-  const tiles = await fetchTilesForLocationSet(locationSetId);
-  console.log('Fetched tiles for false negatives filtering', { tileCount: tiles.length });
+    // Fetch all tiles for the location set
+    console.log('Fetching tiles for location set...');
+    const tiles = await fetchTilesForLocationSet(locationSetId);
+    console.log('Fetched tiles for false negatives filtering', { tileCount: tiles.length });
 
-  if (tiles.length === 0) {
-    return [];
+    if (tiles.length === 0) {
+      return [];
+    }
+
+    // Fetch observation points (locations that humans have reviewed)
+    console.log('Fetching observation points...');
+    const observationMap = await fetchObservationPoints(annotationSetId);
+    console.log('Fetched observation points', { imageCount: observationMap.size });
+
+    // Fetch annotation points
+    console.log('Fetching annotation points...');
+    const annotationMap = await fetchAnnotationPoints(annotationSetId);
+    console.log('Fetched annotation points', { imageCount: annotationMap.size });
+
+    // Fetch image timestamps for sorting
+    console.log('Fetching image timestamps...');
+    const imageTimestamps = await fetchImageTimestamps(projectId);
+    console.log('Fetched image timestamps', { imageCount: imageTimestamps.size });
+
+    // Filter tiles: keep only those without observations and without annotations
+    console.log('Filtering candidates...');
+    const candidates = tiles.filter((tile) => {
+      const observations = observationMap.get(tile.imageId) || [];
+      const annotations = annotationMap.get(tile.imageId) || [];
+      // Check if any observed location overlaps with this tile
+      const hasObservation = observations.some((obs) =>
+        tilesOverlap(tile, obs)
+      );
+      const hasAnnotation = annotations.some((point) =>
+        isInsideTile(point.x, point.y, tile)
+      );
+      return !hasObservation && !hasAnnotation;
+    });
+    console.log('Filtered candidates', {
+      totalTiles: tiles.length,
+      candidateCount: candidates.length,
+    });
+
+    // Sort by image timestamp
+    candidates.sort((a, b) => {
+      const tsA = imageTimestamps.get(a.imageId) ?? 0;
+      const tsB = imageTimestamps.get(b.imageId) ?? 0;
+      return tsA - tsB;
+    });
+
+    // Apply sampling
+    const samplePercent = launchConfig.samplePercent ?? 100;
+    const normalizedPercent = Math.min(Math.max(samplePercent, 0), 100);
+    let sampleCount = Math.floor((candidates.length * normalizedPercent) / 100);
+    if (normalizedPercent > 0 && sampleCount === 0 && candidates.length > 0) {
+      sampleCount = 1;
+    }
+
+    const selectedTiles =
+      sampleCount > 0 && sampleCount < candidates.length
+        ? randomSample(candidates, sampleCount)
+        : candidates.slice();
+
+    console.log('Sampled tiles', {
+      samplePercent,
+      sampleCount,
+      selectedCount: selectedTiles.length,
+    });
+
+    return selectedTiles.map((t) => t.id);
+  } catch (error: any) {
+    const errorMessage = error?.message ?? (typeof error === 'string' ? error : JSON.stringify(error));
+    console.error('Error in applyFalseNegativesFiltering', {
+      projectId,
+      annotationSetId,
+      locationSetId,
+      error: errorMessage,
+      stack: error?.stack,
+    });
+    throw new Error(`False negatives filtering failed: ${errorMessage}`);
   }
-
-  // Fetch observation points (locations that humans have reviewed)
-  const observationMap = await fetchObservationPoints(annotationSetId);
-  console.log('Fetched observation points', { imageCount: observationMap.size });
-
-  // Fetch annotation points
-  const annotationMap = await fetchAnnotationPoints(annotationSetId);
-  console.log('Fetched annotation points', { imageCount: annotationMap.size });
-
-  // Fetch image timestamps for sorting
-  const imageTimestamps = await fetchImageTimestamps(projectId);
-
-  // Filter tiles: keep only those without observations and without annotations
-  const candidates = tiles.filter((tile) => {
-    const observations = observationMap.get(tile.imageId) || [];
-    const annotations = annotationMap.get(tile.imageId) || [];
-    // Check if any observed location overlaps with this tile
-    const hasObservation = observations.some((obs) =>
-      tilesOverlap(tile, obs)
-    );
-    const hasAnnotation = annotations.some((point) =>
-      isInsideTile(point.x, point.y, tile)
-    );
-    return !hasObservation && !hasAnnotation;
-  });
-  console.log('Filtered candidates', {
-    totalTiles: tiles.length,
-    candidateCount: candidates.length,
-  });
-
-  // Sort by image timestamp
-  candidates.sort((a, b) => {
-    const tsA = imageTimestamps.get(a.imageId) ?? 0;
-    const tsB = imageTimestamps.get(b.imageId) ?? 0;
-    return tsA - tsB;
-  });
-
-  // Apply sampling
-  const samplePercent = launchConfig.samplePercent ?? 100;
-  const normalizedPercent = Math.min(Math.max(samplePercent, 0), 100);
-  let sampleCount = Math.floor((candidates.length * normalizedPercent) / 100);
-  if (normalizedPercent > 0 && sampleCount === 0 && candidates.length > 0) {
-    sampleCount = 1;
-  }
-
-  const selectedTiles =
-    sampleCount > 0 && sampleCount < candidates.length
-      ? randomSample(candidates, sampleCount)
-      : candidates.slice();
-
-  console.log('Sampled tiles', {
-    samplePercent,
-    sampleCount,
-    selectedCount: selectedTiles.length,
-  });
-
-  return selectedTiles.map((t) => t.id);
 }
 
 // Fetch tiles for a location set
 async function fetchTilesForLocationSet(locationSetId: string): Promise<MinimalTile[]> {
   const tiles: MinimalTile[] = [];
   let nextToken: string | null | undefined = undefined;
+  let pageCount = 0;
 
-  do {
-    const response = (await client.graphql({
-      query: locationsBySetIdAndConfidence,
-      variables: {
-        setId: locationSetId,
-        lowerLimit: 0,
-        upperLimit: 1,
-        limit: 1000,
-        nextToken,
-      },
-    } as any)) as GraphQLResult<{
-      locationsBySetIdAndConfidence?: {
-        items?: Array<{
-          id?: string | null;
-          imageId?: string | null;
-          x?: number | null;
-          y?: number | null;
-          width?: number | null;
-          height?: number | null;
-        }>;
-        nextToken?: string | null;
-      };
-    }>;
+  try {
+    do {
+      const response = (await client.graphql({
+        query: locationsBySetIdAndConfidence,
+        variables: {
+          setId: locationSetId,
+          lowerLimit: 0,
+          upperLimit: 1,
+          limit: 1000,
+          nextToken,
+        },
+      } as any)) as GraphQLResult<{
+        locationsBySetIdAndConfidence?: {
+          items?: Array<{
+            id?: string | null;
+            imageId?: string | null;
+            x?: number | null;
+            y?: number | null;
+            width?: number | null;
+            height?: number | null;
+          }>;
+          nextToken?: string | null;
+        };
+      }>;
 
-    if (response.errors && response.errors.length > 0) {
-      throw new Error(
-        `GraphQL error fetching tiles: ${JSON.stringify(
-          response.errors.map((e) => e.message)
-        )}`
-      );
-    }
+      if (response.errors && response.errors.length > 0) {
+        throw new Error(
+          `GraphQL error fetching tiles: ${JSON.stringify(
+            response.errors.map((e) => e.message)
+          )}`
+        );
+      }
 
-    const page = response.data?.locationsBySetIdAndConfidence;
-    for (const item of page?.items || []) {
-      if (!item?.id || !item?.imageId) continue;
-      tiles.push({
-        id: item.id,
-        imageId: item.imageId,
-        x: Number(item.x ?? 0),
-        y: Number(item.y ?? 0),
-        width: Number(item.width ?? 0),
-        height: Number(item.height ?? 0),
-      });
-    }
-    nextToken = page?.nextToken ?? undefined;
-  } while (nextToken);
+      const page = response.data?.locationsBySetIdAndConfidence;
+      for (const item of page?.items || []) {
+        if (!item?.id || !item?.imageId) continue;
+        tiles.push({
+          id: item.id,
+          imageId: item.imageId,
+          x: Number(item.x ?? 0),
+          y: Number(item.y ?? 0),
+          width: Number(item.width ?? 0),
+          height: Number(item.height ?? 0),
+        });
+      }
+      nextToken = page?.nextToken ?? undefined;
+      pageCount++;
+      
+      if (pageCount % 50 === 0) {
+        console.log('Fetching tiles progress', { pageCount, tilesSoFar: tiles.length });
+      }
+    } while (nextToken);
+  } catch (error: any) {
+    console.error('Error in fetchTilesForLocationSet', {
+      locationSetId,
+      pageCount,
+      tilesSoFar: tiles.length,
+      error: error?.message ?? JSON.stringify(error),
+    });
+    throw error;
+  }
 
   return tiles;
 }
