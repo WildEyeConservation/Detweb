@@ -75,17 +75,13 @@ export const tilingBatchesByTaskId = /* GraphQL */ `
 export const locationsBySetIdAndConfidence = /* GraphQL */ `
   query LocationsBySetIdAndConfidence(
     $setId: ID!
-    $confidence: ModelFloatKeyConditionInput
     $sortDirection: ModelSortDirection
     $filter: ModelLocationFilterInput
     $limit: Int
     $nextToken: String
-    $lowerLimit: Float
-    $upperLimit: Float
   ) {
     locationsBySetIdAndConfidence(
       setId: $setId
-      confidence: $confidence
       sortDirection: $sortDirection
       filter: $filter
       limit: $limit
@@ -98,7 +94,6 @@ export const locationsBySetIdAndConfidence = /* GraphQL */ `
         y
         width
         height
-        confidence
       }
       nextToken
     }
