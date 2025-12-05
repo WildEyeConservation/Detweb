@@ -837,6 +837,35 @@ async function fetchTiles(locationSetId: string): Promise<MinimalTile[]> {
   return tiles;
 }
 
+// Custom GraphQL query to fetch observations with location data included
+// This avoids N+1 queries by fetching location data in the same query
+const observationsWithLocationsQuery = /* GraphQL */ `
+  query ObservationsByAnnotationSetIdWithLocations(
+    $annotationSetId: ID!
+    $limit: Int
+    $nextToken: String
+  ) {
+    observationsByAnnotationSetId(
+      annotationSetId: $annotationSetId
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        locationId
+        location {
+          id
+          imageId
+          x
+          y
+          width
+          height
+        }
+      }
+      nextToken
+    }
+  }
+`;
+
 // Collect model detection points filtered by confidence/source.
 // Fetch observation points - locations that humans have reviewed
 // Returns a map of imageId -> array of tile bounds (locations that were observed)
@@ -844,11 +873,11 @@ async function fetchObservationPoints(annotationSetId: string) {
   const map = new Map<string, Array<{ x: number; y: number; width: number; height: number }>>();
   let nextToken: string | null | undefined = undefined;
 
-  // First, fetch all observations to get location IDs
-  const locationIds: string[] = [];
+  // Fetch observations with location data included in a single query
+  // This eliminates the N+1 query problem
   do {
     const response = (await client.graphql({
-      query: observationsByAnnotationSetId,
+      query: observationsWithLocationsQuery,
       variables: {
         annotationSetId,
         limit: 1000,
@@ -858,6 +887,14 @@ async function fetchObservationPoints(annotationSetId: string) {
       observationsByAnnotationSetId?: {
         items?: Array<{
           locationId?: string | null;
+          location?: {
+            id?: string | null;
+            imageId?: string | null;
+            x?: number | null;
+            y?: number | null;
+            width?: number | null;
+            height?: number | null;
+          } | null;
         }>;
         nextToken?: string | null;
       };
@@ -873,54 +910,20 @@ async function fetchObservationPoints(annotationSetId: string) {
 
     const page = response.data?.observationsByAnnotationSetId;
     for (const item of page?.items || []) {
-      if (item?.locationId) {
-        locationIds.push(item.locationId);
-      }
+      const location = item?.location;
+      if (!location?.imageId) continue;
+      
+      const list = map.get(location.imageId) || [];
+      list.push({
+        x: Number(location.x ?? 0),
+        y: Number(location.y ?? 0),
+        width: Number(location.width ?? 0),
+        height: Number(location.height ?? 0),
+      });
+      map.set(location.imageId, list);
     }
     nextToken = page?.nextToken ?? undefined;
   } while (nextToken);
-
-  // Now fetch the location details for each observed location
-  // Use batching to avoid too many parallel requests
-  const limit = pLimit(50);
-  const locationTasks = locationIds.map((locationId) =>
-    limit(async () => {
-      const response = (await client.graphql({
-        query: getLocation,
-        variables: { id: locationId },
-      } as any)) as GraphQLResult<{
-        getLocation?: {
-          id?: string | null;
-          imageId?: string | null;
-          x?: number | null;
-          y?: number | null;
-          width?: number | null;
-          height?: number | null;
-        };
-      }>;
-
-      if (response.errors && response.errors.length > 0) {
-        console.warn('Error fetching location', locationId, response.errors);
-        return null;
-      }
-
-      return response.data?.getLocation;
-    })
-  );
-
-  const locations = await Promise.all(locationTasks);
-  
-  for (const loc of locations) {
-    if (!loc?.imageId) continue;
-    const list = map.get(loc.imageId) || [];
-    list.push({
-      x: Number(loc.x ?? 0),
-      y: Number(loc.y ?? 0),
-      width: Number(loc.width ?? 0),
-      height: Number(loc.height ?? 0),
-    });
-    map.set(loc.imageId, list);
-  }
 
   return map;
 }
