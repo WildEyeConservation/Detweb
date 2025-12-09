@@ -12,6 +12,8 @@ import {
 import {
   S3Client,
   PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { randomUUID } from 'crypto';
@@ -135,8 +137,11 @@ type LaunchFalseNegativesPayload = {
   queueTag: string;
   samplePercent: number;
   locationSetId?: string;
+  locationTiles?: MinimalTile[];
   tiledRequest?: TiledLaunchRequest | null;
   batchSize?: number;
+  /** S3 key where the full payload is stored (for large payloads). */
+  payloadS3Key?: string;
 };
 
 type MinimalTile = {
@@ -183,8 +188,17 @@ async function withTiming<T>(label: string, action: () => Promise<T>): Promise<T
 
 // AppSync resolver entry; wraps orchestration in error handling.
 export const handler: Handler = async (event) => {
+  let payloadS3Key: string | undefined;
   try {
-    const payload = parsePayload(event.arguments?.request);
+    let payload = parsePayload(event.arguments?.request);
+
+    // If a payloadS3Key is provided, fetch the full payload from S3.
+    if (payload.payloadS3Key) {
+      payloadS3Key = payload.payloadS3Key;
+      console.log('Reading payload from S3', { key: payloadS3Key });
+      payload = await readPayloadFromS3(payloadS3Key);
+    }
+
     console.log(
       'launchFalseNegatives invoked',
       JSON.stringify({
@@ -204,12 +218,25 @@ export const handler: Handler = async (event) => {
 
     const result = await handleLaunch(payload);
 
+    // Clean up the S3 payload file after successful processing.
+    if (payloadS3Key) {
+      await deletePayloadFromS3(payloadS3Key);
+    }
+
     return {
       statusCode: 200,
       body: JSON.stringify(result),
     };
   } catch (error: any) {
     console.error('Error launching false negatives job', error);
+    // Attempt to clean up even on error to avoid orphaned files.
+    if (payloadS3Key) {
+      try {
+        await deletePayloadFromS3(payloadS3Key);
+      } catch (cleanupError) {
+        console.warn('Failed to clean up S3 payload after error', cleanupError);
+      }
+    }
     return {
       statusCode: 500,
       body: JSON.stringify({
@@ -230,18 +257,40 @@ async function handleLaunch(payload: LaunchFalseNegativesPayload) {
     return handleDistributedFalseNegativesLaunch(payload);
   }
 
-  // Otherwise, use existing location set or create from tiledRequest synchronously (for small sets)
-  const locationSetId =
-    (payload.locationSetId as string | undefined) ??
-    (await withTiming('createTiledLocationSet', () =>
-      createTiledLocationSetSync(projectId, payload.tiledRequest)
-    ));
+  // Use locationTiles if provided (fetched on client), otherwise fetch from locationSetId
+  let tiles: MinimalTile[];
+  let locationSetId: string | undefined;
 
-  const tiles = await withTiming('fetchTiles', () => fetchTiles(locationSetId));
-  console.log('Fetched tiles', {
-    locationSetId,
-    tileCount: tiles.length,
-  });
+  if (payload.locationTiles && payload.locationTiles.length > 0) {
+    // Locations were fetched on the client
+    tiles = payload.locationTiles;
+    locationSetId = payload.locationSetId;
+    console.log('Using locations from client payload', {
+      locationSetId,
+      tileCount: tiles.length,
+    });
+  } else if (payload.locationSetId) {
+    // Fallback: fetch locations in lambda (shouldn't happen with new client code)
+    locationSetId = payload.locationSetId;
+    tiles = await withTiming('fetchTiles', () => fetchTiles(locationSetId!));
+    console.log('Fetched tiles in lambda', {
+      locationSetId,
+      tileCount: tiles.length,
+    });
+  } else if (payload.tiledRequest) {
+    // Create from tiledRequest synchronously (for small sets)
+    locationSetId = await withTiming('createTiledLocationSet', () =>
+      createTiledLocationSetSync(projectId, payload.tiledRequest!)
+    );
+    tiles = await withTiming('fetchTiles', () => fetchTiles(locationSetId!));
+    console.log('Created and fetched tiles', {
+      locationSetId,
+      tileCount: tiles.length,
+    });
+  } else {
+    throw new Error('No location source provided');
+  }
+
   if (tiles.length === 0) {
     throw new Error('No tiles available for false negatives workflow');
   }
@@ -774,6 +823,10 @@ function parsePayload(request: unknown): LaunchFalseNegativesPayload {
     throw new Error('Launch payload is required');
   }
   const parsed = JSON.parse(request);
+  // Allow a minimal payload with just payloadS3Key for S3-based large payloads.
+  if (parsed?.payloadS3Key) {
+    return parsed as LaunchFalseNegativesPayload;
+  }
   if (
     !parsed?.projectId ||
     !parsed?.annotationSetId ||
@@ -782,6 +835,45 @@ function parsePayload(request: unknown): LaunchFalseNegativesPayload {
     throw new Error('Launch payload missing required fields');
   }
   return parsed as LaunchFalseNegativesPayload;
+}
+
+// Read the full payload from S3 when it exceeds inline limits.
+async function readPayloadFromS3(key: string): Promise<LaunchFalseNegativesPayload> {
+  const bucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!bucketName) {
+    throw new Error('OUTPUTS_BUCKET_NAME environment variable not set');
+  }
+  const response = await s3Client.send(
+    new GetObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    })
+  );
+  const bodyStr = await response.Body?.transformToString();
+  if (!bodyStr) {
+    throw new Error('Empty payload from S3');
+  }
+  const parsed = JSON.parse(bodyStr);
+  if (!parsed?.projectId || !parsed?.annotationSetId || !parsed?.queueOptions) {
+    throw new Error('S3 payload missing required fields');
+  }
+  return parsed as LaunchFalseNegativesPayload;
+}
+
+// Delete the payload file from S3 after processing.
+async function deletePayloadFromS3(key: string): Promise<void> {
+  const bucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!bucketName) {
+    console.warn('OUTPUTS_BUCKET_NAME not set, cannot delete payload');
+    return;
+  }
+  await s3Client.send(
+    new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    })
+  );
+  console.log('Deleted S3 payload', { key });
 }
 
 // Fetch the working set of tiles for a location set.

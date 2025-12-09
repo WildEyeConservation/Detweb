@@ -63,24 +63,115 @@ interface StatsEntry {
 
 let stats: Record<string, StatsEntry> = {};
 
-function accumulateStats(input: any) {
-    const setId = input.annotationSetId.S
-    const date = input.createdAt.S.split('T')[0]
-    const userId = input.owner.S.split('::')[1]
-    const projectId = input.projectId.S
-    const annotationCount = parseInt(input.annotationCount.N)
-    let timeTaken = parseFloat(input.timeTaken.N) || 0
-    const waitingTime = parseFloat(input.waitingTime.N) || 0
-    const sighting = (annotationCount > 0 ? 1 : 0)
-    if (timeTaken > (sighting ? 600*1000 : 120*1000)) timeTaken = 0;
-    const key = `${setId}-${date}-${userId}-${projectId}`
-    if (!stats[key]) {
-        stats[key] = stats[key] ||
-        {
-            setId,
-            date,
-            userId,
-            projectId,
+function accumulateStats(input: any): boolean {
+    try {
+        // Validate required fields exist
+        if (!input.annotationSetId?.S || !input.createdAt?.S || !input.owner?.S || !input.projectId?.S) {
+            logger.warn('Missing required fields in observation', {
+                hasAnnotationSetId: !!input.annotationSetId?.S,
+                hasCreatedAt: !!input.createdAt?.S,
+                hasOwner: !!input.owner?.S,
+                hasProjectId: !!input.projectId?.S
+            });
+            return false;
+        }
+
+        const setId = input.annotationSetId.S;
+        const date = input.createdAt.S.split('T')[0];
+        
+        // Extract userId from owner field - handle different formats
+        let userId: string;
+        const ownerValue = input.owner.S;
+        if (ownerValue.includes('::')) {
+            userId = ownerValue.split('::')[1];
+        } else {
+            // If no '::' separator, use the entire owner value as userId
+            userId = ownerValue;
+        }
+
+        if (!userId || userId.trim() === '') {
+            logger.warn('Invalid userId extracted from owner', { owner: ownerValue });
+            return false;
+        }
+
+        const projectId = input.projectId.S;
+        const annotationCount = parseInt(input.annotationCount?.N || '0', 10) || 0;
+        let timeTaken = parseFloat(input.timeTaken?.N || '0') || 0;
+        const waitingTime = parseFloat(input.waitingTime?.N || '0') || 0;
+        const sighting = (annotationCount > 0 ? 1 : 0);
+        if (timeTaken > (sighting ? 600*1000 : 120*1000)) timeTaken = 0;
+        
+        const key = `${setId}-${date}-${userId}-${projectId}`;
+        if (!stats[key]) {
+            stats[key] = {
+                setId,
+                date,
+                userId,
+                projectId,
+                observationCount: 0,
+                annotationCount: 0,
+                sightingCount: 0,
+                activeTime: 0,
+                searchTime: 0,
+                searchCount: 0,
+                annotationTime: 0,
+                waitingTime: 0
+            };
+        }
+        stats[key].observationCount += 1;
+        stats[key].annotationCount += annotationCount;
+        stats[key].sightingCount += sighting;
+        stats[key].activeTime += timeTaken;
+        stats[key].searchTime += (1-sighting) * timeTaken;
+        stats[key].searchCount += (1 - sighting);
+        stats[key].annotationTime += sighting * timeTaken;
+        stats[key].waitingTime += Math.max(waitingTime, 0);
+        logger.info(`Accumulated stats for ${key}`);
+        return true;
+    } catch (error) {
+        logger.error('Error accumulating stats', {
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            input: JSON.stringify(input, null, 2)
+        });
+        return false;
+    }
+}
+
+async function applyUpdate(update: StatsEntry): Promise<boolean> {
+    try {
+        // Validate required fields
+        if (!update.userId || !update.projectId || !update.setId || !update.date) {
+            logger.error('Invalid update entry - missing required fields', {
+                userId: update.userId,
+                projectId: update.projectId,
+                setId: update.setId,
+                date: update.date
+            });
+            return false;
+        }
+
+        const result = await client.graphql({
+            query: getUserStats,
+            variables: {
+                userId: update.userId,
+                projectId: update.projectId,
+                setId: update.setId,
+                date: update.date
+            }
+        });
+
+        // Check for GraphQL errors
+        if (result.errors && result.errors.length > 0) {
+            logger.error('GraphQL query errors', {
+                errors: result.errors,
+                variables: { userId: update.userId, projectId: update.projectId, setId: update.setId, date: update.date }
+            });
+            return false;
+        }
+
+        const statExists = !!result.data?.getUserStats;
+        const existingStats = result.data?.getUserStats || {
             observationCount: 0,
             annotationCount: 0,
             sightingCount: 0,
@@ -89,58 +180,76 @@ function accumulateStats(input: any) {
             searchCount: 0,
             annotationTime: 0,
             waitingTime: 0
-        }
-    }
-    stats[key].observationCount += 1
-    stats[key].annotationCount += annotationCount
-    stats[key].sightingCount += sighting
-    stats[key].activeTime += timeTaken
-    stats[key].searchTime += (1-sighting) * timeTaken
-    stats[key].searchCount += (1 - sighting)
-    stats[key].annotationTime += sighting * timeTaken
-    stats[key].waitingTime += Math.max(waitingTime, 0)
-    logger.info(`Accumulated stats for ${key}`)
-}
+        };
 
-async function applyUpdate(update: any) {
-    const result = await client.graphql({
-        query: getUserStats,
-        variables: {
-            userId: update.userId,
-            projectId: update.projectId,
-            setId: update.setId,
-            date: update.date
+        // Add accumulated deltas from this batch to existing stats
+        const variables = {
+            input: {
+                userId: update.userId,
+                projectId: update.projectId,
+                setId: update.setId,
+                date: update.date,
+                observationCount: existingStats.observationCount + update.observationCount,
+                annotationCount: existingStats.annotationCount + update.annotationCount,
+                sightingCount: (existingStats.sightingCount || 0) + update.sightingCount,
+                activeTime: (existingStats.activeTime || 0) + update.activeTime,
+                searchTime: (existingStats.searchTime || 0) + update.searchTime,
+                searchCount: (existingStats.searchCount || 0) + update.searchCount,
+                annotationTime: (existingStats.annotationTime || 0) + update.annotationTime,
+                waitingTime: (existingStats.waitingTime || 0) + update.waitingTime
+            }
+        };
+
+        const mutationResult = statExists
+            ? await client.graphql({ query: updateUserStats, variables })
+            : await client.graphql({ query: createUserStats, variables });
+
+        // Check for mutation errors
+        if (mutationResult.errors && mutationResult.errors.length > 0) {
+            logger.error('GraphQL mutation errors', {
+                errors: mutationResult.errors,
+                operation: statExists ? 'updateUserStats' : 'createUserStats',
+                variables
+            });
+            return false;
         }
-    })
-    const statExists = result.data?.getUserStats
-    const stats = result.data?.getUserStats || { observationCount: 0, annotationCount: 0, sightingCount: 0, activeTime: 0, searchTime: 0, searchCount: 0, annotationTime: 0, waitingTime: 0 }
-    const variables={
-        input: {
-            userId : update.userId,
-            projectId: update.projectId,
-            setId: update.setId,
-            date: update.date,
-            observationCount: stats.observationCount + 1,
-            annotationCount: stats.annotationCount + update.annotationCount,
-            sightingCount: (stats.sightingCount || 0) + update.sightingCount,
-            activeTime: (stats.activeTime || 0) + update.activeTime,
-            searchTime: (stats.searchTime || 0) + update.searchTime,
-            searchCount: (stats.searchCount || 0) + update.searchCount,
-            annotationTime: (stats.annotationTime || 0) + update.annotationTime,
-            waitingTime:  (stats.waitingTime || 0) + update.waitingTime
-        }
-    }
-    if (statExists) {
-        await client.graphql({query: updateUserStats, variables: variables})
-    } else {
-        await client.graphql({query: createUserStats, variables: variables})
+
+        return true;
+    } catch (error) {
+        logger.error('Error applying update', {
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            update: JSON.stringify(update, null, 2)
+        });
+        return false;
     }
 }
 
 async function updateStats() {
-    const promises = Object.values(stats).map(async (update) => await applyUpdate(update))
-    await Promise.all(promises)
-    logger.info(`Updated ${promises.length} stats`)
+    const updates = Object.values(stats);
+    logger.info(`Updating ${updates.length} unique stat entries`);
+    
+    const results = await Promise.allSettled(
+        updates.map(async (update) => await applyUpdate(update))
+    );
+
+    const successful = results.filter(r => r.status === 'fulfilled' && r.value === true).length;
+    const failed = results.length - successful;
+
+    if (failed > 0) {
+        logger.warn(`Failed to update ${failed} out of ${results.length} stat entries`);
+        results.forEach((result, index) => {
+            if (result.status === 'rejected' || (result.status === 'fulfilled' && result.value === false)) {
+                logger.error(`Failed update ${index + 1}`, {
+                    status: result.status,
+                    reason: result.status === 'rejected' ? result.reason : 'applyUpdate returned false',
+                    update: updates[index]
+                });
+            }
+        });
+    }
+
+    logger.info(`Successfully updated ${successful} stat entries`);
 }
 
 export const handler: DynamoDBStreamHandler = async (event) => {
@@ -148,26 +257,50 @@ export const handler: DynamoDBStreamHandler = async (event) => {
     try {
         logger.info(`Processing ${event.Records.length} records`);
         
+        let processedCount = 0;
+        let skippedCount = 0;
+
         for (const record of event.Records) {
             logger.info(`Processing record: ${record.eventID}`);
             logger.info(`Event Type: ${record.eventName}`);
 
             if (!record.dynamodb) {
                 logger.warn('No dynamodb data in record', { record });
+                skippedCount++;
                 continue;
             }
             if (record.eventName === "INSERT") {
-                accumulateStats(record.dynamodb.NewImage)
+                const success = accumulateStats(record.dynamodb.NewImage);
+                if (success) {
+                    processedCount++;
+                } else {
+                    skippedCount++;
+                }
+            } else {
+                skippedCount++;
             }
         }
+
+        logger.info(`Processed ${processedCount} records, skipped ${skippedCount} records`);
         await updateStats()
         return {
             batchItemFailures: [],
         };
     } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        const errorDetails = error instanceof Error ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+        } : error;
+
         logger.error('Error processing records:', {
-            error: JSON.stringify(error, null, 2),
-            event: JSON.stringify(event, null, 2)
+            error: errorMessage,
+            errorDetails: errorDetails,
+            errorString: JSON.stringify(errorDetails, Object.getOwnPropertyNames(errorDetails), 2),
+            stack: errorStack,
+            recordCount: event.Records?.length || 0
         });
         throw error;
     }

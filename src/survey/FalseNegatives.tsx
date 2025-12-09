@@ -1,8 +1,10 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
 import { Form, Spinner } from 'react-bootstrap';
 import Select, { SingleValue } from 'react-select';
+import { QueryCommand } from '@aws-sdk/client-dynamodb';
+import { uploadData } from 'aws-amplify/storage';
 import { Schema } from '../amplify/client-schema';
-import { GlobalContext } from '../Context';
+import { GlobalContext, UserContext } from '../Context';
 import CreateTask from '../CreateTask';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
 import type { TiledLaunchRequest } from '../types/LaunchTask';
@@ -43,7 +45,8 @@ export default function FalseNegatives({
     React.SetStateAction<LaunchHandler | null>
   >;
 }) {
-  const { client } = useContext(GlobalContext)!;
+  const { client, backend } = useContext(GlobalContext)!;
+  const { getDynamoClient } = useContext(UserContext)!;
 
   // Tile set selection/creation
   const [useExistingTiled, setUseExistingTiled] = useState<boolean>(false);
@@ -172,6 +175,62 @@ export default function FalseNegatives({
     setLaunchDisabled,
   ]);
 
+  // Fetch locations from DynamoDB for existing tiled sets
+  const fetchLocationsFromSet = useCallback(
+    async (
+      locationSetId: string,
+      onProgress?: (message: string) => void
+    ): Promise<MinimalTile[]> => {
+      const dynamoClient = await getDynamoClient();
+      const tiles: MinimalTile[] = [];
+      let lastEvaluatedKey: Record<string, any> | undefined = undefined;
+      onProgress?.('Querying locations...');
+      do {
+        const command = new QueryCommand({
+          TableName: backend.custom.locationTable,
+          IndexName: 'locationsBySetIdAndConfidence',
+          KeyConditionExpression: 'setId = :locationSetId',
+          ExpressionAttributeValues: {
+            ':locationSetId': { S: locationSetId },
+          },
+          ProjectionExpression: 'id, imageId, x, y, width, height',
+          ExclusiveStartKey: lastEvaluatedKey,
+          Limit: 1000,
+        });
+        try {
+          const response = await dynamoClient.send(command);
+          const items = response.Items || [];
+          const pageTiles = items
+            .filter((item: any) => {
+              const x = parseFloat(item.x?.N || '0');
+              const y = parseFloat(item.y?.N || '0');
+              const width = parseFloat(item.width?.N || '0');
+              const height = parseFloat(item.height?.N || '0');
+              return x !== 0 && y !== 0 && width !== 0 && height !== 0;
+            })
+            .map((item: any) => ({
+              id: item.id.S as string,
+              imageId: item.imageId.S as string,
+              x: parseFloat(item.x?.N || '0'),
+              y: parseFloat(item.y?.N || '0'),
+              width: parseFloat(item.width?.N || '0'),
+              height: parseFloat(item.height?.N || '0'),
+            }));
+          tiles.push(...pageTiles);
+          onProgress?.(`Loaded ${tiles.length} locations`);
+          lastEvaluatedKey = response.LastEvaluatedKey as
+            | Record<string, any>
+            | undefined;
+        } catch (error) {
+          console.error('Error querying DynamoDB:', error);
+          throw error;
+        }
+      } while (lastEvaluatedKey);
+      return tiles;
+    },
+    [backend.custom.locationTable, getDynamoClient]
+  );
+
   const computeSummary = useCallback(async () => {
     setSummaryLoading(true);
     setSummaryMessage('Preparing tile data...');
@@ -186,7 +245,7 @@ export default function FalseNegatives({
           throw new Error('Select an existing tiled set');
         }
         setSummaryMessage('Fetching tiles...');
-        tiles = await fetchTilesFromLocationSet(client, selectedTiledSetId);
+        tiles = await fetchLocationsFromSet(selectedTiledSetId, setSummaryMessage);
       } else {
         if (typeof handleCreateTask !== 'function') return;
         setSummaryMessage('Generating tiles...');
@@ -243,6 +302,7 @@ export default function FalseNegatives({
   }, [
     annotationSet.id,
     client,
+    fetchLocationsFromSet,
     handleCreateTask,
     samplePercent,
     selectedTiledSetId,
@@ -255,10 +315,18 @@ export default function FalseNegatives({
       () => async (onProgress: (msg: string) => void) => {
         let locationSetId: string | undefined;
         let tiledRequestPayload: TiledLaunchRequest | null = null;
+        let locationTiles: MinimalTile[] | undefined = undefined;
 
         if (useExistingTiled) {
           if (!selectedTiledSetId) return;
           locationSetId = selectedTiledSetId;
+          onProgress('Fetching locations from existing set...');
+          locationTiles = await fetchLocationsFromSet(selectedTiledSetId, onProgress);
+          if (locationTiles.length === 0) {
+            alert('No locations found in selected tiled set');
+            return;
+          }
+          onProgress(`Found ${locationTiles.length} locations`);
         } else {
           if (typeof handleCreateTask !== 'function') return;
           onProgress('Preparing tiling request...');
@@ -276,6 +344,7 @@ export default function FalseNegatives({
           queueTag,
           samplePercent,
           locationSetId,
+          locationTiles,
           tiledRequest: tiledRequestPayload,
           batchSize: 200,
         };
@@ -291,6 +360,7 @@ export default function FalseNegatives({
   }, [
     annotationSet.id,
     client,
+    fetchLocationsFromSet,
     handleCreateTask,
     project.id,
     queueTag,
@@ -553,55 +623,42 @@ async function fetchObservationPointsDetailed(
 ): Promise<Map<string, Array<{ x: number; y: number; width: number; height: number }>>> {
   const map = new Map<string, Array<{ x: number; y: number; width: number; height: number }>>();
   
-  // First, fetch all observations to get location IDs
-  const locationIds: string[] = [];
+  // OPTIMIZATION: Fetch observations with location data included in the same query
+  // This avoids N+1 queries by including location fields in the selectionSet
   let nextToken: string | null | undefined = undefined;
   do {
     const { data, nextToken: nt } =
-      await client.models.Observation.observationsByAnnotationSetId(
+      await (client as any).models.Observation.observationsByAnnotationSetId(
         { annotationSetId },
         {
-          selectionSet: ['locationId'] as const,
+          selectionSet: [
+            'locationId',
+            'location.id',
+            'location.imageId',
+            'location.width',
+            'location.height',
+            'location.x',
+            'location.y',
+          ] as const,
           limit: 1000,
           nextToken,
         }
       );
     for (const item of data || []) {
-      const locationId = item?.locationId as string | undefined;
-      if (locationId) {
-        locationIds.push(locationId);
-      }
+      const location = (item as any)?.location;
+      if (!location?.imageId) continue;
+      const imageId = location.imageId as string;
+      const list = map.get(imageId) || [];
+      list.push({
+        x: Number(location.x ?? 0),
+        y: Number(location.y ?? 0),
+        width: Number(location.width ?? 0),
+        height: Number(location.height ?? 0),
+      });
+      map.set(imageId, list);
     }
     nextToken = nt as string | null | undefined;
   } while (nextToken);
-
-  // Now fetch the location details for each observed location
-  // Process in parallel with some batching
-  const batchSize = 50;
-  for (let i = 0; i < locationIds.length; i += batchSize) {
-    const batch = locationIds.slice(i, i + batchSize);
-    const locationPromises = batch.map(async (locationId) => {
-      try {
-        const { data } = await client.models.Location.get({ id: locationId });
-        return data;
-      } catch {
-        return null;
-      }
-    });
-    
-    const locations = await Promise.all(locationPromises);
-    for (const loc of locations) {
-      if (!loc?.imageId) continue;
-      const list = map.get(loc.imageId as string) || [];
-      list.push({
-        x: Number(loc.x ?? 0),
-        y: Number(loc.y ?? 0),
-        width: Number(loc.width ?? 0),
-        height: Number(loc.height ?? 0),
-      });
-      map.set(loc.imageId as string, list);
-    }
-  }
 
   return map;
 }
@@ -637,13 +694,42 @@ async function fetchAnnotationPointsDetailed(
   return map;
 }
 
+// Threshold in bytes above which we upload the payload to S3.
+// Lambda sync limit is 6MB, but we use a conservative threshold.
+const PAYLOAD_SIZE_THRESHOLD = 200 * 1024; // 200KB
+
 async function sendLaunchFalseNegativesRequest(
   client: DataClient,
   payload: Record<string, unknown>
 ) {
+  const payloadStr = JSON.stringify(payload);
+  const payloadSize = new Blob([payloadStr]).size;
+
+  let requestPayload: string;
+
+  if (payloadSize > PAYLOAD_SIZE_THRESHOLD) {
+    // Upload large payload to S3 and send only the reference.
+    const s3Key = `launch-payloads/${crypto.randomUUID()}.json`;
+    console.log(
+      `Payload size ${payloadSize} exceeds threshold, uploading to S3`,
+      { key: s3Key }
+    );
+    await uploadData({
+      path: s3Key,
+      data: payloadStr,
+      options: {
+        bucket: 'outputs',
+        contentType: 'application/json',
+      },
+    }).result;
+    requestPayload = JSON.stringify({ payloadS3Key: s3Key });
+  } else {
+    requestPayload = payloadStr;
+  }
+
   try {
     await client.mutations.launchFalseNegatives({
-      request: JSON.stringify(payload),
+      request: requestPayload,
     });
   } catch (error: any) {
     if (shouldIgnoreLaunchError(error)) {
