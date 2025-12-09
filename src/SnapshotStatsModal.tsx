@@ -12,6 +12,7 @@ interface StatsEntry {
   activeTime: number;
   sightingCount: number;
   searchTime: number;
+  searchCount: number;
   annotationTime: number;
   waitingTime: number;
 }
@@ -92,9 +93,11 @@ export default function SnapshotStatsModal({
         upperLimit
       );
       observations.forEach((o: any) => {
-        const userId = o.owner.includes('::')
+        const ownerValue = o.owner || '';
+        const userId = ownerValue.includes('::')
           ? o.owner.split('::')[1]
-          : o.owner;
+          : ownerValue;
+        if (!userId) return;
         if (!tempStats[userId]) {
           tempStats[userId] = {
             observationCount: 0,
@@ -102,6 +105,7 @@ export default function SnapshotStatsModal({
             activeTime: 0,
             sightingCount: 0,
             searchTime: 0,
+            searchCount: 0,
             annotationTime: 0,
             waitingTime: 0,
           };
@@ -111,9 +115,14 @@ export default function SnapshotStatsModal({
         entry.annotationCount += o.annotationCount || 0;
         const sighting = o.annotationCount > 0 ? 1 : 0;
         entry.sightingCount += sighting;
-        const timeTaken = o.timeTaken || 0;
+        let timeTaken = o.timeTaken || 0;
+        // Mirror lambda safeguard: drop obviously bad durations
+        if (timeTaken > (sighting ? 600_000 : 120_000)) {
+          timeTaken = 0;
+        }
         entry.activeTime += timeTaken;
         entry.searchTime += (1 - sighting) * timeTaken;
+        entry.searchCount += 1 - sighting;
         entry.annotationTime += sighting * timeTaken;
         entry.waitingTime += Math.max(0, o.waitingTime || 0);
       });
@@ -130,7 +139,9 @@ export default function SnapshotStatsModal({
         'Time spent': formatDuration(statsEntry.activeTime),
         'Jobs completed': statsEntry.observationCount,
         'Average search time (s/job)': (
-          statsEntry.searchTime / 1000 / statsEntry.observationCount || 0
+          statsEntry.searchTime /
+            1000 /
+            (statsEntry.searchCount || statsEntry.observationCount || 1)
         ).toFixed(1),
         'Total Annotations': statsEntry.annotationCount,
         'Total Sightings': statsEntry.sightingCount,
@@ -194,7 +205,9 @@ export default function SnapshotStatsModal({
                 (
                   snapshotStats[userId].searchTime /
                     1000 /
-                    snapshotStats[userId].observationCount || 0
+                    (snapshotStats[userId].searchCount ||
+                      snapshotStats[userId].observationCount ||
+                      1)
                 ).toFixed(1),
                 snapshotStats[userId].annotationCount,
                 snapshotStats[userId].sightingCount,

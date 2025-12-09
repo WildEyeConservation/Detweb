@@ -97,7 +97,7 @@ mapping1.node.addDependency(policy);
 // Expand the default authenticated Cognito role with data-plane permissions.
 const authenticatedRole = backend.auth.resources.authenticatedUserIamRole;
 const dynamoDbPolicy = new iam.PolicyStatement({
-  actions: ['dynamodb:Query'],
+  actions: ['dynamodb:Query', 'dynamodb:Scan', 'dynamodb:BatchGetItem'],
   resources: ['*'],
 });
 
@@ -173,7 +173,7 @@ const groupS3LaunchPayloadsPolicy = new iam.PolicyStatement({
 // Allow Cognito group roles to query DynamoDB tables and GSIs without
 // referencing specific data resources to avoid circular dependencies.
 const groupDynamoDbQueryPolicy = new iam.PolicyStatement({
-  actions: ['dynamodb:Query'],
+  actions: ['dynamodb:Query', 'dynamodb:Scan', 'dynamodb:BatchGetItem'],
   resources: [
     'arn:aws:dynamodb:*:*:table/*',
     'arn:aws:dynamodb:*:*:table/*/index/*',
