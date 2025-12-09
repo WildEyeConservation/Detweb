@@ -112,7 +112,7 @@ export default function SnapshotStatsModal({
         }
         const entry = tempStats[userId];
         entry.observationCount += 1;
-        entry.annotationCount += o.annotationCount || 0;
+        entry.annotationCount = Math.max(0, entry.annotationCount + (o.annotationCount || 0));
         const sighting = o.annotationCount > 0 ? 1 : 0;
         entry.sightingCount += sighting;
         let timeTaken = o.timeTaken || 0;
@@ -143,7 +143,7 @@ export default function SnapshotStatsModal({
             1000 /
             (statsEntry.searchCount || statsEntry.observationCount || 1)
         ).toFixed(1),
-        'Total Annotations': statsEntry.annotationCount,
+        'Total Annotations': Math.max(0, statsEntry.annotationCount),
         'Total Sightings': statsEntry.sightingCount,
         'Total Search Time': formatDuration(statsEntry.searchTime),
         'Total Annotation Time': formatDuration(statsEntry.annotationTime),
@@ -209,7 +209,7 @@ export default function SnapshotStatsModal({
                       snapshotStats[userId].observationCount ||
                       1)
                 ).toFixed(1),
-                snapshotStats[userId].annotationCount,
+                Math.max(0, snapshotStats[userId].annotationCount),
                 snapshotStats[userId].sightingCount,
                 formatDuration(snapshotStats[userId].searchTime),
                 formatDuration(snapshotStats[userId].annotationTime),

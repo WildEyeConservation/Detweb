@@ -9,8 +9,9 @@ import { QueryCommand, BatchGetItemCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { useUsers } from './apiInterface';
 import Select from 'react-select';
-import { Card, Button } from 'react-bootstrap';
+import { Card, Button, Spinner } from 'react-bootstrap';
 import SnapshotStatsModal from './SnapshotStatsModal';
+import { fetchAllPaginatedResults } from './utils';
 
 export default function UserStats() {
   const { getDynamoClient, myOrganizationHook, myMembershipHook } =
@@ -50,6 +51,8 @@ export default function UserStats() {
 
   // State for export loading
   const [exporting, setExporting] = useState(false);
+  // State for stats loading
+  const [loadingStats, setLoadingStats] = useState(false);
 
   // Check if user is admin for the selected project
   const isProjectAdmin = project
@@ -104,14 +107,84 @@ export default function UserStats() {
     loadProjects();
   }, [myOrganizationHook.data]);
 
+  // Fetch UserStats only when annotation sets are selected
   useEffect(() => {
-    const sub = client.models.UserStats.observeQuery().subscribe({
-      next: ({ items, isSynced }) => {
-        setUserStats([...items]);
-      },
-    });
-    return () => sub.unsubscribe();
-  }, []);
+    let cancelled = false;
+
+    async function fetchStats() {
+      // Only fetch if we have project and selectedSets
+      if (!project || !selectedSets || selectedSets.length === 0) {
+        setUserStats([]);
+        setStats({});
+        return;
+      }
+
+      setLoadingStats(true);
+      try {
+        // Build filter for UserStats query
+        // Use 'or' condition for multiple setId values since ModelIDInput doesn't support 'in'
+        const setIdConditions = selectedSets.map((set) => ({
+          setId: { eq: set.value },
+        }));
+
+        const baseConditions: any[] = [
+          { projectId: { eq: project.value } },
+          {
+            or: setIdConditions,
+          },
+        ];
+
+        // Add date range filter if dates are provided
+        if (startString && endString) {
+          baseConditions.push({
+            date: {
+              between: [startString, endString],
+            },
+          });
+        } else if (startString) {
+          baseConditions.push({
+            date: {
+              ge: startString,
+            },
+          });
+        } else if (endString) {
+          baseConditions.push({
+            date: {
+              le: endString,
+            },
+          });
+        }
+
+        const filter = {
+          and: baseConditions,
+        };
+
+        const fetchedStats = await fetchAllPaginatedResults<UserStatsType>(
+          client.models.UserStats.list,
+          { filter, limit: 1000 }
+        );
+
+        if (!cancelled) {
+          setUserStats(fetchedStats);
+        }
+      } catch (error) {
+        console.error('Error fetching UserStats:', error);
+        if (!cancelled) {
+          setUserStats([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingStats(false);
+        }
+      }
+    }
+
+    fetchStats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [project, selectedSets, startString, endString, client]);
 
   useEffect(() => {
     setStats({});
@@ -142,7 +215,7 @@ export default function UserStats() {
                   };
                 }
                 prev[s.userId].observationCount += s.observationCount;
-                prev[s.userId].annotationCount += s.annotationCount;
+                prev[s.userId].annotationCount = Math.max(0, prev[s.userId].annotationCount + s.annotationCount);
                 prev[s.userId].activeTime += s.activeTime;
                 prev[s.userId].sightingCount += s.sightingCount;
                 prev[s.userId].searchTime += s.searchTime;
@@ -174,7 +247,7 @@ export default function UserStats() {
       (
         stats[userId].searchTime / 1000 / stats[userId].observationCount || 0
       ).toFixed(1),
-      stats[userId].annotationCount,
+      Math.max(0, stats[userId].annotationCount),
       stats[userId].sightingCount,
       formatDuration(stats[userId].searchTime),
       formatDuration(stats[userId].annotationTime),
@@ -288,6 +361,7 @@ export default function UserStats() {
             const { confidence, ...rest } = o;
             return {
               ...rest,
+              annotationCount: Math.max(0, o.annotationCount || 0),
               owner: userLookup.get(o.owner),
               locationConfidence: confidence,
             };
@@ -407,15 +481,24 @@ export default function UserStats() {
           </div>
 
           <div className='mt-3 overflow-x-auto'>
-            <MyTable
-              tableHeadings={tableHeadings}
-              tableData={tableData}
-              emptyMessage={
-                project && selectedSets && selectedSets.length > 0
-                  ? 'No stats found'
-                  : 'Select a survey and annotation sets to view stats'
-              }
-            />
+            {loadingStats ? (
+              <div className='d-flex justify-content-center align-items-center py-5'>
+                <Spinner animation='border' role='status'>
+                  <span className='visually-hidden'>Loading stats...</span>
+                </Spinner>
+                <span className='ms-3'>Loading stats...</span>
+              </div>
+            ) : (
+              <MyTable
+                tableHeadings={tableHeadings}
+                tableData={tableData}
+                emptyMessage={
+                  project && selectedSets && selectedSets.length > 0
+                    ? 'No stats found'
+                    : 'Select a survey and annotation sets to view stats'
+                }
+              />
+            )}
           </div>
         </Card.Body>
         {isProjectAdmin && (
