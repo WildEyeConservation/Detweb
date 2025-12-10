@@ -63,7 +63,9 @@ export class AutoProcessor extends Construct {
       deadLetterQueue: {
         queue: dlq,
         maxReceiveCount: 3,
-      }
+      },
+      // Match expected scoutbot processing time; avoid re-delivery during work.
+      visibilityTimeout: cdk.Duration.minutes(30),
     });
 
     // Create ECS Cluster
