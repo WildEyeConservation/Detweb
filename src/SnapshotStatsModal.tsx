@@ -97,7 +97,10 @@ export default function SnapshotStatsModal({
         const userId = ownerValue.includes('::')
           ? o.owner.split('::')[1]
           : ownerValue;
-        if (!userId) return;
+        if (!userId) {
+          console.warn('Observation missing owner, skipping', o);
+          return;
+        }
         if (!tempStats[userId]) {
           tempStats[userId] = {
             observationCount: 0,

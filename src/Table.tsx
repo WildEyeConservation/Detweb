@@ -88,6 +88,7 @@ export default function MyTable(input: TableObject) {
 
   useEffect(() => {
     setSortedData(tableData);
+    setCurrentPage(0); // reset to first page when data changes (e.g., search/filter)
   }, [tableData]);
 
   if (tableData.length <= 0 && emptyMessage) {

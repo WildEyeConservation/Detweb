@@ -1,10 +1,4 @@
-import {
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-  useMemo,
-} from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useContext } from 'react';
 import { GlobalContext } from '../Context';
 import { Footer } from '../Modal';
@@ -51,10 +45,6 @@ type DeletionCounters = {
   failures: number;
 };
 
-function ensureArray<T>(value?: Array<T> | null): Array<T> {
-  return Array.isArray(value) ? value : [];
-}
-
 // Component to fit map bounds to image locations
 function FitBoundsToImages({ images }: { images: ImageData[] }) {
   const map = useMap();
@@ -70,7 +60,6 @@ function FitBoundsToImages({ images }: { images: ImageData[] }) {
 
   return null;
 }
-
 
 export default function DeleteImages({ projectId }: { projectId: string }) {
   const { client, showModal } = useContext(GlobalContext)!;
@@ -142,12 +131,16 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
       setImages(gpsImages);
       setSelectedIds(new Set());
       setLoadingStatus(
-        `Loaded ${gpsImages.length} images with GPS coordinates (${allImages.length - gpsImages.length} without GPS)`
+        `Loaded ${gpsImages.length} images with GPS coordinates (${
+          allImages.length - gpsImages.length
+        } without GPS)`
       );
     } catch (err) {
       console.error('Failed to fetch images:', err);
       setError(
-        `Failed to fetch images: ${err instanceof Error ? err.message : String(err)}`
+        `Failed to fetch images: ${
+          err instanceof Error ? err.message : String(err)
+        }`
       );
     } finally {
       setLoading(false);
@@ -243,94 +236,18 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
       let totalAnnotations = 0;
       let totalLocations = 0;
 
-      setDeleteProgress({ current: 0, total: 0, phase: 'Fetching image details and relationships...' });
-
-      // Fetch images with their relationships
-      const imageData = (await fetchAllPaginatedResults(
-        client.models.Image.imagesByProjectId,
-        {
-          projectId,
-          selectionSet: [
-            'id',
-            'originalPath',
-            'memberships.id',
-            'memberships.imageSetId',
-            'files.id',
-            'leftNeighbours.image1Id',
-            'leftNeighbours.image2Id',
-            'rightNeighbours.image1Id',
-            'rightNeighbours.image2Id',
-          ],
-          limit: 1000,
-        },
-        (count) => {
-          setDeleteProgress({ current: count, total: 0, phase: `Fetching image details... (${count} images scanned)` });
-        }
-      )) as Array<any>;
-
-      const selectedImageSet = new Set(imageIds);
-
-      for (const img of imageData) {
-        if (!img?.id || !selectedImageSet.has(img.id)) continue;
-
-        const membershipRecords: Array<{ id: string; imageSetId?: string | null }> = 
-          ensureArray(img.memberships)
-            .map((m: any) => {
-              if (!m?.id) return null;
-              return { id: m.id as string, imageSetId: m.imageSetId ?? null };
-            })
-            .filter((m): m is { id: string; imageSetId: string | null } => m !== null);
-
-        const fileRecords = ensureArray(img.files)
-          .map((f: any) => (f?.id ? { id: f.id } : null))
-          .filter((f: any): f is { id: string } => Boolean(f));
-
-        const neighbourPairs: Array<{
-          key: string;
-          image1Id: string;
-          image2Id: string;
-        }> = [];
-        const addNeighbours = (
-          list?: Array<{ image1Id?: string | null; image2Id?: string | null }>
-        ) => {
-          for (const neighbour of list || []) {
-            const image1Id = neighbour?.image1Id;
-            const image2Id = neighbour?.image2Id;
-            if (!image1Id || !image2Id) continue;
-            const key =
-              image1Id < image2Id
-                ? `${image1Id}::${image2Id}`
-                : `${image2Id}::${image1Id}`;
-            neighbourPairs.push({ key, image1Id, image2Id });
-          }
-        };
-        addNeighbours(img.leftNeighbours);
-        addNeighbours(img.rightNeighbours);
-
-        totalMemberships += membershipRecords.length;
-        totalFiles += fileRecords.length;
-        totalNeighbours += neighbourPairs.length;
-
-        imageMap.set(img.id, {
-          id: img.id,
-          originalPath: img.originalPath,
-          annotationIds: [],
-          locationIds: [],
-          membershipRecords,
-          fileRecords,
-          neighbourPairs,
-        });
-      }
-
-      setDeleteProgress({ 
-        current: 0, 
-        total: 0, 
-        phase: `Found ${imageMap.size} selected images with ${totalMemberships} memberships, ${totalFiles} files, ${totalNeighbours} neighbour links. Fetching annotations...` 
+      setDeleteProgress({
+        current: 0,
+        total: imageIds.length,
+        phase: 'Fetching selected image details...',
       });
 
-      // Fetch annotations for selected images
-      const annotationSets = (await fetchAllPaginatedResults(
-        client.models.AnnotationSet.annotationSetsByProjectId,
+      const selectedSet = new Set(imageIds);
+      const deletedNeighbourKeys = new Set<string>();
+
+      // Fetch image sets (usually one) and collect memberships once
+      const imageSets = (await fetchAllPaginatedResults(
+        client.models.ImageSet.imageSetsByProjectId,
         {
           projectId,
           selectionSet: ['id'],
@@ -338,74 +255,194 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
         }
       )) as Array<{ id?: string | null }>;
 
-      let setsProcessed = 0;
-      for (const set of annotationSets) {
-        if (!set?.id) continue;
-        setsProcessed++;
-        setDeleteProgress({ 
-          current: setsProcessed, 
-          total: annotationSets.length, 
-          phase: `Fetching annotations from set ${setsProcessed}/${annotationSets.length}... (${totalAnnotations} annotations found)` 
-        });
+      const membershipByImageId = new Map<
+        string,
+        Array<{ id: string; imageSetId?: string | null }>
+      >();
 
-        const annotations = (await fetchAllPaginatedResults(
-          client.models.Annotation.annotationsByAnnotationSetId,
+      for (const imageSet of imageSets) {
+        if (!imageSet?.id) continue;
+        const memberships = (await fetchAllPaginatedResults(
+          client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
           {
-            setId: set.id,
-            selectionSet: ['id', 'imageId'],
+            imageSetId: imageSet.id,
+            selectionSet: ['id', 'imageId', 'imageSetId'],
             limit: 1000,
           }
-        )) as Array<{ id?: string | null; imageId?: string | null }>;
+        )) as Array<{
+          id?: string | null;
+          imageId?: string | null;
+          imageSetId?: string | null;
+        }>;
 
-        for (const annotation of annotations) {
-          if (!annotation?.id || !annotation?.imageId) continue;
-          const agg = imageMap.get(annotation.imageId);
-          if (!agg) continue;
-          agg.annotationIds.push(annotation.id);
-          totalAnnotations++;
+        for (const m of memberships) {
+          if (!m?.id || !m?.imageId) continue;
+          if (!selectedSet.has(m.imageId)) continue;
+          const list = membershipByImageId.get(m.imageId) ?? [];
+          list.push({ id: m.id, imageSetId: m.imageSetId ?? null });
+          membershipByImageId.set(m.imageId, list);
         }
       }
 
-      setDeleteProgress({ 
-        current: 0, 
-        total: 0, 
-        phase: `Found ${totalAnnotations} annotations. Fetching locations/detections...` 
-      });
+      // Build aggregates per selected image using targeted queries (batched parallel)
+      const fetchBatchSize = 10;
+      for (let start = 0; start < imageIds.length; start += fetchBatchSize) {
+        const batch = imageIds.slice(start, start + fetchBatchSize);
 
-      // Fetch locations for selected images
-      const locations = (await fetchAllPaginatedResults(
-        client.models.Location.locationsByProjectIdAndSource,
-        {
-          projectId,
-          selectionSet: ['id', 'imageId'],
-          limit: 1000,
-        },
-        (count) => {
-          setDeleteProgress({ 
-            current: count, 
-            total: 0, 
-            phase: `Fetching locations... (${count} scanned, ${totalLocations} found for selected images)` 
-          });
+        const batchAggs = await Promise.all(
+          batch.map(async (imageId) => {
+            const baseImage = images.find((img) => img.id === imageId);
+
+            const membershipRecords = membershipByImageId.get(imageId) ?? [];
+
+            const [
+              annotations,
+              locations,
+              files,
+              leftNeighbours,
+              rightNeighbours,
+            ] = await Promise.all([
+              fetchAllPaginatedResults(
+                client.models.Annotation.annotationsByImageIdAndSetId,
+                {
+                  imageId,
+                  selectionSet: ['id', 'setId'],
+                  limit: 1000,
+                }
+              ),
+              fetchAllPaginatedResults(
+                client.models.Location.locationsByImageKey,
+                {
+                  imageId,
+                  selectionSet: ['id'],
+                  limit: 1000,
+                }
+              ),
+              fetchAllPaginatedResults(
+                client.models.ImageFile.imagesByimageId,
+                {
+                  imageId,
+                  selectionSet: ['id'],
+                  limit: 1000,
+                }
+              ),
+              fetchAllPaginatedResults(
+                client.models.ImageNeighbour.imageNeighboursByImage1key,
+                {
+                  image1Id: imageId,
+                  selectionSet: ['image1Id', 'image2Id'],
+                  limit: 1000,
+                }
+              ),
+              fetchAllPaginatedResults(
+                client.models.ImageNeighbour.imageNeighboursByImage2key,
+                {
+                  image2Id: imageId,
+                  selectionSet: ['image1Id', 'image2Id'],
+                  limit: 1000,
+                }
+              ),
+            ]);
+
+            const localNeighbourSet = new Set<string>();
+            const neighbourPairs: Array<{
+              key: string;
+              image1Id: string;
+              image2Id: string;
+            }> = [];
+            const pushNeighbour = (n?: {
+              image1Id?: string | null;
+              image2Id?: string | null;
+            }) => {
+              if (!n?.image1Id || !n?.image2Id) return;
+              const key =
+                n.image1Id < n.image2Id
+                  ? `${n.image1Id}::${n.image2Id}`
+                  : `${n.image2Id}::${n.image1Id}`;
+              if (localNeighbourSet.has(key)) return;
+              localNeighbourSet.add(key);
+              neighbourPairs.push({
+                key,
+                image1Id: n.image1Id,
+                image2Id: n.image2Id,
+              });
+            };
+
+            (leftNeighbours as Array<any>).forEach(pushNeighbour);
+            (rightNeighbours as Array<any>).forEach(pushNeighbour);
+
+            return {
+              imageId,
+              baseImage,
+              membershipRecords,
+              annotations: annotations as Array<{ id?: string | null }>,
+              locations: locations as Array<{ id?: string | null }>,
+              files: files as Array<{ id?: string | null }>,
+              neighbourPairs,
+            };
+          })
+        );
+
+        for (const result of batchAggs) {
+          const agg: ImageAggregate = {
+            id: result.imageId,
+            originalPath: result.baseImage?.originalPath,
+            annotationIds: [],
+            locationIds: [],
+            membershipRecords: result.membershipRecords,
+            fileRecords: [],
+            neighbourPairs: [],
+          };
+
+          totalMemberships += agg.membershipRecords.length;
+
+          for (const annotation of result.annotations) {
+            if (!annotation?.id) continue;
+            agg.annotationIds.push(annotation.id);
+            totalAnnotations++;
+          }
+
+          for (const location of result.locations) {
+            if (!location?.id) continue;
+            agg.locationIds.push(location.id);
+            totalLocations++;
+          }
+
+          for (const file of result.files) {
+            if (!file?.id) continue;
+            agg.fileRecords.push({ id: file.id });
+            totalFiles++;
+          }
+
+          for (const neighbour of result.neighbourPairs) {
+            if (deletedNeighbourKeys.has(neighbour.key)) continue;
+            deletedNeighbourKeys.add(neighbour.key);
+            agg.neighbourPairs.push(neighbour);
+            totalNeighbours++;
+          }
+
+          imageMap.set(result.imageId, agg);
         }
-      )) as Array<{ id?: string | null; imageId?: string | null }>;
 
-      for (const location of locations) {
-        if (!location?.id || !location?.imageId) continue;
-        const agg = imageMap.get(location.imageId);
-        if (!agg) continue;
-        agg.locationIds.push(location.id);
-        totalLocations++;
+        setDeleteProgress({
+          current: Math.min(start + fetchBatchSize, imageIds.length),
+          total: imageIds.length,
+          phase: `Fetched relationships for ${Math.min(
+            start + fetchBatchSize,
+            imageIds.length
+          )}/${imageIds.length} images...`,
+        });
       }
 
-      setDeleteProgress({ 
-        current: 0, 
-        total: 0, 
-        phase: `Ready to delete: ${imageMap.size} images, ${totalAnnotations} annotations, ${totalLocations} locations, ${totalFiles} files, ${totalMemberships} memberships, ${totalNeighbours} neighbour links` 
+      setDeleteProgress({
+        current: imageMap.size,
+        total: imageMap.size,
+        phase: `Ready to delete: ${imageMap.size} images, ${totalAnnotations} annotations, ${totalLocations} locations, ${totalFiles} files, ${totalMemberships} memberships, ${totalNeighbours} neighbour links`,
       });
 
       return imageMap;
     },
-    [client, projectId]
+    [client, images, projectId]
   );
 
   // Delete selected images
@@ -459,7 +496,7 @@ This action cannot be undone.`;
 
       const deletedNeighbourKeys = new Set<string>();
       const impactedImageSetIds = new Set<string>();
-      const batchSize = 10;
+      const batchSize = 25;
       const aggregates = Array.from(imageMap.values());
 
       setDeleteProgress({
@@ -536,15 +573,15 @@ This action cannot be undone.`;
             } catch (err) {
               counters.failures += 1;
               console.warn('Failed to delete image', agg.id, err);
+            } finally {
+              setDeleteProgress({
+                current: counters.imagesDeleted,
+                total: aggregates.length,
+                phase: `Deleted ${counters.imagesDeleted}/${aggregates.length} images (${counters.annotationsDeleted} annotations, ${counters.locationsDeleted} locations)...`,
+              });
             }
           })
         );
-
-        setDeleteProgress({
-          current: counters.imagesDeleted,
-          total: aggregates.length,
-          phase: `Deleted ${counters.imagesDeleted}/${aggregates.length} images (${counters.annotationsDeleted} annotations, ${counters.locationsDeleted} locations)...`,
-        });
       }
 
       // Update impacted image sets
@@ -601,7 +638,9 @@ This action cannot be undone.`;
     } catch (err) {
       console.error('Delete operation failed:', err);
       setError(
-        `Delete operation failed: ${err instanceof Error ? err.message : String(err)}`
+        `Delete operation failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`
       );
     } finally {
       setDeleting(false);
@@ -623,37 +662,41 @@ This action cannot be undone.`;
 
   return (
     <>
-      <div className="p-3 d-flex flex-column gap-3">
+      <div className='p-3 d-flex flex-column gap-3'>
         {/* Instructions */}
-        <Alert variant="info" className="mb-0">
+        <Alert variant='info' className='mb-0'>
           <strong>Instructions:</strong>
-          <ul className="mb-0 mt-2">
+          <ul className='mb-0 mt-2'>
             <li>Click on an image marker to select it</li>
-            <li>Hold <kbd>Ctrl</kbd> + click to select multiple images</li>
-            <li>Use the polygon tool (top-right) to draw around multiple images</li>
+            <li>
+              Hold <kbd>Ctrl</kbd> + click to select multiple images
+            </li>
+            <li>
+              Use the polygon tool (top-right) to draw around multiple images
+            </li>
             <li>Right-click on a marker to view image details</li>
             <li>Blue markers = unselected, Red markers = selected</li>
           </ul>
         </Alert>
 
         {/* Status bar */}
-        <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-          <div className="d-flex gap-2 align-items-center">
-            <Badge bg="primary">{images.length} images loaded</Badge>
+        <div className='d-flex justify-content-between align-items-center flex-wrap gap-2'>
+          <div className='d-flex gap-2 align-items-center'>
+            <Badge bg='primary'>{images.length} images loaded</Badge>
             <Badge bg={selectedCount > 0 ? 'danger' : 'secondary'}>
               {selectedCount} selected
             </Badge>
           </div>
-          <div className="d-flex gap-2">
+          <div className='d-flex gap-2'>
             <Button
-              size="sm"
-              variant="outline-secondary"
+              size='sm'
+              variant='outline-secondary'
               onClick={fetchImages}
               disabled={loading || deleting}
             >
               {loading ? (
                 <>
-                  <Spinner animation="border" size="sm" className="me-1" />
+                  <Spinner animation='border' size='sm' className='me-1' />
                   Loading...
                 </>
               ) : (
@@ -661,30 +704,30 @@ This action cannot be undone.`;
               )}
             </Button>
             <Button
-              size="sm"
-              variant="outline-primary"
+              size='sm'
+              variant='outline-primary'
               onClick={selectAll}
               disabled={loading || deleting || images.length === 0}
             >
               Select All
             </Button>
             <Button
-              size="sm"
-              variant="outline-info"
+              size='sm'
+              variant='outline-info'
               onClick={clearSelection}
               disabled={loading || deleting || selectedCount === 0}
             >
               Clear Selection
             </Button>
             <Button
-              size="sm"
-              variant="danger"
+              size='sm'
+              variant='danger'
               onClick={handleDelete}
               disabled={loading || deleting || selectedCount === 0}
             >
               {deleting ? (
                 <>
-                  <Spinner animation="border" size="sm" className="me-1" />
+                  <Spinner animation='border' size='sm' className='me-1' />
                   Deleting...
                 </>
               ) : (
@@ -696,12 +739,12 @@ This action cannot be undone.`;
 
         {/* Loading status */}
         {loadingStatus && !error && (
-          <div className="text-muted small">{loadingStatus}</div>
+          <div className='text-muted small'>{loadingStatus}</div>
         )}
 
         {/* Error display */}
         {error && (
-          <Alert variant="danger" dismissible onClose={() => setError(null)}>
+          <Alert variant='danger' dismissible onClose={() => setError(null)}>
             {error}
           </Alert>
         )}
@@ -709,15 +752,21 @@ This action cannot be undone.`;
         {/* Delete progress */}
         {deleteProgress && (
           <div>
-            <div className="text-muted small mb-1">{deleteProgress.phase}</div>
-            {deleteProgress.total > 0 && (
-              <ProgressBar
-                now={(deleteProgress.current / deleteProgress.total) * 100}
-                label={`${deleteProgress.current}/${deleteProgress.total}`}
-                animated
-                striped
-              />
-            )}
+            <div className='text-muted small mb-1'>{deleteProgress.phase}</div>
+            <ProgressBar
+              now={
+                deleteProgress.total > 0
+                  ? (deleteProgress.current / deleteProgress.total) * 100
+                  : 100
+              }
+              label={
+                deleteProgress.total > 0
+                  ? `${deleteProgress.current}/${deleteProgress.total}`
+                  : undefined
+              }
+              animated
+              striped
+            />
           </div>
         )}
 
@@ -729,7 +778,7 @@ This action cannot be undone.`;
             onClose={() => setDeleteResult(null)}
           >
             <strong>Deletion complete:</strong>
-            <ul className="mb-0 mt-2">
+            <ul className='mb-0 mt-2'>
               <li>Images deleted: {deleteResult.imagesDeleted}</li>
               <li>Annotations deleted: {deleteResult.annotationsDeleted}</li>
               <li>Locations deleted: {deleteResult.locationsDeleted}</li>
@@ -738,7 +787,7 @@ This action cannot be undone.`;
               <li>Neighbour links deleted: {deleteResult.neighboursDeleted}</li>
               <li>Image sets updated: {deleteResult.imageSetsUpdated}</li>
               {deleteResult.failures > 0 && (
-                <li className="text-danger">
+                <li className='text-danger'>
                   Failures: {deleteResult.failures}
                 </li>
               )}
@@ -758,7 +807,7 @@ This action cannot be undone.`;
           }}
         >
           {images.length === 0 && !loading ? (
-            <div className="d-flex justify-content-center align-items-center h-100 text-muted">
+            <div className='d-flex justify-content-center align-items-center h-100 text-muted'>
               No images with GPS coordinates found
             </div>
           ) : (
@@ -769,7 +818,7 @@ This action cannot be undone.`;
             >
               <TileLayer
                 attribution='&copy; OpenStreetMap contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
               />
 
               {images.length > 0 && <FitBoundsToImages images={images} />}
@@ -777,7 +826,7 @@ This action cannot be undone.`;
               {/* Feature group for polygon drawing */}
               <FeatureGroup ref={featureGroupRef}>
                 <EditControl
-                  position="topright"
+                  position='topright'
                   onCreated={onPolygonCreated}
                   draw={{
                     polygon: {
@@ -856,20 +905,23 @@ This action cannot be undone.`;
                 zIndex: 1000,
               }}
             >
-              <div className="text-center">
-                <Spinner animation="border" variant="primary" />
-                <div className="mt-2">{loadingStatus || 'Loading...'}</div>
+              <div className='text-center'>
+                <Spinner animation='border' variant='primary' />
+                <div className='mt-2'>{loadingStatus || 'Loading...'}</div>
               </div>
             </div>
           )}
         </div>
       </div>
       <Footer>
-        <Button variant="dark" onClick={() => showModal(null)}>
+        <Button
+          variant='dark'
+          onClick={() => showModal(null)}
+          disabled={deleting}
+        >
           Close
         </Button>
       </Footer>
     </>
   );
 }
-
