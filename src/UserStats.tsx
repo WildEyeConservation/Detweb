@@ -51,8 +51,8 @@ export default function UserStats() {
 
   // State for export loading
   const [exporting, setExporting] = useState(false);
-  // State for stats loading
-  const [loadingStats, setLoadingStats] = useState(false);
+  // State for initial fetch loading
+  const [loadingStats, setLoadingStats] = useState(true);
 
   // Check if user is admin for the selected project
   const isProjectAdmin = project
@@ -107,89 +107,112 @@ export default function UserStats() {
     loadProjects();
   }, [myOrganizationHook.data]);
 
-  // Fetch UserStats only when annotation sets are selected
+  // Rapid fetch for initial data, then individual subscriptions for updates
   useEffect(() => {
     let cancelled = false;
+    const subs: { unsubscribe: () => void }[] = [];
 
-    async function fetchStats() {
-      // Only fetch if we have project and selectedSets
-      if (!project || !selectedSets || selectedSets.length === 0) {
-        setUserStats([]);
-        setStats({});
+    // Reset state when selectedSets changes
+    setUserStats([]);
+    setLoadingStats(true);
+
+    // Rapid fetch for initial data - only when annotation sets are selected
+    async function rapidFetch() {
+      // Only fetch if we have selected sets
+      if (!selectedSets || selectedSets.length === 0) {
+        setLoadingStats(false);
         return;
       }
 
-      setLoadingStats(true);
       try {
-        // Build filter for UserStats query
-        // Use 'or' condition for multiple setId values since ModelIDInput doesn't support 'in'
+        // Build filter for selected setIds
         const setIdConditions = selectedSets.map((set) => ({
           setId: { eq: set.value },
         }));
+        const filter = { or: setIdConditions };
 
-        const baseConditions: any[] = [
-          { projectId: { eq: project.value } },
-          {
-            or: setIdConditions,
-          },
-        ];
-
-        // Add date range filter if dates are provided
-        if (startString && endString) {
-          baseConditions.push({
-            date: {
-              between: [startString, endString],
-            },
-          });
-        } else if (startString) {
-          baseConditions.push({
-            date: {
-              ge: startString,
-            },
-          });
-        } else if (endString) {
-          baseConditions.push({
-            date: {
-              le: endString,
-            },
-          });
-        }
-
-        const filter = {
-          and: baseConditions,
-        };
-
-        const fetchedStats = await fetchAllPaginatedResults<UserStatsType>(
+        const fetched = await fetchAllPaginatedResults<UserStatsType>(
           client.models.UserStats.list,
           { filter, limit: 1000 }
         );
-
         if (!cancelled) {
-          setUserStats(fetchedStats);
+          setUserStats(fetched);
+          setLoadingStats(false);
         }
       } catch (error) {
         console.error('Error fetching UserStats:', error);
-        if (!cancelled) {
-          setUserStats([]);
-        }
-      } finally {
         if (!cancelled) {
           setLoadingStats(false);
         }
       }
     }
 
-    fetchStats();
+    rapidFetch();
+
+    // onCreate - add new item (or replace if exists)
+    subs.push(
+      client.models.UserStats.onCreate().subscribe({
+        next: (newItem) => {
+          if (!cancelled && newItem) {
+            setUserStats((prev) => {
+              // Check if already exists by composite key
+              const exists = prev.some(
+                (s) =>
+                  s.userId === newItem.userId &&
+                  s.date === newItem.date &&
+                  s.setId === newItem.setId &&
+                  s.projectId === newItem.projectId
+              );
+              if (exists) {
+                return prev.map((s) =>
+                  s.userId === newItem.userId &&
+                  s.date === newItem.date &&
+                  s.setId === newItem.setId &&
+                  s.projectId === newItem.projectId
+                    ? { ...s, ...newItem }
+                    : s
+                );
+              }
+              return [...prev, newItem];
+            });
+          }
+        },
+        error: (error) => console.error('UserStats onCreate error:', error),
+      })
+    );
+
+    // onUpdate - replace existing item by composite key
+    subs.push(
+      client.models.UserStats.onUpdate().subscribe({
+        next: (updatedItem) => {
+          if (!cancelled && updatedItem) {
+            setUserStats((prev) =>
+              prev.map((s) =>
+                s.userId === updatedItem.userId &&
+                s.date === updatedItem.date &&
+                s.setId === updatedItem.setId &&
+                s.projectId === updatedItem.projectId
+                  ? { ...s, ...updatedItem }
+                  : s
+              )
+            );
+          }
+        },
+        error: (error) => console.error('UserStats onUpdate error:', error),
+      })
+    );
 
     return () => {
       cancelled = true;
+      subs.forEach((sub) => sub.unsubscribe());
     };
-  }, [project, selectedSets, startString, endString, client]);
+  }, [client, selectedSets]);
 
   useEffect(() => {
-    setStats({});
+    // Compute all stats synchronously, then set state once
+    const newStats: typeof stats = {};
 
-    if (project) {
+    if (project && selectedSets && selectedSets.length > 0) {
       userStats
         .filter((s) => s != null)
         .forEach((s) => {
@@ -197,36 +220,34 @@ export default function UserStats() {
             !startString ||
             (s.date >= startString && (!endString || s.date <= endString))
           ) {
-            if (
-              selectedSets &&
-              selectedSets.length > 0 &&
-              selectedSets.some((set) => set.value === s.setId)
-            ) {
-              setStats((prev) => {
-                if (!prev[s.userId]) {
-                  prev[s.userId] = {
-                    observationCount: 0,
-                    annotationCount: 0,
-                    activeTime: 0,
-                    sightingCount: 0,
-                    searchTime: 0,
-                    annotationTime: 0,
-                    waitingTime: 0,
-                  };
-                }
-                prev[s.userId].observationCount += s.observationCount;
-                prev[s.userId].annotationCount = Math.max(0, prev[s.userId].annotationCount + s.annotationCount);
-                prev[s.userId].activeTime += s.activeTime;
-                prev[s.userId].sightingCount += s.sightingCount;
-                prev[s.userId].searchTime += s.searchTime;
-                prev[s.userId].annotationTime += s.annotationTime;
-                prev[s.userId].waitingTime += s.waitingTime;
-                return prev;
-              });
+            if (selectedSets.some((set) => set.value === s.setId)) {
+              if (!newStats[s.userId]) {
+                newStats[s.userId] = {
+                  observationCount: 0,
+                  annotationCount: 0,
+                  activeTime: 0,
+                  sightingCount: 0,
+                  searchTime: 0,
+                  annotationTime: 0,
+                  waitingTime: 0,
+                };
+              }
+              newStats[s.userId].observationCount += s.observationCount;
+              newStats[s.userId].annotationCount = Math.max(
+                0,
+                newStats[s.userId].annotationCount + s.annotationCount
+              );
+              newStats[s.userId].activeTime += s.activeTime;
+              newStats[s.userId].sightingCount += s.sightingCount;
+              newStats[s.userId].searchTime += s.searchTime;
+              newStats[s.userId].annotationTime += s.annotationTime;
+              newStats[s.userId].waitingTime += s.waitingTime;
             }
           }
         });
     }
+
+    setStats(newStats);
   }, [project, startDate, endDate, userStats, selectedSets]);
 
   // Format duration in milliseconds to H:MM:SS format
