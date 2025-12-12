@@ -10,6 +10,7 @@ type LabeledValue = { label: string; value: string };
 interface ReviewCarouselProps {
   selectedAnnotationSet: string;
   selectedCategories: LabeledValue[];
+  selectedUsers?: LabeledValue[];
   imageBased?: boolean;
 }
 
@@ -30,6 +31,7 @@ interface LocationLike {
 export default function ReviewCarousel({
   selectedAnnotationSet,
   selectedCategories,
+  selectedUsers = [],
   imageBased = true,
 }: ReviewCarouselProps) {
   const { client } = useContext(GlobalContext)!;
@@ -54,6 +56,22 @@ export default function ReviewCarousel({
     return all;
   }, [selectedCategories, selectedAnnotationSet, categories]);
 
+  // Helper to extract userId from owner field
+  // If contains "::", take the part before it; otherwise the whole field is the userId
+  const extractUserIdFromOwner = (owner: string | null | undefined): string | null => {
+    if (!owner) return null;
+    if (owner.includes('::')) {
+      return owner.split('::')[0];
+    }
+    return owner;
+  };
+
+  // Set of selected user IDs for filtering
+  const selectedUserIds = useMemo(
+    () => new Set(selectedUsers.map((u) => u.value)),
+    [selectedUsers]
+  );
+
   useEffect(() => {
     let cancelled = false;
 
@@ -73,6 +91,7 @@ export default function ReviewCarousel({
                   selectionSet: [
                     'x',
                     'y',
+                    'owner',
                     'image.id',
                     'image.width',
                     'image.height',
@@ -86,6 +105,7 @@ export default function ReviewCarousel({
               data: Array<{
                 x: number;
                 y: number;
+                owner?: string | null;
                 image: {
                   id: string;
                   width: number;
@@ -96,9 +116,19 @@ export default function ReviewCarousel({
               nextToken?: string | null;
             };
             if (cancelled) return;
+
+            // Filter by user if users are selected
+            const filteredData =
+              selectedUserIds.size > 0
+                ? data.filter((ann) => {
+                    const userId = extractUserIdFromOwner(ann.owner);
+                    return userId && selectedUserIds.has(userId);
+                  })
+                : data;
+
             setAnnotations((prev) => [
               ...prev,
-              ...data.map(({ x, y, image }) => ({
+              ...filteredData.map(({ x, y, image }) => ({
                 location: {
                   x,
                   y,
@@ -115,7 +145,7 @@ export default function ReviewCarousel({
                 id: crypto.randomUUID(),
               })),
             ]);
-            setLocationsLoaded((prev) => prev + data.length);
+            setLocationsLoaded((prev) => prev + filteredData.length);
 
             nextNextToken = nextToken ?? null;
           } while (nextNextToken);
@@ -141,6 +171,7 @@ export default function ReviewCarousel({
                 { categoryId },
                 {
                   selectionSet: [
+                    'owner',
                     'image.id',
                     'image.width',
                     'image.height',
@@ -152,6 +183,7 @@ export default function ReviewCarousel({
               );
             const { data, nextToken } = result as {
               data: Array<{
+                owner?: string | null;
                 image: {
                   id: string;
                   width: number;
@@ -161,7 +193,17 @@ export default function ReviewCarousel({
               }>;
               nextToken?: string | null;
             };
-            for (const { image } of data) {
+
+            // Filter by user if users are selected
+            const filteredData =
+              selectedUserIds.size > 0
+                ? data.filter((ann) => {
+                    const userId = extractUserIdFromOwner(ann.owner);
+                    return userId && selectedUserIds.has(userId);
+                  })
+                : data;
+
+            for (const { image } of filteredData) {
               if (!imagesFound.has(image.id)) {
                 imagesFound.add(image.id);
                 locations.push({
@@ -214,7 +256,7 @@ export default function ReviewCarousel({
     return () => {
       cancelled = true;
     };
-  }, [client, selectedAnnotationSet, effectiveCategories, imageBased]);
+  }, [client, selectedAnnotationSet, effectiveCategories, selectedUserIds, imageBased]);
 
   useEffect(() => {
     if (annotations.length) {
