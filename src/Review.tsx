@@ -1,8 +1,8 @@
 import { useParams } from 'react-router-dom';
-import { useEffect, useState, useContext } from 'react';
+import { useEffect, useState, useContext, useMemo } from 'react';
 import { AnnotationSetDropdown } from './AnnotationSetDropDown';
 import Select, { MultiValue } from 'react-select';
-import { ProjectContext, ManagementContext } from './Context';
+import { ProjectContext, ManagementContext, GlobalContext } from './Context';
 import { Form } from 'react-bootstrap';
 import './Review.css';
 import { Card } from 'react-bootstrap';
@@ -11,9 +11,14 @@ import { PanelBottom } from 'lucide-react';
 import { Tab, Tabs } from './Tabs';
 import ReviewCarousel from './ReviewCarousel';
 import DensityMap from './DensityMap';
+import { useUsers } from './apiInterface';
+import { fetchAllPaginatedResults } from './utils';
 
 export function Review({ showAnnotationSetDropdown = true }) {
   const [selectedCategories, setSelectedCategories] = useState<
+    { label: string; value: string }[]
+  >([]);
+  const [selectedUsers, setSelectedUsers] = useState<
     { label: string; value: string }[]
   >([]);
   const [tab, setTab] = useState<'carousel' | 'map'>('carousel');
@@ -22,6 +27,7 @@ export function Review({ showAnnotationSetDropdown = true }) {
   const [imageBased] = useState(true);
   const [primaryOnly, setPrimaryOnly] = useState(false);
   const [showFilters, setShowFilters] = useState(true);
+  const { client } = useContext(GlobalContext)!;
   const {
     categoriesHook: { data: categories },
     project,
@@ -30,6 +36,49 @@ export function Review({ showAnnotationSetDropdown = true }) {
   const {
     annotationSetsHook: { data: annotationSets },
   } = useContext(ManagementContext)!;
+
+  // Fetch users with project membership
+  const { users } = useUsers();
+  const [projectMemberships, setProjectMemberships] = useState<
+    { userId: string }[]
+  >([]);
+
+  useEffect(() => {
+    if (!project?.id) return;
+    let cancelled = false;
+
+    async function fetchMemberships() {
+      const memberships = await fetchAllPaginatedResults(
+        client.models.UserProjectMembership.userProjectMembershipsByProjectId,
+        {
+          projectId: project.id,
+          selectionSet: ['userId'],
+        }
+      );
+      if (!cancelled) {
+        setProjectMemberships(memberships as { userId: string }[]);
+      }
+    }
+
+    fetchMemberships();
+    return () => {
+      cancelled = true;
+    };
+  }, [client, project?.id]);
+
+  // Build user options from memberships + users lookup
+  const userOptions = useMemo(() => {
+    if (!users || !projectMemberships.length) return [];
+    return projectMemberships
+      .map((membership) => {
+        const user = users.find((u) => u.id === membership.userId);
+        return user
+          ? { label: user.name || user.email || user.id, value: user.id }
+          : null;
+      })
+      .filter((opt): opt is { label: string; value: string } => opt !== null)
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [users, projectMemberships]);
 
   useEffect(() => {
     if (annotationSetId && !showAnnotationSetDropdown) {
@@ -123,6 +172,26 @@ export function Review({ showAnnotationSetDropdown = true }) {
                   )}
                 </div>
 
+                <div className='w-100'>
+                  <Form.Label>Users</Form.Label>
+                  <Select
+                    value={selectedUsers}
+                    onChange={(
+                      newValue: MultiValue<{ label: string; value: string }>
+                    ) =>
+                      setSelectedUsers([
+                        ...(newValue as { label: string; value: string }[]),
+                      ])
+                    }
+                    isMulti
+                    name='Users to filter'
+                    options={userOptions}
+                    className='text-black w-100'
+                    closeMenuOnSelect={false}
+                    placeholder='All users'
+                  />
+                </div>
+
                 {showAnnotationSetDropdown && (
                   <AnnotationSetDropdown
                     selectedSet={selectedAnnotationSet}
@@ -152,6 +221,7 @@ export function Review({ showAnnotationSetDropdown = true }) {
                 <ReviewCarousel
                   selectedAnnotationSet={selectedAnnotationSet}
                   selectedCategories={selectedCategories}
+                  selectedUsers={selectedUsers}
                   imageBased={imageBased}
                 />
               </Tab>
@@ -161,6 +231,7 @@ export function Review({ showAnnotationSetDropdown = true }) {
                     surveyId={project.id}
                     annotationSetId={selectedAnnotationSet}
                     categoryIds={selectedCategories.map((c) => c.value)}
+                    selectedUserIds={selectedUsers.map((u) => u.value)}
                     primaryOnly={primaryOnly}
                     editable
                   />

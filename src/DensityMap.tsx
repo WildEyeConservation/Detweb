@@ -21,6 +21,7 @@ export default function DensityMap({
   annotationSetId,
   surveyId,
   categoryIds = [],
+  selectedUserIds = [],
   primaryOnly = false,
   editable = false,
   dropFalseNegatives = false,
@@ -28,6 +29,7 @@ export default function DensityMap({
   annotationSetId: string;
   surveyId: string;
   categoryIds?: string[];
+  selectedUserIds?: string[];
   primaryOnly?: boolean;
   editable?: boolean;
   dropFalseNegatives?: boolean;
@@ -123,6 +125,7 @@ export default function DensityMap({
               'category.id',
               'objectId',
               'source',
+              'owner',
             ],
           } as any
         ),
@@ -164,15 +167,34 @@ export default function DensityMap({
     loadData();
   }, [client, annotationSetId, surveyId]);
 
-  // Filter annotations when primaryOnly or rawAnnotations change
+  // Helper to extract userId from owner field
+  // If contains "::", take the part before it; otherwise the whole field is the userId
+  const extractUserIdFromOwner = (owner: string | null | undefined): string | null => {
+    if (!owner) return null;
+    if (owner.includes('::')) {
+      return owner.split('::')[0];
+    }
+    return owner;
+  };
+
+  // Filter annotations when primaryOnly, rawAnnotations, or selectedUserIds change
   useEffect(() => {
-    const filteredAnnotations = primaryOnly
+    let filteredAnnotations = primaryOnly
       ? rawAnnotations.filter(
           (a) =>
             a.id === a.objectId &&
             (!dropFalseNegatives || !a.source.includes('false-negative'))
         )
       : rawAnnotations;
+
+    // Filter by user if users are selected
+    if (selectedUserIds.length > 0) {
+      const userIdSet = new Set(selectedUserIds);
+      filteredAnnotations = filteredAnnotations.filter((a) => {
+        const userId = extractUserIdFromOwner(a.owner);
+        return userId && userIdSet.has(userId);
+      });
+    }
 
     // add a name to each annotation
     filteredAnnotations.forEach((a) => {
@@ -185,7 +207,7 @@ export default function DensityMap({
     });
 
     setAnnotations(filteredAnnotations);
-  }, [rawAnnotations, primaryOnly, dropFalseNegatives]);
+  }, [rawAnnotations, primaryOnly, dropFalseNegatives, selectedUserIds]);
 
   // Fit map to image points on initial load
   useEffect(() => {
