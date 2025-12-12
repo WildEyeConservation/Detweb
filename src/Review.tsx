@@ -66,10 +66,16 @@ export function Review({ showAnnotationSetDropdown = true }) {
     };
   }, [client, project?.id]);
 
-  // Build user options from memberships + users lookup
+  // Build user options from memberships + users lookup (deduplicated by userId)
   const userOptions = useMemo(() => {
     if (!users || !projectMemberships.length) return [];
+    const seenUserIds = new Set<string>();
     return projectMemberships
+      .filter((membership) => {
+        if (seenUserIds.has(membership.userId)) return false;
+        seenUserIds.add(membership.userId);
+        return true;
+      })
       .map((membership) => {
         const user = users.find((u) => u.id === membership.userId);
         return user
