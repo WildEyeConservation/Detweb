@@ -16,7 +16,7 @@ import EditSurveyModal from './editSurveyModal.tsx';
 import SpatioTemporalSubset from '../SpatioTemporalSubset.tsx';
 import SubsampleModal from '../Subsample.tsx';
 import FileStructureSubset from '../filestructuresubset.tsx';
-import { SquareArrowOutUpRight, X, Pause, Play, Trash } from 'lucide-react';
+import { SquareArrowOutUpRight, X, Pause, Play, Trash, Minimize2, Maximize2 } from 'lucide-react';
 import { fetchAllPaginatedResults } from '../utils.tsx';
 import { Badge } from 'react-bootstrap';
 import { DeleteQueueCommand } from '@aws-sdk/client-sqs';
@@ -28,6 +28,12 @@ const fileStoreUploaded = localforage.createInstance({
   name: 'fileStoreUploaded',
   storeName: 'filesUploaded',
 });
+
+const STORAGE_KEYS = {
+  ORGANIZATION_FILTER: 'surveysOrganizationFilter',
+  SORT_BY: 'surveysSortBy',
+  COMPACT_MODE: 'surveysCompactMode',
+};
 
 export default function Surveys() {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
@@ -52,8 +58,44 @@ export default function Surveys() {
   const [hasUploadedFiles, setHasUploadedFiles] = useState<{
     [projectId: string]: boolean;
   }>({});
-  const [sortBy, setSortBy] = useState('createdAt');
-  const [organizationFilter, setOrganizationFilter] = useState('');
+  
+  // Initialize sortBy from localStorage or use default
+  const getInitialSortBy = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEYS.SORT_BY);
+      if (stored) {
+        return stored;
+      }
+    }
+    return 'createdAt';
+  };
+  
+  // Initialize organizationFilter from localStorage or use default
+  const getInitialOrganizationFilter = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEYS.ORGANIZATION_FILTER);
+      if (stored !== null) {
+        return stored;
+      }
+    }
+    return '';
+  };
+  
+  const [sortBy, setSortBy] = useState(getInitialSortBy);
+  const [organizationFilter, setOrganizationFilter] = useState(getInitialOrganizationFilter);
+  
+  // Initialize compactMode from localStorage or use default
+  const getInitialCompactMode = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEYS.COMPACT_MODE);
+      if (stored !== null) {
+        return stored === 'true';
+      }
+    }
+    return false;
+  };
+  
+  const [compactMode, setCompactMode] = useState(getInitialCompactMode);
   const getIsMobile = () =>
     typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
 
@@ -82,6 +124,27 @@ export default function Surveys() {
       window.removeEventListener('resize', handleResize);
     };
   }, []);
+
+  // Persist sortBy to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.SORT_BY, sortBy);
+    }
+  }, [sortBy]);
+
+  // Persist organizationFilter to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.ORGANIZATION_FILTER, organizationFilter);
+    }
+  }, [organizationFilter]);
+
+  // Persist compactMode to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.COMPACT_MODE, String(compactMode));
+    }
+  }, [compactMode]);
 
   useEffect(() => {
     async function getProjects() {
@@ -267,10 +330,13 @@ export default function Surveys() {
     hasJobs: boolean,
     options: { wrap?: boolean; size?: 'sm' } = {}
   ) {
-    const { wrap = false, size } = options;
+    // Mobile view should never be compact, so ignore compactMode when isMobile is true
+    const effectiveCompactMode = isMobile ? false : compactMode;
+    const { wrap = false, size = effectiveCompactMode ? 'sm' : undefined } = options;
+    const gapClass = effectiveCompactMode ? 'gap-1' : 'gap-2';
 
     return (
-      <div className={`d-flex ${wrap ? 'flex-wrap w-100' : 'flex-wrap'} gap-2`}>
+      <div className={`d-flex ${wrap ? 'flex-wrap w-100' : 'flex-wrap'} ${gapClass}`}>
         <Button
           size={size}
           variant='primary'
@@ -343,13 +409,17 @@ export default function Surveys() {
     hasJobs: boolean,
     options: { wrap?: boolean; size?: 'sm' } = {}
   ) {
-    const { wrap = false, size } = options;
+    // Mobile view should never be compact, so ignore compactMode when isMobile is true
+    const effectiveCompactMode = isMobile ? false : compactMode;
+    const { wrap = false, size = effectiveCompactMode ? 'sm' : undefined } = options;
     const sortedAnnotationSets = [...project.annotationSets].sort((a, b) =>
       a.name.localeCompare(b.name)
     );
+    const gapClass = effectiveCompactMode ? 'gap-1' : 'gap-2';
+    const borderClass = effectiveCompactMode ? 'pt-1' : 'pt-2';
 
     return (
-      <div className='d-flex flex-column gap-2 flex-grow-1'>
+      <div className={`d-flex flex-column ${gapClass} flex-grow-1`}>
         {isMobile && sortedAnnotationSets.length === 0 && (
           <Badge
             bg='secondary'
@@ -360,12 +430,12 @@ export default function Surveys() {
         )}
         {sortedAnnotationSets.map((annotationSet, i) => (
           <div
-            className={`d-flex flex-column gap-2 ${
-              i === 0 ? '' : 'border-top border-light pt-2'
+            className={`d-flex flex-column ${gapClass} ${
+              i === 0 ? '' : `border-top border-light ${borderClass}`
             }`}
             key={annotationSet.id}
           >
-            <div className='d-flex justify-content-between align-items-center gap-2 flex-wrap'>
+            <div className={`d-flex justify-content-between align-items-center ${gapClass} flex-wrap`}>
               <div style={{ fontSize: '16px' }}>{annotationSet.name}</div>
               {!hasJobs &&
                 renderAnnotationSetActions(
@@ -391,10 +461,13 @@ export default function Surveys() {
     isStale: boolean,
     options: { wrap?: boolean; size?: 'sm' } = {}
   ) {
-    const { wrap = false, size } = options;
+    // Mobile view should never be compact, so ignore compactMode when isMobile is true
+    const effectiveCompactMode = isMobile ? false : compactMode;
+    const { wrap = false, size = effectiveCompactMode ? 'sm' : undefined } = options;
+    const gapClass = effectiveCompactMode ? 'gap-1' : 'gap-2';
     const containerClass = wrap
-      ? 'd-flex flex-wrap gap-2 w-100'
-      : 'd-flex gap-2 flex-wrap';
+      ? `d-flex flex-wrap ${gapClass} w-100`
+      : `d-flex ${gapClass} flex-wrap`;
 
     return (
       <div className={containerClass}>
@@ -521,25 +594,37 @@ export default function Surveys() {
       project.status === 'uploading' &&
       new Date(project.updatedAt).getTime() < Date.now() - 1000 * 60 * 5;
 
+    const gapClass = compactMode ? 'gap-1' : 'gap-2';
+    const columnGapClass = compactMode ? 'gap-1' : 'gap-3';
+    const badgeFontSize = compactMode ? '11px' : '14px';
+
     return {
       id: project.id,
       rowData: [
-        <div className='d-flex justify-content-between align-items-start align-items-lg-center gap-2 flex-wrap'>
-          <div className='d-flex flex-column gap-1'>
-            <h5 className={`mb-0 ${isMobile ? 'fw-semibold' : ''}`}>
-              {project.name}
-            </h5>
-            <div className='d-flex flex-column'>
-              <i style={{ fontSize: '14px' }}>{project.organization.name}</i>
-              {project.status !== 'uploading' && (
-                <i style={{ fontSize: '14px' }}>
-                  Images: {project.imageSets?.[0]?.imageCount || 0}
-                </i>
-              )}
-            </div>
+        <div className={`d-flex justify-content-between align-items-start align-items-lg-center ${gapClass} flex-wrap`}>
+          <div className={`d-flex flex-column ${compactMode ? 'gap-0' : 'gap-1'}`}>
+            {compactMode ? (
+              <h6 className={`mb-0 ${isMobile ? 'fw-semibold' : ''}`}>
+                {project.name}
+              </h6>
+            ) : (
+              <h5 className={`mb-0 ${isMobile ? 'fw-semibold' : ''}`}>
+                {project.name}
+              </h5>
+            )}
+            {!compactMode && (
+              <div className='d-flex flex-column'>
+                <i style={{ fontSize: '14px' }}>{project.organization.name}</i>
+                {project.status !== 'uploading' && (
+                  <i style={{ fontSize: '14px' }}>
+                    Images: {project.imageSets?.[0]?.imageCount || 0}
+                  </i>
+                )}
+              </div>
+            )}
             {project.status !== 'active' && (
               <Badge
-                style={{ fontSize: '14px', width: 'fit-content' }}
+                style={{ fontSize: badgeFontSize, width: 'fit-content' }}
                 bg={'info'}
               >
                 {project.status === 'launching'
@@ -561,18 +646,19 @@ export default function Surveys() {
             isStale
           )}
         </div>,
-        <div className='d-flex flex-column flex-md-row gap-3'>
+        <div className={`d-flex flex-column flex-md-row ${columnGapClass}`}>
           {renderAnnotationSets(project, disabled, hasJobs)}
           {hasJobs && (
             <div
-              className='d-flex flex-row align-items-center gap-2 w-100'
+              className={`d-flex flex-row align-items-center ${gapClass} w-100`}
               style={{ maxWidth: '500px' }}
             >
               <div className='flex-grow-1'>
                 <ProjectProgress projectId={project.id} />
               </div>
-              <div className='d-flex gap-2 flex-wrap justify-content-end'>
+              <div className={`d-flex ${gapClass} flex-wrap justify-content-end`}>
                 <Button
+                  size={compactMode ? 'sm' : undefined}
                   className='flex align-items-center justify-content-center'
                   disabled={disabled}
                   variant='primary'
@@ -581,6 +667,7 @@ export default function Surveys() {
                   <SquareArrowOutUpRight />
                 </Button>
                 <Button
+                  size={compactMode ? 'sm' : undefined}
                   className='flex align-items-center justify-content-center'
                   disabled={disabled}
                   variant='danger'
@@ -791,6 +878,20 @@ export default function Surveys() {
                 <option value='name'>Name (A-Z)</option>
                 <option value='name-reverse'>Name (Z-A)</option>
               </Form.Select>
+              {!isMobile && (
+                <Button
+                  variant='info'
+                  // size='sm'
+                  onClick={() => setCompactMode(!compactMode)}
+                  title={compactMode ? 'Expand view' : 'Compact view'}
+                  style={{
+                    minWidth: 'fit-content',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {compactMode ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
+                </Button>
+              )}
             </div>
           </Card.Header>
           <Card.Body

@@ -2,6 +2,7 @@ import Table from 'react-bootstrap/Table';
 import type { CSSProperties } from 'react';
 import { useState, useEffect } from 'react';
 import Button from 'react-bootstrap/esm/Button';
+import Form from 'react-bootstrap/Form';
 import { MoveUp, MoveDown } from 'lucide-react';
 
 interface TableObject {
@@ -14,12 +15,14 @@ interface TableObject {
 
 type SortDirection = 'asc' | 'desc';
 
+const STORAGE_KEY = 'tableItemsPerPage';
+
 export default function MyTable(input: TableObject) {
   const {
     tableData,
     tableHeadings,
     pagination = false,
-    itemsPerPage = 10,
+    itemsPerPage: initialItemsPerPage = 5,
     emptyMessage = null,
   } = input;
   const [sortedData, setSortedData] = useState(tableData);
@@ -28,6 +31,22 @@ export default function MyTable(input: TableObject) {
     direction: SortDirection;
   } | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
+  
+  // Initialize itemsPerPage from localStorage or use default
+  const getInitialItemsPerPage = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = parseInt(stored, 10);
+        if (!isNaN(parsed) && parsed > 0) {
+          return parsed;
+        }
+      }
+    }
+    return initialItemsPerPage;
+  };
+  
+  const [itemsPerPage, setItemsPerPage] = useState(getInitialItemsPerPage);
 
   const handleSort = (index: number) => {
     let direction: SortDirection = 'asc';
@@ -91,6 +110,14 @@ export default function MyTable(input: TableObject) {
     setCurrentPage(0); // reset to first page when data changes (e.g., search/filter)
   }, [tableData]);
 
+  useEffect(() => {
+    setCurrentPage(0); // reset to first page when itemsPerPage changes
+    // Save to localStorage whenever itemsPerPage changes
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY, itemsPerPage.toString());
+    }
+  }, [itemsPerPage]);
+
   if (tableData.length <= 0 && emptyMessage) {
     return (
       <div className='text-center'>
@@ -138,28 +165,50 @@ export default function MyTable(input: TableObject) {
       </Table>
       {pagination && (
         <div className='text-end d-flex justify-content-between align-items-center'>
-          <p className='d-inline mb-0'>
-            Page {currentPage + 1} of {totalPages}
-          </p>
-          <div className='d-flex gap-1'>
-            <Button
-              variant='info'
-              onClick={() => {
-                setCurrentPage((c) => c - 1);
+          <div className='d-flex align-items-center gap-2'>
+            <label htmlFor='rowsPerPage' className='mb-0'>
+              Rows per page:
+            </label>
+            <Form.Select
+              id='rowsPerPage'
+              value={itemsPerPage}
+              onChange={(e) => {
+                const newValue = Number(e.target.value);
+                setItemsPerPage(newValue);
               }}
-              disabled={currentPage === 0}
+              style={{ width: 'auto' }}
             >
-              &lt;
-            </Button>
-            <Button
-              variant='info'
-              onClick={() => setCurrentPage(currentPage + 1)}
-              disabled={
-                currentPage === Math.ceil(sortedData.length / itemsPerPage) - 1
-              }
-            >
-              &gt;
-            </Button>
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </Form.Select>
+          </div>
+          <div className='d-flex align-items-center gap-2'>
+            <p className='d-inline mb-0'>
+              Page {currentPage + 1} of {totalPages}
+            </p>
+            <div className='d-flex gap-1'>
+              <Button
+                variant='info'
+                onClick={() => {
+                  setCurrentPage((c) => c - 1);
+                }}
+                disabled={currentPage === 0}
+              >
+                &lt;
+              </Button>
+              <Button
+                variant='info'
+                onClick={() => setCurrentPage(currentPage + 1)}
+                disabled={
+                  currentPage === Math.ceil(sortedData.length / itemsPerPage) - 1
+                }
+              >
+                &gt;
+              </Button>
+            </div>
           </div>
         </div>
       )}

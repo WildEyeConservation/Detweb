@@ -9,6 +9,9 @@ import { type GetQueueAttributesCommandInput } from '@aws-sdk/client-sqs';
 import { GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
 import ConfirmationModal from '../ConfirmationModal';
 import ProjectProgress from './ProjectProgress';
+import { Minimize2, Maximize2 } from 'lucide-react';
+
+const STORAGE_KEY_COMPACT_MODE = 'jobsCompactMode';
 
 type Project = {
   id: string;
@@ -50,6 +53,45 @@ export default function Jobs() {
     Schema['Queue']['type'] | null
   >(null);
   const [deletingJob, setDeletingJob] = useState(false);
+
+  // Initialize compactMode from localStorage or use default
+  const getInitialCompactMode = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEY_COMPACT_MODE);
+      if (stored !== null) {
+        return stored === 'true';
+      }
+    }
+    return false;
+  };
+
+  const [compactMode, setCompactMode] = useState(getInitialCompactMode);
+  const getIsMobile = () =>
+    typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
+
+  const [isMobile, setIsMobile] = useState(getIsMobile);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleResize = () => {
+      setIsMobile(getIsMobile());
+    };
+
+    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  // Persist compactMode to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY_COMPACT_MODE, String(compactMode));
+    }
+  }, [compactMode]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -225,22 +267,35 @@ export default function Jobs() {
             return null;
           }
 
+          const paddingClass = compactMode ? 'p-1' : 'p-2';
+          const gapClass = compactMode ? 'gap-1' : 'gap-2';
+          const rowGapClass = compactMode ? 'gap-1' : 'gap-3';
+          const titleSize = compactMode ? 'h6' : 'h5';
+          const badgeFontSize = compactMode ? '11px' : '14px';
+          const typeFontSize = compactMode ? '12px' : '14px';
+
           return {
             id: queue.id,
             rowData: [
               <div
-                className='d-flex justify-content-between align-items-center p-2'
+                className={`d-flex justify-content-between align-items-center ${paddingClass}`}
                 key={queue.id}
               >
-                <div className='d-flex flex-row gap-3 align-items-center'>
+                <div className={`d-flex flex-row ${rowGapClass} align-items-center`}>
                   <div>
-                    <h5 className='mb-0'>{queue.tag || project.name}</h5>
-                    <i style={{ fontSize: '14px', display: 'block' }}>
-                      {project.organization.name}
-                    </i>
+                    {compactMode ? (
+                      <h6 className='mb-0'>{queue.tag || project.name}</h6>
+                    ) : (
+                      <h5 className='mb-0'>{queue.tag || project.name}</h5>
+                    )}
+                    {!compactMode && (
+                      <i style={{ fontSize: '14px', display: 'block' }}>
+                        {project.organization.name}
+                      </i>
+                    )}
                     <p
                       style={{
-                        fontSize: '14px',
+                        fontSize: typeFontSize,
                         display: 'block',
                         marginBottom: '0px',
                       }}
@@ -255,18 +310,19 @@ export default function Jobs() {
                     queue.hidden && (
                       <span
                         className='badge bg-secondary'
-                        style={{ fontSize: '14px' }}
+                        style={{ fontSize: badgeFontSize }}
                       >
                         Hidden
                       </span>
                     )}
                 </div>
                 <div
-                  className='d-flex flex-row gap-2 align-items-center'
+                  className={`d-flex flex-row ${gapClass} align-items-center`}
                   style={{ maxWidth: '600px', width: '100%' }}
                 >
                   <ProjectProgress projectId={project.id} />
                   <Button
+                    size={compactMode ? 'sm' : undefined}
                     className='ms-1'
                     variant='primary'
                     disabled={
@@ -298,22 +354,34 @@ export default function Jobs() {
         return <></>;
       }
 
+      const paddingClass = compactMode ? 'p-1' : 'p-2';
+      const gapClass = compactMode ? 'gap-1' : 'gap-2';
+      const rowGapClass = compactMode ? 'gap-1' : 'gap-3';
+      const titleSize = compactMode ? 'h6' : 'h5';
+      const typeFontSize = compactMode ? '12px' : '14px';
+
       return {
         id: job.id,
         rowData: [
           <div
-            className='d-flex justify-content-between align-items-center p-2'
+            className={`d-flex justify-content-between align-items-center ${paddingClass}`}
             key={job.id}
           >
-            <div className='d-flex flex-row gap-3 align-items-center'>
+            <div className={`d-flex flex-row ${rowGapClass} align-items-center`}>
               <div>
-                <h5 className='mb-0'>{project.name}</h5>
-                <i style={{ fontSize: '14px', display: 'block' }}>
-                  {project.organization.name}
-                </i>
+                {compactMode ? (
+                  <h6 className='mb-0'>{project.name}</h6>
+                ) : (
+                  <h5 className='mb-0'>{project.name}</h5>
+                )}
+                {!compactMode && (
+                  <i style={{ fontSize: '14px', display: 'block' }}>
+                    {project.organization.name}
+                  </i>
+                )}
                 <p
                   style={{
-                    fontSize: '14px',
+                    fontSize: typeFontSize,
                     display: 'block',
                     marginBottom: '0px',
                   }}
@@ -323,6 +391,7 @@ export default function Jobs() {
               </div>
             </div>
             <Button
+              size={compactMode ? 'sm' : undefined}
               className='ms-1'
               variant='primary'
               onClick={() =>
@@ -347,10 +416,23 @@ export default function Jobs() {
       }}
     >
       <Card>
-        <Card.Header>
+        <Card.Header className='d-flex justify-content-between align-items-center'>
           <Card.Title className='mb-0'>
             <h4 className='mb-0'>Jobs Available</h4>
           </Card.Title>
+          {!isMobile && (
+            <Button
+              variant='info'
+              onClick={() => setCompactMode(!compactMode)}
+              title={compactMode ? 'Expand view' : 'Compact view'}
+              style={{
+                minWidth: 'fit-content',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {compactMode ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
+            </Button>
+          )}
         </Card.Header>
         <Card.Body className='overflow-x-auto'>
           {isLoading ? (
