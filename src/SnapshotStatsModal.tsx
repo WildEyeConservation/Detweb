@@ -120,7 +120,7 @@ export default function SnapshotStatsModal({
         entry.sightingCount += sighting;
         let timeTaken = o.timeTaken || 0;
         // Mirror lambda safeguard: drop obviously bad durations
-        if (timeTaken > (sighting ? 600_000 : 120_000)) {
+        if (timeTaken > (sighting ? 900_000 : 120_000)) {
           timeTaken = 0;
         }
         entry.activeTime += timeTaken;

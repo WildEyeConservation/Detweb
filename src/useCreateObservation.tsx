@@ -21,6 +21,10 @@ interface UseCreateObservationProps {
   testSetId?: string;
 }
 
+// Time limits in milliseconds (matching server-side validation)
+const MAX_TIME_WITH_ANNOTATIONS = 900 * 1000; // 15 minutes
+const MAX_TIME_WITHOUT_ANNOTATIONS = 120 * 1000; // 2 minutes
+
 export default function useCreateObservation(props: UseCreateObservationProps) {
   const {
     location: { annotationSetId, id },
@@ -229,12 +233,24 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     //or is removed, this will generate incorrect results.
     const submittedTimestamp = Date.now() - 2000;
     if (!acked && location && annotationSetId && project) {
+      // Calculate time taken
+      let timeTaken = submittedTimestamp ? submittedTimestamp - visibleTimestamp : 0;
+      
+      // Apply client-side time validation (matching server-side logic)
+      const hasSighting = annoCount > 0;
+      const maxTime = hasSighting ? MAX_TIME_WITH_ANNOTATIONS : MAX_TIME_WITHOUT_ANNOTATIONS;
+      
+      if (timeTaken > maxTime) {
+        console.warn(
+          `Time taken (${timeTaken}ms) exceeds maximum (${maxTime}ms) for ${hasSighting ? 'sighting' : 'search'}. Setting to 0.`
+        );
+        timeTaken = 0;
+      }
+      
       client.models.Observation.create({
         annotationSetId: annotationSetToUse,
         annotationCount: annoCount,
-        timeTaken: submittedTimestamp
-          ? submittedTimestamp - visibleTimestamp
-          : 0,
+        timeTaken,
         waitingTime: startLoadingTimestamp
           ? fullyLoadedTimestamp - visibleTimestamp
           : 0,
