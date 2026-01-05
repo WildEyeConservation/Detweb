@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useContext } from 'react';
 import L from 'leaflet';
 import { ProjectContext } from './Context';
 import { Card, Button } from 'react-bootstrap';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 /**
  *
@@ -34,55 +35,87 @@ interface LegendProps {
   categoriesOverride?: any[];
 }
 
+interface SideLegendProps extends LegendProps {
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+}
+
 export function SideLegend({
   annotationSetId,
   categoriesOverride,
-}: LegendProps) {
+  collapsed = false,
+  onToggleCollapse,
+}: SideLegendProps) {
   const {
     categoriesHook: { data: categories },
-    currentCategory,
     setCurrentCategory,
   } = useContext(ProjectContext)!;
   const cats = categoriesOverride ?? categories;
 
   return (
-    <Card className='d-none d-md-flex flex-column h-100 overflow-hidden'>
-      <Card.Header>
-        <Card.Title className='d-flex flex-row align-items-center gap-2 mb-2'>
-          <span>Legend</span>
-        </Card.Title>
-        <span className='text-muted' style={{ fontSize: '14px' }}>
-          Click on a label to annotate with or use the shortcut key
-        </span>
-        {/* <span className='text-muted' style={{ fontSize: '14px' }}>
-          Select a label to annotate with or use the shortcut key
-        </span> */}
-      </Card.Header>
-      <Card.Body className='d-flex flex-column gap-2 overflow-auto'>
-        {cats
-          ?.filter((c) => c.annotationSetId === annotationSetId)
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .map((category) => (
-            <Button
-              variant={'primary'}
-              // variant={currentCategory?.id === category.id ? "info" : "primary"}
-              key={category.id}
-              className='d-flex flex-row align-items-center justify-content-between gap-2'
-              onClick={() => setCurrentCategory(category)}
-            >
-              <div className='d-flex flex-row align-items-center gap-2'>
-                <div
-                  style={{ backgroundColor: category.color || '#000' }}
-                  className='rounded-circle p-2'
-                ></div>
-                <div>{category.name}</div>
-              </div>
-              <div>({category.shortcutKey})</div>
-            </Button>
-          ))}
-      </Card.Body>
-    </Card>
+    <div className='d-none d-md-flex flex-column h-100' style={{ position: 'relative' }}>
+      {/* Toggle button */}
+      <Button
+        variant='secondary'
+        size='sm'
+        onClick={onToggleCollapse}
+        className='d-flex align-items-center justify-content-center'
+        style={{
+          position: 'absolute',
+          left: '-16px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          zIndex: 10,
+          width: '32px',
+          height: '32px',
+          borderRadius: '50%',
+          padding: 0,
+        }}
+        title={collapsed ? 'Expand legend' : 'Collapse legend'}
+      >
+        {collapsed ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+      </Button>
+
+      {!collapsed && (
+        <Card className='d-flex flex-column h-100 overflow-hidden'>
+          <Card.Header>
+            <Card.Title className='d-flex flex-row align-items-center gap-2 mb-2'>
+              <span>Legend</span>
+            </Card.Title>
+            <span className='text-muted' style={{ fontSize: '14px' }}>
+              Click on a label to annotate with or use the shortcut key
+            </span>
+          </Card.Header>
+          <Card.Body className='d-flex flex-column gap-2 overflow-auto'>
+            {cats
+              ?.filter((c) => c.annotationSetId === annotationSetId)
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((category) => (
+                <Button
+                  variant={'primary'}
+                  key={category.id}
+                  className='d-flex flex-row align-items-center justify-content-between gap-2'
+                  onClick={() => setCurrentCategory(category)}
+                >
+                  <div className='d-flex flex-row align-items-center gap-2'>
+                    <div
+                      style={{ backgroundColor: category.color || '#000' }}
+                      className='rounded-circle p-2'
+                    ></div>
+                    <div>{category.name}</div>
+                  </div>
+                  <div>({category.shortcutKey})</div>
+                </Button>
+              ))}
+          </Card.Body>
+        </Card>
+      )}
+    </div>
   );
+}
+
+interface MapLegendProps extends LegendProps {
+  forceVisible?: boolean;
 }
 
 export function MapLegend({
@@ -90,7 +123,8 @@ export function MapLegend({
   annotationSetId,
   alwaysVisible = false,
   categoriesOverride,
-}: LegendProps) {
+  forceVisible = false,
+}: MapLegendProps) {
   const {
     categoriesHook: { data: categories },
     setCurrentCategory,
@@ -108,12 +142,15 @@ export function MapLegend({
     }
   });
 
+  // Determine visibility class
+  const visibilityClass = alwaysVisible || forceVisible 
+    ? ' d-block' 
+    : ' d-block d-md-none';
+
   return (
     <div
       ref={divRef}
-      className={
-        positionClass + (alwaysVisible ? ' d-block' : ' d-block d-md-none')
-      }
+      className={positionClass + visibilityClass}
     >
       <div className='leaflet-control leaflet-bar'>
         <div

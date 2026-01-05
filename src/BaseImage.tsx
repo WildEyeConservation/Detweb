@@ -429,11 +429,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
       () => ({
         width: '100%',
         height: '100%',
-        margin: 'auto',
-        display: 'flex',
-        justifyContent: 'center',
         borderRadius: 10,
-        alignItems: 'center',
       }),
       [fullyLoaded]
     );
@@ -472,9 +468,9 @@ const BaseImage: React.FC<BaseImageProps> = memo(
 
     return useMemo(
       () => (
-        <div className='d-flex flex-column align-items-center w-100 h-100 gap-3'>
+        <div className='d-flex flex-column align-items-stretch w-100 h-100 gap-3'>
           <div
-            className='d-flex flex-column align-items-center w-100 h-100'
+            className='d-flex flex-column align-items-stretch w-100 h-100'
             style={{
               visibility: visible && fullyLoaded ? 'visible' : 'hidden',
               position: 'relative',

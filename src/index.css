@@ -29,6 +29,12 @@ body {
   flex-grow: 1;
 }
 
+.legend-collapsed .leaflet-container {
+  max-width: none;
+  left: 0;
+  transform: none;
+}
+
 .transectSlider {
   width: 100%;
 }

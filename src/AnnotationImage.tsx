@@ -18,7 +18,7 @@ import CreateAnnotationOnHotKey from './CreateAnnotationOnHotKey';
 import { Schema } from './amplify/client-schema';
 import useImageStats from './useImageStats';
 import { Badge, Button } from 'react-bootstrap';
-import { Share2, SearchCheck, RotateCcw } from 'lucide-react';
+import { Share2, SearchCheck, RotateCcw, LogOut } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 const Image = withCreateObservation(withAckOnTimeout(BaseImage));
 
@@ -104,6 +104,23 @@ export default function AnnotationImage(props: any) {
     null
   );
   const [legendCategories, setLegendCategories] = useState<any[] | null>(null);
+  const [legendCollapsed, setLegendCollapsed] = useState<boolean>(() => {
+    if (surveyId) {
+      const stored = localStorage.getItem(`legendCollapsed-${surveyId}`);
+      return stored === 'true';
+    }
+    return false;
+  });
+
+  const toggleLegendCollapsed = () => {
+    setLegendCollapsed((prev) => {
+      const newValue = !prev;
+      if (surveyId) {
+        localStorage.setItem(`legendCollapsed-${surveyId}`, String(newValue));
+      }
+      return newValue;
+    });
+  };
 
   // If the annotation set on the test belongs to a different project than the current one,
   // fetch its categories directly by annotation set id so legend, hotkeys and icons work.
@@ -191,6 +208,7 @@ export default function AnnotationImage(props: any) {
         position='bottomright'
         annotationSetId={annotationSetId}
         categoriesOverride={legendCategories ?? undefined}
+        forceVisible={legendCollapsed}
       />,
     ].concat(
       (legendCategories ?? projectCategories)
@@ -214,6 +232,7 @@ export default function AnnotationImage(props: any) {
     legendCategories,
     projectCategories,
     isFalseNegativesJob,
+    legendCollapsed,
   ]);
 
   async function handleShare() {
@@ -253,11 +272,12 @@ export default function AnnotationImage(props: any) {
       secondaryQueueUrl={props.secondaryQueueUrl}
       taskTag={props.taskTag}
     >
-      <div className='d-flex flex-md-row flex-column justify-content-center w-100 h-100 gap-3 overflow-auto'>
+      <div className={`d-flex flex-md-row flex-column w-100 h-100 gap-3 overflow-auto ${legendCollapsed ? 'legend-collapsed' : 'justify-content-center'}`}>
         <div
-          className={`d-flex flex-column align-items-center w-100 h-100 gap-3`}
+          className={`d-flex flex-column ${legendCollapsed ? 'align-items-stretch' : 'align-items-center'} w-100 h-100 gap-3`}
           style={{
-            maxWidth: '1024px',
+            maxWidth: legendCollapsed ? 'none' : '1024px',
+            flex: legendCollapsed ? 1 : undefined,
           }}
         >
           <div
@@ -326,14 +346,42 @@ export default function AnnotationImage(props: any) {
           <SideLegend
             annotationSetId={annotationSetId}
             categoriesOverride={legendCategories ?? undefined}
+            collapsed={legendCollapsed}
+            onToggleCollapse={toggleLegendCollapsed}
           />
+          {isAnnotatePath && (
+            legendCollapsed ? (
+              <Button
+                variant='success'
+                onClick={() => {
+                  navigate('/jobs');
+                }}
+                className='d-none d-md-flex align-items-center justify-content-center'
+                style={{ width: '40px', height: '40px', padding: 0 }}
+                title='Save & Exit'
+              >
+                <LogOut size={20} />
+              </Button>
+            ) : (
+              <Button
+                variant='success'
+                onClick={() => {
+                  navigate('/jobs');
+                }}
+                className='w-100 d-none d-md-block'
+              >
+                Save & Exit
+              </Button>
+            )
+          )}
+          {/* Mobile Save & Exit button (always shown on mobile) */}
           {isAnnotatePath && (
             <Button
               variant='success'
               onClick={() => {
                 navigate('/jobs');
               }}
-              className='w-100'
+              className='w-100 d-md-none'
             >
               Save & Exit
             </Button>
