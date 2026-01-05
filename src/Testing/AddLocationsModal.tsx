@@ -51,7 +51,7 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
     }[]
   >([]);
   const candidateIndexRef = useRef(0);
-  const currentCandidate = candidates[index] ?? null;
+  const currentCandidate = candidatesRef.current[index] ?? null;
   const [addedLocations, setAddedLocations] = useState<Record<string, boolean>>(
     {}
   );
@@ -227,12 +227,13 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
         }
       }
 
-      candidatesRef.current = allCandidates.filter(
+      const filteredCandidates = allCandidates.filter(
         (cand, i, arr) =>
           arr.findIndex((c) => c.locationId === cand.locationId) === i
       );
 
-      setCandidates(allCandidates);
+      candidatesRef.current = filteredCandidates;
+      setCandidates(filteredCandidates);
       candidateIndexRef.current = 0;
       setIndex(0);
       setLoading(false);
@@ -422,10 +423,10 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
       if (!orig) throw new Error('Original location not found');
 
       const testingSetId = await getOrCreateTestingLocationSetId();
-      const finalWidth = (changeSize ? customWidth : orig.width) ?? 100;
-      const finalHeight = (changeSize ? customHeight : orig.height) ?? 100;
-      const finalX = Math.round((orig.x as number) + (offsetX || 0));
-      const finalY = Math.round((orig.y as number) + (offsetY || 0));
+      const finalWidth = (advancedOpen && changeSize ? customWidth : orig.width) ?? 100;
+      const finalHeight = (advancedOpen && changeSize ? customHeight : orig.height) ?? 100;
+      const finalX = Math.round((orig.x as number) + (advancedOpen ? (offsetX || 0) : 0));
+      const finalY = Math.round((orig.y as number) + (advancedOpen ? (offsetY || 0) : 0));
 
       // Create a new testing location
       // @ts-ignore
