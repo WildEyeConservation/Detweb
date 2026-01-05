@@ -1,4 +1,4 @@
-import React, { memo, useContext } from 'react';
+import React, { memo, useContext, useState } from 'react';
 import { Marker, Tooltip } from 'react-leaflet';
 import {
   uniqueNamesGenerator,
@@ -13,6 +13,7 @@ import type {
   ExtendedAnnotationType,
 } from './schemaTypes';
 import { ManagementContext, GlobalContext } from './Context';
+import ChangeCategoryModal from './ChangeCategoryModal';
 
 interface DetwebMarkerProps {
   annotation: ExtendedAnnotationType;
@@ -126,6 +127,7 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
     } = props;
     const { allUsers } = useContext(ManagementContext)!;
     const { client } = useContext(GlobalContext)!;
+    const [showCategoryModal, setShowCategoryModal] = useState(false);
 
     function getContextMenuItems() {
       let contextmenuItems = [];
@@ -153,7 +155,10 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
             updateAnnotation({ ...annotation, objectId: undefined });
           },
         });
-        if (activeAnnotation && activeAnnotation.objectId !== annotation.objectId) {
+        if (
+          activeAnnotation &&
+          activeAnnotation.objectId !== annotation.objectId
+        ) {
           const oldName = uniqueNamesGenerator({
             dictionaries: [adjectives, names],
             seed: annotation.objectId,
@@ -173,24 +178,28 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
               if (annotation.objectId) {
                 const oldObjectId = annotation.objectId;
                 const newObjectId = activeAnnotation.objectId;
-                
+
                 // Collect all annotations with the old objectId (handling pagination)
                 const allAnnotations: any[] = [];
                 let nextToken: string | null = null;
-                
+
                 do {
-                  const result = await client.models.Annotation.annotationsByObjectId({
-                    objectId: oldObjectId,
-                  }, { nextToken: nextToken || undefined });
-                  
+                  const result =
+                    await client.models.Annotation.annotationsByObjectId(
+                      {
+                        objectId: oldObjectId,
+                      },
+                      { nextToken: nextToken || undefined }
+                    );
+
                   allAnnotations.push(...result.data);
                   nextToken = result.nextToken || null;
                 } while (nextToken);
-                
+
                 console.log(
                   `Found ${allAnnotations.length} annotations with name "${oldName}". Renaming to "${newName}".`
                 );
-                
+
                 // Update all annotations in parallel, awaiting completion
                 await Promise.all(
                   allAnnotations.map((a) =>
@@ -200,8 +209,10 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
                     })
                   )
                 );
-                
-                console.log(`Successfully renamed ${allAnnotations.length} annotations.`);
+
+                console.log(
+                  `Successfully renamed ${allAnnotations.length} annotations.`
+                );
               }
             },
           });
@@ -219,19 +230,14 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
           index: contextmenuItems.length,
         });
       }
-      for (let category of categories.sort((a, b) =>
-        a.name.localeCompare(b.name)
-      )) {
-        if (annotation.categoryId !== category.id) {
-          contextmenuItems.push({
-            text: `Change to ${category.name}`,
-            index: contextmenuItems.length,
-            callback: async () => {
-              updateAnnotation({ id: annotation.id, categoryId: category.id });
-            },
-          });
-        }
-      }
+      // Single "Change Label" option that opens the category selection modal
+      contextmenuItems.push({
+        text: 'Change Label',
+        index: contextmenuItems.length,
+        callback: () => {
+          setShowCategoryModal(true);
+        },
+      });
       if (user.isAdmin) {
         const item = {
           text: 'Send message to ' + annotation.owner,
@@ -295,91 +301,103 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
     //     prevContextRef.current = imageContext;
     // }, [props, imageContext]);
 
+    const handleCategoryChange = (categoryId: string) => {
+      updateAnnotation({ id: annotation.id, categoryId });
+    };
+
     if (xy2latLng) {
       console.log(`creating marker for ${annotation.id}`);
       return (
-        // <Marker key={annotation.id} position={xy2latLng(annotation)} />
-
-        <Marker
-          key={crypto.randomUUID()}
-          eventHandlers={{
-            dragend: (e) => {
-              const coords = latLng2xy(e.target.getLatLng()) as L.Point;
-              const x = Math.round(coords.x);
-              const y = Math.round(coords.y);
-              if (annotation.shadow && onShadowDrag) {
-                onShadowDrag(annotation.id, x, y);
-              } else {
-                updateAnnotation({ ...annotation, x, y });
-              }
-            },
-            click: () => {
-              if (onClick) {
-                onClick(annotation);
-              }
-            },
-            mouseover: (e) => {
-              //If the user hovers over the marker, move the input focus here.
-              e.target.getElement().focus();
-            },
-            mouseout: (e) => {
-              //If the user moves the mouse away from the marker, blur the input field.
-              e.target.getElement().blur();
-            },
-            keydown: (e) => {
-              //if the user presses the backspace key, delete the annotation
-              if (e.originalEvent.key === 'Backspace') {
-                deleteAnnotation(annotation);
-              }
-            },
-          }}
-          position={xy2latLng(annotation)}
-          draggable={true}
-          autopan={true}
-          icon={createIcon(
-            categories,
-            annotation,
-            activeAnnotation,
-            props.hideIdenticon
-          )}
-          contextmenu={true}
-          contextmenuInheritItems={false}
-          contextmenuItems={getContextMenuItems(annotation)}
-        >
-          <Tooltip>
-            Label: {getType(annotation)} <br />
-            {String((annotation as { source?: string }).source || '')
-              .toLowerCase()
-              .includes('false-negative') && (
-              <>
-                False Negative <br />
-              </>
+        <>
+          <Marker
+            key={crypto.randomUUID()}
+            eventHandlers={{
+              dragend: (e) => {
+                const coords = latLng2xy(e.target.getLatLng()) as L.Point;
+                const x = Math.round(coords.x);
+                const y = Math.round(coords.y);
+                if (annotation.shadow && onShadowDrag) {
+                  onShadowDrag(annotation.id, x, y);
+                } else {
+                  updateAnnotation({ ...annotation, x, y });
+                }
+              },
+              click: () => {
+                if (onClick) {
+                  onClick(annotation);
+                }
+              },
+              mouseover: (e) => {
+                //If the user hovers over the marker, move the input focus here.
+                e.target.getElement().focus();
+              },
+              mouseout: (e) => {
+                //If the user moves the mouse away from the marker, blur the input field.
+                e.target.getElement().blur();
+              },
+              keydown: (e) => {
+                //if the user presses the backspace key, delete the annotation
+                if (e.originalEvent.key === 'Backspace') {
+                  deleteAnnotation(annotation);
+                }
+              },
+            }}
+            position={xy2latLng(annotation)}
+            draggable={true}
+            autopan={true}
+            icon={createIcon(
+              categories,
+              annotation,
+              activeAnnotation,
+              props.hideIdenticon
             )}
-            Created by :{' '}
-            {allUsers.find((u) => u.id == annotation.owner)?.name || 'Unknown'}
-            <br />
-            {annotation?.createdAt && (
-              <>
-                Created at : {annotation?.createdAt} <br />
-              </>
-            )}
-            {annotation.objectId &&
-              `Name: ${uniqueNamesGenerator({
-                dictionaries: [adjectives, names],
-                seed: annotation.objectId,
-                style: 'capital',
-                separator: ' ',
-              })}`}
-            {!annotation.objectId &&
-              annotation.proposedObjectId &&
-              `Proposed Name: ${uniqueNamesGenerator({
-                dictionaries: [adjectives, names],
-                seed: annotation.proposedObjectId,
-                style: 'capital',
-                separator: ' ',
-              })}`}
-          </Tooltip>
-        </Marker>
+            contextmenu={true}
+            contextmenuInheritItems={false}
+            contextmenuItems={getContextMenuItems()}
+          >
+            <Tooltip>
+              Label: {getType(annotation)} <br />
+              {String((annotation as { source?: string }).source || '')
+                .toLowerCase()
+                .includes('false-negative') && (
+                <>
+                  False Negative <br />
+                </>
+              )}
+              Created by :{' '}
+              {allUsers.find((u) => u.id == annotation.owner)?.name ||
+                'Unknown'}
+              <br />
+              {annotation?.createdAt && (
+                <>
+                  Created at : {annotation?.createdAt} <br />
+                </>
+              )}
+              {annotation.objectId &&
+                `Name: ${uniqueNamesGenerator({
+                  dictionaries: [adjectives, names],
+                  seed: annotation.objectId,
+                  style: 'capital',
+                  separator: ' ',
+                })}`}
+              {!annotation.objectId &&
+                annotation.proposedObjectId &&
+                `Proposed Name: ${uniqueNamesGenerator({
+                  dictionaries: [adjectives, names],
+                  seed: annotation.proposedObjectId,
+                  style: 'capital',
+                  separator: ' ',
+                })}`}
+            </Tooltip>
+          </Marker>
+          <ChangeCategoryModal
+            show={showCategoryModal}
+            onClose={() => setShowCategoryModal(false)}
+            categories={categories}
+            currentCategoryId={annotation.categoryId}
+            onSelectCategory={handleCategoryChange}
+          />
+        </>
       );
     } else {
       return null;
