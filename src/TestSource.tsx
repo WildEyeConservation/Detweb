@@ -1,12 +1,13 @@
 import { useContext, useCallback, useState, useEffect, useRef } from 'react';
-import { ProjectContext, GlobalContext, UserContext } from './Context';
+import { ProjectContext, GlobalContext } from './Context';
 import { fetchAllPaginatedResults } from './utils';
 
 export default function useTesting() {
   const { currentPM, project, categoriesHook } = useContext(ProjectContext)!;
   const { client } = useContext(GlobalContext)!;
 
-  const [i, setI] = useState(0);
+  // Use ref for index to prevent race conditions when multiple fetcher calls happen concurrently
+  const iRef = useRef(0);
   const [zoom, setZoom] = useState<number | undefined>(undefined);
   const [hasPrimaryCandidates, setHasPrimaryCandidates] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -152,9 +153,15 @@ export default function useTesting() {
     }
     console.log('candidates', candidateEntries);
     const length = candidateEntries.length;
+    
+    // Capture and immediately increment the index to prevent race conditions
+    // when multiple concurrent fetcher calls happen
+    const startIndex = iRef.current;
+    iRef.current = (startIndex + 1) % length;
+    
     // Try each candidate once, wrapping around if necessary
     for (let attempt = 0; attempt < length; attempt++) {
-      const currentIndex = (i + attempt) % length;
+      const currentIndex = (startIndex + attempt) % length;
       const entry = candidateEntries[currentIndex];
       console.log(`entry ${currentIndex}`, entry);
       const categoryCounts = await fetchAllPaginatedResults(
@@ -177,17 +184,18 @@ export default function useTesting() {
       );
       // Return the first valid test location
       if (missingCategories.length === 0) {
-        setI(currentIndex + 1);
+        // Update ref to skip past this entry for next call
+        iRef.current = (currentIndex + 1) % length;
         return entry;
       }
     }
     // If no valid candidate found, fallback to the next in sequence
-    const fallbackIndex = i % length;
+    const fallbackIndex = startIndex % length;
     console.warn(
       'No valid test location found, defaulting to candidate',
       candidateEntries[fallbackIndex]
     );
-    setI(fallbackIndex + 1);
+    iRef.current = (fallbackIndex + 1) % length;
     return candidateEntries[fallbackIndex];
   }
 
@@ -220,7 +228,7 @@ export default function useTesting() {
       isTest: true,
     };
     return body;
-  }, [i, primaryCandidates, zoom]);
+  }, [primaryCandidates, zoom]);
 
   return {
     fetcher: !loading && hasPrimaryCandidates ? fetcher : undefined,
