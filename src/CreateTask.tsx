@@ -1,10 +1,18 @@
-import { useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  ChangeEvent,
+} from 'react';
 import Form from 'react-bootstrap/Form';
 import Spinner from 'react-bootstrap/Spinner';
 import { GlobalContext } from './Context';
 import { fetchAllPaginatedResults } from './utils';
 import LabeledToggleSwitch from './LabeledToggleSwitch';
 import type { TiledLaunchRequest } from './types/LaunchTask';
+import Papa from 'papaparse';
 
 type Nullable<T> = T | null;
 
@@ -67,6 +75,9 @@ function CreateTask({
   const [imagesLoaded, setImagesLoaded] = useState<number>(0);
   // Dev only: global subset and per-transect subsetting
   const [subsetN, setSubsetN] = useState<number>(1);
+  // Dev-only: CSV filter for image IDs
+  const [csvFilterIds, setCsvFilterIds] = useState<string[]>([]);
+  const [csvParseError, setCsvParseError] = useState<string | null>(null);
 
   // Dev-only: per-transect subsetting based on geo + timestamps
   const hasDevGeoTransect = useMemo(() => {
@@ -255,6 +266,18 @@ function CreateTask({
     transectSubsetSteps,
     transectSubsetOffsets,
   ]);
+
+  const csvMatchStats = useMemo(() => {
+    if (!csvFilterIds.length) {
+      return { matched: 0, missing: 0 };
+    }
+    const available = new Set(allImages.map((img) => img.id));
+    let matched = 0;
+    for (const id of csvFilterIds) {
+      if (available.has(id)) matched += 1;
+    }
+    return { matched, missing: csvFilterIds.length - matched };
+  }, [allImages, csvFilterIds]);
 
   function calculateTileSizeAbsoluteOverlap(
     effectiveSize: number,
@@ -517,60 +540,134 @@ function CreateTask({
     }
   }, [loadingImages]);
 
+  const handleCsvUpload = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      setCsvParseError(null);
+      Papa.parse<any>(file, {
+        skipEmptyLines: true,
+        complete: (results) => {
+          if (results.errors && results.errors.length > 0) {
+            setCsvParseError(
+              results.errors[0]?.message ?? 'Failed to parse CSV'
+            );
+            setCsvFilterIds([]);
+            return;
+          }
+          const ids = new Set<string>();
+          for (const row of results.data as any[]) {
+            if (row == null) continue;
+            if (Array.isArray(row)) {
+              row.forEach((cell) => {
+                if (
+                  typeof cell === 'string' ||
+                  typeof cell === 'number'
+                ) {
+                  const id = String(cell).trim();
+                  if (id) ids.add(id);
+                }
+              });
+            } else if (typeof row === 'object') {
+              Object.values(row as Record<string, unknown>).forEach(
+                (cell) => {
+                  if (
+                    typeof cell === 'string' ||
+                    typeof cell === 'number'
+                  ) {
+                    const id = String(cell).trim();
+                    if (id) ids.add(id);
+                  }
+                }
+              );
+            } else if (
+              typeof row === 'string' ||
+              typeof row === 'number'
+            ) {
+              const id = String(row).trim();
+              if (id) ids.add(id);
+            }
+          }
+          setCsvFilterIds(Array.from(ids));
+        },
+        error: (error) => {
+          setCsvParseError(error.message ?? 'Failed to parse CSV');
+          setCsvFilterIds([]);
+        },
+      });
+      // Allow re-uploading the same file
+      event.target.value = '';
+    },
+    []
+  );
+
+  const handleClearCsv = useCallback(() => {
+    setCsvFilterIds([]);
+    setCsvParseError(null);
+  }, []);
+
+  const getImagesToUse = useCallback(() => {
+    let imagesToUse = allImages;
+    if (process.env.NODE_ENV === 'development') {
+      if (hasDevGeoTransect) {
+        const selected: typeof allImages = [];
+        for (const g of transectGroupStats as any[]) {
+          const stepRaw = transectSubsetSteps[g.transectId];
+          const step = Math.max(1, Number(stepRaw) || 1);
+          const offsetRaw = transectSubsetOffsets[g.transectId];
+          const offset = Math.max(0, Number(offsetRaw) || 0);
+          const subset = (g.images as any[]).filter(
+            (_: any, idx: number) => {
+              const pos = idx + 1;
+              if (pos <= offset) return false;
+              return (pos - offset) % step === 0;
+            }
+          );
+          selected.push(...subset);
+        }
+        imagesToUse = selected;
+      } else if (subsetN > 1) {
+        const sortedImages = [...allImages].sort((a, b) => {
+          if (a.timestamp != null && b.timestamp != null) {
+            return (a.timestamp as number) - (b.timestamp as number);
+          } else if (a.timestamp != null) {
+            return -1;
+          } else if (b.timestamp != null) {
+            return 1;
+          }
+          return 0;
+        });
+        imagesToUse = sortedImages.filter(
+          (_, idx) => (idx + 1) % subsetN === 0
+        );
+      }
+      if (csvFilterIds.length > 0) {
+        const idSet = new Set(csvFilterIds);
+        imagesToUse = imagesToUse.filter((img) => idSet.has(img.id));
+      }
+    }
+    return imagesToUse;
+  }, [
+    allImages,
+    csvFilterIds,
+    hasDevGeoTransect,
+    subsetN,
+    transectGroupStats,
+    transectSubsetOffsets,
+    transectSubsetSteps,
+  ]);
+
   const expectedImagesToUse = useMemo(() => {
     if (loadingImages) return 0;
-    if (process.env.NODE_ENV === 'development') {
-      if (hasDevGeoTransect) return expectedCounts.total;
-      if (subsetN > 1)
-        return Math.floor(allImages.length / Math.max(1, subsetN));
-    }
-    return allImages.length;
-  }, [
-    loadingImages,
-    hasDevGeoTransect,
-    expectedCounts.total,
-    subsetN,
-    allImages.length,
-  ]);
+    return getImagesToUse().length;
+  }, [getImagesToUse, loadingImages]);
 
   const expectedTiles = useMemo(() => {
     return expectedImagesToUse * horizontalTiles * verticalTiles;
   }, [expectedImagesToUse, horizontalTiles, verticalTiles]);
 
   const buildTiledRequest = useCallback(() => {
-      let imagesToUse = allImages;
-      if (process.env.NODE_ENV === 'development') {
-        if (hasDevGeoTransect) {
-          const selected: typeof allImages = [];
-          for (const g of transectGroupStats as any[]) {
-            const stepRaw = transectSubsetSteps[g.transectId];
-            const step = Math.max(1, Number(stepRaw) || 1);
-            const offsetRaw = transectSubsetOffsets[g.transectId];
-            const offset = Math.max(0, Number(offsetRaw) || 0);
-            const subset = (g.images as any[]).filter((_: any, idx: number) => {
-              const pos = idx + 1;
-              if (pos <= offset) return false;
-              return (pos - offset) % step === 0;
-            });
-            selected.push(...subset);
-          }
-          imagesToUse = selected;
-        } else if (subsetN > 1) {
-          const sortedImages = [...allImages].sort((a, b) => {
-            if (a.timestamp != null && b.timestamp != null) {
-              return (a.timestamp as number) - (b.timestamp as number);
-            } else if (a.timestamp != null) {
-              return -1;
-            } else if (b.timestamp != null) {
-              return 1;
-            }
-            return 0;
-          });
-          imagesToUse = sortedImages.filter(
-            (_, idx) => (idx + 1) % subsetN === 0
-          );
-        }
-      }
+      const imagesToUse = getImagesToUse();
 
       const description = JSON.stringify({
         mode: 'tiled',
@@ -591,6 +688,10 @@ function CreateTask({
         maxX,
         maxY,
         subsetN,
+        csvFilterCount:
+          process.env.NODE_ENV === 'development' && csvFilterIds.length > 0
+            ? csvFilterIds.length
+            : undefined,
         dev: hasDevGeoTransect
           ? {
               transectSubsetSteps,
@@ -628,10 +729,8 @@ function CreateTask({
       minX,
       minY,
       name,
-      subsetN,
-      transectGroupStats,
-      transectSubsetOffsets,
-      transectSubsetSteps,
+      csvFilterIds.length,
+      getImagesToUse,
       verticalTiles,
       width,
     ]
@@ -766,6 +865,43 @@ function CreateTask({
                 />
               </>
             )}
+            <div className='mt-3 p-2 border-top border-dark text-white'>
+              <Form.Label className='mb-1 text-white'>
+                Limit tiling to CSV image IDs (dev only)
+              </Form.Label>
+              <span
+                className='d-block text-muted mb-2'
+                style={{ fontSize: '12px' }}
+              >
+                Upload a CSV with image IDs in any column. Parsed IDs:{' '}
+                {csvFilterIds.length} | matched: {csvMatchStats.matched} |
+                missing: {csvMatchStats.missing}
+              </span>
+              <Form.Control
+                type='file'
+                accept='.csv,text/csv'
+                size='sm'
+                onChange={handleCsvUpload}
+                disabled={loadingImages}
+              />
+              {csvParseError && (
+                <div
+                  className='text-warning mt-1'
+                  style={{ fontSize: '12px' }}
+                >
+                  {csvParseError}
+                </div>
+              )}
+              {csvFilterIds.length > 0 && (
+                <button
+                  type='button'
+                  className='btn btn-sm btn-light mt-2'
+                  onClick={handleClearCsv}
+                >
+                  Clear CSV filter
+                </button>
+              )}
+            </div>
           </Form.Group>
         )}
       </Form.Group>
