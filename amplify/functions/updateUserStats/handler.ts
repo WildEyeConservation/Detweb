@@ -99,7 +99,7 @@ function accumulateStats(input: any): boolean {
         let timeTaken = parseFloat(input.timeTaken?.N || '0') || 0;
         const waitingTime = parseFloat(input.waitingTime?.N || '0') || 0;
         const sighting = (annotationCount > 0 ? 1 : 0);
-        if (timeTaken > (sighting ? 600*1000 : 120*1000)) timeTaken = 0;
+        if (timeTaken > (sighting ? 900*1000 : 120*1000)) timeTaken = 0;
         
         const key = `${setId}-${date}-${userId}-${projectId}`;
         if (!stats[key]) {

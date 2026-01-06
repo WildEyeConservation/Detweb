@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext, useCallback } from 'react';
+import { useEffect, useState, useContext, useCallback, useRef } from 'react';
 import { UserContext, ProjectContext, GlobalContext } from './Context';
 import {
   ReceiveMessageCommand,
@@ -29,7 +29,8 @@ export default function useSQS(
     Schema['ProjectTestConfig']['type'] | undefined
   >(undefined);
   const [testUser, setTestUser] = useState(false);
-  const [pushTest, setPushTest] = useState(false);
+  // Use ref for pushTest to prevent race conditions when multiple fetcher calls happen concurrently
+  const pushTestRef = useRef(false);
   const { fetcher: testFetcher } = useTesting();
   const [maxJobsCompleted, setMaxJobsCompleted] = useState(0);
   const {
@@ -73,7 +74,7 @@ export default function useSQS(
         setUnannotatedJobs((j) => j + 1);
         setCurrentAnnoCount({});
       } else {
-        setPushTest(true);
+        pushTestRef.current = true;
         setUnannotatedJobs(0);
       }
     }
@@ -135,10 +136,12 @@ export default function useSQS(
 
   const fetcher = useCallback(async (): Promise<Identifiable> => {
     while (true) {
-      if (testFetcher && pushTest) {
+      // Check and immediately clear the flag to prevent race conditions
+      // when multiple concurrent fetcher calls happen
+      if (testFetcher && pushTestRef.current) {
+        pushTestRef.current = false;
         const testLocation = await testFetcher();
         if (testLocation) {
-          setPushTest(false);
           return {
             ...testLocation,
             config: config,
@@ -252,7 +255,6 @@ export default function useSQS(
     getSqsClient,
     filterPredicate,
     processedLocations,
-    pushTest,
     testFetcher,
   ]);
 

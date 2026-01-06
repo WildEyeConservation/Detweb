@@ -10,6 +10,9 @@ import ExceptionsModal from './ExceptionsModal';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
 import { fetchAllPaginatedResults } from '../utils';
 import ConfirmationModal from '../ConfirmationModal';
+import { Minimize2, Maximize2 } from 'lucide-react';
+
+const STORAGE_KEY_COMPACT_MODE = 'usersCompactMode';
 
 export default function Users({
   organization,
@@ -36,6 +39,23 @@ export default function Users({
     name: string;
     organizationName: string;
   } | null>(null);
+
+  // Initialize compactMode from localStorage or use default
+  const getInitialCompactMode = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEY_COMPACT_MODE);
+      if (stored !== null) {
+        return stored === 'true';
+      }
+    }
+    return false;
+  };
+
+  const [compactMode, setCompactMode] = useState(getInitialCompactMode);
+  const getIsMobile = () =>
+    typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
+
+  const [isMobile, setIsMobile] = useState(getIsMobile);
 
   async function updateUser(userId: string, isAdmin: boolean) {
     hook.update({
@@ -137,45 +157,73 @@ export default function Users({
                 updateUser(membership.userId, checked);
               }}
             />,
-            <Button
-              className='fixed-width-button'
-              disabled={
-                process.env.NODE_ENV === 'development'
-                  ? false
-                  : membership.isAdmin
-                  ? true
-                  : false
-              }
-              variant={'info'}
-              onClick={() => {
-                setUserToEdit({
-                  id: user?.id || '',
-                  name: user?.name || '',
-                  organizationName: organization.name,
-                });
-                showModal('exceptions');
-              }}
-            >
-              Edit
-            </Button>,
-            <Button
-              className='fixed-width-button'
-              variant='danger'
-              disabled={user?.id === authUser.userId}
-              onClick={() => {
-                setUserToEdit({
-                  id: user?.id || '',
-                  name: user?.name || '',
-                  organizationName: organization.name,
-                });
-                showModal('removeUser');
-              }}
-            >
-              Remove user
-            </Button>,
+            <div className='d-flex justify-content-center'>
+              <Button
+                size={compactMode ? 'sm' : undefined}
+                className='fixed-width-button'
+                disabled={
+                  process.env.NODE_ENV === 'development'
+                    ? false
+                    : membership.isAdmin
+                    ? true
+                    : false
+                }
+                variant={'info'}
+                onClick={() => {
+                  setUserToEdit({
+                    id: user?.id || '',
+                    name: user?.name || '',
+                    organizationName: organization.name,
+                  });
+                  showModal('exceptions');
+                }}
+              >
+                Edit
+              </Button>
+            </div>,
+            <div className='d-flex justify-content-center'>
+              <Button
+                size={compactMode ? 'sm' : undefined}
+                className='fixed-width-button'
+                variant='danger'
+                disabled={user?.id === authUser.userId}
+                onClick={() => {
+                  setUserToEdit({
+                    id: user?.id || '',
+                    name: user?.name || '',
+                    organizationName: organization.name,
+                  });
+                  showModal('removeUser');
+                }}
+              >
+                Remove user
+              </Button>
+            </div>,
           ],
         };
       });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleResize = () => {
+      setIsMobile(getIsMobile());
+    };
+
+    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  // Persist compactMode to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY_COMPACT_MODE, String(compactMode));
+    }
+  }, [compactMode]);
 
   useEffect(() => {
     setOnClick({
@@ -228,8 +276,27 @@ export default function Users({
 
   return (
     <>
-      <div className='d-flex flex-column gap-2 mt-3 w-100 overflow-x-auto overflow-y-visible'>
-        <h5>Organisation Users</h5>
+      <div className={`d-flex flex-column ${compactMode ? 'gap-1' : 'gap-2'} mt-3 w-100 overflow-x-auto overflow-y-visible`}>
+        <div className='d-flex justify-content-between align-items-center'>
+          {compactMode ? (
+            <h6 className='mb-0'>Organisation Users</h6>
+          ) : (
+            <h5 className='mb-0'>Organisation Users</h5>
+          )}
+          {!isMobile && (
+            <Button
+              variant='info'
+              onClick={() => setCompactMode(!compactMode)}
+              title={compactMode ? 'Expand view' : 'Compact view'}
+              style={{
+                minWidth: 'fit-content',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {compactMode ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
+            </Button>
+          )}
+        </div>
         <MyTable
           tableData={tableData}
           tableHeadings={tableHeadings}
