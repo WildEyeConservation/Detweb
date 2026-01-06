@@ -1,6 +1,6 @@
 import Table from 'react-bootstrap/Table';
 import type { CSSProperties } from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Button from 'react-bootstrap/esm/Button';
 import Form from 'react-bootstrap/Form';
 import { MoveUp, MoveDown } from 'lucide-react';
@@ -47,6 +47,7 @@ export default function MyTable(input: TableObject) {
   };
   
   const [itemsPerPage, setItemsPerPage] = useState(getInitialItemsPerPage);
+  const prevDataRef = useRef<{ id: any }[]>([]);
 
   const handleSort = (index: number) => {
     let direction: SortDirection = 'asc';
@@ -106,8 +107,21 @@ export default function MyTable(input: TableObject) {
     : sortedData;
 
   useEffect(() => {
+    // Only reset page if the data actually changed (length or IDs changed)
+    // This prevents resetting when tableData is recreated with the same content
+    const prevIds = prevDataRef.current.map((item) => item.id).sort().join(',');
+    const currentIds = tableData.map((item) => item.id).sort().join(',');
+    const dataChanged = 
+      prevDataRef.current.length !== tableData.length || 
+      prevIds !== currentIds;
+
     setSortedData(tableData);
-    setCurrentPage(0); // reset to first page when data changes (e.g., search/filter)
+    
+    if (dataChanged) {
+      setCurrentPage(0); // reset to first page when data actually changes (e.g., search/filter)
+    }
+    
+    prevDataRef.current = tableData;
   }, [tableData]);
 
   useEffect(() => {

@@ -1135,15 +1135,65 @@ export function FileUploadCore({
     [associateByTimestamp, csvData, exifData, minTimestamp, maxTimestamp]
   );
 
+  // Check for truly missing GPS files using fullCsvData (unfiltered).
+  // Files that have GPS in the original data but are filtered out should NOT
+  // appear as "missing GPS" - they're just excluded from the current selection.
   const invalidGpsFiles = useMemo(() => {
     if (filteredImageFiles.length === 0) {
       return [] as string[];
     }
 
     return filteredImageFiles
-      .filter((file) => !getGpsForFile(file))
+      .filter((file) => {
+        const exifmeta = exifData[file.webkitRelativePath];
+        if (!exifmeta) return true; // No EXIF metadata = truly invalid
+
+        // Check EXIF GPS first
+        const gps = exifmeta.gpsData;
+        if (gps) {
+          const latNum = typeof gps.lat === 'number' ? gps.lat : Number(gps.lat);
+          const lngNum = typeof gps.lng === 'number' ? gps.lng : Number(gps.lng);
+          if (hasValidLatLng(latNum, lngNum)) {
+            return false; // Has valid GPS from EXIF
+          }
+        }
+
+        // Check fullCsvData (unfiltered GPS data) - NOT csvData
+        if (!fullCsvData || fullCsvData.length === 0) {
+          return true; // No GPS data available at all
+        }
+
+        if (associateByTimestamp) {
+          const timestamp = exifmeta.timestamp;
+          // Check for exact timestamp match in full data
+          const exactRow = fullCsvData.find((row) => row.timestamp === timestamp);
+          if (exactRow && hasValidLatLng(exactRow.lat, exactRow.lng)) {
+            return false; // Has valid GPS in the original full data
+          }
+          // Check if interpolation would be possible using full data
+          const timestampedRows = fullCsvData.filter(
+            (row): row is { timestamp: number; lat: number; lng: number; alt: number } =>
+              typeof row.timestamp === 'number'
+          );
+          if (timestampedRows.length >= 2) {
+            const minTs = Math.min(...timestampedRows.map((r) => r.timestamp));
+            const maxTs = Math.max(...timestampedRows.map((r) => r.timestamp));
+            if (timestamp >= minTs && timestamp <= maxTs) {
+              return false; // Can interpolate GPS from full data
+            }
+          }
+          return true; // Truly cannot get GPS
+        } else {
+          // Associate by filepath - check against full data
+          const csvRow = fullCsvData.find(
+            (row) =>
+              row.filepath?.toLowerCase() === file.webkitRelativePath.toLowerCase()
+          );
+          return !csvRow || !hasValidLatLng(csvRow.lat, csvRow.lng);
+        }
+      })
       .map((file) => file.webkitRelativePath);
-  }, [filteredImageFiles, getGpsForFile]);
+  }, [filteredImageFiles, exifData, fullCsvData, associateByTimestamp]);
 
   const hasValidGpsForAllImages =
     filteredImageFiles.length > 0 && invalidGpsFiles.length === 0;
@@ -1244,19 +1294,33 @@ export function FileUploadCore({
         allCameras.push(camera);
       }
 
-      for (const [name, spec] of Object.entries(cameraSpecs)) {
-        const existingCamera = existingCameras.find((c) => c.name === name);
+      // Get all camera names from cameraSelection, defaulting to single camera if null
+      const cameraNames = cameraSelection
+        ? cameraSelection[1]
+        : ['Survey Camera'];
+
+      // Create or update all cameras, even if they don't have specs
+      for (const cameraName of cameraNames) {
+        const existingCamera = existingCameras.find((c) => c.name === cameraName);
+        const spec = cameraSpecs[cameraName] || {
+          focalLengthMm: 0,
+          sensorWidthMm: 0,
+          tiltDegrees: 0,
+        };
+
         if (existingCamera) {
+          // Update existing camera with specs (even if 0 values)
           await client.models.Camera.update({
             id: existingCamera.id,
-            name: name,
+            name: cameraName,
             focalLengthMm: spec.focalLengthMm || 0,
             sensorWidthMm: spec.sensorWidthMm || 0,
             tiltDegrees: spec.tiltDegrees || 0,
           });
         } else {
+          // Create new camera with specs (even if 0 values)
           const { data: newCamera } = await client.models.Camera.create({
-            name: name,
+            name: cameraName,
             projectId: projectId,
             focalLengthMm: spec.focalLengthMm || 0,
             sensorWidthMm: spec.sensorWidthMm || 0,
