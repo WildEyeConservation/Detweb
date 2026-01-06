@@ -1244,19 +1244,33 @@ export function FileUploadCore({
         allCameras.push(camera);
       }
 
-      for (const [name, spec] of Object.entries(cameraSpecs)) {
-        const existingCamera = existingCameras.find((c) => c.name === name);
+      // Get all camera names from cameraSelection, defaulting to single camera if null
+      const cameraNames = cameraSelection
+        ? cameraSelection[1]
+        : ['Survey Camera'];
+
+      // Create or update all cameras, even if they don't have specs
+      for (const cameraName of cameraNames) {
+        const existingCamera = existingCameras.find((c) => c.name === cameraName);
+        const spec = cameraSpecs[cameraName] || {
+          focalLengthMm: 0,
+          sensorWidthMm: 0,
+          tiltDegrees: 0,
+        };
+
         if (existingCamera) {
+          // Update existing camera with specs (even if 0 values)
           await client.models.Camera.update({
             id: existingCamera.id,
-            name: name,
+            name: cameraName,
             focalLengthMm: spec.focalLengthMm || 0,
             sensorWidthMm: spec.sensorWidthMm || 0,
             tiltDegrees: spec.tiltDegrees || 0,
           });
         } else {
+          // Create new camera with specs (even if 0 values)
           const { data: newCamera } = await client.models.Camera.create({
-            name: name,
+            name: cameraName,
             projectId: projectId,
             focalLengthMm: spec.focalLengthMm || 0,
             sensorWidthMm: spec.sensorWidthMm || 0,
