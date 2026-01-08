@@ -4,6 +4,7 @@ import { useEffect, useState, useContext, useCallback, useMemo } from 'react';
 import Modal from 'react-bootstrap/Modal';
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
+import Alert from 'react-bootstrap/Alert';
 import { list } from 'aws-amplify/storage';
 import { GlobalContext, UploadContext } from './Context.tsx';
 import exifr from 'exifr';
@@ -219,6 +220,11 @@ export function FileUploadCore({
   // State for scan count and total
   const [scanCount, setScanCount] = useState(0);
   const [scanTotal, setScanTotal] = useState(0);
+  
+  // State for tracking files that failed during EXIF scanning
+  const [failedFiles, setFailedFiles] = useState<
+    Array<{ path: string; error: string }>
+  >([]);
 
   // Handler to confirm column mapping before processing
   const handleConfirmMapping = () => {
@@ -426,20 +432,96 @@ export function FileUploadCore({
       setScanCount(0);
       setScanTotal(mapFiles.length);
       setScanningEXIF(true);
+      setFailedFiles([]); // Clear previous failures when starting new scan
 
       // Get EXIF metadata for each file (sample first, then selective fast path if no GPS)
       const sampleSize = Math.min(5, mapFiles.length);
       const sampleFiles = mapFiles.slice(0, sampleSize);
       const restFiles = mapFiles.slice(sampleSize);
 
+      // Helper to safely extract EXIF with error handling and validation
+      const safeExtractExif = async (
+        file: File,
+        extractor: (file: File) => Promise<ImageExif>
+      ): Promise<ImageExif | null> => {
+        try {
+          const exif = await extractor(file);
+          
+          // Validation checks for corrupted files
+          const validationErrors: string[] = [];
+          
+          // Check 1: Image dimensions must be valid
+          if (!exif.width || !exif.height || exif.width <= 0 || exif.height <= 0) {
+            validationErrors.push('Invalid image dimensions');
+          }
+          
+          // Check 2: Timestamp must be valid (not 0, not NaN, and reasonable date)
+          if (!exif.timestamp || !Number.isFinite(exif.timestamp)) {
+            validationErrors.push('Invalid timestamp');
+          } else {
+            // Check if timestamp is reasonable (between 1970 and 2100)
+            const minTimestamp = new Date('1970-01-01').getTime();
+            const maxTimestamp = new Date('2100-01-01').getTime();
+            if (exif.timestamp < minTimestamp || exif.timestamp > maxTimestamp) {
+              validationErrors.push('Timestamp out of valid range');
+            }
+          }
+          
+          // Check 3: File size should be reasonable for an image (at least 1KB)
+          if (file.size < 1024) {
+            validationErrors.push('File size suspiciously small');
+          }
+          
+          // Check 4: File size should not be 0
+          if (file.size === 0) {
+            validationErrors.push('File is empty');
+          }
+          
+          // If validation failed, treat as corrupted file
+          if (validationErrors.length > 0) {
+            const errorMessage = validationErrors.join('; ');
+            console.error(
+              `File validation failed for ${file.webkitRelativePath}:`,
+              errorMessage
+            );
+            setFailedFiles((prev) => [
+              ...prev,
+              {
+                path: file.webkitRelativePath,
+                error: errorMessage,
+              },
+            ]);
+            return null;
+          }
+          
+          return exif;
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          console.error(
+            `Failed to extract EXIF from ${file.webkitRelativePath}:`,
+            error
+          );
+          setFailedFiles((prev) => [
+            ...prev,
+            {
+              path: file.webkitRelativePath,
+              error: errorMessage || 'Unknown error',
+            },
+          ]);
+          return null;
+        }
+      };
+
       // Sample with full EXIF to check for GPS
-      const sampleRaw: ImageExif[] = await Promise.all(
+      const sampleResults = await Promise.all(
         sampleFiles.map(async (file) => {
-          const exif = await getExifmeta(file);
+          const exif = await safeExtractExif(file, getExifmeta);
+          if (!exif) return null;
 
           // Validate and convert GPS data
           let gpsData: GpsData | null = null;
-          if (exif.gpsData.alt && exif.gpsData.lat && exif.gpsData.lng) {
+          if (exif.gpsData && exif.gpsData.alt && exif.gpsData.lat && exif.gpsData.lng) {
             const lat = Number(exif.gpsData.lat);
             const lng = Number(exif.gpsData.lng);
             // Only set GPS data if coordinates are valid and in range
@@ -468,7 +550,13 @@ export function FileUploadCore({
           return updatedExif;
         })
       );
-      setScanCount((prev) => prev + sampleRaw.length);
+      
+      // Filter out null results (failed files)
+      const sampleRaw: ImageExif[] = sampleResults.filter(
+        (exif): exif is ImageExif => exif !== null
+      );
+      // Update count for all attempts (including failures) to show accurate progress
+      setScanCount((prev) => prev + sampleResults.length);
 
       const gpsLikely = sampleRaw.some((x) => x.gpsData !== null);
       const extractor = gpsLikely ? getExifmeta : getTimestampOnlyExif;
@@ -487,11 +575,12 @@ export function FileUploadCore({
       }
 
       // Process the rest with limited concurrency using chosen extractor
-      const restRaw: ImageExif[] = await mapWithLimit(
+      const restResults = await mapWithLimit(
         restFiles,
         4,
         async (file) => {
-          const exif = (await extractor(file as File)) as ImageExif;
+          const exif = await safeExtractExif(file as File, extractor);
+          if (!exif) return null;
 
           // Validate and convert GPS data
           let gpsData: GpsData | null = null;
@@ -529,6 +618,11 @@ export function FileUploadCore({
           return updatedExif;
         },
         () => setScanCount((prev) => prev + 1)
+      );
+      
+      // Filter out null results (failed files)
+      const restRaw: ImageExif[] = restResults.filter(
+        (exif): exif is ImageExif => exif !== null
       );
 
       for (const updatedExif of restRaw) {
@@ -1143,8 +1237,16 @@ export function FileUploadCore({
       return [] as string[];
     }
 
+    // Create a set of failed file paths for quick lookup
+    const failedFilePaths = new Set(failedFiles.map((f) => f.path));
+
     return filteredImageFiles
       .filter((file) => {
+        // Exclude files that failed validation/corruption checks
+        if (failedFilePaths.has(file.webkitRelativePath)) {
+          return false; // Don't include failed files in invalid GPS list
+        }
+
         const exifmeta = exifData[file.webkitRelativePath];
         if (!exifmeta) return true; // No EXIF metadata = truly invalid
 
@@ -1193,7 +1295,7 @@ export function FileUploadCore({
         }
       })
       .map((file) => file.webkitRelativePath);
-  }, [filteredImageFiles, exifData, fullCsvData, associateByTimestamp]);
+  }, [filteredImageFiles, exifData, fullCsvData, associateByTimestamp, failedFiles]);
 
   const hasValidGpsForAllImages =
     filteredImageFiles.length > 0 && invalidGpsFiles.length === 0;
@@ -1215,17 +1317,18 @@ export function FileUploadCore({
   }, [hasValidGpsForAllImages, csvData, setReadyToSubmit]);
 
   // Simple concurrency limiter for mapping large arrays without blocking UI
+  // Now handles errors gracefully - failed items will be null in results
   async function mapWithLimit<T, U>(
     items: T[],
     limit: number,
-    mapper: (item: T, index: number) => Promise<U>,
+    mapper: (item: T, index: number) => Promise<U | null>,
     onProgress?: (index: number) => void
-  ): Promise<U[]> {
-    const results: U[] = new Array(items.length);
+  ): Promise<(U | null)[]> {
+    const results: (U | null)[] = new Array(items.length);
     let nextIndex = 0;
     let active = 0;
 
-    return new Promise<U[]>((resolve, reject) => {
+    return new Promise<(U | null)[]>((resolve) => {
       const launch = () => {
         while (active < limit && nextIndex < items.length) {
           const current = nextIndex++;
@@ -1233,6 +1336,15 @@ export function FileUploadCore({
           mapper(items[current], current)
             .then((res) => {
               results[current] = res;
+              if (onProgress) onProgress(current);
+            })
+            .catch((err) => {
+              // Log error but don't fail the entire operation
+              console.error(
+                `Error processing item at index ${current}:`,
+                err
+              );
+              results[current] = null;
               if (onProgress) onProgress(current);
             })
             .then(() => {
@@ -1246,8 +1358,7 @@ export function FileUploadCore({
               } else {
                 launch();
               }
-            })
-            .catch((err) => reject(err));
+            });
         }
         if (nextIndex >= items.length && active === 0) {
           resolve(results);
@@ -1369,8 +1480,21 @@ export function FileUploadCore({
         });
       }
 
+      // Exclude failed files from processing
+      const failedFilePaths = new Set(failedFiles.map((f) => f.path));
+      
       const gpsFilteredImageFiles = filteredImageFiles.filter((file) => {
+        // Skip files that failed validation/corruption checks
+        if (failedFilePaths.has(file.webkitRelativePath)) {
+          return false;
+        }
+
         const exifMeta = exifData[file.webkitRelativePath];
+        
+        // Skip files without EXIF metadata (shouldn't happen for non-failed files, but safety check)
+        if (!exifMeta) {
+          return false;
+        }
 
         if (exifMeta.gpsData) {
           // image metadata
@@ -2079,7 +2203,44 @@ export function FileUploadCore({
             Scanning images for GPS data: {`${scanCount}/${scanTotal}`}
           </p>
         </div>
-      ) : Object.keys(exifData).length > 0 && imageFiles.length > 0 ? (
+      ) : failedFiles.length > 0 ? (
+        <Alert variant='warning' className='mt-3 mb-3'>
+          <Alert.Heading>
+            {failedFiles.length} file{failedFiles.length === 1 ? '' : 's'} failed
+            to scan
+          </Alert.Heading>
+          <p className='mb-2' style={{ fontSize: '14px' }}>
+            The following file{failedFiles.length === 1 ? '' : 's'} could not be
+            processed (may be corrupt or unreadable). These files will be
+            excluded from the upload, but you can continue with the remaining
+            files.
+          </p>
+          <div
+            style={{
+              maxHeight: '200px',
+              overflowY: 'auto',
+              backgroundColor: '#f8f9fa',
+              padding: '8px',
+              borderRadius: '4px',
+              fontSize: '12px',
+            }}
+          >
+            <ul className='mb-0' style={{ paddingLeft: '20px' }}>
+              {failedFiles.map((failed, idx) => (
+                <li key={idx} className='mb-1'>
+                  <code style={{ fontSize: '11px' }}>{failed.path}</code>
+                  {failed.error && (
+                    <span className='ms-2' style={{ fontSize: '11px', color: '#dc3545' }}>
+                      ({failed.error})
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Alert>
+      ) : null}
+      {!scanningEXIF && Object.keys(exifData).length > 0 && imageFiles.length > 0 ? (
         <Form.Group className='mt-3 d-flex flex-column gap-2'>
           <div>
             <Form.Label className='mb-0'>
