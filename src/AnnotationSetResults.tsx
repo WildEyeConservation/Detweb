@@ -186,7 +186,7 @@ export default function AnnotationSetResults({
               <h5 className='mb-0'>Explore</h5>
               <span className='text-muted' style={{ fontSize: '14px' }}>
                 Explore your annotation set by searching for all sightings of a
-                specific specific species. Can be used to find and correct
+                specific species. Can be used to find and correct
                 errors, and reannotate unknown sightings.
               </span>
               <Button
