@@ -53,8 +53,9 @@ export class AutoProcessor extends Construct {
     super(scope, id);
 
     const { vpc, ecsImage,instanceType,ecsTaskRole,memoryLimitMiB,gpuCount,machineImage } = props;
-    const maxTasks = props.maxTasks ?? 10; // default upper bound for tasks
-    const messagesPerTask = 500; // one task per 500 messages
+    // temp bump from 10 to 20 tasks and 500 to 100 messages per task
+    const maxTasks = props.maxTasks ?? 20; // default upper bound for tasks
+    const messagesPerTask = 100; // one task per 500 messages
 
     // Create Dead Letter Queue for processing
     const dlq = new sqs.Queue(this, 'ProcessingDeadLetterQueue');
