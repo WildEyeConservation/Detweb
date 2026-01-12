@@ -387,6 +387,7 @@ export default function UploadManager() {
                 id: img.id,
                 originalPath: img.originalPath!,
                 timestamp: img.timestamp!,
+                cameraId: img.cameraId ?? undefined,
               });
               knownDbPaths.add(img.originalPath!);
               await createdImagesStore.setItem(projectId, createdImages);
@@ -485,6 +486,7 @@ export default function UploadManager() {
                   id: img.id,
                   originalPath: image.originalPath,
                   timestamp: image.timestamp,
+                  cameraId: img.cameraId ?? undefined,
                 });
                 knownDbPaths.add(image.originalPath);
                 await createdImagesStore.setItem(projectId, createdImages);
