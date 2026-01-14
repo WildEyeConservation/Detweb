@@ -85,8 +85,7 @@ const AnnotationCountModal: React.FC<Props> = ({
         category,
         primaryOnly
           ? annotations.filter(
-              (annotation) =>
-                !annotation.objectId || annotation.objectId === annotation.id
+              (annotation) => annotation.objectId === annotation.id
             ).length
           : annotations.length,
       ].concat(hasFalseNegatives ? [falseNegativesByCategory[category]] : []),
