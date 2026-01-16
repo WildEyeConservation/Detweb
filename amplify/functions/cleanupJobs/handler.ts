@@ -2,7 +2,7 @@ import type { Handler } from "aws-lambda";
 import { env } from "$amplify/env/cleanupJobs";
 import { Amplify } from "aws-amplify";
 import { generateClient } from "aws-amplify/data";
-import { listQueues, listUserProjectMemberships } from "./graphql/queries";
+import { listQueues, listUserProjectMemberships, getProject } from "./graphql/queries";
 import { updateQueue, updateUserProjectMembership } from "./graphql/mutations";
 import type { GraphQLResult } from "@aws-amplify/api-graphql";
 import {
@@ -119,6 +119,18 @@ export const handler: Handler = async (event, context) => {
         (!queue.approximateSize || queue.approximateSize === 0) &&
         parseInt(result.Attributes?.ApproximateNumberOfMessages ?? "0") === 0
       ) {
+        // Fetch project name for logging
+        let projectName = "Unknown";
+        try {
+          const projectResponse = await client.graphql({
+            query: getProject,
+            variables: { id: queue.projectId },
+          });
+          projectName = projectResponse.data?.getProject?.name || "Unknown";
+        } catch (err) {
+          console.error(`Failed to fetch project name for ${queue.projectId}:`, err);
+        }
+
         await client.graphql({
           query: deleteQueue,
           variables: {
@@ -129,6 +141,37 @@ export const handler: Handler = async (event, context) => {
         });
 
         await sqsClient.send(new DeleteQueueCommand({ QueueUrl: queue.url }));
+        
+        // Log the cleanup action
+        const queueName = queue.tag || queue.name || "Unknown";
+        const logMessage = `Cancelled queue job "${queueName}" for project "${projectName}"`;
+        
+        try {
+          await client.graphql({
+            query: /* GraphQL */ `
+              mutation CreateAdminActionLog($input: CreateAdminActionLogInput!) {
+                createAdminActionLog(input: $input) {
+                  id
+                  userId
+                  message
+                  projectId
+                  createdAt
+                }
+              }
+            `,
+            variables: {
+              input: {
+                userId: "SurveyScope",
+                message: logMessage,
+                projectId: queue.projectId,
+              },
+            },
+          });
+        } catch (logError) {
+          // Log error but don't fail the cleanup
+          console.error("Failed to log admin action:", logError);
+        }
+
         deletedProjectIds.add(queue.projectId);
         continue;
       }
