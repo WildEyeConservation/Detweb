@@ -9,6 +9,7 @@ import CreateTask from '../CreateTask';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
 import type { TiledLaunchRequest } from '../types/LaunchTask';
 import { DataClient } from '../../amplify/shared/data-schema.generated';
+import { logAdminAction } from '../utils/adminActionLogger';
 
 type LaunchHandler = (onProgress: (msg: string) => void) => Promise<void>;
 
@@ -46,7 +47,7 @@ export default function FalseNegatives({
   >;
 }) {
   const { client, backend } = useContext(GlobalContext)!;
-  const { getDynamoClient } = useContext(UserContext)!;
+  const { getDynamoClient, user } = useContext(UserContext)!;
 
   // Tile set selection/creation
   const [useExistingTiled, setUseExistingTiled] = useState<boolean>(false);
@@ -350,8 +351,17 @@ export default function FalseNegatives({
         };
 
         onProgress('Enqueuing jobs...');
-        sendLaunchFalseNegativesRequest(client, payload);
+        await sendLaunchFalseNegativesRequest(client, payload);
         onProgress('Launch request submitted');
+        
+        // Log the launch action
+        const queueType = useExistingTiled ? 'existing tiled set' : 'new tiled annotation';
+        await logAdminAction(
+          client,
+          user.userId,
+          `Launched False Negatives queue for annotation set "${annotationSet.name}" in project "${project.name}" (${queueType}, ${samplePercent}% sample)`,
+          project.id
+        ).catch(console.error);
       }
     );
     return () => {
@@ -359,15 +369,18 @@ export default function FalseNegatives({
     };
   }, [
     annotationSet.id,
+    annotationSet.name,
     client,
     fetchLocationsFromSet,
     handleCreateTask,
     project.id,
+    project.name,
     queueTag,
     samplePercent,
     selectedTiledSetId,
     setFalseNegativesLaunchHandler,
     useExistingTiled,
+    user.userId,
   ]);
 
   // modelOptions now derived from actual location sets; when exactly one, it's auto-selected

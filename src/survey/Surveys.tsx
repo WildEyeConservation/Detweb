@@ -23,6 +23,7 @@ import { DeleteQueueCommand } from '@aws-sdk/client-sqs';
 import localforage from 'localforage';
 import UploadIntegrityChecker from '../upload/UploadIntegrityChecker.tsx';
 import ProjectProgress from '../user/ProjectProgress.tsx';
+import { logAdminAction } from '../utils/adminActionLogger.ts';
 
 const fileStoreUploaded = localforage.createInstance({
   name: 'fileStoreUploaded',
@@ -41,6 +42,7 @@ export default function Surveys() {
     myMembershipHook: myProjectsHook,
     isOrganizationAdmin,
     getSqsClient,
+    user,
   } = useContext(UserContext)!;
   const { task, setTask } = useContext(UploadContext)!;
   const navigate = useNavigate();
@@ -177,6 +179,8 @@ export default function Surveys() {
                     'imageSets.name',
                     'queues.id',
                     'queues.url',
+                    'queues.name',
+                    'queues.tag',
                     'status',
                     'updatedAt',
                     'createdAt',
@@ -208,6 +212,9 @@ export default function Surveys() {
   }, [myProjectsHook.data]);
 
   async function deleteProject(projectId: string) {
+    const project = projects.find((p) => p.id === projectId);
+    const projectName = project?.name || 'Unknown';
+
     setProjects((projects) =>
       projects.map((project) => {
         if (project.id === projectId) {
@@ -222,6 +229,13 @@ export default function Surveys() {
       status: 'deleting',
     });
 
+    await logAdminAction(
+      client,
+      user.userId,
+      `Deleted project "${projectName}" (ID: ${projectId})`,
+      projectId
+    );
+
     client.mutations.deleteProjectInFull({ projectId: projectId });
   }
 
@@ -229,7 +243,22 @@ export default function Surveys() {
     projectId: string,
     annotationSetId: string
   ) {
+    const project = projects.find((p) => p.id === projectId);
+    const annotationSet = project?.annotationSets.find(
+      (set) => set.id === annotationSetId
+    );
+    const annotationSetName = annotationSet?.name || 'Unknown';
+    const projectName = project?.name || 'Unknown';
+
     await client.models.AnnotationSet.delete({ id: annotationSetId });
+    
+    await logAdminAction(
+      client,
+      user.userId,
+      `Deleted annotation set "${annotationSetName}" from project "${projectName}"`,
+      projectId
+    );
+
     setProjects(
       projects.map((project) => {
         if (project.id === projectId) {
@@ -266,6 +295,12 @@ export default function Surveys() {
           id: annotationSet.id,
           register: false,
         });
+        await logAdminAction(
+          client,
+          user.userId,
+          `Cancelled registration job for annotation set "${annotationSet.name}" in project "${selectedProject!.name}"`,
+          selectedProject!.id
+        );
         return;
       }
 
@@ -279,6 +314,12 @@ export default function Surveys() {
       const sqsClient = await getSqsClient();
       await sqsClient.send(new DeleteQueueCommand({ QueueUrl: job.url }));
       await client.models.Queue.delete({ id: job.id });
+      await logAdminAction(
+        client,
+        user.userId,
+        `Cancelled queue job "${job.tag || job.name || 'Unknown'}" for project "${selectedProject!.name}"`,
+        selectedProject!.id
+      );
     } catch (error) {
       alert('An unknown error occurred. Please try again later.');
       console.error(error);
@@ -1080,6 +1121,13 @@ export default function Surveys() {
                   : project
               )
             );
+            // Log asynchronously without blocking
+            logAdminAction(
+              client,
+              user.userId,
+              `Added annotation set "${annotationSet.name}" to project "${selectedProject?.name}"`,
+              selectedProject?.id
+            ).catch(console.error);
           }}
           categories={selectedProject.categories}
           setTab={setTab}

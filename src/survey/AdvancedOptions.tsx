@@ -1,4 +1,4 @@
-import { useContext, useState, useCallback } from 'react';
+import { useContext, useState, useCallback, useMemo } from 'react';
 import { Button } from 'react-bootstrap';
 import { Footer } from '../Modal';
 import { GlobalContext } from '../Context';
@@ -13,6 +13,7 @@ import {
 } from '../utils';
 import { inv } from 'mathjs';
 import exportFromJSON from 'export-from-json';
+import { useUsers } from '../apiInterface';
 
 type NeighbourGeoJSON = {
   fromPath: string; // coordinate frame of the GeoJSON polygon's input corners
@@ -25,6 +26,14 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState<string>('');
+  const { users } = useUsers();
+
+  const userMap = useMemo(() => {
+    return users.reduce((acc, user) => {
+      acc[user.id] = user.name ?? '';
+      return acc;
+    }, {} as Record<string, string>);
+  }, [users]);
 
   const buildGeoJSON = useCallback(
     (
@@ -219,6 +228,8 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
             'y',
             'width',
             'height',
+            'observations.createdAt',
+            'observations.owner',
           ],
           limit: 1000,
         },
@@ -229,15 +240,39 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
         }
       );
 
+      // Flatten locations so that each observation is its own row together with the location data
+      const rows = [];
+      for (const location of locations) {
+        if (location.observations && location.observations.length > 0) {
+          for (const observation of location.observations) {
+            rows.push({
+              image: location.image.originalPath ?? '',
+              confidence: location.confidence ?? 0,
+              x: location.x,
+              y: location.y,
+              width: location.width ?? 0,
+              height: location.height ?? 0,
+              observationCreatedAt: observation.createdAt,
+              observationOwner: userMap[observation.owner ?? ''],
+            });
+          }
+        } else {
+          // If there are no observations, still export the location row with empty observation fields
+          rows.push({
+            image: location.image.originalPath ?? '',
+            confidence: location.confidence ?? 0,
+            x: location.x,
+            y: location.y,
+            width: location.width ?? 0,
+            height: location.height ?? 0,
+            observationCreatedAt: '',
+            observationOwner: '',
+          });
+        }
+      }
+
       exportFromJSON({
-        data: locations.map((location) => ({
-          image: location.image.originalPath ?? '',
-          confidence: location.confidence ?? 0,
-          x: location.x,
-          y: location.y,
-          width: location.width ?? 0,
-          height: location.height ?? 0,
-        })),
+        data: rows,
         fileName: `${project!.name}_scoutbot_results`,
         exportType: exportFromJSON.types.csv,
       });
@@ -276,7 +311,7 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
           <Button
             className='d-block mt-2'
             onClick={exportScoutbotResults}
-            disabled={loading}
+            disabled={loading || users.length === 0}
           >
             {loading ? 'Exporting...' : 'Export'}
           </Button>

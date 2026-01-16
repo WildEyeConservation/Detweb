@@ -65,6 +65,7 @@ const schema = a
         ),
         cameraOverlaps: a.hasMany('CameraOverlap', 'projectId'),
         shapefileExclusions: a.hasMany('ShapefileExclusions', 'projectId'),
+        adminActionLogs: a.hasMany('AdminActionLog', 'projectId'),
       })
       .authorization((allow) => [allow.authenticated()]),
     // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
@@ -847,6 +848,18 @@ const schema = a
       .authorization((allow) => [allow.authenticated()])
       .secondaryIndexes((index) => [
         index('userId').queryField('clientLogsByUserId'),
+      ]),
+    AdminActionLog: a
+      .model({
+        userId: a.string().required(),
+        message: a.string().required(),
+        projectId: a.id(),
+        project: a.belongsTo('Project', 'projectId'),
+      })
+      .authorization((allow) => [allow.authenticated()])
+      .secondaryIndexes((index) => [
+        index('projectId').queryField('adminActionLogsByProjectId'),
+        index('userId').queryField('adminActionLogsByUserId'),
       ]),
     // Tiling Task - tracks the whole launch process for tiled tasks
     TilingTask: a
