@@ -43,6 +43,8 @@ type RegisterPairProps = {
   points2?: { id: string; x: number; y: number }[];
   setPoints1?: (updater: any) => void;
   setPoints2?: (updater: any) => void;
+  onSkip?: () => void; // Function to call to skip this pair (mark it as skipped)
+  isEditingHomography?: boolean; // Whether the manual homography editor is currently open
 };
 
 type PointStateSetter = Dispatch<
@@ -64,6 +66,8 @@ export function RegisterPair(props: RegisterPairProps) {
     points2,
     setPoints1,
     setPoints2,
+    onSkip,
+    isEditingHomography,
   } = props;
   const [map1, setMap1] = useState<Map | null>(null);
   const [map2, setMap2] = useState<Map | null>(null);
@@ -337,7 +341,7 @@ export function RegisterPair(props: RegisterPairProps) {
             </div>
           ))}
       </div>
-      {effectiveTransforms && (
+      {effectiveTransforms && !isEditingHomography && (
         <div className='w-100 d-flex flex-column gap-2 bg-secondary p-3'>
           <span style={{ fontSize: '12px', color: '#f8f9fa' }}>
             Tip: click a suggested marker or use Arrow keys to focus it, then
@@ -378,6 +382,16 @@ export function RegisterPair(props: RegisterPairProps) {
               onChange={(e) => setLeniency(parseInt(e.target.value))}
             />
           </div>
+          {onSkip && (
+            <div className='mt-2 pt-2 border-top border-dark'>
+              <button
+                className='btn btn-sm btn-outline-warning w-100'
+                onClick={onSkip}
+              >
+                Skip this pair
+              </button>
+            </div>
+          )}
         </div>
       )}
       {/* Manual homography editor now rendered by parent (Registration) in sidebar */}

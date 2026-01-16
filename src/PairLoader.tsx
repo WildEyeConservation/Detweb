@@ -124,9 +124,37 @@ export function PairLoader() {
     setPoints2([]);
   }, []);
 
-  const handleSkipped = useCallback(() => {
+  // Skip this image pair - mark as skipped so it won't be shown again
+  const handleSkip = useCallback(async () => {
+    if (!pair) return;
+    
+    if (
+      !window.confirm(
+        'Are you sure you want to skip this pair? The images will remain neighbours but won\'t require registration.'
+      )
+    )
+      return;
+
+    const nb1Resp: any = await (client.models.ImageNeighbour.get as any)({
+      image1Id: pair.neighbourKey.image1Id,
+      image2Id: pair.neighbourKey.image2Id,
+    });
+    const nb1 = nb1Resp?.data;
+
+    await client.models.ImageNeighbour.update({
+      image1Id: nb1 ? pair.neighbourKey.image1Id : pair.neighbourKey.image2Id,
+      image2Id: nb1 ? pair.neighbourKey.image2Id : pair.neighbourKey.image1Id,
+      skipped: true,
+    });
+
+    // Mark as skipped in UI
     setSkipped(true);
-  }, []);
+  }, [pair, client]);
+
+  const handleSkipped = useCallback(() => {
+    // When skipped from ManualHomographyEditor, also mark in database
+    handleSkip();
+  }, [handleSkip]);
 
   const content = useMemo(() => {
     if (loading) {
@@ -204,6 +232,7 @@ export function PairLoader() {
               points2={points2}
               setPoints1={setPoints1}
               setPoints2={setPoints2}
+              onSkip={handleSkip}
             />
           </div>
         </div>
@@ -212,6 +241,7 @@ export function PairLoader() {
   }, [
     error,
     handleHomographySaved,
+    handleSkip,
     handleSkipped,
     loading,
     navigate,

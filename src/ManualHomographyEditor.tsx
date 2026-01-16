@@ -430,7 +430,7 @@ export function ManualHomographyEditor({
         </div>
         <div className='mt-3 border-top border-dark pt-3'>
           <Form.Label>
-            If this pair doesn't need to be registered, you can skip it.
+            If this pair doesn't need a homography, skip it.
           </Form.Label>
           <Button
             size='sm'
