@@ -12,6 +12,7 @@ import { FilesUploadForm } from '../FilesUploadComponent';
 import { saveShapefileForProject } from '../utils/shapefileUtils';
 import { useUpdateProgress } from '../useUpdateProgress';
 import { X, Check } from 'lucide-react';
+import { logAdminAction } from '../utils/adminActionLogger';
 
 export default function NewSurveyModal({
   show,
@@ -87,6 +88,14 @@ export default function NewSurveyModal({
       setLoading(false);
       return;
     }
+
+    // Log project creation
+    await logAdminAction(
+      client,
+      user.userId,
+      `Created project "${name}" in organization "${organization.label}"`,
+      project.id
+    ).catch(console.error);
 
     const admins = await fetchAllPaginatedResults(
       client.models.OrganizationMembership.membershipsByOrganizationId,

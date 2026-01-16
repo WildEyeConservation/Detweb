@@ -3,10 +3,11 @@ import type { Dispatch, SetStateAction } from 'react';
 import { Form } from 'react-bootstrap';
 import Select from 'react-select';
 import { Schema } from '../amplify/client-schema';
-import { GlobalContext } from '../Context';
+import { GlobalContext, UserContext } from '../Context';
 import { useLaunchTask } from '../useLaunchTask';
 import CreateTask from '../CreateTask';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
+import { logAdminAction } from '../utils/adminActionLogger';
 
 export default function SpeciesLabelling({
   project,
@@ -26,6 +27,7 @@ export default function SpeciesLabelling({
   >;
 }) {
   const { client } = useContext(GlobalContext)!;
+  const { user } = useContext(UserContext)!;
 
   const [batchSize, setBatchSize] = useState<number>(200);
   const [showAdvancedOptions, setShowAdvancedOptions] =
@@ -264,6 +266,14 @@ export default function SpeciesLabelling({
   const hiddenRef = useRef(hidden);
   const useExistingTiledRef = useRef(useExistingTiled);
   const selectedTiledSetIdRef = useRef(selectedTiledSetId);
+  const lowerLimitRef = useRef(lowerLimit);
+  const upperLimitRef = useRef(upperLimit);
+  const batchSizeRef = useRef(batchSize);
+  const skipLocationsWithAnnotationsRef = useRef(skipLocationsWithAnnotations);
+  const allowAnnotationsOutsideLocationBoundariesRef = useRef(allowAnnotationsOutsideLocationBoundaries);
+  const viewUnobservedLocationsOnlyRef = useRef(viewUnobservedLocationsOnly);
+  const zoomRef = useRef(zoom);
+  const taskTagRef = useRef(taskTag);
 
   useEffect(() => {
     modelGuidedRef.current = modelGuided;
@@ -292,6 +302,30 @@ export default function SpeciesLabelling({
   useEffect(() => {
     selectedTiledSetIdRef.current = selectedTiledSetId;
   }, [selectedTiledSetId]);
+  useEffect(() => {
+    lowerLimitRef.current = lowerLimit;
+  }, [lowerLimit]);
+  useEffect(() => {
+    upperLimitRef.current = upperLimit;
+  }, [upperLimit]);
+  useEffect(() => {
+    batchSizeRef.current = batchSize;
+  }, [batchSize]);
+  useEffect(() => {
+    skipLocationsWithAnnotationsRef.current = skipLocationsWithAnnotations;
+  }, [skipLocationsWithAnnotations]);
+  useEffect(() => {
+    allowAnnotationsOutsideLocationBoundariesRef.current = allowAnnotationsOutsideLocationBoundaries;
+  }, [allowAnnotationsOutsideLocationBoundaries]);
+  useEffect(() => {
+    viewUnobservedLocationsOnlyRef.current = viewUnobservedLocationsOnly;
+  }, [viewUnobservedLocationsOnly]);
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+  useEffect(() => {
+    taskTagRef.current = taskTag;
+  }, [taskTag]);
 
   useEffect(() => {
     // Wrap in function to store a function value (not treat as state updater)
@@ -315,6 +349,24 @@ export default function SpeciesLabelling({
             fifo: false,
           },
         });
+        // Log the launch action with settings
+        const modelName = modelOptions.find((m) => m.value === currentModelValue)?.label || currentModelValue;
+        const settings = [
+          `Confidence: ${lowerLimitRef.current}-${upperLimitRef.current}`,
+          `Batch size: ${batchSizeRef.current}`,
+          `Skip locations with annotations: ${skipLocationsWithAnnotationsRef.current ? 'Yes' : 'No'}`,
+          `Allow annotations outside boundaries: ${allowAnnotationsOutsideLocationBoundariesRef.current ? 'Yes' : 'No'}`,
+          `View unobserved only: ${viewUnobservedLocationsOnlyRef.current ? 'Yes' : 'No'}`,
+          zoomRef.current !== undefined ? `Zoom: ${zoomRef.current}` : null,
+          taskTagRef.current !== annotationSet.name ? `Job name: "${taskTagRef.current}"` : null,
+        ].filter(Boolean).join(', ');
+        
+        await logAdminAction(
+          client,
+          user.userId,
+          `Launched Model Guided queue for annotation set "${annotationSet.name}" in project "${project.name}" (Model: ${modelName}, ${settings})`,
+          project.id
+        ).catch(console.error);
       } else {
         const selectedTaskIds: string[] = [];
         let tiledRequest: any = null;
@@ -337,12 +389,20 @@ export default function SpeciesLabelling({
           },
           tiledRequest,
         });
+        // Log the launch action
+        const queueType = useExistingTiledRef.current ? 'existing tiled set' : 'new tiled annotation';
+        await logAdminAction(
+          client,
+          user.userId,
+          `Launched Tiled Annotation queue for annotation set "${annotationSet.name}" in project "${project.name}" (${queueType})`,
+          project.id
+        ).catch(console.error);
       }
     });
     return () => {
       setSpeciesLaunchHandler(null);
     };
-  }, [setSpeciesLaunchHandler]);
+  }, [setSpeciesLaunchHandler, client, user.userId, annotationSet.name, project.name, project.id, modelOptions]);
 
   return (
     <div className='px-3 pb-3 pt-1'>

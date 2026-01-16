@@ -9,6 +9,7 @@ import EditInformation from './EditInformation';
 import EditCameras from './EditCameras';
 import AdvancedOptions from './AdvancedOptions';
 import DeleteImages from './DeleteImages';
+import Logs from './Logs';
 
 export default function EditSurveyModal({
   show,
@@ -49,6 +50,9 @@ export default function EditSurveyModal({
           </Tab>
           <Tab label='Advanced Options'>
             <AdvancedOptions key={project.id} projectId={project.id} />
+          </Tab>
+          <Tab label='Logs'>
+            <Logs key={project.id} projectId={project.id} />
           </Tab>
         </Tabs>
       </Body>
