@@ -14,6 +14,7 @@ import {
 import { inv } from 'mathjs';
 import exportFromJSON from 'export-from-json';
 import { useUsers } from '../apiInterface';
+import { Annotation } from '../../amplify/shared/types';
 
 type NeighbourGeoJSON = {
   fromPath: string; // coordinate frame of the GeoJSON polygon's input corners
@@ -222,6 +223,7 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
           projectId: projectId,
           source: { beginsWith: 'scoutbotv3' },
           selectionSet: [
+            'imageId',
             'image.originalPath',
             'confidence',
             'x',
@@ -240,10 +242,57 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
         }
       );
 
+      const annotationSets = await fetchAllPaginatedResults(
+        client.models.AnnotationSet.annotationSetsByProjectId, {
+        projectId: projectId,
+        selectionSet: ['id', 'name'] as const,
+        limit: 1000,
+      }
+      );
+
+      let annotations: Annotation[] = [];
+
+      let annotationsFetched = 0;
+      await Promise.all(annotationSets.map(async (annotationSet) => {
+        const a = await fetchAllPaginatedResults(
+          client.models.Annotation.annotationsByAnnotationSetId, {
+          setId: annotationSet.id,
+          selectionSet: ['id', 'owner', 'imageId', 'x', 'y'] as const,
+          limit: 1000,
+        },
+          (stepsCompleted) => {
+            setLoadingStatus(
+              `Fetching annotations... (${annotationsFetched + stepsCompleted} fetched)`
+            );
+          }
+        );
+        annotationsFetched += a.length;
+        annotations.push(...a);
+      }));
+
+      // Map annotations by imageId, this is used to check if a location has an annotation regardless of observation
+      const annotationMap = annotations.reduce((acc, annotation) => {
+        acc[annotation.imageId] = [...(acc[annotation.imageId] || []), annotation];
+        return acc;
+      }, {} as Record<string, Annotation[]>);
+
       // Flatten locations so that each observation is its own row together with the location data
       const rows = [];
       for (const location of locations) {
+        const boundsxy: [number, number][] = [
+          [location!.x - location!.width! / 2, location!.y - location!.height! / 2],
+          [location!.x + location!.width! / 2, location!.y + location!.height! / 2],
+        ];
+
+        const isWithinBounds = (annotation: Annotation) => {
+          return annotation.x >= boundsxy[0][0] &&
+            annotation.y >= boundsxy[0][1] &&
+            annotation.x <= boundsxy[1][0] &&
+            annotation.y <= boundsxy[1][1];
+        };
+
         if (location.observations && location.observations.length > 0) {
+          const hasAnnotation = annotationMap[location.imageId!]?.some(isWithinBounds) ?? false;
           for (const observation of location.observations) {
             rows.push({
               image: location.image.originalPath ?? '',
@@ -252,12 +301,14 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
               y: location.y,
               width: location.width ?? 0,
               height: location.height ?? 0,
+              annotated: hasAnnotation,
               observationCreatedAt: observation.createdAt,
               observationOwner: userMap[observation.owner ?? ''],
             });
           }
         } else {
           // If there are no observations, still export the location row with empty observation fields
+          const hasAnnotation = annotationMap[location.imageId!]?.some(isWithinBounds) ?? false;
           rows.push({
             image: location.image.originalPath ?? '',
             confidence: location.confidence ?? 0,
@@ -265,6 +316,7 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
             y: location.y,
             width: location.width ?? 0,
             height: location.height ?? 0,
+            annotated: hasAnnotation,
             observationCreatedAt: '',
             observationOwner: '',
           });
@@ -272,7 +324,7 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
       }
 
       exportFromJSON({
-        data: rows,
+        data: rows.sort((a, b) => a.confidence - b.confidence),
         fileName: `${project!.name}_scoutbot_results`,
         exportType: exportFromJSON.types.csv,
       });
