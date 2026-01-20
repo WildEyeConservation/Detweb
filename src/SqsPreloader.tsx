@@ -28,6 +28,7 @@ export default function SqsPreloader({
 
   const filter = async (message: Message) => {
     if (!message.skipLocationWithAnnotations) {
+      console.log(`Filter: skipLocationWithAnnotations=false for ${message.location.id}, passing`);
       return true;
     }
 
@@ -40,6 +41,11 @@ export default function SqsPreloader({
       }
     );
 
+    if (!location) {
+      console.log(`Filter: Location ${message.location.id} not found in database, rejecting`);
+      return false;
+    }
+
     const annotations = await fetchAllPaginatedResults(
       client.models.Annotation.annotationsByImageIdAndSetId,
       {
@@ -49,13 +55,13 @@ export default function SqsPreloader({
       }
     );
 
-    // Using the x, y, width, height, check if any of the annotations fall within the location
-    const isWithin = annotations.some((annotation) => {
-      const boundsxy: [number, number][] = [
-        [location.x - location.width / 2, location.y - location.height / 2],
-        [location.x + location.width / 2, location.y + location.height / 2],
-      ];
+    const boundsxy: [number, number][] = [
+      [location.x - location.width / 2, location.y - location.height / 2],
+      [location.x + location.width / 2, location.y + location.height / 2],
+    ];
 
+    // Using the x, y, width, height, check if any of the annotations fall within the location
+    const annotationsWithin = annotations.filter((annotation) => {
       return (
         annotation.x >= boundsxy[0][0] &&
         annotation.y >= boundsxy[0][1] &&
@@ -63,6 +69,25 @@ export default function SqsPreloader({
         annotation.y <= boundsxy[1][1]
       );
     });
+
+    const isWithin = annotationsWithin.length > 0;
+
+    if (isWithin) {
+      console.log(
+        `Filter: Rejecting location ${message.location.id} - found ${annotationsWithin.length} annotation(s) within bounds`,
+        {
+          locationBounds: boundsxy,
+          imageId: location.imageId,
+          annotationSetId: message.location.annotationSetId,
+          totalAnnotationsOnImage: annotations.length,
+          annotationsWithinBounds: annotationsWithin,
+        }
+      );
+    } else {
+      console.log(
+        `Filter: Passing location ${message.location.id} - no annotations within bounds (${annotations.length} total on image)`
+      );
+    }
 
     // return false if any annotation is within the location
     return !isWithin;

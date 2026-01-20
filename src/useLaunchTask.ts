@@ -51,7 +51,16 @@ export function useLaunchTask(
   const { client, backend } = useContext(GlobalContext)!;
   const { getDynamoClient } = useContext(UserContext)!;
 
-  type LocationWithConfidence = { id: string; confidence: number };
+  type LocationWithConfidence = {
+    id: string;
+    confidence: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+
+  type AnnotationPoint = { x: number; y: number };
 
   async function queryLocations(
     locationSetId: string,
@@ -98,6 +107,10 @@ export function useLaunchTask(
           .map((item: any) => ({
             id: item.id.S as string,
             confidence: parseFloat(item.confidence?.N || '0'),
+            x: parseFloat(item.x?.N || '0'),
+            y: parseFloat(item.y?.N || '0'),
+            width: parseFloat(item.width?.N || '0'),
+            height: parseFloat(item.height?.N || '0'),
           }));
         locations.push(...pageLocations);
         onProgress?.(`Loaded ${locations.length} locations`);
@@ -149,6 +162,91 @@ export function useLaunchTask(
     return locationIds;
   }
 
+  // Query all annotations for an annotation set (for filtering locations with existing annotations)
+  async function queryAnnotations(
+    annotationSetId: string,
+    onProgress?: (message: string) => void
+  ): Promise<AnnotationPoint[]> {
+    const dynamoClient = await getDynamoClient();
+    const annotations: AnnotationPoint[] = [];
+    let lastEvaluatedKey: Record<string, any> | undefined = undefined;
+    onProgress?.(`Querying annotations...`);
+    do {
+      const command = new QueryCommand({
+        TableName: backend.custom.annotationTable,
+        IndexName: 'annotationsBySetId',
+        KeyConditionExpression: 'setId = :setId',
+        ExpressionAttributeValues: {
+          ':setId': { S: annotationSetId },
+        },
+        ProjectionExpression: 'x, y',
+        ExclusiveStartKey: lastEvaluatedKey,
+        Limit: 1000,
+      });
+      try {
+        const response = await dynamoClient.send(command);
+        const items = response.Items || [];
+        const pageAnnotations = items.map((item: any) => ({
+          x: parseFloat(item.x?.N || '0'),
+          y: parseFloat(item.y?.N || '0'),
+        }));
+        annotations.push(...pageAnnotations);
+        onProgress?.(`Loaded ${annotations.length} annotations`);
+        lastEvaluatedKey = response.LastEvaluatedKey as
+          | Record<string, any>
+          | undefined;
+      } catch (error) {
+        console.error('Error querying DynamoDB:', error);
+        throw error;
+      }
+    } while (lastEvaluatedKey);
+    return annotations;
+  }
+
+  // Check if an annotation falls within a location's bounds
+  // Location (x, y) is the CENTER, so bounds are calculated as:
+  // minX = x - width/2, maxX = x + width/2
+  // minY = y - height/2, maxY = y + height/2
+  function isAnnotationWithinLocation(
+    annotation: AnnotationPoint,
+    location: LocationWithConfidence
+  ): boolean {
+    const minX = location.x - location.width / 2;
+    const maxX = location.x + location.width / 2;
+    const minY = location.y - location.height / 2;
+    const maxY = location.y + location.height / 2;
+
+    return (
+      annotation.x >= minX &&
+      annotation.x <= maxX &&
+      annotation.y >= minY &&
+      annotation.y <= maxY
+    );
+  }
+
+  // Filter out locations that have annotations within their bounds
+  function filterLocationsWithAnnotations(
+    locations: LocationWithConfidence[],
+    annotations: AnnotationPoint[],
+    onProgress?: (message: string) => void
+  ): LocationWithConfidence[] {
+    onProgress?.(`Filtering ${locations.length} locations against ${annotations.length} annotations...`);
+
+    const filtered = locations.filter((location) => {
+      // Check if any annotation falls within this location's bounds
+      const hasAnnotationWithin = annotations.some((annotation) =>
+        isAnnotationWithinLocation(annotation, location)
+      );
+      // Keep the location only if it has NO annotations within
+      return !hasAnnotationWithin;
+    });
+
+    const skipped = locations.length - filtered.length;
+    onProgress?.(`Filtered out ${skipped} locations with existing annotations, ${filtered.length} remaining`);
+
+    return filtered;
+  }
+
   const launchTask = useCallback(
     async ({
       selectedTasks,
@@ -165,15 +263,31 @@ export function useLaunchTask(
         ? new Set(await queryObservations(options.annotationSetId, onProgress))
         : new Set<string>();
 
+      // If skipLocationWithAnnotations is enabled, query all annotations for the set
+      const allAnnotations = options.skipLocationWithAnnotations
+        ? await queryAnnotations(options.annotationSetId, onProgress)
+        : [];
+
       // Collect locations from all sets, filter observed, and sort by confidence (descending)
-      const allLocationsWithConfidence = (
+      let allLocationsWithConfidence = (
         await Promise.all(
           selectedTasks.map((task) => queryLocations(task, onProgress))
         )
       )
         .flat()
-        .filter((l) => !allSeenLocations.has(l.id))
-        .sort((a, b) => b.confidence - a.confidence); // High confidence first
+        .filter((l) => !allSeenLocations.has(l.id));
+
+      // Filter out locations that already have annotations within their bounds
+      if (options.skipLocationWithAnnotations && allAnnotations.length > 0) {
+        allLocationsWithConfidence = filterLocationsWithAnnotations(
+          allLocationsWithConfidence,
+          allAnnotations,
+          onProgress
+        );
+      }
+
+      // Sort by confidence (descending) - High confidence first
+      allLocationsWithConfidence.sort((a, b) => b.confidence - a.confidence);
 
       // Extract IDs for interleaving (now sorted by confidence)
       let allLocationIds = allLocationsWithConfidence.map((l) => l.id);
