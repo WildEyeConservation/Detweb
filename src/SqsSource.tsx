@@ -20,9 +20,8 @@ export default function useSQS(
   const [backupUrl, setBackupUrl] = useState<string | undefined>(undefined);
   const [zoom, setZoom] = useState<number | undefined>(undefined);
   const [backupZoom, setBackupZoom] = useState<number | undefined>(undefined);
-  const [processedLocations, setProcessedLocations] = useState<Set<string>>(
-    new Set()
-  );
+  // Use ref instead of state to prevent fetcher reference churn on every new location
+  const processedLocationsRef = useRef<Set<string>>(new Set());
 
   // user testing state
   const [config, setConfig] = useState<
@@ -190,7 +189,7 @@ export default function useSQS(
         body.zoom = usingBackup ? backupZoom : zoom;
 
         // Check if we've already processed this location
-        if (body.location?.id && processedLocations.has(body.location.id)) {
+        if (body.location?.id && processedLocationsRef.current.has(body.location.id)) {
           console.log(`Skipping duplicate location ${body.location.id}`);
           body.ack = async () => {
             try {
@@ -208,19 +207,14 @@ export default function useSQS(
             }
           };
           body.ack();
+          // Add delay after duplicate detection to prevent tight looping
+          await new Promise((resolve) => setTimeout(resolve, 500));
           continue;
         }
 
         // Add the location ID to processed locations if it exists
         if (body.location?.id) {
-          console.log(
-            `Adding new location ${body.location.id} to processed locations`
-          );
-          setProcessedLocations((prev) => {
-            const newSet = new Set(prev);
-            newSet.add(body.location.id);
-            return newSet;
-          });
+          processedLocationsRef.current.add(body.location.id);
         }
 
         body.ack = async () => {
@@ -241,9 +235,14 @@ export default function useSQS(
         // Attach revalidate function for last-resort filtering when shown to user
         body.revalidate = () => filterPredicate(body);
         if (await filterPredicate(body)) {
+          console.log(`Returning location ${body.location?.id} to user`);
           return body;
         } else {
+          console.log(`Filter rejected location ${body.location?.id}`);
           body.ack();
+          // Add delay after filter rejection to prevent tight looping
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          continue;
         }
       } else {
         await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -254,7 +253,6 @@ export default function useSQS(
     backupUrl,
     getSqsClient,
     filterPredicate,
-    processedLocations,
     testFetcher,
   ]);
 
