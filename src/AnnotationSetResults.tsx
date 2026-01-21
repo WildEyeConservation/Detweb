@@ -1,12 +1,12 @@
 import { Button } from 'react-bootstrap';
 import { Modal, Body, Header, Footer, Title } from './Modal';
 import { useNavigate } from 'react-router-dom';
-import { useUpdateProgress } from './useUpdateProgress.tsx';
 import { fetchAllPaginatedResults } from './utils.tsx';
 import exportFromJSON from 'export-from-json';
 import { GlobalContext } from './Context.tsx';
 import { useContext, useState, useEffect } from 'react';
 import GenerateJollyResults from './GenerateJollyResults.tsx';
+import { Spinner } from 'react-bootstrap';
 
 export default function AnnotationSetResults({
   show,
@@ -22,13 +22,7 @@ export default function AnnotationSetResults({
   const navigate = useNavigate();
   const { client, showModal } = useContext(GlobalContext)!;
   const [loading, setLoading] = useState(false);
-
-  const [setStepsCompleted, setTotalSteps] = useUpdateProgress({
-    taskId: `Export data`,
-    indeterminateTaskName: `Exporting data`,
-    determinateTaskName: 'Exporting data',
-    stepFormatter: (count) => `${count} annotations`,
-  });
+  const [exportStatus, setExportStatus] = useState('');
 
   const [jollyResultsExists, setJollyResultsExists] = useState(false);
 
@@ -61,8 +55,7 @@ export default function AnnotationSetResults({
   }, [client, surveyId, annotationSet.id]);
 
   async function exportData(annotationSets: { id: string; name: string }[]) {
-    setStepsCompleted(0);
-    setTotalSteps(0);
+    setExportStatus('Exporting data...');
 
     const { data: survey } = await client.models.Project.get(
       {
@@ -77,8 +70,8 @@ export default function AnnotationSetResults({
     }
 
     const annotationSetsResult = await Promise.all(
-      annotationSets.map((annotationSet) => {
-        return fetchAllPaginatedResults(
+      annotationSets.map(async (annotationSet) => {
+        return await fetchAllPaginatedResults(
           client.models.Annotation.annotationsByAnnotationSetId,
           {
             setId: annotationSet.id,
@@ -97,8 +90,11 @@ export default function AnnotationSetResults({
               'image.latitude',
               'image.longitude',
             ] as const,
+            limit: 1000,
           },
-          setStepsCompleted
+          (stepsCompleted) => {
+            setExportStatus(`Fetching annotations... (${stepsCompleted} fetched)`);
+          }
         );
       })
     );
@@ -135,7 +131,10 @@ export default function AnnotationSetResults({
       i++;
     }
 
-    setTotalSteps(a);
+
+    setExportStatus(`Exported ${a} annotations`);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    setExportStatus('');
   }
 
   async function generateSurveyResults() {
@@ -206,11 +205,11 @@ export default function AnnotationSetResults({
               <span className='text-muted' style={{ fontSize: '14px' }}>
                 Download a CSV file of your annotation set.
               </span>
+              {exportStatus && <p className='text-muted' style={{ fontSize: '14px' }}><Spinner animation='border' size='sm' /> {exportStatus}</p>}
               <Button
                 className='d-block mt-1'
                 variant='primary'
                 onClick={() => {
-                  onClose();
                   exportData([annotationSet]);
                 }}
               >
