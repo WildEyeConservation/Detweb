@@ -178,7 +178,7 @@ export default function AnnotationImage(props: any) {
     async (nextToken) =>
       client.models.Annotation.annotationsByImageIdAndSetId(
         { imageId: location.image.id, setId: { eq: location.annotationSetId } },
-        { nextToken }
+        { limit: 1000, nextToken }
       ) as any,
     subscriptionFilter
   );
