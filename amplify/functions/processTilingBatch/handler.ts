@@ -200,9 +200,9 @@ async function downloadLocationsFromS3(key: string): Promise<LocationInput[]> {
   return JSON.parse(bodyStr) as LocationInput[];
 }
 
-async function createLocationsInDb(locations: LocationInput[]): Promise<string[]> {
+async function createLocationsInDb(locations: LocationInput[]): Promise<any[]> {
   const limit = pLimit(100);
-  const createdIds: string[] = [];
+  const createdLocations: any[] = [];
   let createdCount = 0;
 
   const tasks = locations.map((location) =>
@@ -233,14 +233,21 @@ async function createLocationsInDb(locations: LocationInput[]): Promise<string[]
         console.log('Location creation progress', { createdCount, total: locations.length });
       }
 
-      return locationId;
+      return {
+        locationId,
+        imageId: location.imageId,
+        x: location.x,
+        y: location.y,
+        width: location.width,
+        height: location.height,
+      };
     })
   );
 
   const results = await Promise.all(tasks);
-  createdIds.push(...results);
+  createdLocations.push(...results);
 
-  return createdIds;
+  return createdLocations;
 }
 
 async function deleteS3File(key: string): Promise<void> {
@@ -258,7 +265,7 @@ async function deleteS3File(key: string): Promise<void> {
   );
 }
 
-async function writeOutputToS3(batchId: string, locationIds: string[]): Promise<string> {
+async function writeOutputToS3(batchId: string, locations: any[]): Promise<string> {
   const bucketName = env.OUTPUTS_BUCKET_NAME;
   if (!bucketName) {
     throw new Error('OUTPUTS_BUCKET_NAME environment variable not set');
@@ -270,7 +277,7 @@ async function writeOutputToS3(batchId: string, locationIds: string[]): Promise<
     new PutObjectCommand({
       Bucket: bucketName,
       Key: outputKey,
-      Body: JSON.stringify(locationIds),
+      Body: JSON.stringify(locations),
       ContentType: 'application/json',
     })
   );

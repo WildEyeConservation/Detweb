@@ -1598,6 +1598,7 @@ export const getProjectTestConfig = /* GraphQL */ `query GetProjectTestConfig($p
 >;
 export const getQueue = /* GraphQL */ `query GetQueue($id: ID!) {
   getQueue(id: $id) {
+    observedCount
     approximateSize
     backupUsers {
       nextToken
@@ -1629,6 +1630,7 @@ export const getQueue = /* GraphQL */ `query GetQueue($id: ID!) {
       __typename
     }
     zoom
+    observedCount
     __typename
   }
 }

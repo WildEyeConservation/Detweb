@@ -52,6 +52,7 @@ export interface BaseImageProps {
   isTest?: boolean;
   // Controls how tightly we fit bounds around a location. 0.5 = exact bbox, 1.5 = padded
   viewBoundsScale?: number;
+  queueId?: string;
 }
 
 const BaseImage: React.FC<BaseImageProps> = memo(
@@ -185,11 +186,11 @@ const BaseImage: React.FC<BaseImageProps> = memo(
 
     useHotkeys(
       'RightArrow',
-      next ? next : () => {},
+      next ? next : () => { },
       { enabled: canAdvance && visible },
       [next]
     );
-    useHotkeys('LeftArrow', prev ? prev : () => {}, { enabled: visible }, [
+    useHotkeys('LeftArrow', prev ? prev : () => { }, { enabled: visible }, [
       prev,
     ]);
 

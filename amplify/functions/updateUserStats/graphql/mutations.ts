@@ -4888,6 +4888,7 @@ export const updateQueue = /* GraphQL */ `mutation UpdateQueue(
   $input: UpdateQueueInput!
 ) {
   updateQueue(condition: $condition, input: $input) {
+    observedCount
     approximateSize
     backupUsers {
       nextToken

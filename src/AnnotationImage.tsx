@@ -37,6 +37,7 @@ export default function AnnotationImage(props: any) {
     isTest,
     config,
     hideZoomSetting = false,
+    queueId,
   } = props;
 
   const { annotationSetId } = location;
@@ -338,6 +339,7 @@ export default function AnnotationImage(props: any) {
             isTest={isTest}
             testSetId={testSetId}
             config={config}
+            queueId={queueId}
           >
             {visible && memoizedChildren}
           </Image>

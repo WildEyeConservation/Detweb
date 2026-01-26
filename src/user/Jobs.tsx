@@ -53,6 +53,7 @@ export default function Jobs() {
     Schema['Queue']['type'] | null
   >(null);
   const [deletingJob, setDeletingJob] = useState(false);
+  const [scanningProjects, setScanningProjects] = useState<Set<string>>(new Set());
 
   // Initialize compactMode from localStorage or use default
   const getInitialCompactMode = () => {
@@ -320,13 +321,22 @@ export default function Jobs() {
                   className={`d-flex flex-row ${gapClass} align-items-center`}
                   style={{ maxWidth: '600px', width: '100%' }}
                 >
-                  <ProjectProgress projectId={project.id} />
+                  <ProjectProgress
+                    projectId={project.id}
+                    onScanningChange={(isScanning) => {
+                      setScanningProjects(prev => {
+                        const next = new Set(prev);
+                        isScanning ? next.add(project.id) : next.delete(project.id);
+                        return next;
+                      });
+                    }}
+                  />
                   <Button
                     size={compactMode ? 'sm' : undefined}
                     className='ms-1'
                     variant='primary'
                     disabled={
-                      takingJob || deletingJob || numJobsRemaining === 0
+                      takingJob || deletingJob || numJobsRemaining === 0 || scanningProjects.has(project.id)
                     }
                     onClick={() =>
                       handleTakeJob({

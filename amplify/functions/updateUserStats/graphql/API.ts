@@ -488,6 +488,7 @@ export type Queue = {
   url?: string | null,
   users?: ModelUserProjectMembershipConnection | null,
   zoom?: number | null,
+  observedCount?: number | null,
 };
 
 export type ModelObjectConnection = {
@@ -2823,6 +2824,7 @@ export type UpdateQueueInput = {
   totalBatches?: number | null,
   url?: string | null,
   zoom?: number | null,
+  observedCount?: number | null,
 };
 
 export type UpdateResultSharingTokenInput = {
@@ -5021,6 +5023,7 @@ export type GetQueueQueryVariables = {
 export type GetQueueQuery = {
   getQueue?:  {
     __typename: "Queue",
+    observedCount?: number | null,
     approximateSize?: number | null,
     backupUsers?:  {
       __typename: "ModelUserProjectMembershipConnection",
@@ -12265,6 +12268,7 @@ export type UpdateQueueMutationVariables = {
 export type UpdateQueueMutation = {
   updateQueue?:  {
     __typename: "Queue",
+    observedCount?: number | null,
     approximateSize?: number | null,
     backupUsers?:  {
       __typename: "ModelUserProjectMembershipConnection",

@@ -8,13 +8,15 @@ import { launchAnnotationSet } from "../functions/launchAnnotationSet/resource"
 import { launchFalseNegatives } from "../functions/launchFalseNegatives/resource"
 import { processTilingBatch } from "../functions/processTilingBatch/resource"
 import { monitorTilingTasks } from "../functions/monitorTilingTasks/resource"
+import { cleanupJobs } from "../functions/cleanupJobs/resource"
+import { findAndRequeueMissingLocations } from "../functions/findAndRequeueMissingLocations/resource"
 
 export const outputBucket = defineStorage({
   name: "outputs",
   isDefault: true,
   access: allow => ({
     'slippymaps/*': [
-      allow.resource(handleS3Upload).to(['write', 'list', 'get','delete']),
+      allow.resource(handleS3Upload).to(['write', 'list', 'get', 'delete']),
       allow.authenticated.to(['read'])
     ],
     'heatmaps/*': [
@@ -39,6 +41,14 @@ export const outputBucket = defineStorage({
     'tiling-outputs/*': [
       allow.resource(processTilingBatch).to(['write']),
       allow.resource(monitorTilingTasks).to(['read', 'delete'])
+    ],
+    // Queue manifests for requeue detection
+    'queue-manifests/*': [
+      allow.authenticated.to(['write']),
+      allow.resource(launchAnnotationSet).to(['write']),
+      allow.resource(monitorTilingTasks).to(['write']),
+      allow.resource(findAndRequeueMissingLocations).to(['read']),
+      allow.resource(cleanupJobs).to(['delete'])
     ]
   })
 })
@@ -59,7 +69,7 @@ export const inputBucket = defineStorage({
       allow.resource(handleS3Upload).to(['get']),
       allow.resource(processImages).to(['read']),
       allow.resource(runHeatmapper).to(['read']),
-      allow.authenticated.to(['read','write','delete'])
+      allow.authenticated.to(['read', 'write', 'delete'])
     ]
   }),
   triggers: {
