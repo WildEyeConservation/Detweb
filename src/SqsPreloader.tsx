@@ -12,6 +12,7 @@ interface Message {
   };
   allowOutside: boolean;
   zoom: string;
+  queueId: string;
   taskTag: string;
   secondaryQueueUrl: string;
   message_id: string;

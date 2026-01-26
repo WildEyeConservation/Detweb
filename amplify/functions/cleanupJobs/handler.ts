@@ -12,7 +12,11 @@ import {
 } from "@aws-sdk/client-sqs";
 import { Queue, UserProjectMembership } from "./graphql/API";
 import { SQSClient } from "@aws-sdk/client-sqs";
+import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { deleteQueue } from "./graphql/mutations";
+
+// Constants
+const MAX_REQUEUES = 3;
 
 Amplify.configure(
   {
@@ -44,6 +48,15 @@ Amplify.configure(
 
 const client = generateClient({
   authMode: "iam",
+});
+
+const s3Client = new S3Client({
+  region: env.AWS_REGION,
+  credentials: {
+    accessKeyId: env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+    sessionToken: env.AWS_SESSION_TOKEN,
+  },
 });
 
 interface PagedList<T> {
@@ -115,10 +128,55 @@ export const handler: Handler = async (event, context) => {
         new GetQueueAttributesCommand(params)
       );
 
+      const sqsMessageCount = parseInt(result.Attributes?.ApproximateNumberOfMessages ?? "0");
+
       if (
         (!queue.approximateSize || queue.approximateSize === 0) &&
-        parseInt(result.Attributes?.ApproximateNumberOfMessages ?? "0") === 0
+        sqsMessageCount === 0
       ) {
+        // Queue is empty - check if it might need requeuing
+        const hasTrackingFields = queue.launchedCount != null && queue.launchedCount > 0;
+        const mayHaveMissing = hasTrackingFields &&
+          (queue.observedCount ?? 0) < queue.launchedCount!;
+        const underRequeueLimit = (queue.requeuesCompleted ?? 0) < MAX_REQUEUES;
+
+        // If queue might need requeuing, set emptyQueueTimestamp but don't delete yet
+        if (hasTrackingFields && mayHaveMissing && underRequeueLimit) {
+          console.log("Queue may need requeuing, setting emptyQueueTimestamp", {
+            queueId: queue.id,
+            launchedCount: queue.launchedCount,
+            observedCount: queue.observedCount,
+            requeuesCompleted: queue.requeuesCompleted,
+          });
+
+          // Only set if not already set
+          if (!queue.emptyQueueTimestamp) {
+            await client.graphql({
+              query: updateQueue,
+              variables: {
+                input: {
+                  id: queue.id,
+                  approximateSize: 0,
+                  emptyQueueTimestamp: new Date().toISOString(),
+                }
+              },
+            });
+          } else {
+            // Just update approximateSize
+            await client.graphql({
+              query: updateQueue,
+              variables: {
+                input: {
+                  id: queue.id,
+                  approximateSize: 0,
+                },
+              },
+            });
+          }
+          continue;
+        }
+
+        // Queue should be deleted (no tracking, counts match, or requeue limit reached)
         // Fetch project name for logging
         let projectName = "Unknown";
         try {
@@ -131,6 +189,24 @@ export const handler: Handler = async (event, context) => {
           console.error(`Failed to fetch project name for ${queue.projectId}:`, err);
         }
 
+        // Delete the S3 manifest if it exists
+        if (queue.locationManifestS3Key) {
+          try {
+            const bucketName = env.OUTPUTS_BUCKET_NAME;
+            if (bucketName) {
+              await s3Client.send(
+                new DeleteObjectCommand({
+                  Bucket: bucketName,
+                  Key: queue.locationManifestS3Key,
+                })
+              );
+              console.log("Deleted S3 manifest", { key: queue.locationManifestS3Key });
+            }
+          } catch (s3Error) {
+            console.warn("Failed to delete S3 manifest:", s3Error);
+          }
+        }
+
         await client.graphql({
           query: deleteQueue,
           variables: {
@@ -141,11 +217,11 @@ export const handler: Handler = async (event, context) => {
         });
 
         await sqsClient.send(new DeleteQueueCommand({ QueueUrl: queue.url }));
-        
+
         // Log the cleanup action
         const queueName = queue.tag || queue.name || "Unknown";
         const logMessage = `Cancelled queue job "${queueName}" for project "${projectName}"`;
-        
+
         try {
           await client.graphql({
             query: /* GraphQL */ `
@@ -181,9 +257,7 @@ export const handler: Handler = async (event, context) => {
         variables: {
           input: {
             id: queue.id,
-            approximateSize: parseInt(
-              result.Attributes?.ApproximateNumberOfMessages ?? "0"
-            ),
+            approximateSize: sqsMessageCount,
           },
         },
       });

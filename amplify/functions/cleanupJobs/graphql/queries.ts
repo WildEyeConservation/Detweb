@@ -3201,6 +3201,14 @@ export const listQueues = /* GraphQL */ `query ListQueues(
       updatedAt
       url
       zoom
+      annotationSetId
+      locationSetId
+      confidenceThreshold
+      launchedCount
+      observedCount
+      locationManifestS3Key
+      emptyQueueTimestamp
+      requeuesCompleted
       __typename
     }
     nextToken

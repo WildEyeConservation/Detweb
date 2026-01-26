@@ -43,6 +43,8 @@ type LaunchLambdaPayload = {
   locationIds?: string[];
   locationSetIds?: string[];
   tiledRequest?: TiledLaunchRequest | null;
+  locationManifestS3Key?: string | null;
+  launchedCount?: number | null;
 };
 
 export function useLaunchTask(
@@ -58,6 +60,7 @@ export function useLaunchTask(
     y: number;
     width: number;
     height: number;
+    imageId: string;
   };
 
   type AnnotationPoint = { x: number; y: number };
@@ -81,7 +84,7 @@ export function useLaunchTask(
           ':lowerLimit': { N: options.lowerLimit.toString() },
           ':upperLimit': { N: options.upperLimit.toString() },
         },
-        ProjectionExpression: 'id, x, y, width, height, confidence',
+        ProjectionExpression: 'id, x, y, width, height, confidence, imageId',
         ScanIndexForward: false, // Descending order by confidence
         ExclusiveStartKey: lastEvaluatedKey,
         Limit: 1000,
@@ -111,6 +114,7 @@ export function useLaunchTask(
             y: parseFloat(item.y?.N || '0'),
             width: parseFloat(item.width?.N || '0'),
             height: parseFloat(item.height?.N || '0'),
+            imageId: item.imageId?.S || '',
           }));
         locations.push(...pageLocations);
         onProgress?.(`Loaded ${locations.length} locations`);
@@ -259,74 +263,127 @@ export function useLaunchTask(
       let collectedLocations: string[] | undefined;
 
       if (!tiledRequest) {
-      const allSeenLocations = options.filterObserved
-        ? new Set(await queryObservations(options.annotationSetId, onProgress))
-        : new Set<string>();
+        const allSeenLocations = options.filterObserved
+          ? new Set(await queryObservations(options.annotationSetId, onProgress))
+          : new Set<string>();
 
-      // If skipLocationWithAnnotations is enabled, query all annotations for the set
-      const allAnnotations = options.skipLocationWithAnnotations
-        ? await queryAnnotations(options.annotationSetId, onProgress)
-        : [];
+        // If skipLocationWithAnnotations is enabled, query all annotations for the set
+        const allAnnotations = options.skipLocationWithAnnotations
+          ? await queryAnnotations(options.annotationSetId, onProgress)
+          : [];
 
-      // Collect locations from all sets, filter observed, and sort by confidence (descending)
-      let allLocationsWithConfidence = (
-        await Promise.all(
-          selectedTasks.map((task) => queryLocations(task, onProgress))
+        // Collect locations from all sets, filter observed, and sort by confidence (descending)
+        let allLocationsWithConfidence = (
+          await Promise.all(
+            selectedTasks.map((task) => queryLocations(task, onProgress))
+          )
         )
-      )
-        .flat()
-        .filter((l) => !allSeenLocations.has(l.id));
+          .flat()
+          .filter((l) => !allSeenLocations.has(l.id));
 
-      // Filter out locations that already have annotations within their bounds
-      if (options.skipLocationWithAnnotations && allAnnotations.length > 0) {
-        allLocationsWithConfidence = filterLocationsWithAnnotations(
-          allLocationsWithConfidence,
-          allAnnotations,
-          onProgress
-        );
-      }
+        // Filter out locations that already have annotations within their bounds
+        if (options.skipLocationWithAnnotations && allAnnotations.length > 0) {
+          allLocationsWithConfidence = filterLocationsWithAnnotations(
+            allLocationsWithConfidence,
+            allAnnotations,
+            onProgress
+          );
+        }
 
-      // Sort by confidence (descending) - High confidence first
-      allLocationsWithConfidence.sort((a, b) => b.confidence - a.confidence);
+        // Sort by confidence (descending) - High confidence first
+        allLocationsWithConfidence.sort((a, b) => b.confidence - a.confidence);
 
-      // Extract IDs for interleaving (now sorted by confidence)
-      let allLocationIds = allLocationsWithConfidence.map((l) => l.id);
+        // Extract IDs for interleaving (now sorted by confidence)
+        let allLocationIds = allLocationsWithConfidence.map((l) => l.id);
 
-      // Interleave locations to distribute across confidence levels
-      const chunkSize = 100;
-      const passes = Math.ceil(allLocationIds.length / chunkSize);
-      const interleavedLocations: string[] = [];
-      for (let i = 0; i < chunkSize; i++) {
-        for (let j = 0; j < passes; j++) {
-          const index = j * chunkSize + i;
-          if (index < allLocationIds.length) {
-            interleavedLocations.push(allLocationIds[index]);
+        // Interleave locations to distribute across confidence levels
+        const chunkSize = 100;
+        const passes = Math.ceil(allLocationIds.length / chunkSize);
+        const interleavedLocations: string[] = [];
+        for (let i = 0; i < chunkSize; i++) {
+          for (let j = 0; j < passes; j++) {
+            const index = j * chunkSize + i;
+            if (index < allLocationIds.length) {
+              interleavedLocations.push(allLocationIds[index]);
+            }
           }
         }
-      }
-      allLocationIds = interleavedLocations.reverse();
-      onProgress?.(`Found ${allLocationIds.length} locations to launch`);
+        allLocationIds = interleavedLocations.reverse();
+        onProgress?.(`Found ${allLocationIds.length} locations to launch`);
 
-      if (allLocationIds.length === 0) {
-        if (options.filterObserved) {
-          alert('No unobserved locations to launch');
-        } else {
-          alert('No locations to launch');
+        if (allLocationIds.length === 0) {
+          if (options.filterObserved) {
+            alert('No unobserved locations to launch');
+          } else {
+            alert('No locations to launch');
+          }
+          return;
         }
-        return;
-      }
 
         collectedLocations = allLocationIds;
+
+        onProgress?.('Uploading location manifest...');
+        const manifestKey = `queue-manifests/${crypto.randomUUID()}.json`;
+
+        // Map back to the full location objects for the manifest
+        const locationsMap = new Map(allLocationsWithConfidence.map((l) => [l.id, l]));
+        const manifestItems = collectedLocations.map((id) => {
+          const loc = locationsMap.get(id);
+          return {
+            locationId: id,
+            imageId: loc?.imageId || '',
+            x: loc?.x || 0,
+            y: loc?.y || 0,
+            width: loc?.width || 0,
+            height: loc?.height || 0,
+          };
+        });
+
+        await uploadData({
+          path: manifestKey,
+          data: JSON.stringify({ items: manifestItems }),
+          options: {
+            bucket: 'outputs',
+            contentType: 'application/json',
+          },
+        }).result;
+
+        // Note: we can't update payload directly here if it's defined later, 
+        // but we can store these in variables.
+        const locationManifestS3Key = manifestKey;
+        const launchedCount = manifestItems.length;
+
+        const payload: LaunchLambdaPayload = {
+          projectId: options.projectId,
+          annotationSetId: options.annotationSetId,
+          queueOptions,
+          secondaryQueueOptions: secondaryQueueOptions ?? null,
+          allowOutside: options.allowOutside,
+          skipLocationWithAnnotations: options.skipLocationWithAnnotations,
+          taskTag: options.taskTag,
+          batchSize: options.batchSize,
+          zoom: options.zoom ?? null,
+          locationIds: collectedLocations,
+          locationSetIds: selectedTasks,
+          tiledRequest: tiledRequest ?? null,
+          locationManifestS3Key,
+          launchedCount,
+        };
+
+        onProgress?.('Enqueuing jobs...');
+        sendLaunchLambdaRequest(client, payload);
+        onProgress?.('Launch request submitted');
+        return; // Exit early for model-guided
       }
 
       const payload: LaunchLambdaPayload = {
         projectId: options.projectId,
-            annotationSetId: options.annotationSetId,
+        annotationSetId: options.annotationSetId,
         queueOptions,
         secondaryQueueOptions: secondaryQueueOptions ?? null,
-            allowOutside: options.allowOutside,
+        allowOutside: options.allowOutside,
         skipLocationWithAnnotations: options.skipLocationWithAnnotations,
-            taskTag: options.taskTag,
+        taskTag: options.taskTag,
         batchSize: options.batchSize,
         zoom: options.zoom ?? null,
         locationIds: collectedLocations,

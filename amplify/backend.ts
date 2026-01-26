@@ -31,6 +31,7 @@ import { requeueProjectQueues } from './functions/requeueProjectQueues/resource'
 import { monitorScoutbotDlq } from './functions/monitorScoutbotDlq/resource';
 import { processTilingBatch } from './functions/processTilingBatch/resource';
 import { monitorTilingTasks } from './functions/monitorTilingTasks/resource';
+import { findAndRequeueMissingLocations } from './functions/findAndRequeueMissingLocations/resource';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 
 // Register all Amplify-managed resources in a single backend definition.
@@ -57,6 +58,7 @@ const backend = defineBackend({
   monitorScoutbotDlq,
   processTilingBatch,
   monitorTilingTasks,
+  findAndRequeueMissingLocations,
 });
 
 const observationTable = backend.data.resources.tables['Observation'];
@@ -170,6 +172,12 @@ const groupS3LaunchPayloadsPolicy = new iam.PolicyStatement({
   resources: ['arn:aws:s3:::*/launch-payloads/*'],
 });
 
+// Allow writing queue manifests to the outputs bucket
+const groupS3QueueManifestsPolicy = new iam.PolicyStatement({
+  actions: ['s3:PutObject'],
+  resources: ['arn:aws:s3:::*/queue-manifests/*'],
+});
+
 // Allow Cognito group roles to query DynamoDB tables and GSIs without
 // referencing specific data resources to avoid circular dependencies.
 const groupDynamoDbQueryPolicy = new iam.PolicyStatement({
@@ -192,6 +200,7 @@ authenticatedRole.addToPrincipalPolicy(lambdaInvoke);
 authenticatedRole.addToPrincipalPolicy(generalBucketPolicy);
 authenticatedRole.addToPrincipalPolicy(groupEcsListPolicy);
 authenticatedRole.addToPrincipalPolicy(groupS3LaunchPayloadsPolicy);
+authenticatedRole.addToPrincipalPolicy(groupS3QueueManifestsPolicy);
 
 // Ensure every Cognito group role has consistent S3/Dynamo/SQS capabilities.
 Object.values(backend.auth.resources.groups).forEach(({ role }) => {
@@ -205,6 +214,7 @@ Object.values(backend.auth.resources.groups).forEach(({ role }) => {
   role.addToPrincipalPolicy(groupS3OutputsReadPolicy);
   role.addToPrincipalPolicy(groupEcsListPolicy);
   role.addToPrincipalPolicy(groupS3LaunchPayloadsPolicy);
+  role.addToPrincipalPolicy(groupS3QueueManifestsPolicy);
 });
 
 // Add the Sharp layer and throttle concurrency on the image upload Lambda.
@@ -520,6 +530,13 @@ backend.cleanupJobs.resources.lambda.addToRolePolicy(
     resources: ['*'],
   })
 );
+// cleanupJobs needs S3 permissions to delete location manifests
+backend.cleanupJobs.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['s3:DeleteObject'],
+    resources: ['arn:aws:s3:::*/queue-manifests/*'],
+  })
+);
 backend.launchAnnotationSet.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: [
@@ -630,6 +647,18 @@ backend.monitorScoutbotDlq.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: ['ssm:GetParameter'],
     resources: ['arn:aws:ssm:*:*:parameter/*'],
+  })
+);
+
+// findAndRequeueMissingLocations needs SQS permissions to send requeued messages
+backend.findAndRequeueMissingLocations.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'sqs:GetQueueAttributes',
+      'sqs:GetQueueUrl',
+      'sqs:SendMessage',
+    ],
+    resources: ['*'],
   })
 );
 

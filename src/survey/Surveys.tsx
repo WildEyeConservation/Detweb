@@ -60,7 +60,8 @@ export default function Surveys() {
   const [hasUploadedFiles, setHasUploadedFiles] = useState<{
     [projectId: string]: boolean;
   }>({});
-  
+  const [scanningProjects, setScanningProjects] = useState<Set<string>>(new Set());
+
   // Initialize sortBy from localStorage or use default
   const getInitialSortBy = () => {
     if (typeof window !== 'undefined') {
@@ -695,13 +696,22 @@ export default function Surveys() {
               style={{ maxWidth: '500px' }}
             >
               <div className='flex-grow-1'>
-                <ProjectProgress projectId={project.id} />
+                <ProjectProgress
+                  projectId={project.id}
+                  onScanningChange={(isScanning) => {
+                    setScanningProjects(prev => {
+                      const next = new Set(prev);
+                      isScanning ? next.add(project.id) : next.delete(project.id);
+                      return next;
+                    });
+                  }}
+                />
               </div>
               <div className={`d-flex ${gapClass} flex-wrap justify-content-end`}>
                 <Button
                   size={compactMode ? 'sm' : undefined}
                   className='flex align-items-center justify-content-center'
-                  disabled={disabled}
+                  disabled={disabled || scanningProjects.has(project.id)}
                   variant='primary'
                   onClick={() => navigate(`/jobs`)}
                 >
@@ -710,7 +720,7 @@ export default function Surveys() {
                 <Button
                   size={compactMode ? 'sm' : undefined}
                   className='flex align-items-center justify-content-center'
-                  disabled={disabled}
+                  disabled={disabled || scanningProjects.has(project.id)}
                   variant='danger'
                   onClick={() => {
                     setSelectedProject(project);
@@ -804,13 +814,22 @@ export default function Surveys() {
                 }`}
               >
                 <div className='flex-grow-1'>
-                  <ProjectProgress projectId={project.id} />
+                  <ProjectProgress
+                    projectId={project.id}
+                    onScanningChange={(isScanning) => {
+                      setScanningProjects(prev => {
+                        const next = new Set(prev);
+                        isScanning ? next.add(project.id) : next.delete(project.id);
+                        return next;
+                      });
+                    }}
+                  />
                 </div>
                 <div className='d-flex gap-2 flex-wrap justify-content-end'>
                   <Button
                     size='sm'
                     className='flex align-items-center justify-content-center'
-                    disabled={disabled}
+                    disabled={disabled || scanningProjects.has(project.id)}
                     variant='primary'
                     onClick={() => navigate(`/jobs`)}
                   >
@@ -819,7 +838,7 @@ export default function Surveys() {
                   <Button
                     size='sm'
                     className='flex align-items-center justify-content-center'
-                    disabled={disabled}
+                    disabled={disabled || scanningProjects.has(project.id)}
                     variant='danger'
                     onClick={() => {
                       setSelectedProject(project);
