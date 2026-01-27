@@ -209,8 +209,34 @@ async function processTask(task: TilingTaskRecord) {
       return;
     }
 
-    // All batches complete - merge results and launch queue
-    console.log('All batches complete, launching queue', { taskId: task.id });
+    // All batches complete
+    console.log('All batches complete', { taskId: task.id });
+
+    // Check if this is a tiling-only operation (no annotation set launch needed)
+    const isTilingOnly = task.annotationSetId === 'tiling-only';
+
+    if (isTilingOnly) {
+      // Tiling-only mode: just clean up and mark complete, no queue creation
+      console.log('Tiling-only operation complete, skipping queue creation', { taskId: task.id });
+      
+      // Update project status
+      await setProjectStatus(task.projectId, 'active');
+
+      // Refresh project memberships to notify clients of status change
+      await executeGraphql<{ updateProjectMemberships?: string | null }>(
+        updateProjectMembershipsMutation,
+        { projectId: task.projectId }
+      );
+
+      // Clean up S3 files
+      await cleanupBatchOutputs(completedBatches);
+      console.log('Cleaned up batch outputs', { taskId: task.id });
+
+      // Mark task as completed
+      await updateTaskCompleted(task.id);
+      console.log('Tiling-only task completed successfully', { taskId: task.id });
+      return;
+    }
 
     // Download and merge all locations from batch outputs
     const allLocations = await mergeLocations(completedBatches);

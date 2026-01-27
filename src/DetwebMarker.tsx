@@ -62,10 +62,12 @@ function createIcon(
   )
     .toLowerCase()
     .includes('false-negative');
+  // Only show identicon if annotation is primary (id === objectId) - purely based on objectId value
+  const isPrimary = annotation.id === annotation.objectId;
   const markerLabel = isFalseNegative
     ? '<span style="font-weight:bold;font-size:18px;line-height:1;">!</span>'
-    : !hideIdenticon && id
-    ? jdenticon.toSvg(id, 20)
+    : !hideIdenticon && isPrimary && annotation.objectId
+    ? jdenticon.toSvg(annotation.objectId, 20)
     : '';
 
   let html = `

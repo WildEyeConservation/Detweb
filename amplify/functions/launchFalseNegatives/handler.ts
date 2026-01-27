@@ -11,31 +11,21 @@ import {
 } from '@aws-sdk/client-sqs';
 import {
   S3Client,
-  PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { randomUUID } from 'crypto';
 import pLimit from 'p-limit';
 import {
   createQueue as createQueueMutation,
   updateQueue as updateQueueMutation,
-  createLocationSet as createLocationSetMutation,
-  updateLocationSet as updateLocationSetMutation,
-  createLocation as createLocationMutation,
   createTasksOnAnnotationSet as createTasksOnAnnotationSetMutation,
   updateProject as updateProjectMutation,
   updateProjectMemberships as updateProjectMembershipsMutation,
-  createTilingTask as createTilingTaskMutation,
-  createTilingBatch as createTilingBatchMutation,
 } from './graphql/mutations';
 import {
-  locationsBySetIdAndConfidence,
   annotationsByAnnotationSetId,
   imagesByProjectId,
-  observationsByAnnotationSetId,
-  getLocation,
 } from './graphql/queries';
 
 // Configure Amplify so lambda can call the same AppSync API as clients.
@@ -82,18 +72,8 @@ const sqsClient = new SQSClient({
   },
 });
 
-// S3 client for writing batch files.
+// S3 client for reading large payloads.
 const s3Client = new S3Client({
-  region: env.AWS_REGION,
-  credentials: {
-    accessKeyId: env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
-    sessionToken: env.AWS_SESSION_TOKEN,
-  },
-});
-
-// Lambda client for invoking tiling batch lambdas.
-const lambdaClient = new LambdaClient({
   region: env.AWS_REGION,
   credentials: {
     accessKeyId: env.AWS_ACCESS_KEY_ID,
@@ -109,36 +89,16 @@ type LaunchQueueOptions = {
   fifo: boolean;
 };
 
-type TiledLaunchImage = {
-  id: string;
-  width: number;
-  height: number;
-};
-
-type TiledLaunchRequest = {
-  name: string;
-  description: string;
-  horizontalTiles: number;
-  verticalTiles: number;
-  width: number;
-  height: number;
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-  images: TiledLaunchImage[];
-  locationCount: number;
-};
-
 type LaunchFalseNegativesPayload = {
   projectId: string;
   annotationSetId: string;
   queueOptions: LaunchQueueOptions;
   queueTag: string;
   samplePercent: number;
-  locationSetId?: string;
-  locationTiles?: MinimalTile[];
-  tiledRequest?: TiledLaunchRequest | null;
+  /** The global tiled location set ID from the project */
+  locationSetId: string;
+  /** Tiles fetched from the global tiled set by the client */
+  locationTiles: MinimalTile[];
   batchSize?: number;
   /** S3 key where the full payload is stored (for large payloads). */
   payloadS3Key?: string;
@@ -152,20 +112,6 @@ type MinimalTile = {
   width: number;
   height: number;
 };
-
-// Location data structure for in-memory tile generation
-type LocationInput = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  imageId: string;
-  projectId: string;
-  setId: string;
-};
-
-// Batch size for tiling - 50,000 locations per batch
-const TILING_BATCH_SIZE = 50000;
 
 // Simple timer helper to keep logging consistent.
 async function withTiming<T>(label: string, action: () => Promise<T>): Promise<T> {
@@ -205,8 +151,8 @@ export const handler: Handler = async (event) => {
         projectId: payload.projectId,
         annotationSetId: payload.annotationSetId,
         samplePercent: payload.samplePercent,
-        hasTiledRequest: Boolean(payload.tiledRequest),
-        locationSetId: payload.locationSetId ?? null,
+        locationSetId: payload.locationSetId,
+        tileCount: payload.locationTiles?.length ?? 0,
       })
     );
 
@@ -250,45 +196,17 @@ export const handler: Handler = async (event) => {
 // End-to-end workflow for selecting tiles and pushing jobs to workers.
 async function handleLaunch(payload: LaunchFalseNegativesPayload) {
   const workerBatchSize = payload.batchSize ?? 200;
-  const { projectId, annotationSetId } = payload;
+  const { projectId, annotationSetId, locationSetId } = payload;
 
-  // If we need to create tiles from tiledRequest, use distributed tiling
-  if (!payload.locationSetId && payload.tiledRequest) {
-    return handleDistributedFalseNegativesLaunch(payload);
-  }
+  // Use tiles from the global tiled set (fetched by client from project.tiledLocationSetId)
+  const tiles = payload.locationTiles;
+  console.log('Using tiles from global tiled set', {
+    locationSetId,
+    tileCount: tiles.length,
+  });
 
-  // Use locationTiles if provided (fetched on client), otherwise fetch from locationSetId
-  let tiles: MinimalTile[];
-  let locationSetId: string | undefined;
-
-  if (payload.locationTiles && payload.locationTiles.length > 0) {
-    // Locations were fetched on the client
-    tiles = payload.locationTiles;
-    locationSetId = payload.locationSetId;
-    console.log('Using locations from client payload', {
-      locationSetId,
-      tileCount: tiles.length,
-    });
-  } else if (payload.locationSetId) {
-    // Fallback: fetch locations in lambda (shouldn't happen with new client code)
-    locationSetId = payload.locationSetId;
-    tiles = await withTiming('fetchTiles', () => fetchTiles(locationSetId!));
-    console.log('Fetched tiles in lambda', {
-      locationSetId,
-      tileCount: tiles.length,
-    });
-  } else if (payload.tiledRequest) {
-    // Create from tiledRequest synchronously (for small sets)
-    locationSetId = await withTiming('createTiledLocationSet', () =>
-      createTiledLocationSetSync(projectId, payload.tiledRequest!)
-    );
-    tiles = await withTiming('fetchTiles', () => fetchTiles(locationSetId!));
-    console.log('Created and fetched tiles', {
-      locationSetId,
-      tileCount: tiles.length,
-    });
-  } else {
-    throw new Error('No location source provided');
+  if (!tiles || tiles.length === 0) {
+    throw new Error('No tiles provided - ensure the project has a global tiled set configured');
   }
 
   if (tiles.length === 0) {
@@ -432,390 +350,6 @@ async function handleLaunch(payload: LaunchFalseNegativesPayload) {
   };
 }
 
-// Handle distributed tiling for false negatives when creating a new location set
-async function handleDistributedFalseNegativesLaunch(payload: LaunchFalseNegativesPayload) {
-  const tiledRequest = payload.tiledRequest!;
-  const workerBatchSize = payload.batchSize ?? 200;
-
-  // Fetch filtering data BEFORE generating tiles (so we can filter before creating DB records)
-  console.log('Fetching filtering data for false negatives...');
-  const observationMap = await withTiming('fetchObservationPoints', () =>
-    fetchObservationPoints(payload.annotationSetId)
-  );
-  console.log('Fetched observation points', {
-    annotationSetId: payload.annotationSetId,
-    observationImageCount: observationMap.size,
-  });
-
-  const annotationMap = await withTiming('fetchAnnotationPoints', () =>
-    fetchAnnotationPoints(payload.annotationSetId)
-  );
-  console.log('Fetched annotations', {
-    annotationSetId: payload.annotationSetId,
-    annotationImageCount: annotationMap.size,
-  });
-
-  const imageTimestamps = await withTiming('fetchImageTimestamps', () =>
-    fetchImageTimestamps(payload.projectId)
-  );
-  console.log('Fetched image timestamps', {
-    projectId: payload.projectId,
-    imageCount: imageTimestamps.size,
-  });
-
-  // Create the location set first
-  const locationSetData = await executeGraphql<{
-    createLocationSet?: { id: string };
-  }>(createLocationSetMutation, {
-    input: {
-      name: tiledRequest.name,
-      projectId: payload.projectId,
-      description: tiledRequest.description,
-      locationCount: tiledRequest.locationCount,
-    },
-  });
-
-  const locationSetId = locationSetData.createLocationSet?.id;
-  if (!locationSetId) {
-    throw new Error('Unable to create location set');
-  }
-
-  console.log('Created location set', { locationSetId });
-
-  // Generate all tile locations in memory
-  const allLocations = generateTiledLocations(payload.projectId, locationSetId, tiledRequest);
-  console.log('Generated locations in memory', { count: allLocations.length });
-
-  // Convert to MinimalTile format for filtering
-  const allTiles: MinimalTile[] = allLocations.map((loc) => ({
-    id: '', // Will be assigned after DB creation
-    imageId: loc.imageId,
-    x: loc.x,
-    y: loc.y,
-    width: loc.width,
-    height: loc.height,
-  }));
-
-  // Filter tiles: keep only those without observations and without annotations
-  console.log('Filtering false negative candidates...');
-  const candidateTimingStart = Date.now();
-  const candidates = allTiles.filter((tile) => {
-    const observations = observationMap.get(tile.imageId) || [];
-    const annotations = annotationMap.get(tile.imageId) || [];
-    // Check if any observed location overlaps with this tile
-    const hasObservation = observations.some((obs) =>
-      tilesOverlap(tile, obs)
-    );
-    const hasAnnotation = annotations.some((point) =>
-      isInsideTile(point.x, point.y, tile)
-    );
-    return !hasObservation && !hasAnnotation;
-  });
-  console.log('Filtered candidates', {
-    totalTiles: allTiles.length,
-    candidateCount: candidates.length,
-    durationMs: Date.now() - candidateTimingStart,
-  });
-
-  // Sort by image timestamp
-  candidates.sort((a, b) => {
-    const tsA = imageTimestamps.get(a.imageId) ?? 0;
-    const tsB = imageTimestamps.get(b.imageId) ?? 0;
-    return tsA - tsB;
-  });
-
-  // Apply sampling
-  const normalizedPercent = Math.min(
-    Math.max(payload.samplePercent, 0),
-    100
-  );
-  let sampleCount = Math.floor(
-    (candidates.length * normalizedPercent) / 100
-  );
-  if (normalizedPercent > 0 && sampleCount === 0 && candidates.length > 0) {
-    sampleCount = 1;
-  }
-
-  const selectionStart = Date.now();
-  const selectedTiles =
-    sampleCount > 0 && sampleCount < candidates.length
-      ? randomSample(candidates, sampleCount)
-      : candidates.slice();
-  console.log('Tile sampling complete', {
-    requestedPercent: payload.samplePercent,
-    normalizedPercent,
-    sampleCount,
-    selectedTiles: selectedTiles.length,
-    durationMs: Date.now() - selectionStart,
-  });
-
-  if (selectedTiles.length === 0) {
-    await setProjectStatus(payload.projectId, 'active');
-    console.log('No false-negative candidate tiles were found');
-    return {
-      message: 'No candidate tiles discovered',
-      locationCount: 0,
-      queueId: null,
-    };
-  }
-
-  // Map filtered tiles back to LocationInput format, preserving order
-  const filteredLocations: LocationInput[] = [];
-  const tileMap = new Map<string, LocationInput>();
-  for (const loc of allLocations) {
-    const key = `${loc.imageId}-${loc.x}-${loc.y}-${loc.width}-${loc.height}`;
-    tileMap.set(key, loc);
-  }
-
-  for (const tile of selectedTiles) {
-    const key = `${tile.imageId}-${tile.x}-${tile.y}-${tile.width}-${tile.height}`;
-    const loc = tileMap.get(key);
-    if (loc) {
-      filteredLocations.push(loc);
-    }
-  }
-
-  console.log('Filtered locations', {
-    originalCount: allLocations.length,
-    filteredCount: filteredLocations.length,
-  });
-
-  // Update location set with filtered count
-  await executeGraphql<{ updateLocationSet?: { id: string } }>(
-    updateLocationSetMutation,
-    {
-      input: {
-        id: locationSetId,
-        locationCount: filteredLocations.length,
-      },
-    }
-  );
-  console.log('Updated location set count', {
-    locationSetId,
-    locationCount: filteredLocations.length,
-  });
-
-  // Batch only the filtered locations and write to S3
-  const batches = batchLocations(filteredLocations, TILING_BATCH_SIZE);
-  console.log('Created batches from filtered locations', { batchCount: batches.length });
-
-  // Create the launch config for the control lambda to use later
-  // Note: filteringAlreadyDone indicates filtering was done before batching
-  const launchConfig = JSON.stringify({
-    queueOptions: payload.queueOptions,
-    secondaryQueueOptions: null,
-    allowOutside: true,
-    skipLocationWithAnnotations: false,
-    taskTag: payload.queueTag,
-    batchSize: workerBatchSize,
-    zoom: null,
-    // False negatives specific config
-    isFalseNegatives: true,
-    samplePercent: payload.samplePercent,
-  });
-
-  // Create TilingTask record
-  const tilingTaskData = await executeGraphql<{
-    createTilingTask?: { id: string };
-  }>(createTilingTaskMutation, {
-    input: {
-      projectId: payload.projectId,
-      locationSetId,
-      annotationSetId: payload.annotationSetId,
-      status: 'processing',
-      launchConfig,
-      totalBatches: batches.length,
-      completedBatches: 0,
-      totalLocations: filteredLocations.length, // Use filtered count, not original
-    },
-  });
-
-  const tilingTaskId = tilingTaskData.createTilingTask?.id;
-  if (!tilingTaskId) {
-    throw new Error('Failed to create tiling task');
-  }
-
-  console.log('Created tiling task', { tilingTaskId, totalBatches: batches.length });
-
-  // Write batches to S3 and create TilingBatch records
-  const batchCreationLimit = pLimit(10);
-  const batchTasks = batches.map((batch, index) =>
-    batchCreationLimit(async () => {
-      // Write batch to S3
-      const s3Key = `tiling-batches/${tilingTaskId}-batch-${index}.json`;
-      await writeBatchToS3(s3Key, batch);
-
-      // Create TilingBatch record
-      const batchData = await executeGraphql<{
-        createTilingBatch?: { id: string };
-      }>(createTilingBatchMutation, {
-        input: {
-          tilingTaskId,
-          batchIndex: index,
-          status: 'pending',
-          inputS3Key: s3Key,
-          locationCount: batch.length,
-          createdCount: 0,
-        },
-      });
-
-      const batchId = batchData.createTilingBatch?.id;
-      if (!batchId) {
-        throw new Error(`Failed to create tiling batch ${index}`);
-      }
-
-      console.log('Created tiling batch', { batchId, batchIndex: index, locationCount: batch.length });
-
-      // Invoke the processTilingBatch lambda
-      await invokeTilingBatchLambda(batchId);
-
-      return batchId;
-    })
-  );
-
-  await Promise.all(batchTasks);
-
-  console.log('Distributed tiling initiated for false negatives', {
-    tilingTaskId,
-    totalBatches: batches.length,
-    totalLocations: filteredLocations.length,
-    originalLocationCount: allLocations.length,
-  });
-
-  return {
-    message: 'Distributed tiling initiated for false negatives',
-    tilingTaskId,
-    locationSetId,
-    totalBatches: batches.length,
-    totalLocations: filteredLocations.length,
-    originalLocationCount: allLocations.length,
-  };
-}
-
-// Generate all tile locations in memory without writing to DB
-function generateTiledLocations(
-  projectId: string,
-  locationSetId: string,
-  tiledRequest: TiledLaunchRequest
-): LocationInput[] {
-  const locations: LocationInput[] = [];
-
-  const baselineWidth = Math.max(0, tiledRequest.maxX - tiledRequest.minX);
-  const baselineHeight = Math.max(0, tiledRequest.maxY - tiledRequest.minY);
-  const baselineIsLandscape = baselineWidth >= baselineHeight;
-
-  for (const image of tiledRequest.images) {
-    const imageIsLandscape = image.width >= image.height;
-    const swapTileForImage = baselineIsLandscape !== imageIsLandscape;
-    const tileWidthForImage = swapTileForImage
-      ? tiledRequest.height
-      : tiledRequest.width;
-    const tileHeightForImage = swapTileForImage
-      ? tiledRequest.width
-      : tiledRequest.height;
-    const horizontalTilesForImage = swapTileForImage
-      ? tiledRequest.verticalTiles
-      : tiledRequest.horizontalTiles;
-    const verticalTilesForImage = swapTileForImage
-      ? tiledRequest.horizontalTiles
-      : tiledRequest.verticalTiles;
-    const roiMinXForImage = swapTileForImage
-      ? tiledRequest.minY
-      : tiledRequest.minX;
-    const roiMinYForImage = swapTileForImage
-      ? tiledRequest.minX
-      : tiledRequest.minY;
-    const roiMaxXForImage = swapTileForImage
-      ? tiledRequest.maxY
-      : tiledRequest.maxX;
-    const roiMaxYForImage = swapTileForImage
-      ? tiledRequest.maxX
-      : tiledRequest.maxY;
-
-    const effectiveW = Math.max(0, roiMaxXForImage - roiMinXForImage);
-    const effectiveH = Math.max(0, roiMaxYForImage - roiMinYForImage);
-    const xStepSize =
-      horizontalTilesForImage > 1
-        ? (effectiveW - tileWidthForImage) / (horizontalTilesForImage - 1)
-        : 0;
-    const yStepSize =
-      verticalTilesForImage > 1
-        ? (effectiveH - tileHeightForImage) / (verticalTilesForImage - 1)
-        : 0;
-
-    for (let xStep = 0; xStep < horizontalTilesForImage; xStep++) {
-      for (let yStep = 0; yStep < verticalTilesForImage; yStep++) {
-        const x = Math.round(
-          roiMinXForImage +
-            (horizontalTilesForImage > 1 ? xStep * xStepSize : 0) +
-            tileWidthForImage / 2
-        );
-        const y = Math.round(
-          roiMinYForImage +
-            (verticalTilesForImage > 1 ? yStep * yStepSize : 0) +
-            tileHeightForImage / 2
-        );
-
-        locations.push({
-          x,
-          y,
-          width: tileWidthForImage,
-          height: tileHeightForImage,
-          imageId: image.id,
-          projectId,
-          setId: locationSetId,
-        });
-      }
-    }
-  }
-
-  return locations;
-}
-
-// Batch locations into groups
-function batchLocations(
-  locations: LocationInput[],
-  batchSize: number
-): LocationInput[][] {
-  const batches: LocationInput[][] = [];
-  for (let i = 0; i < locations.length; i += batchSize) {
-    batches.push(locations.slice(i, i + batchSize));
-  }
-  return batches;
-}
-
-// Write a batch of locations to S3
-async function writeBatchToS3(key: string, locations: LocationInput[]): Promise<void> {
-  const bucketName = env.OUTPUTS_BUCKET_NAME;
-  if (!bucketName) {
-    throw new Error('OUTPUTS_BUCKET_NAME environment variable not set');
-  }
-
-  await s3Client.send(
-    new PutObjectCommand({
-      Bucket: bucketName,
-      Key: key,
-      Body: JSON.stringify(locations),
-      ContentType: 'application/json',
-    })
-  );
-}
-
-// Invoke the processTilingBatch lambda
-async function invokeTilingBatchLambda(batchId: string): Promise<void> {
-  const functionName = env.PROCESS_TILING_BATCH_FUNCTION_NAME;
-  if (!functionName) {
-    throw new Error('PROCESS_TILING_BATCH_FUNCTION_NAME environment variable not set');
-  }
-
-  await lambdaClient.send(
-    new InvokeCommand({
-      FunctionName: functionName,
-      InvocationType: 'Event', // Async invocation
-      Payload: JSON.stringify({ batchId }),
-    })
-  );
-}
 
 // Validate and hydrate the resolver-supplied string payload.
 function parsePayload(request: unknown): LaunchFalseNegativesPayload {
@@ -874,59 +408,6 @@ async function deletePayloadFromS3(key: string): Promise<void> {
     })
   );
   console.log('Deleted S3 payload', { key });
-}
-
-// Fetch the working set of tiles for a location set.
-async function fetchTiles(locationSetId: string): Promise<MinimalTile[]> {
-  const tiles: MinimalTile[] = [];
-  let nextToken: string | null | undefined = undefined;
-
-  do {
-    const response = (await client.graphql({
-      query: locationsBySetIdAndConfidence,
-      variables: {
-        setId: locationSetId,
-        limit: 1000,
-        nextToken,
-      },
-    } as any)) as GraphQLResult<{
-      locationsBySetIdAndConfidence?: {
-        items?: Array<{
-          id?: string | null;
-          imageId?: string | null;
-          x?: number | null;
-          y?: number | null;
-          width?: number | null;
-          height?: number | null;
-        }>;
-        nextToken?: string | null;
-      };
-    }>;
-
-    if (response.errors && response.errors.length > 0) {
-      throw new Error(
-        `GraphQL error fetching tiles: ${JSON.stringify(
-          response.errors.map((e) => e.message)
-        )}`
-      );
-    }
-
-    const page = response.data?.locationsBySetIdAndConfidence;
-    for (const item of page?.items || []) {
-      if (!item?.id || !item?.imageId) continue;
-      tiles.push({
-        id: item.id,
-        imageId: item.imageId,
-        x: Number(item.x ?? 0),
-        y: Number(item.y ?? 0),
-        width: Number(item.width ?? 0),
-        height: Number(item.height ?? 0),
-      });
-    }
-    nextToken = page?.nextToken ?? undefined;
-  } while (nextToken);
-
-  return tiles;
 }
 
 // Custom GraphQL query to fetch observations with location data included
@@ -1239,142 +720,6 @@ async function getQueueType(queueUrl: string): Promise<'FIFO' | 'Standard'> {
   }
 }
 
-// Derive a location set from tiled launch parameters (synchronous version for small sets).
-async function createTiledLocationSetSync(
-  projectId: string,
-  tiledRequest?: TiledLaunchRequest | null
-) {
-  if (!tiledRequest) {
-    throw new Error('tiledRequest is required when no location set is provided');
-  }
-  if (!tiledRequest.images || tiledRequest.images.length === 0) {
-    throw new Error('Tiled launch requires at least one image');
-  }
-
-  console.log('Creating tiled location set (sync)', {
-    projectId,
-    name: tiledRequest.name,
-    imageCount: tiledRequest.images.length,
-    locationCount: tiledRequest.locationCount,
-  });
-
-  const creationStart = Date.now();
-  const locationSetData = await executeGraphql<{
-    createLocationSet?: { id: string };
-  }>(createLocationSetMutation, {
-    input: {
-      name: tiledRequest.name,
-      projectId,
-      description: tiledRequest.description,
-      locationCount: tiledRequest.locationCount,
-    },
-  });
-
-  const locationSetId = locationSetData.createLocationSet?.id;
-  if (!locationSetId) {
-    throw new Error('Unable to create location set');
-  }
-
-  const creationConcurrency = 100;
-  const creationLimit = pLimit(creationConcurrency);
-  const creationTasks: Array<Promise<void>> = [];
-  let createdCount = 0;
-
-  const baselineWidth = Math.max(0, tiledRequest.maxX - tiledRequest.minX);
-  const baselineHeight = Math.max(0, tiledRequest.maxY - tiledRequest.minY);
-  const baselineIsLandscape = baselineWidth >= baselineHeight;
-
-  for (const image of tiledRequest.images) {
-    const imageIsLandscape = image.width >= image.height;
-    const swapTileForImage = baselineIsLandscape !== imageIsLandscape;
-    const tileWidthForImage = swapTileForImage
-      ? tiledRequest.height
-      : tiledRequest.width;
-    const tileHeightForImage = swapTileForImage
-      ? tiledRequest.width
-      : tiledRequest.height;
-    const horizontalTilesForImage = swapTileForImage
-      ? tiledRequest.verticalTiles
-      : tiledRequest.horizontalTiles;
-    const verticalTilesForImage = swapTileForImage
-      ? tiledRequest.horizontalTiles
-      : tiledRequest.verticalTiles;
-    const roiMinXForImage = swapTileForImage
-      ? tiledRequest.minY
-      : tiledRequest.minX;
-    const roiMinYForImage = swapTileForImage
-      ? tiledRequest.minX
-      : tiledRequest.minY;
-    const roiMaxXForImage = swapTileForImage
-      ? tiledRequest.maxY
-      : tiledRequest.maxX;
-    const roiMaxYForImage = swapTileForImage
-      ? tiledRequest.maxX
-      : tiledRequest.maxY;
-
-    const effectiveW = Math.max(0, roiMaxXForImage - roiMinXForImage);
-    const effectiveH = Math.max(0, roiMaxYForImage - roiMinYForImage);
-    const xStepSize =
-      horizontalTilesForImage > 1
-        ? (effectiveW - tileWidthForImage) / (horizontalTilesForImage - 1)
-        : 0;
-    const yStepSize =
-      verticalTilesForImage > 1
-        ? (effectiveH - tileHeightForImage) / (verticalTilesForImage - 1)
-        : 0;
-
-    for (let xStep = 0; xStep < horizontalTilesForImage; xStep++) {
-      for (let yStep = 0; yStep < verticalTilesForImage; yStep++) {
-        const x = Math.round(
-          roiMinXForImage +
-            (horizontalTilesForImage > 1 ? xStep * xStepSize : 0) +
-            tileWidthForImage / 2
-        );
-        const y = Math.round(
-          roiMinYForImage +
-            (verticalTilesForImage > 1 ? yStep * yStepSize : 0) +
-            tileHeightForImage / 2
-        );
-
-        creationTasks.push(
-          creationLimit(async () => {
-            await executeGraphql<{
-              createLocation?: { id: string };
-            }>(createLocationMutation, {
-              input: {
-                x,
-                y,
-                width: tileWidthForImage,
-                height: tileHeightForImage,
-                imageId: image.id,
-                projectId,
-                confidence: 1,
-                source: 'manual',
-                setId: locationSetId,
-              },
-            });
-            createdCount += 1;
-            if (createdCount % 1000 === 0) {
-              console.log('Created tiled locations progress', {
-                locationSetId,
-                createdCount,
-              });
-            }
-          })
-        );
-      }
-    }
-  }
-
-  await Promise.all(creationTasks);
-  console.log('Created tiled locations', {
-    locationSetId,
-    total: creationTasks.length,
-    durationMs: Date.now() - creationStart,
-    concurrency: creationConcurrency,
-  });
-  return locationSetId;
-}
 
 // GraphQL helper that raises detailed errors when AppSync fails.
 async function executeGraphql<T>(

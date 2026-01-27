@@ -28,6 +28,9 @@ export type LaunchTaskArgs = {
   queueOptions: LaunchQueueOptions;
   secondaryQueueOptions?: LaunchQueueOptions;
   tiledRequest?: TiledLaunchRequest | null;
+  /** If true, delete false negative annotations/observations before launching */
+  hasFN?: boolean;
+  onLaunchConfirmed?: () => void;
 };
 
 type LaunchLambdaPayload = {
@@ -45,6 +48,8 @@ type LaunchLambdaPayload = {
   tiledRequest?: TiledLaunchRequest | null;
   locationManifestS3Key?: string | null;
   launchedCount?: number | null;
+  /** If true, delete false negative annotations/observations before launching */
+  hasFN?: boolean;
 };
 
 export function useLaunchTask(
@@ -258,6 +263,8 @@ export function useLaunchTask(
       queueOptions,
       secondaryQueueOptions,
       tiledRequest,
+      hasFN,
+      onLaunchConfirmed,
     }: LaunchTaskArgs) => {
       onProgress?.('Preparing launch request');
       let collectedLocations: string[] | undefined;
@@ -376,6 +383,8 @@ export function useLaunchTask(
         return; // Exit early for model-guided
       }
 
+      onLaunchConfirmed?.();
+
       const payload: LaunchLambdaPayload = {
         projectId: options.projectId,
         annotationSetId: options.annotationSetId,
@@ -389,6 +398,7 @@ export function useLaunchTask(
         locationIds: collectedLocations,
         locationSetIds: selectedTasks,
         tiledRequest: tiledRequest ?? null,
+        hasFN: hasFN ?? false,
       };
 
       onProgress?.('Enqueuing jobs...');

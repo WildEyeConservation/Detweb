@@ -141,16 +141,18 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
       >
         <Navbar.Brand
           className='d-flex flex-row align-items-center flex-nowrap me-2'
-          onClick={() =>
-            navigate(
-              isOrganizationAdmin
-                ? '/surveys'
-                : belongsToOrganization
-                ? '/jobs'
-                : '/'
-            )
-          }
-          style={{ cursor: 'pointer' }}
+          onClick={() => {
+            if (!isAnnotatePath) {
+              navigate(
+                isOrganizationAdmin
+                  ? '/surveys'
+                  : belongsToOrganization
+                  ? '/jobs'
+                  : '/'
+              );
+            }
+          }}
+          style={{ cursor: isAnnotatePath ? 'default' : 'pointer' }}
         >
           <img
             src='/Logo.png'
