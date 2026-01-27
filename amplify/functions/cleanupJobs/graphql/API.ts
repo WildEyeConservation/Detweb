@@ -488,6 +488,14 @@ export type Queue = {
   url?: string | null,
   users?: ModelUserProjectMembershipConnection | null,
   zoom?: number | null,
+  annotationSetId?: string | null,
+  locationSetId?: string | null,
+  confidenceThreshold?: number | null,
+  launchedCount?: number | null,
+  observedCount?: number | null,
+  locationManifestS3Key?: string | null,
+  emptyQueueTimestamp?: string | null,
+  requeuesCompleted?: number | null,
 };
 
 export type ModelObjectConnection = {
@@ -2823,6 +2831,14 @@ export type UpdateQueueInput = {
   totalBatches?: number | null,
   url?: string | null,
   zoom?: number | null,
+  annotationSetId?: string | null,
+  locationSetId?: string | null,
+  confidenceThreshold?: number | null,
+  launchedCount?: number | null,
+  observedCount?: number | null,
+  locationManifestS3Key?: string | null,
+  emptyQueueTimestamp?: string | null,
+  requeuesCompleted?: number | null,
 };
 
 export type UpdateResultSharingTokenInput = {

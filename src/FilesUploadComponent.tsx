@@ -6,7 +6,7 @@ import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import Alert from 'react-bootstrap/Alert';
 import { list } from 'aws-amplify/storage';
-import { GlobalContext, UploadContext } from './Context.tsx';
+import { GlobalContext, UploadContext, UserContext } from './Context.tsx';
 import exifr from 'exifr';
 import { DateTime } from 'luxon';
 import { fetchAllPaginatedResults } from './utils';
@@ -59,7 +59,7 @@ interface FilesUploadBaseProps {
 }
 
 // Props for form-compatible version
-interface FilesUploadFormProps extends FilesUploadBaseProps {}
+interface FilesUploadFormProps extends FilesUploadBaseProps { }
 
 export type CameraSpec = {
   focalLengthMm: number;
@@ -137,6 +137,7 @@ export function FileUploadCore({
 }: FilesUploadBaseProps) {
   const [name, setName] = useState('');
   const { client } = useContext(GlobalContext)!;
+  const { cognitoGroups } = useContext(UserContext)!;
   const [scannedFiles, setScannedFiles] = useState<File[]>([]);
   const [cameraSelection, setCameraSelection] = useState<
     [string, string[]] | null
@@ -220,7 +221,7 @@ export function FileUploadCore({
   // State for scan count and total
   const [scanCount, setScanCount] = useState(0);
   const [scanTotal, setScanTotal] = useState(0);
-  
+
   // State for tracking files that failed during EXIF scanning
   const [failedFiles, setFailedFiles] = useState<
     Array<{ path: string; error: string }>
@@ -446,15 +447,15 @@ export function FileUploadCore({
       ): Promise<ImageExif | null> => {
         try {
           const exif = await extractor(file);
-          
+
           // Validation checks for corrupted files
           const validationErrors: string[] = [];
-          
+
           // Check 1: Image dimensions must be valid
           if (!exif.width || !exif.height || exif.width <= 0 || exif.height <= 0) {
             validationErrors.push('Invalid image dimensions');
           }
-          
+
           // Check 2: Timestamp must be valid (not 0, not NaN, and reasonable date)
           if (!exif.timestamp || !Number.isFinite(exif.timestamp)) {
             validationErrors.push('Invalid timestamp');
@@ -466,17 +467,17 @@ export function FileUploadCore({
               validationErrors.push('Timestamp out of valid range');
             }
           }
-          
+
           // Check 3: File size should be reasonable for an image (at least 1KB)
           if (file.size < 1024) {
             validationErrors.push('File size suspiciously small');
           }
-          
+
           // Check 4: File size should not be 0
           if (file.size === 0) {
             validationErrors.push('File is empty');
           }
-          
+
           // If validation failed, treat as corrupted file
           if (validationErrors.length > 0) {
             const errorMessage = validationErrors.join('; ');
@@ -493,7 +494,7 @@ export function FileUploadCore({
             ]);
             return null;
           }
-          
+
           return exif;
         } catch (error) {
           const errorMessage =
@@ -550,7 +551,7 @@ export function FileUploadCore({
           return updatedExif;
         })
       );
-      
+
       // Filter out null results (failed files)
       const sampleRaw: ImageExif[] = sampleResults.filter(
         (exif): exif is ImageExif => exif !== null
@@ -619,7 +620,7 @@ export function FileUploadCore({
         },
         () => setScanCount((prev) => prev + 1)
       );
-      
+
       // Filter out null results (failed files)
       const restRaw: ImageExif[] = restResults.filter(
         (exif): exif is ImageExif => exif !== null
@@ -676,6 +677,21 @@ export function FileUploadCore({
       getExistingFiles();
     }
   }, [imageFiles, name, newProject]);
+
+  const handleSkipGps = () => {
+    const dummyGpsData: CsvFile = imageFiles.map((f) => ({
+      timestamp: exifData[f.webkitRelativePath]?.timestamp || f.lastModified,
+      filepath: f.webkitRelativePath,
+      lat: 0,
+      lng: 0,
+      alt: 0,
+    }));
+    setCsvData({ data: dummyGpsData });
+    setFullCsvData(dummyGpsData);
+    setMissingGpsData(false);
+    setAssociateByTimestamp(false);
+    setMappingConfirmed(true);
+  };
 
   useEffect(() => {
     if (!multipleCameras) {
@@ -964,7 +980,7 @@ export function FileUploadCore({
           };
         }
       }
-    } catch {}
+    } catch { }
     return null;
   }
 
@@ -1186,7 +1202,7 @@ export function FileUploadCore({
               if (hasValidLatLng(interpolated.lat, interpolated.lng)) {
                 const alt =
                   typeof interpolated.alt === 'number' &&
-                  Number.isFinite(interpolated.alt)
+                    Number.isFinite(interpolated.alt)
                     ? interpolated.alt
                     : undefined;
                 const normalized: NormalizedGps = {
@@ -1304,8 +1320,8 @@ export function FileUploadCore({
     if (setGpsDataReady) {
       setGpsDataReady(
         !scanningEXIF &&
-          hasValidGpsForAllImages &&
-          Boolean(csvData && csvData.data.length > 0)
+        hasValidGpsForAllImages &&
+        Boolean(csvData && csvData.data.length > 0)
       );
     }
   }, [setGpsDataReady, scanningEXIF, hasValidGpsForAllImages, csvData]);
@@ -1383,10 +1399,8 @@ export function FileUploadCore({
       if (invalidGpsFiles.length > 0) {
         const sample = invalidGpsFiles.slice(0, 5);
         alert(
-          `GPS coordinates are missing or invalid for ${
-            invalidGpsFiles.length
-          } image${invalidGpsFiles.length === 1 ? '' : 's'}. Example${
-            sample.length === 1 ? '' : 's'
+          `GPS coordinates are missing or invalid for ${invalidGpsFiles.length
+          } image${invalidGpsFiles.length === 1 ? '' : 's'}. Example${sample.length === 1 ? '' : 's'
           }: ${sample.join(', ')}`
         );
         return;
@@ -1482,7 +1496,7 @@ export function FileUploadCore({
 
       // Exclude failed files from processing
       const failedFilePaths = new Set(failedFiles.map((f) => f.path));
-      
+
       const gpsFilteredImageFiles = filteredImageFiles.filter((file) => {
         // Skip files that failed validation/corruption checks
         if (failedFilePaths.has(file.webkitRelativePath)) {
@@ -1490,7 +1504,7 @@ export function FileUploadCore({
         }
 
         const exifMeta = exifData[file.webkitRelativePath];
-        
+
         // Skip files without EXIF metadata (shouldn't happen for non-failed files, but safety check)
         if (!exifMeta) {
           return false;
@@ -1520,7 +1534,7 @@ export function FileUploadCore({
               if (
                 exifMeta.timestamp < sortedCsvData[0].timestamp! ||
                 exifMeta.timestamp >
-                  sortedCsvData[sortedCsvData.length - 1].timestamp!
+                sortedCsvData[sortedCsvData.length - 1].timestamp!
               ) {
                 return false;
               }
@@ -1827,7 +1841,7 @@ export function FileUploadCore({
               return {
                 timestamp: hasTimestamp
                   ? detectAndParseTimestamp(row['Timestamp'], commonTimezone) ??
-                    undefined
+                  undefined
                   : undefined,
                 filepath: hasFilepath ? row['FilePath'] : undefined,
                 lat: lat as number,
@@ -1858,8 +1872,8 @@ export function FileUploadCore({
               hasTimestamp
                 ? a.timestamp! - b.timestamp!
                 : a
-                    .filepath!.toLowerCase()
-                    .localeCompare(b.filepath!.toLowerCase())
+                  .filepath!.toLowerCase()
+                  .localeCompare(b.filepath!.toLowerCase())
             );
           if (hasTimestamp && !hasFilepath) {
             // Georeference each image by EXIF timestamp
@@ -2269,13 +2283,24 @@ export function FileUploadCore({
               </code>
             </Form.Text>
           </div>
-          <FileInput
-            id='gps-metadata-file'
-            fileType='.csv,.gpx'
-            onFileChange={(files) => setFile(files[0])}
-          >
-            <p className='mb-0'>Select GPS metadata file</p>
-          </FileInput>
+          <div className='d-flex gap-2 align-items-center'>
+            <FileInput
+              id='gps-metadata-file'
+              fileType='.csv,.gpx'
+              onFileChange={(files) => setFile(files[0])}
+            >
+              <p className='mb-0'>Select GPS metadata file</p>
+            </FileInput>
+            {cognitoGroups.includes('sysadmin') && (
+              <Button
+                variant='outline-warning'
+                size='sm'
+                onClick={handleSkipGps}
+              >
+                Skip GPS selection (Admin)
+              </Button>
+            )}
+          </div>
         </Form.Group>
       ) : null}
       {headerFields && !mappingConfirmed && (
@@ -2300,9 +2325,9 @@ export function FileUploadCore({
                   value={
                     columnMapping.filepath
                       ? {
-                          label: columnMapping.filepath,
-                          value: columnMapping.filepath,
-                        }
+                        label: columnMapping.filepath,
+                        value: columnMapping.filepath,
+                      }
                       : { label: 'None', value: '' }
                   }
                   onChange={(opt) =>
@@ -2331,9 +2356,9 @@ export function FileUploadCore({
                   value={
                     columnMapping.timestamp
                       ? {
-                          label: columnMapping.timestamp,
-                          value: columnMapping.timestamp,
-                        }
+                        label: columnMapping.timestamp,
+                        value: columnMapping.timestamp,
+                      }
                       : { label: 'None', value: '' }
                   }
                   onChange={(opt) =>
@@ -2489,118 +2514,118 @@ export function FileUploadCore({
             (csvData &&
               fullCsvData &&
               fullCsvData.some((row) => row.timestamp))) && (
-            <Form.Group>
-              <Form.Label className='mb-0'>
-                Filter Data by Time Range (Optional)
-              </Form.Label>
-              <Form.Text
-                className='d-block mb-1 mt-0'
-                style={{ fontSize: '12px' }}
-              >
-                Select the effective time range for each day. The default range
-                is the earliest and latest timestamp recorded for that day.
-              </Form.Text>
-              <Form.Text
-                className='d-block mb-1'
-                style={{ fontSize: '12px', fontStyle: 'italic' }}
-              >
-                All times shown in UTC.
-              </Form.Text>
-              <div className='d-flex flex-column gap-2'>
-                {Array.from(
-                  new Set(
-                    (fullCsvData || csvData.data).map((row) =>
-                      new Date(row.timestamp!).getUTCDate()
+              <Form.Group>
+                <Form.Label className='mb-0'>
+                  Filter Data by Time Range (Optional)
+                </Form.Label>
+                <Form.Text
+                  className='d-block mb-1 mt-0'
+                  style={{ fontSize: '12px' }}
+                >
+                  Select the effective time range for each day. The default range
+                  is the earliest and latest timestamp recorded for that day.
+                </Form.Text>
+                <Form.Text
+                  className='d-block mb-1'
+                  style={{ fontSize: '12px', fontStyle: 'italic' }}
+                >
+                  All times shown in UTC.
+                </Form.Text>
+                <div className='d-flex flex-column gap-2'>
+                  {Array.from(
+                    new Set(
+                      (fullCsvData || csvData.data).map((row) =>
+                        new Date(row.timestamp!).getUTCDate()
+                      )
                     )
                   )
-                )
-                  .sort((a: number, b: number) => a - b)
-                  .map((day: number) => {
-                    const data = fullCsvData || csvData.data;
-                    const dayRange = getDayTimeRange(day, data);
-                    const startMinutes = timeToMinutes(
-                      timeRanges[day]?.start || minutesToTime(dayRange.min)
-                    );
-                    const endMinutes = timeToMinutes(
-                      timeRanges[day]?.end || minutesToTime(dayRange.max)
-                    );
+                    .sort((a: number, b: number) => a - b)
+                    .map((day: number) => {
+                      const data = fullCsvData || csvData.data;
+                      const dayRange = getDayTimeRange(day, data);
+                      const startMinutes = timeToMinutes(
+                        timeRanges[day]?.start || minutesToTime(dayRange.min)
+                      );
+                      const endMinutes = timeToMinutes(
+                        timeRanges[day]?.end || minutesToTime(dayRange.max)
+                      );
 
-                    const handleStartTimeChange = (timeStr: string) => {
-                      const newStartMinutes = timeToMinutes(timeStr);
-                      if (newStartMinutes <= endMinutes) {
-                        updateTimeRange(
-                          day,
-                          timeStr,
-                          timeRanges[day]?.end || minutesToTime(dayRange.max)
-                        );
-                      }
-                    };
+                      const handleStartTimeChange = (timeStr: string) => {
+                        const newStartMinutes = timeToMinutes(timeStr);
+                        if (newStartMinutes <= endMinutes) {
+                          updateTimeRange(
+                            day,
+                            timeStr,
+                            timeRanges[day]?.end || minutesToTime(dayRange.max)
+                          );
+                        }
+                      };
 
-                    const handleEndTimeChange = (timeStr: string) => {
-                      const newEndMinutes = timeToMinutes(timeStr);
-                      if (newEndMinutes >= startMinutes) {
-                        updateTimeRange(
-                          day,
-                          timeRanges[day]?.start || minutesToTime(dayRange.min),
-                          timeStr
-                        );
-                      }
-                    };
+                      const handleEndTimeChange = (timeStr: string) => {
+                        const newEndMinutes = timeToMinutes(timeStr);
+                        if (newEndMinutes >= startMinutes) {
+                          updateTimeRange(
+                            day,
+                            timeRanges[day]?.start || minutesToTime(dayRange.min),
+                            timeStr
+                          );
+                        }
+                      };
 
-                    return (
-                      <div
-                        key={`day-${day}`}
-                        className='d-flex flex-column gap-2 mt-2'
-                      >
-                        <span className='fw-bold'>
-                          {new Date(data[0].timestamp!).toLocaleDateString()}
-                        </span>
-                        <div className='d-flex align-items-center gap-2'>
-                          <label className='mb-0'>Start:</label>
-                          <input
-                            type='time'
-                            className='form-control'
-                            style={{ width: '120px' }}
-                            value={minutesToTime(startMinutes)}
-                            onChange={(e) =>
-                              handleStartTimeChange(e.target.value)
-                            }
-                          />
-                          <label className='mb-0'>End:</label>
-                          <input
-                            type='time'
-                            className='form-control'
-                            style={{ width: '120px' }}
-                            value={minutesToTime(endMinutes)}
-                            onChange={(e) =>
-                              handleEndTimeChange(e.target.value)
-                            }
-                          />
-                          <div className='flex-grow-1'>
-                            <Slider
-                              range
-                              min={dayRange.min}
-                              max={dayRange.max}
-                              value={[startMinutes, endMinutes]}
-                              onChange={(vals) => {
-                                if (Array.isArray(vals)) {
-                                  const [s, e] = vals as [number, number];
-                                  updateTimeRange(
-                                    day,
-                                    minutesToTime(s),
-                                    minutesToTime(e)
-                                  );
-                                }
-                              }}
+                      return (
+                        <div
+                          key={`day-${day}`}
+                          className='d-flex flex-column gap-2 mt-2'
+                        >
+                          <span className='fw-bold'>
+                            {new Date(data[0].timestamp!).toLocaleDateString()}
+                          </span>
+                          <div className='d-flex align-items-center gap-2'>
+                            <label className='mb-0'>Start:</label>
+                            <input
+                              type='time'
+                              className='form-control'
+                              style={{ width: '120px' }}
+                              value={minutesToTime(startMinutes)}
+                              onChange={(e) =>
+                                handleStartTimeChange(e.target.value)
+                              }
                             />
+                            <label className='mb-0'>End:</label>
+                            <input
+                              type='time'
+                              className='form-control'
+                              style={{ width: '120px' }}
+                              value={minutesToTime(endMinutes)}
+                              onChange={(e) =>
+                                handleEndTimeChange(e.target.value)
+                              }
+                            />
+                            <div className='flex-grow-1'>
+                              <Slider
+                                range
+                                min={dayRange.min}
+                                max={dayRange.max}
+                                value={[startMinutes, endMinutes]}
+                                onChange={(vals) => {
+                                  if (Array.isArray(vals)) {
+                                    const [s, e] = vals as [number, number];
+                                    updateTimeRange(
+                                      day,
+                                      minutesToTime(s),
+                                      minutesToTime(e)
+                                    );
+                                  }
+                                }}
+                              />
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </Form.Group>
-          )}
+                      );
+                    })}
+                </div>
+              </Form.Group>
+            )}
           <div className='mt-3'>
             {(() => {
               if (invalidGpsFiles.length > 0) {
@@ -2655,7 +2680,7 @@ export function FileUploadCore({
                       (row) =>
                         row.filepath &&
                         row.filepath.toLowerCase() ===
-                          file.webkitRelativePath.toLowerCase()
+                        file.webkitRelativePath.toLowerCase()
                     )
                   ).length;
                   const percent = Math.round((matched / total) * 100);

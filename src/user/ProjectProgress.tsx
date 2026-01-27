@@ -1,13 +1,14 @@
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { UserContext, GlobalContext } from '../Context';
 import { GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
 import { Spinner, ProgressBar } from 'react-bootstrap';
 
 type ProjectProgressProps = {
   projectId: string;
+  onScanningChange?: (isScanning: boolean) => void;
 };
 
-export default function ProjectProgress({ projectId }: ProjectProgressProps) {
+export default function ProjectProgress({ projectId, onScanningChange }: ProjectProgressProps) {
   const { client } = useContext(GlobalContext)!;
   const { getSqsClient } = useContext(UserContext)!;
   const [isLoading, setIsLoading] = useState(true);
@@ -15,9 +16,14 @@ export default function ProjectProgress({ projectId }: ProjectProgressProps) {
     url: string;
     batchSize: number;
     totalBatches: number;
+    launchedCount: number | null;
+    observedCount: number | null;
+    requeuesCompleted: number | null;
+    emptyQueueTimestamp: string | null;
   } | null>(null);
   const [jobsRemaining, setJobsRemaining] = useState<number>(0);
   const [registering, setRegistering] = useState<boolean>(false);
+  const prevScanningRef = useRef<boolean>(false);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -33,6 +39,10 @@ export default function ProjectProgress({ projectId }: ProjectProgressProps) {
               'queues.url',
               'queues.batchSize',
               'queues.totalBatches',
+              'queues.launchedCount',
+              'queues.observedCount',
+              'queues.requeuesCompleted',
+              'queues.emptyQueueTimestamp',
               'annotationSets.register',
             ],
           }
@@ -55,7 +65,11 @@ export default function ProjectProgress({ projectId }: ProjectProgressProps) {
       const url = q.url || '';
       const batchSize = q.batchSize || 0;
       const totalBatches = q.totalBatches || 0;
-      setQueueInfo({ url, batchSize, totalBatches });
+      const launchedCount = q.launchedCount ?? null;
+      const observedCount = q.observedCount ?? null;
+      const requeuesCompleted = q.requeuesCompleted ?? null;
+      const emptyQueueTimestamp = q.emptyQueueTimestamp ?? null;
+      setQueueInfo({ url, batchSize, totalBatches, launchedCount, observedCount, requeuesCompleted, emptyQueueTimestamp });
       setIsLoading(false);
 
       async function updateJobsRemaining() {
@@ -84,6 +98,23 @@ export default function ProjectProgress({ projectId }: ProjectProgressProps) {
     };
   }, [projectId, client, getSqsClient]);
 
+  const isScanning = jobsRemaining === 0
+    && queueInfo?.launchedCount != null
+    && queueInfo?.emptyQueueTimestamp != null
+    && (queueInfo.observedCount || 0) < queueInfo.launchedCount
+    && (queueInfo.requeuesCompleted || 0) < 3;
+
+  const isPolling = jobsRemaining === 0 && !isScanning;
+
+  const shouldDisable = isScanning || isPolling;
+
+  useEffect(() => {
+    if (shouldDisable !== prevScanningRef.current) {
+      prevScanningRef.current = shouldDisable;
+      onScanningChange?.(shouldDisable);
+    }
+  }, [shouldDisable, onScanningChange]);
+
   if (registering) {
     return <p className='mb-0 w-100'>Registering</p>;
   }
@@ -95,6 +126,36 @@ export default function ProjectProgress({ projectId }: ProjectProgressProps) {
   const { batchSize, totalBatches } = queueInfo;
   if (batchSize > 0) {
     const batchesRemaining = Math.ceil(jobsRemaining / batchSize);
+    if (isScanning) {
+      return (
+        <div className='d-flex flex-column w-100'>
+          <div className='d-flex align-items-center gap-2 mb-0'>
+            <Spinner animation='border' size='sm' />
+            <span>Scanning for missed locations...</span>
+          </div>
+          <ProgressBar
+            now={totalBatches - batchesRemaining}
+            max={totalBatches}
+            className='w-100'
+          />
+        </div>
+      );
+    }
+    if (isPolling) {
+      return (
+        <div className='d-flex flex-column w-100'>
+          <div className='d-flex align-items-center gap-2 mb-0'>
+            <Spinner animation='border' size='sm' />
+            <span>Polling for work...</span>
+          </div>
+          <ProgressBar
+            now={totalBatches}
+            max={totalBatches}
+            className='w-100'
+          />
+        </div>
+      );
+    }
     return (
       <div className='d-flex flex-column w-100'>
         <p className='mb-0'>{batchesRemaining} batches remaining</p>
@@ -107,6 +168,22 @@ export default function ProjectProgress({ projectId }: ProjectProgressProps) {
       </div>
     );
   } else {
+    if (isScanning) {
+      return (
+        <div className='d-flex align-items-center gap-2 mb-0'>
+          <Spinner animation='border' size='sm' />
+          <span>Scanning for missed locations...</span>
+        </div>
+      );
+    }
+    if (isPolling) {
+      return (
+        <div className='d-flex align-items-center gap-2 mb-0'>
+          <Spinner animation='border' size='sm' />
+          <span>Polling for work...</span>
+        </div>
+      );
+    }
     return <p className='mb-0'>Jobs remaining: {jobsRemaining}</p>;
   }
 }

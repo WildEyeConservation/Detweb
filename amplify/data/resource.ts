@@ -22,6 +22,7 @@ import { requeueProjectQueues } from '../functions/requeueProjectQueues/resource
 import { monitorScoutbotDlq } from '../functions/monitorScoutbotDlq/resource';
 import { processTilingBatch } from '../functions/processTilingBatch/resource';
 import { monitorTilingTasks } from '../functions/monitorTilingTasks/resource';
+import { findAndRequeueMissingLocations } from '../functions/findAndRequeueMissingLocations/resource';
 // import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
@@ -297,6 +298,7 @@ const schema = a
         annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
         source: a.string(),
         createdAt: a.string().required(),
+        queueId: a.id(), // Queue ID for requeue detection (observedCount tracking)
       })
       .authorization((allow) => [allow.authenticated(), allow.owner()])
       .secondaryIndexes((index) => [
@@ -423,6 +425,22 @@ const schema = a
         tag: a.string(),
         requeueAt: a.string(),
         updatedAt: a.string(),
+
+        // Track what was launched (for requeue detection)
+        annotationSetId: a.id(),
+        locationSetId: a.id(),
+        confidenceThreshold: a.float(),    // Lower confidence threshold (keep in mind for when users are queuing under upper threshold of 1)
+
+        // Progress tracking
+        launchedCount: a.integer(),
+        observedCount: a.integer().default(0),
+
+        // S3 manifest for efficient lookup
+        locationManifestS3Key: a.string(),
+
+        // Empty detection and requeue tracking
+        emptyQueueTimestamp: a.string(),
+        requeuesCompleted: a.integer().default(0),
       })
       .authorization((allow) => [allow.authenticated()])
       //.authorization(allow => [allow.groupDefinedIn('projectId')])
@@ -1023,6 +1041,7 @@ const schema = a
     allow.resource(monitorScoutbotDlq),
     allow.resource(processTilingBatch),
     allow.resource(monitorTilingTasks),
+    allow.resource(findAndRequeueMissingLocations),
     // allow.resource(consolidateUserStats),
   ]);
 

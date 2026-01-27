@@ -37,6 +37,7 @@ export default function AnnotationImage(props: any) {
     isTest,
     config,
     hideZoomSetting = false,
+    queueId,
   } = props;
 
   const { annotationSetId } = location;
@@ -178,7 +179,7 @@ export default function AnnotationImage(props: any) {
     async (nextToken) =>
       client.models.Annotation.annotationsByImageIdAndSetId(
         { imageId: location.image.id, setId: { eq: location.annotationSetId } },
-        { nextToken }
+        { limit: 1000, nextToken }
       ) as any,
     subscriptionFilter
   );
@@ -346,6 +347,7 @@ export default function AnnotationImage(props: any) {
             isTest={isTest}
             testSetId={testSetId}
             config={config}
+            queueId={queueId}
             observationSource={source}
           >
             {visible && memoizedChildren}

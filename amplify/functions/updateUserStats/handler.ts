@@ -6,8 +6,8 @@ import { generateClient } from "aws-amplify/data";
 import { Handler } from "aws-lambda";
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3'
-import { getUserStats } from './graphql/queries'
-import { updateUserStats, createUserStats} from './graphql/mutations'
+import { getUserStats, getQueue } from './graphql/queries'
+import { updateUserStats, createUserStats, updateQueue } from './graphql/mutations'
 
 Amplify.configure(
     {
@@ -62,6 +62,7 @@ interface StatsEntry {
 }
 
 let stats: Record<string, StatsEntry> = {};
+let queueCounts: Record<string, number> = {}; // queueId → observation count delta
 
 function accumulateStats(input: any): boolean {
     try {
@@ -126,6 +127,13 @@ function accumulateStats(input: any): boolean {
         stats[key].searchCount += (1 - sighting);
         stats[key].annotationTime += sighting * timeTaken;
         stats[key].waitingTime += Math.max(waitingTime, 0);
+
+        // Track queue observation counts for requeue detection
+        const queueId = input.queueId?.S;
+        if (queueId) {
+            queueCounts[queueId] = (queueCounts[queueId] || 0) + 1;
+        }
+
         logger.info(`Accumulated stats for ${key}`);
         return true;
     } catch (error) {
@@ -252,8 +260,48 @@ async function updateStats() {
     logger.info(`Successfully updated ${successful} stat entries`);
 }
 
+async function updateQueueObservedCounts() {
+    const entries = Object.entries(queueCounts);
+    if (entries.length === 0) return;
+
+    logger.info(`Updating observedCount for ${entries.length} queues`);
+
+    for (const [queueId, delta] of entries) {
+        try {
+            const result = await client.graphql({
+                query: getQueue,
+                variables: { id: queueId }
+            });
+
+            const queue = result.data?.getQueue;
+            if (!queue) {
+                logger.warn(`Queue ${queueId} not found, skipping observedCount update`);
+                continue;
+            }
+
+            const newCount = (queue.observedCount || 0) + delta;
+            await client.graphql({
+                query: updateQueue,
+                variables: {
+                    input: {
+                        id: queueId,
+                        observedCount: newCount,
+                    }
+                }
+            });
+            logger.info(`Updated queue ${queueId} observedCount: ${queue.observedCount || 0} -> ${newCount} (+${delta})`);
+        } catch (error) {
+            logger.error(`Failed to update observedCount for queue ${queueId}`, {
+                error: error instanceof Error ? error.message : String(error),
+                delta
+            });
+        }
+    }
+}
+
 export const handler: DynamoDBStreamHandler = async (event) => {
-    stats = {}
+    stats = {};
+    queueCounts = {};
     try {
         logger.info(`Processing ${event.Records.length} records`);
         
@@ -282,7 +330,8 @@ export const handler: DynamoDBStreamHandler = async (event) => {
         }
 
         logger.info(`Processed ${processedCount} records, skipped ${skippedCount} records`);
-        await updateStats()
+        await updateStats();
+        await updateQueueObservedCounts();
         return {
             batchItemFailures: [],
         };

@@ -190,6 +190,8 @@ type LaunchLambdaPayload = {
   tiledRequest?: TiledLaunchRequest | null;
   /** S3 key where the full payload is stored (for large payloads). */
   payloadS3Key?: string;
+  locationManifestS3Key?: string | null;
+  launchedCount?: number | null;
   /** If true, delete false negative annotations/observations before launching */
   hasFN?: boolean;
 };
@@ -318,13 +320,25 @@ async function handleLaunch(payload: LaunchLambdaPayload) {
     secondary: payload.secondaryQueueOptions?.name ?? null,
     totalLocations: locationIds.length,
   });
-  const mainQueue = await createQueue(payload.queueOptions, payload);
+
+  // Determine locationSetId from the first locationSetId provided (if any)
+  const locationSetId = payload.locationSetIds?.[0];
+
+  const mainQueue = await createQueue(
+    payload.queueOptions,
+    payload,
+    locationIds,
+    locationSetId,
+    payload.locationManifestS3Key,
+    payload.launchedCount
+  );
   const secondaryQueue = payload.secondaryQueueOptions
-    ? await createQueue(payload.secondaryQueueOptions, payload)
+    ? await createQueue(payload.secondaryQueueOptions, payload, [], locationSetId, null, 0)
     : null;
 
   await enqueueLocations(
     mainQueue.url,
+    mainQueue.id,
     locationIds,
     payload,
     secondaryQueue?.url ?? null
@@ -581,13 +595,13 @@ function generateTiledLocations(
       for (let yStep = 0; yStep < verticalTilesForImage; yStep++) {
         const x = Math.round(
           roiMinXForImage +
-            (horizontalTilesForImage > 1 ? xStep * xStepSize : 0) +
-            tileWidthForImage / 2
+          (horizontalTilesForImage > 1 ? xStep * xStepSize : 0) +
+          tileWidthForImage / 2
         );
         const y = Math.round(
           roiMinYForImage +
-            (verticalTilesForImage > 1 ? yStep * yStepSize : 0) +
-            tileHeightForImage / 2
+          (verticalTilesForImage > 1 ? yStep * yStepSize : 0) +
+          tileHeightForImage / 2
         );
 
         locations.push({
@@ -809,7 +823,11 @@ async function deletePayloadFromS3(key: string): Promise<void> {
 // Create an SQS queue plus the matching AppSync metadata row.
 async function createQueue(
   queueOptions: LaunchQueueOptions,
-  payload: LaunchLambdaPayload
+  payload: LaunchLambdaPayload,
+  locationIds: string[],
+  locationSetId?: string,
+  locationManifestS3Key?: string | null,
+  launchedCount?: number | null
 ): Promise<QueueRecord> {
   const queueNameSeed = `${queueOptions.name}-${randomUUID()}`;
   const safeBaseName = makeSafeQueueName(queueNameSeed);
@@ -830,12 +848,24 @@ async function createQueue(
     throw new Error('Unable to determine created queue URL');
   }
 
+  // Generate a unique ID for the queue record before creating it
+  const queueId = randomUUID();
+
+  // Use manifest provided by client if available
+  const manifestKey = locationManifestS3Key || null;
+  const finalLaunchedCount = launchedCount ?? locationIds.length;
+
+  if (manifestKey) {
+    console.log('Using provided location manifest', { manifestKey, locationCount: finalLaunchedCount });
+  }
+
   const timestamp = new Date().toISOString();
 
   const queueData = await executeGraphql<{
     createQueue?: { id: string };
   }>(createQueueMutation, {
     input: {
+      id: queueId,
       url: queueUrl,
       name: queueOptions.name,
       projectId: payload.projectId,
@@ -846,6 +876,13 @@ async function createQueue(
       approximateSize: 1,
       updatedAt: timestamp,
       requeueAt: timestamp,
+      // New fields for requeue detection
+      annotationSetId: payload.annotationSetId,
+      locationSetId: locationSetId,
+      launchedCount: finalLaunchedCount,
+      observedCount: 0,
+      locationManifestS3Key: manifestKey,
+      requeuesCompleted: 0,
     },
   });
 
@@ -860,9 +897,12 @@ async function createQueue(
   };
 }
 
+// writeLocationManifest removed - now handled by client or tiling task monitor
+
 // Batch SQS writes so we stay within SDK limits.
 async function enqueueLocations(
   queueUrl: string,
+  queueId: string,
   locationIds: string[],
   payload: LaunchLambdaPayload,
   secondaryQueueUrl: string | null
@@ -874,6 +914,7 @@ async function enqueueLocations(
   const tasks: Array<Promise<void>> = [];
   console.log('Dispatching SQS batches', {
     queueUrl,
+    queueId,
     batches: Math.ceil(locationIds.length / batchSize),
   });
 
@@ -885,6 +926,7 @@ async function enqueueLocations(
           id: locationId,
           annotationSetId: payload.annotationSetId,
         },
+        queueId, // Include queueId for observation counter increment
         allowOutside: payload.allowOutside,
         taskTag: payload.taskTag,
         secondaryQueueUrl,

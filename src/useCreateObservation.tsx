@@ -19,6 +19,7 @@ interface UseCreateObservationProps {
   config?: Schema['ProjectTestConfig']['type'];
   testPresetId?: string;
   testSetId?: string;
+  queueId?: string; // Queue ID for incrementing observed count
   /** Optional source tag for the observation (e.g., 'manual-false-negative') */
   observationSource?: string;
 }
@@ -37,6 +38,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     config: _config,
     testPresetId,
     testSetId,
+    queueId,
     observationSource,
   } = props;
   const annotationSetToUse = isTest && testSetId ? testSetId : annotationSetId;
@@ -262,8 +264,10 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
           : 0,
         locationId: id,
         projectId: project.id,
+        queueId: queueId || undefined, // Track which queue this observation belongs to
         source: observationSource,
       });
+
       setAcked(true);
     }
 
@@ -282,6 +286,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     annoCount,
     isTest,
     testSetId,
+    queueId,
     observationSource,
   ]);
 
@@ -302,6 +307,7 @@ export function withCreateObservation<T extends CombinedProps>(
   WrappedComponent: React.ComponentType<T>
 ) {
   const WithCreateObservation: React.FC<T> = (props) => {
+    const { location, ack, isTest, config, testPresetId, testSetId, queueId } = props;
     const { location, ack, isTest, config, testPresetId, testSetId, observationSource } = props;
     const newAck = location.id
       ? useCreateObservation({
@@ -311,6 +317,7 @@ export function withCreateObservation<T extends CombinedProps>(
           config,
           testPresetId,
           testSetId,
+          queueId, // Pass queueId for observation counter increment
           observationSource,
         })
       : ack;

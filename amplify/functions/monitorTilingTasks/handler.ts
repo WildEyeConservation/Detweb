@@ -13,6 +13,7 @@ import {
   S3Client,
   GetObjectCommand,
   DeleteObjectCommand,
+  PutObjectCommand,
 } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
 import pLimit from 'p-limit';
@@ -237,13 +238,14 @@ async function processTask(task: TilingTaskRecord) {
       return;
     }
 
-    // Download and merge all location IDs from batch outputs
-    console.log('Merging location IDs for queue launch', { taskId: task.id });
-    const allLocationIds = await mergeLocationIds(completedBatches);
-    console.log('Merged location IDs', {
+    // Download and merge all locations from batch outputs
+    const allLocations = await mergeLocations(completedBatches);
+    console.log('Merged locations', {
       taskId: task.id,
-      totalLocations: allLocationIds.length,
+      totalLocations: allLocations.length,
     });
+
+    const allLocationIds = allLocations.map(l => l.locationId);
 
     // Parse launch config
     const launchConfig = JSON.parse(task.launchConfig) as LaunchConfig;
@@ -268,13 +270,28 @@ async function processTask(task: TilingTaskRecord) {
     }
 
     // Create queue and enqueue locations
-    const mainQueue = await createQueue(launchConfig.queueOptions, task.projectId, launchConfig);
+    const mainQueue = await createQueue(
+      launchConfig.queueOptions,
+      task.projectId,
+      launchConfig,
+      task.annotationSetId,
+      task.locationSetId,
+      allLocations
+    );
     const secondaryQueue = launchConfig.secondaryQueueOptions
-      ? await createQueue(launchConfig.secondaryQueueOptions, task.projectId, launchConfig)
+      ? await createQueue(
+        launchConfig.secondaryQueueOptions,
+        task.projectId,
+        launchConfig,
+        task.annotationSetId,
+        task.locationSetId,
+        [] // Secondary queue doesn't track locations
+      )
       : null;
 
     await enqueueLocations(
       mainQueue.url,
+      mainQueue.id,
       finalLocationIds,
       task.annotationSetId,
       launchConfig,
@@ -407,13 +424,13 @@ async function fetchBatchesForTask(taskId: string): Promise<TilingBatchRecord[]>
   return batches;
 }
 
-async function mergeLocationIds(batches: TilingBatchRecord[]): Promise<string[]> {
+async function mergeLocations(batches: TilingBatchRecord[]): Promise<any[]> {
   const bucketName = env.OUTPUTS_BUCKET_NAME;
   if (!bucketName) {
     throw new Error('OUTPUTS_BUCKET_NAME environment variable not set');
   }
 
-  const allIds: string[] = [];
+  const allLocations: any[] = [];
   const limit = pLimit(10);
 
   const downloadTasks = batches.map((batch) =>
@@ -436,16 +453,16 @@ async function mergeLocationIds(batches: TilingBatchRecord[]): Promise<string[]>
         return [];
       }
 
-      return JSON.parse(bodyStr) as string[];
+      return JSON.parse(bodyStr) as any[];
     })
   );
 
   const results = await Promise.all(downloadTasks);
-  for (const ids of results) {
-    allIds.push(...ids);
+  for (const locations of results) {
+    allLocations.push(...locations);
   }
 
-  return allIds;
+  return allLocations;
 }
 
 async function cleanupBatchOutputs(batches: TilingBatchRecord[]): Promise<void> {
@@ -475,7 +492,10 @@ async function cleanupBatchOutputs(batches: TilingBatchRecord[]): Promise<void> 
 async function createQueue(
   queueOptions: { name: string; hidden: boolean; fifo: boolean },
   projectId: string,
-  launchConfig: LaunchConfig
+  launchConfig: LaunchConfig,
+  annotationSetId: string,
+  locationSetId: string,
+  locations: any[]
 ): Promise<QueueRecord> {
   const queueNameSeed = `${queueOptions.name}-${randomUUID()}`;
   const safeBaseName = makeSafeQueueName(queueNameSeed);
@@ -496,12 +516,21 @@ async function createQueue(
     throw new Error('Unable to determine created queue URL');
   }
 
+  // Generate a unique ID for the queue record before creating it
+  const queueId = randomUUID();
+
+  // Write S3 manifest with all location info for requeue detection
+  const manifestKey = `queue-manifests/${queueId}.json`;
+  await writeLocationManifest(manifestKey, locations);
+  console.log('Wrote location manifest to S3', { manifestKey, locationCount: locations.length });
+
   const timestamp = new Date().toISOString();
 
   const queueData = await executeGraphql<{
     createQueue?: { id: string };
   }>(createQueueMutation, {
     input: {
+      id: queueId,
       url: queueUrl,
       name: queueOptions.name,
       projectId,
@@ -512,6 +541,13 @@ async function createQueue(
       approximateSize: 1,
       updatedAt: timestamp,
       requeueAt: timestamp,
+      // New fields for requeue detection
+      annotationSetId,
+      locationSetId,
+      launchedCount: locations.length,
+      observedCount: 0,
+      locationManifestS3Key: manifestKey,
+      requeuesCompleted: 0,
     },
   });
 
@@ -526,8 +562,26 @@ async function createQueue(
   };
 }
 
+// Write location info to S3 manifest for requeue detection
+async function writeLocationManifest(key: string, locations: any[]): Promise<void> {
+  const bucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!bucketName) {
+    throw new Error('OUTPUTS_BUCKET_NAME environment variable not set');
+  }
+
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+      Body: JSON.stringify({ items: locations }),
+      ContentType: 'application/json',
+    })
+  );
+}
+
 async function enqueueLocations(
   queueUrl: string,
+  queueId: string,
   locationIds: string[],
   annotationSetId: string,
   launchConfig: LaunchConfig,
@@ -541,6 +595,7 @@ async function enqueueLocations(
 
   console.log('Dispatching SQS batches', {
     queueUrl,
+    queueId,
     batches: Math.ceil(locationIds.length / batchSize),
   });
 
@@ -552,6 +607,7 @@ async function enqueueLocations(
           id: locationId,
           annotationSetId,
         },
+        queueId, // Include queueId for observation counter increment
         allowOutside: launchConfig.allowOutside,
         taskTag: launchConfig.taskTag,
         secondaryQueueUrl,
