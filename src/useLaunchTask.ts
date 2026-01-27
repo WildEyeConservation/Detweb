@@ -28,6 +28,9 @@ export type LaunchTaskArgs = {
   queueOptions: LaunchQueueOptions;
   secondaryQueueOptions?: LaunchQueueOptions;
   tiledRequest?: TiledLaunchRequest | null;
+  /** If true, delete false negative annotations/observations before launching */
+  hasFN?: boolean;
+  onLaunchConfirmed?: () => void;
 };
 
 type LaunchLambdaPayload = {
@@ -43,6 +46,8 @@ type LaunchLambdaPayload = {
   locationIds?: string[];
   locationSetIds?: string[];
   tiledRequest?: TiledLaunchRequest | null;
+  /** If true, delete false negative annotations/observations before launching */
+  hasFN?: boolean;
 };
 
 export function useLaunchTask(
@@ -254,6 +259,8 @@ export function useLaunchTask(
       queueOptions,
       secondaryQueueOptions,
       tiledRequest,
+      hasFN,
+      onLaunchConfirmed,
     }: LaunchTaskArgs) => {
       onProgress?.('Preparing launch request');
       let collectedLocations: string[] | undefined;
@@ -319,19 +326,22 @@ export function useLaunchTask(
         collectedLocations = allLocationIds;
       }
 
+      onLaunchConfirmed?.();
+
       const payload: LaunchLambdaPayload = {
         projectId: options.projectId,
-            annotationSetId: options.annotationSetId,
+        annotationSetId: options.annotationSetId,
         queueOptions,
         secondaryQueueOptions: secondaryQueueOptions ?? null,
-            allowOutside: options.allowOutside,
+        allowOutside: options.allowOutside,
         skipLocationWithAnnotations: options.skipLocationWithAnnotations,
-            taskTag: options.taskTag,
+        taskTag: options.taskTag,
         batchSize: options.batchSize,
         zoom: options.zoom ?? null,
         locationIds: collectedLocations,
         locationSetIds: selectedTasks,
         tiledRequest: tiledRequest ?? null,
+        hasFN: hasFN ?? false,
       };
 
       onProgress?.('Enqueuing jobs...');

@@ -19,6 +19,8 @@ interface UseCreateObservationProps {
   config?: Schema['ProjectTestConfig']['type'];
   testPresetId?: string;
   testSetId?: string;
+  /** Optional source tag for the observation (e.g., 'manual-false-negative') */
+  observationSource?: string;
 }
 
 // Time limits in milliseconds (matching server-side validation)
@@ -35,6 +37,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     config: _config,
     testPresetId,
     testSetId,
+    observationSource,
   } = props;
   const annotationSetToUse = isTest && testSetId ? testSetId : annotationSetId;
   const {
@@ -235,18 +238,18 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     if (!acked && location && annotationSetId && project) {
       // Calculate time taken
       let timeTaken = submittedTimestamp ? submittedTimestamp - visibleTimestamp : 0;
-      
+
       // Apply client-side time validation (matching server-side logic)
       const hasSighting = annoCount > 0;
       const maxTime = hasSighting ? MAX_TIME_WITH_ANNOTATIONS : MAX_TIME_WITHOUT_ANNOTATIONS;
-      
+
       if (timeTaken > maxTime) {
         console.warn(
           `Time taken (${timeTaken}ms) exceeds maximum (${maxTime}ms) for ${hasSighting ? 'sighting' : 'search'}. Setting to 0.`
         );
         timeTaken = 0;
       }
-      
+
       client.models.Observation.create({
         annotationSetId: annotationSetToUse,
         annotationCount: annoCount,
@@ -259,6 +262,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
           : 0,
         locationId: id,
         projectId: project.id,
+        source: observationSource,
       });
       setAcked(true);
     }
@@ -278,12 +282,14 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     annoCount,
     isTest,
     testSetId,
+    observationSource,
   ]);
 
   return newAck;
 }
 
 export interface WithCreateObservationProps extends UseCreateObservationProps {
+  observationSource?: string;
   [key: string]: any;
 }
 
@@ -296,7 +302,7 @@ export function withCreateObservation<T extends CombinedProps>(
   WrappedComponent: React.ComponentType<T>
 ) {
   const WithCreateObservation: React.FC<T> = (props) => {
-    const { location, ack, isTest, config, testPresetId, testSetId } = props;
+    const { location, ack, isTest, config, testPresetId, testSetId, observationSource } = props;
     const newAck = location.id
       ? useCreateObservation({
           location,
@@ -305,6 +311,7 @@ export function withCreateObservation<T extends CombinedProps>(
           config,
           testPresetId,
           testSetId,
+          observationSource,
         })
       : ack;
     return (

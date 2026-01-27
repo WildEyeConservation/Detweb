@@ -66,6 +66,8 @@ const schema = a
         cameraOverlaps: a.hasMany('CameraOverlap', 'projectId'),
         shapefileExclusions: a.hasMany('ShapefileExclusions', 'projectId'),
         adminActionLogs: a.hasMany('AdminActionLog', 'projectId'),
+        // Global tiled location set ID for the project (no belongsTo to avoid bidirectional requirement)
+        tiledLocationSetId: a.id(),
       })
       .authorization((allow) => [allow.authenticated()]),
     // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
@@ -293,6 +295,7 @@ const schema = a
         location: a.belongsTo('Location', 'locationId'),
         annotationSetId: a.id().required(),
         annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
+        source: a.string(),
         createdAt: a.string().required(),
       })
       .authorization((allow) => [allow.authenticated(), allow.owner()])
@@ -1036,13 +1039,26 @@ type MutationHandler<Args, Result = unknown> = (
   context: LambdaContext
 ) => Promise<Result>;
 
-export type AddUserToGroupHandler = MutationHandler<{ userId: string; groupName: string }>;
-export type RemoveUserFromGroupHandler = MutationHandler<{ userId: string; groupName: string }>;
+export type AddUserToGroupHandler = MutationHandler<{
+  userId: string;
+  groupName: string;
+}>;
+export type RemoveUserFromGroupHandler = MutationHandler<{
+  userId: string;
+  groupName: string;
+}>;
 export type CreateGroupHandler = MutationHandler<{ groupName: string }>;
 export type ListUsersHandler = MutationHandler<{ nextToken?: string | null }>;
-export type ListGroupsForUserHandler = MutationHandler<{ userId: string; nextToken?: string | null }>;
+export type ListGroupsForUserHandler = MutationHandler<{
+  userId: string;
+  nextToken?: string | null;
+}>;
 export type DeleteProjectInFullHandler = MutationHandler<{ projectId: string }>;
-export type GenerateSurveyResultsHandler = MutationHandler<{ surveyId: string; annotationSetId: string; categoryIds: string[] }>;
+export type GenerateSurveyResultsHandler = MutationHandler<{
+  surveyId: string;
+  annotationSetId: string;
+  categoryIds: string[];
+}>;
 export type LaunchAnnotationSetHandler = MutationHandler<{ request: string }>;
 export type LaunchFalseNegativesHandler = MutationHandler<{ request: string }>;
 export const data = defineData({

@@ -34,6 +34,7 @@ const STORAGE_KEYS = {
   ORGANIZATION_FILTER: 'surveysOrganizationFilter',
   SORT_BY: 'surveysSortBy',
   COMPACT_MODE: 'surveysCompactMode',
+  SEARCH: 'surveysSearch',
 };
 
 export default function Surveys() {
@@ -55,8 +56,20 @@ export default function Surveys() {
   const [selectedAnnotationSet, setSelectedAnnotationSet] = useState<
     Schema['AnnotationSet']['type'] | null
   >(null);
-  const [search, setSearch] = useState('');
   const [selectedSets, setSelectedSets] = useState<string[]>([]);
+  
+  // Initialize search from localStorage or use default
+  const getInitialSearch = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEYS.SEARCH);
+      if (stored !== null) {
+        return stored;
+      }
+    }
+    return '';
+  };
+  
+  const [search, setSearch] = useState(getInitialSearch);
   const [hasUploadedFiles, setHasUploadedFiles] = useState<{
     [projectId: string]: boolean;
   }>({});
@@ -148,6 +161,13 @@ export default function Surveys() {
     }
   }, [compactMode]);
 
+  // Persist search to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.SEARCH, search);
+    }
+  }, [search]);
+
   useEffect(() => {
     async function getProjects() {
       const myAdminProjects = myProjectsHook.data?.filter(
@@ -185,6 +205,7 @@ export default function Surveys() {
                     'updatedAt',
                     'createdAt',
                     'imageSets.imageCount',
+                    'tiledLocationSetId',
                   ],
                 }
               )

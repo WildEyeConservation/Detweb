@@ -1,25 +1,17 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
-import { Form, Spinner } from 'react-bootstrap';
-import Select, { SingleValue } from 'react-select';
+import { Alert, Form, Spinner } from 'react-bootstrap';
 import { QueryCommand } from '@aws-sdk/client-dynamodb';
 import { uploadData } from 'aws-amplify/storage';
 import { Schema } from '../amplify/client-schema';
 import { GlobalContext, UserContext } from '../Context';
-import CreateTask from '../CreateTask';
-import LabeledToggleSwitch from '../LabeledToggleSwitch';
-import type { TiledLaunchRequest } from '../types/LaunchTask';
 import { DataClient } from '../../amplify/shared/data-schema.generated';
 import { logAdminAction } from '../utils/adminActionLogger';
 
-type LaunchHandler = (onProgress: (msg: string) => void) => Promise<void>;
-
-type Option = { label: string; value: string };
-
-type TiledOption = {
-  label: string;
-  value: string;
-  locationCount?: number;
-  tilesPerImage?: number;
+type LaunchHandler = {
+  execute: (
+    onProgress: (msg: string) => void,
+    onLaunchConfirmed: () => void
+  ) => Promise<void>;
 };
 
 type MinimalTile = {
@@ -49,19 +41,19 @@ export default function FalseNegatives({
   const { client, backend } = useContext(GlobalContext)!;
   const { getDynamoClient, user } = useContext(UserContext)!;
 
-  // Tile set selection/creation
-  const [useExistingTiled, setUseExistingTiled] = useState<boolean>(false);
-  const [tiledSetOptions, setTiledSetOptions] = useState<TiledOption[]>([]);
-  const [selectedTiledSetId, setSelectedTiledSetId] = useState<string>('');
-  const [handleCreateTask, setHandleCreateTask] = useState<
-    (() => Promise<TiledLaunchRequest>) | null
-  >(null);
+  // Global tiled location set from project
+  const tiledLocationSetId = (project as any).tiledLocationSetId as
+    | string
+    | undefined;
 
   // Queue tag
-  const [loadingModels, setLoadingModels] = useState<boolean>(false);
   const [queueTag, setQueueTag] = useState<string>(
     `${annotationSet.name} - False Negatives`
   );
+
+  // Tile count state
+  const [globalTileCount, setGlobalTileCount] = useState<number | null>(null);
+  const [loadingTileCount, setLoadingTileCount] = useState<boolean>(true);
 
   // Sampling
   const [samplePercent, setSamplePercent] = useState<number>(5);
@@ -75,108 +67,57 @@ export default function FalseNegatives({
     number | null
   >(null);
 
-  // Load all tiled location sets for the project
+  // Load global tile count
   useEffect(() => {
-    let cancelled = false;
-    async function loadTiledSets() {
-      setLoadingModels(true);
-      const resp1 = await client.models.LocationSet.locationSetsByProjectId(
-        { projectId: project.id },
-        {
-          selectionSet: ['id', 'name', 'description', 'locationCount'] as const,
-        }
-      );
-      const data = resp1.data as Array<{
-        id: string;
-        name: string;
-        description?: string | null;
-        locationCount?: number | null;
-      }>;
-
-      // Restrict tiled sets to those mapped to the current annotation set
-      const resp2 =
-        await client.models.TasksOnAnnotationSet.locationSetsByAnnotationSetId({
-          annotationSetId: annotationSet.id,
-        });
-      const taskMappings = resp2.data as Array<{ locationSetId: string }>;
-      const allowedTiledSetIds = new Set(
-        (taskMappings || []).map((m) => m.locationSetId)
-      );
-
-      const options: TiledOption[] = [];
-      for (const ls of data || []) {
-        const descRaw = ls.description as string | undefined;
-        if (!descRaw) continue;
-        try {
-          const desc = JSON.parse(descRaw);
-          if (desc && desc.mode === 'tiled' && allowedTiledSetIds.has(ls.id)) {
-            const parts: string[] = [];
-            if (ls.name) parts.push(ls.name);
-            if (
-              typeof desc.horizontalTiles === 'number' &&
-              typeof desc.verticalTiles === 'number'
-            ) {
-              parts.push(`${desc.horizontalTiles}x${desc.verticalTiles}`);
-            }
-            if (
-              typeof desc.width === 'number' &&
-              typeof desc.height === 'number'
-            ) {
-              parts.push(`${desc.width}x${desc.height}px`);
-            }
-            const horizontal = Number(desc.horizontalTiles ?? 0);
-            const vertical = Number(desc.verticalTiles ?? 0);
-            options.push({
-              label: parts.join(' • '),
-              value: ls.id,
-              locationCount:
-                typeof ls.locationCount === 'number'
-                  ? ls.locationCount
-                  : undefined,
-              tilesPerImage:
-                horizontal > 0 && vertical > 0
-                  ? horizontal * vertical
-                  : undefined,
-            });
-          }
-        } catch {}
+    let mounted = true;
+    async function loadTileCount() {
+      if (!tiledLocationSetId) {
+        setGlobalTileCount(0);
+        setLoadingTileCount(false);
+        return;
       }
-      if (!cancelled)
-        setTiledSetOptions(
-          options.sort((a, b) => (a.label > b.label ? 1 : -1))
+      setLoadingTileCount(true);
+      try {
+        const { data } = await client.models.LocationSet.get(
+          { id: tiledLocationSetId },
+          { selectionSet: ['locationCount'] }
         );
-      if (!cancelled) setLoadingModels(false);
+        if (mounted) {
+          setGlobalTileCount(data?.locationCount ?? 0);
+        }
+      } catch (err) {
+        console.error('Failed to load tile count', err);
+        if (mounted) {
+          setGlobalTileCount(0);
+        }
+      }
+      if (mounted) {
+        setLoadingTileCount(false);
+      }
     }
-    loadTiledSets();
+    loadTileCount();
     return () => {
-      cancelled = true;
+      mounted = false;
     };
-  }, [
-    client.models.LocationSet,
-    client.models.TasksOnAnnotationSet,
-    project.id,
-    annotationSet.id,
-  ]);
+  }, [client.models.LocationSet, tiledLocationSetId]);
 
-  // Enable/disable Launch button
+  // Enable/disable Launch button based on global tiles availability
   useEffect(() => {
     const shouldDisable =
       launching ||
-      loadingModels ||
-      (useExistingTiled
-        ? !selectedTiledSetId
-        : typeof handleCreateTask !== 'function');
+      loadingTileCount ||
+      !tiledLocationSetId ||
+      (globalTileCount !== null && globalTileCount === 0);
     setLaunchDisabled(shouldDisable);
   }, [
     launching,
-    loadingModels,
-    useExistingTiled,
-    selectedTiledSetId,
-    handleCreateTask,
+    loadingTileCount,
+    tiledLocationSetId,
+    globalTileCount,
     setLaunchDisabled,
   ]);
 
-  // Fetch locations from DynamoDB for existing tiled sets
+  // Fetch locations from DynamoDB for the global tiled set
   const fetchLocationsFromSet = useCallback(
     async (
       locationSetId: string,
@@ -233,26 +174,19 @@ export default function FalseNegatives({
   );
 
   const computeSummary = useCallback(async () => {
+    if (!tiledLocationSetId) return;
+
     setSummaryLoading(true);
     setSummaryMessage('Preparing tile data...');
     setCandidateTiles(null);
     setEstimatedSampleTiles(null);
     setExpectedTiles(null);
     try {
-      let tiles: MinimalTile[] = [];
-
-      if (useExistingTiled) {
-        if (!selectedTiledSetId) {
-          throw new Error('Select an existing tiled set');
-        }
-        setSummaryMessage('Fetching tiles...');
-        tiles = await fetchLocationsFromSet(selectedTiledSetId, setSummaryMessage);
-      } else {
-        if (typeof handleCreateTask !== 'function') return;
-        setSummaryMessage('Generating tiles...');
-        const request = await handleCreateTask();
-        tiles = generateTilesFromRequest(request);
-      }
+      setSummaryMessage('Fetching tiles...');
+      const tiles = await fetchLocationsFromSet(
+        tiledLocationSetId,
+        setSummaryMessage
+      );
 
       setExpectedTiles(tiles.length);
 
@@ -304,35 +238,30 @@ export default function FalseNegatives({
     annotationSet.id,
     client,
     fetchLocationsFromSet,
-    handleCreateTask,
     samplePercent,
-    selectedTiledSetId,
-    useExistingTiled,
+    tiledLocationSetId,
   ]);
 
   // Expose launch handler to parent
   useEffect(() => {
-    setFalseNegativesLaunchHandler(
-      () => async (onProgress: (msg: string) => void) => {
-        let locationSetId: string | undefined;
-        let tiledRequestPayload: TiledLaunchRequest | null = null;
-        let locationTiles: MinimalTile[] | undefined = undefined;
-
-        if (useExistingTiled) {
-          if (!selectedTiledSetId) return;
-          locationSetId = selectedTiledSetId;
-          onProgress('Fetching locations from existing set...');
-          locationTiles = await fetchLocationsFromSet(selectedTiledSetId, onProgress);
-          if (locationTiles.length === 0) {
-            alert('No locations found in selected tiled set');
-            return;
-          }
-          onProgress(`Found ${locationTiles.length} locations`);
-        } else {
-          if (typeof handleCreateTask !== 'function') return;
-          onProgress('Preparing tiling request...');
-          tiledRequestPayload = await handleCreateTask();
+    setFalseNegativesLaunchHandler({
+      execute: async (onProgress: (msg: string) => void, onLaunchConfirmed: () => void) => {
+        if (!tiledLocationSetId) {
+          onProgress('No tiles configured for this survey.');
+          return;
         }
+
+        onProgress('Fetching locations from global tile set...');
+        const locationTiles = await fetchLocationsFromSet(
+          tiledLocationSetId,
+          onProgress
+        );
+        if (locationTiles.length === 0) {
+          alert('No locations found in the global tiled set');
+          return;
+        }
+        onLaunchConfirmed();
+        onProgress(`Found ${locationTiles.length} locations`);
 
         const payload = {
           projectId: project.id,
@@ -344,26 +273,23 @@ export default function FalseNegatives({
           },
           queueTag,
           samplePercent,
-          locationSetId,
+          locationSetId: tiledLocationSetId,
           locationTiles,
-          tiledRequest: tiledRequestPayload,
           batchSize: 200,
         };
 
         onProgress('Enqueuing jobs...');
         await sendLaunchFalseNegativesRequest(client, payload);
         onProgress('Launch request submitted');
-        
-        // Log the launch action
-        const queueType = useExistingTiled ? 'existing tiled set' : 'new tiled annotation';
+
         await logAdminAction(
           client,
           user.userId,
-          `Launched False Negatives queue for annotation set "${annotationSet.name}" in project "${project.name}" (${queueType}, ${samplePercent}% sample)`,
+          `Launched False Negatives queue for annotation set "${annotationSet.name}" in project "${project.name}" ($${samplePercent}% sample)`,
           project.id
         ).catch(console.error);
       }
-    );
+    });
     return () => {
       setFalseNegativesLaunchHandler(null);
     };
@@ -372,260 +298,142 @@ export default function FalseNegatives({
     annotationSet.name,
     client,
     fetchLocationsFromSet,
-    handleCreateTask,
     project.id,
     project.name,
     queueTag,
     samplePercent,
-    selectedTiledSetId,
+    tiledLocationSetId,
     setFalseNegativesLaunchHandler,
-    useExistingTiled,
-    user.userId,
   ]);
 
-  // modelOptions now derived from actual location sets; when exactly one, it's auto-selected
+  // Show warning if no global tiles exist
+  const showNoTilesWarning =
+    !loadingTileCount && (!tiledLocationSetId || globalTileCount === 0);
 
   return (
     <div className='px-3 pb-3 pt-1'>
       <div className='d-flex flex-column gap-3 mt-2'>
-        <div
-          className='border border-dark shadow-sm p-2'
-          style={{ backgroundColor: '#697582' }}
-        >
-          <LabeledToggleSwitch
-            className='m-0'
-            leftLabel='Create tiles'
-            rightLabel='Use existing tiles'
-            checked={useExistingTiled}
-            onChange={(checked) => setUseExistingTiled(checked)}
-          />
-          {useExistingTiled ? (
-            <Form.Group className='mt-2'>
-              <Form.Label className='mb-0'>Existing tiled sets</Form.Label>
-              <Select<Option>
-                value={
-                  tiledSetOptions.find((o) => o.value === selectedTiledSetId) ||
-                  null
-                }
-                onChange={(opt: SingleValue<Option>) =>
-                  setSelectedTiledSetId(opt?.value ?? '')
-                }
-                options={tiledSetOptions}
-                placeholder='Select a tiled set'
-                className='text-black'
-                isDisabled={launching}
-              />
-            </Form.Group>
-          ) : (
-            <div className='mt-2'>
-              <CreateTask
-                name={`${annotationSet.name}-FN`}
-                projectId={project.id}
-                setHandleCreateTask={setHandleCreateTask}
-                setLaunchDisabled={() => {}}
-                disabled={launching}
-              />
-            </div>
-          )}
-        </div>
-
-        {loadingModels && (
+        {loadingTileCount ? (
           <p
-            className='text-muted mb-0 mt-2 text-center'
+            className='text-muted mb-0 text-center'
             style={{ fontSize: '12px' }}
           >
-            Loading tile sets...
+            Loading tile information...
           </p>
-        )}
-        <Form.Group>
-          <Form.Label className='mb-0'>Sample size (%)</Form.Label>
-          <Form.Control
-            type='number'
-            min={0}
-            max={100}
-            step={1}
-            value={samplePercent}
-            onChange={(e) =>
-              setSamplePercent(Number((e.target as HTMLInputElement).value))
-            }
-            disabled={launching}
-          />
-        </Form.Group>
+        ) : showNoTilesWarning ? (
+          <Alert variant='warning' className='mb-0'>
+            <strong>No tiles configured.</strong>
+            <p className='mb-0 mt-1' style={{ fontSize: '14px' }}>
+              Please go to <strong>Edit Survey &gt; Manage Tiles</strong> to
+              create tiles for this survey before launching a false negatives
+              task.
+            </p>
+          </Alert>
+        ) : (
+          <>
+            <div
+              className='border border-dark shadow-sm p-2'
+              style={{ backgroundColor: '#697582' }}
+            >
+              <p className='mb-0 text-white'>
+                <strong>{globalTileCount}</strong> tiles available for false
+                negative sampling.
+              </p>
+              <p className='mb-0 mt-1 text-muted' style={{ fontSize: '12px' }}>
+                To modify tiles, go to Edit Survey &gt; Manage Tiles.
+              </p>
+            </div>
 
-        <Form.Group>
-          <Form.Switch
-            label='Show Advanced Options'
-            checked={showAdvancedOptions}
-            onChange={() => setShowAdvancedOptions(!showAdvancedOptions)}
-            disabled={launching}
-          />
-        </Form.Group>
-
-        {showAdvancedOptions && (
-          <div
-            className='d-flex flex-column gap-3 border border-dark shadow-sm p-2'
-            style={{ backgroundColor: '#697582' }}
-          >
             <Form.Group>
-              <Form.Label className='mb-0'>Job Name</Form.Label>
-              <span
-                className='text-muted d-block mb-1'
-                style={{ fontSize: '12px' }}
-              >
-                Modify this to display a different name for the job in the jobs
-                page.
-              </span>
+              <Form.Label className='mb-0'>Sample size (%)</Form.Label>
               <Form.Control
-                type='text'
-                value={queueTag}
+                type='number'
+                min={0}
+                max={100}
+                step={1}
+                value={samplePercent}
                 onChange={(e) =>
-                  setQueueTag((e.target as HTMLInputElement).value)
+                  setSamplePercent(Number((e.target as HTMLInputElement).value))
                 }
                 disabled={launching}
               />
             </Form.Group>
-          </div>
-        )}
 
-        <div
-          className='border border-dark shadow-sm p-2'
-          style={{ backgroundColor: '#697582' }}
-        >
-          <div className='d-flex align-items-center justify-content-between'>
-            <div className='text-white' style={{ fontSize: '12px' }}>
-              <div>Expected tiles: {expectedTiles ?? '—'}</div>
-              <div>Estimated candidate tiles: {candidateTiles ?? '—'}</div>
-              <div>
-                Estimated launch ({samplePercent}%):{' '}
-                {estimatedSampleTiles ?? '—'}
+            <Form.Group>
+              <Form.Switch
+                label='Show Advanced Options'
+                checked={showAdvancedOptions}
+                onChange={() => setShowAdvancedOptions(!showAdvancedOptions)}
+                disabled={launching}
+              />
+            </Form.Group>
+
+            {showAdvancedOptions && (
+              <div
+                className='d-flex flex-column gap-3 border border-dark shadow-sm p-2'
+                style={{ backgroundColor: '#697582' }}
+              >
+                <Form.Group>
+                  <Form.Label className='mb-0'>Job Name</Form.Label>
+                  <span
+                    className='text-muted d-block mb-1'
+                    style={{ fontSize: '12px' }}
+                  >
+                    Modify this to display a different name for the job in the
+                    jobs page.
+                  </span>
+                  <Form.Control
+                    type='text'
+                    value={queueTag}
+                    onChange={(e) =>
+                      setQueueTag((e.target as HTMLInputElement).value)
+                    }
+                    disabled={launching}
+                  />
+                </Form.Group>
               </div>
-            </div>
-            <button
-              type='button'
-              className='btn btn-primary'
-              disabled={
-                launching ||
-                (useExistingTiled
-                  ? !selectedTiledSetId
-                  : typeof handleCreateTask !== 'function') ||
-                summaryLoading
-              }
-              onClick={computeSummary}
+            )}
+
+            <div
+              className='border border-dark shadow-sm p-2'
+              style={{ backgroundColor: '#697582' }}
             >
-              {summaryLoading ? (
-                <span className='d-inline-flex align-items-center'>
-                  <Spinner animation='border' size='sm' className='me-2' />{' '}
-                  Computing summary...
-                </span>
-              ) : (
-                'Compute Summary'
+              <div className='d-flex align-items-center justify-content-between'>
+                <div className='text-white' style={{ fontSize: '12px' }}>
+                  <div>Expected tiles: {expectedTiles ?? '—'}</div>
+                  <div>Estimated candidate tiles: {candidateTiles ?? '—'}</div>
+                  <div>
+                    Estimated launch ({samplePercent}%):{' '}
+                    {estimatedSampleTiles ?? '—'}
+                  </div>
+                </div>
+                <button
+                  type='button'
+                  className='btn btn-primary'
+                  disabled={launching || summaryLoading}
+                  onClick={computeSummary}
+                >
+                  {summaryLoading ? (
+                    <span className='d-inline-flex align-items-center'>
+                      <Spinner animation='border' size='sm' className='me-2' />{' '}
+                      Computing summary...
+                    </span>
+                  ) : (
+                    'Compute Summary'
+                  )}
+                </button>
+              </div>
+              {summaryMessage && (
+                <div className='mt-2 text-muted' style={{ fontSize: '12px' }}>
+                  {summaryMessage}
+                </div>
               )}
-            </button>
-          </div>
-          {summaryMessage && (
-            <div className='mt-2 text-muted' style={{ fontSize: '12px' }}>
-              {summaryMessage}
             </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
     </div>
   );
-}
-
-async function fetchTilesFromLocationSet(
-  client: DataClient,
-  locationSetId: string
-): Promise<MinimalTile[]> {
-  const tiles: MinimalTile[] = [];
-  let nextToken: string | null | undefined = undefined;
-  do {
-    const { data, nextToken: nt } =
-      await client.models.Location.locationsBySetIdAndConfidence(
-        { setId: locationSetId },
-        {
-          selectionSet: ['id', 'imageId', 'x', 'y', 'width', 'height'] as const,
-          limit: 1000,
-          nextToken,
-        }
-      );
-    for (const item of data || []) {
-      if (!item?.id || !item?.imageId) continue;
-      tiles.push({
-        id: item.id as string,
-        imageId: item.imageId as string,
-        x: Number(item.x ?? 0),
-        y: Number(item.y ?? 0),
-        width: Number(item.width ?? 0),
-        height: Number(item.height ?? 0),
-      });
-    }
-    nextToken = nt as string | null | undefined;
-  } while (nextToken);
-  return tiles;
-}
-
-function generateTilesFromRequest(request: TiledLaunchRequest): MinimalTile[] {
-  const tiles: MinimalTile[] = [];
-  const baselineWidth = Math.max(0, request.maxX - request.minX);
-  const baselineHeight = Math.max(0, request.maxY - request.minY);
-  const baselineIsLandscape = baselineWidth >= baselineHeight;
-  let counter = 0;
-
-  for (const image of request.images) {
-    const imageIsLandscape = image.width >= image.height;
-    const swapTileForImage = baselineIsLandscape !== imageIsLandscape;
-    const tileWidthForImage = swapTileForImage ? request.height : request.width;
-    const tileHeightForImage = swapTileForImage
-      ? request.width
-      : request.height;
-    const horizontalTilesForImage = swapTileForImage
-      ? request.verticalTiles
-      : request.horizontalTiles;
-    const verticalTilesForImage = swapTileForImage
-      ? request.horizontalTiles
-      : request.verticalTiles;
-    const roiMinXForImage = swapTileForImage ? request.minY : request.minX;
-    const roiMinYForImage = swapTileForImage ? request.minX : request.minY;
-    const roiMaxXForImage = swapTileForImage ? request.maxY : request.maxX;
-    const roiMaxYForImage = swapTileForImage ? request.maxX : request.maxY;
-
-    const effectiveW = Math.max(0, roiMaxXForImage - roiMinXForImage);
-    const effectiveH = Math.max(0, roiMaxYForImage - roiMinYForImage);
-    const xStepSize =
-      horizontalTilesForImage > 1
-        ? (effectiveW - tileWidthForImage) / (horizontalTilesForImage - 1)
-        : 0;
-    const yStepSize =
-      verticalTilesForImage > 1
-        ? (effectiveH - tileHeightForImage) / (verticalTilesForImage - 1)
-        : 0;
-
-    for (let xStep = 0; xStep < horizontalTilesForImage; xStep++) {
-      for (let yStep = 0; yStep < verticalTilesForImage; yStep++) {
-        const x = Math.round(
-          roiMinXForImage +
-            (horizontalTilesForImage > 1 ? xStep * xStepSize : 0) +
-            tileWidthForImage / 2
-        );
-        const y = Math.round(
-          roiMinYForImage +
-            (verticalTilesForImage > 1 ? yStep * yStepSize : 0) +
-            tileHeightForImage / 2
-        );
-        tiles.push({
-          id: `${image.id}-${counter++}`,
-          imageId: image.id,
-          x,
-          y,
-          width: tileWidthForImage,
-          height: tileHeightForImage,
-        });
-      }
-    }
-  }
-
-  return tiles;
 }
 
 // Fetch observation points - locations that humans have reviewed
@@ -633,15 +441,20 @@ function generateTilesFromRequest(request: TiledLaunchRequest): MinimalTile[] {
 async function fetchObservationPointsDetailed(
   client: DataClient,
   annotationSetId: string
-): Promise<Map<string, Array<{ x: number; y: number; width: number; height: number }>>> {
-  const map = new Map<string, Array<{ x: number; y: number; width: number; height: number }>>();
-  
+): Promise<
+  Map<string, Array<{ x: number; y: number; width: number; height: number }>>
+> {
+  const map = new Map<
+    string,
+    Array<{ x: number; y: number; width: number; height: number }>
+  >();
+
   // OPTIMIZATION: Fetch observations with location data included in the same query
   // This avoids N+1 queries by including location fields in the selectionSet
   let nextToken: string | null | undefined = undefined;
   do {
     const { data, nextToken: nt } =
-      await (client as any).models.Observation.observationsByAnnotationSetId(
+      await client.models.Observation.observationsByAnnotationSetId(
         { annotationSetId },
         {
           selectionSet: [
@@ -766,7 +579,18 @@ function shouldIgnoreLaunchError(error: any): boolean {
   );
 }
 
-function isInsideTile(px: number, py: number, tile: MinimalTile): boolean {
+type MinimalTileForCheck = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+function isInsideTile(
+  px: number,
+  py: number,
+  tile: MinimalTileForCheck
+): boolean {
   const halfW = tile.width / 2;
   const halfH = tile.height / 2;
   const minX = tile.x - halfW;
@@ -778,24 +602,24 @@ function isInsideTile(px: number, py: number, tile: MinimalTile): boolean {
 
 // Check if two tiles overlap (both have center x,y and width,height)
 function tilesOverlap(
-  tile1: MinimalTile,
+  tile1: MinimalTileForCheck,
   tile2: { x: number; y: number; width: number; height: number }
 ): boolean {
   const halfW1 = tile1.width / 2;
   const halfH1 = tile1.height / 2;
   const halfW2 = tile2.width / 2;
   const halfH2 = tile2.height / 2;
-  
+
   const minX1 = tile1.x - halfW1;
   const maxX1 = tile1.x + halfW1;
   const minY1 = tile1.y - halfH1;
   const maxY1 = tile1.y + halfH1;
-  
+
   const minX2 = tile2.x - halfW2;
   const maxX2 = tile2.x + halfW2;
   const minY2 = tile2.y - halfH2;
   const maxY2 = tile2.y + halfH2;
-  
+
   // Check if rectangles overlap
   return minX1 < maxX2 && maxX1 > minX2 && minY1 < maxY2 && maxY1 > minY2;
 }
