@@ -785,9 +785,20 @@ export function FileUploadCore({
     const dto = tags?.DateTimeOriginal as Date | string | undefined;
     const tz = tags?.OffsetTimeOriginal as string | undefined;
     if (dto instanceof Date) {
-      timestamp = dto.getTime();
+      // Optimized numeric timezone shift: JS Date is local -> force literal UTC
+      timestamp = dto.getTime() - (dto.getTimezoneOffset() * 60000);
+      if (tz && tz !== 'Z' && tz !== '+00:00') {
+        const offsetMatch = tz.match(/([+-])(\d{2}):?(\d{2})/);
+        if (offsetMatch) {
+          const sign = offsetMatch[1] === '+' ? 1 : -1;
+          const hrs = parseInt(offsetMatch[2]);
+          const mins = parseInt(offsetMatch[3]);
+          const totalOffsetMs = sign * (hrs * 3600000 + mins * 60000);
+          timestamp -= totalOffsetMs;
+        }
+      }
     } else if (typeof dto === 'string' && dto.length > 0) {
-      const dt = DateTime.fromFormat(dto, 'yyyy:MM:dd HH:mm:ss', { zone: tz });
+      const dt = DateTime.fromFormat(dto, 'yyyy:MM:dd HH:mm:ss', { zone: tz || 'utc' });
       timestamp = dt.isValid ? dt.toMillis() : file.lastModified;
     } else {
       timestamp = file.lastModified;
@@ -1084,9 +1095,20 @@ export function FileUploadCore({
     const dto = (tags as any)?.DateTimeOriginal;
     const tz = (tags as any)?.OffsetTimeOriginal as string | undefined;
     if (dto instanceof Date) {
-      timestamp = dto.getTime();
+      // Optimized numeric timezone shift: JS Date is local -> force literal UTC
+      timestamp = dto.getTime() - (dto.getTimezoneOffset() * 60000);
+      if (tz && tz !== 'Z' && tz !== '+00:00') {
+        const offsetMatch = tz.match(/([+-])(\d{2}):?(\d{2})/);
+        if (offsetMatch) {
+          const sign = offsetMatch[1] === '+' ? 1 : -1;
+          const hrs = parseInt(offsetMatch[2]);
+          const mins = parseInt(offsetMatch[3]);
+          const totalOffsetMs = sign * (hrs * 3600000 + mins * 60000);
+          timestamp -= totalOffsetMs;
+        }
+      }
     } else if (typeof dto === 'string' && dto.length > 0) {
-      const dt = DateTime.fromFormat(dto, 'yyyy:MM:dd HH:mm:ss', { zone: tz });
+      const dt = DateTime.fromFormat(dto, 'yyyy:MM:dd HH:mm:ss', { zone: tz || 'utc' });
       timestamp = dt.isValid ? dt.toMillis() : file.lastModified;
     } else {
       timestamp = file.lastModified;
