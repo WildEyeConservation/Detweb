@@ -28,6 +28,7 @@ export type LaunchTaskArgs = {
   queueOptions: LaunchQueueOptions;
   secondaryQueueOptions?: LaunchQueueOptions;
   tiledRequest?: TiledLaunchRequest | null;
+  launchImageIds?: string[];
 };
 
 type LaunchLambdaPayload = {
@@ -45,6 +46,7 @@ type LaunchLambdaPayload = {
   tiledRequest?: TiledLaunchRequest | null;
   locationManifestS3Key?: string | null;
   launchedCount?: number | null;
+  launchImageIds?: string[];
 };
 
 export function useLaunchTask(
@@ -258,6 +260,7 @@ export function useLaunchTask(
       queueOptions,
       secondaryQueueOptions,
       tiledRequest,
+      launchImageIds,
     }: LaunchTaskArgs) => {
       onProgress?.('Preparing launch request');
       let collectedLocations: string[] | undefined;
@@ -389,6 +392,7 @@ export function useLaunchTask(
         locationIds: collectedLocations,
         locationSetIds: selectedTasks,
         tiledRequest: tiledRequest ?? null,
+        launchImageIds: tiledRequest ? tiledRequest.launchImageIds : launchImageIds, // Pass it if provided
       };
 
       onProgress?.('Enqueuing jobs...');

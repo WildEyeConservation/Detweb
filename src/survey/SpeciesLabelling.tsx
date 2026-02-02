@@ -219,7 +219,7 @@ export default function SpeciesLabelling({
                 value: ls.id,
               });
             }
-          } catch {}
+          } catch { }
         }
       }
       if (options.length === 1) {
@@ -241,8 +241,8 @@ export default function SpeciesLabelling({
   useEffect(() => {
     const shouldDisable = modelGuided
       ? loadingLocationSets ||
-        modelOptions.length === 0 ||
-        (modelOptions.length > 1 && !model)
+      modelOptions.length === 0 ||
+      (modelOptions.length > 1 && !model)
       : useExistingTiled && tiledSetOptions.length > 0 && !selectedTiledSetId;
     setLaunchDisabled(shouldDisable);
   }, [
@@ -327,10 +327,42 @@ export default function SpeciesLabelling({
     taskTagRef.current = taskTag;
   }, [taskTag]);
 
+
+
+  // Dev-only: Filter launch by image IDs from JSON
+  const [launchImageIds, setLaunchImageIds] = useState<string[]>([]);
+  const handleJsonUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed) && parsed.every(id => typeof id === 'string')) {
+          setLaunchImageIds(parsed);
+          alert(`Loaded ${parsed.length} image IDs for filtering`);
+        } else {
+          alert('Invalid JSON: content must be an array of strings');
+          setLaunchImageIds([]);
+        }
+      } catch (err) {
+        console.error('Error parsing JSON:', err);
+        alert('Failed to parse JSON file');
+        setLaunchImageIds([]);
+      }
+    };
+    reader.readAsText(file);
+    // Reset value to allow re-uploading the same file
+    event.target.value = '';
+  };
+
   useEffect(() => {
-    // Wrap in function to store a function value (not treat as state updater)
+    // Update the launch handler to include launchImageIds
     setSpeciesLaunchHandler(() => async (onProgress: (msg: string) => void) => {
       if (modelGuidedRef.current) {
+        // ... existing model guided logic ...
         if (modelOptionsLengthRef.current === 0) return;
         const currentModelValue = (modelRef.current?.value ?? '') as string;
         const sets = (locationSetsRef.current || []).filter((ls: any) =>
@@ -360,7 +392,7 @@ export default function SpeciesLabelling({
           zoomRef.current !== undefined ? `Zoom: ${zoomRef.current}` : null,
           taskTagRef.current !== annotationSet.name ? `Job name: "${taskTagRef.current}"` : null,
         ].filter(Boolean).join(', ');
-        
+
         await logAdminAction(
           client,
           user.userId,
@@ -388,21 +420,20 @@ export default function SpeciesLabelling({
             fifo: false,
           },
           tiledRequest,
+          launchImageIds: launchImageIds.length > 0 ? launchImageIds : undefined,
         });
         // Log the launch action
         const queueType = useExistingTiledRef.current ? 'existing tiled set' : 'new tiled annotation';
+        const stats = launchImageIds.length > 0 ? ` (Filtered: ${launchImageIds.length} images)` : '';
         await logAdminAction(
           client,
           user.userId,
-          `Launched Tiled Annotation queue for annotation set "${annotationSet.name}" in project "${project.name}" (${queueType})`,
+          `Launched Tiled Annotation queue for annotation set "${annotationSet.name}" in project "${project.name}" (${queueType}${stats})`,
           project.id
         ).catch(console.error);
       }
     });
-    return () => {
-      setSpeciesLaunchHandler(null);
-    };
-  }, [setSpeciesLaunchHandler, client, user.userId, annotationSet.name, project.name, project.id, modelOptions]);
+  }, [setSpeciesLaunchHandler, client, user.userId, annotationSet.name, project.name, project.id, modelOptions, launchImageIds]);
 
   return (
     <div className='px-3 pb-3 pt-1'>
@@ -633,6 +664,37 @@ export default function SpeciesLabelling({
               setLaunchDisabled={setLaunchDisabled}
               disabled={launching}
             />
+          )}
+
+          {process.env.NODE_ENV === 'development' && !useExistingTiled && (
+            <div className='mt-3 border border-warning p-2'>
+              <Form.Group>
+                <Form.Label className='mb-0 text-warning'>
+                  Dev: Filter Launch by Image IDs (JSON Array)
+                </Form.Label>
+                <span className='text-muted d-block mb-1' style={{ fontSize: '10px' }}>
+                  Upload a JSON file containing an array of image IDs strings. Only tiles belonging to these images will be launched.
+                </span>
+                <Form.Control
+                  type='file'
+                  accept='.json'
+                  onChange={handleJsonUpload}
+                  disabled={launching}
+                />
+                {launchImageIds.length > 0 && (
+                  <div className='text-success mt-1' style={{ fontSize: '12px' }}>
+                    {launchImageIds.length} image IDs loaded for filtering.
+                    <span
+                      className='text-danger ms-2'
+                      style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                      onClick={() => setLaunchImageIds([])}
+                    >
+                      Clear
+                    </span>
+                  </div>
+                )}
+              </Form.Group>
+            </div>
           )}
         </>
       )}

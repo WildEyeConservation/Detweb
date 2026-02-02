@@ -139,6 +139,7 @@ type LaunchLambdaPayload = {
   payloadS3Key?: string;
   locationManifestS3Key?: string | null;
   launchedCount?: number | null;
+  launchImageIds?: string[];
 };
 
 type QueueRecord = {
@@ -355,6 +356,7 @@ async function handleDistributedTiling(payload: LaunchLambdaPayload) {
     taskTag: payload.taskTag,
     batchSize: payload.batchSize,
     zoom: payload.zoom,
+    launchImageIds: payload.launchImageIds, // Pass the filter to the monitor
   });
 
   // Create TilingTask record

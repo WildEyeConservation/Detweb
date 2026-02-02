@@ -23,5 +23,6 @@ export type TiledLaunchRequest = {
   maxY: number;
   images: TiledLaunchImage[];
   locationCount: number;
+  launchImageIds?: string[];
 };
 

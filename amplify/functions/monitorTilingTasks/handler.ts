@@ -101,6 +101,7 @@ type LaunchConfig = {
   // False negatives specific fields
   isFalseNegatives?: boolean;
   samplePercent?: number;
+  launchImageIds?: string[];
 };
 
 type TilingTaskRecord = {
@@ -224,9 +225,30 @@ async function processTask(task: TilingTaskRecord) {
     // Parse launch config
     const launchConfig = JSON.parse(task.launchConfig) as LaunchConfig;
 
-    // For false negatives, filtering was already done before batching in launchFalseNegatives
-    // Just use the merged location IDs directly
     let finalLocationIds = allLocationIds;
+
+    // Filter by launchImageIds if provided (dev only feature)
+    if (launchConfig.launchImageIds && launchConfig.launchImageIds.length > 0) {
+      const allowedImageIds = new Set(launchConfig.launchImageIds);
+      console.log('Filtering locations by image IDs', {
+        total: allLocations.length,
+        allowedCount: allowedImageIds.size
+      });
+
+      // We need to map back to image IDs. 
+      // The merged locations (allLocations) are raw objects from the tiling batch output.
+      // They should contain imageId.
+      const filteredLocations = allLocations.filter(l => allowedImageIds.has(l.imageId));
+      finalLocationIds = filteredLocations.map(l => l.locationId);
+
+      console.log('Filtered locations result', {
+        originalCount: allLocationIds.length,
+        filteredCount: finalLocationIds.length
+      });
+    }
+
+    // For false negatives, filtering was already done before batching in launchFalseNegatives
+    // Just use the merged location IDs directly (or the filtered ones if applicable)
     if (launchConfig.isFalseNegatives) {
       console.log('False negatives filtering already done before batching', {
         taskId: task.id,
