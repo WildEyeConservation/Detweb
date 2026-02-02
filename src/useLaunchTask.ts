@@ -392,7 +392,7 @@ export function useLaunchTask(
         locationIds: collectedLocations,
         locationSetIds: selectedTasks,
         tiledRequest: tiledRequest ?? null,
-        launchImageIds: tiledRequest ? tiledRequest.launchImageIds : launchImageIds, // Pass it if provided
+        launchImageIds: launchImageIds ?? tiledRequest?.launchImageIds, // Prioritize explicit argument
       };
 
       onProgress?.('Enqueuing jobs...');

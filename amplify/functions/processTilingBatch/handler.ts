@@ -131,17 +131,18 @@ export const handler: Handler = async (event) => {
       }),
     };
   } catch (error: any) {
-    console.error('Error processing batch', { batchId, error: error?.message });
+    const errorMessage = error?.message ?? (typeof error === 'string' ? error : JSON.stringify(error));
+    console.error('Error processing batch', { batchId, error: errorMessage, stack: error?.stack, raw: error });
 
     // Update batch as failed
-    await updateBatchFailed(batchId, error?.message ?? 'Unknown error');
+    await updateBatchFailed(batchId, errorMessage ?? 'Unknown error');
 
     return {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Failed to process batch',
         batchId,
-        error: error?.message ?? 'Unknown error',
+        error: errorMessage ?? 'Unknown error',
       }),
     };
   }
