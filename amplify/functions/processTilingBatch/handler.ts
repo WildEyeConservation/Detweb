@@ -9,12 +9,13 @@ import {
   DeleteObjectCommand,
   PutObjectCommand,
 } from '@aws-sdk/client-s3';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import pLimit from 'p-limit';
 import {
   createLocation as createLocationMutation,
   updateTilingBatch as updateTilingBatchMutation,
 } from './graphql/mutations';
-import { getTilingBatch } from './graphql/queries';
+import { getTilingBatch, tilingBatchesByTaskId } from './graphql/queries';
 
 // Configure Amplify for IAM-based GraphQL access.
 Amplify.configure(
@@ -50,6 +51,15 @@ const client = generateClient({
 });
 
 const s3Client = new S3Client({
+  region: env.AWS_REGION,
+  credentials: {
+    accessKeyId: env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+    sessionToken: env.AWS_SESSION_TOKEN,
+  },
+});
+
+const lambdaClient = new LambdaClient({
   region: env.AWS_REGION,
   credentials: {
     accessKeyId: env.AWS_ACCESS_KEY_ID,
@@ -121,6 +131,18 @@ export const handler: Handler = async (event) => {
     // Update batch record as complete
     await updateBatchComplete(batchId, outputS3Key, createdLocationIds.length);
     console.log('Batch processing complete', { batchId });
+
+    // Chain to next batch for sequential processing
+    try {
+      await invokeNextBatch(batch.tilingTaskId, batch.batchIndex);
+    } catch (chainError: any) {
+      console.error('Failed to invoke next batch', {
+        batchId,
+        tilingTaskId: batch.tilingTaskId,
+        error: chainError?.message,
+      });
+      // Don't fail the current batch if chaining fails - monitor will pick up
+    }
 
     return {
       statusCode: 200,
@@ -202,7 +224,7 @@ async function downloadLocationsFromS3(key: string): Promise<LocationInput[]> {
 }
 
 async function createLocationsInDb(locations: LocationInput[]): Promise<any[]> {
-  const limit = pLimit(30);
+  const limit = pLimit(100);
   const createdLocations: any[] = [];
   let createdCount = 0;
 
@@ -327,6 +349,63 @@ async function updateBatchFailed(batchId: string, errorMessage: string): Promise
       },
     }
   );
+}
+
+async function invokeNextBatch(tilingTaskId: string, currentBatchIndex: number): Promise<void> {
+  const nextBatchIndex = currentBatchIndex + 1;
+
+  // Query for the next batch by index
+  const response = await executeGraphql<{
+    tilingBatchesByTaskId?: {
+      items?: Array<{
+        id: string;
+        batchIndex: number;
+        status: string;
+      }>;
+    };
+  }>(tilingBatchesByTaskId, {
+    tilingTaskId,
+    batchIndex: { eq: nextBatchIndex },
+    limit: 1,
+  });
+
+  const nextBatch = response.tilingBatchesByTaskId?.items?.[0];
+
+  if (!nextBatch) {
+    console.log('No next batch found, chain complete', { tilingTaskId, currentBatchIndex });
+    return;
+  }
+
+  if (nextBatch.status !== 'pending') {
+    console.log('Next batch is not pending, skipping', {
+      tilingTaskId,
+      nextBatchIndex,
+      status: nextBatch.status,
+    });
+    return;
+  }
+
+  console.log('Invoking next batch', {
+    tilingTaskId,
+    nextBatchId: nextBatch.id,
+    nextBatchIndex,
+  });
+
+  const functionName = env.PROCESS_TILING_BATCH_FUNCTION_NAME;
+  if (!functionName) {
+    console.error('PROCESS_TILING_BATCH_FUNCTION_NAME not set, cannot chain to next batch');
+    return;
+  }
+
+  await lambdaClient.send(
+    new InvokeCommand({
+      FunctionName: functionName,
+      InvocationType: 'Event', // Async invocation
+      Payload: JSON.stringify({ batchId: nextBatch.id }),
+    })
+  );
+
+  console.log('Successfully invoked next batch', { nextBatchId: nextBatch.id });
 }
 
 async function executeGraphql<T>(

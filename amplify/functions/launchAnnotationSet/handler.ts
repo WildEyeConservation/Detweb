@@ -382,7 +382,7 @@ async function handleDistributedTiling(payload: LaunchLambdaPayload) {
 
   console.log('Created tiling task', { tilingTaskId, totalBatches: batches.length });
 
-  // Write batches to S3 and create TilingBatch records
+  // Write batches to S3 and create TilingBatch records (but don't invoke yet)
   const batchCreationLimit = pLimit(10);
   const batchTasks = batches.map((batch, index) =>
     batchCreationLimit(async () => {
@@ -411,14 +411,21 @@ async function handleDistributedTiling(payload: LaunchLambdaPayload) {
 
       console.log('Created tiling batch', { batchId, batchIndex: index, locationCount: batch.length });
 
-      // Invoke the processTilingBatch lambda
-      await invokeTilingBatchLambda(batchId);
-
-      return batchId;
+      return { batchId, batchIndex: index };
     })
   );
 
-  await Promise.all(batchTasks);
+  const createdBatches = await Promise.all(batchTasks);
+
+  // Sort by batchIndex to ensure we get the first one
+  createdBatches.sort((a, b) => a.batchIndex - b.batchIndex);
+
+  // Invoke ONLY the first batch (index 0) - it will chain to subsequent batches
+  const firstBatch = createdBatches.find((b) => b.batchIndex === 0);
+  if (firstBatch) {
+    await invokeTilingBatchLambda(firstBatch.batchId);
+    console.log('Invoked first batch to start sequential chain', { batchId: firstBatch.batchId });
+  }
 
   console.log('Distributed tiling initiated', {
     tilingTaskId,
