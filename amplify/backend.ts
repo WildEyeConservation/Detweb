@@ -484,11 +484,6 @@ backend.launchFalseNegatives.addEnvironment(
   'PROCESS_TILING_BATCH_FUNCTION_NAME',
   backend.processTilingBatch.resources.lambda.functionName
 );
-// processTilingBatch needs to invoke itself for sequential chaining
-backend.processTilingBatch.addEnvironment(
-  'PROCESS_TILING_BATCH_FUNCTION_NAME',
-  backend.processTilingBatch.resources.lambda.functionName
-);
 
 // Allow processImages to publish Digests into SQS.
 const statement = new iam.PolicyStatement({

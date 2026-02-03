@@ -391,9 +391,10 @@ async function invokeNextBatch(tilingTaskId: string, currentBatchIndex: number):
     nextBatchIndex,
   });
 
-  const functionName = env.PROCESS_TILING_BATCH_FUNCTION_NAME;
+  // Use built-in AWS_LAMBDA_FUNCTION_NAME to invoke ourselves (avoids circular dependency)
+  const functionName = process.env.AWS_LAMBDA_FUNCTION_NAME;
   if (!functionName) {
-    console.error('PROCESS_TILING_BATCH_FUNCTION_NAME not set, cannot chain to next batch');
+    console.error('AWS_LAMBDA_FUNCTION_NAME not set, cannot chain to next batch');
     return;
   }
 
