@@ -202,7 +202,7 @@ async function downloadLocationsFromS3(key: string): Promise<LocationInput[]> {
 }
 
 async function createLocationsInDb(locations: LocationInput[]): Promise<any[]> {
-  const limit = pLimit(100);
+  const limit = pLimit(30);
   const createdLocations: any[] = [];
   let createdCount = 0;
 
