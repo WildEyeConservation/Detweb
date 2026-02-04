@@ -102,7 +102,7 @@ export default function ProjectProgress({ projectId, onScanningChange }: Project
     && queueInfo?.launchedCount != null
     && queueInfo?.emptyQueueTimestamp != null
     && (queueInfo.observedCount || 0) < queueInfo.launchedCount
-    && (queueInfo.requeuesCompleted || 0) < 3;
+    && (queueInfo.requeuesCompleted || 0) < 1;
 
   const isPolling = jobsRemaining === 0 && !isScanning;
 

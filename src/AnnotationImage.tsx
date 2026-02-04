@@ -207,6 +207,7 @@ export default function AnnotationImage(props: any) {
         annotationSetId={testSetId}
         realAnnotationSetId={annotationSetId}
         categoriesOverride={legendCategories ?? undefined}
+        hideFnAnnotations={!isFalseNegativesJob}
       />,
       <Location key='location' {...location} />,
       <MapLegend
@@ -242,6 +243,7 @@ export default function AnnotationImage(props: any) {
     location,
     testSetId,
     isTest,
+    isFalseNegativesJob,
   ]);
 
   async function handleShare() {

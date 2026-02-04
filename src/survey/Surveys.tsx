@@ -57,7 +57,7 @@ export default function Surveys() {
     Schema['AnnotationSet']['type'] | null
   >(null);
   const [selectedSets, setSelectedSets] = useState<string[]>([]);
-  
+
   // Initialize search from localStorage or use default
   const getInitialSearch = () => {
     if (typeof window !== 'undefined') {
@@ -68,7 +68,7 @@ export default function Surveys() {
     }
     return '';
   };
-  
+
   const [search, setSearch] = useState(getInitialSearch);
   const [hasUploadedFiles, setHasUploadedFiles] = useState<{
     [projectId: string]: boolean;
@@ -85,7 +85,7 @@ export default function Surveys() {
     }
     return 'createdAt';
   };
-  
+
   // Initialize organizationFilter from localStorage or use default
   const getInitialOrganizationFilter = () => {
     if (typeof window !== 'undefined') {
@@ -96,10 +96,10 @@ export default function Surveys() {
     }
     return '';
   };
-  
+
   const [sortBy, setSortBy] = useState(getInitialSortBy);
   const [organizationFilter, setOrganizationFilter] = useState(getInitialOrganizationFilter);
-  
+
   // Initialize compactMode from localStorage or use default
   const getInitialCompactMode = () => {
     if (typeof window !== 'undefined') {
@@ -110,7 +110,7 @@ export default function Surveys() {
     }
     return false;
   };
-  
+
   const [compactMode, setCompactMode] = useState(getInitialCompactMode);
   const getIsMobile = () =>
     typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
@@ -273,7 +273,7 @@ export default function Surveys() {
     const projectName = project?.name || 'Unknown';
 
     await client.models.AnnotationSet.delete({ id: annotationSetId });
-    
+
     await logAdminAction(
       client,
       user.userId,
@@ -339,7 +339,7 @@ export default function Surveys() {
       await logAdminAction(
         client,
         user.userId,
-        `Cancelled queue job "${job.tag || job.name || 'Unknown'}" for project "${selectedProject!.name}"`,
+        `Closed job "${job.tag || job.name || 'Unknown'}" for project "${selectedProject!.name}"`,
         selectedProject!.id
       );
     } catch (error) {
@@ -493,9 +493,8 @@ export default function Surveys() {
         )}
         {sortedAnnotationSets.map((annotationSet, i) => (
           <div
-            className={`d-flex flex-column ${gapClass} ${
-              i === 0 ? '' : `border-top border-light ${borderClass}`
-            }`}
+            className={`d-flex flex-column ${gapClass} ${i === 0 ? '' : `border-top border-light ${borderClass}`
+              }`}
             key={annotationSet.id}
           >
             <div className={`d-flex justify-content-between align-items-center ${gapClass} flex-wrap`}>
@@ -693,8 +692,8 @@ export default function Surveys() {
                 {project.status === 'launching'
                   ? 'Launching - please wait'
                   : project.status.includes('processing')
-                  ? 'Processing'
-                  : project.status.replace(/\b\w/g, (char) =>
+                    ? 'Processing'
+                    : project.status.replace(/\b\w/g, (char) =>
                       char.toUpperCase()
                     )}
               </Badge>
@@ -811,8 +810,8 @@ export default function Surveys() {
                     {project.status === 'launching'
                       ? 'Launching - please wait'
                       : project.status.includes('processing')
-                      ? 'Processing'
-                      : project.status.replace(/\b\w/g, (char) =>
+                        ? 'Processing'
+                        : project.status.replace(/\b\w/g, (char) =>
                           char.toUpperCase()
                         )}
                   </Badge>
@@ -830,9 +829,8 @@ export default function Surveys() {
             </div>
             {hasJobs && (
               <div
-                className={`d-flex flex-row align-items-center gap-2 ${
-                  isMobile ? 'pt-3 border-top border-light' : ''
-                }`}
+                className={`d-flex flex-row align-items-center gap-2 ${isMobile ? 'pt-3 border-top border-light' : ''
+                  }`}
               >
                 <div className='flex-grow-1'>
                   <ProjectProgress
@@ -873,9 +871,8 @@ export default function Surveys() {
             )}
           </div>
           <div
-            className={`d-flex flex-column gap-2 ${
-              isMobile ? 'pt-3 border-top border-light' : ''
-            }`}
+            className={`d-flex flex-column gap-2 ${isMobile ? 'pt-3 border-top border-light' : ''
+              }`}
           >
             <div className='fw-semibold'>Annotation Sets</div>
             {renderAnnotationSets(project, disabled, hasJobs, {
@@ -1149,15 +1146,15 @@ export default function Surveys() {
               projects.map((project) =>
                 project.id === selectedProject?.id
                   ? {
-                      ...project,
-                      annotationSets: [
-                        ...project.annotationSets,
-                        {
-                          id: annotationSet.id,
-                          name: annotationSet.name,
-                        },
-                      ],
-                    }
+                    ...project,
+                    annotationSets: [
+                      ...project.annotationSets,
+                      {
+                        id: annotationSet.id,
+                        name: annotationSet.name,
+                      },
+                    ],
+                  }
                   : project
               )
             );

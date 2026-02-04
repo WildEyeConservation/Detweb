@@ -11,6 +11,7 @@ import {
 } from '@aws-sdk/client-sqs';
 import {
   S3Client,
+  PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
@@ -102,6 +103,8 @@ type LaunchFalseNegativesPayload = {
   batchSize?: number;
   /** S3 key where the full payload is stored (for large payloads). */
   payloadS3Key?: string;
+  /** When true, this is a continuation of an unfinished launch (no pool/history changes). */
+  isContinuation?: boolean;
 };
 
 type MinimalTile = {
@@ -111,6 +114,29 @@ type MinimalTile = {
   y: number;
   width: number;
   height: number;
+};
+
+// Candidate pool manifest – created once on first launch, never modified.
+type FnPool = {
+  annotationSetId: string;
+  poolCreatedAt: string;
+  poolSize: number;
+  items: MinimalTile[];
+};
+
+// A single launch entry within the history manifest.
+type FnLaunchEntry = {
+  launchedAt: string;
+  launchedCount: number;
+  items: MinimalTile[];
+};
+
+// Launch history manifest – appended to on each new launch.
+type FnHistory = {
+  annotationSetId: string;
+  poolSize: number;
+  totalLaunched: number;
+  launches: FnLaunchEntry[];
 };
 
 // Simple timer helper to keep logging consistent.
@@ -194,97 +220,254 @@ export const handler: Handler = async (event) => {
 };
 
 // End-to-end workflow for selecting tiles and pushing jobs to workers.
+// Supports three modes:
+//   1. First launch – compute candidates, create pool & history, sample.
+//   2. Additional sample – load existing pool, exclude launched, sample remaining.
+//   3. Continuation – re-enqueue remaining tiles from an unfinished session.
 async function handleLaunch(payload: LaunchFalseNegativesPayload) {
   const workerBatchSize = payload.batchSize ?? 200;
   const { projectId, annotationSetId, locationSetId } = payload;
 
-  // Use tiles from the global tiled set (fetched by client from project.tiledLocationSetId)
-  const tiles = payload.locationTiles;
-  console.log('Using tiles from global tiled set', {
-    locationSetId,
-    tileCount: tiles.length,
-  });
+  let selectedTiles: MinimalTile[];
 
-  if (!tiles || tiles.length === 0) {
-    throw new Error('No tiles provided - ensure the project has a global tiled set configured');
-  }
-
-  if (tiles.length === 0) {
-    throw new Error('No tiles available for false negatives workflow');
-  }
-
-  const observationMap = await withTiming('fetchObservationPoints', () =>
-    fetchObservationPoints(annotationSetId)
-  );
-  console.log('Fetched observation points', {
-    annotationSetId,
-    observationImageCount: observationMap.size,
-  });
-
-  const annotationMap = await withTiming('fetchAnnotationPoints', () =>
-    fetchAnnotationPoints(annotationSetId)
-  );
-  console.log('Fetched annotations', {
-    annotationSetId,
-    annotationImageCount: annotationMap.size,
-  });
-
-  const imageTimestamps = await withTiming('fetchImageTimestamps', () =>
-    fetchImageTimestamps(projectId)
-  );
-  console.log('Fetched image timestamps', {
-    projectId,
-    imageCount: imageTimestamps.size,
-  });
-
-  const candidateTimingStart = Date.now();
-  const candidates = tiles.filter((tile) => {
-    const observations = observationMap.get(tile.imageId) || [];
-    const annotations = annotationMap.get(tile.imageId) || [];
-    // Check if any observed location overlaps with this tile
-    const hasObservation = observations.some((obs) =>
-      tilesOverlap(tile, obs)
+  if (payload.isContinuation) {
+    // ── CONTINUE MODE ──
+    // Re-launch remaining tiles from an unfinished session.
+    // Pool and history manifests are left untouched.
+    selectedTiles = payload.locationTiles;
+    if (!selectedTiles || selectedTiles.length === 0) {
+      await setProjectStatus(projectId, 'active');
+      console.log('Continue mode: no remaining tiles to launch');
+      return {
+        message: 'No remaining tiles to launch',
+        locationCount: 0,
+        queueId: null,
+      };
+    }
+    console.log('Continue mode: launching remaining tiles', {
+      count: selectedTiles.length,
+    });
+  } else {
+    // Check for an existing candidate pool
+    const existingPool = await withTiming('loadFnPool', () =>
+      loadFnPool(annotationSetId)
     );
-    const hasAnnotation = annotations.some((point) =>
-      isInsideTile(point.x, point.y, tile)
-    );
-    return !hasObservation && !hasAnnotation;
-  });
-  console.log('Candidate filtering complete', {
-    totalTiles: tiles.length,
-    candidateCount: candidates.length,
-    durationMs: Date.now() - candidateTimingStart,
-  });
 
-  candidates.sort((a, b) => {
-    const tsA = imageTimestamps.get(a.imageId) ?? 0;
-    const tsB = imageTimestamps.get(b.imageId) ?? 0;
-    return tsA - tsB;
-  });
+    if (existingPool) {
+      // ── ADDITIONAL SAMPLE MODE ──
+      // Pool exists from a previous launch. Sample from remaining candidates.
+      console.log('Additional sample mode: pool exists', {
+        poolSize: existingPool.poolSize,
+      });
 
-  const normalizedPercent = Math.min(
-    Math.max(payload.samplePercent, 0),
-    100
-  );
-  let sampleCount = Math.floor(
-    (candidates.length * normalizedPercent) / 100
-  );
-  if (normalizedPercent > 0 && sampleCount === 0 && candidates.length > 0) {
-    sampleCount = 1;
+      const existingHistory = await withTiming('loadFnHistory', () =>
+        loadFnHistory(annotationSetId)
+      );
+
+      // Build set of all previously launched tile IDs
+      const launchedIds = new Set<string>();
+      if (existingHistory) {
+        for (const launch of existingHistory.launches) {
+          for (const item of launch.items) {
+            launchedIds.add(item.id);
+          }
+        }
+      }
+
+      // Filter remaining from pool
+      const remaining = existingPool.items.filter(
+        (t) => !launchedIds.has(t.id)
+      );
+      console.log('Additional sample: remaining candidates', {
+        poolSize: existingPool.poolSize,
+        previouslyLaunched: launchedIds.size,
+        remaining: remaining.length,
+      });
+
+      if (remaining.length === 0) {
+        await setProjectStatus(projectId, 'active');
+        console.log('All candidates from the original pool have been launched');
+        return {
+          message: 'All candidates from the original pool have been launched',
+          locationCount: 0,
+          queueId: null,
+        };
+      }
+
+      // Sample from remaining, using original pool size as denominator
+      const normalizedPercent = Math.min(
+        Math.max(payload.samplePercent, 0),
+        100
+      );
+      let sampleCount = Math.floor(
+        (existingPool.poolSize * normalizedPercent) / 100
+      );
+      if (normalizedPercent > 0 && sampleCount === 0 && remaining.length > 0) {
+        sampleCount = 1;
+      }
+      // Cap at available remaining tiles
+      sampleCount = Math.min(sampleCount, remaining.length);
+
+      selectedTiles =
+        sampleCount <= 0
+          ? []
+          : sampleCount >= remaining.length
+            ? remaining.slice()
+            : randomSample(remaining, sampleCount);
+      console.log('Additional sample: selected tiles', {
+        requestedPercent: payload.samplePercent,
+        normalizedPercent,
+        sampleCount,
+        selectedTiles: selectedTiles.length,
+      });
+
+      // Update history
+      const now = new Date().toISOString();
+      const newEntry: FnLaunchEntry = {
+        launchedAt: now,
+        launchedCount: selectedTiles.length,
+        items: selectedTiles,
+      };
+      const updatedHistory: FnHistory = existingHistory
+        ? {
+            ...existingHistory,
+            totalLaunched:
+              existingHistory.totalLaunched + selectedTiles.length,
+            launches: [...existingHistory.launches, newEntry],
+          }
+        : {
+            annotationSetId,
+            poolSize: existingPool.poolSize,
+            totalLaunched: selectedTiles.length,
+            launches: [newEntry],
+          };
+      await withTiming('saveFnHistory', () =>
+        saveFnHistory(annotationSetId, updatedHistory)
+      );
+    } else {
+      // ── FIRST LAUNCH MODE ──
+      // No pool exists. Compute candidates, create pool, sample, create history.
+      const tiles = payload.locationTiles;
+      console.log('First launch mode: computing candidates', {
+        locationSetId,
+        tileCount: tiles?.length ?? 0,
+      });
+
+      if (!tiles || tiles.length === 0) {
+        throw new Error(
+          'No tiles provided - ensure the project has a global tiled set configured'
+        );
+      }
+
+      const observationMap = await withTiming('fetchObservationPoints', () =>
+        fetchObservationPoints(annotationSetId)
+      );
+      console.log('Fetched observation points', {
+        annotationSetId,
+        observationImageCount: observationMap.size,
+      });
+
+      const annotationMap = await withTiming('fetchAnnotationPoints', () =>
+        fetchAnnotationPoints(annotationSetId)
+      );
+      console.log('Fetched annotations', {
+        annotationSetId,
+        annotationImageCount: annotationMap.size,
+      });
+
+      const imageTimestamps = await withTiming('fetchImageTimestamps', () =>
+        fetchImageTimestamps(projectId)
+      );
+      console.log('Fetched image timestamps', {
+        projectId,
+        imageCount: imageTimestamps.size,
+      });
+
+      const candidateTimingStart = Date.now();
+      const candidates = tiles.filter((tile) => {
+        const observations = observationMap.get(tile.imageId) || [];
+        const annotations = annotationMap.get(tile.imageId) || [];
+        const hasObservation = observations.some((obs) =>
+          tilesOverlap(tile, obs)
+        );
+        const hasAnnotation = annotations.some((point) =>
+          isInsideTile(point.x, point.y, tile)
+        );
+        return !hasObservation && !hasAnnotation;
+      });
+      console.log('Candidate filtering complete', {
+        totalTiles: tiles.length,
+        candidateCount: candidates.length,
+        durationMs: Date.now() - candidateTimingStart,
+      });
+
+      candidates.sort((a, b) => {
+        const tsA = imageTimestamps.get(a.imageId) ?? 0;
+        const tsB = imageTimestamps.get(b.imageId) ?? 0;
+        return tsA - tsB;
+      });
+
+      // Save pool (immutable, created once)
+      const now = new Date().toISOString();
+      const pool: FnPool = {
+        annotationSetId,
+        poolCreatedAt: now,
+        poolSize: candidates.length,
+        items: candidates,
+      };
+      await withTiming('saveFnPool', () =>
+        saveFnPool(annotationSetId, pool)
+      );
+
+      // Sample
+      const normalizedPercent = Math.min(
+        Math.max(payload.samplePercent, 0),
+        100
+      );
+      let sampleCount = Math.floor(
+        (candidates.length * normalizedPercent) / 100
+      );
+      if (
+        normalizedPercent > 0 &&
+        sampleCount === 0 &&
+        candidates.length > 0
+      ) {
+        sampleCount = 1;
+      }
+
+      const selectionStart = Date.now();
+      selectedTiles =
+        sampleCount <= 0
+          ? []
+          : sampleCount >= candidates.length
+            ? candidates.slice()
+            : randomSample(candidates, sampleCount);
+      console.log('Tile sampling complete', {
+        requestedPercent: payload.samplePercent,
+        normalizedPercent,
+        sampleCount,
+        selectedTiles: selectedTiles.length,
+        durationMs: Date.now() - selectionStart,
+      });
+
+      // Save history (first entry)
+      const history: FnHistory = {
+        annotationSetId,
+        poolSize: candidates.length,
+        totalLaunched: selectedTiles.length,
+        launches: [
+          {
+            launchedAt: now,
+            launchedCount: selectedTiles.length,
+            items: selectedTiles,
+          },
+        ],
+      };
+      await withTiming('saveFnHistory', () =>
+        saveFnHistory(annotationSetId, history)
+      );
+    }
   }
-
-  const selectionStart = Date.now();
-  const selectedTiles =
-    sampleCount > 0 && sampleCount < candidates.length
-      ? randomSample(candidates, sampleCount)
-      : candidates.slice();
-  console.log('Tile sampling complete', {
-    requestedPercent: payload.samplePercent,
-    normalizedPercent,
-    sampleCount,
-    selectedTiles: selectedTiles.length,
-    durationMs: Date.now() - selectionStart,
-  });
 
   if (selectedTiles.length === 0) {
     await setProjectStatus(projectId, 'active');
@@ -302,11 +485,23 @@ async function handleLaunch(payload: LaunchFalseNegativesPayload) {
   });
 
   const queue = await withTiming('createQueue', () =>
-    createQueue(payload.queueOptions, payload.queueTag, projectId, workerBatchSize)
+    createQueue(payload.queueOptions, payload.queueTag, projectId, workerBatchSize, {
+      annotationSetId,
+      locationSetId,
+      launchedCount: selectedTiles.length,
+      locations: selectedTiles.map((t) => ({
+        locationId: t.id,
+        imageId: t.imageId,
+        x: t.x,
+        y: t.y,
+        width: t.width,
+        height: t.height,
+      })),
+    })
   );
 
   await withTiming('enqueueTiles', () =>
-    enqueueTiles(queue.url, selectedTiles, annotationSetId, payload.queueTag)
+    enqueueTiles(queue.url, queue.id, selectedTiles, annotationSetId, payload.queueTag)
   );
 
   await withTiming('updateQueueMetadata', () =>
@@ -410,16 +605,124 @@ async function deletePayloadFromS3(key: string): Promise<void> {
   console.log('Deleted S3 payload', { key });
 }
 
+// ── FN Pool manifest helpers ──
+// The pool stores the original candidate set, created once and never modified.
+
+async function loadFnPool(
+  annotationSetId: string
+): Promise<FnPool | null> {
+  const bucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!bucketName) return null;
+  const key = `false-negative-pools/${annotationSetId}.json`;
+  try {
+    const response = await s3Client.send(
+      new GetObjectCommand({ Bucket: bucketName, Key: key })
+    );
+    const bodyStr = await response.Body?.transformToString();
+    if (!bodyStr) return null;
+    return JSON.parse(bodyStr) as FnPool;
+  } catch (error: any) {
+    if (error?.name === 'NoSuchKey' || error?.Code === 'NoSuchKey') return null;
+    console.warn('Failed to load FN pool', { key, error: error?.message });
+    return null;
+  }
+}
+
+async function saveFnPool(
+  annotationSetId: string,
+  pool: FnPool
+): Promise<void> {
+  const bucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!bucketName) {
+    console.warn('OUTPUTS_BUCKET_NAME not set, cannot save FN pool');
+    return;
+  }
+  const key = `false-negative-pools/${annotationSetId}.json`;
+  try {
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: bucketName,
+        Key: key,
+        Body: JSON.stringify(pool),
+        ContentType: 'application/json',
+      })
+    );
+    console.log('Saved FN pool to S3', { key, poolSize: pool.poolSize });
+  } catch (error) {
+    console.warn('Failed to save FN pool to S3', {
+      key,
+      error: error instanceof Error ? error.message : 'unknown error',
+    });
+  }
+}
+
+// ── FN History manifest helpers ──
+// The history tracks all launches and their tiles, appended to on each new launch.
+
+async function loadFnHistory(
+  annotationSetId: string
+): Promise<FnHistory | null> {
+  const bucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!bucketName) return null;
+  const key = `false-negative-history/${annotationSetId}.json`;
+  try {
+    const response = await s3Client.send(
+      new GetObjectCommand({ Bucket: bucketName, Key: key })
+    );
+    const bodyStr = await response.Body?.transformToString();
+    if (!bodyStr) return null;
+    return JSON.parse(bodyStr) as FnHistory;
+  } catch (error: any) {
+    if (error?.name === 'NoSuchKey' || error?.Code === 'NoSuchKey') return null;
+    console.warn('Failed to load FN history', { key, error: error?.message });
+    return null;
+  }
+}
+
+async function saveFnHistory(
+  annotationSetId: string,
+  history: FnHistory
+): Promise<void> {
+  const bucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!bucketName) {
+    console.warn('OUTPUTS_BUCKET_NAME not set, cannot save FN history');
+    return;
+  }
+  const key = `false-negative-history/${annotationSetId}.json`;
+  try {
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: bucketName,
+        Key: key,
+        Body: JSON.stringify(history),
+        ContentType: 'application/json',
+      })
+    );
+    console.log('Saved FN history to S3', {
+      key,
+      totalLaunched: history.totalLaunched,
+      launchCount: history.launches.length,
+    });
+  } catch (error) {
+    console.warn('Failed to save FN history to S3', {
+      key,
+      error: error instanceof Error ? error.message : 'unknown error',
+    });
+  }
+}
+
 // Custom GraphQL query to fetch observations with location data included
 // This avoids N+1 queries by fetching location data in the same query
 const observationsWithLocationsQuery = /* GraphQL */ `
   query ObservationsByAnnotationSetIdWithLocations(
     $annotationSetId: ID!
+    $filter: ModelObservationFilterInput
     $limit: Int
     $nextToken: String
   ) {
     observationsByAnnotationSetId(
       annotationSetId: $annotationSetId
+      filter: $filter
       limit: $limit
       nextToken: $nextToken
     ) {
@@ -453,6 +756,12 @@ async function fetchObservationPoints(annotationSetId: string) {
       query: observationsWithLocationsQuery,
       variables: {
         annotationSetId,
+        filter: {
+          or: [
+            { source: { notContains: 'false-negative' } },
+            { source: { attributeExists: false } },
+          ],
+        },
         limit: 1000,
         nextToken,
       },
@@ -501,7 +810,7 @@ async function fetchObservationPoints(annotationSetId: string) {
   return map;
 }
 
-// Gather existing human annotations to avoid rework.
+// Gather existing normal (non-FN) human annotations to avoid rework.
 async function fetchAnnotationPoints(annotationSetId: string) {
   const map = new Map<string, Array<{ x: number; y: number }>>();
   let nextToken: string | null | undefined = undefined;
@@ -511,6 +820,12 @@ async function fetchAnnotationPoints(annotationSetId: string) {
       query: annotationsByAnnotationSetId,
       variables: {
         setId: annotationSetId,
+        filter: {
+          or: [
+            { source: { notContains: 'false-negative' } },
+            { source: { attributeExists: false } },
+          ],
+        },
         limit: 1000,
         nextToken,
       },
@@ -588,14 +903,28 @@ async function fetchImageTimestamps(projectId: string) {
   return map;
 }
 
-// Create the SQS queue and persist queue metadata.
+// Create the SQS queue and persist queue metadata with tracking fields.
 async function createQueue(
   queueOptions: LaunchQueueOptions,
   queueTag: string,
   projectId: string,
-  batchSize: number
+  batchSize: number,
+  trackingParams: {
+    annotationSetId: string;
+    locationSetId: string;
+    launchedCount: number;
+    locations: Array<{
+      locationId: string;
+      imageId: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }>;
+  }
 ) {
-  const queueNameSeed = `${queueOptions.name}-${randomUUID()}`;
+  const queueId = randomUUID();
+  const queueNameSeed = `${queueOptions.name}-${queueId}`;
   const safeBaseName = makeSafeQueueName(queueNameSeed);
   const finalName = queueOptions.fifo ? `${safeBaseName}.fifo` : safeBaseName;
 
@@ -614,10 +943,28 @@ async function createQueue(
     throw new Error('Unable to determine created queue URL');
   }
 
+  // Write location manifest to S3 for requeue tracking
+  const manifestKey = `queue-manifests/${queueId}.json`;
+  const bucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!bucketName) {
+    throw new Error('OUTPUTS_BUCKET_NAME environment variable not set');
+  }
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: bucketName,
+      Key: manifestKey,
+      Body: JSON.stringify({ items: trackingParams.locations }),
+      ContentType: 'application/json',
+    })
+  );
+  console.log('Wrote location manifest to S3', { manifestKey, locationCount: trackingParams.locations.length });
+
+  const timestamp = new Date().toISOString();
   const queueData = await executeGraphql<{
     createQueue?: { id: string };
   }>(createQueueMutation, {
     input: {
+      id: queueId,
       url: queueUrl,
       name: queueOptions.name,
       projectId,
@@ -625,7 +972,15 @@ async function createQueue(
       hidden: queueOptions.hidden,
       tag: queueTag,
       approximateSize: 1,
-      updatedAt: new Date().toISOString(),
+      updatedAt: timestamp,
+      requeueAt: timestamp,
+      // Tracking fields for requeue detection
+      annotationSetId: trackingParams.annotationSetId,
+      locationSetId: trackingParams.locationSetId,
+      launchedCount: trackingParams.launchedCount,
+      observedCount: 0,
+      locationManifestS3Key: manifestKey,
+      requeuesCompleted: 0,
     },
   });
 
@@ -640,6 +995,7 @@ async function createQueue(
 // Fan selected tiles into SQS batches respecting FIFO rules.
 async function enqueueTiles(
   queueUrl: string,
+  queueId: string,
   tiles: MinimalTile[],
   annotationSetId: string,
   queueTag: string
@@ -661,7 +1017,8 @@ async function enqueueTiles(
     const entries = batch.map((tile) => {
       const body = JSON.stringify({
         location: { id: tile.id, annotationSetId },
-        allowOutside: true,
+        queueId,  // For observation counter increment
+        allowOutside: false,
         taskTag: queueTag,
         skipLocationWithAnnotations: false,
       });

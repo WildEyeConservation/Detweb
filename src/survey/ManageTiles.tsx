@@ -38,9 +38,7 @@ export default function ManageTiles({
   const isActiveRef = useRef(true);
 
   // Get the tiled location set ID from project
-  const tiledLocationSetId = (project as any).tiledLocationSetId as
-    | string
-    | undefined;
+  const tiledLocationSetId = project.tiledLocationSetId;
 
   useEffect(() => {
     isActiveRef.current = true;
@@ -80,26 +78,25 @@ export default function ManageTiles({
     async function checkActiveTilingTask() {
       if (!tiledLocationSetId) return;
       try {
-        const { data: tasks } = (await (
-          client.models.TilingTask as any
-        ).tilingTasksByProjectId(
-          { projectId: project.id },
-          {
-            selectionSet: [
-              'id',
-              'status',
-              'totalBatches',
-              'completedBatches',
-              'totalLocations',
-              'locationSetId',
-            ],
-            limit: 10,
-          }
-        )) as { data: any[] };
+        const { data: tasks } = await
+          client.models.TilingTask.tilingTasksByProjectId(
+            { projectId: project.id },
+            {
+              selectionSet: [
+                'id',
+                'status',
+                'totalBatches',
+                'completedBatches',
+                'totalLocations',
+                'locationSetId',
+              ],
+              limit: 10,
+            }
+          );
 
         // Find active task for our location set
         const activeTask = tasks?.find(
-          (t: any) =>
+          (t) =>
             t.locationSetId === tiledLocationSetId &&
             (t.status === 'pending' || t.status === 'processing')
         );
@@ -134,21 +131,21 @@ export default function ManageTiles({
         }
 
         try {
-          const { data: task } = (await (
-            client.models.TilingTask as any
-          ).get(
-            { id: tilingTaskId },
-            {
-              selectionSet: [
-                'id',
-                'status',
-                'totalBatches',
-                'completedBatches',
-                'totalLocations',
-                'errorMessage',
-              ],
-            }
-          )) as { data: any };
+          const { data: task } = await
+            client.models.TilingTask
+              .get(
+                { id: tilingTaskId },
+                {
+                  selectionSet: [
+                    'id',
+                    'status',
+                    'totalBatches',
+                    'completedBatches',
+                    'totalLocations',
+                    'errorMessage',
+                  ],
+                }
+              );
 
           if (!task) return;
 
@@ -204,34 +201,34 @@ export default function ManageTiles({
 
       attempts++;
       try {
-        const { data: tasks } = (await (
-          client.models.TilingTask as any
-        ).tilingTasksByProjectId(
-          { projectId: project.id },
-          {
-            selectionSet: [
-              'id',
-              'status',
-              'totalBatches',
-              'completedBatches',
-              'totalLocations',
-              'locationSetId',
-              'createdAt',
-            ],
-            limit: 10,
-          }
-        )) as { data: any[] };
+        const { data: tasks } = await
+          client.models.TilingTask
+            .tilingTasksByProjectId(
+              { projectId: project.id },
+              {
+                selectionSet: [
+                  'id',
+                  'status',
+                  'totalBatches',
+                  'completedBatches',
+                  'totalLocations',
+                  'locationSetId',
+                  'createdAt',
+                ],
+                limit: 10,
+              }
+            );
 
         // Find the most recent active task for our location set
         const activeTask = tasks
           ?.filter(
-            (t: any) =>
+            (t) =>
               t.locationSetId === tiledLocationSetId &&
               (t.status === 'pending' || t.status === 'processing')
           )
           .sort(
-            (a: any, b: any) =>
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            (a, b) =>
+              new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()
           )[0];
 
         if (activeTask) {
@@ -354,7 +351,7 @@ export default function ManageTiles({
       }
 
       setStatusMessage('Tiles being created...');
-      
+
       // Start polling for the tiling task immediately
       // Don't wait for lambda response due to Amplify timeout issues
       startPollingForTask();
@@ -407,8 +404,8 @@ export default function ManageTiles({
   const progressPercent =
     tilingProgress && tilingProgress.totalBatches > 0
       ? Math.round(
-          (tilingProgress.completedBatches / tilingProgress.totalBatches) * 100
-        )
+        (tilingProgress.completedBatches / tilingProgress.totalBatches) * 100
+      )
       : 0;
 
   return (

@@ -300,26 +300,26 @@ export interface WithCreateObservationProps extends UseCreateObservationProps {
 
 interface CombinedProps
   extends WithCreateObservationProps,
-    UseAckOnTimeoutProps,
-    BaseImageProps {}
+  UseAckOnTimeoutProps,
+  BaseImageProps { }
 
 export function withCreateObservation<T extends CombinedProps>(
   WrappedComponent: React.ComponentType<T>
 ) {
   const WithCreateObservation: React.FC<T> = (props) => {
-    const { location, ack, isTest, config, testPresetId, testSetId, queueId } = props;
-    const { location, ack, isTest, config, testPresetId, testSetId, observationSource } = props;
+    const { location, ack, isTest, config, testPresetId, testSetId, observationSource, queueId, annotationSet } = props;
     const newAck = location.id
       ? useCreateObservation({
-          location,
-          ack,
-          isTest,
-          config,
-          testPresetId,
-          testSetId,
-          queueId, // Pass queueId for observation counter increment
-          observationSource,
-        })
+        location,
+        ack,
+        isTest,
+        config,
+        testPresetId,
+        testSetId,
+        queueId, // Pass queueId for observation counter increment
+        annotationSet,
+        observationSource,
+      })
       : ack;
     return (
       <WrappedComponent {...props} location={{ ...location, ack: newAck }} />

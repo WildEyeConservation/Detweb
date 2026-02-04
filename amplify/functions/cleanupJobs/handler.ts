@@ -13,10 +13,11 @@ import {
 import { Queue, UserProjectMembership } from "./graphql/API";
 import { SQSClient } from "@aws-sdk/client-sqs";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { deleteQueue } from "./graphql/mutations";
 
 // Constants
-const MAX_REQUEUES = 3;
+const MAX_REQUEUES = 1;
 
 Amplify.configure(
   {
@@ -207,6 +208,10 @@ export const handler: Handler = async (event, context) => {
           }
         }
 
+        // NOTE: FN pool and history manifests are NOT deleted on queue cleanup.
+        // They persist until the user explicitly resets via the UI, enabling
+        // cumulative sampling across multiple launches.
+
         await client.graphql({
           query: deleteQueue,
           variables: {
@@ -246,6 +251,38 @@ export const handler: Handler = async (event, context) => {
         } catch (logError) {
           // Log error but don't fail the cleanup
           console.error("Failed to log admin action:", logError);
+        }
+
+        // Trigger FN pool reconciliation for non-FN (species labelling) queues
+        const isFnQueue = queue.name === 'False Negatives';
+        if (!isFnQueue && queue.annotationSetId) {
+          try {
+            const functionName = (env as any).RECONCILE_FALSE_NEGATIVES_FUNCTION_NAME;
+            if (functionName) {
+              const lambdaClient = new LambdaClient({
+                region: env.AWS_REGION,
+                credentials: {
+                  accessKeyId: env.AWS_ACCESS_KEY_ID,
+                  secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+                  sessionToken: env.AWS_SESSION_TOKEN,
+                },
+              });
+              await lambdaClient.send(
+                new InvokeCommand({
+                  FunctionName: functionName,
+                  InvocationType: 'Event',
+                  Payload: new TextEncoder().encode(
+                    JSON.stringify({ annotationSetId: queue.annotationSetId })
+                  ),
+                })
+              );
+              console.log('Triggered FN reconciliation', {
+                annotationSetId: queue.annotationSetId,
+              });
+            }
+          } catch (err) {
+            console.error('Failed to trigger FN reconciliation', err);
+          }
         }
 
         deletedProjectIds.add(queue.projectId);

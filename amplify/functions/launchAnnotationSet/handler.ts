@@ -284,15 +284,6 @@ export const handler: Handler = async (event) => {
 
 // Orchestrate queue creation, task enqueuing, and bookkeeping.
 async function handleLaunch(payload: LaunchLambdaPayload) {
-  // Delete false negative data if requested
-  if (payload.hasFN && payload.annotationSetId) {
-    console.log('Deleting false negative data', {
-      annotationSetId: payload.annotationSetId,
-    });
-    await deleteFalseNegativeData(payload.annotationSetId);
-    console.log('False negative data deletion complete');
-  }
-
   const locationSetIds = new Set(payload.locationSetIds ?? []);
   let locationIds = payload.locationIds ?? [];
 
@@ -1039,6 +1030,41 @@ async function deleteFalseNegativeData(annotationSetId: string): Promise<void> {
 
   // Delete false negative annotations
   await deleteFalseNegativeAnnotations(annotationSetId);
+
+  // Delete the FN manifest from S3 (for continuation detection)
+  await deleteFnManifest(annotationSetId);
+}
+
+// Delete all FN manifests from S3 when FN data is being cleared.
+// This covers both the legacy single manifest and the new pool/history manifests.
+async function deleteFnManifest(annotationSetId: string): Promise<void> {
+  const bucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!bucketName) {
+    console.warn('OUTPUTS_BUCKET_NAME not set, cannot delete FN manifests');
+    return;
+  }
+  const keys = [
+    `false-negative-manifests/${annotationSetId}.json`,
+    `false-negative-pools/${annotationSetId}.json`,
+    `false-negative-history/${annotationSetId}.json`,
+  ];
+  for (const key of keys) {
+    try {
+      await s3Client.send(
+        new DeleteObjectCommand({
+          Bucket: bucketName,
+          Key: key,
+        })
+      );
+      console.log('Deleted FN manifest from S3', { key });
+    } catch (error: any) {
+      if (error?.name === 'NoSuchKey' || error?.Code === 'NoSuchKey') {
+        console.log('FN manifest does not exist, nothing to delete', { key });
+        continue;
+      }
+      console.warn('Failed to delete FN manifest', { key, error });
+    }
+  }
 }
 
 // Delete observations with source containing 'false-negative'

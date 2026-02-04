@@ -23,6 +23,7 @@ import { monitorScoutbotDlq } from '../functions/monitorScoutbotDlq/resource';
 import { processTilingBatch } from '../functions/processTilingBatch/resource';
 import { monitorTilingTasks } from '../functions/monitorTilingTasks/resource';
 import { findAndRequeueMissingLocations } from '../functions/findAndRequeueMissingLocations/resource';
+import { reconcileFalseNegatives } from '../functions/reconcileFalseNegatives/resource';
 // import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
@@ -1042,6 +1043,7 @@ const schema = a
     allow.resource(processTilingBatch),
     allow.resource(monitorTilingTasks),
     allow.resource(findAndRequeueMissingLocations),
+    allow.resource(reconcileFalseNegatives),
     // allow.resource(consolidateUserStats),
   ]);
 

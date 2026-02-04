@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { Alert, Form, Modal, Button } from 'react-bootstrap';
+import { Alert, Form } from 'react-bootstrap';
 import Select from 'react-select';
 import { Schema } from '../amplify/client-schema';
 import { GlobalContext, UserContext } from '../Context';
@@ -60,14 +60,6 @@ export default function SpeciesLabelling({
   const [globalTileCount, setGlobalTileCount] = useState<number | null>(null);
   const [loadingTileCount, setLoadingTileCount] = useState<boolean>(false);
 
-  // False negative data detection
-  const [hasFalseNegativeData, setHasFalseNegativeData] =
-    useState<boolean>(false);
-  const [showFnConfirmModal, setShowFnConfirmModal] = useState<boolean>(false);
-  const confirmPromiseRef = useRef<{
-    resolve: (value: boolean) => void;
-    reject: (reason?: any) => void;
-  } | null>(null);
 
   // Get the tiled location set ID from project
   const tiledLocationSetId = (project as any).tiledLocationSetId as
@@ -87,46 +79,6 @@ export default function SpeciesLabelling({
     zoom: zoom as number | undefined,
   });
 
-  // Check for false negative data on mount
-  useEffect(() => {
-    let mounted = true;
-    async function checkForFnData() {
-      try {
-        // Query observations with source filter - looking for any with 'false-negative'
-        // The index has sortKeys on createdAt and source, so we need to scan
-        const { data } =
-          await client.models.Observation.observationsByAnnotationSetId(
-            {
-              annotationSetId: annotationSet.id,
-            },
-            {
-              filter: {
-                source: { contains: 'false-negative' },
-              },
-              selectionSet: ['id', 'source'] as const,
-              limit: 1000,
-            }
-          );
-        if (!mounted) return;
-        // Check if any observation has false-negative in source
-        const hasFn = (data || []).some(
-          (obs: any) =>
-            obs?.source && String(obs.source).includes('false-negative')
-        );
-        console.log('hasFn', hasFn);
-        setHasFalseNegativeData(hasFn);
-      } catch (err) {
-        console.error('Failed to check for FN data', err);
-        if (mounted) {
-          setHasFalseNegativeData(false);
-        }
-      }
-    }
-    checkForFnData();
-    return () => {
-      mounted = false;
-    };
-  }, [client, annotationSet.id]);
 
   // Load global tile count when switching to tiled mode
   useEffect(() => {
@@ -304,17 +256,12 @@ export default function SpeciesLabelling({
     tiledLocationSetIdRef.current = tiledLocationSetId;
   }, [tiledLocationSetId]);
 
-  const hasFalseNegativeDataRef = useRef(hasFalseNegativeData);
-  useEffect(() => {
-    hasFalseNegativeDataRef.current = hasFalseNegativeData;
-  }, [hasFalseNegativeData]);
 
-  // The actual launch logic - called after confirmation if FN data exists
+  // The actual launch logic
   const performLaunch = useCallback(
     async (
       onProgress: (msg: string) => void,
-      onLaunchConfirmed: () => void,
-      deleteFnData: boolean
+      onLaunchConfirmed: () => void
     ) => {
       if (modelGuidedRef.current) {
         // Model guided launch
@@ -335,7 +282,6 @@ export default function SpeciesLabelling({
             hidden: false,
             fifo: false,
           },
-          hasFN: deleteFnData,
           onLaunchConfirmed,
         });
         // Log the launch action with settings
@@ -372,7 +318,6 @@ export default function SpeciesLabelling({
             hidden: hiddenRef.current,
             fifo: false,
           },
-          hasFN: deleteFnData,
           onLaunchConfirmed,
         });
         // Log the launch action
@@ -399,53 +344,10 @@ export default function SpeciesLabelling({
     performLaunchRef.current = performLaunch;
   }, [performLaunch]);
 
-  // Handle confirmation dialog result
-  const handleFnConfirm = useCallback(async () => {
-    setShowFnConfirmModal(false);
-    if (confirmPromiseRef.current) {
-      confirmPromiseRef.current.resolve(true);
-      confirmPromiseRef.current = null;
-    }
-  }, []);
-
-  const handleFnCancel = useCallback(() => {
-    setShowFnConfirmModal(false);
-    if (confirmPromiseRef.current) {
-      confirmPromiseRef.current.reject(new Error('User cancelled launch'));
-      confirmPromiseRef.current = null;
-    }
-  }, []);
-
   useEffect(() => {
-    // Wrap in function to store a function value (not treat as state updater)
     setSpeciesLaunchHandler({
       execute: async (onProgress: (msg: string) => void, onLaunchConfirmed: () => void) => {
-        // Check if FN data exists - if so, show confirmation dialog
-        if (hasFalseNegativeDataRef.current) {
-          try {
-            // Create a promise that will be resolved/rejected when user confirms/cancels
-            const userConfirmed = await new Promise<boolean>(
-              (resolve, reject) => {
-                confirmPromiseRef.current = { resolve, reject };
-                setShowFnConfirmModal(true);
-              }
-            );
-
-            if (!userConfirmed) {
-              // User cancelled, don't proceed with launch
-              return;
-            }
-
-            // User confirmed, proceed with launch and delete FN data
-            await performLaunchRef.current(onProgress, onLaunchConfirmed, true);
-          } catch (error) {
-            // User cancelled via rejection - propagate the error to parent
-            throw error;
-          }
-          return;
-        }
-        // No FN data, proceed with launch directly
-        await performLaunchRef.current(onProgress, onLaunchConfirmed, false);
+        await performLaunchRef.current(onProgress, onLaunchConfirmed);
       }
     });
     return () => {
@@ -675,35 +577,6 @@ export default function SpeciesLabelling({
         </div>
       )}
 
-      {/* False Negative Data Confirmation Modal */}
-      <Modal
-        show={showFnConfirmModal}
-        onHide={handleFnCancel}
-        centered
-        backdrop='static'
-        keyboard={false}
-      >
-        <Modal.Header closeButton>
-          <Modal.Title>False Negative Data Detected</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <p>
-            This annotation set contains data from a previous False Negatives
-            task. Launching a new annotation task will{' '}
-            <strong>permanently delete</strong> all false negative annotations
-            and observations to maintain statistical accuracy.
-          </p>
-          <p className='mb-0'>Do you want to proceed?</p>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant='secondary' onClick={handleFnCancel}>
-            Cancel
-          </Button>
-          <Button variant='danger' onClick={handleFnConfirm}>
-            Delete FN Data & Launch
-          </Button>
-        </Modal.Footer>
-      </Modal>
     </div>
   );
 }

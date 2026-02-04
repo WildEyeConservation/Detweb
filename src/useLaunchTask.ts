@@ -171,7 +171,7 @@ export function useLaunchTask(
     return locationIds;
   }
 
-  // Query all annotations for an annotation set (for filtering locations with existing annotations)
+  // Query normal (non-FN) annotations for an annotation set (for filtering locations with existing annotations)
   async function queryAnnotations(
     annotationSetId: string,
     onProgress?: (message: string) => void
@@ -185,8 +185,14 @@ export function useLaunchTask(
         TableName: backend.custom.annotationTable,
         IndexName: 'annotationsBySetId',
         KeyConditionExpression: 'setId = :setId',
+        FilterExpression:
+          'attribute_not_exists(#src) OR NOT contains(#src, :fnMarker)',
+        ExpressionAttributeNames: {
+          '#src': 'source',
+        },
         ExpressionAttributeValues: {
           ':setId': { S: annotationSetId },
+          ':fnMarker': { S: 'false-negative' },
         },
         ProjectionExpression: 'x, y',
         ExclusiveStartKey: lastEvaluatedKey,
@@ -375,6 +381,7 @@ export function useLaunchTask(
           tiledRequest: tiledRequest ?? null,
           locationManifestS3Key,
           launchedCount,
+          hasFN: hasFN ?? false,
         };
 
         onProgress?.('Enqueuing jobs...');

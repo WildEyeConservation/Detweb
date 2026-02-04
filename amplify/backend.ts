@@ -32,6 +32,7 @@ import { monitorScoutbotDlq } from './functions/monitorScoutbotDlq/resource';
 import { processTilingBatch } from './functions/processTilingBatch/resource';
 import { monitorTilingTasks } from './functions/monitorTilingTasks/resource';
 import { findAndRequeueMissingLocations } from './functions/findAndRequeueMissingLocations/resource';
+import { reconcileFalseNegatives } from './functions/reconcileFalseNegatives/resource';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 
 // Register all Amplify-managed resources in a single backend definition.
@@ -59,6 +60,7 @@ const backend = defineBackend({
   processTilingBatch,
   monitorTilingTasks,
   findAndRequeueMissingLocations,
+  reconcileFalseNegatives,
 });
 
 const observationTable = backend.data.resources.tables['Observation'];
@@ -162,8 +164,14 @@ const groupS3ObjectsPolicy = new iam.PolicyStatement({
 
 // Allow reading tiles and results from the outputs bucket prefixes
 const groupS3OutputsReadPolicy = new iam.PolicyStatement({
-  actions: ['s3:GetObject'],
-  resources: ['arn:aws:s3:::*/slippymaps/*', 'arn:aws:s3:::*/heatmaps/*'],
+  actions: ['s3:GetObject', 's3:DeleteObject'],
+  resources: [
+    'arn:aws:s3:::*/slippymaps/*',
+    'arn:aws:s3:::*/heatmaps/*',
+    'arn:aws:s3:::*/false-negative-manifests/*',
+    'arn:aws:s3:::*/false-negative-pools/*',
+    'arn:aws:s3:::*/false-negative-history/*',
+  ],
 });
 
 // Allow writing launch payloads to the outputs bucket
@@ -530,11 +538,35 @@ backend.cleanupJobs.resources.lambda.addToRolePolicy(
     resources: ['*'],
   })
 );
-// cleanupJobs needs S3 permissions to delete location manifests
+// cleanupJobs needs S3 permissions to delete location manifests and FN manifests
 backend.cleanupJobs.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: ['s3:DeleteObject'],
-    resources: ['arn:aws:s3:::*/queue-manifests/*'],
+    resources: [
+      'arn:aws:s3:::*/queue-manifests/*',
+      'arn:aws:s3:::*/false-negative-manifests/*',
+    ],
+  })
+);
+// cleanupJobs triggers reconcileFalseNegatives when species labelling jobs complete
+backend.cleanupJobs.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['lambda:InvokeFunction'],
+    resources: [backend.reconcileFalseNegatives.resources.lambda.functionArn],
+  })
+);
+backend.cleanupJobs.addEnvironment(
+  'RECONCILE_FALSE_NEGATIVES_FUNCTION_NAME',
+  backend.reconcileFalseNegatives.resources.lambda.functionName
+);
+// reconcileFalseNegatives needs S3 permissions for FN pool and history manifests
+backend.reconcileFalseNegatives.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['s3:GetObject', 's3:PutObject'],
+    resources: [
+      'arn:aws:s3:::*/false-negative-pools/*',
+      'arn:aws:s3:::*/false-negative-history/*',
+    ],
   })
 );
 backend.launchAnnotationSet.resources.lambda.addToRolePolicy(
@@ -570,6 +602,29 @@ backend.launchFalseNegatives.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: ['lambda:InvokeFunction'],
     resources: ['*'],
+  })
+);
+// launchFalseNegatives needs S3 permissions to write queue manifests and FN manifests
+backend.launchFalseNegatives.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['s3:PutObject', 's3:GetObject'],
+    resources: [
+      'arn:aws:s3:::*/queue-manifests/*',
+      'arn:aws:s3:::*/false-negative-manifests/*',
+      'arn:aws:s3:::*/false-negative-pools/*',
+      'arn:aws:s3:::*/false-negative-history/*',
+    ],
+  })
+);
+// launchAnnotationSet needs S3 permissions to delete FN manifests when hasFN=true
+backend.launchAnnotationSet.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['s3:DeleteObject'],
+    resources: [
+      'arn:aws:s3:::*/false-negative-manifests/*',
+      'arn:aws:s3:::*/false-negative-pools/*',
+      'arn:aws:s3:::*/false-negative-history/*',
+    ],
   })
 );
 // monitorTilingTasks needs SQS permissions for queue creation and messaging
