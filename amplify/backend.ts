@@ -166,15 +166,17 @@ const groupS3OutputsReadPolicy = new iam.PolicyStatement({
   resources: ['arn:aws:s3:::*/slippymaps/*', 'arn:aws:s3:::*/heatmaps/*'],
 });
 
-// Allow writing launch payloads to the outputs bucket
+// Allow writing and reading launch payloads to/from the outputs bucket
+// (read is needed for HEAD requests after uploadData completes)
 const groupS3LaunchPayloadsPolicy = new iam.PolicyStatement({
-  actions: ['s3:PutObject'],
+  actions: ['s3:PutObject', 's3:GetObject'],
   resources: ['arn:aws:s3:::*/launch-payloads/*'],
 });
 
-// Allow writing queue manifests to the outputs bucket
+// Allow writing and reading queue manifests to/from the outputs bucket
+// (read is needed for HEAD requests after uploadData completes)
 const groupS3QueueManifestsPolicy = new iam.PolicyStatement({
-  actions: ['s3:PutObject'],
+  actions: ['s3:PutObject', 's3:GetObject'],
   resources: ['arn:aws:s3:::*/queue-manifests/*'],
 });
 

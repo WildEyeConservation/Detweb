@@ -27,7 +27,7 @@ export const outputBucket = defineStorage({
       allow.authenticated.to(['read'])
     ],
     'launch-payloads/*': [
-      allow.authenticated.to(['write']),
+      allow.authenticated.to(['write', 'read']),
       allow.resource(launchAnnotationSet).to(['read', 'delete']),
       allow.resource(launchFalseNegatives).to(['read', 'delete'])
     ],
@@ -44,7 +44,7 @@ export const outputBucket = defineStorage({
     ],
     // Queue manifests for requeue detection
     'queue-manifests/*': [
-      allow.authenticated.to(['write']),
+      allow.authenticated.to(['write', 'read']),
       allow.resource(launchAnnotationSet).to(['write']),
       allow.resource(monitorTilingTasks).to(['write']),
       allow.resource(findAndRequeueMissingLocations).to(['read']),
