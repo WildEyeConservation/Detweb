@@ -40,7 +40,7 @@ interface AppProps {
   user?: AuthUser;
 }
 
-function App({ signOut = () => {}, user }: AppProps) {
+function App({ signOut = () => { }, user }: AppProps) {
   const [session, setSession] = useState<any>();
   const [cognitoGroups, setCognitoGroups] = useState<string[]>([]);
   const [continueOnMobile, setContinueOnMobile] = useState(false);
@@ -158,7 +158,7 @@ export default function AppWithAuthenticator() {
   }, []);
 
   return (
-    <Authenticator components={components} variation='modal'>
+    <Authenticator components={components} variation='modal' hideSignUp>
       {({ signOut, user }) => <App signOut={signOut} user={user} />}
     </Authenticator>
   );
