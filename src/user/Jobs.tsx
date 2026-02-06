@@ -2,7 +2,7 @@ import { Card } from 'react-bootstrap';
 import { useContext, useEffect, useState } from 'react';
 import { UserContext, GlobalContext } from '../Context';
 import { Schema } from '../amplify/client-schema';
-import { Spinner, Button, ProgressBar } from 'react-bootstrap';
+import { Spinner, Button, ProgressBar, Form } from 'react-bootstrap';
 import MyTable from '../Table';
 import { useNavigate } from 'react-router-dom';
 import { type GetQueueAttributesCommandInput } from '@aws-sdk/client-sqs';
@@ -11,7 +11,11 @@ import ConfirmationModal from '../ConfirmationModal';
 import ProjectProgress from './ProjectProgress';
 import { Minimize2, Maximize2 } from 'lucide-react';
 
-const STORAGE_KEY_COMPACT_MODE = 'jobsCompactMode';
+const STORAGE_KEYS = {
+  COMPACT_MODE: 'jobsCompactMode',
+  SORT_BY: 'jobsSortBy',
+  ORGANIZATION_FILTER: 'jobsOrganizationFilter',
+};
 
 type Project = {
   id: string;
@@ -22,7 +26,9 @@ type Project = {
   };
   annotationSets: {
     id: string;
+    register: boolean;
   }[];
+  createdAt: string;
   queues: Schema['Queue']['type'][];
 };
 
@@ -54,11 +60,39 @@ export default function Jobs() {
   >(null);
   const [deletingJob, setDeletingJob] = useState(false);
   const [scanningProjects, setScanningProjects] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState('');
+
+  // Initialize sortBy from localStorage or use default
+  const getInitialSortBy = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEYS.SORT_BY);
+      if (stored) {
+        return stored;
+      }
+    }
+    return 'createdAt';
+  };
+
+  // Initialize organizationFilter from localStorage or use default
+  const getInitialOrganizationFilter = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEYS.ORGANIZATION_FILTER);
+      if (stored !== null) {
+        return stored;
+      }
+    }
+    return '';
+  };
+
+  const [sortBy, setSortBy] = useState(getInitialSortBy);
+  const [organizationFilter, setOrganizationFilter] = useState(
+    getInitialOrganizationFilter
+  );
 
   // Initialize compactMode from localStorage or use default
   const getInitialCompactMode = () => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(STORAGE_KEY_COMPACT_MODE);
+      const stored = localStorage.getItem(STORAGE_KEYS.COMPACT_MODE);
       if (stored !== null) {
         return stored === 'true';
       }
@@ -90,9 +124,26 @@ export default function Jobs() {
   // Persist compactMode to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_COMPACT_MODE, String(compactMode));
+      localStorage.setItem(STORAGE_KEYS.COMPACT_MODE, String(compactMode));
     }
   }, [compactMode]);
+
+  // Persist sortBy to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.SORT_BY, sortBy);
+    }
+  }, [sortBy]);
+
+  // Persist organizationFilter to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(
+        STORAGE_KEYS.ORGANIZATION_FILTER,
+        organizationFilter
+      );
+    }
+  }, [organizationFilter]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -113,6 +164,7 @@ export default function Jobs() {
               'organization.name',
               'annotationSets.id',
               'annotationSets.register',
+              'createdAt',
               'queues.*',
             ],
           }
@@ -212,6 +264,47 @@ export default function Jobs() {
     };
   }, [userProjectMembershipHook.data]);
 
+  const organizationOptions = Array.from(
+    new Map(
+      displayProjects.map((project) => [
+        project.organization.id,
+        project.organization.name,
+      ])
+    ).entries()
+  ).map(([id, name]) => ({ id, name }));
+
+  const filteredProjects = displayProjects.filter((project) => {
+    const searchLower = search.toLowerCase();
+    const matchesOrganization =
+      !organizationFilter || project.organization.id === organizationFilter;
+    const matchesQueue = project.queues.some((queue) =>
+      (queue.tag || '').toLowerCase().includes(searchLower)
+    );
+    const matchesSearch =
+      searchLower === '' ||
+      project.name.toLowerCase().includes(searchLower) ||
+      project.organization.name.toLowerCase().includes(searchLower) ||
+      matchesQueue;
+
+    return matchesOrganization && matchesSearch;
+  });
+
+  const sortedProjects = [...filteredProjects].sort((a, b) => {
+    if (sortBy === 'createdAt') {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }
+    if (sortBy === 'createdAt-reverse') {
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    }
+    if (sortBy === 'name') {
+      return a.name.localeCompare(b.name);
+    }
+    if (sortBy === 'name-reverse') {
+      return b.name.localeCompare(a.name);
+    }
+    return 0;
+  });
+
   async function handleTakeJob(job: { queueId: string; projectId: string }) {
     setTakingJob(true);
 
@@ -251,7 +344,7 @@ export default function Jobs() {
   }
 
   const tableData = [
-    ...displayProjects.flatMap((project) =>
+    ...sortedProjects.flatMap((project) =>
       project.queues
         .map((queue) => {
           const numJobsRemaining = Number(jobsRemaining[queue.url || ''] || 0);
@@ -355,65 +448,81 @@ export default function Jobs() {
         })
         .filter((item) => item !== null)
     ),
-    ...registrationJobs.map((job) => {
-      const project = displayProjects.find(
-        (project) => project.id === job.projectId
-      );
+    ...registrationJobs
+      .filter((job) => {
+        const project = displayProjects.find((p) => p.id === job.projectId);
+        if (!project) return false;
 
-      if (!project) {
-        return <></>;
-      }
+        const searchLower = search.toLowerCase();
+        const matchesOrganization =
+          !organizationFilter || project.organization.id === organizationFilter;
+        const matchesSearch =
+          searchLower === '' ||
+          project.name.toLowerCase().includes(searchLower) ||
+          project.organization.name.toLowerCase().includes(searchLower) ||
+          'registration'.includes(searchLower);
 
-      const paddingClass = compactMode ? 'p-1' : 'p-2';
-      const gapClass = compactMode ? 'gap-1' : 'gap-2';
-      const rowGapClass = compactMode ? 'gap-1' : 'gap-3';
-      const titleSize = compactMode ? 'h6' : 'h5';
-      const typeFontSize = compactMode ? '12px' : '14px';
+        return matchesOrganization && matchesSearch;
+      })
+      .map((job) => {
+        const project = displayProjects.find(
+          (project) => project.id === job.projectId
+        );
 
-      return {
-        id: job.id,
-        rowData: [
-          <div
-            className={`d-flex justify-content-between align-items-center ${paddingClass}`}
-            key={job.id}
-          >
-            <div className={`d-flex flex-row ${rowGapClass} align-items-center`}>
-              <div>
-                {compactMode ? (
-                  <h6 className='mb-0'>{project.name}</h6>
-                ) : (
-                  <h5 className='mb-0'>{project.name}</h5>
-                )}
-                {!compactMode && (
-                  <i style={{ fontSize: '14px', display: 'block' }}>
-                    {project.organization.name}
-                  </i>
-                )}
-                <p
-                  style={{
-                    fontSize: typeFontSize,
-                    display: 'block',
-                    marginBottom: '0px',
-                  }}
-                >
-                  Type: Registration
-                </p>
-              </div>
-            </div>
-            <Button
-              size={compactMode ? 'sm' : undefined}
-              className='ms-1'
-              variant='primary'
-              onClick={() =>
-                navigate(`/surveys/${project.id}/set/${job.id}/registration`)
-              }
+        if (!project) {
+          return <></>;
+        }
+
+        const paddingClass = compactMode ? 'p-1' : 'p-2';
+        const gapClass = compactMode ? 'gap-1' : 'gap-2';
+        const rowGapClass = compactMode ? 'gap-1' : 'gap-3';
+        const titleSize = compactMode ? 'h6' : 'h5';
+        const typeFontSize = compactMode ? '12px' : '14px';
+
+        return {
+          id: job.id,
+          rowData: [
+            <div
+              className={`d-flex justify-content-between align-items-center ${paddingClass}`}
+              key={job.id}
             >
-              Take Job
-            </Button>
-          </div>,
-        ],
-      };
-    }),
+              <div className={`d-flex flex-row ${rowGapClass} align-items-center`}>
+                <div>
+                  {compactMode ? (
+                    <h6 className='mb-0'>{project.name}</h6>
+                  ) : (
+                    <h5 className='mb-0'>{project.name}</h5>
+                  )}
+                  {!compactMode && (
+                    <i style={{ fontSize: '14px', display: 'block' }}>
+                      {project.organization.name}
+                    </i>
+                  )}
+                  <p
+                    style={{
+                      fontSize: typeFontSize,
+                      display: 'block',
+                      marginBottom: '0px',
+                    }}
+                  >
+                    Type: Registration
+                  </p>
+                </div>
+              </div>
+              <Button
+                size={compactMode ? 'sm' : undefined}
+                className='ms-1'
+                variant='primary'
+                onClick={() =>
+                  navigate(`/surveys/${project.id}/set/${job.id}/registration`)
+                }
+              >
+                Take Job
+              </Button>
+            </div>,
+          ],
+        };
+      }),
   ];
 
   return (
@@ -426,23 +535,69 @@ export default function Jobs() {
       }}
     >
       <Card>
-        <Card.Header className='d-flex justify-content-between align-items-center'>
-          <Card.Title className='mb-0'>
+        <Card.Header className='d-flex flex-column flex-lg-row align-items-lg-center gap-3'>
+          <Card.Title className='mb-0 flex-shrink-0' style={{ whiteSpace: 'nowrap' }}>
             <h4 className='mb-0'>Jobs Available</h4>
           </Card.Title>
-          {!isMobile && (
-            <Button
-              variant='info'
-              onClick={() => setCompactMode(!compactMode)}
-              title={compactMode ? 'Expand view' : 'Compact view'}
+          <div className='d-flex flex-column flex-lg-row gap-2 w-100 w-lg-auto ms-lg-auto justify-content-lg-end align-items-lg-center'>
+            <Form.Control
+              className='w-100'
+              type='text'
               style={{
-                minWidth: 'fit-content',
-                whiteSpace: 'nowrap',
+                minWidth: 0,
+                width: '100%',
+                maxWidth: isMobile ? '100%' : '250px',
+              }}
+              placeholder='Search'
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <Form.Select
+              className='w-100 w-lg-auto'
+              value={organizationFilter}
+              onChange={(e) => setOrganizationFilter(e.target.value)}
+              style={{
+                minWidth: 0,
+                width: '100%',
+                maxWidth: isMobile ? '100%' : '250px',
               }}
             >
-              {compactMode ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
-            </Button>
-          )}
+              <option value=''>All organisations</option>
+              {organizationOptions.map((org) => (
+                <option key={org.id} value={org.id}>
+                  {org.name}
+                </option>
+              ))}
+            </Form.Select>
+            <Form.Select
+              className='w-100 w-lg-auto'
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              style={{
+                minWidth: 0,
+                width: '100%',
+                maxWidth: isMobile ? '100%' : '250px',
+              }}
+            >
+              <option value='createdAt'>Created (newest first)</option>
+              <option value='createdAt-reverse'>Created (oldest first)</option>
+              <option value='name'>Name (A-Z)</option>
+              <option value='name-reverse'>Name (Z-A)</option>
+            </Form.Select>
+            {!isMobile && (
+              <Button
+                variant='info'
+                onClick={() => setCompactMode(!compactMode)}
+                title={compactMode ? 'Expand view' : 'Compact view'}
+                style={{
+                  minWidth: 'fit-content',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {compactMode ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
+              </Button>
+            )}
+          </div>
         </Card.Header>
         <Card.Body className='overflow-x-auto'>
           {isLoading ? (
