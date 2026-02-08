@@ -37,6 +37,7 @@
     "@types/react-datepicker": "^6.2.0",
     "@we-gold/gpxjs": "^1.1.0",
     "aws-amplify": "^6.4.0",
+    "aws-jwt-verify": "^5.1.1",
     "aws-sdk": "^2.1691.0",
     "bootswatch": "^5.3.3",
     "exifr": "^7.1.3",

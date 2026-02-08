@@ -1,6 +1,6 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
-import { data } from './data/resource';
+import { data, customAuthorizer } from './data/resource';
 import { addUserToGroup } from './functions/add-user-to-group/resource';
 import { Stack, Fn } from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -38,6 +38,7 @@ import * as ssm from 'aws-cdk-lib/aws-ssm';
 const backend = defineBackend({
   auth,
   data,
+  customAuthorizer,
   addUserToGroup,
   outputBucket,
   inputBucket,
@@ -60,6 +61,38 @@ const backend = defineBackend({
   monitorTilingTasks,
   findAndRequeueMissingLocations,
 });
+
+// Derive an environment name for parameter paths and tagging.
+const envName =
+  process.env.AMPLIFY_ENV ?? process.env.AWS_BRANCH ?? 'production';
+
+// Custom Lambda authorizer – inject User Pool ID via SSM (avoids cross-stack
+// circular dependency between function/auth/data stacks) and grant read access.
+const userPoolIdParamName = `/${envName}/auth/userPoolId`;
+new ssm.StringParameter(Stack.of(backend.auth.resources.userPool), 'UserPoolIdParameter', {
+  parameterName: userPoolIdParamName,
+  stringValue: backend.auth.resources.userPool.userPoolId,
+});
+// Pass the SSM parameter NAME (a plain string) – no cross-stack reference.
+backend.customAuthorizer.addEnvironment(
+  'USERPOOL_ID_PARAM',
+  userPoolIdParamName
+);
+backend.customAuthorizer.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['ssm:GetParameter'],
+    resources: ['arn:aws:ssm:*:*:parameter/*'],
+  })
+);
+backend.customAuthorizer.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['dynamodb:GetItem', 'dynamodb:Query'],
+    resources: [
+      'arn:aws:dynamodb:*:*:table/*',
+      'arn:aws:dynamodb:*:*:table/*/index/*',
+    ],
+  })
+);
 
 const observationTable = backend.data.resources.tables['Observation'];
 const annotationTable = backend.data.resources.tables['Annotation'];
@@ -252,10 +285,6 @@ const enableMadDetector =
 
 // Base VPC that hosts the EC2 queue processor.
 const vpc = new ec2.Vpc(customStack, 'my-cdk-vpc');
-
-// Derive an environment name for parameter paths and tagging.
-const envName =
-  process.env.AMPLIFY_ENV ?? process.env.AWS_BRANCH ?? 'production'; // use AWS_BRANCH or default if AMPLIFY_ENV is undefined
 
 // Collect queue URLs so they can be exposed as stack outputs.
 let pointFinderQueueUrl: string | undefined;
