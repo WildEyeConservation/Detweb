@@ -131,10 +131,12 @@ export default function JollyResults() {
       secret
     );
 
+    const { data: surveyProject } = await client.models.Project.get({ id: surveyId });
     await client.models.ResultSharingToken.create({
       surveyId,
       annotationSetId,
       jwt: token,
+      group: surveyProject?.organizationId,
     });
 
     setCurrentToken(token);

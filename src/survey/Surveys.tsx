@@ -234,7 +234,8 @@ export default function Surveys() {
       client,
       user.userId,
       `Deleted project "${projectName}" (ID: ${projectId})`,
-      projectId
+      projectId,
+      project?.organizationId || ''
     );
 
     client.mutations.deleteProjectInFull({ projectId: projectId });
@@ -257,7 +258,8 @@ export default function Surveys() {
       client,
       user.userId,
       `Deleted annotation set "${annotationSetName}" from project "${projectName}"`,
-      projectId
+      projectId,
+      project?.organizationId || ''
     );
 
     setProjects(
@@ -300,7 +302,8 @@ export default function Surveys() {
           client,
           user.userId,
           `Cancelled registration job for annotation set "${annotationSet.name}" in project "${selectedProject!.name}"`,
-          selectedProject!.id
+          selectedProject!.id,
+          selectedProject!.organizationId
         );
         return;
       }
@@ -319,7 +322,8 @@ export default function Surveys() {
         client,
         user.userId,
         `Cancelled queue job "${job.tag || job.name || 'Unknown'}" for project "${selectedProject!.name}"`,
-        selectedProject!.id
+        selectedProject!.id,
+        selectedProject!.organizationId
       );
     } catch (error) {
       alert('An unknown error occurred. Please try again later.');
@@ -1145,7 +1149,8 @@ export default function Surveys() {
               client,
               user.userId,
               `Added annotation set "${annotationSet.name}" to project "${selectedProject?.name}"`,
-              selectedProject?.id
+              selectedProject?.id || '',
+              selectedProject?.organizationId || ''
             ).catch(console.error);
           }}
           categories={selectedProject.categories}

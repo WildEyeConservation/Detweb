@@ -17,6 +17,12 @@ import {
 } from './graphql/mutations';
 import { getTilingBatch, tilingBatchesByTaskId } from './graphql/queries';
 
+const getProjectOrganizationId = /* GraphQL */ `
+  query GetProject($id: ID!) {
+    getProject(id: $id) { organizationId }
+  }
+`;
+
 // Configure Amplify for IAM-based GraphQL access.
 Amplify.configure(
   {
@@ -113,8 +119,22 @@ export const handler: Handler = async (event) => {
       locationCount: locations.length,
     });
 
+    // Fetch organizationId from the project (once, before the loop)
+    const projectId = locations[0]?.projectId;
+    if (!projectId) {
+      throw new Error('No projectId found in location data');
+    }
+    const projectResult = await executeGraphql<{
+      getProject?: { organizationId: string };
+    }>(getProjectOrganizationId, { id: projectId });
+    const organizationId = projectResult.getProject?.organizationId;
+    if (!organizationId) {
+      throw new Error(`Could not fetch organizationId for project ${projectId}`);
+    }
+    console.log('Fetched organizationId for group field', { projectId, organizationId });
+
     // Create locations in DB with concurrency of 100
-    const createdLocationIds = await createLocationsInDb(locations);
+    const createdLocationIds = await createLocationsInDb(locations, organizationId);
     console.log('Created locations in DB', {
       batchId,
       createdCount: createdLocationIds.length,
@@ -223,7 +243,7 @@ async function downloadLocationsFromS3(key: string): Promise<LocationInput[]> {
   return JSON.parse(bodyStr) as LocationInput[];
 }
 
-async function createLocationsInDb(locations: LocationInput[]): Promise<any[]> {
+async function createLocationsInDb(locations: LocationInput[], organizationId: string): Promise<any[]> {
   const limit = pLimit(100);
   const createdLocations: any[] = [];
   let createdCount = 0;
@@ -243,6 +263,7 @@ async function createLocationsInDb(locations: LocationInput[]): Promise<any[]> {
           confidence: 1,
           source: 'manual',
           setId: location.setId,
+          group: organizationId,
         },
       });
 

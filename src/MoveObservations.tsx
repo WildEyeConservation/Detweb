@@ -138,6 +138,7 @@ export default function MoveObservations({
             criteria.owner ? user : criteria.timeTaken ? observationTime : ''
           }`,
           projectId: project.id,
+          group: project.organizationId,
         });
         targetAnnotationSetId = result?.id;
       } else {

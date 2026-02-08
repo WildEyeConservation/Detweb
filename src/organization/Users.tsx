@@ -109,6 +109,7 @@ export default function Users({
               userId: userId,
               projectId: project.id,
               isAdmin: true,
+              group: organization.id,
             });
           }
         })

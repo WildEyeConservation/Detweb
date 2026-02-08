@@ -53,6 +53,7 @@ export default function CreateOrganization({
           organizationId: organization.id,
           userId: user.id,
           isAdmin: true,
+          group: organization.id,
         });
 
       if (membership) {

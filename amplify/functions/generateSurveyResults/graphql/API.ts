@@ -1864,6 +1864,7 @@ export type CreateJollyResultInput = {
   categoryId: string,
   density: number,
   estimate: number,
+  group?: string | null,
   lowerBound95: number,
   numSamples: number,
   standardError: number,

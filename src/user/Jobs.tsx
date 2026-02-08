@@ -326,8 +326,9 @@ export default function Jobs() {
         }
       );
     } else {
+      const jobProject = displayProjects.find(p => p.id === job.projectId);
       userProjectMembershipHook.create(
-        { userId: user.userId, projectId: job.projectId, queueId: job.queueId },
+        { userId: user.userId, projectId: job.projectId, queueId: job.queueId, group: jobProject?.organization.id },
         {
           onSuccess: () => {
             navigate(`/surveys/${job.projectId}/annotate`);

@@ -244,7 +244,7 @@ export const useQueues = () => {
   );
   const create = (name: string) => {
     const safeName = makeSafeQueueName(name + crypto.randomUUID());
-    const id = originalHook.create({ name, projectId: project.id });
+    const id = originalHook.create({ name, projectId: project.id, group: project.organizationId });
     getSqsClient()
       .then((sqsClient) =>
         sqsClient.send(

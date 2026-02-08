@@ -34,16 +34,16 @@ export default function EditSurveyModal({
             <EditInformation key={project.id} projectId={project.id} />
           </Tab>
           <Tab label='Process Images'>
-            <ProcessImages key={project.id} projectId={project.id} />
+            <ProcessImages key={project.id} projectId={project.id} organizationId={project.organizationId} />
           </Tab>
           <Tab label='Edit Cameras'>
-            <EditCameras key={project.id} projectId={project.id} />
+            <EditCameras key={project.id} projectId={project.id} organizationId={project.organizationId} />
           </Tab>
           <Tab label='Edit Shape File'>
-            <EditShapeFile key={project.id} projectId={project.id} />
+            <EditShapeFile key={project.id} projectId={project.id} organizationId={project.organizationId} />
           </Tab>
           <Tab label='Define Transects & Strata'>
-            <DefineTransects key={project.id} projectId={project.id} />
+            <DefineTransects key={project.id} projectId={project.id} organizationId={project.organizationId} />
           </Tab>
           <Tab label='Delete Images'>
             <DeleteImages key={project.id} projectId={project.id} />

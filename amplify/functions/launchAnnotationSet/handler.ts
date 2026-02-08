@@ -30,6 +30,12 @@ import {
   createTilingBatch as createTilingBatchMutation,
 } from './graphql/mutations';
 
+const getProjectOrganizationId = /* GraphQL */ `
+  query GetProject($id: ID!) {
+    getProject(id: $id) { organizationId }
+  }
+`;
+
 // Configure Amplify to talk to the same AppSync backend the UI uses.
 Amplify.configure(
   {
@@ -185,11 +191,21 @@ export const handler: Handler = async (event) => {
       })
     );
     await setProjectStatus(payload.projectId, 'launching');
+
+    // Fetch the project's organizationId to set the group field on all created records.
+    const projectData = await executeGraphql<{
+      getProject?: { organizationId?: string | null };
+    }>(getProjectOrganizationId, { id: payload.projectId });
+    const organizationId = projectData.getProject?.organizationId;
+    if (!organizationId) {
+      throw new Error('Project does not have an organizationId');
+    }
+
     await executeGraphql<{ updateProjectMemberships?: string | null }>(
       updateProjectMembershipsMutation,
       { projectId: payload.projectId }
     );
-    const result = await handleLaunch(payload);
+    const result = await handleLaunch(payload, organizationId);
 
     // Clean up the S3 payload file after successful processing.
     if (payloadS3Key) {
@@ -221,7 +237,7 @@ export const handler: Handler = async (event) => {
 };
 
 // Orchestrate queue creation, task enqueuing, and bookkeeping.
-async function handleLaunch(payload: LaunchLambdaPayload) {
+async function handleLaunch(payload: LaunchLambdaPayload, organizationId: string) {
   const locationSetIds = new Set(payload.locationSetIds ?? []);
   let locationIds = payload.locationIds ?? [];
 
@@ -236,7 +252,7 @@ async function handleLaunch(payload: LaunchLambdaPayload) {
     );
 
     // Use distributed tiling for large tile sets
-    const result = await handleDistributedTiling(payload);
+    const result = await handleDistributedTiling(payload, organizationId);
     return result;
   }
 
@@ -259,10 +275,11 @@ async function handleLaunch(payload: LaunchLambdaPayload) {
     locationIds,
     locationSetId,
     payload.locationManifestS3Key,
-    payload.launchedCount
+    payload.launchedCount,
+    organizationId
   );
   const secondaryQueue = payload.secondaryQueueOptions
-    ? await createQueue(payload.secondaryQueueOptions, payload, [], locationSetId, null, 0)
+    ? await createQueue(payload.secondaryQueueOptions, payload, [], locationSetId, null, 0, organizationId)
     : null;
 
   await enqueueLocations(
@@ -292,6 +309,7 @@ async function handleLaunch(payload: LaunchLambdaPayload) {
           input: {
             annotationSetId: payload.annotationSetId,
             locationSetId,
+            group: organizationId,
           },
         }
       )
@@ -317,7 +335,7 @@ async function handleLaunch(payload: LaunchLambdaPayload) {
 }
 
 // Handle distributed tiling for large tile sets
-async function handleDistributedTiling(payload: LaunchLambdaPayload) {
+async function handleDistributedTiling(payload: LaunchLambdaPayload, organizationId: string) {
   const tiledRequest = payload.tiledRequest!;
 
   // Create the location set first
@@ -329,6 +347,7 @@ async function handleDistributedTiling(payload: LaunchLambdaPayload) {
       projectId: payload.projectId,
       description: tiledRequest.description,
       locationCount: tiledRequest.locationCount,
+      group: organizationId,
     },
   });
 
@@ -372,6 +391,7 @@ async function handleDistributedTiling(payload: LaunchLambdaPayload) {
       totalBatches: batches.length,
       completedBatches: 0,
       totalLocations: locations.length,
+      group: organizationId,
     },
   });
 
@@ -401,6 +421,7 @@ async function handleDistributedTiling(payload: LaunchLambdaPayload) {
           inputS3Key: s3Key,
           locationCount: batch.length,
           createdCount: 0,
+          group: organizationId,
         },
       });
 
@@ -629,7 +650,8 @@ async function createQueue(
   locationIds: string[],
   locationSetId?: string,
   locationManifestS3Key?: string | null,
-  launchedCount?: number | null
+  launchedCount?: number | null,
+  organizationId?: string
 ): Promise<QueueRecord> {
   const queueNameSeed = `${queueOptions.name}-${randomUUID()}`;
   const safeBaseName = makeSafeQueueName(queueNameSeed);
@@ -685,6 +707,7 @@ async function createQueue(
       observedCount: 0,
       locationManifestS3Key: manifestKey,
       requeuesCompleted: 0,
+      group: organizationId,
     },
   });
 

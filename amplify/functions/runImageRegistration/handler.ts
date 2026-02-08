@@ -131,7 +131,8 @@ async function handlePair(
   image1: MinimalImage,
   image2: MinimalImage,
   masks: number[][][],
-  computeKey: (orig: string) => string
+  computeKey: (orig: string) => string,
+  organizationId?: string
 ) {
   try {
     console.log(`Processing pair ${image1.id} and ${image2.id}`);
@@ -170,6 +171,7 @@ async function handlePair(
               input: {
                 image1Id: image1.id,
                 image2Id: image2.id,
+                group: organizationId,
               },
             },
           })
@@ -235,7 +237,8 @@ function addAdjacentPairTasks(
   masks: number[][][],
   seenPairs: Set<string>,
   outTasks: Array<() => Promise<SqsEntry | null>>,
-  computeKey: (orig: string) => string
+  computeKey: (orig: string) => string,
+  organizationId?: string
 ) {
   for (let i = 0; i < images.length - 1; i++) {
     const image1 = images[i];
@@ -245,7 +248,7 @@ function addAdjacentPairTasks(
       const key = [image1.id, image2.id].sort().join('|');
       if (!seenPairs.has(key)) {
         seenPairs.add(key);
-        outTasks.push(() => handlePair(image1, image2, masks, computeKey));
+        outTasks.push(() => handlePair(image1, image2, masks, computeKey, organizationId));
       }
     } else {
       console.log(
@@ -384,7 +387,7 @@ export const handler: Handler = async (event, context) => {
 
     // process images by camera
     Object.entries(imagesByCamera).forEach(([, images]) => {
-      addAdjacentPairTasks(images, masks, seenPairs, tasks, computeKey);
+      addAdjacentPairTasks(images, masks, seenPairs, tasks, computeKey, organizationId);
     });
 
     // process images from overlapping cameras
@@ -397,11 +400,11 @@ export const handler: Handler = async (event, context) => {
         (a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0)
       );
 
-      addAdjacentPairTasks(mergedImages, masks, seenPairs, tasks, computeKey);
+      addAdjacentPairTasks(mergedImages, masks, seenPairs, tasks, computeKey, organizationId);
     });
 
     // process images with no camera
-    addAdjacentPairTasks(noCamImgs, masks, seenPairs, tasks, computeKey);
+    addAdjacentPairTasks(noCamImgs, masks, seenPairs, tasks, computeKey, organizationId);
 
     // Limit concurrency to prevent exhausting file descriptors and network resources
     const messages = (await withConcurrency<SqsEntry | null>(tasks, 10)).filter(

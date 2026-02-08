@@ -66,6 +66,7 @@ export default function InviteUserModal({
       organizationId: organization.id,
       username: userId,
       invitedBy: authUser.username,
+      group: organization.id,
     });
 
     if (invite) {

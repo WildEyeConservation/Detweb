@@ -19,6 +19,7 @@ export const createAdminActionLog = /* GraphQL */ `
       userId
       message
       projectId
+      group
       createdAt
     }
   }

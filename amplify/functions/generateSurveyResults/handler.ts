@@ -45,6 +45,12 @@ const client = generateClient({
   authMode: 'iam',
 });
 
+const getProjectOrganizationId = /* GraphQL */ `
+  query GetProject($id: ID!) {
+    getProject(id: $id) { organizationId }
+  }
+`;
+
 // trims the outliers before calculating the mean
 function trimmedMean(values: number[], trimRatio: number = 0.2): number {
   const sorted = [...values].sort((a, b) => a - b);
@@ -189,6 +195,13 @@ export const handler: GenerateSurveyResultsHandler =
     const categoryIds = event.arguments.categoryIds;
 
     try {
+      // fetch organization ID from the project for group-based access
+      const projectResponse = await client.graphql({
+        query: getProjectOrganizationId,
+        variables: { id: surveyId },
+      });
+      const organizationId = (projectResponse as GraphQLResult<any>).data?.getProject?.organizationId;
+
       // fetch project cameras
       const cameras = await fetchAllPages<any>(
         (nextToken) =>
@@ -428,6 +441,7 @@ export const handler: GenerateSurveyResultsHandler =
                 estimate,
                 lowerBound95: lower95,
                 upperBound95: upper95,
+                group: organizationId,
               },
             },
           });

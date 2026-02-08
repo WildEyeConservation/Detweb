@@ -4,7 +4,7 @@ import { useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { GlobalContext } from '../Context';
 import Select from 'react-select';
 
-export default function ProcessImages({ projectId }: { projectId: string }) {
+export default function ProcessImages({ projectId, organizationId }: { projectId: string; organizationId: string }) {
   const { client, backend, showModal } = useContext(GlobalContext)!;
   const [model, setModel] = useState<{ label: string; value: string } | null>(
     null
@@ -160,6 +160,7 @@ export default function ProcessImages({ projectId }: { projectId: string }) {
         await client.models.LocationSet.create({
           name: scoutbotSetName,
           projectId: projectId,
+          group: organizationId,
         });
       locationSet = createdLocationSet ?? null;
     }

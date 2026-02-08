@@ -607,16 +607,18 @@ async function getQueueType(queueUrl: string): Promise<'FIFO' | 'Standard'> {
 }
 
 async function logRequeueAction(queue: QueueRecord, count: number): Promise<void> {
-  // Fetch project name
+  // Fetch project name and organizationId
   let projectName = 'Unknown';
+  let organizationId: string | undefined;
   try {
     const response = (await client.graphql({
       query: getProject,
       variables: { id: queue.projectId },
     } as any)) as GraphQLResult<{
-      getProject?: { id: string; name: string };
+      getProject?: { id: string; name: string; organizationId?: string };
     }>;
     projectName = response.data?.getProject?.name ?? 'Unknown';
+    organizationId = response.data?.getProject?.organizationId ?? undefined;
   } catch (err) {
     console.warn('Failed to fetch project name', err);
   }
@@ -631,6 +633,7 @@ async function logRequeueAction(queue: QueueRecord, count: number): Promise<void
         userId: 'SurveyScope',
         message,
         projectId: queue.projectId,
+        group: organizationId,
       },
     });
   } catch (logError) {

@@ -186,6 +186,7 @@ function Invite({
         organizationId: invite.organizationId,
         userId: userId,
         isAdmin: false,
+        group: invite.organizationId,
       });
     }
   }

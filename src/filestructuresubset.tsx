@@ -342,6 +342,7 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({
         client.models.ImageSetMembership.create({
           imageSetId: subsetId,
           imageId: imageId,
+          group: project.organizationId,
         })
       )
     );
@@ -350,6 +351,7 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({
       name: name,
       projectId: project.id,
       imageCount: imageIds.length,
+      group: project.organizationId,
     });
     //console.log(`Created new ImageSet "${name}" with ${filePaths.length} files`);
   };

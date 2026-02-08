@@ -77,12 +77,14 @@ function ProjectSelector({ currentPM, setCurrentPM }: ProjectSelectorProps) {
         name,
         organizationId: organizationId!,
         createdBy: user.username,
+        group: organizationId!,
       });
       if (project) {
         await createProjectMembership({
           projectId: project.id!,
           userId: user.username,
           isAdmin: true,
+          group: organizationId!,
         });
         return project.id;
       }
