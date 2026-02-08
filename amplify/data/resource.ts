@@ -67,8 +67,9 @@ const schema = a
         cameraOverlaps: a.hasMany('CameraOverlap', 'projectId'),
         shapefileExclusions: a.hasMany('ShapefileExclusions', 'projectId'),
         adminActionLogs: a.hasMany('AdminActionLog', 'projectId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()]),
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')]),
     // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
     // allow.group('orgadmin').to(['create', 'update', 'delete', 'read']),
     // allow.custom()]),
@@ -87,8 +88,9 @@ const schema = a
           'LocationAnnotationCount',
           'categoryId'
         ),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       // .authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
         index('annotationSetId').queryField('categoriesByAnnotationSetId'),
@@ -123,11 +125,12 @@ const schema = a
         transectId: a.id(),
         transect: a.belongsTo('Transect', 'transectId'),
         processedBy: a.hasMany('ImageProcessedBy', 'imageId'),
+        group: a.string(),
         // sets: [ImageSet] @manyToMany(relationName: "ImageSetMembership")
         //   leftNeighbours: [ImageNeighbour] @hasMany(indexName:"bySecondNeighbour",fields:["key"])
         //   rightNeighbours: [ImageNeighbour] @hasMany(indexName:"byFirstNeighbour",fields:["key"])
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('imagesByProjectId'),
       ]),
@@ -141,10 +144,11 @@ const schema = a
         key: a.string().required(),
         image: a.belongsTo('Image', 'imageId'),
         type: a.string().required(),
+        group: a.string(),
         // Add this line to define the reverse relationship
         // .authorization(allow => [allow.groupDefinedIn('projectId')])
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('imageId').queryField('imagesByimageId'),
         index('path').queryField('imagesByPath'),
@@ -156,9 +160,10 @@ const schema = a
         image: a.belongsTo('Image', 'imageId'),
         source: a.string().required(), // e.g., 'scoutbotv3', 'mad-v2', 'pointfinder'
         projectId: a.id().required(),
+        group: a.string(),
       })
       .identifier(['imageId', 'source'])
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('projectId')
           .sortKeys(['source'])
@@ -185,8 +190,9 @@ const schema = a
           'JollyResultsMembership',
           'annotationSetId'
         ),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       // .authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('annotationSetsByProjectId'),
@@ -207,8 +213,9 @@ const schema = a
         obscured: a.boolean(),
         objectId: a.id(),
         object: a.belongsTo('Object', 'objectId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated(), allow.owner()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('setId').queryField('annotationsByAnnotationSetId'),
         index('imageId')
@@ -226,9 +233,10 @@ const schema = a
         annotationSetId: a.id().required(),
         annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
         count: a.integer().default(0),
+        group: a.string(),
       })
       .identifier(['locationId', 'categoryId', 'annotationSetId'])
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('locationId')
           .sortKeys(['annotationSetId'])
@@ -241,8 +249,9 @@ const schema = a
         annotations: a.hasMany('Annotation', 'objectId'),
         categoryId: a.id().required(),
         category: a.belongsTo('Category', 'categoryId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       // .authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
         index('categoryId').queryField('objectsByCategoryId'),
@@ -266,8 +275,9 @@ const schema = a
         testPresets: a.hasMany('TestPresetLocation', 'locationId'),
         annotationCounts: a.hasMany('LocationAnnotationCount', 'locationId'),
         testResults: a.hasMany('TestResult', 'locationId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       // .authorization(allow => [allow.groupDefinedIn('projectId')])
 
       .secondaryIndexes((index) => [
@@ -296,8 +306,9 @@ const schema = a
         annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
         createdAt: a.string().required(),
         queueId: a.id(), // Queue ID for requeue detection (observedCount tracking)
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated(), allow.owner()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('locationId').queryField('observationsByLocationId'),
         index('annotationSetId')
@@ -316,8 +327,9 @@ const schema = a
         locationCount: a.integer().default(0),
         tasks: a.hasMany('TasksOnAnnotationSet', 'locationSetId'),
         tilingTasks: a.hasMany('TilingTask', 'locationSetId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       // .authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('locationSetsByProjectId'),
@@ -328,16 +340,18 @@ const schema = a
         locationSetId: a.id().required(),
         location: a.belongsTo('Location', 'locationId'),
         locationSet: a.belongsTo('LocationSet', 'locationSetId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()]),
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')]),
     ImageSetMembership: a
       .model({
         imageId: a.id().required(),
         imageSetId: a.id().required(),
         image: a.belongsTo('Image', 'imageId'),
         imageSet: a.belongsTo('ImageSet', 'imageSetId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('imageSetId').queryField('imageSetMembershipsByImageSetId'),
       ]),
@@ -348,8 +362,9 @@ const schema = a
         name: a.string().required(),
         images: a.hasMany('ImageSetMembership', 'imageSetId'),
         imageCount: a.integer().default(0),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       //.authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('imageSetsByProjectId'),
@@ -364,8 +379,9 @@ const schema = a
         queue: a.belongsTo('Queue', 'queueId'),
         backupQueueId: a.id(),
         backupQueue: a.belongsTo('Queue', 'backupQueueId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       //.authorization(allow => [allow.groupDefinedIn('projectId'), allow.group('orgadmin')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('userProjectMembershipsByProjectId'),
@@ -398,8 +414,9 @@ const schema = a
         // When true, this pair is intentionally skipped for registration
         // (images are neighbours but don't need homography computed)
         skipped: a.boolean().default(false),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .identifier(['image1Id', 'image2Id'])
       .secondaryIndexes((index) => [
         index('image1Id').queryField('imageNeighboursByImage1key'),
@@ -438,8 +455,9 @@ const schema = a
         // Empty detection and requeue tracking
         emptyQueueTimestamp: a.string(),
         requeuesCompleted: a.integer().default(0),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       //.authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('queuesByProjectId'),
@@ -458,17 +476,19 @@ const schema = a
         searchTime: a.float(),
         searchCount: a.integer(),
         waitingTime: a.float(),
+        group: a.string(),
       })
       .identifier(['projectId', 'userId', 'date', 'setId'])
-      .authorization((allow) => [allow.authenticated(), allow.publicApiKey()]),
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')]),
     TasksOnAnnotationSet: a
       .model({
         annotationSetId: a.id().required(),
         annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
         locationSetId: a.id().required(),
         locationSet: a.belongsTo('LocationSet', 'locationSetId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('annotationSetId').queryField('locationSetsByAnnotationSetId'),
       ]),
@@ -483,8 +503,9 @@ const schema = a
         postTestConfirmation: a.boolean(),
         accuracy: a.integer().required(),
         testPresetProjects: a.hasMany('TestPresetProject', 'projectId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .identifier(['projectId']),
     TestPresetProject: a
       .model({
@@ -492,8 +513,9 @@ const schema = a
         testPreset: a.belongsTo('TestPreset', 'testPresetId'),
         projectId: a.id().required(),
         projectConfig: a.belongsTo('ProjectTestConfig', 'projectId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .identifier(['testPresetId', 'projectId'])
       .secondaryIndexes((index) => [
         index('projectId').queryField('testPresetsByProjectId'),
@@ -506,8 +528,9 @@ const schema = a
         locations: a.hasMany('TestPresetLocation', 'testPresetId'),
         projects: a.hasMany('TestPresetProject', 'testPresetId'),
         testResults: a.hasMany('TestResult', 'testPresetId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('organizationId').queryField('testPresetsByOrganizationId'),
         index('name').queryField('testPresetsByName'),
@@ -520,8 +543,9 @@ const schema = a
         location: a.belongsTo('Location', 'locationId'),
         annotationSetId: a.id().required(),
         annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .identifier(['testPresetId', 'locationId', 'annotationSetId'])
       .secondaryIndexes((index) => [
         index('testPresetId').queryField('locationsByTestPresetId'),
@@ -542,8 +566,9 @@ const schema = a
         totalMissedAnimals: a.integer().required(),
         passedOnTotal: a.boolean().required(),
         categoryCounts: a.hasMany('TestResultCategoryCount', 'testResultId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('userId').queryField('testResultsByUserId'),
         index('testPresetId').queryField('testResultsByTestPresetId'),
@@ -555,8 +580,9 @@ const schema = a
         categoryName: a.string().required(),
         userCount: a.integer().required(),
         testCount: a.integer().required(),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .identifier(['testResultId', 'categoryName'])
       .secondaryIndexes((index) => [
         index('testResultId').queryField('categoryCountsByTestResultId'),
@@ -567,8 +593,9 @@ const schema = a
         project: a.belongsTo('Project', 'projectId'),
         //stores shape as poylgon to use with leaflet
         coordinates: a.float().array(),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('shapefilesByProjectId'),
       ]),
@@ -579,8 +606,9 @@ const schema = a
         project: a.belongsTo('Project', 'projectId'),
         // stores exclusion polygons as flattened lat,lng pairs
         coordinates: a.float().array(),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('shapefileExclusionsByProjectId'),
       ]),
@@ -593,8 +621,9 @@ const schema = a
         sensorWidthMm: a.float(),
         tiltDegrees: a.float(),
         images: a.hasMany('Image', 'cameraId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('camerasByProjectId'),
       ]),
@@ -604,8 +633,9 @@ const schema = a
         project: a.belongsTo('Project', 'projectId'),
         cameraAId: a.id().required(),
         cameraBId: a.id().required(),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .identifier(['cameraAId', 'cameraBId'])
       .secondaryIndexes((index) => [
         index('projectId').queryField('cameraOverlapsByProjectId'),
@@ -617,8 +647,9 @@ const schema = a
         stratumId: a.id().required(),
         stratum: a.belongsTo('Stratum', 'stratumId'),
         images: a.hasMany('Image', 'transectId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('transectsByProjectId'),
       ]),
@@ -632,8 +663,9 @@ const schema = a
         baselineLength: a.float(),
         // store polygon coordinates as flattened [lat, lng, ...]
         coordinates: a.float().array(),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('strataByProjectId'),
       ]),
@@ -652,13 +684,15 @@ const schema = a
         numSamples: a.integer().required(),
         lowerBound95: a.float().required(),
         upperBound95: a.float().required(),
+        group: a.string(),
       })
       .identifier(['surveyId', 'stratumId', 'annotationSetId', 'categoryId'])
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('surveyId').queryField('jollyResultsBySurveyId'),
         index('stratumId').queryField('jollyResultsByStratumId'),
       ]),
+    //TODO: Verify usage
     addUserToGroup: a
       .mutation()
       .arguments({
@@ -668,6 +702,7 @@ const schema = a
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(addUserToGroup))
       .returns(a.json()),
+    //TODO: Verify usage
     removeUserFromGroup: a
       .mutation()
       .arguments({
@@ -677,6 +712,7 @@ const schema = a
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(addUserToGroup))
       .returns(a.json()),
+    //TODO: Verify usage
     createGroup: a
       .mutation()
       .arguments({
@@ -685,6 +721,7 @@ const schema = a
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(createGroup))
       .returns(a.json()),
+    //TODO: own validation
     listUsers: a
       .query()
       .arguments({
@@ -698,6 +735,7 @@ const schema = a
           NextToken: a.string(),
         })
       ),
+    //TODO: own validation
     listGroupsForUser: a
       .query()
       .arguments({
@@ -713,6 +751,7 @@ const schema = a
       content: a.string().required(),
       channelName: a.string().required(),
     }),
+    //TODO: Verify usage
     publish: a
       .mutation()
       .arguments({
@@ -739,6 +778,7 @@ const schema = a
       )
       // authorization rules as to who can subscribe to the data
       .authorization((allow) => [allow.authenticated()]),
+    //TODO: Verify usage
     processImages: a
       .mutation()
       .arguments({
@@ -752,6 +792,7 @@ const schema = a
     CountType: a.customType({
       count: a.integer().required(),
     }),
+    //TODO: Verify usage
     getImageCounts: a
       .query()
       .arguments({
@@ -790,8 +831,9 @@ const schema = a
         projects: a.hasMany('Project', 'organizationId'),
         invites: a.hasMany('OrganizationInvite', 'organizationId'),
         testPresets: a.hasMany('TestPreset', 'organizationId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()]),
+      .authorization((allow) => [allow.authenticated(), allow.group("sysadmin"), allow.groupDefinedIn("group").to(['read'])]),
     OrganizationMembership: a
       .model({
         organizationId: a.id().required(),
@@ -799,9 +841,10 @@ const schema = a
         userId: a.string().required(),
         isAdmin: a.boolean().default(false),
         isTested: a.boolean().default(false),
+        group: a.string(),
       })
       .identifier(['organizationId', 'userId'])
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn("group")])
       .secondaryIndexes((index) => [
         index('userId').queryField('organizationsByUserId'),
         index('organizationId').queryField('membershipsByOrganizationId'),
@@ -813,11 +856,13 @@ const schema = a
         username: a.string().required(),
         invitedBy: a.string().required(),
         status: a.string().default('pending'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn("group")])
       .secondaryIndexes((index) => [
         index('username').queryField('organizationInvitesByUsername'),
       ]),
+    //Any user on the system can request an organization. This carries no security implications.
     OrganizationRegistration: a
       .model({
         organizationName: a.string().required(),
@@ -834,9 +879,10 @@ const schema = a
         surveyId: a.id().required(),
         annotationSetId: a.id().required(),
         jwt: a.string().required(),
+        group: a.string(),
       })
       .identifier(['surveyId', 'annotationSetId'])
-      .authorization((allow) => [allow.authenticated()]),
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn("group")]),
     JollyResultsMembership: a
       .model({
         surveyId: a.id().required(),
@@ -844,9 +890,10 @@ const schema = a
         survey: a.belongsTo('Project', 'surveyId'),
         annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
         userId: a.string().required(),
+        group: a.string(),
       })
       .identifier(['surveyId', 'annotationSetId', 'userId'])
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn("group")])
       .secondaryIndexes((index) => [
         index('surveyId')
           .queryField('jollyResultsMembershipsBySurveyId')
@@ -863,7 +910,7 @@ const schema = a
         downlink: a.float(),
         rtt: a.float(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.group("sysadmin")])
       .secondaryIndexes((index) => [
         index('userId').queryField('clientLogsByUserId'),
       ]),
@@ -873,8 +920,9 @@ const schema = a
         message: a.string().required(),
         projectId: a.id(),
         project: a.belongsTo('Project', 'projectId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn("group")])
       .secondaryIndexes((index) => [
         index('projectId').queryField('adminActionLogsByProjectId'),
         index('userId').queryField('adminActionLogsByUserId'),
@@ -897,8 +945,9 @@ const schema = a
         outputS3Key: a.string(),
         errorMessage: a.string(),
         batches: a.hasMany('TilingBatch', 'tilingTaskId'),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn("group")])
       .secondaryIndexes((index) => [
         index('status').queryField('tilingTasksByStatus'),
         index('projectId').queryField('tilingTasksByProjectId'),
@@ -918,13 +967,15 @@ const schema = a
         locationCount: a.integer().default(0),
         createdCount: a.integer().default(0),
         errorMessage: a.string(),
+        group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn("group")])
       .secondaryIndexes((index) => [
         index('tilingTaskId')
           .sortKeys(['batchIndex'])
           .queryField('tilingBatchesByTaskId'),
       ]),
+    //TODO: own validation
     updateProjectMemberships: a
       .mutation()
       .arguments({
@@ -933,6 +984,7 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(updateProjectMemberships)),
+    //TODO: own validation
     runImageRegistration: a
       .mutation()
       .arguments({
@@ -946,6 +998,7 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(runImageRegistration)),
+    //TODO: own validation
     runScoutbot: a
       .mutation()
       .arguments({
@@ -958,6 +1011,7 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(runScoutbot)),
+    //TODO: own validation
     runMadDetector: a
       .mutation()
       .arguments({
@@ -970,6 +1024,7 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(runMadDetector)),
+    //TODO: own validation
     runHeatmapper: a
       .mutation()
       .arguments({
@@ -978,6 +1033,7 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(runHeatmapper)),
+    //TODO: own validation
     deleteProjectInFull: a
       .mutation()
       .arguments({
@@ -986,6 +1042,7 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(deleteProject)),
+    //TODO: own validation
     generateSurveyResults: a
       .mutation()
       .arguments({
@@ -996,6 +1053,7 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(generateSurveyResults)),
+    //TODO: own validation
     launchAnnotationSet: a
       .mutation()
       .arguments({
@@ -1004,6 +1062,7 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(launchAnnotationSet)),
+    //TODO: own validation
     launchFalseNegatives: a
       .mutation()
       .arguments({
@@ -1012,6 +1071,7 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(launchFalseNegatives)),
+    //TODO: own validation
     getJwtSecret: a
       .mutation()
       .returns(a.string())
