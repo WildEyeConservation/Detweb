@@ -8,7 +8,7 @@ import 'leaflet/dist/leaflet.css';
 import { configure } from 'react-hotkeys';
 // import { withAuthenticator } from "@aws-amplify/ui-react";
 import '@aws-amplify/ui-react/styles.css';
-import { User } from './UserContext.js';
+import { User, Organization } from './UserContext.js';
 import 'bootswatch/dist/superhero/bootstrap.min.css';
 import { fetchAuthSession, AuthUser } from 'aws-amplify/auth';
 import { BrowserView, MobileView } from 'react-device-detect';
@@ -84,21 +84,25 @@ function App({ signOut = () => { }, user }: AppProps) {
   return session ? (
     continueOnMobile ? (
       <User user={user!} cognitoGroups={cognitoGroups}>
-        {user?.userId && <ClientLogger userId={user.userId} />}
-        <Upload>
-          <UploadManager />
-          <MainNavigation signOut={signOut} />
-        </Upload>
+        <Organization>
+          {user?.userId && <ClientLogger userId={user.userId} />}
+          <Upload>
+            <UploadManager />
+            <MainNavigation signOut={signOut} />
+          </Upload>
+        </Organization>
       </User>
     ) : (
       <>
         <BrowserView>
           <User user={user!} cognitoGroups={cognitoGroups}>
-            {user?.userId && <ClientLogger userId={user.userId} />}
-            <Upload>
-              <UploadManager />
-              <MainNavigation signOut={signOut} />
-            </Upload>
+            <Organization>
+              {user?.userId && <ClientLogger userId={user.userId} />}
+              <Upload>
+                <UploadManager />
+                <MainNavigation signOut={signOut} />
+              </Upload>
+            </Organization>
           </User>
         </BrowserView>
         <MobileView>

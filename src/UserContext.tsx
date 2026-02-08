@@ -21,6 +21,7 @@ import outputs from '../amplify_outputs.json';
 import { useOptimisticUpdates, useQueues } from './useOptimisticUpdates.tsx';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { useQuery } from '@tanstack/react-query';
+import { setCurrentOrganizationId } from './limitedClient';
 
 export function Project({
   children,
@@ -402,32 +403,52 @@ export function Progress({ children }: { children: React.ReactNode }) {
   );
 }
 
-// export function Organization({ children }: { children: React.ReactNode }) {
-//   const { client } = useContext(GlobalContext)!;
-//   const subscriptionFilter = useMemo(
-//     () => ({ filter: { organizationId: { eq: project.organizationId } } }),
-//     [project.organizationId]
-//   );
-//   const membershipHook = useOptimisticUpdates<
-//     Schema['OrganizationMembership']['type'],
-//     'OrganizationMembership'
-//   >(
-//     'OrganizationMembership',
-//     async (nextToken) =>
-//       client.models.OrganizationMembership.membershipsByOrganizationId({
-//         organizationId: project.organizationId,
-//         nextToken,
-//       }),
-//     subscriptionFilter
-//   );
+export function Organization({ children }: { children: React.ReactNode }) {
+  const { myOrganizationHook, cognitoGroups } = useContext(UserContext)!;
+  const { client } = useContext(GlobalContext)!;
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
+  const [organizationName, setOrganizationName] = useState<string | null>(null);
 
-//   return (
-//     <OrganizationContext.Provider
-//       value={{
-//         membershipHook,
-//       }}
-//     >
-//       {children}
-//     </OrganizationContext.Provider>
-//   );
-// }
+  const isSysadmin = cognitoGroups.includes('sysadmin');
+
+  const setActiveOrganization = useCallback(
+    (orgId: string | null, orgName: string | null) => {
+      setOrganizationId(orgId);
+      setOrganizationName(orgName);
+      setCurrentOrganizationId(orgId);
+    },
+    []
+  );
+
+  // Auto-select organization when user has exactly one membership
+  useEffect(() => {
+    if (organizationId) return; // Already selected
+    const memberships = myOrganizationHook.data;
+    if (memberships?.length === 1) {
+      const orgId = memberships[0].organizationId;
+      // Fetch org name (GetOrganization is exempt so works without orgId set)
+      client.models.Organization.get({ id: orgId })
+        .then((result) => {
+          const org = result?.data;
+          setActiveOrganization(orgId, org?.name ?? null);
+        })
+        .catch((error) => {
+          console.error('Failed to fetch organization for auto-select:', error);
+          // Still set the org ID even if we can't get the name
+          setActiveOrganization(orgId, null);
+        });
+    }
+  }, [myOrganizationHook.data, organizationId]);
+
+  return (
+    <OrganizationContext.Provider
+      value={{
+        organizationId,
+        organizationName,
+        setActiveOrganization,
+      }}
+    >
+      {children}
+    </OrganizationContext.Provider>
+  );
+}

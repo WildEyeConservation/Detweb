@@ -32,6 +32,8 @@ import { monitorScoutbotDlq } from './functions/monitorScoutbotDlq/resource';
 import { processTilingBatch } from './functions/processTilingBatch/resource';
 import { monitorTilingTasks } from './functions/monitorTilingTasks/resource';
 import { findAndRequeueMissingLocations } from './functions/findAndRequeueMissingLocations/resource';
+import { createOrganization } from './functions/createOrganization/resource';
+import { manageOrgMembership } from './functions/manageOrgMembership/resource';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 
 // Register all Amplify-managed resources in a single backend definition.
@@ -59,6 +61,8 @@ const backend = defineBackend({
   processTilingBatch,
   monitorTilingTasks,
   findAndRequeueMissingLocations,
+  createOrganization,
+  manageOrgMembership,
 });
 
 const observationTable = backend.data.resources.tables['Observation'];
@@ -672,6 +676,74 @@ backend.findAndRequeueMissingLocations.resources.lambda.addToRolePolicy(
 );
 
 const generalBucketName = 'surveyscope';
+
+// --- Organization Multitenancy: Lambda Authorizer & Management ---
+
+// The customAuthorizer is defined INLINE in defineData (not in defineBackend) to avoid
+// a circular dependency between the data and function nested stacks. The Lambda lives
+// in the data stack. We find it via the CDK construct tree to add IAM policies.
+// Environment variables (SSM param names) are set via defineFunction's environment prop.
+
+const orgMembershipTable = backend.data.resources.tables['OrganizationMembership'];
+
+// Store dynamic values in SSM from the data stack (no cross-stack refs)
+new ssm.StringParameter(Stack.of(orgMembershipTable), 'OrgMembershipTableParam', {
+  parameterName: '/detweb/orgMembershipTableName',
+  stringValue: orgMembershipTable.tableName,
+});
+new ssm.StringParameter(Stack.of(backend.auth.resources.userPool), 'UserPoolIdParam', {
+  parameterName: '/detweb/userPoolId',
+  stringValue: backend.auth.resources.userPool.userPoolId,
+});
+
+// Find the authorizer Lambda's IAM role in the data construct tree and grant permissions.
+// The Lambda is created by defineData (inline defineFunction), so it's in the data stack.
+const authorizerRole = backend.data.node.findAll().find(
+  (c): c is iam.CfnRole =>
+    c instanceof iam.CfnRole &&
+    c.node.path.toLowerCase().includes('customauthorizer')
+);
+if (authorizerRole) {
+  // Append inline policy for DynamoDB and SSM access
+  const existingPolicies = (authorizerRole.policies as any[]) || [];
+  authorizerRole.policies = [
+    ...existingPolicies,
+    {
+      policyName: 'CustomAuthorizerAccess',
+      policyDocument: {
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: ['dynamodb:GetItem'],
+            Resource: [orgMembershipTable.tableArn],
+          },
+          {
+            Effect: 'Allow',
+            Action: ['ssm:GetParameter'],
+            Resource: [
+              Fn.sub(
+                'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/detweb/*'
+              ),
+            ],
+          },
+        ],
+      },
+    },
+  ];
+}
+
+// Grant manageOrgMembership Lambda Cognito access for user lookup by email
+backend.manageOrgMembership.addEnvironment(
+  'USER_POOL_ID',
+  backend.auth.resources.userPool.userPoolId
+);
+backend.manageOrgMembership.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['cognito-idp:ListUsers'],
+    resources: [backend.auth.resources.userPool.userPoolArn],
+  })
+);
 
 // Expose useful resource identifiers for downstream tooling.
 backend.addOutput({

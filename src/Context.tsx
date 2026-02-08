@@ -121,9 +121,11 @@ export interface ManagementContextType {
   };
 }
 
-// export interface OrganizationContextType {
-//   organizationHook: CRUDhook<'OrganizationMembership'>;
-// }
+export interface OrganizationContextType {
+  organizationId: string | null;
+  organizationName: string | null;
+  setActiveOrganization: (orgId: string | null, orgName: string | null) => void;
+}
 
 export interface ProjectContextType {
   currentPM: Schema['UserProjectMembership']['type'];
@@ -186,8 +188,8 @@ export const ImageContext = createContext<ImageContextType | undefined>(
   undefined
 );
 export const TestingContext = createContext<TestingContextType | null>(null);
-// export const OrganizationContext =
-//   createContext<OrganizationContextType | null>(null);
+export const OrganizationContext =
+  createContext<OrganizationContextType | null>(null);
 export const UploadContext = createContext<UploadContextType | null>(null);
 
 export const GlobalContext = createContext<GlobalContextType>({
