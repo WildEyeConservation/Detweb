@@ -177,7 +177,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
       { selectionSet: ['id', 'organizationId', 'tags'] as const }
     );
     const projRecord = (project ?? {}) as Record<string, unknown>;
-    const organizationId: string | undefined =
+    const projOrganizationId: string | undefined =
       typeof projRecord['organizationId'] === 'string'
         ? (projRecord['organizationId'] as string)
         : undefined;
@@ -187,8 +187,8 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
       : false;
 
     const makeKey = (orig: string): string =>
-      !isLegacyProject && organizationId
-        ? `${organizationId}/${projectId}/${orig}`
+      !isLegacyProject && projOrganizationId
+        ? `${projOrganizationId}/${projectId}/${orig}`
         : orig;
 
     const BATCH_SIZE = 500;
