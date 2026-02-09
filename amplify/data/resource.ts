@@ -23,7 +23,6 @@ import { monitorScoutbotDlq } from '../functions/monitorScoutbotDlq/resource';
 import { processTilingBatch } from '../functions/processTilingBatch/resource';
 import { monitorTilingTasks } from '../functions/monitorTilingTasks/resource';
 import { findAndRequeueMissingLocations } from '../functions/findAndRequeueMissingLocations/resource';
-import { group } from 'console';
 // import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
@@ -216,7 +215,7 @@ const schema = a
         object: a.belongsTo('Object', 'objectId'),
         group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
+      .authorization((allow) => [allow.authenticated(), allow.owner(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('setId').queryField('annotationsByAnnotationSetId'),
         index('imageId')
@@ -309,7 +308,7 @@ const schema = a
         queueId: a.id(), // Queue ID for requeue detection (observedCount tracking)
         group: a.string(),
       })
-      .authorization((allow) => [allow.authenticated(), allow.groupDefinedIn('group')])
+      .authorization((allow) => [allow.authenticated(), allow.owner(), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('locationId').queryField('observationsByLocationId'),
         index('annotationSetId')
