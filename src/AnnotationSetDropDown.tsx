@@ -21,7 +21,7 @@ export function AnnotationSetDropdown({
   const onNewAnnotationSet = async () => {
     const name = prompt('Please enter new AnnotationSet name', '');
     if (name) {
-      setAnnotationSet(createAnnotationSet({ name, projectId: project.id }));
+      setAnnotationSet(createAnnotationSet({ name, projectId: project.id, group: project.organizationId }));
     }
   };
   const options = annotationSets?.map((q) => ({ label: q.name, value: q.id }));

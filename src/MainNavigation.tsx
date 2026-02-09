@@ -93,10 +93,12 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
               });
 
             if (!jollyResultsMembership) {
+              const { data: surveyProject } = await client.models.Project.get({ id: payload.surveyId });
               await client.models.JollyResultsMembership.create({
                 surveyId: payload.surveyId,
                 annotationSetId: payload.annotationSetId,
                 userId: user.userId,
+                group: surveyProject?.organizationId,
               });
             }
 

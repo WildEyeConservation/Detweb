@@ -90,6 +90,7 @@ export default function TestLocationModal({
           testPresetId: preset.value,
           locationId: locationId,
           annotationSetId: annotationSetId,
+          group: project.organizationId,
         });
       }
     }
@@ -166,6 +167,7 @@ export default function TestLocationModal({
           categoryId: categoryId,
           annotationSetId: annotationSetId,
           count: count,
+          group: project.organizationId,
         });
       }
     }

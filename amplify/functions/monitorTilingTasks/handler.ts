@@ -30,6 +30,12 @@ import {
   tilingBatchesByTaskId,
 } from './graphql/queries';
 
+const getProjectOrganizationId = /* GraphQL */ `
+  query GetProject($id: ID!) {
+    getProject(id: $id) { organizationId }
+  }
+`;
+
 // Configure Amplify for IAM-based GraphQL access.
 Amplify.configure(
   {
@@ -213,6 +219,15 @@ async function processTask(task: TilingTaskRecord) {
     // All batches complete - merge results and launch queue
     console.log('All batches complete, launching queue', { taskId: task.id });
 
+    // Fetch organizationId from the project for group-based access
+    const projectData = await executeGraphql<{
+      getProject?: { organizationId: string };
+    }>(getProjectOrganizationId, { id: task.projectId });
+    const organizationId = projectData.getProject?.organizationId;
+    if (!organizationId) {
+      throw new Error(`Project ${task.projectId} missing organizationId`);
+    }
+
     // Download and merge all locations from batch outputs
     const allLocations = await mergeLocations(completedBatches);
     console.log('Merged locations', {
@@ -272,7 +287,8 @@ async function processTask(task: TilingTaskRecord) {
       launchConfig,
       task.annotationSetId,
       task.locationSetId,
-      allLocations
+      allLocations,
+      organizationId
     );
     const secondaryQueue = launchConfig.secondaryQueueOptions
       ? await createQueue(
@@ -281,7 +297,8 @@ async function processTask(task: TilingTaskRecord) {
         launchConfig,
         task.annotationSetId,
         task.locationSetId,
-        [] // Secondary queue doesn't track locations
+        [], // Secondary queue doesn't track locations
+        organizationId
       )
       : null;
 
@@ -314,6 +331,7 @@ async function processTask(task: TilingTaskRecord) {
         input: {
           annotationSetId: task.annotationSetId,
           locationSetId: task.locationSetId,
+          group: organizationId,
         },
       }
     );
@@ -491,7 +509,8 @@ async function createQueue(
   launchConfig: LaunchConfig,
   annotationSetId: string,
   locationSetId: string,
-  locations: any[]
+  locations: any[],
+  group: string
 ): Promise<QueueRecord> {
   const queueNameSeed = `${queueOptions.name}-${randomUUID()}`;
   const safeBaseName = makeSafeQueueName(queueNameSeed);
@@ -544,6 +563,7 @@ async function createQueue(
       observedCount: 0,
       locationManifestS3Key: manifestKey,
       requeuesCompleted: 0,
+      group,
     },
   });
 

@@ -130,6 +130,7 @@ const createImageProcessedBy = /* GraphQL */ `mutation CreateImageProcessedBy(
     imageId
     source
     projectId
+    group
   }
 }
 `;
@@ -227,6 +228,7 @@ async function updateProgress(
                 imageId: image.id,
                 source: source,
                 projectId: project.id,
+                group: project.organizationId,
               },
             },
           });

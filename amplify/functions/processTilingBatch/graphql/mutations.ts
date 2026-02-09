@@ -15,6 +15,7 @@ export const createLocation = /* GraphQL */ `
       y
       source
       confidence
+      group
       createdAt
       updatedAt
     }

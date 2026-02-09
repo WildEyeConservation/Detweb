@@ -240,6 +240,7 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({
           client.models.ImageSetMembership.create({
             imageSetId: subsetId,
             imageId: imageId,
+            group: project.organizationId,
           })
         )
       );
@@ -248,6 +249,7 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({
         name: name,
         projectId: project.id,
         imageCount: imageIds.length,
+        group: project.organizationId,
       });
     },
     [client.models.ImageSetMembership, client.models.ImageSet, project.id]

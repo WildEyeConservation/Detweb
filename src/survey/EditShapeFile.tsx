@@ -20,7 +20,7 @@ import FileInput from '../FileInput';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 
-export default function EditShapeFile({ projectId }: { projectId: string }) {
+export default function EditShapeFile({ projectId, organizationId }: { projectId: string; organizationId: string }) {
   const { client, showModal } = useContext(GlobalContext)!;
   const [polygonCoords, setPolygonCoords] = useState<
     L.LatLngExpression[] | null
@@ -194,7 +194,8 @@ export default function EditShapeFile({ projectId }: { projectId: string }) {
     await saveShapefileForProject(
       client,
       projectId,
-      latLngs as [number, number][]
+      latLngs as [number, number][],
+      organizationId
     );
     // save exclusion polygons
     const exResult = (await (
@@ -218,6 +219,7 @@ export default function EditShapeFile({ projectId }: { projectId: string }) {
         return (client.models.ShapefileExclusions.create as any)({
           projectId,
           coordinates: flatEx,
+          group: organizationId,
         });
       })
     );

@@ -8,6 +8,7 @@ import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3'
 import { getUserStats, getQueue } from './graphql/queries'
 import { updateUserStats, createUserStats, updateQueue } from './graphql/mutations'
+import type { CreateUserStatsInput, UpdateUserStatsInput } from './graphql/API'
 
 Amplify.configure(
     {
@@ -45,6 +46,34 @@ const logger = new Logger({
   logLevel: "INFO",
   serviceName: "dynamodb-stream-handler",
 });
+
+const getProjectOrganizationId = /* GraphQL */ `
+  query GetProject($id: ID!) {
+    getProject(id: $id) { organizationId }
+  }
+`;
+
+const organizationIdCache: Record<string, string | undefined> = {};
+
+async function getOrganizationId(projectId: string): Promise<string | undefined> {
+    if (projectId in organizationIdCache) return organizationIdCache[projectId];
+    try {
+        const projectResponse = await client.graphql({
+            query: getProjectOrganizationId,
+            variables: { id: projectId },
+        });
+        const organizationId = (projectResponse as any).data?.getProject?.organizationId;
+        organizationIdCache[projectId] = organizationId;
+        return organizationId;
+    } catch (error) {
+        logger.error('Failed to fetch organizationId for project', {
+            projectId,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        organizationIdCache[projectId] = undefined;
+        return undefined;
+    }
+}
 
 interface StatsEntry {
     setId: string;
@@ -191,8 +220,7 @@ async function applyUpdate(update: StatsEntry): Promise<boolean> {
         };
 
         // Add accumulated deltas from this batch to existing stats
-        const variables = {
-            input: {
+        const baseInput = {
                 userId: update.userId,
                 projectId: update.projectId,
                 setId: update.setId,
@@ -205,19 +233,27 @@ async function applyUpdate(update: StatsEntry): Promise<boolean> {
                 searchCount: (existingStats.searchCount || 0) + update.searchCount,
                 annotationTime: (existingStats.annotationTime || 0) + update.annotationTime,
                 waitingTime: (existingStats.waitingTime || 0) + update.waitingTime
-            }
         };
 
-        const mutationResult = statExists
-            ? await client.graphql({ query: updateUserStats, variables })
-            : await client.graphql({ query: createUserStats, variables });
+        let mutationResult;
+        if (statExists) {
+            const input: UpdateUserStatsInput = baseInput;
+            mutationResult = await client.graphql({ query: updateUserStats, variables: { input } });
+        } else {
+            const organizationId = await getOrganizationId(update.projectId);
+            const input: CreateUserStatsInput = {
+                ...baseInput,
+                ...(organizationId ? { group: organizationId } : {}),
+            };
+            mutationResult = await client.graphql({ query: createUserStats, variables: { input } });
+        }
 
         // Check for mutation errors
         if (mutationResult.errors && mutationResult.errors.length > 0) {
             logger.error('GraphQL mutation errors', {
                 errors: mutationResult.errors,
                 operation: statExists ? 'updateUserStats' : 'createUserStats',
-                variables
+                input: baseInput
             });
             return false;
         }

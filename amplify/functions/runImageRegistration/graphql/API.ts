@@ -1805,6 +1805,7 @@ export type ModelImageNeighbourConditionInput = {
 };
 
 export type CreateImageNeighbourInput = {
+  group?: string | null,
   homography?: Array< number | null > | null,
   image1Id: string,
   image2Id: string,

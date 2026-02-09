@@ -81,6 +81,7 @@ export default function NewSurveyModal({
       organizationId: organization.value,
       createdBy: user.userId,
       status: 'uploading',
+      group: organization.value,
     });
 
     if (!project) {
@@ -94,7 +95,8 @@ export default function NewSurveyModal({
       client,
       user.userId,
       `Created project "${name}" in organization "${organization.label}"`,
-      project.id
+      project.id,
+      organization.value
     ).catch(console.error);
 
     const admins = await fetchAllPaginatedResults(
@@ -112,6 +114,7 @@ export default function NewSurveyModal({
           userId: a.userId,
           projectId: project.id,
           isAdmin: true,
+          group: organization.value,
         });
       })
     );
@@ -125,6 +128,7 @@ export default function NewSurveyModal({
             userId: e.user.id,
             projectId: project.id,
             isAdmin: false,
+            group: organization.value,
           });
         }
       })
@@ -142,6 +146,7 @@ export default function NewSurveyModal({
             userId: u.id,
             projectId: project.id,
             isAdmin: false,
+            group: organization.value,
           });
         })
       );
@@ -153,16 +158,19 @@ export default function NewSurveyModal({
       interval: 50,
       accuracy: 50,
       postTestConfirmation: false,
+      group: organization.value,
     });
 
     const { data: testPreset } = await client.models.TestPreset.create({
       name: name,
       organizationId: organization.value,
+      group: organization.value,
     });
 
     await client.models.TestPresetProject.create({
       testPresetId: testPreset.id,
       projectId: project.id,
+      group: organization.value,
     });
 
     client.mutations.updateProjectMemberships({
@@ -175,7 +183,7 @@ export default function NewSurveyModal({
 
     // If a shapefile was provided during upload, save it to the project now
     if (shapefileLatLngs && shapefileLatLngs.length > 0) {
-      await saveShapefileForProject(client, project.id, shapefileLatLngs);
+      await saveShapefileForProject(client, project.id, shapefileLatLngs, organization.value);
     }
     setLoading(false);
     showModal(null);

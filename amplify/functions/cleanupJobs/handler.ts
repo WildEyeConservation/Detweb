@@ -179,12 +179,14 @@ export const handler: Handler = async (event, context) => {
         // Queue should be deleted (no tracking, counts match, or requeue limit reached)
         // Fetch project name for logging
         let projectName = "Unknown";
+        let organizationId: string | undefined;
         try {
           const projectResponse = await client.graphql({
             query: getProject,
             variables: { id: queue.projectId },
           });
           projectName = projectResponse.data?.getProject?.name || "Unknown";
+          organizationId = projectResponse.data?.getProject?.organizationId ?? undefined;
         } catch (err) {
           console.error(`Failed to fetch project name for ${queue.projectId}:`, err);
         }
@@ -231,6 +233,7 @@ export const handler: Handler = async (event, context) => {
                   userId
                   message
                   projectId
+                  group
                   createdAt
                 }
               }
@@ -240,6 +243,7 @@ export const handler: Handler = async (event, context) => {
                 userId: "SurveyScope",
                 message: logMessage,
                 projectId: queue.projectId,
+                group: organizationId,
               },
             },
           });

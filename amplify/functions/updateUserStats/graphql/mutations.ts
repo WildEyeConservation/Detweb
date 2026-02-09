@@ -1767,6 +1767,7 @@ export const createUserStats = /* GraphQL */ `mutation CreateUserStats(
     annotationTime
     createdAt
     date
+    group
     observationCount
     projectId
     searchCount

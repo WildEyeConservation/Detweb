@@ -252,9 +252,19 @@ async function handleLaunch(payload: LaunchFalseNegativesPayload) {
   const workerBatchSize = payload.batchSize ?? 200;
   const { projectId, annotationSetId } = payload;
 
+  // Fetch the organizationId from the project for group-based access.
+  const projectData = await executeGraphql<{
+    getProject?: { organizationId?: string | null };
+  }>(getProjectOrganizationId, { id: projectId });
+  const organizationId = projectData.getProject?.organizationId;
+  if (!organizationId) {
+    throw new Error('Unable to determine organizationId for project');
+  }
+  console.log('Fetched organizationId', { projectId, organizationId });
+
   // If we need to create tiles from tiledRequest, use distributed tiling
   if (!payload.locationSetId && payload.tiledRequest) {
-    return handleDistributedFalseNegativesLaunch(payload);
+    return handleDistributedFalseNegativesLaunch(payload, organizationId);
   }
 
   // Use locationTiles if provided (fetched on client), otherwise fetch from locationSetId
@@ -280,7 +290,7 @@ async function handleLaunch(payload: LaunchFalseNegativesPayload) {
   } else if (payload.tiledRequest) {
     // Create from tiledRequest synchronously (for small sets)
     locationSetId = await withTiming('createTiledLocationSet', () =>
-      createTiledLocationSetSync(projectId, payload.tiledRequest!)
+      createTiledLocationSetSync(projectId, payload.tiledRequest!, organizationId)
     );
     tiles = await withTiming('fetchTiles', () => fetchTiles(locationSetId!));
     console.log('Created and fetched tiles', {
@@ -384,7 +394,7 @@ async function handleLaunch(payload: LaunchFalseNegativesPayload) {
   });
 
   const queue = await withTiming('createQueue', () =>
-    createQueue(payload.queueOptions, payload.queueTag, projectId, workerBatchSize)
+    createQueue(payload.queueOptions, payload.queueTag, projectId, workerBatchSize, organizationId)
   );
 
   await withTiming('enqueueTiles', () =>
@@ -407,6 +417,7 @@ async function handleLaunch(payload: LaunchFalseNegativesPayload) {
         input: {
           annotationSetId,
           locationSetId,
+          group: organizationId,
         },
       }
     )
@@ -433,7 +444,7 @@ async function handleLaunch(payload: LaunchFalseNegativesPayload) {
 }
 
 // Handle distributed tiling for false negatives when creating a new location set
-async function handleDistributedFalseNegativesLaunch(payload: LaunchFalseNegativesPayload) {
+async function handleDistributedFalseNegativesLaunch(payload: LaunchFalseNegativesPayload, organizationId: string) {
   const tiledRequest = payload.tiledRequest!;
   const workerBatchSize = payload.batchSize ?? 200;
 
@@ -472,6 +483,7 @@ async function handleDistributedFalseNegativesLaunch(payload: LaunchFalseNegativ
       projectId: payload.projectId,
       description: tiledRequest.description,
       locationCount: tiledRequest.locationCount,
+      group: organizationId,
     },
   });
 
@@ -627,6 +639,7 @@ async function handleDistributedFalseNegativesLaunch(payload: LaunchFalseNegativ
       totalBatches: batches.length,
       completedBatches: 0,
       totalLocations: filteredLocations.length, // Use filtered count, not original
+      group: organizationId,
     },
   });
 
@@ -656,6 +669,7 @@ async function handleDistributedFalseNegativesLaunch(payload: LaunchFalseNegativ
           inputS3Key: s3Key,
           locationCount: batch.length,
           createdCount: 0,
+          group: organizationId,
         },
       });
 
@@ -936,6 +950,13 @@ async function fetchTiles(locationSetId: string): Promise<MinimalTile[]> {
   return tiles;
 }
 
+// Inline query to fetch the organizationId from a project.
+const getProjectOrganizationId = /* GraphQL */ `
+  query GetProject($id: ID!) {
+    getProject(id: $id) { organizationId }
+  }
+`;
+
 // Custom GraphQL query to fetch observations with location data included
 // This avoids N+1 queries by fetching location data in the same query
 const observationsWithLocationsQuery = /* GraphQL */ `
@@ -1119,7 +1140,8 @@ async function createQueue(
   queueOptions: LaunchQueueOptions,
   queueTag: string,
   projectId: string,
-  batchSize: number
+  batchSize: number,
+  organizationId: string
 ) {
   const queueNameSeed = `${queueOptions.name}-${randomUUID()}`;
   const safeBaseName = makeSafeQueueName(queueNameSeed);
@@ -1152,6 +1174,7 @@ async function createQueue(
       tag: queueTag,
       approximateSize: 1,
       updatedAt: new Date().toISOString(),
+      group: organizationId,
     },
   });
 
@@ -1249,7 +1272,8 @@ async function getQueueType(queueUrl: string): Promise<'FIFO' | 'Standard'> {
 // Derive a location set from tiled launch parameters (synchronous version for small sets).
 async function createTiledLocationSetSync(
   projectId: string,
-  tiledRequest?: TiledLaunchRequest | null
+  tiledRequest: TiledLaunchRequest,
+  organizationId: string
 ) {
   if (!tiledRequest) {
     throw new Error('tiledRequest is required when no location set is provided');
@@ -1274,6 +1298,7 @@ async function createTiledLocationSetSync(
       projectId,
       description: tiledRequest.description,
       locationCount: tiledRequest.locationCount,
+      group: organizationId,
     },
   });
 
@@ -1358,6 +1383,7 @@ async function createTiledLocationSetSync(
                 confidence: 1,
                 source: 'manual',
                 setId: locationSetId,
+                group: organizationId,
               },
             });
             createdCount += 1;

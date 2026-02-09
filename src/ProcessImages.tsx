@@ -23,10 +23,12 @@ interface ProcessImagesProps {
   setHandleSubmit: React.Dispatch<
     React.SetStateAction<(() => Promise<void>) | null>
   >;
+  organizationId: string;
 }
 
 export default function ProcessImages({
   imageSets,
+  organizationId,
   setHandleSubmit,
 }: ProcessImagesProps) {
   const { client, backend } = useContext(GlobalContext)!;
@@ -96,6 +98,7 @@ export default function ProcessImages({
       await client.models.ImageNeighbour.create({
         image1Id: image1.id,
         image2Id: image2.id,
+        group: organizationId,
       });
     }
     setMessagePreppingStepsCompleted((s) => s + 1);

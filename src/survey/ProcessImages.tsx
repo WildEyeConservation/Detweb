@@ -4,7 +4,7 @@ import { useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { GlobalContext } from '../Context';
 import Select from 'react-select';
 
-export default function ProcessImages({ projectId }: { projectId: string }) {
+export default function ProcessImages({ projectId, organizationId }: { projectId: string; organizationId: string }) {
   const { client, backend, showModal } = useContext(GlobalContext)!;
   const [model, setModel] = useState<{ label: string; value: string } | null>(
     null
@@ -160,6 +160,7 @@ export default function ProcessImages({ projectId }: { projectId: string }) {
         await client.models.LocationSet.create({
           name: scoutbotSetName,
           projectId: projectId,
+          group: organizationId,
         });
       locationSet = createdLocationSet ?? null;
     }
@@ -176,7 +177,7 @@ export default function ProcessImages({ projectId }: { projectId: string }) {
       { selectionSet: ['id', 'organizationId', 'tags'] as const }
     );
     const projRecord = (project ?? {}) as Record<string, unknown>;
-    const organizationId: string | undefined =
+    const projOrganizationId: string | undefined =
       typeof projRecord['organizationId'] === 'string'
         ? (projRecord['organizationId'] as string)
         : undefined;
@@ -186,8 +187,8 @@ export default function ProcessImages({ projectId }: { projectId: string }) {
       : false;
 
     const makeKey = (orig: string): string =>
-      !isLegacyProject && organizationId
-        ? `${organizationId}/${projectId}/${orig}`
+      !isLegacyProject && projOrganizationId
+        ? `${projOrganizationId}/${projectId}/${orig}`
         : orig;
 
     const BATCH_SIZE = 500;
