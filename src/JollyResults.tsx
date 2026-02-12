@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 import { GlobalContext, UserContext } from './Context.tsx';
 import { fetchAllPaginatedResults } from './utils.tsx';
 import MyTable from './Table.tsx';
-import { Button, Card, Form } from 'react-bootstrap';
+import { Button, Card, Form, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import DensityMap from './DensityMap.tsx';
 import exportFromJSON from 'export-from-json';
 import { useUsers } from './apiInterface';
@@ -217,8 +217,8 @@ export default function JollyResults() {
 
     const filteredResults = categoryIds.length
       ? resultsWithFalseNegatives.filter((r) =>
-          categoryIds.includes(r.categoryId)
-        )
+        categoryIds.includes(r.categoryId)
+      )
       : resultsWithFalseNegatives;
 
     exportFromJSON({
@@ -512,9 +512,7 @@ export default function JollyResults() {
                     )}
                     <Form.Control
                       type='date'
-                      disabled={
-                        tokenExpiry && tokenExpiry > DateTime.now().toJSDate()
-                      }
+                      disabled={true}
                       placeholder='Expiration'
                       value={DateTime.fromMillis(expiration).toFormat(
                         'yyyy-MM-dd'
@@ -529,14 +527,22 @@ export default function JollyResults() {
                       }
                       min={DateTime.now().toFormat('yyyy-MM-dd')}
                     />
-                    <Button
-                      variant='outline-primary'
-                      className='mt-2 w-100'
-                      onClick={handleShare}
-                      disabled={isCopying}
+                    <OverlayTrigger
+                      placement='top'
+                      overlay={<Tooltip id='copy-link-tooltip'>Under maintenance</Tooltip>}
                     >
-                      {isCopying ? 'Copying...' : 'Copy Link'}
-                    </Button>
+                      <div className='d-inline-block w-100'>
+                        <Button
+                          variant='outline-primary'
+                          className='mt-2 w-100'
+                          onClick={handleShare}
+                          disabled={true}
+                          style={{ pointerEvents: 'none' }}
+                        >
+                          {isCopying ? 'Copying...' : 'Copy Link'}
+                        </Button>
+                      </div>
+                    </OverlayTrigger>
                   </Form.Group>
                   <Form.Group>
                     <Form.Label className='m-0'>Shared with:</Form.Label>

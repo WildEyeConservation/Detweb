@@ -8,7 +8,7 @@ import Container from 'react-bootstrap/Container';
 import Notifications from './user/Notifications.tsx';
 import { UserContext, GlobalContext } from './Context.tsx';
 import Settings from './user/Settings.tsx';
-import { Card, Button } from 'react-bootstrap';
+import { Card, Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import UploadProgress from './upload/UploadProgress.tsx';
 import { verifyToken } from './utils/jwt.ts';
 import { useQueryClient } from '@tanstack/react-query';
@@ -148,8 +148,8 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
               isOrganizationAdmin
                 ? '/surveys'
                 : belongsToOrganization
-                ? '/jobs'
-                : '/'
+                  ? '/jobs'
+                  : '/'
             )
           }
           style={{ cursor: 'pointer' }}
@@ -237,14 +237,23 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                   )}
                 </>
               )}
-              <Nav.Link
-                as={NavLink}
-                eventKey={`shared-results`}
-                to={`shared-results`}
-                className='px-2'
+              <OverlayTrigger
+                placement='bottom'
+                overlay={<Tooltip id='shared-results-tooltip'>Under maintenance</Tooltip>}
               >
-                Shared Results
-              </Nav.Link>
+                <div className='d-inline-block'>
+                  <Nav.Link
+                    as={NavLink}
+                    eventKey={`shared-results`}
+                    to={`shared-results`}
+                    className='px-2'
+                    disabled={true}
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    Shared Results
+                  </Nav.Link>
+                </div>
+              </OverlayTrigger>
             </Nav>
           )}
           <div className='d-flex flex-column flex-lg-row flex-grow-1 align-items-center justify-content-end gap-3 gap-lg-0 mt-2 mt-lg-0'>
@@ -261,11 +270,11 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
       >
         {(!belongsToOrganization &&
           location.pathname === '/SSRegisterOrganization') ||
-        belongsToOrganization ||
-        location.pathname.startsWith('/jolly') ||
-        location.pathname.startsWith('/shared-results') ||
-        (cognitoGroups.includes('sysadmin') &&
-          location.pathname === '/SSAdmin') ? (
+          belongsToOrganization ||
+          location.pathname.startsWith('/jolly') ||
+          location.pathname.startsWith('/shared-results') ||
+          (cognitoGroups.includes('sysadmin') &&
+            location.pathname === '/SSAdmin') ? (
           <Outlet />
         ) : (
           <Card
@@ -287,6 +296,13 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                 You are not currently a member of any organisation.
               </Card.Text>
               <Card.Text>
+                Please visit the{' '}
+                <a href='https://wildeyeconservation.org/surveyscope-registration/'>
+                  Wildeye Conservation website
+                </a>{' '}
+                to register your organisation.
+              </Card.Text>
+              {/* <Card.Text>
                 Please take note of the following:
                 <ul>
                   <li>
@@ -304,7 +320,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                     us.
                   </li>
                 </ul>
-              </Card.Text>
+              </Card.Text> */}
               <Card.Text>
                 If your organisation is not registered, please register an
                 organisation below.

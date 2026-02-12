@@ -1,4 +1,4 @@
-import { Card, Button } from 'react-bootstrap';
+import { Card, Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { Tabs, Tab } from './Tabs';
 import Users from './organization/Users';
 import OrganizationSelector from './OrganizationSelector';
@@ -53,9 +53,21 @@ export default function Permissions() {
         </Card.Body>
         {onClick && (
           <Card.Footer className='d-flex justify-content-center'>
-            <Button variant='primary' onClick={onClick.function}>
-              {onClick.name}
-            </Button>
+            <OverlayTrigger
+              placement='top'
+              overlay={<Tooltip id='permissions-footer-tooltip'>Under maintenance</Tooltip>}
+            >
+              <div className='d-inline-block'>
+                <Button
+                  variant='primary'
+                  onClick={onClick.function}
+                  disabled={true}
+                  style={{ pointerEvents: 'none' }}
+                >
+                  {onClick.name}
+                </Button>
+              </div>
+            </OverlayTrigger>
           </Card.Footer>
         )}
       </Card>

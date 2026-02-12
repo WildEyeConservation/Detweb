@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState } from 'react';
 import { UserContext, GlobalContext, UploadContext } from '../Context.tsx';
 import { Schema } from '../amplify/client-schema.ts';
-import { Card, Button, Form } from 'react-bootstrap';
+import { Card, Button, Form, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import MyTable from '../Table.tsx';
 import NewSurveyModal from './NewSurveyModal.tsx';
 import { useNavigate } from 'react-router-dom';
@@ -72,7 +72,7 @@ export default function Surveys() {
     }
     return 'createdAt';
   };
-  
+
   // Initialize organizationFilter from localStorage or use default
   const getInitialOrganizationFilter = () => {
     if (typeof window !== 'undefined') {
@@ -83,10 +83,10 @@ export default function Surveys() {
     }
     return '';
   };
-  
+
   const [sortBy, setSortBy] = useState(getInitialSortBy);
   const [organizationFilter, setOrganizationFilter] = useState(getInitialOrganizationFilter);
-  
+
   // Initialize compactMode from localStorage or use default
   const getInitialCompactMode = () => {
     if (typeof window !== 'undefined') {
@@ -97,7 +97,7 @@ export default function Surveys() {
     }
     return false;
   };
-  
+
   const [compactMode, setCompactMode] = useState(getInitialCompactMode);
   const getIsMobile = () =>
     typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
@@ -253,7 +253,7 @@ export default function Surveys() {
     const projectName = project?.name || 'Unknown';
 
     await client.models.AnnotationSet.delete({ id: annotationSetId });
-    
+
     await logAdminAction(
       client,
       user.userId,
@@ -476,9 +476,8 @@ export default function Surveys() {
         )}
         {sortedAnnotationSets.map((annotationSet, i) => (
           <div
-            className={`d-flex flex-column ${gapClass} ${
-              i === 0 ? '' : `border-top border-light ${borderClass}`
-            }`}
+            className={`d-flex flex-column ${gapClass} ${i === 0 ? '' : `border-top border-light ${borderClass}`
+              }`}
             key={annotationSet.id}
           >
             <div className={`d-flex justify-content-between align-items-center ${gapClass} flex-wrap`}>
@@ -676,8 +675,8 @@ export default function Surveys() {
                 {project.status === 'launching'
                   ? 'Launching - please wait'
                   : project.status.includes('processing')
-                  ? 'Processing'
-                  : project.status.replace(/\b\w/g, (char) =>
+                    ? 'Processing'
+                    : project.status.replace(/\b\w/g, (char) =>
                       char.toUpperCase()
                     )}
               </Badge>
@@ -794,8 +793,8 @@ export default function Surveys() {
                     {project.status === 'launching'
                       ? 'Launching - please wait'
                       : project.status.includes('processing')
-                      ? 'Processing'
-                      : project.status.replace(/\b\w/g, (char) =>
+                        ? 'Processing'
+                        : project.status.replace(/\b\w/g, (char) =>
                           char.toUpperCase()
                         )}
                   </Badge>
@@ -813,9 +812,8 @@ export default function Surveys() {
             </div>
             {hasJobs && (
               <div
-                className={`d-flex flex-row align-items-center gap-2 ${
-                  isMobile ? 'pt-3 border-top border-light' : ''
-                }`}
+                className={`d-flex flex-row align-items-center gap-2 ${isMobile ? 'pt-3 border-top border-light' : ''
+                  }`}
               >
                 <div className='flex-grow-1'>
                   <ProjectProgress
@@ -856,9 +854,8 @@ export default function Surveys() {
             )}
           </div>
           <div
-            className={`d-flex flex-column gap-2 ${
-              isMobile ? 'pt-3 border-top border-light' : ''
-            }`}
+            className={`d-flex flex-column gap-2 ${isMobile ? 'pt-3 border-top border-light' : ''
+              }`}
           >
             <div className='fw-semibold'>Annotation Sets</div>
             {renderAnnotationSets(project, disabled, hasJobs, {
@@ -990,9 +987,19 @@ export default function Surveys() {
           </Card.Body>
           {isOrganizationAdmin && (
             <Card.Footer className='d-flex justify-content-center'>
-              <Button variant='primary' onClick={() => showModal('newSurvey')}>
-                New Survey
-              </Button>
+              <OverlayTrigger
+                placement='top'
+                overlay={<Tooltip id='new-survey-tooltip'>Under maintenance</Tooltip>}
+              >
+                <div className='d-inline-block'>
+                  <Button variant='primary' onClick={() => showModal('newSurvey')}
+                    disabled={true}
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    New Survey
+                  </Button>
+                </div>
+              </OverlayTrigger>
             </Card.Footer>
           )}
         </Card>
@@ -1132,15 +1139,15 @@ export default function Surveys() {
               projects.map((project) =>
                 project.id === selectedProject?.id
                   ? {
-                      ...project,
-                      annotationSets: [
-                        ...project.annotationSets,
-                        {
-                          id: annotationSet.id,
-                          name: annotationSet.name,
-                        },
-                      ],
-                    }
+                    ...project,
+                    annotationSets: [
+                      ...project.annotationSets,
+                      {
+                        id: annotationSet.id,
+                        name: annotationSet.name,
+                      },
+                    ],
+                  }
                   : project
               )
             );
