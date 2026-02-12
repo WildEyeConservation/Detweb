@@ -43,9 +43,9 @@ export default function UserStats() {
 
   const [selectedSets, setSelectedSets] = useState<
     | {
-        label: string;
-        value: string;
-      }[]
+      label: string;
+      value: string;
+    }[]
     | undefined
   >([]);
 
@@ -57,20 +57,20 @@ export default function UserStats() {
   // Check if user is admin for the selected project
   const isProjectAdmin = project
     ? myMembershipHook.data?.find((m) => m.projectId === project.value)
-        ?.isAdmin || false
+      ?.isAdmin || false
     : false;
 
   const startString = startDate
     ? `${startDate?.getFullYear()}-${String(startDate?.getMonth() + 1).padStart(
-        2,
-        '0'
-      )}-${String(startDate?.getDate()).padStart(2, '0')}`
+      2,
+      '0'
+    )}-${String(startDate?.getDate()).padStart(2, '0')}`
     : null;
   const endString = endDate
     ? `${endDate?.getFullYear()}-${String(endDate?.getMonth() + 1).padStart(
-        2,
-        '0'
-      )}-${String(endDate?.getDate()).padStart(2, '0')}`
+      2,
+      '0'
+    )}-${String(endDate?.getDate()).padStart(2, '0')}`
     : null;
 
   useEffect(() => {
@@ -166,9 +166,9 @@ export default function UserStats() {
               if (exists) {
                 return prev.map((s) =>
                   s.userId === newItem.userId &&
-                  s.date === newItem.date &&
-                  s.setId === newItem.setId &&
-                  s.projectId === newItem.projectId
+                    s.date === newItem.date &&
+                    s.setId === newItem.setId &&
+                    s.projectId === newItem.projectId
                     ? { ...s, ...newItem }
                     : s
                 );
@@ -189,9 +189,9 @@ export default function UserStats() {
             setUserStats((prev) =>
               prev.map((s) =>
                 s.userId === updatedItem.userId &&
-                s.date === updatedItem.date &&
-                s.setId === updatedItem.setId &&
-                s.projectId === updatedItem.projectId
+                  s.date === updatedItem.date &&
+                  s.setId === updatedItem.setId &&
+                  s.projectId === updatedItem.projectId
                   ? { ...s, ...updatedItem }
                   : s
               )
@@ -201,6 +201,49 @@ export default function UserStats() {
         error: (error) => console.error('UserStats onUpdate error:', error),
       })
     );
+
+    // Subscribe to real-time updates via custom pub/sub channels per annotation set
+    // if (selectedSets && selectedSets.length > 0) {
+    //   for (const set of selectedSets) {
+    //     subs.push(
+    //       client.subscriptions
+    //         .receive({ namePrefix: `${set.value}-userstats` })
+    //         .subscribe({
+    //           next: (event) => {
+    //             if (!cancelled && event?.content) {
+    //               try {
+    //                 const data = JSON.parse(event.content) as UserStatsType;
+    //                 setUserStats((prev) => {
+    //                   const exists = prev.some(
+    //                     (s) =>
+    //                       s.userId === data.userId &&
+    //                       s.date === data.date &&
+    //                       s.setId === data.setId &&
+    //                       s.projectId === data.projectId
+    //                   );
+    //                   if (exists) {
+    //                     return prev.map((s) =>
+    //                       s.userId === data.userId &&
+    //                         s.date === data.date &&
+    //                         s.setId === data.setId &&
+    //                         s.projectId === data.projectId
+    //                         ? { ...s, ...data }
+    //                         : s
+    //                     );
+    //                   }
+    //                   return [...prev, data];
+    //                 });
+    //               } catch (e) {
+    //                 console.error('Failed to parse userstats message:', e);
+    //               }
+    //             }
+    //           },
+    //           error: (error) =>
+    //             console.error('UserStats receive error:', error),
+    //         })
+    //     );
+    //   }
+    // }
 
     return () => {
       cancelled = true;
@@ -475,7 +518,8 @@ export default function UserStats() {
           </div>
 
           <div className='mt-3'>
-            <label className='mb-2'>Select Annotation Sets</label>
+            <label className=''>Select Annotation Sets</label>
+            <label className='d-block text-danger mb-2'>Known Issue: Stats are not updated in real-time. Please deselect and reselect annotation sets to refresh.</label>
             <Select
               className='text-black basic-multi-select'
               value={selectedSets}
