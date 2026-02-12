@@ -18,21 +18,51 @@ import {
 import { randomUUID } from 'crypto';
 import pLimit from 'p-limit';
 import {
-  createQueue as createQueueMutation,
-  updateQueue as updateQueueMutation,
-  createTasksOnAnnotationSet as createTasksOnAnnotationSetMutation,
-  updateProject as updateProjectMutation,
-  updateProjectMemberships as updateProjectMembershipsMutation,
-  updateTilingTask as updateTilingTaskMutation,
-} from './graphql/mutations';
-import {
   tilingTasksByStatus,
   tilingBatchesByTaskId,
 } from './graphql/queries';
 
+// Inline minimal mutations – return key fields + `group` to avoid nested-resolver
+// auth failures while still enabling subscription delivery via groupDefinedIn('group').
 const getProjectOrganizationId = /* GraphQL */ `
   query GetProject($id: ID!) {
     getProject(id: $id) { organizationId }
+  }
+`;
+
+const createQueueMutation = /* GraphQL */ `
+  mutation CreateQueue($input: CreateQueueInput!) {
+    createQueue(input: $input) { id group }
+  }
+`;
+
+const updateQueueMutation = /* GraphQL */ `
+  mutation UpdateQueue($input: UpdateQueueInput!) {
+    updateQueue(input: $input) { id group }
+  }
+`;
+
+const createTasksOnAnnotationSetMutation = /* GraphQL */ `
+  mutation CreateTasksOnAnnotationSet($input: CreateTasksOnAnnotationSetInput!) {
+    createTasksOnAnnotationSet(input: $input) { id group }
+  }
+`;
+
+const updateProjectMutation = /* GraphQL */ `
+  mutation UpdateProject($input: UpdateProjectInput!) {
+    updateProject(input: $input) { id group }
+  }
+`;
+
+const updateProjectMembershipsMutation = /* GraphQL */ `
+  mutation UpdateProjectMemberships($projectId: String!) {
+    updateProjectMemberships(projectId: $projectId)
+  }
+`;
+
+const updateTilingTaskMutation = /* GraphQL */ `
+  mutation UpdateTilingTask($input: UpdateTilingTaskInput!) {
+    updateTilingTask(input: $input) { id group }
   }
 `;
 

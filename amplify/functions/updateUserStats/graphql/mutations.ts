@@ -3582,11 +3582,7 @@ export const processImages = /* GraphQL */ `mutation ProcessImages($model: Strin
   APITypes.ProcessImagesMutation
 >;
 export const publish = /* GraphQL */ `mutation Publish($channelName: String!, $content: String!) {
-  publish(channelName: $channelName, content: $content) {
-    channelName
-    content
-    __typename
-  }
+  publish(channelName: $channelName, content: $content) 
 }
 ` as GeneratedMutation<
   APITypes.PublishMutationVariables,
@@ -4891,35 +4887,16 @@ export const updateQueue = /* GraphQL */ `mutation UpdateQueue(
   updateQueue(condition: $condition, input: $input) {
     observedCount
     approximateSize
-    backupUsers {
-      nextToken
-      __typename
-    }
     batchSize
     createdAt
     hidden
     id
     name
-    project {
-      createdAt
-      createdBy
-      hidden
-      id
-      name
-      organizationId
-      status
-      updatedAt
-      __typename
-    }
     projectId
     tag
     totalBatches
     updatedAt
     url
-    users {
-      nextToken
-      __typename
-    }
     zoom
     __typename
   }

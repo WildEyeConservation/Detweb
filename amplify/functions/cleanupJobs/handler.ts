@@ -3,7 +3,6 @@ import { env } from "$amplify/env/cleanupJobs";
 import { Amplify } from "aws-amplify";
 import { generateClient } from "aws-amplify/data";
 import { listQueues, listUserProjectMemberships, getProject } from "./graphql/queries";
-import { updateQueue, updateUserProjectMembership } from "./graphql/mutations";
 import type { GraphQLResult } from "@aws-amplify/api-graphql";
 import {
   DeleteQueueCommand,
@@ -13,7 +12,26 @@ import {
 import { Queue, UserProjectMembership } from "./graphql/API";
 import { SQSClient } from "@aws-sdk/client-sqs";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { deleteQueue } from "./graphql/mutations";
+
+// Inline minimal mutations – return key fields + `group` to avoid nested-resolver
+// auth failures while still enabling subscription delivery via groupDefinedIn('group').
+const updateQueue = /* GraphQL */ `
+  mutation UpdateQueue($input: UpdateQueueInput!) {
+    updateQueue(input: $input) { id group }
+  }
+`;
+
+const deleteQueue = /* GraphQL */ `
+  mutation DeleteQueue($input: DeleteQueueInput!) {
+    deleteQueue(input: $input) { id group }
+  }
+`;
+
+const updateUserProjectMembership = /* GraphQL */ `
+  mutation UpdateUserProjectMembership($input: UpdateUserProjectMembershipInput!) {
+    updateUserProjectMembership(input: $input) { id group }
+  }
+`;
 
 // Constants
 const MAX_REQUEUES = 3;

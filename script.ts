@@ -482,6 +482,7 @@ function buildDataSchemaFile(intro: IntrospectionData): string {
   const enumNames = sortKeys(intro.enums);
   const queryNames = sortKeys(intro.queries);
   const mutationNames = sortKeys(intro.mutations);
+  const subscriptionNames = sortKeys(intro.subscriptions);
 
   const lines: string[] = [];
   lines.push(
@@ -881,7 +882,47 @@ function buildDataSchemaFile(intro: IntrospectionData): string {
   customOperationLines('queries', queryNames);
   customOperationLines('mutations', mutationNames);
 
-  lines.push('export type DataSubscriptions = Record<string, never>;');
+  if (!subscriptionNames.length) {
+    lines.push('export type DataSubscriptions = Record<string, never>;');
+  } else {
+    lines.push('export interface DataSubscriptions {');
+    for (const name of subscriptionNames) {
+      const definition = intro.subscriptions![name];
+      const args = sortKeys(definition.arguments).map((argName) => [
+        argName,
+        definition.arguments![argName]
+      ]) as Array<[string, FieldDefinition]>;
+      const hasArgs = args.length > 0;
+      const argsOptional = hasArgs && args.every(([, field]) => !field.isRequired);
+      const resultBase = resolveTypeName(definition.type, 'namespaced');
+      const resultType = definition.isArray ? `${resultBase}[]` : resultBase;
+
+      lines.push(`${SINGLE_INDENT}${name}(`);
+      if (hasArgs) {
+        lines.push(
+          `${SINGLE_INDENT.repeat(2)}args${argsOptional ? '?' : ''}: {`
+        );
+        for (const [argName, field] of args) {
+          const { type, optional } = getFieldTyping(field, {
+            forceOptional: !field.isRequired,
+            treatAsInput: true,
+            mode: 'namespaced'
+          });
+          lines.push(
+            `${SINGLE_INDENT.repeat(3)}${argName}${optional ? '?' : ''}: ${type};`
+          );
+        }
+        lines.push(`${SINGLE_INDENT.repeat(2)}},`);
+      }
+      lines.push(
+        `${SINGLE_INDENT.repeat(2)}options?: SubscriptionOptions<${resultType}>`
+      );
+      lines.push(
+        `${SINGLE_INDENT}): SubscriptionResult<${resultType}>;`
+      );
+    }
+    lines.push('}');
+  }
   lines.push('export type DataConversations = Record<string, never>;');
   lines.push('export type DataGenerations = Record<string, never>;');
   lines.push('');

@@ -1,4 +1,4 @@
-import Button from 'react-bootstrap/Button';
+import { Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import MyTable from '../Table';
 import { useOptimisticUpdates } from '../useOptimisticUpdates';
 import { Schema } from '../amplify/client-schema';
@@ -139,70 +139,78 @@ export default function Users({
   const tableData = isLoading
     ? []
     : hook.data.map((membership) => {
-        const user = users.find((user) => user.id === membership.userId);
-        return {
-          id: membership.organizationId + membership.userId,
-          rowData: [
-            user?.name,
-            user?.email,
-            <LabeledToggleSwitch
-              className='mb-0'
-              leftLabel='No'
-              rightLabel='Yes'
-              checked={membership.isAdmin ?? false}
-              onChange={(checked) => {
-                if (user?.id === authUser.userId) {
-                  alert('You cannot change your own admin status');
-                  return;
-                }
-                updateUser(membership.userId, checked);
-              }}
-            />,
-            <div className='d-flex justify-content-center'>
-              <Button
-                size={compactMode ? 'sm' : undefined}
-                className='fixed-width-button'
-                disabled={
-                  process.env.NODE_ENV === 'development'
-                    ? false
-                    : membership.isAdmin
+      const user = users.find((user) => user.id === membership.userId);
+      return {
+        id: membership.organizationId + membership.userId,
+        rowData: [
+          user?.name,
+          user?.email,
+          <LabeledToggleSwitch
+            className='mb-0'
+            leftLabel='No'
+            rightLabel='Yes'
+            checked={membership.isAdmin ?? false}
+            onChange={(checked) => {
+              if (user?.id === authUser.userId) {
+                alert('You cannot change your own admin status');
+                return;
+              }
+              updateUser(membership.userId, checked);
+            }}
+          />,
+          <div className='d-flex justify-content-center'>
+            <Button
+              size={compactMode ? 'sm' : undefined}
+              className='fixed-width-button'
+              disabled={
+                process.env.NODE_ENV === 'development'
+                  ? false
+                  : membership.isAdmin
                     ? true
                     : false
-                }
-                variant={'info'}
-                onClick={() => {
-                  setUserToEdit({
-                    id: user?.id || '',
-                    name: user?.name || '',
-                    organizationName: organization.name,
-                  });
-                  showModal('exceptions');
-                }}
-              >
-                Edit
-              </Button>
-            </div>,
-            <div className='d-flex justify-content-center'>
-              <Button
-                size={compactMode ? 'sm' : undefined}
-                className='fixed-width-button'
-                variant='danger'
-                disabled={user?.id === authUser.userId}
-                onClick={() => {
-                  setUserToEdit({
-                    id: user?.id || '',
-                    name: user?.name || '',
-                    organizationName: organization.name,
-                  });
-                  showModal('removeUser');
-                }}
-              >
-                Remove user
-              </Button>
-            </div>,
-          ],
-        };
-      });
+              }
+              variant={'info'}
+              onClick={() => {
+                setUserToEdit({
+                  id: user?.id || '',
+                  name: user?.name || '',
+                  organizationName: organization.name,
+                });
+                showModal('exceptions');
+              }}
+            >
+              Edit
+            </Button>
+          </div>,
+          <div className='d-flex justify-content-center'>
+            <OverlayTrigger
+              placement='top'
+              overlay={<Tooltip id='remove-user-tooltip'>Under maintenance</Tooltip>}
+            >
+              <div className='d-inline-block'>
+                <Button
+                  size={compactMode ? 'sm' : undefined}
+                  className='fixed-width-button'
+                  variant='danger'
+                  disabled={true}
+                  style={{ pointerEvents: 'none' }}
+                  onClick={() => {
+                    setUserToEdit({
+                      id: user?.id || '',
+                      name: user?.name || '',
+                      organizationName: organization.name,
+                    });
+                    showModal('removeUser');
+                  }}
+                >
+                  Remove user
+                </Button>
+              </div>
+            </OverlayTrigger>
+          </div>,
+        ],
+      };
+    });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

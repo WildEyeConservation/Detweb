@@ -19,6 +19,9 @@ import {
   useAuthenticator,
   View,
   Button as AmplifyButton,
+  Text,
+  Link,
+  Heading,
 } from '@aws-amplify/ui-react';
 //import { ErrorHandler } from './ErrorHandler';
 //import {TaskProgressHandler} from './TaskProgressHandler';
@@ -140,6 +143,23 @@ export default function AppWithAuthenticator() {
             >
               Reset Password
             </AmplifyButton>
+            <Heading level={6} marginTop='medium'>
+              Want to get started?
+            </Heading>
+            <Text marginTop='small'>
+              To join an existing organisation, please have your administrator
+              reach out to us.
+            </Text>
+            <Text marginTop='small'>
+              If you would like to register a brand new organisation, please do so
+              through our{' '}
+              <Link
+                href='https://wildeyeconservation.org/surveyscope-registration/'
+                isExternal
+              >
+                website
+              </Link>
+            </Text>
           </View>
         );
       },

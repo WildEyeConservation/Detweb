@@ -7,10 +7,19 @@ import {
   userProjectMembershipsByProjectId,
   imagesByProjectId,
 } from './graphql/queries';
-import {
-  updateProject,
-  updateUserProjectMembership,
-} from './graphql/mutations';
+// Inline minimal mutations – return key fields + `group` to avoid nested-resolver
+// auth failures while still enabling subscription delivery via groupDefinedIn('group').
+const updateProject = /* GraphQL */ `
+  mutation UpdateProject($input: UpdateProjectInput!) {
+    updateProject(input: $input) { id group }
+  }
+`;
+
+const updateUserProjectMembership = /* GraphQL */ `
+  mutation UpdateUserProjectMembership($input: UpdateUserProjectMembershipInput!) {
+    updateUserProjectMembership(input: $input) { id group }
+  }
+`;
 import type { GraphQLResult } from '@aws-amplify/api-graphql';
 import { UserProjectMembership } from './graphql/API';
 import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';

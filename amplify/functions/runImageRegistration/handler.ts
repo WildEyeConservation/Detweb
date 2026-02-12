@@ -11,12 +11,19 @@ import {
   imagesByProjectId,
   getProject,
 } from './graphql/queries';
-import { createImageNeighbour } from './graphql/mutations';
 import {
   CameraOverlap,
   GetImageNeighbourQuery,
   GetProjectQuery,
 } from '../runImageRegistration/graphql/API';
+
+// Inline minimal mutation – return composite key fields + `group` to avoid
+// nested-resolver auth failures while enabling subscription delivery via groupDefinedIn('group').
+const createImageNeighbour = /* GraphQL */ `
+  mutation CreateImageNeighbour($input: CreateImageNeighbourInput!) {
+    createImageNeighbour(input: $input) { image1Id image2Id group }
+  }
+`;
 
 Amplify.configure(
   {
@@ -174,7 +181,7 @@ async function handlePair(
                 group: organizationId,
               },
             },
-          })
+          }) as Promise<GraphQLResult<any>>
         );
       } catch (e: unknown) {
         const errors = ((): unknown[] => {

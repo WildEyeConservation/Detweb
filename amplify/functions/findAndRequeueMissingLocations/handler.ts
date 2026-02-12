@@ -20,10 +20,20 @@ import {
   annotationsByImageIdAndSetId,
   getProject,
 } from './graphql/queries';
-import {
-  updateQueue,
-  createAdminActionLog,
-} from './graphql/mutations';
+
+// Inline minimal mutations – return key fields + `group` to avoid nested-resolver
+// auth failures while still enabling subscription delivery via groupDefinedIn('group').
+const updateQueue = /* GraphQL */ `
+  mutation UpdateQueue($input: UpdateQueueInput!) {
+    updateQueue(input: $input) { id group }
+  }
+`;
+
+const createAdminActionLog = /* GraphQL */ `
+  mutation CreateAdminActionLog($input: CreateAdminActionLogInput!) {
+    createAdminActionLog(input: $input) { id group }
+  }
+`;
 
 // Configure Amplify for IAM-based GraphQL access.
 Amplify.configure(

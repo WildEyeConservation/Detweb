@@ -106,6 +106,9 @@ function wrapClientMethods(obj: any): any {
       if (Array.isArray(value)) {
         // Do not wrap arrays.
         wrappedObj[key] = value;
+      } else if (key === 'subscriptions') {
+        // Do not wrap subscriptions - they return observables, not promises.
+        wrappedObj[key] = value;
       } else {
         wrappedObj[key] = wrapClientMethods(value);
       }

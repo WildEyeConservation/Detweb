@@ -11,11 +11,21 @@ import {
 } from '@aws-sdk/client-s3';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import pLimit from 'p-limit';
-import {
-  createLocation as createLocationMutation,
-  updateTilingBatch as updateTilingBatchMutation,
-} from './graphql/mutations';
 import { getTilingBatch, tilingBatchesByTaskId } from './graphql/queries';
+
+// Inline minimal mutations – return key fields + `group` to avoid nested-resolver
+// auth failures while still enabling subscription delivery via groupDefinedIn('group').
+const createLocationMutation = /* GraphQL */ `
+  mutation CreateLocation($input: CreateLocationInput!) {
+    createLocation(input: $input) { id group }
+  }
+`;
+
+const updateTilingBatchMutation = /* GraphQL */ `
+  mutation UpdateTilingBatch($input: UpdateTilingBatchInput!) {
+    updateTilingBatch(input: $input) { id group }
+  }
+`;
 
 const getProjectOrganizationId = /* GraphQL */ `
   query GetProject($id: ID!) {
