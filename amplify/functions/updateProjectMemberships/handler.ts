@@ -3,16 +3,64 @@ import { env } from '$amplify/env/updateProjectMemberships';
 import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 import type { GraphQLResult } from '@aws-amplify/api-graphql';
-import {
-  listUserProjectMemberships,
-  getProject,
-  listOrganizationMemberships,
-} from './graphql/queries';
-import {
-  updateUserProjectMembership,
-  updateOrganizationMembership,
-} from './graphql/mutations';
-import { OrganizationMembership, UserProjectMembership } from './graphql/API';
+
+// Inline minimal queries/mutations – return key fields + `group` to avoid nested-resolver
+// auth failures while still enabling subscription delivery via groupDefinedIn('group').
+const listUserProjectMembershipsQuery = /* GraphQL */ `
+  query ListUserProjectMemberships($filter: ModelUserProjectMembershipFilterInput, $limit: Int, $nextToken: String) {
+    listUserProjectMemberships(filter: $filter, limit: $limit, nextToken: $nextToken) {
+      items { id group }
+      nextToken
+    }
+  }
+`;
+
+const getProjectQuery = /* GraphQL */ `
+  query GetProject($id: ID!) {
+    getProject(id: $id) { organizationId }
+  }
+`;
+
+const listOrganizationMembershipsQuery = /* GraphQL */ `
+  query ListOrganizationMemberships($filter: ModelOrganizationMembershipFilterInput, $limit: Int, $nextToken: String, $organizationId: ID, $sortDirection: ModelSortDirection, $userId: ModelStringKeyConditionInput) {
+    listOrganizationMemberships(filter: $filter, limit: $limit, nextToken: $nextToken, organizationId: $organizationId, sortDirection: $sortDirection, userId: $userId) {
+      items { organizationId userId group }
+      nextToken
+    }
+  }
+`;
+
+// Return all scalar fields (no nested relations) so subscription clients receive full data.
+const updateUserProjectMembershipMutation = /* GraphQL */ `
+  mutation UpdateUserProjectMembership($input: UpdateUserProjectMembershipInput!) {
+    updateUserProjectMembership(input: $input) {
+      id
+      userId
+      projectId
+      isAdmin
+      queueId
+      backupQueueId
+      group
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+// Return all scalar fields (no nested relations) so subscription clients receive full data.
+const updateOrganizationMembershipMutation = /* GraphQL */ `
+  mutation UpdateOrganizationMembership($input: UpdateOrganizationMembershipInput!) {
+    updateOrganizationMembership(input: $input) {
+      organizationId
+      userId
+      isAdmin
+      isTested
+      group
+      createdAt
+      updatedAt
+    }
+  }
+`;
 
 Amplify.configure(
   {
@@ -46,15 +94,36 @@ const client = generateClient({
   authMode: 'iam',
 });
 
+// Shared GraphQL helper that surfaces descriptive errors.
+async function executeGraphql<T>(
+  query: string,
+  variables: Record<string, any>
+): Promise<T> {
+  const response = (await client.graphql({
+    query,
+    variables,
+  } as any)) as GraphQLResult<T>;
+  if (response.errors && response.errors.length > 0) {
+    throw new Error(
+      `GraphQL error: ${JSON.stringify(
+        response.errors.map((err) => err.message)
+      )}`
+    );
+  }
+  if (!response.data) {
+    throw new Error('GraphQL response missing data');
+  }
+  return response.data;
+}
+
 interface PagedList<T> {
   items: T[];
   nextToken: string | null | undefined;
 }
 
 async function fetchAllPages<T, K extends string>(
-  queryFn: (
-    nextToken?: string
-  ) => Promise<GraphQLResult<{ [key in K]: PagedList<T> }>>,
+  queryString: string,
+  variables: Record<string, any>,
   queryName: K
 ): Promise<T[]> {
   const allItems: T[] = [];
@@ -62,10 +131,13 @@ async function fetchAllPages<T, K extends string>(
 
   do {
     console.log(`Fetching ${queryName} next page`);
-    const response = await queryFn(nextToken);
-    const items = response.data?.[queryName]?.items ?? [];
-    allItems.push(...(items as T[]));
-    nextToken = response.data?.[queryName]?.nextToken ?? undefined;
+    const data = await executeGraphql<{ [key in K]: PagedList<T> }>(
+      queryString,
+      { ...variables, nextToken }
+    );
+    const items = data[queryName]?.items ?? [];
+    allItems.push(...items);
+    nextToken = data[queryName]?.nextToken ?? undefined;
   } while (nextToken);
 
   console.log(
@@ -74,26 +146,7 @@ async function fetchAllPages<T, K extends string>(
   return allItems;
 }
 
-export const handler: Handler = async (event, context) => {
-  function serializeError(err: unknown): string {
-    try {
-      if (err instanceof Error) {
-        return JSON.stringify(
-          {
-            name: err.name,
-            message: err.message,
-            stack: err.stack,
-          },
-          null,
-          2
-        );
-      }
-      return JSON.stringify(err, null, 2);
-    } catch {
-      return String(err);
-    }
-  }
-
+export const handler: Handler = async (event) => {
   try {
     console.log('Invoked updateProjectMemberships with event:', JSON.stringify(event));
     const { projectId } = event.arguments ?? {};
@@ -103,113 +156,53 @@ export const handler: Handler = async (event, context) => {
 
     //get all UserProjectMembership records for the project
     const memberships = await fetchAllPages<
-      UserProjectMembership,
+      { id: string },
       'listUserProjectMemberships'
     >(
-      (nextToken) =>
-        client.graphql({
-          query: listUserProjectMemberships,
-          variables: {
-            filter: {
-              projectId: {
-                eq: projectId,
-              },
-            },
-            limit: 1000,
-            nextToken,
-          },
-        }) as Promise<
-          GraphQLResult<{
-            listUserProjectMemberships: PagedList<UserProjectMembership>;
-          }>
-        >,
+      listUserProjectMembershipsQuery,
+      { filter: { projectId: { eq: projectId } }, limit: 1000 },
       'listUserProjectMemberships'
     );
 
     //dummy update the project memberships
     for (const membership of memberships) {
-      const updateResult = (await client.graphql({
-        query: updateUserProjectMembership,
-        variables: {
-          input: {
-            id: membership.id,
-          },
-        },
-      })) as GraphQLResult<unknown>;
-
-      if (updateResult.errors && updateResult.errors.length > 0) {
-        throw new Error(
-          `GraphQL updateUserProjectMembership error: ${JSON.stringify(
-            updateResult.errors
-          )}`
-        );
-      }
-    }
-
-    const projectResult = (await client.graphql({
-      query: getProject,
-      variables: {
-        id: projectId,
-      },
-    })) as GraphQLResult<{ getProject?: { organizationId?: string | null } }>;
-
-    if (projectResult.errors && projectResult.errors.length > 0) {
-      throw new Error(
-        `GraphQL getProject error: ${JSON.stringify(projectResult.errors)}`
+      await executeGraphql<{ updateUserProjectMembership?: { id: string } }>(
+        updateUserProjectMembershipMutation,
+        { input: { id: membership.id } }
       );
     }
 
-    const organizationId = projectResult.data?.getProject?.organizationId;
+    const projectData = await executeGraphql<{
+      getProject?: { organizationId?: string | null };
+    }>(getProjectQuery, { id: projectId });
+
+    const organizationId = projectData.getProject?.organizationId;
 
     //get all organizationMemberships
     if (organizationId) {
       const orgMemberships = await fetchAllPages<
-        OrganizationMembership,
+        { organizationId: string; userId: string },
         'listOrganizationMemberships'
       >(
-        (nextToken) =>
-          client.graphql({
-            query: listOrganizationMemberships,
-            variables: {
-              filter: {
-                organizationId: {
-                  eq: organizationId,
-                },
-              },
-              nextToken,
-              limit: 1000,
-            },
-          }) as Promise<
-            GraphQLResult<{
-              listOrganizationMemberships: PagedList<OrganizationMembership>;
-            }>
-          >,
+        listOrganizationMembershipsQuery,
+        { filter: { organizationId: { eq: organizationId } }, limit: 1000 },
         'listOrganizationMemberships'
       );
 
       //dummy update the organization memberships
       for (const membership of orgMemberships) {
-        const orgUpdateResult = (await client.graphql({
-          query: updateOrganizationMembership,
-          variables: {
-            input: {
-              organizationId: membership.organizationId,
-              userId: membership.userId,
-            },
+        await executeGraphql<{
+          updateOrganizationMembership?: { organizationId: string; userId: string };
+        }>(updateOrganizationMembershipMutation, {
+          input: {
+            organizationId: membership.organizationId,
+            userId: membership.userId,
           },
-        })) as GraphQLResult<unknown>;
-
-        if (orgUpdateResult.errors && orgUpdateResult.errors.length > 0) {
-          throw new Error(
-            `GraphQL updateOrganizationMembership error: ${JSON.stringify(
-              orgUpdateResult.errors
-            )}`
-          );
-        }
+        });
       }
     }
   } catch (err) {
-    console.error('updateProjectMemberships failed:', serializeError(err));
-    throw err instanceof Error ? err : new Error(serializeError(err));
+    console.error('updateProjectMemberships failed:', err instanceof Error ? err.message : String(err));
+    throw err instanceof Error ? err : new Error(String(err));
   }
 };

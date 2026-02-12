@@ -8,8 +8,15 @@ import {
   imagesByProjectId,
   annotationsByAnnotationSetId,
 } from './graphql/queries';
-import { createJollyResult } from './graphql/mutations';
 import { generateClient, GraphQLResult } from 'aws-amplify/data';
+
+// Inline minimal mutation – return composite key fields + `group` to avoid
+// nested-resolver auth failures while enabling subscription delivery via groupDefinedIn('group').
+const createJollyResult = /* GraphQL */ `
+  mutation CreateJollyResult($input: CreateJollyResultInput!) {
+    createJollyResult(input: $input) { surveyId stratumId annotationSetId categoryId group }
+  }
+`;
 // @ts-ignore
 import * as jStat from 'jstat';
 
