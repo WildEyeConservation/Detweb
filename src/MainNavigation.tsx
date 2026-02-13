@@ -320,7 +320,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                     us.
                   </li>
                 </ul>
-              </Card.Text> */}
+              </Card.Text> 
               <Card.Text>
                 If your organisation is not registered, please register an
                 organisation below.
@@ -331,7 +331,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                 onClick={() => navigate('/SSRegisterOrganization')}
               >
                 Register Organisation
-              </Button>
+              </Button>*/}
             </Card.Body>
           </Card>
         )}
