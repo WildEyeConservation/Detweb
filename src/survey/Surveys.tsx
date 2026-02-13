@@ -714,7 +714,7 @@ export default function Surveys() {
                 <Button
                   size={compactMode ? 'sm' : undefined}
                   className='flex align-items-center justify-content-center'
-                  disabled={disabled || scanningProjects.has(project.id)}
+                  disabled={!project.annotationSets.some((set) => set.register) && (disabled || scanningProjects.has(project.id))}
                   variant='primary'
                   onClick={() => navigate(`/jobs`)}
                 >
@@ -723,7 +723,7 @@ export default function Surveys() {
                 <Button
                   size={compactMode ? 'sm' : undefined}
                   className='flex align-items-center justify-content-center'
-                  disabled={disabled || scanningProjects.has(project.id)}
+                  disabled={!project.annotationSets.some((set) => set.register) && (disabled || scanningProjects.has(project.id))}
                   variant='danger'
                   onClick={() => {
                     setSelectedProject(project);
@@ -831,7 +831,7 @@ export default function Surveys() {
                   <Button
                     size='sm'
                     className='flex align-items-center justify-content-center'
-                    disabled={disabled || scanningProjects.has(project.id)}
+                    disabled={!project.annotationSets.some((set) => set.register) && (disabled || scanningProjects.has(project.id))}
                     variant='primary'
                     onClick={() => navigate(`/jobs`)}
                   >
@@ -840,7 +840,7 @@ export default function Surveys() {
                   <Button
                     size='sm'
                     className='flex align-items-center justify-content-center'
-                    disabled={disabled || scanningProjects.has(project.id)}
+                    disabled={!project.annotationSets.some((set) => set.register) && (disabled || scanningProjects.has(project.id))}
                     variant='danger'
                     onClick={() => {
                       setSelectedProject(project);
