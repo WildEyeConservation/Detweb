@@ -128,13 +128,6 @@ const sqsConsumeQueueStatement = new iam.PolicyStatement({
   ],
   resources: ['*'],
 });
-const cognitoAdmin = new iam.PolicyStatement({
-  actions: [
-    'cognito-idp:AdminRemoveUserFromGroup',
-    'cognito-idp:AdminAddUserToGroup',
-  ],
-  resources: ['*'],
-});
 const lambdaInvoke = new iam.PolicyStatement({
   actions: ['lambda:InvokeFunction'],
   resources: ['*'],
@@ -197,7 +190,6 @@ const groupEcsListPolicy = new iam.PolicyStatement({
 
 authenticatedRole.addToPrincipalPolicy(sqsCreateQueueStatement);
 authenticatedRole.addToPrincipalPolicy(sqsConsumeQueueStatement);
-authenticatedRole.addToPrincipalPolicy(cognitoAdmin);
 authenticatedRole.addToPrincipalPolicy(lambdaInvoke);
 authenticatedRole.addToPrincipalPolicy(generalBucketPolicy);
 authenticatedRole.addToPrincipalPolicy(groupEcsListPolicy);
