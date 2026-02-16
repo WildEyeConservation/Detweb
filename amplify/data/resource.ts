@@ -3,6 +3,7 @@ import { addUserToGroup } from '../functions/add-user-to-group/resource';
 import { createGroup } from '../data/create-group/resource';
 import { listUsers } from '../data/list-users/resource';
 import { listGroupsForUser } from '../data/list-groups-for-user/resource';
+import { removeUserFromGroup } from '../data/remove-user-from-group/resource';
 import { processImages } from '../functions/processImages/resource';
 import { updateUserStats } from '../functions/updateUserStats/resource';
 import { monitorModelProgress } from '../functions/monitorModelProgress/resource';
@@ -693,33 +694,31 @@ const schema = a
         index('surveyId').queryField('jollyResultsBySurveyId'),
         index('stratumId').queryField('jollyResultsByStratumId'),
       ]),
-    //TODO: Verify usage
+    // Lambda-only: users will manage groups through dedicated authorized lambdas
     addUserToGroup: a
       .mutation()
       .arguments({
         userId: a.string().required(),
         groupName: a.string().required(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.group('sysadmin')])
       .handler(a.handler.function(addUserToGroup))
       .returns(a.json()),
-    //TODO: Verify usage
     removeUserFromGroup: a
       .mutation()
       .arguments({
         userId: a.string().required(),
         groupName: a.string().required(),
       })
-      .authorization((allow) => [allow.authenticated()])
-      .handler(a.handler.function(addUserToGroup))
+      .authorization((allow) => [allow.group('sysadmin')])
+      .handler(a.handler.function(removeUserFromGroup))
       .returns(a.json()),
-    //TODO: Verify usage
     createGroup: a
       .mutation()
       .arguments({
         groupName: a.string().required(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.group('sysadmin')])
       .handler(a.handler.function(createGroup))
       .returns(a.json()),
     //TODO: own validation
@@ -736,14 +735,13 @@ const schema = a
           NextToken: a.string(),
         })
       ),
-    //TODO: own validation
     listGroupsForUser: a
       .query()
       .arguments({
         userId: a.string().required(),
         nextToken: a.string(),
       })
-      .authorization((allow) => [allow.authenticated()])
+      .authorization((allow) => [allow.group('sysadmin')])
       .handler(a.handler.function(listGroupsForUser))
       .returns(a.json()),
     // Message publish mutation
