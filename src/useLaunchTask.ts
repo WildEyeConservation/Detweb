@@ -284,6 +284,15 @@ export function useLaunchTask(
           .flat()
           .filter((l) => !allSeenLocations.has(l.id));
 
+        // Filter by launchImageIds if provided (dev feature for re-launching specific images)
+        if (launchImageIds && launchImageIds.length > 0) {
+          const allowedImageIds = new Set(launchImageIds);
+          allLocationsWithConfidence = allLocationsWithConfidence.filter(
+            (l) => allowedImageIds.has(l.imageId)
+          );
+          onProgress?.(`Filtered to ${allLocationsWithConfidence.length} locations matching ${launchImageIds.length} image IDs`);
+        }
+
         // Filter out locations that already have annotations within their bounds
         if (options.skipLocationWithAnnotations && allAnnotations.length > 0) {
           allLocationsWithConfidence = filterLocationsWithAnnotations(

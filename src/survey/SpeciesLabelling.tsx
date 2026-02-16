@@ -668,7 +668,7 @@ export default function SpeciesLabelling({
             />
           )}
 
-          {process.env.NODE_ENV === 'development' && !useExistingTiled && (
+          {process.env.NODE_ENV === 'development' && (
             <div className='mt-3 border border-warning p-2'>
               <Form.Group>
                 <Form.Label className='mb-0 text-warning'>
