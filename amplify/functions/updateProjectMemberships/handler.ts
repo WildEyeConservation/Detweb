@@ -1,8 +1,9 @@
-import type { Handler } from 'aws-lambda';
+import type { UpdateProjectMembershipsHandler } from '../../data/resource';
 import { env } from '$amplify/env/updateProjectMemberships';
 import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 import type { GraphQLResult } from '@aws-amplify/api-graphql';
+import { authorizeRequest } from '../shared/authorizeRequest';
 
 // Inline minimal queries/mutations – return key fields + `group` to avoid nested-resolver
 // auth failures while still enabling subscription delivery via groupDefinedIn('group').
@@ -146,12 +147,19 @@ async function fetchAllPages<T, K extends string>(
   return allItems;
 }
 
-export const handler: Handler = async (event) => {
+export const handler: UpdateProjectMembershipsHandler = async (event) => {
   try {
     console.log('Invoked updateProjectMemberships with event:', JSON.stringify(event));
-    const { projectId } = event.arguments ?? {};
-    if (!projectId) {
-      throw new Error('Missing required argument: projectId');
+    const { projectId } = event.arguments;
+
+    // Fetch project to get organizationId for authorization
+    const projectData = await executeGraphql<{
+      getProject?: { organizationId?: string | null };
+    }>(getProjectQuery, { id: projectId });
+    const organizationId = projectData.getProject?.organizationId;
+
+    if (organizationId) {
+      authorizeRequest(event.identity, organizationId);
     }
 
     //get all UserProjectMembership records for the project
@@ -171,12 +179,6 @@ export const handler: Handler = async (event) => {
         { input: { id: membership.id } }
       );
     }
-
-    const projectData = await executeGraphql<{
-      getProject?: { organizationId?: string | null };
-    }>(getProjectQuery, { id: projectId });
-
-    const organizationId = projectData.getProject?.organizationId;
 
     //get all organizationMemberships
     if (organizationId) {

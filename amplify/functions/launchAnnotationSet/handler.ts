@@ -1,8 +1,9 @@
-import type { Handler } from 'aws-lambda';
+import type { LaunchAnnotationSetHandler } from '../../data/resource';
 import { env } from '$amplify/env/launchAnnotationSet';
 import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 import type { GraphQLResult } from '@aws-amplify/api-graphql';
+import { authorizeRequest } from '../shared/authorizeRequest';
 import {
   CreateQueueCommand,
   GetQueueAttributesCommand,
@@ -212,7 +213,7 @@ type LocationInput = {
 const TILING_BATCH_SIZE = 50000;
 
 // Entry point invoked by AppSync resolver.
-export const handler: Handler = async (event) => {
+export const handler: LaunchAnnotationSetHandler = async (event) => {
   let payloadS3Key: string | undefined;
   try {
     let payload = parsePayload(event.arguments?.request);
@@ -234,7 +235,6 @@ export const handler: Handler = async (event) => {
         locationSetIdsProvided: payload.locationSetIds?.length ?? 0,
       })
     );
-    await setProjectStatus(payload.projectId, 'launching');
 
     // Fetch the project's organizationId to set the group field on all created records.
     const projectData = await executeGraphql<{
@@ -244,6 +244,10 @@ export const handler: Handler = async (event) => {
     if (!organizationId) {
       throw new Error('Project does not have an organizationId');
     }
+
+    authorizeRequest(event.identity, organizationId);
+
+    await setProjectStatus(payload.projectId, 'launching');
 
     await executeGraphql<{ updateProjectMemberships?: string | null }>(
       updateProjectMembershipsMutation,

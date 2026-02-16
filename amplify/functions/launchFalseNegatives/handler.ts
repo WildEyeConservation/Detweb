@@ -1,8 +1,9 @@
-import type { Handler } from 'aws-lambda';
+import type { LaunchFalseNegativesHandler } from '../../data/resource';
 import { env } from '$amplify/env/launchFalseNegatives';
 import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 import type { GraphQLResult } from '@aws-amplify/api-graphql';
+import { authorizeRequest } from '../shared/authorizeRequest';
 import {
   CreateQueueCommand,
   GetQueueAttributesCommand,
@@ -237,7 +238,7 @@ async function withTiming<T>(label: string, action: () => Promise<T>): Promise<T
 }
 
 // AppSync resolver entry; wraps orchestration in error handling.
-export const handler: Handler = async (event) => {
+export const handler: LaunchFalseNegativesHandler = async (event) => {
   let payloadS3Key: string | undefined;
   try {
     let payload = parsePayload(event.arguments?.request);
@@ -260,13 +261,24 @@ export const handler: Handler = async (event) => {
       })
     );
 
+    // Fetch the organizationId from the project for group-based access and authorization.
+    const projectData = await executeGraphql<{
+      getProject?: { organizationId?: string | null };
+    }>(getProjectOrganizationId, { id: payload.projectId });
+    const organizationId = projectData.getProject?.organizationId;
+    if (!organizationId) {
+      throw new Error('Unable to determine organizationId for project');
+    }
+
+    authorizeRequest(event.identity, organizationId);
+
     await setProjectStatus(payload.projectId, 'launching');
     await executeGraphql<{ updateProjectMemberships?: string | null }>(
       updateProjectMembershipsMutation,
       { projectId: payload.projectId }
     );
 
-    const result = await handleLaunch(payload);
+    const result = await handleLaunch(payload, organizationId);
 
     // Clean up the S3 payload file after successful processing.
     if (payloadS3Key) {
@@ -298,19 +310,11 @@ export const handler: Handler = async (event) => {
 };
 
 // End-to-end workflow for selecting tiles and pushing jobs to workers.
-async function handleLaunch(payload: LaunchFalseNegativesPayload) {
+async function handleLaunch(payload: LaunchFalseNegativesPayload, organizationId: string) {
   const workerBatchSize = payload.batchSize ?? 200;
   const { projectId, annotationSetId } = payload;
 
-  // Fetch the organizationId from the project for group-based access.
-  const projectData = await executeGraphql<{
-    getProject?: { organizationId?: string | null };
-  }>(getProjectOrganizationId, { id: projectId });
-  const organizationId = projectData.getProject?.organizationId;
-  if (!organizationId) {
-    throw new Error('Unable to determine organizationId for project');
-  }
-  console.log('Fetched organizationId', { projectId, organizationId });
+  console.log('Using organizationId', { projectId, organizationId });
 
   // If we need to create tiles from tiledRequest, use distributed tiling
   if (!payload.locationSetId && payload.tiledRequest) {

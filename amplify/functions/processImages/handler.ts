@@ -2,7 +2,7 @@ import { publish } from './graphql/mutations'
 import { Amplify } from "aws-amplify";
 import { env } from '$amplify/env/processImages'
 import { generateClient } from "aws-amplify/data";
-import { Handler } from "aws-lambda";
+import type { ProcessImagesHandler } from '../../data/resource';
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3'
 
@@ -66,7 +66,7 @@ function publishToClients(message: string) {
   });
 }
 
-export const handler: Handler = async (event, context) => {
+export const handler: ProcessImagesHandler = async (event) => {
   try {
     const s3Client = new S3Client({ region: env.AWS_REGION });
     const heatMapPath = 'heatmaps/' + event.arguments.s3key + '.h5'

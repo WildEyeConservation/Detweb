@@ -1,6 +1,7 @@
 import { env } from '$amplify/env/deleteProject';
 import { Amplify } from 'aws-amplify';
 import type { GenerateSurveyResultsHandler } from '../../data/resource';
+import { authorizeRequest } from '../shared/authorizeRequest';
 import {
   camerasByProjectId,
   strataByProjectId,
@@ -208,6 +209,11 @@ export const handler: GenerateSurveyResultsHandler =
         variables: { id: surveyId },
       });
       const organizationId = (projectResponse as GraphQLResult<any>).data?.getProject?.organizationId;
+
+      if (!organizationId) {
+        throw new Error('Project does not have an organizationId');
+      }
+      authorizeRequest(event.identity, organizationId);
 
       // fetch project cameras
       const cameras = await fetchAllPages<any>(
