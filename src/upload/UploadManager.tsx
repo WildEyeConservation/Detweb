@@ -888,6 +888,7 @@ export default function UploadManager() {
           );
 
           client.mutations.runHeatmapper({
+            projectId,
             images: batchStrings,
           });
         }

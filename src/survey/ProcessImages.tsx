@@ -223,6 +223,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
           );
 
           client.mutations.runHeatmapper({
+            projectId,
             images: batchStrings,
           });
         }

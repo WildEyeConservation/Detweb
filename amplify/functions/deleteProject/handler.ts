@@ -1,6 +1,7 @@
 import { env } from '$amplify/env/deleteProject';
 import { Amplify } from 'aws-amplify';
 import type { DeleteProjectInFullHandler } from '../../data/resource';
+import { authorizeRequest } from '../shared/authorizeRequest';
 import {
   getProject,
   listImageSets,
@@ -182,6 +183,8 @@ export const handler: DeleteProjectInFullHandler = async (
     if (!project) {
       throw new Error(`Project ${projectId} not found`);
     }
+
+    authorizeRequest(event.identity, project.organizationId);
 
     //delete project
     await client.graphql({

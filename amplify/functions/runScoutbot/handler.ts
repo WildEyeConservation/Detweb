@@ -1,8 +1,11 @@
-import type { Handler } from 'aws-lambda';
+import type { RunScoutbotHandler } from '../../data/resource';
 import { env } from '$amplify/env/runScoutbot';
 import { Amplify } from 'aws-amplify';
+import { generateClient } from 'aws-amplify/data';
+import type { GraphQLResult } from '@aws-amplify/api-graphql';
 import { SendMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
+import { authorizeRequest } from '../shared/authorizeRequest';
 
 Amplify.configure(
   {
@@ -32,12 +35,30 @@ Amplify.configure(
   }
 );
 
-export const handler: Handler = async (event, context) => {
+const gqlClient = generateClient({ authMode: 'iam' });
+
+const getProjectOrganizationId = /* GraphQL */ `
+  query GetProject($id: ID!) {
+    getProject(id: $id) { organizationId }
+  }
+`;
+
+export const handler: RunScoutbotHandler = async (event, context) => {
   try {
-    const imagesFromEvent = event.arguments.images as string[];
-    const projectId = event.arguments.projectId as string;
-    const setId = event.arguments.setId as string;
-    const bucket = event.arguments.bucket as string;
+    const imagesFromEvent = event.arguments.images ?? [];
+    const projectId = event.arguments.projectId;
+
+    // Authorize: fetch project org and verify user membership
+    const projResp = (await gqlClient.graphql({
+      query: getProjectOrganizationId,
+      variables: { id: projectId },
+    })) as GraphQLResult<{ getProject?: { organizationId?: string | null } }>;
+    const organizationId = projResp.data?.getProject?.organizationId;
+    if (organizationId) {
+      authorizeRequest(event.identity, organizationId);
+    }
+    const setId = event.arguments.setId;
+    const bucket = event.arguments.bucket;
 
     const images = imagesFromEvent.map((imageStr) => {
       const [id, originalPath] = imageStr.split('---');
@@ -47,7 +68,7 @@ export const handler: Handler = async (event, context) => {
       };
     });
 
-    const queueUrl = event.arguments.queueUrl as string;
+    const queueUrl = event.arguments.queueUrl;
 
     const TIME_THRESHOLD_MS = 60000;
     const sqsClient = new SQSClient({

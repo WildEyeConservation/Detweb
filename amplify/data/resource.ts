@@ -752,7 +752,6 @@ const schema = a
       content: a.string().required(),
       channelName: a.string().required(),
     }),
-    //TODO: Verify usage
     publish: a
       .mutation()
       .arguments({
@@ -764,7 +763,6 @@ const schema = a
       .authorization((allow) => [
         allow.authenticated(),
       ]),
-    // Subscribe to incoming messages
     receive: a
       .subscription()
       // subscribes to the 'publish' mutation
@@ -776,37 +774,36 @@ const schema = a
           entry: './receive.js',
         })
       )
-      // authorization rules as to who can subscribe to the data
       .authorization((allow) => [allow.authenticated()]),
-    //TODO: Verify usage
-    processImages: a
-      .mutation()
-      .arguments({
-        s3key: a.string().required(),
-        model: a.string().required(),
-        threshold: a.float(),
-      })
-      .handler(a.handler.function(processImages))
-      .returns(a.string())
-      .authorization((allow) => [allow.authenticated()]),
-    CountType: a.customType({
-      count: a.integer().required(),
-    }),
-    //TODO: Verify usage
-    getImageCounts: a
-      .query()
-      .arguments({
-        imageSetId: a.string().required(),
-        nextToken: a.string(),
-      })
-      .returns(a.customType({ count: a.integer(), nextToken: a.string() }))
-      .authorization((allow) => [allow.authenticated()])
-      .handler(
-        a.handler.custom({
-          entry: './getImageCounts.js',
-          dataSource: a.ref('ImageSetMembership'),
-        })
-      ),
+    // Legacy function
+    // processImages: a
+    //   .mutation()
+    //   .arguments({
+    //     s3key: a.string().required(),
+    //     model: a.string().required(),
+    //     threshold: a.float(),
+    //   })
+    //   .handler(a.handler.function(processImages))
+    //   .returns(a.string())
+    //   .authorization((allow) => [allow.authenticated()]),
+    // CountType: a.customType({
+    //   count: a.integer().required(),
+    // }),
+    // Legacy function
+    // getImageCounts: a
+    //   .query()
+    //   .arguments({
+    //     imageSetId: a.string().required(),
+    //     nextToken: a.string(),
+    //   })
+    //   .returns(a.customType({ count: a.integer(), nextToken: a.string() }))
+    //   .authorization((allow) => [allow.authenticated()])
+    //   .handler(
+    //     a.handler.custom({
+    //       entry: './getImageCounts.js',
+    //       dataSource: a.ref('ImageSetMembership'),
+    //     })
+    //   ),
     //.authorization(allow => [allow.authenticated()])
 
     // registerImages: a
@@ -983,7 +980,6 @@ const schema = a
           .sortKeys(['batchIndex'])
           .queryField('tilingBatchesByTaskId'),
       ]),
-    //TODO: own validation
     updateProjectMemberships: a
       .mutation()
       .arguments({
@@ -992,7 +988,6 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(updateProjectMemberships)),
-    //TODO: own validation
     runImageRegistration: a
       .mutation()
       .arguments({
@@ -1006,7 +1001,6 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(runImageRegistration)),
-    //TODO: own validation
     runScoutbot: a
       .mutation()
       .arguments({
@@ -1019,7 +1013,6 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(runScoutbot)),
-    //TODO: own validation
     runMadDetector: a
       .mutation()
       .arguments({
@@ -1032,16 +1025,15 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(runMadDetector)),
-    //TODO: own validation
     runHeatmapper: a
       .mutation()
       .arguments({
+        projectId: a.string().required(),
         images: a.string().array(),
       })
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(runHeatmapper)),
-    //TODO: own validation
     deleteProjectInFull: a
       .mutation()
       .arguments({
@@ -1050,7 +1042,6 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(deleteProject)),
-    //TODO: own validation
     generateSurveyResults: a
       .mutation()
       .arguments({
@@ -1061,7 +1052,6 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(generateSurveyResults)),
-    //TODO: own validation
     launchAnnotationSet: a
       .mutation()
       .arguments({
@@ -1070,7 +1060,6 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(launchAnnotationSet)),
-    //TODO: own validation
     launchFalseNegatives: a
       .mutation()
       .arguments({
@@ -1079,7 +1068,7 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(launchFalseNegatives)),
-    //TODO: own validation
+    //TODO: Rethink sharing completely
     getJwtSecret: a
       .mutation()
       .returns(a.string())
@@ -1123,22 +1112,48 @@ export type ServerSchema = typeof schema;
 // Minimal, explicit server handler types to avoid indexing into ModelSchema
 interface LambdaContext {
   awsRequestId?: string;
+  callbackWaitsForEmptyEventLoop: boolean;
+  getRemainingTimeInMillis: () => number;
 }
 
+type AppSyncIdentityCognito = {
+  sub: string;
+  username: string;
+  claims: Record<string, string>;
+  groups: string[] | null;
+  issuer: string;
+  defaultAuthStrategy: string;
+};
+
 type MutationHandler<Args, Result = unknown> = (
-  event: { arguments: Args },
+  event: { arguments: Args; identity?: AppSyncIdentityCognito },
   context: LambdaContext
 ) => Promise<Result>;
 
+// User management -> shouldn't be able to call this from client
 export type AddUserToGroupHandler = MutationHandler<{ userId: string; groupName: string }>;
 export type RemoveUserFromGroupHandler = MutationHandler<{ userId: string; groupName: string }>;
 export type CreateGroupHandler = MutationHandler<{ groupName: string }>;
+
+// Rethink user listing
 export type ListUsersHandler = MutationHandler<{ nextToken?: string | null }>;
 export type ListGroupsForUserHandler = MutationHandler<{ userId: string; nextToken?: string | null }>;
+
+// Lambdas authorize user requests based on user groups (event.identity.groups)
 export type DeleteProjectInFullHandler = MutationHandler<{ projectId: string }>;
 export type GenerateSurveyResultsHandler = MutationHandler<{ surveyId: string; annotationSetId: string; categoryIds: string[] }>;
 export type LaunchAnnotationSetHandler = MutationHandler<{ request: string }>;
 export type LaunchFalseNegativesHandler = MutationHandler<{ request: string }>;
+export type ProcessImagesHandler = MutationHandler<{ s3key: string; model: string; threshold?: number | null }>; //legacy
+export type UpdateProjectMembershipsHandler = MutationHandler<{ projectId: string }>;
+export type RunImageRegistrationHandler = MutationHandler<{ projectId: string; metadata: string; queueUrl: string; images?: string[] | null }>;
+export type RunScoutbotHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string }>;
+export type RunMadDetectorHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string }>;
+export type RunHeatmapperHandler = MutationHandler<{ projectId: string; images?: string[] | null }>;
+
+// TODO: Rethink sharing completely
+export type GetJwtSecretHandler = MutationHandler<Record<string, never>, string>;
+
 export const data = defineData({
   schema,
   authorizationModes: {

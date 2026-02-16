@@ -1,7 +1,8 @@
-import type { Handler } from 'aws-lambda';
+import type { RunImageRegistrationHandler } from '../../data/resource';
 import { env } from '$amplify/env/runImageRegistration';
 import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
+import { authorizeRequest } from '../shared/authorizeRequest';
 import { SendMessageBatchCommand, SQSClient } from '@aws-sdk/client-sqs';
 import type { SendMessageBatchRequestEntry } from '@aws-sdk/client-sqs';
 import type { GraphQLResult } from '@aws-amplify/api-graphql';
@@ -266,14 +267,11 @@ function addAdjacentPairTasks(
   }
 }
 
-export const handler: Handler = async (event, context) => {
+export const handler: RunImageRegistrationHandler = async (event, context) => {
   try {
     // Do not wait for open handles after we return a response
-    if (context && typeof context === 'object') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (context as any).callbackWaitsForEmptyEventLoop = false;
-    }
-    const projectId = event.arguments.projectId as string;
+    context.callbackWaitsForEmptyEventLoop = false;
+    const projectId = event.arguments.projectId;
     const metadata = JSON.parse(event.arguments.metadata) as {
       masks?: number[][][];
       images?: Array<{
@@ -284,7 +282,7 @@ export const handler: Handler = async (event, context) => {
       }>;
     };
     const masks = Array.isArray(metadata?.masks) ? (metadata.masks as number[][][]) : [];
-    const queueUrl = event.arguments.queueUrl as string;
+    const queueUrl = event.arguments.queueUrl;
 
     // Fetch project info to determine key prefixing
     let organizationId: string | undefined = undefined;
@@ -304,6 +302,10 @@ export const handler: Handler = async (event, context) => {
       console.warn(
         'Unable to fetch project tags; defaulting to legacy=false behavior'
       );
+    }
+
+    if (organizationId) {
+      authorizeRequest(event.identity, organizationId);
     }
 
     const computeKey = (orig: string) =>

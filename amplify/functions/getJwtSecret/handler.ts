@@ -1,6 +1,7 @@
+import type { GetJwtSecretHandler } from '../../data/resource';
 import { env } from '$amplify/env/getJwtSecret';
 
-export const handler = async (event: any, context: any) => {
+export const handler: GetJwtSecretHandler = async (_event, context) => {
   // allow Lambda to return without waiting for open event loop handles
   context.callbackWaitsForEmptyEventLoop = false;
   try {
@@ -9,7 +10,7 @@ export const handler = async (event: any, context: any) => {
     console.log('JWT_SECRET', s);
 
     return s;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error details:', error);
 
     return 'error';
