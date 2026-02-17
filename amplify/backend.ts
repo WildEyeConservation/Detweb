@@ -98,13 +98,6 @@ mapping1.node.addDependency(policy);
 
 // Expand the default authenticated Cognito role with data-plane permissions.
 const authenticatedRole = backend.auth.resources.authenticatedUserIamRole;
-const dynamoDbPolicy = new iam.PolicyStatement({
-  actions: ['dynamodb:Query', 'dynamodb:Scan', 'dynamodb:BatchGetItem'],
-  resources: ['*'],
-});
-
-//Attach the dynamoDbPolicy to the authenticatedRole
-authenticatedRole.addToPrincipalPolicy(dynamoDbPolicy);
 
 // Shared SQS permissions for Lambdas and groups that spin up task queues.
 const sqsCreateQueueStatement = new iam.PolicyStatement({
@@ -173,16 +166,6 @@ const groupS3QueueManifestsPolicy = new iam.PolicyStatement({
   resources: ['arn:aws:s3:::*/queue-manifests/*'],
 });
 
-// Allow Cognito group roles to query DynamoDB tables and GSIs without
-// referencing specific data resources to avoid circular dependencies.
-const groupDynamoDbQueryPolicy = new iam.PolicyStatement({
-  actions: ['dynamodb:Query', 'dynamodb:Scan', 'dynamodb:BatchGetItem'],
-  resources: [
-    'arn:aws:dynamodb:*:*:table/*',
-    'arn:aws:dynamodb:*:*:table/*/index/*',
-  ],
-});
-
 const groupEcsListPolicy = new iam.PolicyStatement({
   actions: ['ecs:ListClusters', 'ecs:DescribeClusters', 'ecs:ListServices', 'ecs:DescribeServices'],
   resources: ['*'],
@@ -201,7 +184,6 @@ Object.values(backend.auth.resources.groups).forEach(({ role }) => {
   role.addToPrincipalPolicy(generalBucketPolicy);
   role.addToPrincipalPolicy(groupS3ListPolicy);
   role.addToPrincipalPolicy(groupS3ObjectsPolicy);
-  role.addToPrincipalPolicy(groupDynamoDbQueryPolicy);
   // Also allow group roles to create and consume SQS queues
   role.addToPrincipalPolicy(sqsCreateQueueStatement);
   role.addToPrincipalPolicy(sqsConsumeQueueStatement);
@@ -673,15 +655,6 @@ backend.addOutput({
     madDetectorTaskQueueUrl: madDetectorQueueUrl ?? '',
     processTaskQueueUrl: processor.queue.queueUrl,
     pointFinderTaskQueueUrl: pointFinderQueueUrl ?? '',
-    annotationTable: backend.data.resources.tables['Annotation'].tableName,
-    locationTable: backend.data.resources.tables['Location'].tableName,
-    imageTable: backend.data.resources.tables['Image'].tableName,
-    imageSetTable: backend.data.resources.tables['ImageSet'].tableName,
-    categoryTable: backend.data.resources.tables['Category'].tableName,
-    projectTable: backend.data.resources.tables['Project'].tableName,
-    imageSetMembershipsTable:
-      backend.data.resources.tables['ImageSetMembership'].tableName,
-    observationTable: backend.data.resources.tables['Observation'].tableName,
     generalBucketName: generalBucketName,
   },
 });
