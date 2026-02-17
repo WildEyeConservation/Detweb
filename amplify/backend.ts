@@ -32,6 +32,8 @@ import { monitorScoutbotDlq } from './functions/monitorScoutbotDlq/resource';
 import { processTilingBatch } from './functions/processTilingBatch/resource';
 import { monitorTilingTasks } from './functions/monitorTilingTasks/resource';
 import { findAndRequeueMissingLocations } from './functions/findAndRequeueMissingLocations/resource';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 
 // Register all Amplify-managed resources in a single backend definition.
@@ -95,6 +97,56 @@ const mapping1 = new EventSourceMapping(
   }
 );
 mapping1.node.addDependency(policy);
+
+// Backfill Location.group from the project's organizationId on INSERT
+const backfillStack = backend.createStack('BackfillLocationGroup');
+const locationTable = backend.data.resources.tables['Location'];
+const projectTable = backend.data.resources.tables['Project'];
+
+const backfillFn = new NodejsFunction(backfillStack, 'BackfillLocationGroupFn', {
+  entry: path.join(__dirname, 'functions/backfillLocationGroup/handler.ts'),
+  handler: 'handler',
+  runtime: lambda.Runtime.NODEJS_20_X,
+  environment: {
+    LOCATION_TABLE_NAME: locationTable.tableName,
+    PROJECT_TABLE_NAME: projectTable.tableName,
+  },
+});
+
+backfillFn.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'dynamodb:GetItem',
+      'dynamodb:PutItem',
+      'dynamodb:UpdateItem',
+      'dynamodb:Query',
+    ],
+    resources: [locationTable.tableArn, `${locationTable.tableArn}/index/*`],
+  })
+);
+backfillFn.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['dynamodb:GetItem', 'dynamodb:Query'],
+    resources: [projectTable.tableArn, `${projectTable.tableArn}/index/*`],
+  })
+);
+backfillFn.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'dynamodb:DescribeStream',
+      'dynamodb:GetRecords',
+      'dynamodb:GetShardIterator',
+      'dynamodb:ListStreams',
+    ],
+    resources: ['*'],
+  })
+);
+
+new EventSourceMapping(backfillStack, 'LocationEventStreamMapping', {
+  target: backfillFn,
+  eventSourceArn: locationTable.tableStreamArn,
+  startingPosition: StartingPosition.LATEST,
+});
 
 // Expand the default authenticated Cognito role with data-plane permissions.
 const authenticatedRole = backend.auth.resources.authenticatedUserIamRole;
