@@ -32,6 +32,8 @@ import { monitorScoutbotDlq } from './functions/monitorScoutbotDlq/resource';
 import { processTilingBatch } from './functions/processTilingBatch/resource';
 import { monitorTilingTasks } from './functions/monitorTilingTasks/resource';
 import { findAndRequeueMissingLocations } from './functions/findAndRequeueMissingLocations/resource';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 
 // Register all Amplify-managed resources in a single backend definition.
@@ -96,15 +98,58 @@ const mapping1 = new EventSourceMapping(
 );
 mapping1.node.addDependency(policy);
 
-// Expand the default authenticated Cognito role with data-plane permissions.
-const authenticatedRole = backend.auth.resources.authenticatedUserIamRole;
-const dynamoDbPolicy = new iam.PolicyStatement({
-  actions: ['dynamodb:Query', 'dynamodb:Scan', 'dynamodb:BatchGetItem'],
-  resources: ['*'],
+// Backfill Location.group from the project's organizationId on INSERT
+const backfillStack = backend.createStack('BackfillLocationGroup');
+const locationTable = backend.data.resources.tables['Location'];
+const projectTable = backend.data.resources.tables['Project'];
+
+const backfillFn = new NodejsFunction(backfillStack, 'BackfillLocationGroupFn', {
+  entry: path.join(__dirname, 'functions/backfillLocationGroup/handler.ts'),
+  handler: 'handler',
+  runtime: lambda.Runtime.NODEJS_20_X,
+  environment: {
+    LOCATION_TABLE_NAME: locationTable.tableName,
+    PROJECT_TABLE_NAME: projectTable.tableName,
+  },
 });
 
-//Attach the dynamoDbPolicy to the authenticatedRole
-authenticatedRole.addToPrincipalPolicy(dynamoDbPolicy);
+backfillFn.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'dynamodb:GetItem',
+      'dynamodb:PutItem',
+      'dynamodb:UpdateItem',
+      'dynamodb:Query',
+    ],
+    resources: [locationTable.tableArn, `${locationTable.tableArn}/index/*`],
+  })
+);
+backfillFn.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['dynamodb:GetItem', 'dynamodb:Query'],
+    resources: [projectTable.tableArn, `${projectTable.tableArn}/index/*`],
+  })
+);
+backfillFn.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'dynamodb:DescribeStream',
+      'dynamodb:GetRecords',
+      'dynamodb:GetShardIterator',
+      'dynamodb:ListStreams',
+    ],
+    resources: ['*'],
+  })
+);
+
+new EventSourceMapping(backfillStack, 'LocationEventStreamMapping', {
+  target: backfillFn,
+  eventSourceArn: locationTable.tableStreamArn,
+  startingPosition: StartingPosition.LATEST,
+});
+
+// Expand the default authenticated Cognito role with data-plane permissions.
+const authenticatedRole = backend.auth.resources.authenticatedUserIamRole;
 
 // Shared SQS permissions for Lambdas and groups that spin up task queues.
 const sqsCreateQueueStatement = new iam.PolicyStatement({
@@ -173,16 +218,6 @@ const groupS3QueueManifestsPolicy = new iam.PolicyStatement({
   resources: ['arn:aws:s3:::*/queue-manifests/*'],
 });
 
-// Allow Cognito group roles to query DynamoDB tables and GSIs without
-// referencing specific data resources to avoid circular dependencies.
-const groupDynamoDbQueryPolicy = new iam.PolicyStatement({
-  actions: ['dynamodb:Query', 'dynamodb:Scan', 'dynamodb:BatchGetItem'],
-  resources: [
-    'arn:aws:dynamodb:*:*:table/*',
-    'arn:aws:dynamodb:*:*:table/*/index/*',
-  ],
-});
-
 const groupEcsListPolicy = new iam.PolicyStatement({
   actions: ['ecs:ListClusters', 'ecs:DescribeClusters', 'ecs:ListServices', 'ecs:DescribeServices'],
   resources: ['*'],
@@ -201,7 +236,6 @@ Object.values(backend.auth.resources.groups).forEach(({ role }) => {
   role.addToPrincipalPolicy(generalBucketPolicy);
   role.addToPrincipalPolicy(groupS3ListPolicy);
   role.addToPrincipalPolicy(groupS3ObjectsPolicy);
-  role.addToPrincipalPolicy(groupDynamoDbQueryPolicy);
   // Also allow group roles to create and consume SQS queues
   role.addToPrincipalPolicy(sqsCreateQueueStatement);
   role.addToPrincipalPolicy(sqsConsumeQueueStatement);
@@ -673,15 +707,6 @@ backend.addOutput({
     madDetectorTaskQueueUrl: madDetectorQueueUrl ?? '',
     processTaskQueueUrl: processor.queue.queueUrl,
     pointFinderTaskQueueUrl: pointFinderQueueUrl ?? '',
-    annotationTable: backend.data.resources.tables['Annotation'].tableName,
-    locationTable: backend.data.resources.tables['Location'].tableName,
-    imageTable: backend.data.resources.tables['Image'].tableName,
-    imageSetTable: backend.data.resources.tables['ImageSet'].tableName,
-    categoryTable: backend.data.resources.tables['Category'].tableName,
-    projectTable: backend.data.resources.tables['Project'].tableName,
-    imageSetMembershipsTable:
-      backend.data.resources.tables['ImageSetMembership'].tableName,
-    observationTable: backend.data.resources.tables['Observation'].tableName,
     generalBucketName: generalBucketName,
   },
 });

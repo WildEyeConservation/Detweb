@@ -1,10 +1,10 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
 import { Form, Spinner } from 'react-bootstrap';
 import Select, { SingleValue } from 'react-select';
-import { QueryCommand } from '@aws-sdk/client-dynamodb';
 import { uploadData } from 'aws-amplify/storage';
 import { Schema } from '../amplify/client-schema';
 import { GlobalContext, UserContext } from '../Context';
+import { fetchAllPaginatedResults } from '../utils';
 import CreateTask from '../CreateTask';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
 import type { TiledLaunchRequest } from '../types/LaunchTask';
@@ -46,8 +46,8 @@ export default function FalseNegatives({
     React.SetStateAction<LaunchHandler | null>
   >;
 }) {
-  const { client, backend } = useContext(GlobalContext)!;
-  const { getDynamoClient, user } = useContext(UserContext)!;
+  const { client } = useContext(GlobalContext)!;
+  const { user } = useContext(UserContext)!;
 
   // Tile set selection/creation
   const [useExistingTiled, setUseExistingTiled] = useState<boolean>(false);
@@ -176,60 +176,33 @@ export default function FalseNegatives({
     setLaunchDisabled,
   ]);
 
-  // Fetch locations from DynamoDB for existing tiled sets
+  // Fetch locations via AppSync for existing tiled sets
   const fetchLocationsFromSet = useCallback(
     async (
       locationSetId: string,
       onProgress?: (message: string) => void
     ): Promise<MinimalTile[]> => {
-      const dynamoClient = await getDynamoClient();
-      const tiles: MinimalTile[] = [];
-      let lastEvaluatedKey: Record<string, any> | undefined = undefined;
       onProgress?.('Querying locations...');
-      do {
-        const command = new QueryCommand({
-          TableName: backend.custom.locationTable,
-          IndexName: 'locationsBySetIdAndConfidence',
-          KeyConditionExpression: 'setId = :locationSetId',
-          ExpressionAttributeValues: {
-            ':locationSetId': { S: locationSetId },
-          },
-          ProjectionExpression: 'id, imageId, x, y, width, height',
-          ExclusiveStartKey: lastEvaluatedKey,
-          Limit: 1000,
-        });
-        try {
-          const response = await dynamoClient.send(command);
-          const items = response.Items || [];
-          const pageTiles = items
-            .filter((item: any) => {
-              const x = parseFloat(item.x?.N || '0');
-              const y = parseFloat(item.y?.N || '0');
-              const width = parseFloat(item.width?.N || '0');
-              const height = parseFloat(item.height?.N || '0');
-              return x !== 0 && y !== 0 && width !== 0 && height !== 0;
-            })
-            .map((item: any) => ({
-              id: item.id.S as string,
-              imageId: item.imageId.S as string,
-              x: parseFloat(item.x?.N || '0'),
-              y: parseFloat(item.y?.N || '0'),
-              width: parseFloat(item.width?.N || '0'),
-              height: parseFloat(item.height?.N || '0'),
-            }));
-          tiles.push(...pageTiles);
-          onProgress?.(`Loaded ${tiles.length} locations`);
-          lastEvaluatedKey = response.LastEvaluatedKey as
-            | Record<string, any>
-            | undefined;
-        } catch (error) {
-          console.error('Error querying DynamoDB:', error);
-          throw error;
+      const allLocs = await fetchAllPaginatedResults(
+        client.models.Location.locationsBySetIdAndConfidence,
+        {
+          setId: locationSetId,
+          limit: 1000,
+          selectionSet: ['id', 'imageId', 'x', 'y', 'width', 'height'] as const,
         }
-      } while (lastEvaluatedKey);
-      return tiles;
+      );
+      return allLocs
+        .filter(loc => loc.x !== 0 && loc.y !== 0 && (loc.width ?? 0) !== 0 && (loc.height ?? 0) !== 0)
+        .map(loc => ({
+          id: loc.id,
+          imageId: loc.imageId!,
+          x: loc.x,
+          y: loc.y,
+          width: loc.width!,
+          height: loc.height!,
+        }));
     },
-    [backend.custom.locationTable, getDynamoClient]
+    [client]
   );
 
   const computeSummary = useCallback(async () => {

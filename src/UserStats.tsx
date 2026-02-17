@@ -5,8 +5,6 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import type { UserStatsType } from './schemaTypes';
 import exportFromJSON from 'export-from-json';
-import { QueryCommand, BatchGetItemCommand } from '@aws-sdk/client-dynamodb';
-import { unmarshall } from '@aws-sdk/util-dynamodb';
 import { useUsers } from './apiInterface';
 import Select from 'react-select';
 import { Card, Button, Spinner } from 'react-bootstrap';
@@ -14,9 +12,9 @@ import SnapshotStatsModal from './SnapshotStatsModal';
 import { fetchAllPaginatedResults } from './utils';
 
 export default function UserStats() {
-  const { getDynamoClient, myOrganizationHook, myMembershipHook } =
+  const { myOrganizationHook, myMembershipHook } =
     useContext(UserContext)!;
-  const { client, backend, modalToShow, showModal } =
+  const { client, modalToShow, showModal } =
     useContext(GlobalContext)!;
   const { users: allUsers } = useUsers();
   const [projects, setProjects] = useState<
@@ -340,69 +338,28 @@ export default function UserStats() {
     lowerLimitOverride?: string,
     upperLimitOverride?: string
   ): Promise<any[]> {
-    const dynamoClient = await getDynamoClient();
     const lower = lowerLimitOverride ?? `${startString}T00:00:00Z`;
     const upper = upperLimitOverride ?? `${endString}T23:59:59Z`;
-    const observations: any[] = [];
-    let lastEvaluatedKey: Record<string, any> | undefined = undefined;
-    // Fetch observation records
-    do {
-      const command = new QueryCommand({
-        TableName: backend.custom.observationTable,
-        IndexName: 'observationsByAnnotationSetIdAndCreatedAt',
-        KeyConditionExpression:
-          'annotationSetId = :annotationSetId and createdAt BETWEEN :lowerLimit and :upperLimit',
-        ExpressionAttributeValues: {
-          ':annotationSetId': { S: annotationSetId },
-          ':lowerLimit': { S: lower },
-          ':upperLimit': { S: upper },
-        },
-        ProjectionExpression:
-          'createdAt,annotationCount,timeTaken,waitingTime,#o,locationId',
-        ExpressionAttributeNames: { '#o': 'owner' },
-        ExclusiveStartKey: lastEvaluatedKey,
-        Limit: 1000,
-      });
-      try {
-        const response = await dynamoClient.send(command);
-        observations.push(
-          ...(response.Items || []).map((item) => unmarshall(item))
-        );
-        lastEvaluatedKey = (response as any).LastEvaluatedKey;
-      } catch (error) {
-        console.error('Error querying DynamoDB:', error);
-        throw error;
+    const allObs = await fetchAllPaginatedResults(
+      client.models.Observation.observationsByAnnotationSetId,
+      {
+        annotationSetId,
+        createdAt: { between: [lower, upper] },
+        limit: 1000,
+        selectionSet: [
+          'createdAt', 'annotationCount', 'timeTaken', 'waitingTime', 'owner', 'locationId',
+          'location.id', 'location.confidence',
+        ] as const,
       }
-    } while (lastEvaluatedKey);
-
-    // Fetch location confidences
-    const locationIds = Array.from(
-      new Set(observations.map((o) => o.locationId))
     );
-    const locMap: Record<string, number> = {};
-    for (let i = 0; i < locationIds.length; i += 100) {
-      const chunk = locationIds.slice(i, i + 100);
-      const batchGet = new BatchGetItemCommand({
-        RequestItems: {
-          [backend.custom.locationTable]: {
-            Keys: chunk.map((id) => ({ id: { S: id } })),
-            ProjectionExpression: 'id,confidence',
-          },
-        },
-      });
-      const locResponse = await dynamoClient.send(batchGet);
-      const items =
-        (locResponse as any).Responses?.[backend.custom.locationTable] || [];
-      for (const attr of items) {
-        const loc = unmarshall(attr);
-        locMap[loc.id] = loc.confidence;
-      }
-    }
-
-    // Enrich observations with confidence
-    return observations.map((o) => ({
-      ...o,
-      confidence: locMap[o.locationId] ?? null,
+    return allObs.map(o => ({
+      createdAt: o.createdAt,
+      annotationCount: o.annotationCount,
+      timeTaken: o.timeTaken,
+      waitingTime: o.waitingTime,
+      owner: o.owner,
+      locationId: o.locationId,
+      confidence: (o as any).location?.confidence ?? null,
     }));
   }
 

@@ -987,19 +987,12 @@ export default function Surveys() {
           </Card.Body>
           {isOrganizationAdmin && (
             <Card.Footer className='d-flex justify-content-center'>
-              <OverlayTrigger
-                placement='top'
-                overlay={<Tooltip id='new-survey-tooltip'>Under maintenance</Tooltip>}
-              >
-                <div className='d-inline-block'>
-                  <Button variant='primary' onClick={() => showModal('newSurvey')}
-                    disabled={true}
-                    style={{ pointerEvents: 'none' }}
-                  >
-                    New Survey
-                  </Button>
-                </div>
-              </OverlayTrigger>
+              <div className='d-inline-block'>
+                <Button variant='primary' onClick={() => showModal('newSurvey')}
+                >
+                  New Survey
+                </Button>
+              </div>
             </Card.Footer>
           )}
         </Card>
