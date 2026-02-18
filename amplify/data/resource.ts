@@ -24,6 +24,11 @@ import { monitorScoutbotDlq } from '../functions/monitorScoutbotDlq/resource';
 import { processTilingBatch } from '../functions/processTilingBatch/resource';
 import { monitorTilingTasks } from '../functions/monitorTilingTasks/resource';
 import { findAndRequeueMissingLocations } from '../functions/findAndRequeueMissingLocations/resource';
+import { createOrganization } from '../functions/createOrganization/resource';
+import { inviteUserToOrganization } from '../functions/inviteUserToOrganization/resource';
+import { respondToInvite } from '../functions/respondToInvite/resource';
+import { removeUserFromOrganization } from '../functions/removeUserFromOrganization/resource';
+import { updateOrganizationMemberAdmin } from '../functions/updateOrganizationMemberAdmin/resource';
 // import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
@@ -278,8 +283,7 @@ const schema = a
         testResults: a.hasMany('TestResult', 'locationId'),
         group: a.string(),
       })
-      // TODO: authenticated i.e. ECS models and lambdas can create locations - move to API key authorization
-      .authorization((allow) => [allow.group('sysadmin'), allow.authenticated().to(['create']), allow.groupDefinedIn('group')])
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
       // .authorization(allow => [allow.groupDefinedIn('projectId')])
 
       .secondaryIndexes((index) => [
@@ -418,7 +422,7 @@ const schema = a
         skipped: a.boolean().default(false),
         group: a.string(),
       })
-      .authorization((allow) => [allow.group('sysadmin'), allow.authenticated().to(['update']), allow.groupDefinedIn('group')])
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
       .identifier(['image1Id', 'image2Id'])
       .secondaryIndexes((index) => [
         index('image1Id').queryField('imageNeighboursByImage1key'),
@@ -744,6 +748,55 @@ const schema = a
       .authorization((allow) => [allow.group('sysadmin')])
       .handler(a.handler.function(listGroupsForUser))
       .returns(a.json()),
+    // Organization management mutations
+    createOrganizationMutation: a
+      .mutation()
+      .arguments({
+        name: a.string().required(),
+        description: a.string(),
+        adminEmail: a.string().required(),
+        registrationId: a.string(),
+      })
+      .authorization((allow) => [allow.group('sysadmin')])
+      .handler(a.handler.function(createOrganization))
+      .returns(a.json()),
+    inviteUserToOrganization: a
+      .mutation()
+      .arguments({
+        organizationId: a.string().required(),
+        email: a.string().required(),
+      })
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(inviteUserToOrganization))
+      .returns(a.json()),
+    respondToInvite: a
+      .mutation()
+      .arguments({
+        inviteId: a.string().required(),
+        accept: a.boolean().required(),
+      })
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(respondToInvite))
+      .returns(a.json()),
+    removeUserFromOrganization: a
+      .mutation()
+      .arguments({
+        organizationId: a.string().required(),
+        userId: a.string().required(),
+      })
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(removeUserFromOrganization))
+      .returns(a.json()),
+    updateOrganizationMemberAdmin: a
+      .mutation()
+      .arguments({
+        organizationId: a.string().required(),
+        userId: a.string().required(),
+        isAdmin: a.boolean().required(),
+      })
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(updateOrganizationMemberAdmin))
+      .returns(a.json()),
     // Message publish mutation
     // Message type that's used for this PubSub sample
     Message: a.customType({
@@ -819,7 +872,6 @@ const schema = a
     //     level: a.float(),
     //   })
 
-    //Temporary lockdown on organizations until business rules are implemented via secure lambdas
     Organization: a
       .model({
         name: a.string().required(),
@@ -830,7 +882,7 @@ const schema = a
         testPresets: a.hasMany('TestPreset', 'organizationId'),
         group: a.string(),
       })
-      .authorization((allow) => [allow.group("sysadmin"), allow.groupDefinedIn("group").to(['read', 'update'])]),
+      .authorization((allow) => [allow.group("sysadmin"), allow.groupDefinedIn("group").to(['read'])]),
     OrganizationMembership: a
       .model({
         organizationId: a.id().required(),
@@ -841,12 +893,11 @@ const schema = a
         group: a.string(),
       })
       .identifier(['organizationId', 'userId'])
-      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn("group").to(['read', 'update'])])
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn("group").to(['read'])])
       .secondaryIndexes((index) => [
         index('userId').queryField('organizationsByUserId'),
         index('organizationId').queryField('membershipsByOrganizationId'),
       ]),
-    //TODO: set up lambda
     OrganizationInvite: a
       .model({
         organizationId: a.id().required(),
@@ -854,11 +905,10 @@ const schema = a
         username: a.string().required(),
         invitedBy: a.string().required(),
         status: a.string().default('pending'),
+        organizationName: a.string(),
         group: a.string(),
       })
-      .authorization((allow) => [allow.group('sysadmin'),
-        // allow.authenticated(), allow.groupDefinedIn("group")
-      ])
+      .authorization((allow) => [allow.group('sysadmin'), allow.ownerDefinedIn('username').to(['read'])])
       .secondaryIndexes((index) => [
         index('username').queryField('organizationInvitesByUsername'),
       ]),
@@ -1101,6 +1151,11 @@ const schema = a
     allow.resource(processTilingBatch),
     allow.resource(monitorTilingTasks),
     allow.resource(findAndRequeueMissingLocations),
+    allow.resource(createOrganization),
+    allow.resource(inviteUserToOrganization),
+    allow.resource(respondToInvite),
+    allow.resource(removeUserFromOrganization),
+    allow.resource(updateOrganizationMemberAdmin),
     // allow.resource(consolidateUserStats),
   ]);
 
@@ -1152,14 +1207,16 @@ export type RunHeatmapperHandler = MutationHandler<{ projectId: string; images?:
 // TODO: Rethink sharing completely
 export type GetJwtSecretHandler = MutationHandler<Record<string, never>, string>;
 
+// Organization management
+export type CreateOrganizationHandler = MutationHandler<{ name: string; description?: string | null; adminEmail: string; registrationId?: string | null }>;
+export type InviteUserToOrganizationHandler = MutationHandler<{ organizationId: string; email: string }>;
+export type RespondToInviteHandler = MutationHandler<{ inviteId: string; accept: boolean }>;
+export type RemoveUserFromOrganizationHandler = MutationHandler<{ organizationId: string; userId: string }>;
+export type UpdateOrganizationMemberAdminHandler = MutationHandler<{ organizationId: string; userId: string; isAdmin: boolean }>;
+
 export const data = defineData({
   schema,
   authorizationModes: {
-    defaultAuthorizationMode: 'apiKey',
-    // defaultAuthorizationMode: 'iam', Used with pubSub testing
-    // API Key is used for a.allow.public() rules
-    apiKeyAuthorizationMode: {
-      expiresInDays: 30,
-    },
+    defaultAuthorizationMode: 'userPool',
   },
 });
