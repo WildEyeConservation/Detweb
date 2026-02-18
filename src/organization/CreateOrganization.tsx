@@ -2,8 +2,7 @@ import Form from 'react-bootstrap/Form';
 import Button from 'react-bootstrap/Button';
 import { useState, useContext, useEffect } from 'react';
 import { GlobalContext } from '../Context';
-import { useUsers } from '../apiInterface';
-import { Modal, Body, Header, Footer, Title } from '../Modal';
+import { Modal, Body, Header, Title } from '../Modal';
 import { Schema } from '../amplify/client-schema';
 
 export default function CreateOrganization({
@@ -18,7 +17,6 @@ export default function CreateOrganization({
   };
 }) {
   const { client } = useContext(GlobalContext);
-  const { users } = useUsers();
 
   const [name, setName] = useState<string>('');
   const [description, setDescription] = useState<string>('');
@@ -33,39 +31,28 @@ export default function CreateOrganization({
       return;
     }
 
-    const user = users.find((user) => user.email === adminEmail);
-
-    if (!user) {
-      alert('A user with this email does not exist');
+    if (!adminEmail) {
+      alert('Admin email is required');
       return;
     }
 
     setIsSubmitting(true);
 
-    const { data: organization } = await client.models.Organization.create({
-      name,
-      description,
-    });
+    try {
+      const { errors } = await client.mutations.createOrganizationMutation({
+        name,
+        description,
+        adminEmail,
+        registrationId: request?.id,
+      });
 
-    if (organization) {
-      const { data: membership } =
-        await client.models.OrganizationMembership.create({
-          organizationId: organization.id,
-          userId: user.id,
-          isAdmin: true,
-          group: organization.id,
-        });
-
-      if (membership) {
-        if (request) {
-          await client.models.OrganizationRegistration.update({
-            id: request.id,
-            status: 'approved',
-          });
-        }
-
+      if (errors?.length) {
+        alert(errors[0].message);
+      } else {
         alert('Organisation ' + name + ' created for ' + adminEmail);
       }
+    } catch (err: any) {
+      alert(err.message ?? 'Failed to create organization');
     }
 
     setIsSubmitting(false);

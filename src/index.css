@@ -92,6 +92,15 @@ code {
   to {opacity: 0.2}
 }
 
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.spinning {
+  animation: rotate 1s linear infinite;
+}
+
 .marker[withnote] {animation-name: throb;
            animation-duration: 1s;
            animation-iteration-count: infinite;

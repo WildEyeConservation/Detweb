@@ -32,6 +32,11 @@ import { monitorScoutbotDlq } from './functions/monitorScoutbotDlq/resource';
 import { processTilingBatch } from './functions/processTilingBatch/resource';
 import { monitorTilingTasks } from './functions/monitorTilingTasks/resource';
 import { findAndRequeueMissingLocations } from './functions/findAndRequeueMissingLocations/resource';
+import { createOrganization } from './functions/createOrganization/resource';
+import { inviteUserToOrganization } from './functions/inviteUserToOrganization/resource';
+import { respondToInvite } from './functions/respondToInvite/resource';
+import { removeUserFromOrganization } from './functions/removeUserFromOrganization/resource';
+import { updateOrganizationMemberAdmin } from './functions/updateOrganizationMemberAdmin/resource';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -61,6 +66,11 @@ const backend = defineBackend({
   processTilingBatch,
   monitorTilingTasks,
   findAndRequeueMissingLocations,
+  createOrganization,
+  inviteUserToOrganization,
+  respondToInvite,
+  removeUserFromOrganization,
+  updateOrganizationMemberAdmin,
 });
 
 const observationTable = backend.data.resources.tables['Observation'];
@@ -173,11 +183,6 @@ const sqsConsumeQueueStatement = new iam.PolicyStatement({
   ],
   resources: ['*'],
 });
-const lambdaInvoke = new iam.PolicyStatement({
-  actions: ['lambda:InvokeFunction'],
-  resources: ['*'],
-});
-
 // Direct access to the legacy surveyscope bucket outside Amplify storage.
 const generalBucketArn = 'arn:aws:s3:::surveyscope';
 const generalBucketArn2 = 'arn:aws:s3:::surveyscope/*';
@@ -193,30 +198,6 @@ const groupS3ListPolicy = new iam.PolicyStatement({
   resources: ['arn:aws:s3:::*'],
 });
 
-const groupS3ObjectsPolicy = new iam.PolicyStatement({
-  actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
-  resources: ['arn:aws:s3:::*/images/*'],
-});
-
-// Allow reading tiles and results from the outputs bucket prefixes
-const groupS3OutputsReadPolicy = new iam.PolicyStatement({
-  actions: ['s3:GetObject'],
-  resources: ['arn:aws:s3:::*/slippymaps/*', 'arn:aws:s3:::*/heatmaps/*'],
-});
-
-// Allow writing and reading launch payloads to/from the outputs bucket
-// (read is needed for HEAD requests after uploadData completes)
-const groupS3LaunchPayloadsPolicy = new iam.PolicyStatement({
-  actions: ['s3:PutObject', 's3:GetObject'],
-  resources: ['arn:aws:s3:::*/launch-payloads/*'],
-});
-
-// Allow writing and reading queue manifests to/from the outputs bucket
-// (read is needed for HEAD requests after uploadData completes)
-const groupS3QueueManifestsPolicy = new iam.PolicyStatement({
-  actions: ['s3:PutObject', 's3:GetObject'],
-  resources: ['arn:aws:s3:::*/queue-manifests/*'],
-});
 
 const groupEcsListPolicy = new iam.PolicyStatement({
   actions: ['ecs:ListClusters', 'ecs:DescribeClusters', 'ecs:ListServices', 'ecs:DescribeServices'],
@@ -225,25 +206,19 @@ const groupEcsListPolicy = new iam.PolicyStatement({
 
 authenticatedRole.addToPrincipalPolicy(sqsCreateQueueStatement);
 authenticatedRole.addToPrincipalPolicy(sqsConsumeQueueStatement);
-authenticatedRole.addToPrincipalPolicy(lambdaInvoke);
 authenticatedRole.addToPrincipalPolicy(generalBucketPolicy);
-authenticatedRole.addToPrincipalPolicy(groupEcsListPolicy);
-authenticatedRole.addToPrincipalPolicy(groupS3LaunchPayloadsPolicy);
-authenticatedRole.addToPrincipalPolicy(groupS3QueueManifestsPolicy);
 
-// Ensure every Cognito group role has consistent S3/Dynamo/SQS capabilities.
+// Ensure every Cognito group role has consistent S3/SQS capabilities.
+// Grant group roles (sysadmin, orgadmin) additional S3/SQS beyond what storage/resource.ts provides.
 Object.values(backend.auth.resources.groups).forEach(({ role }) => {
   role.addToPrincipalPolicy(generalBucketPolicy);
   role.addToPrincipalPolicy(groupS3ListPolicy);
-  role.addToPrincipalPolicy(groupS3ObjectsPolicy);
-  // Also allow group roles to create and consume SQS queues
   role.addToPrincipalPolicy(sqsCreateQueueStatement);
   role.addToPrincipalPolicy(sqsConsumeQueueStatement);
-  role.addToPrincipalPolicy(groupS3OutputsReadPolicy);
-  role.addToPrincipalPolicy(groupEcsListPolicy);
-  role.addToPrincipalPolicy(groupS3LaunchPayloadsPolicy);
-  role.addToPrincipalPolicy(groupS3QueueManifestsPolicy);
 });
+
+// Only sysadmin can view ECS cluster and service health.
+backend.auth.resources.groups['sysadmin'].role.addToPrincipalPolicy(groupEcsListPolicy);
 
 // Add the Sharp layer and throttle concurrency on the image upload Lambda.
 const lambdaFunction = backend.handleS3Upload.resources
@@ -326,7 +301,6 @@ if (enableEcs) {
         ecsTaskRole,
         environment: {
           API_ENDPOINT: backend.data.graphqlUrl,
-          API_KEY: backend.data.apiKey || '',
         },
         machineImage: ecs.EcsOptimizedImage.amazonLinux2(),
       }
@@ -363,7 +337,6 @@ if (enableEcs) {
         gpuCount: 1,
         environment: {
           API_ENDPOINT: backend.data.graphqlUrl,
-          API_KEY: backend.data.apiKey || '',
           BUCKET: backend.inputBucket.resources.bucket.bucketName,
         },
         machineImage: ecs.EcsOptimizedImage.amazonLinux2(
@@ -403,7 +376,6 @@ if (enableEcs) {
         gpuCount: 1,
         environment: {
           API_ENDPOINT: backend.data.graphqlUrl,
-          API_KEY: backend.data.apiKey || '',
           BUCKET: backend.inputBucket.resources.bucket.bucketName,
         },
         machineImage: ecs.EcsOptimizedImage.amazonLinux2(
@@ -442,7 +414,6 @@ if (enableEcs) {
         gpuCount: 1,
         environment: {
           API_ENDPOINT: backend.data.graphqlUrl,
-          API_KEY: backend.data.apiKey || '',
           BUCKET: backend.inputBucket.resources.bucket.bucketName,
           MAD_CHECKPOINT_S3: 's3://surveyscope/2024-mad-v2/checkpoint.pth',
         },

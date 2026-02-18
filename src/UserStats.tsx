@@ -476,7 +476,6 @@ export default function UserStats() {
 
           <div className='mt-3'>
             <label className=''>Select Annotation Sets</label>
-            <label className='d-block text-danger mb-2'>Known Issue: Stats are not updated in real-time. Please deselect and reselect annotation sets to refresh.</label>
             <Select
               className='text-black basic-multi-select'
               value={selectedSets}

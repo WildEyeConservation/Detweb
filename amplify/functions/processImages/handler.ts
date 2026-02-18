@@ -12,8 +12,7 @@ Amplify.configure(
         GraphQL: {
           endpoint: env.AMPLIFY_DATA_GRAPHQL_ENDPOINT,
           region: env.AWS_REGION,
-                defaultAuthMode: 'apiKey',
-                apiKey: env.API_KEY
+                defaultAuthMode: 'iam',
         },
       },
     },
@@ -36,7 +35,7 @@ Amplify.configure(
 );
   
 const client = generateClient({
-  authMode: "apiKey",
+  authMode: "iam",
 });
 
 async function existsOnS3(client: S3Client, bucket: string, prefix: string) {

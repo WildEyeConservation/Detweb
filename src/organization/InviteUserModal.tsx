@@ -1,17 +1,13 @@
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import { Modal } from 'react-bootstrap';
-import { useContext } from 'react';
-import { GlobalContext, UserContext } from '../Context';
-import { useUsers } from '../apiInterface';
-import { Schema } from '../amplify/client-schema';
+import { useContext, useState } from 'react';
+import { GlobalContext } from '../Context';
 
 export default function InviteUserModal({
-  memberships,
   organization,
   show,
 }: {
-  memberships: Schema['OrganizationMembership']['type'][];
   organization: {
     id: string;
     name: string;
@@ -19,61 +15,37 @@ export default function InviteUserModal({
   show: boolean;
 }) {
   const { client, showModal } = useContext(GlobalContext)!;
-  const { user: authUser } = useContext(UserContext)!;
-  const { users } = useUsers();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.target as HTMLFormElement);
-    const username = formData.get('username') as string;
+    const email = formData.get('email') as string;
 
-    if (!username) {
-      alert('Please enter a username');
+    if (!email) {
+      alert('Please enter an email');
       return;
     }
 
-    const userId = users?.find(
-      (user) => user.name === username || user.email === username
-    )?.id;
-    if (!userId) {
-      alert('User not found');
-      return;
-    }
+    setIsSubmitting(true);
 
-    if (memberships?.some((membership) => membership.userId === userId)) {
-      alert('User is already a member of the organisation');
-      return;
-    }
-
-    const { data: old } =
-      await client.models.OrganizationInvite.organizationInvitesByUsername({
-        username: userId,
+    try {
+      const { errors } = await client.mutations.inviteUserToOrganization({
+        organizationId: organization.id,
+        email,
       });
 
-    if (
-      old.length > 0 &&
-      old.some(
-        (invite) =>
-          invite.status === 'pending' &&
-          invite.organizationId === organization.id
-      )
-    ) {
-      alert('User already has a pending invitation');
-      return;
+      if (errors?.length) {
+        alert(errors[0].message);
+      } else {
+        showModal(null);
+        setTimeout(() => alert('Invite sent!'), 300);
+      }
+    } catch (err: any) {
+      alert(err.message ?? 'Failed to send invite');
     }
 
-    const invite = await client.models.OrganizationInvite.create({
-      organizationId: organization.id,
-      username: userId,
-      invitedBy: authUser.username,
-      group: organization.id,
-    });
-
-    if (invite) {
-      alert('Invite sent!');
-    } else {
-      alert('Failed to send invite');
-    }
+    setIsSubmitting(false);
   };
 
   return (
@@ -84,28 +56,22 @@ export default function InviteUserModal({
       <Modal.Body>
         <Form onSubmit={handleSubmit}>
           <Form.Group className='mb-3' controlId='formBasicEmail'>
-            <Form.Label>Username</Form.Label>
+            <Form.Label>Email</Form.Label>
             <Form.Control
-              type='text'
-              placeholder='Enter username'
-              name='username'
+              type='email'
+              placeholder='Enter email'
+              name='email'
             />
           </Form.Group>
-          <Button variant='primary' type='submit'>
+          <Button variant='primary' type='submit' disabled={isSubmitting}>
             Send Invite
           </Button>
-          <Form.Text className='d-block mt-2'>
-            *This will send an invite to the user's SurveyScope inbox.{' '}
-            <span
-              className='text-muted'
-              style={{ textDecoration: 'underline', cursor: 'pointer' }}
-              onClick={() => {
-                navigator.clipboard.writeText(window.location.origin);
-                alert('Signup link copied to clipboard!');
-              }}
-            >
-              (Copy link to signup page)
-            </span>
+          <Form.Text className='d-block mt-3'>
+            This will send an invite to the user's SurveyScope inbox.
+          </Form.Text>
+          <Form.Text className='d-block'>
+            If the user doesn't have an account, please contact WildEye support
+            with the email of the user that requires an account.
           </Form.Text>
         </Form>
       </Modal.Body>
