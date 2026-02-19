@@ -17,30 +17,35 @@ export const outputBucket = defineStorage({
   access: allow => ({
     'slippymaps/*': [
       allow.resource(handleS3Upload).to(['write', 'list', 'get', 'delete']),
-      allow.authenticated.to(['read'])
+      allow.authenticated.to(['read']),
+      allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ],
     'heatmaps/*': [
       allow.resource(processImages).to(['write', 'list', 'delete']),
       allow.resource(runPointFinder).to(['read']),
       allow.resource(runHeatmapper).to(['read']),
       allow.resource(monitorModelProgress).to(['read']),
-      allow.authenticated.to(['read'])
+      allow.authenticated.to(['read']),
+      allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ],
     'launch-payloads/*': [
       allow.authenticated.to(['write', 'read']),
       allow.resource(launchAnnotationSet).to(['read', 'delete']),
-      allow.resource(launchFalseNegatives).to(['read', 'delete'])
+      allow.resource(launchFalseNegatives).to(['read', 'delete']),
+      allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ],
     // Tiling batch input files - location data to be created
     'tiling-batches/*': [
       allow.resource(launchAnnotationSet).to(['write']),
       allow.resource(launchFalseNegatives).to(['write']),
-      allow.resource(processTilingBatch).to(['read', 'delete'])
+      allow.resource(processTilingBatch).to(['read', 'delete']),
+      allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ],
     // Tiling batch output files - created location IDs
     'tiling-outputs/*': [
       allow.resource(processTilingBatch).to(['write']),
-      allow.resource(monitorTilingTasks).to(['read', 'delete'])
+      allow.resource(monitorTilingTasks).to(['read', 'delete']),
+      allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ],
     // Queue manifests for requeue detection
     'queue-manifests/*': [
@@ -48,7 +53,8 @@ export const outputBucket = defineStorage({
       allow.resource(launchAnnotationSet).to(['write']),
       allow.resource(monitorTilingTasks).to(['write']),
       allow.resource(findAndRequeueMissingLocations).to(['read']),
-      allow.resource(cleanupJobs).to(['delete'])
+      allow.resource(cleanupJobs).to(['delete']),
+      allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ]
   })
 })
@@ -69,7 +75,8 @@ export const inputBucket = defineStorage({
       allow.resource(handleS3Upload).to(['get']),
       allow.resource(processImages).to(['read']),
       allow.resource(runHeatmapper).to(['read']),
-      allow.authenticated.to(['read', 'write', 'delete'])
+      allow.authenticated.to(['read', 'write', 'delete']),
+      allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ]
   }),
   triggers: {

@@ -19,7 +19,6 @@ import FileStructureSubset from '../filestructuresubset.tsx';
 import { SquareArrowOutUpRight, X, Pause, Play, Trash, Minimize2, Maximize2 } from 'lucide-react';
 import { fetchAllPaginatedResults } from '../utils.tsx';
 import { Badge } from 'react-bootstrap';
-import { DeleteQueueCommand } from '@aws-sdk/client-sqs';
 import localforage from 'localforage';
 import UploadIntegrityChecker from '../upload/UploadIntegrityChecker.tsx';
 import ProjectProgress from '../user/ProjectProgress.tsx';
@@ -41,7 +40,6 @@ export default function Surveys() {
   const {
     myMembershipHook: myProjectsHook,
     isOrganizationAdmin,
-    getSqsClient,
     user,
   } = useContext(UserContext)!;
   const { task, setTask } = useContext(UploadContext)!;
@@ -315,9 +313,7 @@ export default function Surveys() {
         return;
       }
 
-      const sqsClient = await getSqsClient();
-      await sqsClient.send(new DeleteQueueCommand({ QueueUrl: job.url }));
-      await client.models.Queue.delete({ id: job.id });
+      await client.mutations.deleteQueueMutation({ queueId: job.id });
       await logAdminAction(
         client,
         user.userId,

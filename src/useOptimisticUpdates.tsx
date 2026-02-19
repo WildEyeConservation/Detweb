@@ -46,8 +46,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useContext, useMemo, useCallback } from 'react';
 import type { Schema } from './amplify/client-schema';
 import { V6Client } from '@aws-amplify/api-graphql';
-import { CreateQueueCommand, DeleteQueueCommand } from '@aws-sdk/client-sqs';
-import { makeSafeQueueName } from './utils';
 import { GlobalContext, UserContext, ProjectContext } from './Context';
 
 type ClientType = V6Client<Schema>;
@@ -229,7 +227,6 @@ export function useOptimisticUpdates<
 
 export const useQueues = () => {
   const { client } = useContext(GlobalContext)!;
-  const { getSqsClient } = useContext(UserContext)!;
   const { project } = useContext(ProjectContext)!;
   const subscriptionFilter = useMemo(
     () => ({
@@ -247,36 +244,13 @@ export const useQueues = () => {
       }),
     subscriptionFilter
   );
-  const create = (name: string) => {
-    const safeName = makeSafeQueueName(name + crypto.randomUUID());
-    const id = originalHook.create({ name, projectId: project.id, group: project.organizationId });
-    getSqsClient()
-      .then((sqsClient) =>
-        sqsClient.send(
-          new CreateQueueCommand({
-            QueueName: safeName + '.fifo',
-            Attributes: {
-              MessageRetentionPeriod: '1209600', //This value is in seconds. 1209600 corresponds to 14 days and is the maximum AWS supports
-              FifoQueue: 'true',
-            },
-          })
-        )
-      )
-      .then(({ QueueUrl: url }) => {
-        originalHook.update({ id, url });
-        return id;
-      });
-  };
   const remove = ({ id }: { id: string }) => {
-    const url = originalHook.data.find((x) => x.id == id)?.url;
-    if (url) {
-      getSqsClient().then((sqsClient) =>
-        sqsClient.send(new DeleteQueueCommand({ QueueUrl: url }))
-      );
-    }
+    client.mutations.deleteQueueMutation({ queueId: id }).catch((err: any) =>
+      console.error('deleteQueueMutation failed:', err)
+    );
     originalHook.delete({ id });
   };
-  return { ...originalHook, create, delete: remove };
+  return { ...originalHook, delete: remove };
 };
 
 // // The byProject versions of the useOptimisticUpdates hook work on all classes except project itself

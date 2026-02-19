@@ -14,7 +14,6 @@ interface Message {
   zoom: string;
   queueId: string;
   taskTag: string;
-  secondaryQueueUrl: string;
   message_id: string;
   skipLocationWithAnnotations: boolean;
 }

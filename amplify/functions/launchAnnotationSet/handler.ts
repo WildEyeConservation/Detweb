@@ -177,7 +177,6 @@ type LaunchLambdaPayload = {
   projectId: string;
   annotationSetId: string;
   queueOptions: LaunchQueueOptions;
-  secondaryQueueOptions?: LaunchQueueOptions | null;
   allowOutside: boolean;
   skipLocationWithAnnotations: boolean;
   taskTag: string;
@@ -310,7 +309,6 @@ async function handleLaunch(payload: LaunchLambdaPayload, organizationId: string
 
   console.log('Creating queues', {
     primaryName: payload.queueOptions.name,
-    secondary: payload.secondaryQueueOptions?.name ?? null,
     totalLocations: locationIds.length,
   });
 
@@ -326,16 +324,12 @@ async function handleLaunch(payload: LaunchLambdaPayload, organizationId: string
     payload.launchedCount,
     organizationId
   );
-  const secondaryQueue = payload.secondaryQueueOptions
-    ? await createQueue(payload.secondaryQueueOptions, payload, [], locationSetId, null, 0, organizationId)
-    : null;
 
   await enqueueLocations(
     mainQueue.url,
     mainQueue.id,
     locationIds,
-    payload,
-    secondaryQueue?.url ?? null
+    payload
   );
   console.log('Enqueued locations', {
     queueId: mainQueue.id,
@@ -417,7 +411,6 @@ async function handleDistributedTiling(payload: LaunchLambdaPayload, organizatio
   // Create the launch config for the control lambda to use later
   const launchConfig = JSON.stringify({
     queueOptions: payload.queueOptions,
-    secondaryQueueOptions: payload.secondaryQueueOptions,
     allowOutside: payload.allowOutside,
     skipLocationWithAnnotations: payload.skipLocationWithAnnotations,
     taskTag: payload.taskTag,
@@ -777,8 +770,7 @@ async function enqueueLocations(
   queueUrl: string,
   queueId: string,
   locationIds: string[],
-  payload: LaunchLambdaPayload,
-  secondaryQueueUrl: string | null
+  payload: LaunchLambdaPayload
 ) {
   const queueType = await getQueueType(queueUrl);
   const groupId = randomUUID();
@@ -802,7 +794,6 @@ async function enqueueLocations(
         queueId, // Include queueId for observation counter increment
         allowOutside: payload.allowOutside,
         taskTag: payload.taskTag,
-        secondaryQueueUrl,
         skipLocationWithAnnotations: payload.skipLocationWithAnnotations,
       });
 

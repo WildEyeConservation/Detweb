@@ -562,7 +562,6 @@ async function requeueLocations(queue: QueueRecord, locationIds: string[]): Prom
         queueId: queue.id,
         allowOutside: true,
         taskTag: queue.tag ?? queue.name,
-        secondaryQueueUrl: null,
         skipLocationWithAnnotations: false,
         isRequeued: true,
       });

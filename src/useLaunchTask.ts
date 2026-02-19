@@ -26,7 +26,6 @@ export type LaunchTaskArgs = {
   selectedTasks: string[];
   onProgress?: (message: string) => void;
   queueOptions: LaunchQueueOptions;
-  secondaryQueueOptions?: LaunchQueueOptions;
   tiledRequest?: TiledLaunchRequest | null;
   launchImageIds?: string[];
 };
@@ -35,7 +34,6 @@ type LaunchLambdaPayload = {
   projectId: string;
   annotationSetId: string;
   queueOptions: LaunchQueueOptions;
-  secondaryQueueOptions?: LaunchQueueOptions | null;
   allowOutside: boolean;
   skipLocationWithAnnotations: boolean;
   taskTag: string;
@@ -176,7 +174,6 @@ export function useLaunchTask(
       selectedTasks,
       onProgress,
       queueOptions,
-      secondaryQueueOptions,
       tiledRequest,
       launchImageIds,
     }: LaunchTaskArgs) => {
@@ -287,7 +284,6 @@ export function useLaunchTask(
           projectId: options.projectId,
           annotationSetId: options.annotationSetId,
           queueOptions,
-          secondaryQueueOptions: secondaryQueueOptions ?? null,
           allowOutside: options.allowOutside,
           skipLocationWithAnnotations: options.skipLocationWithAnnotations,
           taskTag: options.taskTag,
@@ -310,7 +306,6 @@ export function useLaunchTask(
         projectId: options.projectId,
         annotationSetId: options.annotationSetId,
         queueOptions,
-        secondaryQueueOptions: secondaryQueueOptions ?? null,
         allowOutside: options.allowOutside,
         skipLocationWithAnnotations: options.skipLocationWithAnnotations,
         taskTag: options.taskTag,
