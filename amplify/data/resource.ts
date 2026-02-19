@@ -29,6 +29,7 @@ import { inviteUserToOrganization } from '../functions/inviteUserToOrganization/
 import { respondToInvite } from '../functions/respondToInvite/resource';
 import { removeUserFromOrganization } from '../functions/removeUserFromOrganization/resource';
 import { updateOrganizationMemberAdmin } from '../functions/updateOrganizationMemberAdmin/resource';
+import { deleteQueue } from '../functions/deleteQueue/resource';
 // import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
@@ -387,7 +388,7 @@ const schema = a
         backupQueue: a.belongsTo('Queue', 'backupQueueId'),
         group: a.string(),
       })
-      // TODO: listen to own memberships (can't use owner auth since users don't create their own memberships)
+      // TODO: listen to own memberships only
       .authorization((allow) => [allow.group('sysadmin'), allow.authenticated().to(['listen']), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('userProjectMembershipsByProjectId'),
@@ -797,6 +798,12 @@ const schema = a
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(updateOrganizationMemberAdmin))
       .returns(a.json()),
+    deleteQueueMutation: a
+      .mutation()
+      .arguments({ queueId: a.string().required() })
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(deleteQueue))
+      .returns(a.json()),
     // Message publish mutation
     // Message type that's used for this PubSub sample
     Message: a.customType({
@@ -1156,6 +1163,7 @@ const schema = a
     allow.resource(respondToInvite),
     allow.resource(removeUserFromOrganization),
     allow.resource(updateOrganizationMemberAdmin),
+    allow.resource(deleteQueue),
     // allow.resource(consolidateUserStats),
   ]);
 
@@ -1213,6 +1221,7 @@ export type InviteUserToOrganizationHandler = MutationHandler<{ organizationId: 
 export type RespondToInviteHandler = MutationHandler<{ inviteId: string; accept: boolean }>;
 export type RemoveUserFromOrganizationHandler = MutationHandler<{ organizationId: string; userId: string }>;
 export type UpdateOrganizationMemberAdminHandler = MutationHandler<{ organizationId: string; userId: string; isAdmin: boolean }>;
+export type DeleteQueueHandler = MutationHandler<{ queueId: string }>;
 
 export const data = defineData({
   schema,

@@ -124,11 +124,6 @@ type LaunchConfig = {
     hidden: boolean;
     fifo: boolean;
   };
-  secondaryQueueOptions?: {
-    name: string;
-    hidden: boolean;
-    fifo: boolean;
-  } | null;
   allowOutside: boolean;
   skipLocationWithAnnotations: boolean;
   taskTag: string;
@@ -320,25 +315,12 @@ async function processTask(task: TilingTaskRecord) {
       allLocations,
       organizationId
     );
-    const secondaryQueue = launchConfig.secondaryQueueOptions
-      ? await createQueue(
-        launchConfig.secondaryQueueOptions,
-        task.projectId,
-        launchConfig,
-        task.annotationSetId,
-        task.locationSetId,
-        [], // Secondary queue doesn't track locations
-        organizationId
-      )
-      : null;
-
     await enqueueLocations(
       mainQueue.url,
       mainQueue.id,
       finalLocationIds,
       task.annotationSetId,
-      launchConfig,
-      secondaryQueue?.url ?? null
+      launchConfig
     );
     console.log('Enqueued locations', {
       taskId: task.id,
@@ -630,8 +612,7 @@ async function enqueueLocations(
   queueId: string,
   locationIds: string[],
   annotationSetId: string,
-  launchConfig: LaunchConfig,
-  secondaryQueueUrl: string | null
+  launchConfig: LaunchConfig
 ) {
   const queueType = await getQueueType(queueUrl);
   const groupId = randomUUID();
@@ -656,7 +637,6 @@ async function enqueueLocations(
         queueId, // Include queueId for observation counter increment
         allowOutside: launchConfig.allowOutside,
         taskTag: launchConfig.taskTag,
-        secondaryQueueUrl,
         skipLocationWithAnnotations: launchConfig.skipLocationWithAnnotations,
       });
 

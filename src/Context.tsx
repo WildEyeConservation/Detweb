@@ -112,7 +112,6 @@ export interface ManagementContextType {
   locationSetsHook: CRUDhook<'LocationSet'>;
   queuesHook: {
     data: Schema['Queue']['type'][];
-    create: (arg0: string) => string;
     update: (
       arg: Parameters<ClientType['models']['Queue']['update']>[0]
     ) => void;

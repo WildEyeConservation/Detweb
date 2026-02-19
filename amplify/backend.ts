@@ -37,6 +37,7 @@ import { inviteUserToOrganization } from './functions/inviteUserToOrganization/r
 import { respondToInvite } from './functions/respondToInvite/resource';
 import { removeUserFromOrganization } from './functions/removeUserFromOrganization/resource';
 import { updateOrganizationMemberAdmin } from './functions/updateOrganizationMemberAdmin/resource';
+import { deleteQueue } from './functions/deleteQueue/resource';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -71,6 +72,7 @@ const backend = defineBackend({
   respondToInvite,
   removeUserFromOrganization,
   updateOrganizationMemberAdmin,
+  deleteQueue,
 });
 
 const observationTable = backend.data.resources.tables['Observation'];
@@ -161,24 +163,24 @@ new EventSourceMapping(backfillStack, 'LocationEventStreamMapping', {
 // Expand the default authenticated Cognito role with data-plane permissions.
 const authenticatedRole = backend.auth.resources.authenticatedUserIamRole;
 
-// Shared SQS permissions for Lambdas and groups that spin up task queues.
-const sqsCreateQueueStatement = new iam.PolicyStatement({
-  actions: [
-    'sqs:CreateQueue',
-    'sqs:PurgeQueue',
-    'sqs:SendMessage',
-    'sqs:DeleteQueue',
-    'sqs:GetQueueAttributes',
-    'sqs:GetQueueUrl',
-  ],
-  resources: ['*'],
-});
-const sqsConsumeQueueStatement = new iam.PolicyStatement({
+// Minimal SQS permissions for annotators (authenticated role).
+const sqsAnnotatorStatement = new iam.PolicyStatement({
   actions: [
     'sqs:ReceiveMessage',
     'sqs:DeleteMessage',
     'sqs:GetQueueAttributes',
+  ],
+  resources: ['*'],
+});
+
+// Elevated SQS permissions for sysadmin (DLQ replay, health page, etc.).
+const sqsSysadminStatement = new iam.PolicyStatement({
+  actions: [
     'sqs:GetQueueUrl',
+    'sqs:SendMessage',
+    'sqs:SendMessageBatch',
+    'sqs:DeleteMessageBatch',
+    'sqs:ReceiveMessage',
     'sqs:ChangeMessageVisibility',
   ],
   resources: ['*'],
@@ -204,20 +206,20 @@ const groupEcsListPolicy = new iam.PolicyStatement({
   resources: ['*'],
 });
 
-authenticatedRole.addToPrincipalPolicy(sqsCreateQueueStatement);
-authenticatedRole.addToPrincipalPolicy(sqsConsumeQueueStatement);
+authenticatedRole.addToPrincipalPolicy(sqsAnnotatorStatement);
 authenticatedRole.addToPrincipalPolicy(generalBucketPolicy);
 
-// Ensure every Cognito group role has consistent S3/SQS capabilities.
-// Grant group roles (sysadmin, orgadmin) additional S3/SQS beyond what storage/resource.ts provides.
+// Grant group roles (sysadmin, orgadmin) S3 + base SQS capabilities.
+// Group roles REPLACE the authenticated role in Cognito Identity Pools,
+// so they need the annotator SQS permissions too.
 Object.values(backend.auth.resources.groups).forEach(({ role }) => {
   role.addToPrincipalPolicy(generalBucketPolicy);
   role.addToPrincipalPolicy(groupS3ListPolicy);
-  role.addToPrincipalPolicy(sqsCreateQueueStatement);
-  role.addToPrincipalPolicy(sqsConsumeQueueStatement);
+  role.addToPrincipalPolicy(sqsAnnotatorStatement);
 });
 
-// Only sysadmin can view ECS cluster and service health.
+// Only sysadmin gets elevated SQS and ECS permissions.
+backend.auth.resources.groups['sysadmin'].role.addToPrincipalPolicy(sqsSysadminStatement);
 backend.auth.resources.groups['sysadmin'].role.addToPrincipalPolicy(groupEcsListPolicy);
 
 // Add the Sharp layer and throttle concurrency on the image upload Lambda.
@@ -524,6 +526,12 @@ backend.runMadDetector.resources.lambda.addToRolePolicy(
   })
 );
 backend.cleanupJobs.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['sqs:DeleteQueue', 'sqs:GetQueueAttributes'],
+    resources: ['*'],
+  })
+);
+backend.deleteQueue.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: ['sqs:DeleteQueue', 'sqs:GetQueueAttributes'],
     resources: ['*'],

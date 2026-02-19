@@ -218,7 +218,6 @@ export default function useTesting() {
       },
       allowOutside: true,
       taskTag: '',
-      secondaryQueueUrl: undefined,
       skipLocationWithAnnotations: false,
       zoom: zoom,
       testPresetId: location.testPresetId,

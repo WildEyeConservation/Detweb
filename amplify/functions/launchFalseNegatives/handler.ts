@@ -669,7 +669,6 @@ async function handleDistributedFalseNegativesLaunch(payload: LaunchFalseNegativ
   // Note: filteringAlreadyDone indicates filtering was done before batching
   const launchConfig = JSON.stringify({
     queueOptions: payload.queueOptions,
-    secondaryQueueOptions: null,
     allowOutside: true,
     skipLocationWithAnnotations: false,
     taskTag: payload.queueTag,

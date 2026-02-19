@@ -270,7 +270,6 @@ export default function AnnotationImage(props: any) {
       hook={annotationsHook}
       locationId={location.id}
       image={location.image}
-      secondaryQueueUrl={props.secondaryQueueUrl}
       taskTag={props.taskTag}
     >
       <div className={`d-flex flex-md-row flex-column w-100 h-100 gap-3 overflow-auto ${legendCollapsed ? 'legend-collapsed' : 'justify-content-center'}`}>
