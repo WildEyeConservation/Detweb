@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { fetchAllPaginatedResults } from './utils.tsx';
 import exportFromJSON from 'export-from-json';
 import { GlobalContext } from './Context.tsx';
-import { useContext, useState, useEffect } from 'react';
+import { useContext, useState, useEffect, useMemo } from 'react';
+import { useUsers } from './apiInterface';
 import GenerateJollyResults from './GenerateJollyResults.tsx';
 import { Spinner } from 'react-bootstrap';
 
@@ -23,6 +24,14 @@ export default function AnnotationSetResults({
   const { client, showModal } = useContext(GlobalContext)!;
   const [loading, setLoading] = useState(false);
   const [exportStatus, setExportStatus] = useState('');
+  const { users } = useUsers();
+
+  const userMap = useMemo(() => {
+    return users.reduce((acc, user) => {
+      acc[user.id] = user.name ?? '';
+      return acc;
+    }, {} as Record<string, string>);
+  }, [users]);
 
   const [jollyResultsExists, setJollyResultsExists] = useState(false);
 
@@ -116,7 +125,7 @@ export default function AnnotationSetResults({
             latitude: anno.image.latitude,
             longitude: anno.image.longitude,
             obscured: anno.obscured,
-            annotator: anno.owner,
+            annotator: userMap[anno.owner ?? ''] || 'Unknown',
             isPrimary: anno.objectId === anno.id,
             objectId: anno.objectId,
             x: anno.x,
@@ -209,6 +218,7 @@ export default function AnnotationSetResults({
               <Button
                 className='d-block mt-1'
                 variant='primary'
+                disabled={users.length === 0}
                 onClick={() => {
                   exportData([annotationSet]);
                 }}

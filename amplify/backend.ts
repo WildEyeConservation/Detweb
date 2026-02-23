@@ -185,7 +185,7 @@ const sqsSysadminStatement = new iam.PolicyStatement({
   ],
   resources: ['*'],
 });
-// Direct access to the legacy surveyscope bucket outside Amplify storage.
+// Direct access to the surveyscope bucket (stores SRTM tiles and checkpoint files) outside Amplify storage.
 const generalBucketArn = 'arn:aws:s3:::surveyscope';
 const generalBucketArn2 = 'arn:aws:s3:::surveyscope/*';
 const generalBucketPolicy = new iam.PolicyStatement({
@@ -237,7 +237,7 @@ const layerVersion = new lambda.LayerVersion(
 lambdaFunction.addLayers(layerVersion);
 backend.handleS3Upload.resources.cfnResources.cfnFunction.addPropertyOverride(
   'ReservedConcurrentExecutions',
-  5
+  50
 );
 
 // Additional stack for bespoke EC2/ECS compute and shared infra.
