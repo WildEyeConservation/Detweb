@@ -185,6 +185,23 @@ export default function NewSurveyModal({
     if (shapefileLatLngs && shapefileLatLngs.length > 0) {
       await saveShapefileForProject(client, project.id, shapefileLatLngs, organization.value);
     }
+
+    // Create an empty tiled location set for global tiles
+    const { data: tiledLocationSet } = await client.models.LocationSet.create({
+      name: `${name} - Tiles`,
+      projectId: project.id,
+      description: JSON.stringify({ mode: 'tiled', global: true }),
+      locationCount: 0,
+    });
+
+    if (tiledLocationSet?.id) {
+      // Update project with the tiled location set ID
+      await client.models.Project.update({
+        id: project.id,
+        tiledLocationSetId: tiledLocationSet.id,
+      });
+    }
+
     setLoading(false);
     showModal(null);
   }

@@ -53,7 +53,7 @@ export function SideLegend({
   const cats = categoriesOverride ?? categories;
 
   return (
-    <div className='d-none d-md-flex flex-column h-100' style={{ position: 'relative' }}>
+    <div className='d-none d-md-flex flex-column ms-2' style={{ position: 'relative', height: `calc(100% - 56px)` }}>
       {/* Toggle button */}
       <Button
         variant='secondary'
@@ -67,8 +67,8 @@ export function SideLegend({
           transform: 'translateY(-50%)',
           zIndex: 10,
           width: '32px',
-          height: '32px',
-          borderRadius: '50%',
+          height: collapsed ? '100%' : '32px',
+          borderRadius: collapsed ? '4px' : '50%',
           padding: 0,
         }}
         title={collapsed ? 'Expand legend' : 'Collapse legend'}
@@ -143,8 +143,8 @@ export function MapLegend({
   });
 
   // Determine visibility class
-  const visibilityClass = alwaysVisible || forceVisible 
-    ? ' d-block' 
+  const visibilityClass = alwaysVisible || forceVisible
+    ? ' d-block'
     : ' d-block d-md-none';
 
   return (
@@ -161,39 +161,39 @@ export function MapLegend({
           <div className='d-flex flex-column'>
             {expanded
               ? cats
-                  ?.filter((c) => c.annotationSetId === annotationSetId)
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((item, index) => {
-                    return (
+                ?.filter((c) => c.annotationSetId === annotationSetId)
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((item, index) => {
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => setCurrentCategory(item)}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'row',
+                        backgroundColor:
+                          currentCategory?.id === item.id
+                            ? '#bdbebf'
+                            : 'transparent',
+                        padding: '8px',
+                      }}
+                    >
+                      <i style={{ background: item.color || '#000' }}></i>
                       <div
-                        key={index}
-                        onClick={() => setCurrentCategory(item)}
                         style={{
                           display: 'flex',
                           flexDirection: 'row',
-                          backgroundColor:
-                            currentCategory?.id === item.id
-                              ? '#bdbebf'
-                              : 'transparent',
-                          padding: '8px',
+                          width: '100%',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
                         }}
                       >
-                        <i style={{ background: item.color || '#000' }}></i>
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'row',
-                            width: '100%',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                          }}
-                        >
-                          <div>{item.name}</div>
-                          <div>({item.shortcutKey})</div>
-                        </div>
+                        <div>{item.name}</div>
+                        <div>({item.shortcutKey})</div>
                       </div>
-                    );
-                  })
+                    </div>
+                  );
+                })
               : 'Legend'}
           </div>
         </div>

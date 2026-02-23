@@ -1,25 +1,17 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
-import { Form, Spinner } from 'react-bootstrap';
-import Select, { SingleValue } from 'react-select';
-import { uploadData } from 'aws-amplify/storage';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { Alert, Form, Spinner } from 'react-bootstrap';
+import { QueryCommand } from '@aws-sdk/client-dynamodb';
+import { uploadData, downloadData, remove } from 'aws-amplify/storage';
 import { Schema } from '../amplify/client-schema';
 import { GlobalContext, UserContext } from '../Context';
-import { fetchAllPaginatedResults } from '../utils';
-import CreateTask from '../CreateTask';
-import LabeledToggleSwitch from '../LabeledToggleSwitch';
-import type { TiledLaunchRequest } from '../types/LaunchTask';
 import { DataClient } from '../../amplify/shared/data-schema.generated';
 import { logAdminAction } from '../utils/adminActionLogger';
 
-type LaunchHandler = (onProgress: (msg: string) => void) => Promise<void>;
-
-type Option = { label: string; value: string };
-
-type TiledOption = {
-  label: string;
-  value: string;
-  locationCount?: number;
-  tilesPerImage?: number;
+type LaunchHandler = {
+  execute: (
+    onProgress: (msg: string) => void,
+    onLaunchConfirmed: () => void
+  ) => Promise<void>;
 };
 
 type MinimalTile = {
@@ -29,6 +21,26 @@ type MinimalTile = {
   y: number;
   width: number;
   height: number;
+};
+
+type FnPool = {
+  annotationSetId: string;
+  poolCreatedAt: string;
+  poolSize: number;
+  items: MinimalTile[];
+};
+
+type FnLaunchEntry = {
+  launchedAt: string;
+  launchedCount: number;
+  items: MinimalTile[];
+};
+
+type FnHistory = {
+  annotationSetId: string;
+  poolSize: number;
+  totalLaunched: number;
+  launches: FnLaunchEntry[];
 };
 
 export default function FalseNegatives({
@@ -49,21 +61,21 @@ export default function FalseNegatives({
   const { client } = useContext(GlobalContext)!;
   const { user } = useContext(UserContext)!;
 
-  // Tile set selection/creation
-  const [useExistingTiled, setUseExistingTiled] = useState<boolean>(false);
-  const [tiledSetOptions, setTiledSetOptions] = useState<TiledOption[]>([]);
-  const [selectedTiledSetId, setSelectedTiledSetId] = useState<string>('');
-  const [handleCreateTask, setHandleCreateTask] = useState<
-    (() => Promise<TiledLaunchRequest>) | null
-  >(null);
+  // Global tiled location set from project
+  const tiledLocationSetId = (project as any).tiledLocationSetId as
+    | string
+    | undefined;
 
   // Queue tag
-  const [loadingModels, setLoadingModels] = useState<boolean>(false);
   const [queueTag, setQueueTag] = useState<string>(
     `${annotationSet.name} - False Negatives`
   );
 
-  // Sampling
+  // Tile count state
+  const [globalTileCount, setGlobalTileCount] = useState<number | null>(null);
+  const [loadingTileCount, setLoadingTileCount] = useState<boolean>(true);
+
+  // Sampling (first launch + additional sample modes)
   const [samplePercent, setSamplePercent] = useState<number>(5);
   const [showAdvancedOptions, setShowAdvancedOptions] =
     useState<boolean>(false);
@@ -75,108 +87,193 @@ export default function FalseNegatives({
     number | null
   >(null);
 
-  // Load all tiled location sets for the project
+  // FN pool + history state
+  const [loadingManifests, setLoadingManifests] = useState<boolean>(true);
+  const [fnPool, setFnPool] = useState<FnPool | null>(null);
+  const [fnHistory, setFnHistory] = useState<FnHistory | null>(null);
+  const [remainingTiles, setRemainingTiles] = useState<MinimalTile[] | null>(
+    null
+  );
+  const [loadingRemaining, setLoadingRemaining] = useState<boolean>(false);
+
+  // Derive mode from loaded manifests and remaining tiles
+  let mode: 'loading' | 'first-launch' | 'continue' | 'additional';
+  if (
+    loadingManifests ||
+    (fnPool && loadingRemaining) ||
+    (fnPool && fnHistory && remainingTiles === null)
+  ) {
+    mode = 'loading';
+  } else if (!fnPool) {
+    mode = 'first-launch';
+  } else if (remainingTiles && remainingTiles.length > 0) {
+    mode = 'continue';
+  } else {
+    mode = 'additional';
+  }
+
+  // Check for existing FN pool + history manifests on mount
   useEffect(() => {
-    let cancelled = false;
-    async function loadTiledSets() {
-      setLoadingModels(true);
-      const resp1 = await client.models.LocationSet.locationSetsByProjectId(
-        { projectId: project.id },
-        {
-          selectionSet: ['id', 'name', 'description', 'locationCount'] as const,
-        }
-      );
-      const data = resp1.data as Array<{
-        id: string;
-        name: string;
-        description?: string | null;
-        locationCount?: number | null;
-      }>;
+    let mounted = true;
+    async function checkForFnManifests() {
+      setLoadingManifests(true);
+      const poolKey = `false-negative-pools/${annotationSet.id}.json`;
+      try {
+        const poolResult = await downloadData({
+          path: poolKey,
+          options: { bucket: 'outputs' },
+        }).result;
+        const poolText = await poolResult.body.text();
+        const pool = JSON.parse(poolText) as FnPool;
+        if (!mounted) return;
+        setFnPool(pool);
 
-      // Restrict tiled sets to those mapped to the current annotation set
-      const resp2 =
-        await client.models.TasksOnAnnotationSet.locationSetsByAnnotationSetId({
-          annotationSetId: annotationSet.id,
-        });
-      const taskMappings = resp2.data as Array<{ locationSetId: string }>;
-      const allowedTiledSetIds = new Set(
-        (taskMappings || []).map((m) => m.locationSetId)
-      );
-
-      const options: TiledOption[] = [];
-      for (const ls of data || []) {
-        const descRaw = ls.description as string | undefined;
-        if (!descRaw) continue;
+        // Pool exists – try to load history
+        const historyKey = `false-negative-history/${annotationSet.id}.json`;
         try {
-          const desc = JSON.parse(descRaw);
-          if (desc && desc.mode === 'tiled' && allowedTiledSetIds.has(ls.id)) {
-            const parts: string[] = [];
-            if (ls.name) parts.push(ls.name);
-            if (
-              typeof desc.horizontalTiles === 'number' &&
-              typeof desc.verticalTiles === 'number'
-            ) {
-              parts.push(`${desc.horizontalTiles}x${desc.verticalTiles}`);
-            }
-            if (
-              typeof desc.width === 'number' &&
-              typeof desc.height === 'number'
-            ) {
-              parts.push(`${desc.width}x${desc.height}px`);
-            }
-            const horizontal = Number(desc.horizontalTiles ?? 0);
-            const vertical = Number(desc.verticalTiles ?? 0);
-            options.push({
-              label: parts.join(' • '),
-              value: ls.id,
-              locationCount:
-                typeof ls.locationCount === 'number'
-                  ? ls.locationCount
-                  : undefined,
-              tilesPerImage:
-                horizontal > 0 && vertical > 0
-                  ? horizontal * vertical
-                  : undefined,
-            });
-          }
-        } catch {}
+          const historyResult = await downloadData({
+            path: historyKey,
+            options: { bucket: 'outputs' },
+          }).result;
+          const historyText = await historyResult.body.text();
+          const history = JSON.parse(historyText) as FnHistory;
+          if (mounted) setFnHistory(history);
+        } catch {
+          // Pool exists but no history (edge case)
+          if (mounted) setFnHistory(null);
+        }
+      } catch {
+        // No pool – first launch mode
+        if (mounted) {
+          setFnPool(null);
+          setFnHistory(null);
+        }
       }
-      if (!cancelled)
-        setTiledSetOptions(
-          options.sort((a, b) => (a.label > b.label ? 1 : -1))
-        );
-      if (!cancelled) setLoadingModels(false);
+      if (mounted) setLoadingManifests(false);
     }
-    loadTiledSets();
+    checkForFnManifests();
     return () => {
-      cancelled = true;
+      mounted = false;
     };
-  }, [
-    client.models.LocationSet,
-    client.models.TasksOnAnnotationSet,
-    project.id,
-    annotationSet.id,
-  ]);
+  }, [annotationSet.id]);
 
-  // Enable/disable Launch button
+  // Load global tile count
   useEffect(() => {
-    const shouldDisable =
-      launching ||
-      loadingModels ||
-      (useExistingTiled
-        ? !selectedTiledSetId
-        : typeof handleCreateTask !== 'function');
-    setLaunchDisabled(shouldDisable);
+    let mounted = true;
+    async function loadTileCount() {
+      if (!tiledLocationSetId) {
+        setGlobalTileCount(0);
+        setLoadingTileCount(false);
+        return;
+      }
+      setLoadingTileCount(true);
+      try {
+        const { data } = await client.models.LocationSet.get(
+          { id: tiledLocationSetId },
+          { selectionSet: ['locationCount'] }
+        );
+        if (mounted) {
+          setGlobalTileCount(data?.locationCount ?? 0);
+        }
+      } catch (err) {
+        console.error('Failed to load tile count', err);
+        if (mounted) {
+          setGlobalTileCount(0);
+        }
+      }
+      if (mounted) {
+        setLoadingTileCount(false);
+      }
+    }
+    loadTileCount();
+    return () => {
+      mounted = false;
+    };
+  }, [client.models.LocationSet, tiledLocationSetId]);
+
+  // Compute remaining tiles when pool + history are loaded
+  useEffect(() => {
+    if (!fnPool || !fnHistory) {
+      setRemainingTiles(null);
+      return;
+    }
+
+    let mounted = true;
+    async function computeRemaining() {
+      setLoadingRemaining(true);
+      try {
+        const observedLocationIds = await fetchObservedLocationIds(
+          client,
+          annotationSet.id
+        );
+        const annotationPoints = await fetchAnnotationPointsDetailed(
+          client,
+          annotationSet.id
+        );
+
+        // Collect all launched tiles across all launches
+        const allLaunchedTiles = fnHistory.launches.flatMap((l) => l.items);
+
+        const remaining = allLaunchedTiles.filter((tile) => {
+          // Check if this specific tile was observed (by location ID)
+          if (observedLocationIds.has(tile.id)) return false;
+          const anns = annotationPoints.get(tile.imageId) || [];
+          const hasAnnotation = anns.some((pt) =>
+            isInsideTile(pt.x, pt.y, tile)
+          );
+          return !hasAnnotation;
+        });
+
+        if (mounted) {
+          setRemainingTiles(remaining);
+        }
+      } catch (err) {
+        console.error('Failed to compute remaining tiles', err);
+        if (mounted) {
+          setRemainingTiles([]);
+        }
+      }
+      if (mounted) {
+        setLoadingRemaining(false);
+      }
+    }
+    computeRemaining();
+    return () => {
+      mounted = false;
+    };
+  }, [fnPool, fnHistory, client, annotationSet.id]);
+
+  // Enable/disable Launch button based on mode and state
+  useEffect(() => {
+    let shouldDisable = false;
+
+    if (mode === 'loading' || loadingTileCount) {
+      shouldDisable = true;
+    } else if (!tiledLocationSetId || globalTileCount === 0) {
+      shouldDisable = true;
+    } else if (mode === 'continue') {
+      shouldDisable = !remainingTiles || remainingTiles.length === 0;
+    } else if (mode === 'additional') {
+      // Disable if pool is fully exhausted
+      const totalLaunched = fnHistory?.totalLaunched ?? 0;
+      const poolSize = fnPool?.poolSize ?? 0;
+      shouldDisable = totalLaunched >= poolSize;
+    }
+
+    setLaunchDisabled(shouldDisable || launching);
   }, [
     launching,
-    loadingModels,
-    useExistingTiled,
-    selectedTiledSetId,
-    handleCreateTask,
+    mode,
+    loadingTileCount,
+    tiledLocationSetId,
+    globalTileCount,
+    remainingTiles,
+    fnPool,
+    fnHistory,
     setLaunchDisabled,
   ]);
 
-  // Fetch locations via AppSync for existing tiled sets
+  // Fetch locations from DynamoDB for the global tiled set
   const fetchLocationsFromSet = useCallback(
     async (
       locationSetId: string,
@@ -206,26 +303,19 @@ export default function FalseNegatives({
   );
 
   const computeSummary = useCallback(async () => {
+    if (!tiledLocationSetId) return;
+
     setSummaryLoading(true);
     setSummaryMessage('Preparing tile data...');
     setCandidateTiles(null);
     setEstimatedSampleTiles(null);
     setExpectedTiles(null);
     try {
-      let tiles: MinimalTile[] = [];
-
-      if (useExistingTiled) {
-        if (!selectedTiledSetId) {
-          throw new Error('Select an existing tiled set');
-        }
-        setSummaryMessage('Fetching tiles...');
-        tiles = await fetchLocationsFromSet(selectedTiledSetId, setSummaryMessage);
-      } else {
-        if (typeof handleCreateTask !== 'function') return;
-        setSummaryMessage('Generating tiles...');
-        const request = await handleCreateTask();
-        tiles = generateTilesFromRequest(request);
-      }
+      setSummaryMessage('Fetching tiles...');
+      const tiles = await fetchLocationsFromSet(
+        tiledLocationSetId,
+        setSummaryMessage
+      );
 
       setExpectedTiles(tiles.length);
 
@@ -277,51 +367,143 @@ export default function FalseNegatives({
     annotationSet.id,
     client,
     fetchLocationsFromSet,
-    handleCreateTask,
     samplePercent,
-    selectedTiledSetId,
-    useExistingTiled,
+    tiledLocationSetId,
   ]);
+
+  // Refs for stable launch handler (avoid re-render loops)
+  const modeRef = useRef(mode);
+  const remainingTilesRef = useRef(remainingTiles);
+  const queueTagRef = useRef(queueTag);
+  const samplePercentRef = useRef(samplePercent);
+  const tiledLocationSetIdRef = useRef(tiledLocationSetId);
+
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+  useEffect(() => {
+    remainingTilesRef.current = remainingTiles;
+  }, [remainingTiles]);
+  useEffect(() => {
+    queueTagRef.current = queueTag;
+  }, [queueTag]);
+  useEffect(() => {
+    samplePercentRef.current = samplePercent;
+  }, [samplePercent]);
+  useEffect(() => {
+    tiledLocationSetIdRef.current = tiledLocationSetId;
+  }, [tiledLocationSetId]);
 
   // Expose launch handler to parent
   useEffect(() => {
-    setFalseNegativesLaunchHandler(
-      () => async (onProgress: (msg: string) => void) => {
-        let locationSetId: string | undefined;
-        let tiledRequestPayload: TiledLaunchRequest | null = null;
-        let locationTiles: MinimalTile[] | undefined = undefined;
-
-        if (useExistingTiled) {
-          if (!selectedTiledSetId) return;
-          locationSetId = selectedTiledSetId;
-          onProgress('Fetching locations from existing set...');
-          locationTiles = await fetchLocationsFromSet(selectedTiledSetId, onProgress);
-          if (locationTiles.length === 0) {
-            alert('No locations found in selected tiled set');
-            return;
-          }
-          onProgress(`Found ${locationTiles.length} locations`);
-        } else {
-          if (typeof handleCreateTask !== 'function') return;
-          onProgress('Preparing tiling request...');
-          tiledRequestPayload = await handleCreateTask();
+    setFalseNegativesLaunchHandler({
+      execute: async (
+        onProgress: (msg: string) => void,
+        onLaunchConfirmed: () => void
+      ) => {
+        const currentTiledLocationSetId = tiledLocationSetIdRef.current;
+        if (!currentTiledLocationSetId) {
+          onProgress('No tiles configured for this survey.');
+          return;
         }
 
-        const payload = {
-          projectId: project.id,
-          annotationSetId: annotationSet.id,
-          queueOptions: {
-            name: 'False Negatives',
-            hidden: false,
-            fifo: false,
-          },
-          queueTag,
-          samplePercent,
-          locationSetId,
-          locationTiles,
-          tiledRequest: tiledRequestPayload,
-          batchSize: 200,
-        };
+        const currentMode = modeRef.current;
+
+        if (currentMode === 'continue') {
+          // Continue mode – launch remaining tiles from unfinished session
+          const remaining = remainingTilesRef.current;
+          if (!remaining || remaining.length === 0) {
+            alert('No remaining tiles to launch');
+            return;
+          }
+
+          onLaunchConfirmed();
+          onProgress(`Launching ${remaining.length} remaining tiles...`);
+
+          const payload = {
+            projectId: project.id,
+            annotationSetId: annotationSet.id,
+            queueOptions: {
+              name: 'False Negatives',
+              hidden: false,
+              fifo: false,
+            },
+            queueTag: queueTagRef.current,
+            samplePercent: 100,
+            locationSetId: currentTiledLocationSetId,
+            locationTiles: remaining,
+            batchSize: 200,
+            isContinuation: true,
+          };
+
+          onProgress('Enqueuing jobs...');
+          await sendLaunchFalseNegativesRequest(client, payload);
+          onProgress('Launch request submitted');
+
+          await logAdminAction(
+            client,
+            user.userId,
+            `Continued False Negatives queue for annotation set "${annotationSet.name}" in project "${project.name}" (${remaining.length} remaining tiles)`,
+            project.id
+          ).catch(console.error);
+        } else if (currentMode === 'additional') {
+          // Additional sample mode – Lambda loads from existing pool
+          onLaunchConfirmed();
+          onProgress('Launching additional sample from existing pool...');
+
+          const payload = {
+            projectId: project.id,
+            annotationSetId: annotationSet.id,
+            queueOptions: {
+              name: 'False Negatives',
+              hidden: false,
+              fifo: false,
+            },
+            queueTag: queueTagRef.current,
+            samplePercent: samplePercentRef.current,
+            locationSetId: currentTiledLocationSetId,
+            locationTiles: [], // Empty – Lambda loads from pool
+            batchSize: 200,
+          };
+
+          onProgress('Enqueuing jobs...');
+          await sendLaunchFalseNegativesRequest(client, payload);
+          onProgress('Launch request submitted');
+
+          await logAdminAction(
+            client,
+            user.userId,
+            `Launched additional ${samplePercentRef.current}% False Negatives sample for annotation set "${annotationSet.name}" in project "${project.name}"`,
+            project.id
+          ).catch(console.error);
+        } else {
+          // First launch mode – sample from all tiles
+          onProgress('Fetching locations from global tile set...');
+          const locationTiles = await fetchLocationsFromSet(
+            currentTiledLocationSetId,
+            onProgress
+          );
+          if (locationTiles.length === 0) {
+            alert('No locations found in the global tiled set');
+            return;
+          }
+          onLaunchConfirmed();
+          onProgress(`Found ${locationTiles.length} locations`);
+
+          const payload = {
+            projectId: project.id,
+            annotationSetId: annotationSet.id,
+            queueOptions: {
+              name: 'False Negatives',
+              hidden: false,
+              fifo: false,
+            },
+            queueTag: queueTagRef.current,
+            samplePercent: samplePercentRef.current,
+            locationSetId: currentTiledLocationSetId,
+            locationTiles,
+            batchSize: 200,
+          };
 
         onProgress('Enqueuing jobs...');
         await sendLaunchFalseNegativesRequest(client, payload);
@@ -346,260 +528,509 @@ export default function FalseNegatives({
     annotationSet.name,
     client,
     fetchLocationsFromSet,
-    handleCreateTask,
     project.id,
     project.name,
-    queueTag,
-    samplePercent,
-    selectedTiledSetId,
     setFalseNegativesLaunchHandler,
-    useExistingTiled,
     user.userId,
   ]);
 
-  // modelOptions now derived from actual location sets; when exactly one, it's auto-selected
+  // Reset progress state
+  const [resetting, setResetting] = useState<boolean>(false);
+  const [resetProgress, setResetProgress] = useState<string>('');
+
+  // Reset FN data – delete observations, annotations, and manifests
+  const handleReset = useCallback(async () => {
+    if (
+      !confirm(
+        'Reset all false negatives data? This will delete all observations and annotations from false negative reviews, clear the candidate pool and launch history, allowing you to start fresh. This cannot be undone.'
+      )
+    ) {
+      return;
+    }
+
+    setResetting(true);
+    setResetProgress('Loading history...');
+
+    try {
+      // Load history if not already in state
+      let history = fnHistory;
+      if (!history) {
+        const historyKey = `false-negative-history/${annotationSet.id}.json`;
+        try {
+          const historyResult = await downloadData({
+            path: historyKey,
+            options: { bucket: 'outputs' },
+          }).result;
+          const historyText = await historyResult.body.text();
+          history = JSON.parse(historyText) as FnHistory;
+        } catch {
+          // No history exists, nothing to delete
+          history = null;
+        }
+      }
+
+      if (history && history.launches.length > 0) {
+        // Collect all launched tiles
+        const allLaunchedTiles = history.launches.flatMap((l) => l.items);
+        const totalTiles = allLaunchedTiles.length;
+
+        // Helper to run promises with concurrency limit
+        const runWithConcurrency = async <T,>(
+          items: T[],
+          fn: (item: T) => Promise<void>,
+          concurrency: number
+        ): Promise<void> => {
+          const queue = [...items];
+          const workers = Array.from({ length: concurrency }, async () => {
+            while (queue.length > 0) {
+              const item = queue.shift();
+              if (item !== undefined) {
+                await fn(item);
+              }
+            }
+          });
+          await Promise.all(workers);
+        };
+
+        // Delete observations by locationId
+        let observationsDeleted = 0;
+        setResetProgress(`Deleting observations (0/${totalTiles} tiles)...`);
+
+        await runWithConcurrency(
+          allLaunchedTiles,
+          async (tile) => {
+            let nextToken: string | null | undefined = undefined;
+            do {
+              const { data, nextToken: nt } =
+                await client.models.Observation.observationsByLocationId(
+                  { locationId: tile.id },
+                  {
+                    filter: { annotationSetId: { eq: annotationSet.id } },
+                    limit: 100,
+                    nextToken,
+                  }
+                );
+              const deletePromises = (data || []).map((obs) =>
+                client.models.Observation.delete({ id: obs.id })
+              );
+              await Promise.all(deletePromises);
+              nextToken = nt as string | null | undefined;
+            } while (nextToken);
+
+            observationsDeleted++;
+            if (observationsDeleted % 10 === 0 || observationsDeleted === totalTiles) {
+              setResetProgress(
+                `Deleting observations (${observationsDeleted}/${totalTiles} tiles)...`
+              );
+            }
+          },
+          50
+        );
+
+        // Delete annotations by imageId with source containing "false-negative"
+        // Get unique imageIds from launched tiles
+        const uniqueImageIds = Array.from(
+          new Set(allLaunchedTiles.map((t) => t.imageId))
+        );
+        let imagesProcessed = 0;
+        setResetProgress(`Deleting annotations (0/${uniqueImageIds.length} images)...`);
+
+        await runWithConcurrency(
+          uniqueImageIds,
+          async (imageId) => {
+            let nextToken: string | null | undefined = undefined;
+            do {
+              const { data, nextToken: nt } =
+                await client.models.Annotation.annotationsByImageIdAndSetId(
+                  { imageId, setId: { eq: annotationSet.id } },
+                  {
+                    filter: { source: { contains: 'false-negative' } },
+                    limit: 100,
+                    nextToken,
+                  }
+                );
+              const deletePromises = (data || []).map((ann) =>
+                client.models.Annotation.delete({ id: ann.id })
+              );
+              await Promise.all(deletePromises);
+              nextToken = nt as string | null | undefined;
+            } while (nextToken);
+
+            imagesProcessed++;
+            if (imagesProcessed % 10 === 0 || imagesProcessed === uniqueImageIds.length) {
+              setResetProgress(
+                `Deleting annotations (${imagesProcessed}/${uniqueImageIds.length} images)...`
+              );
+            }
+          },
+          50
+        );
+      }
+
+      // Delete manifests
+      setResetProgress('Removing manifests...');
+      const poolKey = `false-negative-pools/${annotationSet.id}.json`;
+      const historyKey = `false-negative-history/${annotationSet.id}.json`;
+      await remove({ path: poolKey, options: { bucket: 'outputs' } }).catch(
+        () => { }
+      );
+      await remove({ path: historyKey, options: { bucket: 'outputs' } }).catch(
+        () => { }
+      );
+
+      setFnPool(null);
+      setFnHistory(null);
+      setRemainingTiles(null);
+      setResetProgress('');
+    } catch (err) {
+      console.error('Failed to reset FN data', err);
+      alert('Failed to reset data. Check console for details.');
+    } finally {
+      setResetting(false);
+    }
+  }, [annotationSet.id, client, fnHistory]);
+
+  // Show warning if no global tiles exist
+  const showNoTilesWarning =
+    !loadingTileCount && (!tiledLocationSetId || globalTileCount === 0);
+
+  // Progress values for pool modes
+  const poolSize = fnPool?.poolSize ?? 0;
+  const totalLaunched = fnHistory?.totalLaunched ?? 0;
+  const coveragePercent =
+    poolSize > 0 ? ((totalLaunched / poolSize) * 100).toFixed(1) : '0.0';
+  const remainingInPool = poolSize - totalLaunched;
+  const poolExhausted = poolSize > 0 && remainingInPool <= 0;
+
+  // For additional sample mode: compute expected new sample inline
+  const additionalSampleCount = (() => {
+    if (mode !== 'additional' || poolExhausted) return 0;
+    const normalizedPercent = Math.min(Math.max(samplePercent, 0), 100);
+    let count = Math.floor((poolSize * normalizedPercent) / 100);
+    if (normalizedPercent > 0 && count === 0 && remainingInPool > 0) {
+      count = 1;
+    }
+    return Math.min(count, remainingInPool);
+  })();
 
   return (
     <div className='px-3 pb-3 pt-1'>
       <div className='d-flex flex-column gap-3 mt-2'>
-        <div
-          className='border border-dark shadow-sm p-2'
-          style={{ backgroundColor: '#697582' }}
-        >
-          <LabeledToggleSwitch
-            className='m-0'
-            leftLabel='Create tiles'
-            rightLabel='Use existing tiles'
-            checked={useExistingTiled}
-            onChange={(checked) => setUseExistingTiled(checked)}
-          />
-          {useExistingTiled ? (
-            <Form.Group className='mt-2'>
-              <Form.Label className='mb-0'>Existing tiled sets</Form.Label>
-              <Select<Option>
-                value={
-                  tiledSetOptions.find((o) => o.value === selectedTiledSetId) ||
-                  null
-                }
-                onChange={(opt: SingleValue<Option>) =>
-                  setSelectedTiledSetId(opt?.value ?? '')
-                }
-                options={tiledSetOptions}
-                placeholder='Select a tiled set'
-                className='text-black'
-                isDisabled={launching}
-              />
-            </Form.Group>
-          ) : (
-            <div className='mt-2'>
-              <CreateTask
-                name={`${annotationSet.name}-FN`}
-                projectId={project.id}
-                setHandleCreateTask={setHandleCreateTask}
-                setLaunchDisabled={() => {}}
-                disabled={launching}
-              />
-            </div>
-          )}
-        </div>
-
-        {loadingModels && (
+        {mode === 'loading' ? (
           <p
-            className='text-muted mb-0 mt-2 text-center'
+            className='text-muted mb-0 text-center'
             style={{ fontSize: '12px' }}
           >
-            Loading tile sets...
+            Loading...
           </p>
-        )}
-        <Form.Group>
-          <Form.Label className='mb-0'>Sample size (%)</Form.Label>
-          <Form.Control
-            type='number'
-            min={0}
-            max={100}
-            step={1}
-            value={samplePercent}
-            onChange={(e) =>
-              setSamplePercent(Number((e.target as HTMLInputElement).value))
-            }
-            disabled={launching}
-          />
-        </Form.Group>
-
-        <Form.Group>
-          <Form.Switch
-            label='Show Advanced Options'
-            checked={showAdvancedOptions}
-            onChange={() => setShowAdvancedOptions(!showAdvancedOptions)}
-            disabled={launching}
-          />
-        </Form.Group>
-
-        {showAdvancedOptions && (
+        ) : showNoTilesWarning ? (
+          <Alert variant='warning' className='mb-0'>
+            <strong>No tiles configured.</strong>
+            <p className='mb-0 mt-1' style={{ fontSize: '14px' }}>
+              Please go to <strong>Edit Survey &gt; Manage Tiles</strong> to
+              create tiles for this survey before launching a false negatives
+              task.
+            </p>
+          </Alert>
+        ) : mode === 'continue' ? (
+          // ── Continue mode UI ──
           <div
-            className='d-flex flex-column gap-3 border border-dark shadow-sm p-2'
+            className='border border-dark shadow-sm p-2'
             style={{ backgroundColor: '#697582' }}
           >
-            <Form.Group>
-              <Form.Label className='mb-0'>Job Name</Form.Label>
-              <span
-                className='text-muted d-block mb-1'
+            <p className='mb-0 text-white'>
+              <strong>Continuing False Negatives Task</strong>
+            </p>
+            <p className='mb-0 mt-2 text-white' style={{ fontSize: '14px' }}>
+              {coveragePercent}% of candidate pool has been covered
+              ({totalLaunched} of {poolSize} candidates launched across{' '}
+              {fnHistory?.launches.length ?? 0} session
+              {(fnHistory?.launches.length ?? 0) !== 1 ? 's' : ''})
+            </p>
+            {loadingRemaining ? (
+              <div className='mt-2 d-flex align-items-center gap-2 text-white'>
+                <Spinner animation='border' size='sm' />
+                <span style={{ fontSize: '12px' }}>
+                  Calculating remaining tiles...
+                </span>
+              </div>
+            ) : remainingTiles !== null ? (
+              <div className='mt-2'>
+                <p className='mb-0 text-white' style={{ fontSize: '14px' }}>
+                  <strong>{remainingTiles.length}</strong> tiles remaining from
+                  previous launches
+                </p>
+              </div>
+            ) : null}
+            <div className='mt-3'>
+              <button
+                type='button'
+                className='btn btn-outline-light btn-sm'
+                onClick={handleReset}
+                disabled={launching || resetting}
+              >
+                {resetting ? (
+                  <span className='d-inline-flex align-items-center'>
+                    <Spinner animation='border' size='sm' className='me-2' />
+                    {resetProgress || 'Resetting...'}
+                  </span>
+                ) : (
+                  'Reset FN Data'
+                )}
+              </button>
+            </div>
+          </div>
+        ) : mode === 'additional' ? (
+          // ── Additional sample mode UI ──
+          <>
+            <div
+              className='border border-dark shadow-sm p-2'
+              style={{ backgroundColor: '#697582' }}
+            >
+              <p className='mb-0 text-white'>
+                <strong>False Negatives Progress</strong>
+              </p>
+              <p
+                className='mb-0 mt-2 text-white'
+                style={{ fontSize: '14px' }}
+              >
+                {coveragePercent}% of candidate pool has been covered
+              </p>
+              <div
+                className='mt-1 text-white'
                 style={{ fontSize: '12px' }}
               >
-                Modify this to display a different name for the job in the jobs
-                page.
-              </span>
+                <div>
+                  Pool size: <strong>{poolSize}</strong>
+                </div>
+                <div>
+                  Launched: <strong>{totalLaunched}</strong> across{' '}
+                  {fnHistory?.launches.length ?? 0} session
+                  {(fnHistory?.launches.length ?? 0) !== 1 ? 's' : ''}
+                </div>
+                <div>
+                  Remaining candidates: <strong>{remainingInPool}</strong>
+                </div>
+              </div>
+            </div>
+
+            {poolExhausted ? (
+              <Alert variant='success' className='mb-0'>
+                All candidates from the original pool have been launched.
+              </Alert>
+            ) : (
+              <>
+                <Form.Group>
+                  <Form.Label className='mb-0'>
+                    Additional sample size (%)
+                  </Form.Label>
+                  <span
+                    className='text-muted d-block mb-1'
+                    style={{ fontSize: '12px' }}
+                  >
+                    Percentage of the candidate pool ({poolSize}{' '}
+                    tiles). Up to {remainingInPool} tiles can still be launched.
+                  </span>
+                  <Form.Control
+                    type='number'
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={samplePercent}
+                    onChange={(e) =>
+                      setSamplePercent(
+                        Number((e.target as HTMLInputElement).value)
+                      )
+                    }
+                    disabled={launching}
+                  />
+                </Form.Group>
+
+                <Form.Group>
+                  <Form.Switch
+                    label='Show Advanced Options'
+                    checked={showAdvancedOptions}
+                    onChange={() => setShowAdvancedOptions(!showAdvancedOptions)}
+                    disabled={launching}
+                  />
+                </Form.Group>
+
+                {showAdvancedOptions && (
+                  <div
+                    className='d-flex flex-column gap-3 border border-dark shadow-sm p-2'
+                    style={{ backgroundColor: '#697582' }}
+                  >
+                    <Form.Group>
+                      <Form.Label className='mb-0'>Job Name</Form.Label>
+                      <span
+                        className='text-muted d-block mb-1'
+                        style={{ fontSize: '12px' }}
+                      >
+                        Modify this to display a different name for the job in
+                        the jobs page.
+                      </span>
+                      <Form.Control
+                        type='text'
+                        value={queueTag}
+                        onChange={(e) =>
+                          setQueueTag((e.target as HTMLInputElement).value)
+                        }
+                        disabled={launching}
+                      />
+                    </Form.Group>
+                  </div>
+                )}
+
+                <div
+                  className='border border-dark shadow-sm p-2'
+                  style={{ backgroundColor: '#697582' }}
+                >
+                  <div className='text-white' style={{ fontSize: '12px' }}>
+                    <div>
+                      New sample ({samplePercent}% of pool):{' '}
+                      <strong>{additionalSampleCount}</strong> tiles
+                    </div>
+                    <div>
+                      After launch: {totalLaunched + additionalSampleCount} of{' '}
+                      {poolSize} launched (
+                      {poolSize > 0
+                        ? (
+                          ((totalLaunched + additionalSampleCount) /
+                            poolSize) *
+                          100
+                        ).toFixed(1)
+                        : '0.0'}
+                      %)
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div>
+              <button
+                type='button'
+                className='btn btn-outline-danger btn-sm'
+                onClick={handleReset}
+                disabled={launching || resetting}
+              >
+                {resetting ? (
+                  <span className='d-inline-flex align-items-center'>
+                    <Spinner animation='border' size='sm' className='me-2' />
+                    {resetProgress || 'Resetting...'}
+                  </span>
+                ) : (
+                  'Reset FN Data'
+                )}
+              </button>
+            </div>
+          </>
+        ) : (
+          // ── First launch mode UI ──
+          <>
+            <div
+              className='border border-dark shadow-sm p-2'
+              style={{ backgroundColor: '#697582' }}
+            >
+              <p className='mb-0 text-white'>
+                <strong>{globalTileCount}</strong> tiles available for false
+                negative sampling.
+              </p>
+              <p className='mb-0 mt-1 text-muted' style={{ fontSize: '12px' }}>
+                To modify tiles, go to Edit Survey &gt; Manage Tiles.
+              </p>
+            </div>
+
+            <Form.Group>
+              <Form.Label className='mb-0'>Sample size (%)</Form.Label>
               <Form.Control
-                type='text'
-                value={queueTag}
+                type='number'
+                min={0}
+                max={100}
+                step={1}
+                value={samplePercent}
                 onChange={(e) =>
-                  setQueueTag((e.target as HTMLInputElement).value)
+                  setSamplePercent(Number((e.target as HTMLInputElement).value))
                 }
                 disabled={launching}
               />
             </Form.Group>
-          </div>
-        )}
 
-        <div
-          className='border border-dark shadow-sm p-2'
-          style={{ backgroundColor: '#697582' }}
-        >
-          <div className='d-flex align-items-center justify-content-between'>
-            <div className='text-white' style={{ fontSize: '12px' }}>
-              <div>Expected tiles: {expectedTiles ?? '—'}</div>
-              <div>Estimated candidate tiles: {candidateTiles ?? '—'}</div>
-              <div>
-                Estimated launch ({samplePercent}%):{' '}
-                {estimatedSampleTiles ?? '—'}
+            <Form.Group>
+              <Form.Switch
+                label='Show Advanced Options'
+                checked={showAdvancedOptions}
+                onChange={() => setShowAdvancedOptions(!showAdvancedOptions)}
+                disabled={launching}
+              />
+            </Form.Group>
+
+            {showAdvancedOptions && (
+              <div
+                className='d-flex flex-column gap-3 border border-dark shadow-sm p-2'
+                style={{ backgroundColor: '#697582' }}
+              >
+                <Form.Group>
+                  <Form.Label className='mb-0'>Job Name</Form.Label>
+                  <span
+                    className='text-muted d-block mb-1'
+                    style={{ fontSize: '12px' }}
+                  >
+                    Modify this to display a different name for the job in the
+                    jobs page.
+                  </span>
+                  <Form.Control
+                    type='text'
+                    value={queueTag}
+                    onChange={(e) =>
+                      setQueueTag((e.target as HTMLInputElement).value)
+                    }
+                    disabled={launching}
+                  />
+                </Form.Group>
               </div>
-            </div>
-            <button
-              type='button'
-              className='btn btn-primary'
-              disabled={
-                launching ||
-                (useExistingTiled
-                  ? !selectedTiledSetId
-                  : typeof handleCreateTask !== 'function') ||
-                summaryLoading
-              }
-              onClick={computeSummary}
+            )}
+
+            <div
+              className='border border-dark shadow-sm p-2'
+              style={{ backgroundColor: '#697582' }}
             >
-              {summaryLoading ? (
-                <span className='d-inline-flex align-items-center'>
-                  <Spinner animation='border' size='sm' className='me-2' />{' '}
-                  Computing summary...
-                </span>
-              ) : (
-                'Compute Summary'
+              <div className='d-flex align-items-center justify-content-between'>
+                <div className='text-white' style={{ fontSize: '12px' }}>
+                  <div>Expected tiles: {expectedTiles ?? '—'}</div>
+                  <div>Estimated candidate tiles: {candidateTiles ?? '—'}</div>
+                  <div>
+                    Estimated launch ({samplePercent}%):{' '}
+                    {estimatedSampleTiles ?? '—'}
+                  </div>
+                </div>
+                <button
+                  type='button'
+                  className='btn btn-primary'
+                  disabled={launching || summaryLoading}
+                  onClick={computeSummary}
+                >
+                  {summaryLoading ? (
+                    <span className='d-inline-flex align-items-center'>
+                      <Spinner animation='border' size='sm' className='me-2' />{' '}
+                      Computing summary...
+                    </span>
+                  ) : (
+                    'Compute Summary'
+                  )}
+                </button>
+              </div>
+              {summaryMessage && (
+                <div className='mt-2 text-muted' style={{ fontSize: '12px' }}>
+                  {summaryMessage}
+                </div>
               )}
-            </button>
-          </div>
-          {summaryMessage && (
-            <div className='mt-2 text-muted' style={{ fontSize: '12px' }}>
-              {summaryMessage}
             </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
     </div>
   );
-}
-
-async function fetchTilesFromLocationSet(
-  client: DataClient,
-  locationSetId: string
-): Promise<MinimalTile[]> {
-  const tiles: MinimalTile[] = [];
-  let nextToken: string | null | undefined = undefined;
-  do {
-    const { data, nextToken: nt } =
-      await client.models.Location.locationsBySetIdAndConfidence(
-        { setId: locationSetId },
-        {
-          selectionSet: ['id', 'imageId', 'x', 'y', 'width', 'height'] as const,
-          limit: 1000,
-          nextToken,
-        }
-      );
-    for (const item of data || []) {
-      if (!item?.id || !item?.imageId) continue;
-      tiles.push({
-        id: item.id as string,
-        imageId: item.imageId as string,
-        x: Number(item.x ?? 0),
-        y: Number(item.y ?? 0),
-        width: Number(item.width ?? 0),
-        height: Number(item.height ?? 0),
-      });
-    }
-    nextToken = nt as string | null | undefined;
-  } while (nextToken);
-  return tiles;
-}
-
-function generateTilesFromRequest(request: TiledLaunchRequest): MinimalTile[] {
-  const tiles: MinimalTile[] = [];
-  const baselineWidth = Math.max(0, request.maxX - request.minX);
-  const baselineHeight = Math.max(0, request.maxY - request.minY);
-  const baselineIsLandscape = baselineWidth >= baselineHeight;
-  let counter = 0;
-
-  for (const image of request.images) {
-    const imageIsLandscape = image.width >= image.height;
-    const swapTileForImage = baselineIsLandscape !== imageIsLandscape;
-    const tileWidthForImage = swapTileForImage ? request.height : request.width;
-    const tileHeightForImage = swapTileForImage
-      ? request.width
-      : request.height;
-    const horizontalTilesForImage = swapTileForImage
-      ? request.verticalTiles
-      : request.horizontalTiles;
-    const verticalTilesForImage = swapTileForImage
-      ? request.horizontalTiles
-      : request.verticalTiles;
-    const roiMinXForImage = swapTileForImage ? request.minY : request.minX;
-    const roiMinYForImage = swapTileForImage ? request.minX : request.minY;
-    const roiMaxXForImage = swapTileForImage ? request.maxY : request.maxX;
-    const roiMaxYForImage = swapTileForImage ? request.maxX : request.maxY;
-
-    const effectiveW = Math.max(0, roiMaxXForImage - roiMinXForImage);
-    const effectiveH = Math.max(0, roiMaxYForImage - roiMinYForImage);
-    const xStepSize =
-      horizontalTilesForImage > 1
-        ? (effectiveW - tileWidthForImage) / (horizontalTilesForImage - 1)
-        : 0;
-    const yStepSize =
-      verticalTilesForImage > 1
-        ? (effectiveH - tileHeightForImage) / (verticalTilesForImage - 1)
-        : 0;
-
-    for (let xStep = 0; xStep < horizontalTilesForImage; xStep++) {
-      for (let yStep = 0; yStep < verticalTilesForImage; yStep++) {
-        const x = Math.round(
-          roiMinXForImage +
-            (horizontalTilesForImage > 1 ? xStep * xStepSize : 0) +
-            tileWidthForImage / 2
-        );
-        const y = Math.round(
-          roiMinYForImage +
-            (verticalTilesForImage > 1 ? yStep * yStepSize : 0) +
-            tileHeightForImage / 2
-        );
-        tiles.push({
-          id: `${image.id}-${counter++}`,
-          imageId: image.id,
-          x,
-          y,
-          width: tileWidthForImage,
-          height: tileHeightForImage,
-        });
-      }
-    }
-  }
-
-  return tiles;
 }
 
 // Fetch observation points - locations that humans have reviewed
@@ -607,15 +1038,20 @@ function generateTilesFromRequest(request: TiledLaunchRequest): MinimalTile[] {
 async function fetchObservationPointsDetailed(
   client: DataClient,
   annotationSetId: string
-): Promise<Map<string, Array<{ x: number; y: number; width: number; height: number }>>> {
-  const map = new Map<string, Array<{ x: number; y: number; width: number; height: number }>>();
-  
+): Promise<
+  Map<string, Array<{ x: number; y: number; width: number; height: number }>>
+> {
+  const map = new Map<
+    string,
+    Array<{ x: number; y: number; width: number; height: number }>
+  >();
+
   // OPTIMIZATION: Fetch observations with location data included in the same query
   // This avoids N+1 queries by including location fields in the selectionSet
   let nextToken: string | null | undefined = undefined;
   do {
     const { data, nextToken: nt } =
-      await (client as any).models.Observation.observationsByAnnotationSetId(
+      await client.models.Observation.observationsByAnnotationSetId(
         { annotationSetId },
         {
           selectionSet: [
@@ -648,6 +1084,36 @@ async function fetchObservationPointsDetailed(
   } while (nextToken);
 
   return map;
+}
+
+// Fetch the set of location IDs that have been observed (reviewed by a human).
+// Used by computeRemaining to check if a specific launched tile was reviewed,
+// rather than checking geometric overlap which can match nearby tiles.
+async function fetchObservedLocationIds(
+  client: DataClient,
+  annotationSetId: string
+): Promise<Set<string>> {
+  const ids = new Set<string>();
+  let nextToken: string | null | undefined = undefined;
+  do {
+    const { data, nextToken: nt } =
+      await client.models.Observation.observationsByAnnotationSetId(
+        { annotationSetId },
+        {
+          selectionSet: ['locationId'] as const,
+          limit: 1000,
+          nextToken,
+        }
+      );
+    for (const item of data || []) {
+      const locationId = (item as any)?.locationId as string | undefined;
+      if (locationId) {
+        ids.add(locationId);
+      }
+    }
+    nextToken = nt as string | null | undefined;
+  } while (nextToken);
+  return ids;
 }
 
 async function fetchAnnotationPointsDetailed(
@@ -740,7 +1206,18 @@ function shouldIgnoreLaunchError(error: any): boolean {
   );
 }
 
-function isInsideTile(px: number, py: number, tile: MinimalTile): boolean {
+type MinimalTileForCheck = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+function isInsideTile(
+  px: number,
+  py: number,
+  tile: MinimalTileForCheck
+): boolean {
   const halfW = tile.width / 2;
   const halfH = tile.height / 2;
   const minX = tile.x - halfW;
@@ -752,24 +1229,24 @@ function isInsideTile(px: number, py: number, tile: MinimalTile): boolean {
 
 // Check if two tiles overlap (both have center x,y and width,height)
 function tilesOverlap(
-  tile1: MinimalTile,
+  tile1: MinimalTileForCheck,
   tile2: { x: number; y: number; width: number; height: number }
 ): boolean {
   const halfW1 = tile1.width / 2;
   const halfH1 = tile1.height / 2;
   const halfW2 = tile2.width / 2;
   const halfH2 = tile2.height / 2;
-  
+
   const minX1 = tile1.x - halfW1;
   const maxX1 = tile1.x + halfW1;
   const minY1 = tile1.y - halfH1;
   const maxY1 = tile1.y + halfH1;
-  
+
   const minX2 = tile2.x - halfW2;
   const maxX2 = tile2.x + halfW2;
   const minY2 = tile2.y - halfH2;
   const maxY2 = tile2.y + halfH2;
-  
+
   // Check if rectangles overlap
   return minX1 < maxX2 && maxX1 > minX2 && minY1 < maxY2 && maxY1 > minY2;
 }

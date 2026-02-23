@@ -1,11 +1,10 @@
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { Form } from 'react-bootstrap';
+import { Alert, Form } from 'react-bootstrap';
 import Select from 'react-select';
 import { Schema } from '../amplify/client-schema';
 import { GlobalContext, UserContext } from '../Context';
 import { useLaunchTask } from '../useLaunchTask';
-import CreateTask from '../CreateTask';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
 import { logAdminAction } from '../utils/adminActionLogger';
 
@@ -21,9 +20,12 @@ export default function SpeciesLabelling({
   launching: boolean;
   setLaunchDisabled: Dispatch<SetStateAction<boolean>>;
   setSpeciesLaunchHandler: Dispatch<
-    SetStateAction<
-      ((onProgress: (msg: string) => void) => Promise<void>) | null
-    >
+    SetStateAction<{
+      execute: (
+        onProgress: (msg: string) => void,
+        onLaunchConfirmed: () => void
+      ) => Promise<void>;
+    } | null>
   >;
 }) {
   const { client } = useContext(GlobalContext)!;
@@ -45,8 +47,6 @@ export default function SpeciesLabelling({
   const [lowerLimit, setLowerLimit] = useState<number>(0.6);
   const [upperLimit, setUpperLimit] = useState<number>(1);
   const [hidden, setHidden] = useState<boolean>(false);
-  const [handleCreateTaskWithArgs, setHandleCreateTaskWithArgs] =
-    useState<any>(null);
   const [modelGuided, setModelGuided] = useState<boolean>(true);
   const [model, setModel] = useState<{ label: string; value: string }>();
   const [modelOptions, setModelOptions] = useState<
@@ -55,11 +55,18 @@ export default function SpeciesLabelling({
   const [locationSets, setLocationSets] = useState<any[]>([]);
   const [loadingLocationSets, setLoadingLocationSets] =
     useState<boolean>(false);
-  const [useExistingTiled, setUseExistingTiled] = useState<boolean>(false);
-  const [selectedTiledSetId, setSelectedTiledSetId] = useState<string>('');
-  const [tiledSetOptions, setTiledSetOptions] = useState<
-    { label: string; value: string }[]
-  >([]);
+
+  // Global tiled location set state
+  const [globalTileCount, setGlobalTileCount] = useState<number | null>(null);
+  const [loadingTileCount, setLoadingTileCount] = useState<boolean>(false);
+
+  // Dev-only: Filter launch by image IDs from JSON
+  const [launchImageIds, setLaunchImageIds] = useState<string[]>([]);
+
+  // Get the tiled location set ID from project
+  const tiledLocationSetId = (project as any).tiledLocationSetId as
+    | string
+    | undefined;
 
   const launchTask = useLaunchTask({
     allowOutside: allowAnnotationsOutsideLocationBoundaries,
@@ -74,6 +81,42 @@ export default function SpeciesLabelling({
     zoom: zoom as number | undefined,
   });
 
+  // Load global tile count when switching to tiled mode
+  useEffect(() => {
+    if (modelGuided) return;
+    if (!tiledLocationSetId) {
+      setGlobalTileCount(0);
+      return;
+    }
+
+    let mounted = true;
+    const locationSetIdToFetch = tiledLocationSetId;
+    async function loadTileCount() {
+      setLoadingTileCount(true);
+      try {
+        const { data } = await client.models.LocationSet.get(
+          { id: locationSetIdToFetch as string },
+          { selectionSet: ['locationCount'] }
+        );
+        if (mounted) {
+          setGlobalTileCount(data?.locationCount ?? 0);
+        }
+      } catch (err) {
+        console.error('Failed to load tile count', err);
+        if (mounted) {
+          setGlobalTileCount(0);
+        }
+      }
+      if (mounted) {
+        setLoadingTileCount(false);
+      }
+    }
+    loadTileCount();
+    return () => {
+      mounted = false;
+    };
+  }, [client.models.LocationSet, tiledLocationSetId, modelGuided]);
+
   // load model options from location sets
   useEffect(() => {
     let mounted = true;
@@ -84,20 +127,10 @@ export default function SpeciesLabelling({
       )({
         projectId: project.id,
       })) as { data: any[] };
-      // Fetch mappings to restrict tiled sets to current annotation set
-      const { data: taskMappings } = (await (
-        client.models.TasksOnAnnotationSet.locationSetsByAnnotationSetId as any
-      )({
-        annotationSetId: annotationSet.id,
-      })) as { data: any[] };
       if (!mounted) return;
       setLocationSets(data);
 
       const options: { label: string; value: string }[] = [];
-      const tiledOptions: { label: string; value: string }[] = [];
-      const allowedTiledSetIds = new Set(
-        (taskMappings || []).map((m: any) => m.locationSetId)
-      );
       for (const ls of data) {
         const n = ls.name.toLowerCase();
         if (n.includes('scoutbot')) {
@@ -118,117 +151,11 @@ export default function SpeciesLabelling({
             });
           }
         }
-
-        // Build options for existing tiled sets (those with a description)
-        const descRaw = ls.description as string | undefined;
-        if (descRaw && allowedTiledSetIds.has(ls.id)) {
-          try {
-            const desc = JSON.parse(descRaw);
-            if (desc && desc.mode === 'tiled') {
-              const labelParts: string[] = [];
-              if (typeof ls.name === 'string' && ls.name.length > 0) {
-                labelParts.push(ls.name);
-              }
-              if (
-                typeof desc.horizontalTiles === 'number' &&
-                typeof desc.verticalTiles === 'number'
-              ) {
-                labelParts.push(
-                  `${desc.horizontalTiles}x${desc.verticalTiles}`
-                );
-              }
-              if (
-                typeof desc.width === 'number' &&
-                typeof desc.height === 'number'
-              ) {
-                labelParts.push(`${desc.width}x${desc.height}px`);
-              }
-              // Overlap/Sidelap
-              if (desc.specifyOverlapInPercentage) {
-                if (
-                  typeof desc.minOverlapPercentage === 'number' ||
-                  typeof desc.minSidelapPercentage === 'number'
-                ) {
-                  const ov =
-                    typeof desc.minOverlapPercentage === 'number'
-                      ? `${desc.minOverlapPercentage}%`
-                      : '?%';
-                  const sl =
-                    typeof desc.minSidelapPercentage === 'number'
-                      ? `${desc.minSidelapPercentage}%`
-                      : '?%';
-                  labelParts.push(`overlap ${ov}/${sl}`);
-                }
-              } else {
-                if (
-                  typeof desc.minOverlap === 'number' ||
-                  typeof desc.minSidelap === 'number'
-                ) {
-                  const ov =
-                    typeof desc.minOverlap === 'number'
-                      ? `${desc.minOverlap}px`
-                      : '?px';
-                  const sl =
-                    typeof desc.minSidelap === 'number'
-                      ? `${desc.minSidelap}px`
-                      : '?px';
-                  labelParts.push(`overlap ${ov}/${sl}`);
-                }
-              }
-              // ROI
-              if (desc.specifyBorders) {
-                if (desc.specifyBorderPercentage) {
-                  if (
-                    typeof desc.minX === 'number' &&
-                    typeof desc.maxX === 'number' &&
-                    typeof desc.minY === 'number' &&
-                    typeof desc.maxY === 'number'
-                  ) {
-                    labelParts.push(
-                      `ROI ${Math.round(desc.minX)}-${Math.round(
-                        desc.maxX
-                      )}% x ${Math.round(desc.minY)}-${Math.round(desc.maxY)}%`
-                    );
-                  }
-                } else {
-                  if (
-                    typeof desc.minX === 'number' &&
-                    typeof desc.maxX === 'number' &&
-                    typeof desc.minY === 'number' &&
-                    typeof desc.maxY === 'number'
-                  ) {
-                    labelParts.push(
-                      `ROI ${desc.minX}-${desc.maxX}px x ${desc.minY}-${desc.maxY}px`
-                    );
-                  }
-                }
-              }
-              // Subset
-              if (typeof desc.subsetN === 'number' && desc.subsetN > 1) {
-                labelParts.push(`subset n=${desc.subsetN}`);
-              }
-              // Location count
-              if (
-                typeof ls.locationCount === 'number' &&
-                ls.locationCount > 0
-              ) {
-                labelParts.push(`tiles ${ls.locationCount}`);
-              }
-              tiledOptions.push({
-                label: labelParts.join(' • '),
-                value: ls.id,
-              });
-            }
-          } catch { }
-        }
       }
       if (options.length === 1) {
         setModel(options[0]);
       }
       setModelOptions(options);
-      setTiledSetOptions(
-        tiledOptions.sort((a, b) => (a.label > b.label ? 1 : -1))
-      );
       setLoadingLocationSets(false);
     }
     fetchLocationSets();
@@ -239,20 +166,31 @@ export default function SpeciesLabelling({
 
   // Control Launch disabled state based on mode
   useEffect(() => {
-    const shouldDisable = modelGuided
-      ? loadingLocationSets ||
-      modelOptions.length === 0 ||
-      (modelOptions.length > 1 && !model)
-      : useExistingTiled && tiledSetOptions.length > 0 && !selectedTiledSetId;
+    let shouldDisable = false;
+
+    if (modelGuided) {
+      // Model guided mode
+      shouldDisable =
+        loadingLocationSets ||
+        modelOptions.length === 0 ||
+        (modelOptions.length > 1 && !model);
+    } else {
+      // Tiled annotation mode - check if global tiles exist
+      shouldDisable =
+        loadingTileCount ||
+        !tiledLocationSetId ||
+        (globalTileCount !== null && globalTileCount === 0);
+    }
+
     setLaunchDisabled(shouldDisable);
   }, [
     modelGuided,
     loadingLocationSets,
     modelOptions.length,
     model,
-    useExistingTiled,
-    selectedTiledSetId,
-    tiledSetOptions.length,
+    loadingTileCount,
+    tiledLocationSetId,
+    globalTileCount,
     setLaunchDisabled,
   ]);
 
@@ -262,10 +200,7 @@ export default function SpeciesLabelling({
   const modelOptionsLengthRef = useRef(modelOptions.length);
   const locationSetsRef = useRef(locationSets);
   const launchTaskRef = useRef(launchTask);
-  const handleCreateTaskRef = useRef(handleCreateTaskWithArgs);
   const hiddenRef = useRef(hidden);
-  const useExistingTiledRef = useRef(useExistingTiled);
-  const selectedTiledSetIdRef = useRef(selectedTiledSetId);
   const lowerLimitRef = useRef(lowerLimit);
   const upperLimitRef = useRef(upperLimit);
   const batchSizeRef = useRef(batchSize);
@@ -274,63 +209,130 @@ export default function SpeciesLabelling({
   const viewUnobservedLocationsOnlyRef = useRef(viewUnobservedLocationsOnly);
   const zoomRef = useRef(zoom);
   const taskTagRef = useRef(taskTag);
+  const tiledLocationSetIdRef = useRef(tiledLocationSetId);
+  const launchImageIdsRef = useRef(launchImageIds);
+
+  useEffect(() => { modelGuidedRef.current = modelGuided; }, [modelGuided]);
+  useEffect(() => { modelRef.current = model as any; }, [model]);
+  useEffect(() => { modelOptionsLengthRef.current = modelOptions.length; }, [modelOptions.length]);
+  useEffect(() => { locationSetsRef.current = locationSets; }, [locationSets]);
+  useEffect(() => { launchTaskRef.current = launchTask; }, [launchTask]);
+  useEffect(() => { hiddenRef.current = hidden; }, [hidden]);
+  useEffect(() => { lowerLimitRef.current = lowerLimit; }, [lowerLimit]);
+  useEffect(() => { upperLimitRef.current = upperLimit; }, [upperLimit]);
+  useEffect(() => { batchSizeRef.current = batchSize; }, [batchSize]);
+  useEffect(() => { skipLocationsWithAnnotationsRef.current = skipLocationsWithAnnotations; }, [skipLocationsWithAnnotations]);
+  useEffect(() => { allowAnnotationsOutsideLocationBoundariesRef.current = allowAnnotationsOutsideLocationBoundaries; }, [allowAnnotationsOutsideLocationBoundaries]);
+  useEffect(() => { viewUnobservedLocationsOnlyRef.current = viewUnobservedLocationsOnly; }, [viewUnobservedLocationsOnly]);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+  useEffect(() => { taskTagRef.current = taskTag; }, [taskTag]);
+  useEffect(() => { tiledLocationSetIdRef.current = tiledLocationSetId; }, [tiledLocationSetId]);
+  useEffect(() => { launchImageIdsRef.current = launchImageIds; }, [launchImageIds]);
+
+  // The actual launch logic
+  const performLaunch = useCallback(
+    async (
+      onProgress: (msg: string) => void,
+      onLaunchConfirmed: () => void
+    ) => {
+      if (modelGuidedRef.current) {
+        // Model guided launch
+        if (modelOptionsLengthRef.current === 0) return;
+        const currentModelValue = (modelRef.current?.value ?? '') as string;
+        const sets = (locationSetsRef.current || []).filter((ls: any) =>
+          String(ls.name || '')
+            .toLowerCase()
+            .includes(currentModelValue)
+        );
+        if (sets.length === 0) return;
+        onProgress('Initializing launch...');
+        await launchTaskRef.current({
+          selectedTasks: sets.map((ls: any) => ls.id),
+          onProgress,
+          queueOptions: {
+            name: 'Model Guided',
+            hidden: false,
+            fifo: false,
+          },
+          onLaunchConfirmed,
+        });
+        // Log the launch action with settings
+        const modelName = modelOptions.find((m) => m.value === currentModelValue)?.label || currentModelValue;
+        const settings = [
+          `Confidence: ${lowerLimitRef.current}-${upperLimitRef.current}`,
+          `Batch size: ${batchSizeRef.current}`,
+          `Skip locations with annotations: ${skipLocationsWithAnnotationsRef.current ? 'Yes' : 'No'}`,
+          `Allow annotations outside boundaries: ${allowAnnotationsOutsideLocationBoundariesRef.current ? 'Yes' : 'No'}`,
+          `View unobserved only: ${viewUnobservedLocationsOnlyRef.current ? 'Yes' : 'No'}`,
+          zoomRef.current !== undefined ? `Zoom: ${zoomRef.current}` : null,
+          taskTagRef.current !== annotationSet.name ? `Job name: "${taskTagRef.current}"` : null,
+        ].filter(Boolean).join(', ');
+
+        await logAdminAction(
+          client,
+          user.userId,
+          `Launched Model Guided queue for annotation set "${annotationSet.name}" in project "${project.name}" (Model: ${modelName}, ${settings})`,
+          project.id,
+          project.organizationId
+        ).catch(console.error);
+      } else {
+        // Tiled annotation launch - use global tiled location set
+        if (!tiledLocationSetIdRef.current) {
+          onProgress('No tiles configured for this survey.');
+          return;
+        }
+
+        onProgress('Initializing launch...');
+        const currentLaunchImageIds = launchImageIdsRef.current;
+        await launchTaskRef.current({
+          selectedTasks: [tiledLocationSetIdRef.current],
+          onProgress,
+          queueOptions: {
+            name: 'Tiled Annotation',
+            hidden: hiddenRef.current,
+            fifo: false,
+          },
+          onLaunchConfirmed,
+          launchImageIds: currentLaunchImageIds.length > 0 ? currentLaunchImageIds : undefined,
+        });
+        // Log the launch action
+        const stats = currentLaunchImageIds.length > 0 ? ` (Filtered: ${currentLaunchImageIds.length} images)` : '';
+        await logAdminAction(
+          client,
+          user.userId,
+          `Launched Tiled Annotation queue for annotation set "${annotationSet.name}" in project "${project.name}"${stats}`,
+          project.id,
+          project.organizationId
+        ).catch(console.error);
+      }
+    },
+    [
+      client,
+      user.userId,
+      annotationSet.name,
+      project.name,
+      project.id,
+      project.organizationId,
+      modelOptions,
+    ]
+  );
+
+  const performLaunchRef = useRef(performLaunch);
+  useEffect(() => {
+    performLaunchRef.current = performLaunch;
+  }, [performLaunch]);
 
   useEffect(() => {
-    modelGuidedRef.current = modelGuided;
-  }, [modelGuided]);
-  useEffect(() => {
-    modelRef.current = model as any;
-  }, [model]);
-  useEffect(() => {
-    modelOptionsLengthRef.current = modelOptions.length;
-  }, [modelOptions.length]);
-  useEffect(() => {
-    locationSetsRef.current = locationSets;
-  }, [locationSets]);
-  useEffect(() => {
-    launchTaskRef.current = launchTask;
-  }, [launchTask]);
-  useEffect(() => {
-    handleCreateTaskRef.current = handleCreateTaskWithArgs;
-  }, [handleCreateTaskWithArgs]);
-  useEffect(() => {
-    hiddenRef.current = hidden;
-  }, [hidden]);
-  useEffect(() => {
-    useExistingTiledRef.current = useExistingTiled;
-  }, [useExistingTiled]);
-  useEffect(() => {
-    selectedTiledSetIdRef.current = selectedTiledSetId;
-  }, [selectedTiledSetId]);
-  useEffect(() => {
-    lowerLimitRef.current = lowerLimit;
-  }, [lowerLimit]);
-  useEffect(() => {
-    upperLimitRef.current = upperLimit;
-  }, [upperLimit]);
-  useEffect(() => {
-    batchSizeRef.current = batchSize;
-  }, [batchSize]);
-  useEffect(() => {
-    skipLocationsWithAnnotationsRef.current = skipLocationsWithAnnotations;
-  }, [skipLocationsWithAnnotations]);
-  useEffect(() => {
-    allowAnnotationsOutsideLocationBoundariesRef.current = allowAnnotationsOutsideLocationBoundaries;
-  }, [allowAnnotationsOutsideLocationBoundaries]);
-  useEffect(() => {
-    viewUnobservedLocationsOnlyRef.current = viewUnobservedLocationsOnly;
-  }, [viewUnobservedLocationsOnly]);
-  useEffect(() => {
-    zoomRef.current = zoom;
-  }, [zoom]);
-  useEffect(() => {
-    taskTagRef.current = taskTag;
-  }, [taskTag]);
+    setSpeciesLaunchHandler({
+      execute: async (onProgress: (msg: string) => void, onLaunchConfirmed: () => void) => {
+        await performLaunchRef.current(onProgress, onLaunchConfirmed);
+      }
+    });
+    return () => {
+      setSpeciesLaunchHandler(null);
+    };
+  }, [setSpeciesLaunchHandler, client, user.userId, annotationSet.name, project.name, project.id, modelOptions]);
 
-
-
-  // Dev-only: Filter launch by image IDs from JSON
-  const [launchImageIds, setLaunchImageIds] = useState<string[]>([]);
   const handleJsonUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -357,85 +359,6 @@ export default function SpeciesLabelling({
     // Reset value to allow re-uploading the same file
     event.target.value = '';
   };
-
-  useEffect(() => {
-    // Update the launch handler to include launchImageIds
-    setSpeciesLaunchHandler(() => async (onProgress: (msg: string) => void) => {
-      if (modelGuidedRef.current) {
-        // ... existing model guided logic ...
-        if (modelOptionsLengthRef.current === 0) return;
-        const currentModelValue = (modelRef.current?.value ?? '') as string;
-        const sets = (locationSetsRef.current || []).filter((ls: any) =>
-          String(ls.name || '')
-            .toLowerCase()
-            .includes(currentModelValue)
-        );
-        if (sets.length === 0) return;
-        onProgress('Initializing launch...');
-        await launchTaskRef.current({
-          selectedTasks: sets.map((ls: any) => ls.id),
-          onProgress,
-          queueOptions: {
-            name: 'Model Guided',
-            hidden: false,
-            fifo: false,
-          },
-        });
-        // Log the launch action with settings
-        const modelName = modelOptions.find((m) => m.value === currentModelValue)?.label || currentModelValue;
-        const settings = [
-          `Confidence: ${lowerLimitRef.current}-${upperLimitRef.current}`,
-          `Batch size: ${batchSizeRef.current}`,
-          `Skip locations with annotations: ${skipLocationsWithAnnotationsRef.current ? 'Yes' : 'No'}`,
-          `Allow annotations outside boundaries: ${allowAnnotationsOutsideLocationBoundariesRef.current ? 'Yes' : 'No'}`,
-          `View unobserved only: ${viewUnobservedLocationsOnlyRef.current ? 'Yes' : 'No'}`,
-          zoomRef.current !== undefined ? `Zoom: ${zoomRef.current}` : null,
-          taskTagRef.current !== annotationSet.name ? `Job name: "${taskTagRef.current}"` : null,
-        ].filter(Boolean).join(', ');
-
-        await logAdminAction(
-          client,
-          user.userId,
-          `Launched Model Guided queue for annotation set "${annotationSet.name}" in project "${project.name}" (Model: ${modelName}, ${settings})`,
-          project.id,
-          project.organizationId
-        ).catch(console.error);
-      } else {
-        const selectedTaskIds: string[] = [];
-        let tiledRequest: any = null;
-        if (useExistingTiledRef.current && selectedTiledSetIdRef.current) {
-          selectedTaskIds.push(selectedTiledSetIdRef.current);
-        } else {
-          const createTask = handleCreateTaskRef.current;
-          if (!createTask) return;
-          tiledRequest = await createTask();
-        }
-        if (!tiledRequest && selectedTaskIds.length === 0) return;
-        onProgress('Initializing launch...');
-        await launchTaskRef.current({
-          selectedTasks: selectedTaskIds,
-          onProgress,
-          queueOptions: {
-            name: 'Tiled Annotation',
-            hidden: hiddenRef.current,
-            fifo: false,
-          },
-          tiledRequest,
-          launchImageIds: launchImageIds.length > 0 ? launchImageIds : undefined,
-        });
-        // Log the launch action
-        const queueType = useExistingTiledRef.current ? 'existing tiled set' : 'new tiled annotation';
-        const stats = launchImageIds.length > 0 ? ` (Filtered: ${launchImageIds.length} images)` : '';
-        await logAdminAction(
-          client,
-          user.userId,
-          `Launched Tiled Annotation queue for annotation set "${annotationSet.name}" in project "${project.name}" (${queueType}${stats})`,
-          project.id,
-          project.organizationId
-        ).catch(console.error);
-      }
-    });
-  }, [setSpeciesLaunchHandler, client, user.userId, annotationSet.name, project.name, project.id, modelOptions, launchImageIds]);
 
   return (
     <div className='px-3 pb-3 pt-1'>
@@ -510,38 +433,40 @@ export default function SpeciesLabelling({
               ))}
             </Form.Select>
           </Form.Group>
-          <Form.Group>
-            <Form.Label className='mb-0'>
-              Filter by confidence value:
-            </Form.Label>
-            <span
-              className='text-muted d-block mb-1'
-              style={{ fontSize: '12px' }}
-            >
-              Filter images by confidence value.
-            </span>
-            <div className='d-flex align-items-center gap-2'>
-              <Form.Control
-                type='number'
-                min={0}
-                max={1}
-                step={0.01}
-                value={lowerLimit}
-                onChange={(e) => setLowerLimit(Number(e.target.value))}
-                style={{ width: '80px' }}
-              />
-              <span>to</span>
-              <Form.Control
-                type='number'
-                min={0}
-                max={1}
-                step={0.01}
-                value={upperLimit}
-                onChange={(e) => setUpperLimit(Number(e.target.value))}
-                style={{ width: '80px' }}
-              />
-            </div>
-          </Form.Group>
+          {modelGuided && (
+            <Form.Group>
+              <Form.Label className='mb-0'>
+                Filter by confidence value:
+              </Form.Label>
+              <span
+                className='text-muted d-block mb-1'
+                style={{ fontSize: '12px' }}
+              >
+                Filter images by confidence value.
+              </span>
+              <div className='d-flex align-items-center gap-2'>
+                <Form.Control
+                  type='number'
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={lowerLimit}
+                  onChange={(e) => setLowerLimit(Number(e.target.value))}
+                  style={{ width: '80px' }}
+                />
+                <span>to</span>
+                <Form.Control
+                  type='number'
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={upperLimit}
+                  onChange={(e) => setUpperLimit(Number(e.target.value))}
+                  style={{ width: '80px' }}
+                />
+              </div>
+            </Form.Group>
+          )}
           <Form.Group>
             <Form.Switch
               label='Skip Locations With Annotations'
@@ -623,49 +548,36 @@ export default function SpeciesLabelling({
           )
         )
       ) : (
-        <>
-          {tiledSetOptions.length > 0 && (
+        <div className='mt-2'>
+          {loadingTileCount ? (
+            <p
+              className='text-muted mb-0 text-center'
+              style={{ fontSize: '12px' }}
+            >
+              Loading tile information...
+            </p>
+          ) : !tiledLocationSetId || globalTileCount === 0 ? (
+            <Alert variant='warning' className='mb-0'>
+              <strong>No tiles configured.</strong>
+              <p className='mb-0 mt-1' style={{ fontSize: '14px' }}>
+                Please go to <strong>Edit Survey &gt; Manage Tiles</strong> to
+                create tiles for this survey before launching a tiled annotation
+                task.
+              </p>
+            </Alert>
+          ) : (
             <div
               className='border border-dark shadow-sm p-2'
               style={{ backgroundColor: '#697582' }}
             >
-              <Form.Group>
-                <Form.Switch
-                  label='Use existing tiled location set'
-                  checked={useExistingTiled}
-                  onChange={() => setUseExistingTiled(!useExistingTiled)}
-                  disabled={launching}
-                />
-              </Form.Group>
-              {useExistingTiled && (
-                <Form.Group>
-                  <Form.Label className='mb-0'>Existing tiled sets</Form.Label>
-                  <Select
-                    value={
-                      tiledSetOptions.find(
-                        (o) => o.value === selectedTiledSetId
-                      ) as any
-                    }
-                    onChange={(opt) =>
-                      setSelectedTiledSetId((opt as any)?.value ?? '')
-                    }
-                    options={tiledSetOptions}
-                    placeholder='Select a tiled set'
-                    className='text-black'
-                    isDisabled={launching}
-                  />
-                </Form.Group>
-              )}
+              <p className='mb-0 text-white'>
+                <strong>{globalTileCount}</strong> tiles available for
+                annotation.
+              </p>
+              <p className='mb-0 mt-1 text-muted' style={{ fontSize: '12px' }}>
+                To modify tiles, go to Edit Survey &gt; Manage Tiles.
+              </p>
             </div>
-          )}
-          {!useExistingTiled && (
-            <CreateTask
-              name={annotationSet.name}
-              setHandleCreateTask={setHandleCreateTaskWithArgs}
-              projectId={project.id}
-              setLaunchDisabled={setLaunchDisabled}
-              disabled={launching}
-            />
           )}
 
           {process.env.NODE_ENV === 'development' && (
@@ -675,7 +587,7 @@ export default function SpeciesLabelling({
                   Dev: Filter Launch by Image IDs (JSON Array)
                 </Form.Label>
                 <span className='text-muted d-block mb-1' style={{ fontSize: '10px' }}>
-                  Upload a JSON file containing an array of image IDs strings. Only tiles belonging to these images will be launched.
+                  Upload a JSON file containing an array of image ID strings. Only tiles belonging to these images will be launched.
                 </span>
                 <Form.Control
                   type='file'
@@ -698,7 +610,7 @@ export default function SpeciesLabelling({
               </Form.Group>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );

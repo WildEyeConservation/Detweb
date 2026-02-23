@@ -28,6 +28,9 @@ export type LaunchTaskArgs = {
   queueOptions: LaunchQueueOptions;
   tiledRequest?: TiledLaunchRequest | null;
   launchImageIds?: string[];
+  /** If true, delete false negative annotations/observations before launching */
+  hasFN?: boolean;
+  onLaunchConfirmed?: () => void;
 };
 
 type LaunchLambdaPayload = {
@@ -45,6 +48,8 @@ type LaunchLambdaPayload = {
   locationManifestS3Key?: string | null;
   launchedCount?: number | null;
   launchImageIds?: string[];
+  /** If true, delete false negative annotations/observations before launching */
+  hasFN?: boolean;
 };
 
 export function useLaunchTask(
@@ -108,18 +113,48 @@ export function useLaunchTask(
     return allObs.map(o => o.locationId);
   }
 
-  // Query all annotations for an annotation set (for filtering locations with existing annotations)
+  // Query normal (non-FN) annotations for an annotation set (for filtering locations with existing annotations)
   async function queryAnnotations(
     annotationSetId: string,
     onProgress?: (message: string) => void
   ): Promise<AnnotationPoint[]> {
-    onProgress?.('Querying annotations...');
-    const allAnnos = await fetchAllPaginatedResults(
-      client.models.Annotation.annotationsByAnnotationSetId,
-      {
-        setId: annotationSetId,
-        limit: 1000,
-        selectionSet: ['x', 'y'] as const,
+    const dynamoClient = await getDynamoClient();
+    const annotations: AnnotationPoint[] = [];
+    let lastEvaluatedKey: Record<string, any> | undefined = undefined;
+    onProgress?.(`Querying annotations...`);
+    do {
+      const command = new QueryCommand({
+        TableName: backend.custom.annotationTable,
+        IndexName: 'annotationsBySetId',
+        KeyConditionExpression: 'setId = :setId',
+        FilterExpression:
+          'attribute_not_exists(#src) OR NOT contains(#src, :fnMarker)',
+        ExpressionAttributeNames: {
+          '#src': 'source',
+        },
+        ExpressionAttributeValues: {
+          ':setId': { S: annotationSetId },
+          ':fnMarker': { S: 'false-negative' },
+        },
+        ProjectionExpression: 'x, y',
+        ExclusiveStartKey: lastEvaluatedKey,
+        Limit: 1000,
+      });
+      try {
+        const response = await dynamoClient.send(command);
+        const items = response.Items || [];
+        const pageAnnotations = items.map((item: any) => ({
+          x: parseFloat(item.x?.N || '0'),
+          y: parseFloat(item.y?.N || '0'),
+        }));
+        annotations.push(...pageAnnotations);
+        onProgress?.(`Loaded ${annotations.length} annotations`);
+        lastEvaluatedKey = response.LastEvaluatedKey as
+          | Record<string, any>
+          | undefined;
+      } catch (error) {
+        console.error('Error querying DynamoDB:', error);
+        throw error;
       }
     );
     return allAnnos.map(a => ({ x: a.x, y: a.y }));
@@ -176,6 +211,8 @@ export function useLaunchTask(
       queueOptions,
       tiledRequest,
       launchImageIds,
+      hasFN,
+      onLaunchConfirmed,
     }: LaunchTaskArgs) => {
       onProgress?.('Preparing launch request');
       let collectedLocations: string[] | undefined;
@@ -294,6 +331,7 @@ export function useLaunchTask(
           tiledRequest: tiledRequest ?? null,
           locationManifestS3Key,
           launchedCount,
+          hasFN: hasFN ?? false,
         };
 
         onProgress?.('Enqueuing jobs...');
@@ -301,6 +339,8 @@ export function useLaunchTask(
         onProgress?.('Launch request submitted');
         return; // Exit early for model-guided
       }
+
+      onLaunchConfirmed?.();
 
       const payload: LaunchLambdaPayload = {
         projectId: options.projectId,
@@ -315,6 +355,7 @@ export function useLaunchTask(
         locationSetIds: selectedTasks,
         tiledRequest: tiledRequest ?? null,
         launchImageIds: launchImageIds ?? tiledRequest?.launchImageIds, // Prioritize explicit argument
+        hasFN: hasFN ?? false,
       };
 
       onProgress?.('Enqueuing jobs...');

@@ -10,6 +10,7 @@ import { processTilingBatch } from "../functions/processTilingBatch/resource"
 import { monitorTilingTasks } from "../functions/monitorTilingTasks/resource"
 import { cleanupJobs } from "../functions/cleanupJobs/resource"
 import { findAndRequeueMissingLocations } from "../functions/findAndRequeueMissingLocations/resource"
+import { reconcileFalseNegatives } from "../functions/reconcileFalseNegatives/resource"
 
 export const outputBucket = defineStorage({
   name: "outputs",
@@ -54,6 +55,22 @@ export const outputBucket = defineStorage({
       allow.resource(monitorTilingTasks).to(['write']),
       allow.resource(findAndRequeueMissingLocations).to(['read']),
       allow.resource(cleanupJobs).to(['delete']),
+      allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
+    ],
+    // False negative pools for species labelling reconciliation
+    'false-negative-pools/*': [
+      allow.authenticated.to(['read', 'delete']),
+      allow.resource(launchFalseNegatives).to(['read', 'write']),
+      allow.resource(launchAnnotationSet).to(['delete']),
+      allow.resource(reconcileFalseNegatives).to(['read', 'write']),
+      allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
+    ],
+    // False negative history tracking
+    'false-negative-history/*': [
+      allow.authenticated.to(['read', 'delete']),
+      allow.resource(launchFalseNegatives).to(['read', 'write']),
+      allow.resource(launchAnnotationSet).to(['delete']),
+      allow.resource(reconcileFalseNegatives).to(['read', 'write']),
       allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ]
   })

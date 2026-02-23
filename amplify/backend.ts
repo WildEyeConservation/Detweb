@@ -40,6 +40,7 @@ import { updateOrganizationMemberAdmin } from './functions/updateOrganizationMem
 import { deleteQueue } from './functions/deleteQueue/resource';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as path from 'path';
+import { reconcileFalseNegatives } from './functions/reconcileFalseNegatives/resource';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 
 // Register all Amplify-managed resources in a single backend definition.
@@ -73,6 +74,7 @@ const backend = defineBackend({
   removeUserFromOrganization,
   updateOrganizationMemberAdmin,
   deleteQueue,
+  reconcileFalseNegatives,
 });
 
 const observationTable = backend.data.resources.tables['Observation'];
@@ -541,7 +543,31 @@ backend.deleteQueue.resources.lambda.addToRolePolicy(
 backend.cleanupJobs.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: ['s3:DeleteObject'],
-    resources: ['arn:aws:s3:::*/queue-manifests/*'],
+    resources: [
+      'arn:aws:s3:::*/queue-manifests/*',
+      'arn:aws:s3:::*/false-negative-manifests/*',
+    ],
+  })
+);
+// cleanupJobs triggers reconcileFalseNegatives when species labelling jobs complete
+backend.cleanupJobs.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['lambda:InvokeFunction'],
+    resources: [backend.reconcileFalseNegatives.resources.lambda.functionArn],
+  })
+);
+backend.cleanupJobs.addEnvironment(
+  'RECONCILE_FALSE_NEGATIVES_FUNCTION_NAME',
+  backend.reconcileFalseNegatives.resources.lambda.functionName
+);
+// reconcileFalseNegatives needs S3 permissions for FN pool and history manifests
+backend.reconcileFalseNegatives.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['s3:GetObject', 's3:PutObject'],
+    resources: [
+      'arn:aws:s3:::*/false-negative-pools/*',
+      'arn:aws:s3:::*/false-negative-history/*',
+    ],
   })
 );
 backend.launchAnnotationSet.resources.lambda.addToRolePolicy(
@@ -584,6 +610,27 @@ backend.processTilingBatch.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: ['lambda:InvokeFunction'],
     resources: ['*'],
+// launchFalseNegatives needs S3 permissions to write queue manifests and FN manifests
+backend.launchFalseNegatives.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['s3:PutObject', 's3:GetObject'],
+    resources: [
+      'arn:aws:s3:::*/queue-manifests/*',
+      'arn:aws:s3:::*/false-negative-manifests/*',
+      'arn:aws:s3:::*/false-negative-pools/*',
+      'arn:aws:s3:::*/false-negative-history/*',
+    ],
+  })
+);
+// launchAnnotationSet needs S3 permissions to delete FN manifests when hasFN=true
+backend.launchAnnotationSet.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['s3:DeleteObject'],
+    resources: [
+      'arn:aws:s3:::*/false-negative-manifests/*',
+      'arn:aws:s3:::*/false-negative-pools/*',
+      'arn:aws:s3:::*/false-negative-history/*',
+    ],
   })
 );
 // monitorTilingTasks needs SQS permissions for queue creation and messaging

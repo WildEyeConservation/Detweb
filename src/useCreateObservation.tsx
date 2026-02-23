@@ -20,6 +20,8 @@ interface UseCreateObservationProps {
   testPresetId?: string;
   testSetId?: string;
   queueId?: string; // Queue ID for incrementing observed count
+  /** Optional source tag for the observation (e.g., 'manual-false-negative') */
+  observationSource?: string;
 }
 
 // Time limits in milliseconds (matching server-side validation)
@@ -37,6 +39,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     testPresetId,
     testSetId,
     queueId,
+    observationSource,
   } = props;
   const annotationSetToUse = isTest && testSetId ? testSetId : annotationSetId;
   const {
@@ -240,18 +243,18 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     if (!acked && location && annotationSetId && project) {
       // Calculate time taken
       let timeTaken = submittedTimestamp ? submittedTimestamp - visibleTimestamp : 0;
-      
+
       // Apply client-side time validation (matching server-side logic)
       const hasSighting = annoCount > 0;
       const maxTime = hasSighting ? MAX_TIME_WITH_ANNOTATIONS : MAX_TIME_WITHOUT_ANNOTATIONS;
-      
+
       if (timeTaken > maxTime) {
         console.warn(
           `Time taken (${timeTaken}ms) exceeds maximum (${maxTime}ms) for ${hasSighting ? 'sighting' : 'search'}. Setting to 0.`
         );
         timeTaken = 0;
       }
-      
+
       client.models.Observation.create({
         annotationSetId: annotationSetToUse,
         annotationCount: annoCount,
@@ -266,6 +269,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
         projectId: project.id,
         queueId: queueId || undefined, // Track which queue this observation belongs to
         group: project.organizationId,
+        source: observationSource,
       });
 
       setAcked(true);
@@ -287,35 +291,39 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     isTest,
     testSetId,
     queueId,
+    observationSource,
   ]);
 
   return newAck;
 }
 
 export interface WithCreateObservationProps extends UseCreateObservationProps {
+  observationSource?: string;
   [key: string]: any;
 }
 
 interface CombinedProps
   extends WithCreateObservationProps,
-    UseAckOnTimeoutProps,
-    BaseImageProps {}
+  UseAckOnTimeoutProps,
+  BaseImageProps { }
 
 export function withCreateObservation<T extends CombinedProps>(
   WrappedComponent: React.ComponentType<T>
 ) {
   const WithCreateObservation: React.FC<T> = (props) => {
-    const { location, ack, isTest, config, testPresetId, testSetId, queueId } = props;
+    const { location, ack, isTest, config, testPresetId, testSetId, observationSource, queueId, annotationSet } = props;
     const newAck = location.id
       ? useCreateObservation({
-          location,
-          ack,
-          isTest,
-          config,
-          testPresetId,
-          testSetId,
-          queueId, // Pass queueId for observation counter increment
-        })
+        location,
+        ack,
+        isTest,
+        config,
+        testPresetId,
+        testSetId,
+        queueId, // Pass queueId for observation counter increment
+        annotationSet,
+        observationSource,
+      })
       : ack;
     return (
       <WrappedComponent {...props} location={{ ...location, ack: newAck }} />

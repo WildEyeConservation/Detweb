@@ -2,7 +2,6 @@ import { Modal, Header, Title, Body } from '../Modal';
 import { Schema } from '../amplify/client-schema';
 import { Tabs, Tab } from '../Tabs';
 import ProcessImages from './ProcessImages';
-import CreateSubset from '../CreateSubset';
 import EditShapeFile from './EditShapeFile';
 import DefineTransects from './DefineTransects';
 import EditInformation from './EditInformation';
@@ -10,6 +9,7 @@ import EditCameras from './EditCameras';
 import AdvancedOptions from './AdvancedOptions';
 import DeleteImages from './DeleteImages';
 import Logs from './Logs';
+import ManageTiles from './ManageTiles';
 
 export default function EditSurveyModal({
   show,
@@ -35,6 +35,9 @@ export default function EditSurveyModal({
           </Tab>
           <Tab label='Process Images'>
             <ProcessImages key={project.id} projectId={project.id} organizationId={project.organizationId} />
+          </Tab>
+          <Tab label='Manage Tiles'>
+            <ManageTiles key={project.id} project={project} />
           </Tab>
           <Tab label='Edit Cameras'>
             <EditCameras key={project.id} projectId={project.id} organizationId={project.organizationId} />

@@ -88,7 +88,7 @@ const sqsClient = new SQSClient({
 
 // Constants
 const EMPTY_QUEUE_WAIT_MINUTES = 10;
-const MAX_REQUEUES = 3;
+const MAX_REQUEUES = 1;
 
 type QueueRecord = {
   id: string;

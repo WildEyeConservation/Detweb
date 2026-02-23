@@ -46,13 +46,19 @@ export default function SqsPreloader({
       return false;
     }
 
-    const annotations = await fetchAllPaginatedResults(
+    const allAnnotations = await fetchAllPaginatedResults(
       client.models.Annotation.annotationsByImageIdAndSetId,
       {
         imageId: location.imageId,
         setId: { eq: message.location.annotationSetId },
-        selectionSet: ['x', 'y'] as const,
+        selectionSet: ['x', 'y', 'source'] as const,
       }
+    );
+
+    // Only consider normal (non-FN) annotations for the skip check
+    const annotations = allAnnotations.filter(
+      (a: any) =>
+        !a.source || !String(a.source).includes('false-negative')
     );
 
     const boundsxy: [number, number][] = [

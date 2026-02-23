@@ -19,6 +19,14 @@ import {
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { randomUUID } from 'crypto';
 import pLimit from 'p-limit';
+import {
+  updateLocationSet as updateLocationSetMutation,
+  deleteLocation as deleteLocationMutation,
+  deleteAnnotation as deleteAnnotationMutation,
+  deleteObservation as deleteObservationMutation,
+} from './graphql/mutations';
+import { locationsBySetIdAndConfidence } from './graphql/queries';
+
 // Inline minimal mutations – return key fields + `group` to avoid nested-resolver
 // auth failures while still enabling subscription delivery via groupDefinedIn('group').
 const getProjectOrganizationId = /* GraphQL */ `
@@ -78,6 +86,51 @@ const createTilingTaskMutation = /* GraphQL */ `
 const createTilingBatchMutation = /* GraphQL */ `
   mutation CreateTilingBatch($input: CreateTilingBatchInput!) {
     createTilingBatch(input: $input) { id group }
+`;
+
+// Custom query to fetch observations with source field
+const observationsByAnnotationSetId = /* GraphQL */ `
+  query ObservationsByAnnotationSetId(
+    $annotationSetId: ID!
+    $filter: ModelObservationFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    observationsByAnnotationSetId(
+      annotationSetId: $annotationSetId
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        source
+      }
+      nextToken
+    }
+  }
+`;
+
+// Custom query to fetch annotations with source field
+const annotationsByAnnotationSetId = /* GraphQL */ `
+  query AnnotationsByAnnotationSetId(
+    $setId: ID!
+    $filter: ModelAnnotationFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    annotationsByAnnotationSetId(
+      setId: $setId
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        source
+      }
+      nextToken
+    }
   }
 `;
 
@@ -171,6 +224,8 @@ type TiledLaunchRequest = {
   maxY: number;
   images: TiledLaunchImage[];
   locationCount: number;
+  /** Optional: Reuse this existing location set instead of creating a new one */
+  existingLocationSetId?: string;
 };
 
 type LaunchLambdaPayload = {
@@ -190,6 +245,8 @@ type LaunchLambdaPayload = {
   locationManifestS3Key?: string | null;
   launchedCount?: number | null;
   launchImageIds?: string[];
+  /** If true, delete false negative annotations/observations before launching */
+  hasFN?: boolean;
 };
 
 type QueueRecord = {
@@ -224,12 +281,16 @@ export const handler: LaunchAnnotationSetHandler = async (event) => {
       payload = await readPayloadFromS3(payloadS3Key);
     }
 
+    // Check if this is a tiling-only operation (no annotation set to launch)
+    const isTilingOnly = payload.tiledRequest && !payload.annotationSetId;
+
     console.log(
       'launchAnnotationSet invoked',
       JSON.stringify({
         projectId: payload.projectId,
         annotationSetId: payload.annotationSetId,
         launchMode: payload.tiledRequest ? 'tiled' : 'model-guided',
+        isTilingOnly,
         locationIdsProvided: payload.locationIds?.length ?? 0,
         locationSetIdsProvided: payload.locationSetIds?.length ?? 0,
       })
@@ -246,8 +307,11 @@ export const handler: LaunchAnnotationSetHandler = async (event) => {
 
     authorizeRequest(event.identity, organizationId);
 
-    await setProjectStatus(payload.projectId, 'launching');
-
+    // Use 'processing' for tiling-only, 'launching' for actual annotation set launches
+    await setProjectStatus(
+      payload.projectId,
+      isTilingOnly ? 'processing' : 'launching'
+    );
     await executeGraphql<{ updateProjectMemberships?: string | null }>(
       updateProjectMembershipsMutation,
       { projectId: payload.projectId }
@@ -379,29 +443,55 @@ async function handleLaunch(payload: LaunchLambdaPayload, organizationId: string
 // Handle distributed tiling for large tile sets
 async function handleDistributedTiling(payload: LaunchLambdaPayload, organizationId: string) {
   const tiledRequest = payload.tiledRequest!;
+  let locationSetId: string;
 
-  // Create the location set first
-  const locationSetData = await executeGraphql<{
-    createLocationSet?: { id: string };
-  }>(createLocationSetMutation, {
-    input: {
-      name: tiledRequest.name,
-      projectId: payload.projectId,
-      description: tiledRequest.description,
-      locationCount: tiledRequest.locationCount,
-      group: organizationId,
-    },
-  });
+  // Check if we should reuse an existing location set
+  if (tiledRequest.existingLocationSetId) {
+    locationSetId = tiledRequest.existingLocationSetId;
+    console.log('Reusing existing location set', { locationSetId });
 
-  const locationSetId = locationSetData.createLocationSet?.id;
-  if (!locationSetId) {
-    throw new Error('Unable to create location set');
+    // Clear existing locations from the location set
+    await clearLocationSetLocations(locationSetId);
+
+    // Update the location set with new description and count
+    await executeGraphql<{ updateLocationSet?: { id: string } }>(
+      updateLocationSetMutation,
+      {
+        input: {
+          id: locationSetId,
+          description: tiledRequest.description,
+          locationCount: tiledRequest.locationCount,
+        },
+      }
+    );
+    console.log('Updated location set', { locationSetId });
+  } else {
+    // Create a new location set
+    const locationSetData = await executeGraphql<{
+      createLocationSet?: { id: string };
+    }>(createLocationSetMutation, {
+      input: {
+        name: tiledRequest.name,
+        projectId: payload.projectId,
+        description: tiledRequest.description,
+        locationCount: tiledRequest.locationCount,
+      },
+    });
+
+    locationSetId = locationSetData.createLocationSet?.id!;
+    if (!locationSetId) {
+      throw new Error('Unable to create location set');
+    }
+
+    console.log('Created location set', { locationSetId });
   }
 
-  console.log('Created location set', { locationSetId });
-
   // Generate all tile locations in memory
-  const locations = generateTiledLocations(payload.projectId, locationSetId, tiledRequest);
+  const locations = generateTiledLocations(
+    payload.projectId,
+    locationSetId,
+    tiledRequest
+  );
   console.log('Generated locations in memory', { count: locations.length });
 
   // Batch locations and write to S3
@@ -420,13 +510,14 @@ async function handleDistributedTiling(payload: LaunchLambdaPayload, organizatio
   });
 
   // Create TilingTask record
+  // For tiling-only operations, annotationSetId may not be provided
   const tilingTaskData = await executeGraphql<{
     createTilingTask?: { id: string };
   }>(createTilingTaskMutation, {
     input: {
       projectId: payload.projectId,
       locationSetId,
-      annotationSetId: payload.annotationSetId,
+      annotationSetId: payload.annotationSetId || 'tiling-only',
       status: 'processing',
       launchConfig,
       totalBatches: batches.length,
@@ -441,7 +532,10 @@ async function handleDistributedTiling(payload: LaunchLambdaPayload, organizatio
     throw new Error('Failed to create tiling task');
   }
 
-  console.log('Created tiling task', { tilingTaskId, totalBatches: batches.length });
+  console.log('Created tiling task', {
+    tilingTaskId,
+    totalBatches: batches.length,
+  });
 
   // Write batches to S3 and create TilingBatch records (but don't invoke yet)
   const batchCreationLimit = pLimit(10);
@@ -471,7 +565,11 @@ async function handleDistributedTiling(payload: LaunchLambdaPayload, organizatio
         throw new Error(`Failed to create tiling batch ${index}`);
       }
 
-      console.log('Created tiling batch', { batchId, batchIndex: index, locationCount: batch.length });
+      console.log('Created tiling batch', {
+        batchId,
+        batchIndex: index,
+        locationCount: batch.length,
+      });
 
       return { batchId, batchIndex: index };
     })
@@ -597,7 +695,10 @@ function batchLocations(
 }
 
 // Write a batch of locations to S3
-async function writeBatchToS3(key: string, locations: LocationInput[]): Promise<void> {
+async function writeBatchToS3(
+  key: string,
+  locations: LocationInput[]
+): Promise<void> {
   const bucketName = env.OUTPUTS_BUCKET_NAME;
   if (!bucketName) {
     throw new Error('OUTPUTS_BUCKET_NAME environment variable not set');
@@ -617,7 +718,9 @@ async function writeBatchToS3(key: string, locations: LocationInput[]): Promise<
 async function invokeTilingBatchLambda(batchId: string): Promise<void> {
   const functionName = env.PROCESS_TILING_BATCH_FUNCTION_NAME;
   if (!functionName) {
-    throw new Error('PROCESS_TILING_BATCH_FUNCTION_NAME environment variable not set');
+    throw new Error(
+      'PROCESS_TILING_BATCH_FUNCTION_NAME environment variable not set'
+    );
   }
 
   await lambdaClient.send(
@@ -626,6 +729,87 @@ async function invokeTilingBatchLambda(batchId: string): Promise<void> {
       InvocationType: 'Event', // Async invocation
       Payload: JSON.stringify({ batchId }),
     })
+  );
+}
+
+// Clear all existing locations from a location set
+async function clearLocationSetLocations(locationSetId: string): Promise<void> {
+  console.log('Clearing existing locations from location set', {
+    locationSetId,
+  });
+
+  // Type for the query response
+  type LocationQueryResponse = {
+    locationsBySetIdAndConfidence?: {
+      items: Array<{ id: string }>;
+      nextToken?: string | null;
+    };
+  };
+
+  // Query all locations in the set using pagination
+  let nextToken: string | null | undefined = undefined;
+  let totalDeleted = 0;
+  const deleteLimit = pLimit(50); // Limit concurrent deletions
+
+  do {
+    const response: LocationQueryResponse =
+      await executeGraphql<LocationQueryResponse>(
+        locationsBySetIdAndConfidence,
+        {
+          setId: locationSetId,
+          confidence: { between: [0, 2] }, // Get all confidence levels
+          limit: 1000,
+          nextToken,
+        }
+      );
+
+    const items: Array<{ id: string }> =
+      response.locationsBySetIdAndConfidence?.items ?? [];
+    nextToken = response.locationsBySetIdAndConfidence?.nextToken ?? null;
+
+    if (items.length === 0) {
+      break;
+    }
+
+    // Delete locations in parallel with concurrency limit
+    const deleteTasks = items.map((item: { id: string }) =>
+      deleteLimit(async () => {
+        try {
+          await executeGraphql<{ deleteLocation?: { id: string } }>(
+            deleteLocationMutation,
+            { input: { id: item.id } }
+          );
+        } catch (err) {
+          console.warn('Failed to delete location', {
+            id: item.id,
+            error: err,
+          });
+        }
+      })
+    );
+
+    await Promise.all(deleteTasks);
+    totalDeleted += items.length;
+    console.log('Deleted locations batch', {
+      deleted: items.length,
+      totalDeleted,
+    });
+  } while (nextToken);
+
+  console.log('Finished clearing location set', {
+    locationSetId,
+    totalDeleted,
+  });
+
+  // Update the location set count to 0
+  await executeGraphql<{ updateLocationSet?: { id: string } }>(
+    updateLocationSetMutation,
+    {
+      input: {
+        id: locationSetId,
+        locationCount: 0,
+      },
+    }
   );
 }
 
@@ -639,8 +823,15 @@ function parsePayload(request: unknown): LaunchLambdaPayload {
   if (parsed?.payloadS3Key) {
     return parsed as LaunchLambdaPayload;
   }
-  if (!parsed?.projectId || !parsed?.annotationSetId || !parsed?.queueOptions) {
+  // For tiling-only operations (when tiledRequest is provided), annotationSetId is optional
+  const isTilingOnly = !!parsed?.tiledRequest;
+  if (!parsed?.projectId || !parsed?.queueOptions) {
     throw new Error('Launch payload missing required fields');
+  }
+  if (!isTilingOnly && !parsed?.annotationSetId) {
+    throw new Error(
+      'Launch payload missing annotationSetId (required for non-tiling operations)'
+    );
   }
   return parsed as LaunchLambdaPayload;
 }
@@ -662,8 +853,15 @@ async function readPayloadFromS3(key: string): Promise<LaunchLambdaPayload> {
     throw new Error('Empty payload from S3');
   }
   const parsed = JSON.parse(bodyStr);
-  if (!parsed?.projectId || !parsed?.annotationSetId || !parsed?.queueOptions) {
+  // For tiling-only operations (when tiledRequest is provided), annotationSetId is optional
+  const isTilingOnly = !!parsed?.tiledRequest;
+  if (!parsed?.projectId || !parsed?.queueOptions) {
     throw new Error('S3 payload missing required fields');
+  }
+  if (!isTilingOnly && !parsed?.annotationSetId) {
+    throw new Error(
+      'S3 payload missing annotationSetId (required for non-tiling operations)'
+    );
   }
   return parsed as LaunchLambdaPayload;
 }
@@ -894,4 +1092,214 @@ async function setProjectStatus(projectId: string, status: string) {
       },
     }
   );
+}
+
+// Delete false negative annotations and observations using GraphQL
+async function deleteFalseNegativeData(annotationSetId: string): Promise<void> {
+  // Delete false negative observations
+  await deleteFalseNegativeObservations(annotationSetId);
+
+  // Delete false negative annotations
+  await deleteFalseNegativeAnnotations(annotationSetId);
+
+  // Delete the FN manifest from S3 (for continuation detection)
+  await deleteFnManifest(annotationSetId);
+}
+
+// Delete all FN manifests from S3 when FN data is being cleared.
+// This covers both the legacy single manifest and the new pool/history manifests.
+async function deleteFnManifest(annotationSetId: string): Promise<void> {
+  const bucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!bucketName) {
+    console.warn('OUTPUTS_BUCKET_NAME not set, cannot delete FN manifests');
+    return;
+  }
+  const keys = [
+    `false-negative-manifests/${annotationSetId}.json`,
+    `false-negative-pools/${annotationSetId}.json`,
+    `false-negative-history/${annotationSetId}.json`,
+  ];
+  for (const key of keys) {
+    try {
+      await s3Client.send(
+        new DeleteObjectCommand({
+          Bucket: bucketName,
+          Key: key,
+        })
+      );
+      console.log('Deleted FN manifest from S3', { key });
+    } catch (error: any) {
+      if (error?.name === 'NoSuchKey' || error?.Code === 'NoSuchKey') {
+        console.log('FN manifest does not exist, nothing to delete', { key });
+        continue;
+      }
+      console.warn('Failed to delete FN manifest', { key, error });
+    }
+  }
+}
+
+// Delete observations with source containing 'false-negative'
+async function deleteFalseNegativeObservations(
+  annotationSetId: string
+): Promise<void> {
+  console.log('Querying false negative observations', { annotationSetId });
+
+  let nextToken: string | null | undefined = undefined;
+  let totalFetched = 0;
+  let totalDeleted = 0;
+  const deleteLimit = pLimit(50);
+
+  do {
+    // Query observations using the index with source filter
+    const response = (await client.graphql({
+      query: observationsByAnnotationSetId,
+      variables: {
+        annotationSetId,
+        filter: {
+          source: { contains: 'false-negative' },
+        },
+        limit: 1000,
+        nextToken,
+      },
+    } as any)) as GraphQLResult<{
+      observationsByAnnotationSetId?: {
+        items?: Array<{
+          id?: string | null;
+          source?: string | null;
+        }>;
+        nextToken?: string | null;
+      };
+    }>;
+
+    if (response.errors && response.errors.length > 0) {
+      throw new Error(
+        `GraphQL error fetching observations: ${JSON.stringify(
+          response.errors.map((e) => e.message)
+        )}`
+      );
+    }
+
+    const page = response.data?.observationsByAnnotationSetId;
+    const items = page?.items ?? [];
+    nextToken = page?.nextToken ?? null;
+
+    totalFetched += items.length;
+
+    if (items.length === 0) {
+      break;
+    }
+
+    // Delete each item using GraphQL mutation
+    const deleteTasks = items.map((item) =>
+      deleteLimit(async () => {
+        if (!item?.id) return;
+        try {
+          await executeGraphql<{ deleteObservation?: { id: string } }>(
+            deleteObservationMutation,
+            { input: { id: item.id } }
+          );
+        } catch (err) {
+          console.warn('Failed to delete observation', {
+            id: item.id,
+            error: err,
+          });
+        }
+      })
+    );
+
+    await Promise.all(deleteTasks);
+    totalDeleted += items.length;
+    console.log('Deleted observations batch', {
+      deleted: items.length,
+      totalDeleted,
+    });
+  } while (nextToken);
+
+  console.log('Finished deleting false negative observations', {
+    totalFetched,
+    totalDeleted,
+  });
+}
+
+// Delete annotations with source containing 'false-negative'
+async function deleteFalseNegativeAnnotations(
+  annotationSetId: string
+): Promise<void> {
+  console.log('Querying false negative annotations', { annotationSetId });
+
+  let nextToken: string | null | undefined = undefined;
+  let totalFetched = 0;
+  let totalDeleted = 0;
+  const deleteLimit = pLimit(50);
+
+  do {
+    // Query annotations using the index with source filter
+    const response = (await client.graphql({
+      query: annotationsByAnnotationSetId,
+      variables: {
+        setId: annotationSetId,
+        filter: {
+          source: { contains: 'false-negative' },
+        },
+        limit: 1000,
+        nextToken,
+      },
+    } as any)) as GraphQLResult<{
+      annotationsByAnnotationSetId?: {
+        items?: Array<{
+          id?: string | null;
+          source?: string | null;
+        }>;
+        nextToken?: string | null;
+      };
+    }>;
+
+    if (response.errors && response.errors.length > 0) {
+      throw new Error(
+        `GraphQL error fetching annotations: ${JSON.stringify(
+          response.errors.map((e) => e.message)
+        )}`
+      );
+    }
+
+    const page = response.data?.annotationsByAnnotationSetId;
+    const items = page?.items ?? [];
+    nextToken = page?.nextToken ?? null;
+
+    totalFetched += items.length;
+
+    if (items.length === 0) {
+      break;
+    }
+
+    // Delete each item using GraphQL mutation
+    const deleteTasks = items.map((item) =>
+      deleteLimit(async () => {
+        if (!item?.id) return;
+        try {
+          await executeGraphql<{ deleteAnnotation?: { id: string } }>(
+            deleteAnnotationMutation,
+            { input: { id: item.id } }
+          );
+        } catch (err) {
+          console.warn('Failed to delete annotation', {
+            id: item.id,
+            error: err,
+          });
+        }
+      })
+    );
+
+    await Promise.all(deleteTasks);
+    totalDeleted += items.length;
+    console.log('Deleted annotations batch', {
+      deleted: items.length,
+      totalDeleted,
+    });
+  } while (nextToken);
+
+  console.log('Finished deleting false negative annotations', {
+    totalFetched,
+    totalDeleted,
+  });
 }

@@ -24,5 +24,7 @@ export type TiledLaunchRequest = {
   images: TiledLaunchImage[];
   locationCount: number;
   launchImageIds?: string[];
+  /** Optional: Reuse this existing location set instead of creating a new one */
+  existingLocationSetId?: string;
 };
 
