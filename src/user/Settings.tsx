@@ -96,8 +96,7 @@ export default function Settings({ signOut }: { signOut: () => void }) {
           onClick={() => setShow(false)}
         />
       )}
-      {username && (
-        <Card
+      <Card
           className='position-fixed w-100 mt-lg-3'
           style={{
             maxWidth: '400px',
@@ -116,8 +115,8 @@ export default function Settings({ signOut }: { signOut: () => void }) {
           </Card.Header>
           <Card.Body>
             <div className='d-flex flex-column gap-2'>
-              <p className='mb-0'>Username: {username}</p>
-              <p className='mb-0'>Email: {email}</p>
+              <p className='mb-0'>Username: {username ?? user.username}</p>
+              <p className='mb-0'>Email: {email ?? user.signInDetails?.loginId}</p>
             </div>
 
             <Button
@@ -136,7 +135,6 @@ export default function Settings({ signOut }: { signOut: () => void }) {
             </Button>
           </Card.Body>
         </Card>
-      )}
     </div>
   );
 }
