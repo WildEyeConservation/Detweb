@@ -1,5 +1,6 @@
 import { UserIcon } from 'lucide-react';
-import { useContext, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
+import { fetchUserAttributes } from 'aws-amplify/auth';
 import { UserContext } from '../Context';
 import { useUsers } from '../apiInterface';
 import { X } from 'lucide-react';
@@ -15,8 +16,16 @@ export default function Settings({ signOut }: { signOut: () => void }) {
   const { user } = useContext(UserContext)!;
   const { users } = useUsers();
 
-  const username = users?.find((u) => u.id === user.username)?.name;
-  const email = users?.find((u) => u.id === user.username)?.email;
+  const [userAttributes, setUserAttributes] = useState<{ name?: string; email?: string }>({});
+
+  useEffect(() => {
+    fetchUserAttributes().then((attrs) => {
+      setUserAttributes({ name: attrs.name, email: attrs.email });
+    });
+  }, []);
+
+  const username = users?.find((u) => u.id === user.username)?.name ?? userAttributes.name;
+  const email = users?.find((u) => u.id === user.username)?.email ?? userAttributes.email;
 
   const clearSiteData = () => {
     if (
@@ -115,8 +124,8 @@ export default function Settings({ signOut }: { signOut: () => void }) {
           </Card.Header>
           <Card.Body>
             <div className='d-flex flex-column gap-2'>
-              <p className='mb-0'>Username: {username ?? user.username}</p>
-              <p className='mb-0'>Email: {email ?? user.signInDetails?.loginId}</p>
+              <p className='mb-0'>Username: {username}</p>
+              <p className='mb-0'>Email: {email}</p>
             </div>
 
             <Button
