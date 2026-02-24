@@ -33,6 +33,7 @@ export default function CreateAnnotationOnHotKey({
       y: Math.round(currentPosition.y),
       projectId: project.id,
       source: source,
+      group: project.organizationId,
     });
     setCurrentCategory(category);
   }, [

@@ -1,6 +1,4 @@
-import Button from 'react-bootstrap/Button';
-import Card from 'react-bootstrap/Card';
-import Form from 'react-bootstrap/Form';
+import { Button, Card, Form, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { useContext, useState } from 'react';
 import { GlobalContext, UserContext } from './Context';
 import { fetchAllPaginatedResults } from './utils';
@@ -127,9 +125,21 @@ export default function RegisterOrganization() {
               required
             />
           </Form.Group>
-          <Button type='submit' variant='primary' disabled={isLoading}>
-            {isLoading ? 'Submitting...' : 'Submit'}
-          </Button>
+          <OverlayTrigger
+            placement='top'
+            overlay={<Tooltip id='register-org-tooltip'>Under maintenance</Tooltip>}
+          >
+            <div className='d-inline-block'>
+              <Button
+                type='submit'
+                variant='primary'
+                disabled={true}
+                style={{ pointerEvents: 'none' }}
+              >
+                {isLoading ? 'Submitting...' : 'Submit'}
+              </Button>
+            </div>
+          </OverlayTrigger>
         </Form>
       </Card.Body>
     </Card>

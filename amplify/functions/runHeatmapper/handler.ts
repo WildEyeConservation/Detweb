@@ -1,8 +1,11 @@
-import type { Handler } from 'aws-lambda';
+import type { RunHeatmapperHandler } from '../../data/resource';
 import { env } from '$amplify/env/runHeatmapper';
 import { Amplify } from 'aws-amplify';
+import { generateClient } from 'aws-amplify/data';
+import type { GraphQLResult } from '@aws-amplify/api-graphql';
 import { SendMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
 import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { authorizeRequest } from '../shared/authorizeRequest';
 
 Amplify.configure(
   {
@@ -32,9 +35,29 @@ Amplify.configure(
   }
 );
 
-export const handler: Handler = async (event, context) => {
+const gqlClient = generateClient({ authMode: 'iam' });
+
+const getProjectOrganizationId = /* GraphQL */ `
+  query GetProject($id: ID!) {
+    getProject(id: $id) { organizationId }
+  }
+`;
+
+export const handler: RunHeatmapperHandler = async (event) => {
   try {
-    const imagePaths = event.arguments.images as string[];
+    const projectId = event.arguments.projectId;
+
+    // Authorize: fetch project org and verify user membership
+    const projResp = (await gqlClient.graphql({
+      query: getProjectOrganizationId,
+      variables: { id: projectId },
+    })) as GraphQLResult<{ getProject?: { organizationId?: string | null } }>;
+    const organizationId = projResp.data?.getProject?.organizationId;
+    if (organizationId) {
+      authorizeRequest(event.identity, organizationId);
+    }
+
+    const imagePaths = event.arguments.images ?? [];
 
     //log a sample
     console.log('imagePath sample', imagePaths[0]);

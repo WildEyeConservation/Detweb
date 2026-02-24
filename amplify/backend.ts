@@ -32,6 +32,14 @@ import { monitorScoutbotDlq } from './functions/monitorScoutbotDlq/resource';
 import { processTilingBatch } from './functions/processTilingBatch/resource';
 import { monitorTilingTasks } from './functions/monitorTilingTasks/resource';
 import { findAndRequeueMissingLocations } from './functions/findAndRequeueMissingLocations/resource';
+import { createOrganization } from './functions/createOrganization/resource';
+import { inviteUserToOrganization } from './functions/inviteUserToOrganization/resource';
+import { respondToInvite } from './functions/respondToInvite/resource';
+import { removeUserFromOrganization } from './functions/removeUserFromOrganization/resource';
+import { updateOrganizationMemberAdmin } from './functions/updateOrganizationMemberAdmin/resource';
+import { deleteQueue } from './functions/deleteQueue/resource';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 
 // Register all Amplify-managed resources in a single backend definition.
@@ -59,6 +67,12 @@ const backend = defineBackend({
   processTilingBatch,
   monitorTilingTasks,
   findAndRequeueMissingLocations,
+  createOrganization,
+  inviteUserToOrganization,
+  respondToInvite,
+  removeUserFromOrganization,
+  updateOrganizationMemberAdmin,
+  deleteQueue,
 });
 
 const observationTable = backend.data.resources.tables['Observation'];
@@ -96,51 +110,82 @@ const mapping1 = new EventSourceMapping(
 );
 mapping1.node.addDependency(policy);
 
+// Backfill Location.group from the project's organizationId on INSERT
+const backfillStack = backend.createStack('BackfillLocationGroup');
+const locationTable = backend.data.resources.tables['Location'];
+const projectTable = backend.data.resources.tables['Project'];
+
+const backfillFn = new NodejsFunction(backfillStack, 'BackfillLocationGroupFn', {
+  entry: path.join(__dirname, 'functions/backfillLocationGroup/handler.ts'),
+  handler: 'handler',
+  runtime: lambda.Runtime.NODEJS_20_X,
+  environment: {
+    LOCATION_TABLE_NAME: locationTable.tableName,
+    PROJECT_TABLE_NAME: projectTable.tableName,
+  },
+});
+
+backfillFn.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'dynamodb:GetItem',
+      'dynamodb:PutItem',
+      'dynamodb:UpdateItem',
+      'dynamodb:Query',
+    ],
+    resources: [locationTable.tableArn, `${locationTable.tableArn}/index/*`],
+  })
+);
+backfillFn.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['dynamodb:GetItem', 'dynamodb:Query'],
+    resources: [projectTable.tableArn, `${projectTable.tableArn}/index/*`],
+  })
+);
+backfillFn.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'dynamodb:DescribeStream',
+      'dynamodb:GetRecords',
+      'dynamodb:GetShardIterator',
+      'dynamodb:ListStreams',
+    ],
+    resources: ['*'],
+  })
+);
+
+new EventSourceMapping(backfillStack, 'LocationEventStreamMapping', {
+  target: backfillFn,
+  eventSourceArn: locationTable.tableStreamArn,
+  startingPosition: StartingPosition.LATEST,
+});
+
 // Expand the default authenticated Cognito role with data-plane permissions.
 const authenticatedRole = backend.auth.resources.authenticatedUserIamRole;
-const dynamoDbPolicy = new iam.PolicyStatement({
-  actions: ['dynamodb:Query', 'dynamodb:Scan', 'dynamodb:BatchGetItem'],
-  resources: ['*'],
-});
 
-//Attach the dynamoDbPolicy to the authenticatedRole
-authenticatedRole.addToPrincipalPolicy(dynamoDbPolicy);
-
-// Shared SQS permissions for Lambdas and groups that spin up task queues.
-const sqsCreateQueueStatement = new iam.PolicyStatement({
-  actions: [
-    'sqs:CreateQueue',
-    'sqs:PurgeQueue',
-    'sqs:SendMessage',
-    'sqs:DeleteQueue',
-    'sqs:GetQueueAttributes',
-    'sqs:GetQueueUrl',
-  ],
-  resources: ['*'],
-});
-const sqsConsumeQueueStatement = new iam.PolicyStatement({
+// Minimal SQS permissions for annotators (authenticated role).
+const sqsAnnotatorStatement = new iam.PolicyStatement({
   actions: [
     'sqs:ReceiveMessage',
     'sqs:DeleteMessage',
     'sqs:GetQueueAttributes',
+  ],
+  resources: ['*'],
+});
+
+// Elevated SQS permissions for sysadmin (DLQ replay, health page, etc.).
+const sqsSysadminStatement = new iam.PolicyStatement({
+  actions: [
     'sqs:GetQueueUrl',
+    'sqs:SendMessage',
+    'sqs:SendMessageBatch',
+    'sqs:DeleteMessageBatch',
+    'sqs:ReceiveMessage',
     'sqs:ChangeMessageVisibility',
   ],
   resources: ['*'],
 });
-const cognitoAdmin = new iam.PolicyStatement({
-  actions: [
-    'cognito-idp:AdminRemoveUserFromGroup',
-    'cognito-idp:AdminAddUserToGroup',
-  ],
-  resources: ['*'],
-});
-const lambdaInvoke = new iam.PolicyStatement({
-  actions: ['lambda:InvokeFunction'],
-  resources: ['*'],
-});
-
-// Direct access to the legacy surveyscope bucket outside Amplify storage.
+// Direct access to the surveyscope bucket (stores SRTM tiles and checkpoint files) outside Amplify storage.
 const generalBucketArn = 'arn:aws:s3:::surveyscope';
 const generalBucketArn2 = 'arn:aws:s3:::surveyscope/*';
 const generalBucketPolicy = new iam.PolicyStatement({
@@ -155,69 +200,27 @@ const groupS3ListPolicy = new iam.PolicyStatement({
   resources: ['arn:aws:s3:::*'],
 });
 
-const groupS3ObjectsPolicy = new iam.PolicyStatement({
-  actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
-  resources: ['arn:aws:s3:::*/images/*'],
-});
-
-// Allow reading tiles and results from the outputs bucket prefixes
-const groupS3OutputsReadPolicy = new iam.PolicyStatement({
-  actions: ['s3:GetObject'],
-  resources: ['arn:aws:s3:::*/slippymaps/*', 'arn:aws:s3:::*/heatmaps/*'],
-});
-
-// Allow writing and reading launch payloads to/from the outputs bucket
-// (read is needed for HEAD requests after uploadData completes)
-const groupS3LaunchPayloadsPolicy = new iam.PolicyStatement({
-  actions: ['s3:PutObject', 's3:GetObject'],
-  resources: ['arn:aws:s3:::*/launch-payloads/*'],
-});
-
-// Allow writing and reading queue manifests to/from the outputs bucket
-// (read is needed for HEAD requests after uploadData completes)
-const groupS3QueueManifestsPolicy = new iam.PolicyStatement({
-  actions: ['s3:PutObject', 's3:GetObject'],
-  resources: ['arn:aws:s3:::*/queue-manifests/*'],
-});
-
-// Allow Cognito group roles to query DynamoDB tables and GSIs without
-// referencing specific data resources to avoid circular dependencies.
-const groupDynamoDbQueryPolicy = new iam.PolicyStatement({
-  actions: ['dynamodb:Query', 'dynamodb:Scan', 'dynamodb:BatchGetItem'],
-  resources: [
-    'arn:aws:dynamodb:*:*:table/*',
-    'arn:aws:dynamodb:*:*:table/*/index/*',
-  ],
-});
 
 const groupEcsListPolicy = new iam.PolicyStatement({
   actions: ['ecs:ListClusters', 'ecs:DescribeClusters', 'ecs:ListServices', 'ecs:DescribeServices'],
   resources: ['*'],
 });
 
-authenticatedRole.addToPrincipalPolicy(sqsCreateQueueStatement);
-authenticatedRole.addToPrincipalPolicy(sqsConsumeQueueStatement);
-authenticatedRole.addToPrincipalPolicy(cognitoAdmin);
-authenticatedRole.addToPrincipalPolicy(lambdaInvoke);
+authenticatedRole.addToPrincipalPolicy(sqsAnnotatorStatement);
 authenticatedRole.addToPrincipalPolicy(generalBucketPolicy);
-authenticatedRole.addToPrincipalPolicy(groupEcsListPolicy);
-authenticatedRole.addToPrincipalPolicy(groupS3LaunchPayloadsPolicy);
-authenticatedRole.addToPrincipalPolicy(groupS3QueueManifestsPolicy);
 
-// Ensure every Cognito group role has consistent S3/Dynamo/SQS capabilities.
+// Grant group roles (sysadmin, orgadmin) S3 + base SQS capabilities.
+// Group roles REPLACE the authenticated role in Cognito Identity Pools,
+// so they need the annotator SQS permissions too.
 Object.values(backend.auth.resources.groups).forEach(({ role }) => {
   role.addToPrincipalPolicy(generalBucketPolicy);
   role.addToPrincipalPolicy(groupS3ListPolicy);
-  role.addToPrincipalPolicy(groupS3ObjectsPolicy);
-  role.addToPrincipalPolicy(groupDynamoDbQueryPolicy);
-  // Also allow group roles to create and consume SQS queues
-  role.addToPrincipalPolicy(sqsCreateQueueStatement);
-  role.addToPrincipalPolicy(sqsConsumeQueueStatement);
-  role.addToPrincipalPolicy(groupS3OutputsReadPolicy);
-  role.addToPrincipalPolicy(groupEcsListPolicy);
-  role.addToPrincipalPolicy(groupS3LaunchPayloadsPolicy);
-  role.addToPrincipalPolicy(groupS3QueueManifestsPolicy);
+  role.addToPrincipalPolicy(sqsAnnotatorStatement);
 });
+
+// Only sysadmin gets elevated SQS and ECS permissions.
+backend.auth.resources.groups['sysadmin'].role.addToPrincipalPolicy(sqsSysadminStatement);
+backend.auth.resources.groups['sysadmin'].role.addToPrincipalPolicy(groupEcsListPolicy);
 
 // Add the Sharp layer and throttle concurrency on the image upload Lambda.
 const lambdaFunction = backend.handleS3Upload.resources
@@ -234,7 +237,7 @@ const layerVersion = new lambda.LayerVersion(
 lambdaFunction.addLayers(layerVersion);
 backend.handleS3Upload.resources.cfnResources.cfnFunction.addPropertyOverride(
   'ReservedConcurrentExecutions',
-  5
+  50
 );
 
 // Additional stack for bespoke EC2/ECS compute and shared infra.
@@ -300,7 +303,6 @@ if (enableEcs) {
         ecsTaskRole,
         environment: {
           API_ENDPOINT: backend.data.graphqlUrl,
-          API_KEY: backend.data.apiKey || '',
         },
         machineImage: ecs.EcsOptimizedImage.amazonLinux2(),
       }
@@ -337,7 +339,6 @@ if (enableEcs) {
         gpuCount: 1,
         environment: {
           API_ENDPOINT: backend.data.graphqlUrl,
-          API_KEY: backend.data.apiKey || '',
           BUCKET: backend.inputBucket.resources.bucket.bucketName,
         },
         machineImage: ecs.EcsOptimizedImage.amazonLinux2(
@@ -377,7 +378,6 @@ if (enableEcs) {
         gpuCount: 1,
         environment: {
           API_ENDPOINT: backend.data.graphqlUrl,
-          API_KEY: backend.data.apiKey || '',
           BUCKET: backend.inputBucket.resources.bucket.bucketName,
         },
         machineImage: ecs.EcsOptimizedImage.amazonLinux2(
@@ -416,7 +416,6 @@ if (enableEcs) {
         gpuCount: 1,
         environment: {
           API_ENDPOINT: backend.data.graphqlUrl,
-          API_KEY: backend.data.apiKey || '',
           BUCKET: backend.inputBucket.resources.bucket.bucketName,
           MAD_CHECKPOINT_S3: 's3://surveyscope/2024-mad-v2/checkpoint.pth',
         },
@@ -527,6 +526,12 @@ backend.runMadDetector.resources.lambda.addToRolePolicy(
   })
 );
 backend.cleanupJobs.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['sqs:DeleteQueue', 'sqs:GetQueueAttributes'],
+    resources: ['*'],
+  })
+);
+backend.deleteQueue.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: ['sqs:DeleteQueue', 'sqs:GetQueueAttributes'],
     resources: ['*'],
@@ -681,15 +686,6 @@ backend.addOutput({
     madDetectorTaskQueueUrl: madDetectorQueueUrl ?? '',
     processTaskQueueUrl: processor.queue.queueUrl,
     pointFinderTaskQueueUrl: pointFinderQueueUrl ?? '',
-    annotationTable: backend.data.resources.tables['Annotation'].tableName,
-    locationTable: backend.data.resources.tables['Location'].tableName,
-    imageTable: backend.data.resources.tables['Image'].tableName,
-    imageSetTable: backend.data.resources.tables['ImageSet'].tableName,
-    categoryTable: backend.data.resources.tables['Category'].tableName,
-    projectTable: backend.data.resources.tables['Project'].tableName,
-    imageSetMembershipsTable:
-      backend.data.resources.tables['ImageSetMembership'].tableName,
-    observationTable: backend.data.resources.tables['Observation'].tableName,
     generalBucketName: generalBucketName,
   },
 });

@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react';
-import { Button, Row, Tooltip, OverlayTrigger, Col } from 'react-bootstrap';
+import { Button, Row, Tooltip, OverlayTrigger } from 'react-bootstrap';
 import { UserContext, ManagementContext, GlobalContext } from './Context';
 import MyTable from './Table';
 import {
@@ -16,7 +16,7 @@ export default function QueueManagement() {
   const { getSqsClient } = useContext(UserContext)!;
   const { modalToShow, showModal } = useContext(GlobalContext)!;
   const {
-    queuesHook: { data: queues, create: createQueue, delete: deleteQueue },
+    queuesHook: { data: queues, delete: deleteQueue },
   } = useContext(ManagementContext)!;
   const {
     projectMembershipHook: {
@@ -198,25 +198,11 @@ export default function QueueManagement() {
     { content: 'Actions' },
   ];
 
-  const addQueue = () => {
-    const queueName = prompt('Please enter the name for the new job:');
-    if (queueName) {
-      console.log('Adding new queue:', queueName);
-      createQueue(queueName);
-      // TODO: Implement actual queue creation logic
-    }
-  };
-
   return (
     <Row className='justify-content-center mt-3'>
       <div>
         <h5>Job Management</h5>
         <MyTable tableHeadings={tableHeadings} tableData={tableData || []} />
-        <Col className='d-flex justify-content-center mt-3 border-top pt-3 border-dark'>
-          <Button variant='primary' onClick={addQueue}>
-            Add New Job
-          </Button>
-        </Col>
       </div>
       <EditQueueModal
         show={modalToShow === 'editQueue'}

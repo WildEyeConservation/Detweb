@@ -162,6 +162,7 @@ export default function ExceptionsModal({
           userId: user.id,
           projectId: permission.projectId,
           isAdmin: permission.isAdmin,
+          group: organization.id,
         });
       }
     }

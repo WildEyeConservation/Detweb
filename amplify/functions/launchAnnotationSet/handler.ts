@@ -1,8 +1,9 @@
-import type { Handler } from 'aws-lambda';
+import type { LaunchAnnotationSetHandler } from '../../data/resource';
 import { env } from '$amplify/env/launchAnnotationSet';
 import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 import type { GraphQLResult } from '@aws-amplify/api-graphql';
+import { authorizeRequest } from '../shared/authorizeRequest';
 import {
   CreateQueueCommand,
   GetQueueAttributesCommand,
@@ -18,17 +19,67 @@ import {
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { randomUUID } from 'crypto';
 import pLimit from 'p-limit';
-import {
-  createQueue as createQueueMutation,
-  updateQueue as updateQueueMutation,
-  createLocationSet as createLocationSetMutation,
-  createLocation as createLocationMutation,
-  createTasksOnAnnotationSet as createTasksOnAnnotationSetMutation,
-  updateProject as updateProjectMutation,
-  updateProjectMemberships as updateProjectMembershipsMutation,
-  createTilingTask as createTilingTaskMutation,
-  createTilingBatch as createTilingBatchMutation,
-} from './graphql/mutations';
+// Inline minimal mutations – return key fields + `group` to avoid nested-resolver
+// auth failures while still enabling subscription delivery via groupDefinedIn('group').
+const getProjectOrganizationId = /* GraphQL */ `
+  query GetProject($id: ID!) {
+    getProject(id: $id) { organizationId }
+  }
+`;
+
+const createQueueMutation = /* GraphQL */ `
+  mutation CreateQueue($input: CreateQueueInput!) {
+    createQueue(input: $input) { id group }
+  }
+`;
+
+const updateQueueMutation = /* GraphQL */ `
+  mutation UpdateQueue($input: UpdateQueueInput!) {
+    updateQueue(input: $input) { id group }
+  }
+`;
+
+const createLocationSetMutation = /* GraphQL */ `
+  mutation CreateLocationSet($input: CreateLocationSetInput!) {
+    createLocationSet(input: $input) { id group }
+  }
+`;
+
+const createLocationMutation = /* GraphQL */ `
+  mutation CreateLocation($input: CreateLocationInput!) {
+    createLocation(input: $input) { id group }
+  }
+`;
+
+const createTasksOnAnnotationSetMutation = /* GraphQL */ `
+  mutation CreateTasksOnAnnotationSet($input: CreateTasksOnAnnotationSetInput!) {
+    createTasksOnAnnotationSet(input: $input) { id group }
+  }
+`;
+
+const updateProjectMutation = /* GraphQL */ `
+  mutation UpdateProject($input: UpdateProjectInput!) {
+    updateProject(input: $input) { id group }
+  }
+`;
+
+const updateProjectMembershipsMutation = /* GraphQL */ `
+  mutation UpdateProjectMemberships($projectId: String!) {
+    updateProjectMemberships(projectId: $projectId)
+  }
+`;
+
+const createTilingTaskMutation = /* GraphQL */ `
+  mutation CreateTilingTask($input: CreateTilingTaskInput!) {
+    createTilingTask(input: $input) { id group }
+  }
+`;
+
+const createTilingBatchMutation = /* GraphQL */ `
+  mutation CreateTilingBatch($input: CreateTilingBatchInput!) {
+    createTilingBatch(input: $input) { id group }
+  }
+`;
 
 // Configure Amplify to talk to the same AppSync backend the UI uses.
 Amplify.configure(
@@ -126,7 +177,6 @@ type LaunchLambdaPayload = {
   projectId: string;
   annotationSetId: string;
   queueOptions: LaunchQueueOptions;
-  secondaryQueueOptions?: LaunchQueueOptions | null;
   allowOutside: boolean;
   skipLocationWithAnnotations: boolean;
   taskTag: string;
@@ -162,7 +212,7 @@ type LocationInput = {
 const TILING_BATCH_SIZE = 50000;
 
 // Entry point invoked by AppSync resolver.
-export const handler: Handler = async (event) => {
+export const handler: LaunchAnnotationSetHandler = async (event) => {
   let payloadS3Key: string | undefined;
   try {
     let payload = parsePayload(event.arguments?.request);
@@ -184,12 +234,25 @@ export const handler: Handler = async (event) => {
         locationSetIdsProvided: payload.locationSetIds?.length ?? 0,
       })
     );
+
+    // Fetch the project's organizationId to set the group field on all created records.
+    const projectData = await executeGraphql<{
+      getProject?: { organizationId?: string | null };
+    }>(getProjectOrganizationId, { id: payload.projectId });
+    const organizationId = projectData.getProject?.organizationId;
+    if (!organizationId) {
+      throw new Error('Project does not have an organizationId');
+    }
+
+    authorizeRequest(event.identity, organizationId);
+
     await setProjectStatus(payload.projectId, 'launching');
+
     await executeGraphql<{ updateProjectMemberships?: string | null }>(
       updateProjectMembershipsMutation,
       { projectId: payload.projectId }
     );
-    const result = await handleLaunch(payload);
+    const result = await handleLaunch(payload, organizationId);
 
     // Clean up the S3 payload file after successful processing.
     if (payloadS3Key) {
@@ -221,7 +284,7 @@ export const handler: Handler = async (event) => {
 };
 
 // Orchestrate queue creation, task enqueuing, and bookkeeping.
-async function handleLaunch(payload: LaunchLambdaPayload) {
+async function handleLaunch(payload: LaunchLambdaPayload, organizationId: string) {
   const locationSetIds = new Set(payload.locationSetIds ?? []);
   let locationIds = payload.locationIds ?? [];
 
@@ -236,7 +299,7 @@ async function handleLaunch(payload: LaunchLambdaPayload) {
     );
 
     // Use distributed tiling for large tile sets
-    const result = await handleDistributedTiling(payload);
+    const result = await handleDistributedTiling(payload, organizationId);
     return result;
   }
 
@@ -246,7 +309,6 @@ async function handleLaunch(payload: LaunchLambdaPayload) {
 
   console.log('Creating queues', {
     primaryName: payload.queueOptions.name,
-    secondary: payload.secondaryQueueOptions?.name ?? null,
     totalLocations: locationIds.length,
   });
 
@@ -259,18 +321,15 @@ async function handleLaunch(payload: LaunchLambdaPayload) {
     locationIds,
     locationSetId,
     payload.locationManifestS3Key,
-    payload.launchedCount
+    payload.launchedCount,
+    organizationId
   );
-  const secondaryQueue = payload.secondaryQueueOptions
-    ? await createQueue(payload.secondaryQueueOptions, payload, [], locationSetId, null, 0)
-    : null;
 
   await enqueueLocations(
     mainQueue.url,
     mainQueue.id,
     locationIds,
-    payload,
-    secondaryQueue?.url ?? null
+    payload
   );
   console.log('Enqueued locations', {
     queueId: mainQueue.id,
@@ -292,6 +351,7 @@ async function handleLaunch(payload: LaunchLambdaPayload) {
           input: {
             annotationSetId: payload.annotationSetId,
             locationSetId,
+            group: organizationId,
           },
         }
       )
@@ -317,7 +377,7 @@ async function handleLaunch(payload: LaunchLambdaPayload) {
 }
 
 // Handle distributed tiling for large tile sets
-async function handleDistributedTiling(payload: LaunchLambdaPayload) {
+async function handleDistributedTiling(payload: LaunchLambdaPayload, organizationId: string) {
   const tiledRequest = payload.tiledRequest!;
 
   // Create the location set first
@@ -329,6 +389,7 @@ async function handleDistributedTiling(payload: LaunchLambdaPayload) {
       projectId: payload.projectId,
       description: tiledRequest.description,
       locationCount: tiledRequest.locationCount,
+      group: organizationId,
     },
   });
 
@@ -350,7 +411,6 @@ async function handleDistributedTiling(payload: LaunchLambdaPayload) {
   // Create the launch config for the control lambda to use later
   const launchConfig = JSON.stringify({
     queueOptions: payload.queueOptions,
-    secondaryQueueOptions: payload.secondaryQueueOptions,
     allowOutside: payload.allowOutside,
     skipLocationWithAnnotations: payload.skipLocationWithAnnotations,
     taskTag: payload.taskTag,
@@ -372,6 +432,7 @@ async function handleDistributedTiling(payload: LaunchLambdaPayload) {
       totalBatches: batches.length,
       completedBatches: 0,
       totalLocations: locations.length,
+      group: organizationId,
     },
   });
 
@@ -401,6 +462,7 @@ async function handleDistributedTiling(payload: LaunchLambdaPayload) {
           inputS3Key: s3Key,
           locationCount: batch.length,
           createdCount: 0,
+          group: organizationId,
         },
       });
 
@@ -629,7 +691,8 @@ async function createQueue(
   locationIds: string[],
   locationSetId?: string,
   locationManifestS3Key?: string | null,
-  launchedCount?: number | null
+  launchedCount?: number | null,
+  organizationId?: string
 ): Promise<QueueRecord> {
   const queueNameSeed = `${queueOptions.name}-${randomUUID()}`;
   const safeBaseName = makeSafeQueueName(queueNameSeed);
@@ -685,6 +748,7 @@ async function createQueue(
       observedCount: 0,
       locationManifestS3Key: manifestKey,
       requeuesCompleted: 0,
+      group: organizationId,
     },
   });
 
@@ -706,8 +770,7 @@ async function enqueueLocations(
   queueUrl: string,
   queueId: string,
   locationIds: string[],
-  payload: LaunchLambdaPayload,
-  secondaryQueueUrl: string | null
+  payload: LaunchLambdaPayload
 ) {
   const queueType = await getQueueType(queueUrl);
   const groupId = randomUUID();
@@ -731,7 +794,6 @@ async function enqueueLocations(
         queueId, // Include queueId for observation counter increment
         allowOutside: payload.allowOutside,
         taskTag: payload.taskTag,
-        secondaryQueueUrl,
         skipLocationWithAnnotations: payload.skipLocationWithAnnotations,
       });
 

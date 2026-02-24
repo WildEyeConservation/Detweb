@@ -397,7 +397,8 @@ export default function SpeciesLabelling({
           client,
           user.userId,
           `Launched Model Guided queue for annotation set "${annotationSet.name}" in project "${project.name}" (Model: ${modelName}, ${settings})`,
-          project.id
+          project.id,
+          project.organizationId
         ).catch(console.error);
       } else {
         const selectedTaskIds: string[] = [];
@@ -429,7 +430,8 @@ export default function SpeciesLabelling({
           client,
           user.userId,
           `Launched Tiled Annotation queue for annotation set "${annotationSet.name}" in project "${project.name}" (${queueType}${stats})`,
-          project.id
+          project.id,
+          project.organizationId
         ).catch(console.error);
       }
     });
@@ -666,7 +668,7 @@ export default function SpeciesLabelling({
             />
           )}
 
-          {process.env.NODE_ENV === 'development' && !useExistingTiled && (
+          {process.env.NODE_ENV === 'development' && (
             <div className='mt-3 border border-warning p-2'>
               <Form.Group>
                 <Form.Label className='mb-0 text-warning'>

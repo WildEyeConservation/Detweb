@@ -21,7 +21,7 @@ export default function AddAnnotationSetModal({
   const { client } = useContext(GlobalContext)!;
   const [name, setName] = useState('');
   const [saveLabels, setSaveLabels] = useState<
-    ((annotationSetId: string, projectId: string) => Promise<void>) | null
+    ((annotationSetId: string, projectId: string, group: string) => Promise<void>) | null
   >(null);
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [selectedAnnotationSet, setSelectedAnnotationSet] =
@@ -51,13 +51,14 @@ export default function AddAnnotationSetModal({
     const { data: annotationSet } = await client.models.AnnotationSet.create({
       name,
       projectId: project.id,
+      group: project.organizationId,
     });
 
     if (annotationSet) {
       addAnnotationSet(annotationSet);
 
       if (saveLabels) {
-        await saveLabels(annotationSet.id, project.id);
+        await saveLabels(annotationSet.id, project.id, project.organizationId);
       }
     }
 

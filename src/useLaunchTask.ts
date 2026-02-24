@@ -1,12 +1,12 @@
 import { useContext, useCallback } from 'react';
-import { QueryCommand } from '@aws-sdk/client-dynamodb';
 import { uploadData } from 'aws-amplify/storage';
-import { GlobalContext, UserContext } from './Context';
+import { GlobalContext } from './Context';
 import type {
   LaunchQueueOptions,
   TiledLaunchRequest,
 } from './types/LaunchTask';
 import type { DataClient } from '../amplify/shared/data-schema.generated';
+import { fetchAllPaginatedResults } from './utils';
 
 // Types for options and function arguments
 export type LaunchTaskOptions = {
@@ -26,7 +26,6 @@ export type LaunchTaskArgs = {
   selectedTasks: string[];
   onProgress?: (message: string) => void;
   queueOptions: LaunchQueueOptions;
-  secondaryQueueOptions?: LaunchQueueOptions;
   tiledRequest?: TiledLaunchRequest | null;
   launchImageIds?: string[];
 };
@@ -35,7 +34,6 @@ type LaunchLambdaPayload = {
   projectId: string;
   annotationSetId: string;
   queueOptions: LaunchQueueOptions;
-  secondaryQueueOptions?: LaunchQueueOptions | null;
   allowOutside: boolean;
   skipLocationWithAnnotations: boolean;
   taskTag: string;
@@ -52,8 +50,7 @@ type LaunchLambdaPayload = {
 export function useLaunchTask(
   options: LaunchTaskOptions
 ): (args: LaunchTaskArgs) => Promise<void> {
-  const { client, backend } = useContext(GlobalContext)!;
-  const { getDynamoClient } = useContext(UserContext)!;
+  const { client } = useContext(GlobalContext)!;
 
   type LocationWithConfidence = {
     id: string;
@@ -71,101 +68,44 @@ export function useLaunchTask(
     locationSetId: string,
     onProgress?: (message: string) => void
   ): Promise<LocationWithConfidence[]> {
-    const dynamoClient = await getDynamoClient();
-    const locations: LocationWithConfidence[] = [];
-    let lastEvaluatedKey: Record<string, any> | undefined = undefined;
-    onProgress?.(`Querying locations...`);
-    do {
-      const command = new QueryCommand({
-        TableName: backend.custom.locationTable,
-        IndexName: 'locationsBySetIdAndConfidence',
-        KeyConditionExpression:
-          'setId = :locationSetId and confidence BETWEEN :lowerLimit and :upperLimit',
-        ExpressionAttributeValues: {
-          ':locationSetId': { S: locationSetId },
-          ':lowerLimit': { N: options.lowerLimit.toString() },
-          ':upperLimit': { N: options.upperLimit.toString() },
-        },
-        ProjectionExpression: 'id, x, y, width, height, confidence, imageId',
-        ScanIndexForward: false, // Descending order by confidence
-        ExclusiveStartKey: lastEvaluatedKey,
-        Limit: 1000,
-      });
-      try {
-        const response = await dynamoClient.send(command);
-        const items = response.Items || [];
-        const pageLocations = items
-          .filter((item: any) => {
-            const x = parseFloat(item.x?.N || '0');
-            const y = parseFloat(item.y?.N || '0');
-            const width = parseFloat(item.width?.N || '0');
-            const height = parseFloat(item.height?.N || '0');
-            const confidence = parseFloat(item.confidence?.N || '0');
-            return (
-              x !== 0 &&
-              y !== 0 &&
-              width !== 0 &&
-              height !== 0 &&
-              confidence !== 0
-            );
-          })
-          .map((item: any) => ({
-            id: item.id.S as string,
-            confidence: parseFloat(item.confidence?.N || '0'),
-            x: parseFloat(item.x?.N || '0'),
-            y: parseFloat(item.y?.N || '0'),
-            width: parseFloat(item.width?.N || '0'),
-            height: parseFloat(item.height?.N || '0'),
-            imageId: item.imageId?.S || '',
-          }));
-        locations.push(...pageLocations);
-        onProgress?.(`Loaded ${locations.length} locations`);
-        lastEvaluatedKey = response.LastEvaluatedKey as
-          | Record<string, any>
-          | undefined;
-      } catch (error) {
-        console.error('Error querying DynamoDB:', error);
-        throw error;
+    onProgress?.('Querying locations...');
+    const allLocations = await fetchAllPaginatedResults(
+      client.models.Location.locationsBySetIdAndConfidence,
+      {
+        setId: locationSetId,
+        confidence: { between: [options.lowerLimit, options.upperLimit] },
+        sortDirection: 'DESC',
+        limit: 1000,
+        selectionSet: ['id', 'x', 'y', 'width', 'height', 'confidence', 'imageId'] as const,
       }
-    } while (lastEvaluatedKey);
-    return locations;
+    );
+    return allLocations
+      .filter(loc => loc.x !== 0 && loc.y !== 0 && (loc.width ?? 0) !== 0 && (loc.height ?? 0) !== 0 && (loc.confidence ?? 0) !== 0)
+      .map(loc => ({
+        id: loc.id,
+        confidence: loc.confidence!,
+        x: loc.x,
+        y: loc.y,
+        width: loc.width!,
+        height: loc.height!,
+        imageId: loc.imageId!,
+      }));
   }
 
   async function queryObservations(
     annotationSetId: string,
     onProgress?: (message: string) => void
   ): Promise<string[]> {
-    const dynamoClient = await getDynamoClient();
-    const locationIds: string[] = [];
-    let lastEvaluatedKey: Record<string, any> | undefined = undefined;
-    onProgress?.(`Querying observations...`);
-    do {
-      const command = new QueryCommand({
-        TableName: backend.custom.observationTable,
-        IndexName: 'observationsByAnnotationSetIdAndCreatedAt',
-        KeyConditionExpression: 'annotationSetId = :annotationSetId',
-        ExpressionAttributeValues: {
-          ':annotationSetId': { S: annotationSetId },
-        },
-        ProjectionExpression: 'locationId',
-        ExclusiveStartKey: lastEvaluatedKey,
-        Limit: 1000,
-      });
-      try {
-        const response = await dynamoClient.send(command);
-        const items = response.Items || [];
-        const pageLocationIds = items.map((item: any) => item.locationId.S);
-        locationIds.push(...pageLocationIds);
-        onProgress?.(`Loaded ${locationIds.length} observations`);
-        lastEvaluatedKey = response.LastEvaluatedKey as
-          | Record<string, any>
-          | undefined;
-      } catch (error) {
-        console.error('Error querying DynamoDB:', error);
-        throw error;
+    onProgress?.('Querying observations...');
+    const allObs = await fetchAllPaginatedResults(
+      client.models.Observation.observationsByAnnotationSetId,
+      {
+        annotationSetId,
+        limit: 1000,
+        selectionSet: ['locationId'] as const,
       }
-    } while (lastEvaluatedKey);
-    return locationIds;
+    );
+    return allObs.map(o => o.locationId);
   }
 
   // Query all annotations for an annotation set (for filtering locations with existing annotations)
@@ -173,40 +113,16 @@ export function useLaunchTask(
     annotationSetId: string,
     onProgress?: (message: string) => void
   ): Promise<AnnotationPoint[]> {
-    const dynamoClient = await getDynamoClient();
-    const annotations: AnnotationPoint[] = [];
-    let lastEvaluatedKey: Record<string, any> | undefined = undefined;
-    onProgress?.(`Querying annotations...`);
-    do {
-      const command = new QueryCommand({
-        TableName: backend.custom.annotationTable,
-        IndexName: 'annotationsBySetId',
-        KeyConditionExpression: 'setId = :setId',
-        ExpressionAttributeValues: {
-          ':setId': { S: annotationSetId },
-        },
-        ProjectionExpression: 'x, y',
-        ExclusiveStartKey: lastEvaluatedKey,
-        Limit: 1000,
-      });
-      try {
-        const response = await dynamoClient.send(command);
-        const items = response.Items || [];
-        const pageAnnotations = items.map((item: any) => ({
-          x: parseFloat(item.x?.N || '0'),
-          y: parseFloat(item.y?.N || '0'),
-        }));
-        annotations.push(...pageAnnotations);
-        onProgress?.(`Loaded ${annotations.length} annotations`);
-        lastEvaluatedKey = response.LastEvaluatedKey as
-          | Record<string, any>
-          | undefined;
-      } catch (error) {
-        console.error('Error querying DynamoDB:', error);
-        throw error;
+    onProgress?.('Querying annotations...');
+    const allAnnos = await fetchAllPaginatedResults(
+      client.models.Annotation.annotationsByAnnotationSetId,
+      {
+        setId: annotationSetId,
+        limit: 1000,
+        selectionSet: ['x', 'y'] as const,
       }
-    } while (lastEvaluatedKey);
-    return annotations;
+    );
+    return allAnnos.map(a => ({ x: a.x, y: a.y }));
   }
 
   // Check if an annotation falls within a location's bounds
@@ -258,7 +174,6 @@ export function useLaunchTask(
       selectedTasks,
       onProgress,
       queueOptions,
-      secondaryQueueOptions,
       tiledRequest,
       launchImageIds,
     }: LaunchTaskArgs) => {
@@ -283,6 +198,15 @@ export function useLaunchTask(
         )
           .flat()
           .filter((l) => !allSeenLocations.has(l.id));
+
+        // Filter by launchImageIds if provided (dev feature for re-launching specific images)
+        if (launchImageIds && launchImageIds.length > 0) {
+          const allowedImageIds = new Set(launchImageIds);
+          allLocationsWithConfidence = allLocationsWithConfidence.filter(
+            (l) => allowedImageIds.has(l.imageId)
+          );
+          onProgress?.(`Filtered to ${allLocationsWithConfidence.length} locations matching ${launchImageIds.length} image IDs`);
+        }
 
         // Filter out locations that already have annotations within their bounds
         if (options.skipLocationWithAnnotations && allAnnotations.length > 0) {
@@ -360,7 +284,6 @@ export function useLaunchTask(
           projectId: options.projectId,
           annotationSetId: options.annotationSetId,
           queueOptions,
-          secondaryQueueOptions: secondaryQueueOptions ?? null,
           allowOutside: options.allowOutside,
           skipLocationWithAnnotations: options.skipLocationWithAnnotations,
           taskTag: options.taskTag,
@@ -383,7 +306,6 @@ export function useLaunchTask(
         projectId: options.projectId,
         annotationSetId: options.annotationSetId,
         queueOptions,
-        secondaryQueueOptions: secondaryQueueOptions ?? null,
         allowOutside: options.allowOutside,
         skipLocationWithAnnotations: options.skipLocationWithAnnotations,
         taskTag: options.taskTag,
@@ -399,7 +321,7 @@ export function useLaunchTask(
       sendLaunchLambdaRequest(client, payload);
       onProgress?.('Launch request submitted');
     },
-    [options, client, backend, getDynamoClient]
+    [options, client]
   );
 
   return launchTask;

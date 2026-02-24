@@ -1,7 +1,19 @@
-export function request() {
-    return {};
+import { util, extensions } from "@aws-appsync/utils"
+
+// Subscription handlers must return a `null` payload on the request
+export function request() { return { payload: null } }
+
+/**
+ * @param {import('@aws-appsync/utils').Context} ctx
+ */
+export function response(ctx) {
+  const filter = {
+    channelName: {
+      beginsWith: ctx.args.namePrefix
+    }
   }
-  
-  export const response = (ctx) => {
-    return ctx.result;
-  };
+
+  extensions.setSubscriptionFilter(util.transform.toSubscriptionFilter(filter))
+
+  return null
+}

@@ -8,7 +8,7 @@ import {
 } from 'react';
 import { Button, Form, Spinner } from 'react-bootstrap';
 import { Modal, Header, Title, Body, Footer } from '../Modal';
-import { GlobalContext } from '../Context';
+import { GlobalContext, TestingContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
 import { FetcherType, PreloaderFactory } from '../Preloader';
 import LightLocationView from './LightLocationView';
@@ -22,6 +22,7 @@ type Props = {
 
 export default function AddLocationsModal({ show, preset, surveyId }: Props) {
   const { client, showModal } = useContext(GlobalContext)!;
+  const { organizationId } = useContext(TestingContext)!;
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
   const [candidates, setCandidates] = useState<
@@ -331,6 +332,7 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
     const { data: created } = await (client as any).models.LocationSet.create({
       name: TESTING_SET_NAME,
       projectId: surveyId,
+      group: organizationId,
     });
     setLocationSets((prev) => (created ? [...prev, created] : prev));
     return created?.id as string;
@@ -404,6 +406,7 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
           categoryId,
           annotationSetId: cand.annotationSetId,
           count,
+          group: organizationId,
         });
       }
     }
@@ -439,6 +442,7 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
         width: finalWidth,
         height: finalHeight,
         source: 'testing',
+        group: organizationId,
       } as any);
 
       if (!newLoc?.id) throw new Error('Failed to create testing location');
@@ -449,6 +453,7 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
         testPresetId: preset.id,
         locationId: newLoc.id,
         annotationSetId: cand.annotationSetId,
+        group: organizationId,
       });
 
       // mark for effect using the new location

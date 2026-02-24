@@ -599,6 +599,7 @@ export const createJollyResult = /* GraphQL */ `mutation CreateJollyResult(
     createdAt
     density
     estimate
+    group
     lowerBound95
     numSamples
     standardError

@@ -14,7 +14,7 @@ interface CameraFormDataMap {
   [cameraId: string]: CameraFormData;
 }
 
-export default function EditCameras({ projectId }: { projectId: string }) {
+export default function EditCameras({ projectId, organizationId }: { projectId: string; organizationId: string }) {
   const { client, showModal } = useContext(GlobalContext);
   const [cameras, setCameras] = useState<Schema['Camera']['type'][]>([]);
   const [cameraFormDataMap, setCameraFormDataMap] = useState<CameraFormDataMap>(
@@ -113,6 +113,7 @@ export default function EditCameras({ projectId }: { projectId: string }) {
         focalLengthMm: cameraFormDataMap['new-camera']?.focalLengthMm,
         sensorWidthMm: cameraFormDataMap['new-camera']?.sensorWidthMm,
         tiltDegrees: cameraFormDataMap['new-camera']?.tiltDegrees,
+        group: organizationId,
       });
 
       if (newCamera) {

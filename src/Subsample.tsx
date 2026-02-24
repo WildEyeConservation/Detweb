@@ -56,6 +56,7 @@ const SubsampleModal: React.FC<SubsampleModalProps> = ({
         client.models.ImageSetMembership.create({
           imageSetId: newImageSetId,
           imageId: image.id,
+          group: project.organizationId,
         })
       );
       await Promise.all(promises);
@@ -64,6 +65,7 @@ const SubsampleModal: React.FC<SubsampleModalProps> = ({
         projectId: project.id,
         name: `${name}-sub-${subsampleInterval}`,
         imageCount: subsampledImages.length,
+        group: project.organizationId,
       });
       console.log(allImages);
     }

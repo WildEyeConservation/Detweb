@@ -11,11 +11,27 @@ import {
 } from '@aws-sdk/client-s3';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import pLimit from 'p-limit';
-import {
-  createLocation as createLocationMutation,
-  updateTilingBatch as updateTilingBatchMutation,
-} from './graphql/mutations';
 import { getTilingBatch, tilingBatchesByTaskId } from './graphql/queries';
+
+// Inline minimal mutations – return key fields + `group` to avoid nested-resolver
+// auth failures while still enabling subscription delivery via groupDefinedIn('group').
+const createLocationMutation = /* GraphQL */ `
+  mutation CreateLocation($input: CreateLocationInput!) {
+    createLocation(input: $input) { id group }
+  }
+`;
+
+const updateTilingBatchMutation = /* GraphQL */ `
+  mutation UpdateTilingBatch($input: UpdateTilingBatchInput!) {
+    updateTilingBatch(input: $input) { id group }
+  }
+`;
+
+const getProjectOrganizationId = /* GraphQL */ `
+  query GetProject($id: ID!) {
+    getProject(id: $id) { organizationId }
+  }
+`;
 
 // Configure Amplify for IAM-based GraphQL access.
 Amplify.configure(
@@ -113,8 +129,22 @@ export const handler: Handler = async (event) => {
       locationCount: locations.length,
     });
 
+    // Fetch organizationId from the project (once, before the loop)
+    const projectId = locations[0]?.projectId;
+    if (!projectId) {
+      throw new Error('No projectId found in location data');
+    }
+    const projectResult = await executeGraphql<{
+      getProject?: { organizationId: string };
+    }>(getProjectOrganizationId, { id: projectId });
+    const organizationId = projectResult.getProject?.organizationId;
+    if (!organizationId) {
+      throw new Error(`Could not fetch organizationId for project ${projectId}`);
+    }
+    console.log('Fetched organizationId for group field', { projectId, organizationId });
+
     // Create locations in DB with concurrency of 100
-    const createdLocationIds = await createLocationsInDb(locations);
+    const createdLocationIds = await createLocationsInDb(locations, organizationId);
     console.log('Created locations in DB', {
       batchId,
       createdCount: createdLocationIds.length,
@@ -223,7 +253,7 @@ async function downloadLocationsFromS3(key: string): Promise<LocationInput[]> {
   return JSON.parse(bodyStr) as LocationInput[];
 }
 
-async function createLocationsInDb(locations: LocationInput[]): Promise<any[]> {
+async function createLocationsInDb(locations: LocationInput[], organizationId: string): Promise<any[]> {
   const limit = pLimit(100);
   const createdLocations: any[] = [];
   let createdCount = 0;
@@ -243,6 +273,7 @@ async function createLocationsInDb(locations: LocationInput[]): Promise<any[]> {
           confidence: 1,
           source: 'manual',
           setId: location.setId,
+          group: organizationId,
         },
       });
 

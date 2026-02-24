@@ -20,10 +20,20 @@ import {
   annotationsByImageIdAndSetId,
   getProject,
 } from './graphql/queries';
-import {
-  updateQueue,
-  createAdminActionLog,
-} from './graphql/mutations';
+
+// Inline minimal mutations – return key fields + `group` to avoid nested-resolver
+// auth failures while still enabling subscription delivery via groupDefinedIn('group').
+const updateQueue = /* GraphQL */ `
+  mutation UpdateQueue($input: UpdateQueueInput!) {
+    updateQueue(input: $input) { id group }
+  }
+`;
+
+const createAdminActionLog = /* GraphQL */ `
+  mutation CreateAdminActionLog($input: CreateAdminActionLogInput!) {
+    createAdminActionLog(input: $input) { id group }
+  }
+`;
 
 // Configure Amplify for IAM-based GraphQL access.
 Amplify.configure(
@@ -552,7 +562,6 @@ async function requeueLocations(queue: QueueRecord, locationIds: string[]): Prom
         queueId: queue.id,
         allowOutside: true,
         taskTag: queue.tag ?? queue.name,
-        secondaryQueueUrl: null,
         skipLocationWithAnnotations: false,
         isRequeued: true,
       });
@@ -607,16 +616,18 @@ async function getQueueType(queueUrl: string): Promise<'FIFO' | 'Standard'> {
 }
 
 async function logRequeueAction(queue: QueueRecord, count: number): Promise<void> {
-  // Fetch project name
+  // Fetch project name and organizationId
   let projectName = 'Unknown';
+  let organizationId: string | undefined;
   try {
     const response = (await client.graphql({
       query: getProject,
       variables: { id: queue.projectId },
     } as any)) as GraphQLResult<{
-      getProject?: { id: string; name: string };
+      getProject?: { id: string; name: string; organizationId?: string };
     }>;
     projectName = response.data?.getProject?.name ?? 'Unknown';
+    organizationId = response.data?.getProject?.organizationId ?? undefined;
   } catch (err) {
     console.warn('Failed to fetch project name', err);
   }
@@ -631,6 +642,7 @@ async function logRequeueAction(queue: QueueRecord, count: number): Promise<void
         userId: 'SurveyScope',
         message,
         projectId: queue.projectId,
+        group: organizationId,
       },
     });
   } catch (logError) {

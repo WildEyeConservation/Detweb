@@ -1,7 +1,17 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs",
+      "Bash(npm install:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.amplify.aws)",
+      "WebFetch(domain:github.com)",
+      "Bash(npx vite build)",
+      "Bash(python3:*)",
+      "WebFetch(domain:aws.amazon.com)",
+      "Bash(node:*)"
     ]
   }
 }

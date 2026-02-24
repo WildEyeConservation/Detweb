@@ -158,6 +158,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
         totalMissedAnimals: totalTestCounts - totalUserCounts,
         // Placeholder to satisfy current schema; not used for reporting
         passedOnTotal: false,
+        group: project.organizationId,
       });
       testResult = newTestResult;
     }
@@ -193,6 +194,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
             categoryName: categoryName,
             userCount: count,
             testCount: category.count || 0,
+            group: project.organizationId,
           });
         }
       }
@@ -213,6 +215,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
             categoryName: categoryCount.category.name,
             userCount: 0,
             testCount: categoryCount.count || 0,
+            group: project.organizationId,
           });
         }
       }
@@ -262,6 +265,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
         locationId: id,
         projectId: project.id,
         queueId: queueId || undefined, // Track which queue this observation belongs to
+        group: project.organizationId,
       });
 
       setAcked(true);

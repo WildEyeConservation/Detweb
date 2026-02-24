@@ -23,7 +23,7 @@ export default function LabelEditor({
   importLabels?: Label[];
   setHandleSave: React.Dispatch<
     React.SetStateAction<
-      ((annotationSetId: string, projectId: string) => Promise<void>) | null
+      ((annotationSetId: string, projectId: string, group: string) => Promise<void>) | null
     >
   >;
   isEditing?: boolean;
@@ -40,7 +40,7 @@ export default function LabelEditor({
   }, [defaultLabels]);
 
   const handleSave = useCallback(
-    async (annotationSetId: string, projectId: string) => {
+    async (annotationSetId: string, projectId: string, group: string) => {
       const filteredLabels = labels.filter(
         (l) => l.name !== '' && l.shortcutKey !== ''
       );
@@ -75,6 +75,7 @@ export default function LabelEditor({
                 shortcutKey: l.shortcutKey,
                 color: l.color,
                 annotationSetId: annotationSetId,
+                group,
               });
             })
         );
@@ -101,6 +102,7 @@ export default function LabelEditor({
               color: l.color,
               annotationSetId: annotationSetId,
               projectId: projectId,
+              group,
             });
           })
         );

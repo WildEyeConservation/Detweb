@@ -18,17 +18,53 @@ import {
 import { randomUUID } from 'crypto';
 import pLimit from 'p-limit';
 import {
-  createQueue as createQueueMutation,
-  updateQueue as updateQueueMutation,
-  createTasksOnAnnotationSet as createTasksOnAnnotationSetMutation,
-  updateProject as updateProjectMutation,
-  updateProjectMemberships as updateProjectMembershipsMutation,
-  updateTilingTask as updateTilingTaskMutation,
-} from './graphql/mutations';
-import {
   tilingTasksByStatus,
   tilingBatchesByTaskId,
 } from './graphql/queries';
+
+// Inline minimal mutations – return key fields + `group` to avoid nested-resolver
+// auth failures while still enabling subscription delivery via groupDefinedIn('group').
+const getProjectOrganizationId = /* GraphQL */ `
+  query GetProject($id: ID!) {
+    getProject(id: $id) { organizationId }
+  }
+`;
+
+const createQueueMutation = /* GraphQL */ `
+  mutation CreateQueue($input: CreateQueueInput!) {
+    createQueue(input: $input) { id group }
+  }
+`;
+
+const updateQueueMutation = /* GraphQL */ `
+  mutation UpdateQueue($input: UpdateQueueInput!) {
+    updateQueue(input: $input) { id group }
+  }
+`;
+
+const createTasksOnAnnotationSetMutation = /* GraphQL */ `
+  mutation CreateTasksOnAnnotationSet($input: CreateTasksOnAnnotationSetInput!) {
+    createTasksOnAnnotationSet(input: $input) { id group }
+  }
+`;
+
+const updateProjectMutation = /* GraphQL */ `
+  mutation UpdateProject($input: UpdateProjectInput!) {
+    updateProject(input: $input) { id group }
+  }
+`;
+
+const updateProjectMembershipsMutation = /* GraphQL */ `
+  mutation UpdateProjectMemberships($projectId: String!) {
+    updateProjectMemberships(projectId: $projectId)
+  }
+`;
+
+const updateTilingTaskMutation = /* GraphQL */ `
+  mutation UpdateTilingTask($input: UpdateTilingTaskInput!) {
+    updateTilingTask(input: $input) { id group }
+  }
+`;
 
 // Configure Amplify for IAM-based GraphQL access.
 Amplify.configure(
@@ -88,11 +124,6 @@ type LaunchConfig = {
     hidden: boolean;
     fifo: boolean;
   };
-  secondaryQueueOptions?: {
-    name: string;
-    hidden: boolean;
-    fifo: boolean;
-  } | null;
   allowOutside: boolean;
   skipLocationWithAnnotations: boolean;
   taskTag: string;
@@ -213,6 +244,15 @@ async function processTask(task: TilingTaskRecord) {
     // All batches complete - merge results and launch queue
     console.log('All batches complete, launching queue', { taskId: task.id });
 
+    // Fetch organizationId from the project for group-based access
+    const projectData = await executeGraphql<{
+      getProject?: { organizationId: string };
+    }>(getProjectOrganizationId, { id: task.projectId });
+    const organizationId = projectData.getProject?.organizationId;
+    if (!organizationId) {
+      throw new Error(`Project ${task.projectId} missing organizationId`);
+    }
+
     // Download and merge all locations from batch outputs
     const allLocations = await mergeLocations(completedBatches);
     console.log('Merged locations', {
@@ -272,26 +312,15 @@ async function processTask(task: TilingTaskRecord) {
       launchConfig,
       task.annotationSetId,
       task.locationSetId,
-      allLocations
+      allLocations,
+      organizationId
     );
-    const secondaryQueue = launchConfig.secondaryQueueOptions
-      ? await createQueue(
-        launchConfig.secondaryQueueOptions,
-        task.projectId,
-        launchConfig,
-        task.annotationSetId,
-        task.locationSetId,
-        [] // Secondary queue doesn't track locations
-      )
-      : null;
-
     await enqueueLocations(
       mainQueue.url,
       mainQueue.id,
       finalLocationIds,
       task.annotationSetId,
-      launchConfig,
-      secondaryQueue?.url ?? null
+      launchConfig
     );
     console.log('Enqueued locations', {
       taskId: task.id,
@@ -314,6 +343,7 @@ async function processTask(task: TilingTaskRecord) {
         input: {
           annotationSetId: task.annotationSetId,
           locationSetId: task.locationSetId,
+          group: organizationId,
         },
       }
     );
@@ -491,7 +521,8 @@ async function createQueue(
   launchConfig: LaunchConfig,
   annotationSetId: string,
   locationSetId: string,
-  locations: any[]
+  locations: any[],
+  group: string
 ): Promise<QueueRecord> {
   const queueNameSeed = `${queueOptions.name}-${randomUUID()}`;
   const safeBaseName = makeSafeQueueName(queueNameSeed);
@@ -544,6 +575,7 @@ async function createQueue(
       observedCount: 0,
       locationManifestS3Key: manifestKey,
       requeuesCompleted: 0,
+      group,
     },
   });
 
@@ -580,8 +612,7 @@ async function enqueueLocations(
   queueId: string,
   locationIds: string[],
   annotationSetId: string,
-  launchConfig: LaunchConfig,
-  secondaryQueueUrl: string | null
+  launchConfig: LaunchConfig
 ) {
   const queueType = await getQueueType(queueUrl);
   const groupId = randomUUID();
@@ -606,7 +637,6 @@ async function enqueueLocations(
         queueId, // Include queueId for observation counter increment
         allowOutside: launchConfig.allowOutside,
         taskTag: launchConfig.taskTag,
-        secondaryQueueUrl,
         skipLocationWithAnnotations: launchConfig.skipLocationWithAnnotations,
       });
 

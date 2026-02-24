@@ -15,6 +15,7 @@ interface Option {
 
 export default function Surveys() {
   const {
+    organizationId,
     organizationProjects: surveys,
     organizationTestPresets: locationPools,
   } = useContext(TestingContext)!;
@@ -54,6 +55,7 @@ export default function Surveys() {
           client.models.TestPresetProject.create({
             testPresetId: pool.value,
             projectId: surveyId,
+            group: organizationId,
           })
         ),
     ]);

@@ -75,7 +75,8 @@ export async function parseShapefileToLatLngs(
 export async function saveShapefileForProject(
   client: any,
   projectId: string,
-  latLngs: LatLngTuple[]
+  latLngs: LatLngTuple[],
+  group: string
 ): Promise<void> {
   if (!latLngs || latLngs.length === 0) return;
 
@@ -101,6 +102,6 @@ export async function saveShapefileForProject(
       coordinates: flattened,
     });
   } else {
-    await client.models.Shapefile.create({ projectId, coordinates: flattened });
+    await client.models.Shapefile.create({ projectId, coordinates: flattened, group });
   }
 }
