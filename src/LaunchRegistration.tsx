@@ -282,6 +282,7 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
                   image1Id: previousImage.image.id,
                   image2Id: image.image.id,
                   homography,
+                  group: project.organizationId,
                 });
               await getSqsClient().then((sqsClient) =>
                 sqsClient.send(

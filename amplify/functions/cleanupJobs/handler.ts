@@ -3,7 +3,6 @@ import { env } from "$amplify/env/cleanupJobs";
 import { Amplify } from "aws-amplify";
 import { generateClient } from "aws-amplify/data";
 import { listQueues, listUserProjectMemberships, getProject } from "./graphql/queries";
-import { updateQueue, updateUserProjectMembership } from "./graphql/mutations";
 import type { GraphQLResult } from "@aws-amplify/api-graphql";
 import {
   DeleteQueueCommand,
@@ -14,7 +13,26 @@ import { Queue, UserProjectMembership } from "./graphql/API";
 import { SQSClient } from "@aws-sdk/client-sqs";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
-import { deleteQueue } from "./graphql/mutations";
+
+// Inline minimal mutations – return key fields + `group` to avoid nested-resolver
+// auth failures while still enabling subscription delivery via groupDefinedIn('group').
+const updateQueue = /* GraphQL */ `
+  mutation UpdateQueue($input: UpdateQueueInput!) {
+    updateQueue(input: $input) { id group }
+  }
+`;
+
+const deleteQueue = /* GraphQL */ `
+  mutation DeleteQueue($input: DeleteQueueInput!) {
+    deleteQueue(input: $input) { id group }
+  }
+`;
+
+const updateUserProjectMembership = /* GraphQL */ `
+  mutation UpdateUserProjectMembership($input: UpdateUserProjectMembershipInput!) {
+    updateUserProjectMembership(input: $input) { id group }
+  }
+`;
 
 // Constants
 const MAX_REQUEUES = 1;
@@ -180,12 +198,14 @@ export const handler: Handler = async (event, context) => {
         // Queue should be deleted (no tracking, counts match, or requeue limit reached)
         // Fetch project name for logging
         let projectName = "Unknown";
+        let organizationId: string | undefined;
         try {
           const projectResponse = await client.graphql({
             query: getProject,
             variables: { id: queue.projectId },
           });
           projectName = projectResponse.data?.getProject?.name || "Unknown";
+          organizationId = projectResponse.data?.getProject?.organizationId ?? undefined;
         } catch (err) {
           console.error(`Failed to fetch project name for ${queue.projectId}:`, err);
         }
@@ -236,6 +256,7 @@ export const handler: Handler = async (event, context) => {
                   userId
                   message
                   projectId
+                  group
                   createdAt
                 }
               }
@@ -245,6 +266,7 @@ export const handler: Handler = async (event, context) => {
                 userId: "SurveyScope",
                 message: logMessage,
                 projectId: queue.projectId,
+                group: organizationId,
               },
             },
           });

@@ -15,7 +15,14 @@ import {
 } from '@aws-sdk/client-sqs';
 import { randomUUID } from 'crypto';
 import { listQueues } from './graphql/queries';
-import { updateQueue } from './graphql/mutations';
+
+// Inline minimal mutation – return key fields + `group` to avoid nested-resolver
+// auth failures while still enabling subscription delivery via groupDefinedIn('group').
+const updateQueue = /* GraphQL */ `
+  mutation UpdateQueue($input: UpdateQueueInput!) {
+    updateQueue(input: $input) { id group }
+  }
+`;
 
 Amplify.configure(
   {

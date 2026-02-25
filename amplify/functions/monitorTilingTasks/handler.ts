@@ -18,17 +18,53 @@ import {
 import { randomUUID } from 'crypto';
 import pLimit from 'p-limit';
 import {
-  createQueue as createQueueMutation,
-  updateQueue as updateQueueMutation,
-  createTasksOnAnnotationSet as createTasksOnAnnotationSetMutation,
-  updateProject as updateProjectMutation,
-  updateProjectMemberships as updateProjectMembershipsMutation,
-  updateTilingTask as updateTilingTaskMutation,
-} from './graphql/mutations';
-import {
   tilingTasksByStatus,
   tilingBatchesByTaskId,
 } from './graphql/queries';
+
+// Inline minimal mutations – return key fields + `group` to avoid nested-resolver
+// auth failures while still enabling subscription delivery via groupDefinedIn('group').
+const getProjectOrganizationId = /* GraphQL */ `
+  query GetProject($id: ID!) {
+    getProject(id: $id) { organizationId }
+  }
+`;
+
+const createQueueMutation = /* GraphQL */ `
+  mutation CreateQueue($input: CreateQueueInput!) {
+    createQueue(input: $input) { id group }
+  }
+`;
+
+const updateQueueMutation = /* GraphQL */ `
+  mutation UpdateQueue($input: UpdateQueueInput!) {
+    updateQueue(input: $input) { id group }
+  }
+`;
+
+const createTasksOnAnnotationSetMutation = /* GraphQL */ `
+  mutation CreateTasksOnAnnotationSet($input: CreateTasksOnAnnotationSetInput!) {
+    createTasksOnAnnotationSet(input: $input) { id group }
+  }
+`;
+
+const updateProjectMutation = /* GraphQL */ `
+  mutation UpdateProject($input: UpdateProjectInput!) {
+    updateProject(input: $input) { id group }
+  }
+`;
+
+const updateProjectMembershipsMutation = /* GraphQL */ `
+  mutation UpdateProjectMemberships($projectId: String!) {
+    updateProjectMemberships(projectId: $projectId)
+  }
+`;
+
+const updateTilingTaskMutation = /* GraphQL */ `
+  mutation UpdateTilingTask($input: UpdateTilingTaskInput!) {
+    updateTilingTask(input: $input) { id group }
+  }
+`;
 
 // Configure Amplify for IAM-based GraphQL access.
 Amplify.configure(
@@ -88,11 +124,6 @@ type LaunchConfig = {
     hidden: boolean;
     fifo: boolean;
   };
-  secondaryQueueOptions?: {
-    name: string;
-    hidden: boolean;
-    fifo: boolean;
-  } | null;
   allowOutside: boolean;
   skipLocationWithAnnotations: boolean;
   taskTag: string;
@@ -101,6 +132,7 @@ type LaunchConfig = {
   // False negatives specific fields
   isFalseNegatives?: boolean;
   samplePercent?: number;
+  launchImageIds?: string[];
 };
 
 type TilingTaskRecord = {
@@ -238,6 +270,15 @@ async function processTask(task: TilingTaskRecord) {
       return;
     }
 
+    // Fetch organizationId from the project for group-based access
+    const projectData = await executeGraphql<{
+      getProject?: { organizationId: string };
+    }>(getProjectOrganizationId, { id: task.projectId });
+    const organizationId = projectData.getProject?.organizationId;
+    if (!organizationId) {
+      throw new Error(`Project ${task.projectId} missing organizationId`);
+    }
+
     // Download and merge all locations from batch outputs
     const allLocations = await mergeLocations(completedBatches);
     console.log('Merged locations', {
@@ -250,9 +291,30 @@ async function processTask(task: TilingTaskRecord) {
     // Parse launch config
     const launchConfig = JSON.parse(task.launchConfig) as LaunchConfig;
 
-    // For false negatives, filtering was already done before batching in launchFalseNegatives
-    // Just use the merged location IDs directly
     let finalLocationIds = allLocationIds;
+
+    // Filter by launchImageIds if provided (dev only feature)
+    if (launchConfig.launchImageIds && launchConfig.launchImageIds.length > 0) {
+      const allowedImageIds = new Set(launchConfig.launchImageIds);
+      console.log('Filtering locations by image IDs', {
+        total: allLocations.length,
+        allowedCount: allowedImageIds.size
+      });
+
+      // We need to map back to image IDs. 
+      // The merged locations (allLocations) are raw objects from the tiling batch output.
+      // They should contain imageId.
+      const filteredLocations = allLocations.filter(l => allowedImageIds.has(l.imageId));
+      finalLocationIds = filteredLocations.map(l => l.locationId);
+
+      console.log('Filtered locations result', {
+        originalCount: allLocationIds.length,
+        filteredCount: finalLocationIds.length
+      });
+    }
+
+    // For false negatives, filtering was already done before batching in launchFalseNegatives
+    // Just use the merged location IDs directly (or the filtered ones if applicable)
     if (launchConfig.isFalseNegatives) {
       console.log('False negatives filtering already done before batching', {
         taskId: task.id,
@@ -276,26 +338,15 @@ async function processTask(task: TilingTaskRecord) {
       launchConfig,
       task.annotationSetId,
       task.locationSetId,
-      allLocations
+      allLocations,
+      organizationId
     );
-    const secondaryQueue = launchConfig.secondaryQueueOptions
-      ? await createQueue(
-        launchConfig.secondaryQueueOptions,
-        task.projectId,
-        launchConfig,
-        task.annotationSetId,
-        task.locationSetId,
-        [] // Secondary queue doesn't track locations
-      )
-      : null;
-
     await enqueueLocations(
       mainQueue.url,
       mainQueue.id,
       finalLocationIds,
       task.annotationSetId,
-      launchConfig,
-      secondaryQueue?.url ?? null
+      launchConfig
     );
     console.log('Enqueued locations', {
       taskId: task.id,
@@ -318,6 +369,7 @@ async function processTask(task: TilingTaskRecord) {
         input: {
           annotationSetId: task.annotationSetId,
           locationSetId: task.locationSetId,
+          group: organizationId,
         },
       }
     );
@@ -495,7 +547,8 @@ async function createQueue(
   launchConfig: LaunchConfig,
   annotationSetId: string,
   locationSetId: string,
-  locations: any[]
+  locations: any[],
+  group: string
 ): Promise<QueueRecord> {
   const queueNameSeed = `${queueOptions.name}-${randomUUID()}`;
   const safeBaseName = makeSafeQueueName(queueNameSeed);
@@ -548,6 +601,7 @@ async function createQueue(
       observedCount: 0,
       locationManifestS3Key: manifestKey,
       requeuesCompleted: 0,
+      group,
     },
   });
 
@@ -584,8 +638,7 @@ async function enqueueLocations(
   queueId: string,
   locationIds: string[],
   annotationSetId: string,
-  launchConfig: LaunchConfig,
-  secondaryQueueUrl: string | null
+  launchConfig: LaunchConfig
 ) {
   const queueType = await getQueueType(queueUrl);
   const groupId = randomUUID();
@@ -610,7 +663,6 @@ async function enqueueLocations(
         queueId, // Include queueId for observation counter increment
         allowOutside: launchConfig.allowOutside,
         taskTag: launchConfig.taskTag,
-        secondaryQueueUrl,
         skipLocationWithAnnotations: launchConfig.skipLocationWithAnnotations,
       });
 

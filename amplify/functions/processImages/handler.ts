@@ -2,7 +2,7 @@ import { publish } from './graphql/mutations'
 import { Amplify } from "aws-amplify";
 import { env } from '$amplify/env/processImages'
 import { generateClient } from "aws-amplify/data";
-import { Handler } from "aws-lambda";
+import type { ProcessImagesHandler } from '../../data/resource';
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3'
 
@@ -12,8 +12,7 @@ Amplify.configure(
         GraphQL: {
           endpoint: env.AMPLIFY_DATA_GRAPHQL_ENDPOINT,
           region: env.AWS_REGION,
-                defaultAuthMode: 'apiKey',
-                apiKey: env.API_KEY
+                defaultAuthMode: 'iam',
         },
       },
     },
@@ -36,7 +35,7 @@ Amplify.configure(
 );
   
 const client = generateClient({
-  authMode: "apiKey",
+  authMode: "iam",
 });
 
 async function existsOnS3(client: S3Client, bucket: string, prefix: string) {
@@ -66,7 +65,7 @@ function publishToClients(message: string) {
   });
 }
 
-export const handler: Handler = async (event, context) => {
+export const handler: ProcessImagesHandler = async (event) => {
   try {
     const s3Client = new S3Client({ region: env.AWS_REGION });
     const heatMapPath = 'heatmaps/' + event.arguments.s3key + '.h5'

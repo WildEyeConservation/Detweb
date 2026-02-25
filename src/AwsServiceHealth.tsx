@@ -137,7 +137,7 @@ export default function AwsServiceHealth() {
         new ListClustersCommand({})
       );
       const clusterArns = (listClustersResp.clusterArns ?? []).filter(
-        (arn) => !arn?.toLowerCase().includes('sandbox')
+        (arn) => !arn?.toLowerCase().includes('sand')
       );
       if (!clusterArns.length) {
         setEcsState({ clusters: [], isLoading: false, error: null });
@@ -476,9 +476,8 @@ export default function AwsServiceHealth() {
           variant: 'success',
           message:
             moved > 0
-              ? `Moved ${moved} message${moved === 1 ? '' : 's'} from ${
-                  row.label
-                } to ${row.dlq.name}.`
+              ? `Moved ${moved} message${moved === 1 ? '' : 's'} from ${row.label
+              } to ${row.dlq.name}.`
               : `No messages found in ${row.label}.`,
         });
         await fetchQueueHealth();
@@ -519,9 +518,8 @@ export default function AwsServiceHealth() {
           variant: 'success',
           message:
             moved > 0
-              ? `Moved ${moved} message${moved === 1 ? '' : 's'} from ${
-                  row.dlq.name
-                } back to ${row.label}.`
+              ? `Moved ${moved} message${moved === 1 ? '' : 's'} from ${row.dlq.name
+              } back to ${row.label}.`
               : `No messages found in ${row.dlq.name}.`,
         });
         await fetchQueueHealth();
@@ -878,10 +876,10 @@ async function moveMessages({
         MessageAttributes: message.MessageAttributes,
         ...(fifo
           ? {
-              MessageGroupId: direction === 'drain' ? 'drain' : 'replay',
-              MessageDeduplicationId:
-                `${baseId}-${direction}-${Date.now()}`.slice(0, 128),
-            }
+            MessageGroupId: direction === 'drain' ? 'drain' : 'replay',
+            MessageDeduplicationId:
+              `${baseId}-${direction}-${Date.now()}`.slice(0, 128),
+          }
           : {}),
       };
     });
@@ -949,8 +947,8 @@ async function fetchClusterServices(
   return services
     .filter(
       (service) =>
-        !service.serviceArn?.toLowerCase().includes('sandbox') &&
-        !service.serviceName?.toLowerCase().includes('sandbox')
+        !service.serviceArn?.toLowerCase().includes('sand') &&
+        !service.serviceName?.toLowerCase().includes('sand')
     )
     .map((service: Service) => ({
       serviceArn: service.serviceArn,

@@ -454,6 +454,7 @@ export const createImageNeighbour = /* GraphQL */ `mutation CreateImageNeighbour
 ) {
   createImageNeighbour(condition: $condition, input: $input) {
     createdAt
+    group
     homography
     image1 {
       altitude_agl

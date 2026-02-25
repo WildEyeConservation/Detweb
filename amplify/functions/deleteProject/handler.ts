@@ -1,6 +1,7 @@
 import { env } from '$amplify/env/deleteProject';
 import { Amplify } from 'aws-amplify';
 import type { DeleteProjectInFullHandler } from '../../data/resource';
+import { authorizeRequest } from '../shared/authorizeRequest';
 import {
   getProject,
   listImageSets,
@@ -19,21 +20,6 @@ import {
 } from './graphql/queries';
 import { generateClient, GraphQLResult } from 'aws-amplify/data';
 import {
-  deleteProject,
-  deleteUserProjectMembership,
-  deleteCategory,
-  deleteImageSet,
-  deleteLocationSet,
-  deleteAnnotationSet,
-  deleteImage,
-  deleteObject,
-  deleteTasksOnAnnotationSet,
-  deleteImageSetMembership,
-  deleteImageFile,
-  deleteAnnotation,
-  deleteLocation,
-} from './graphql/mutations';
-import {
   Category,
   AnnotationSet,
   LocationSet,
@@ -47,6 +33,74 @@ import {
   Annotation,
   Location,
 } from './graphql/API';
+
+// Inline minimal mutations – return key fields + `group` to avoid nested-resolver
+// auth failures while still enabling subscription delivery via groupDefinedIn('group').
+const deleteProject = /* GraphQL */ `
+  mutation DeleteProject($input: DeleteProjectInput!) {
+    deleteProject(input: $input) { id group }
+  }
+`;
+const deleteUserProjectMembership = /* GraphQL */ `
+  mutation DeleteUserProjectMembership($input: DeleteUserProjectMembershipInput!) {
+    deleteUserProjectMembership(input: $input) { id group }
+  }
+`;
+const deleteCategory = /* GraphQL */ `
+  mutation DeleteCategory($input: DeleteCategoryInput!) {
+    deleteCategory(input: $input) { id group }
+  }
+`;
+const deleteImageSet = /* GraphQL */ `
+  mutation DeleteImageSet($input: DeleteImageSetInput!) {
+    deleteImageSet(input: $input) { id group }
+  }
+`;
+const deleteLocationSet = /* GraphQL */ `
+  mutation DeleteLocationSet($input: DeleteLocationSetInput!) {
+    deleteLocationSet(input: $input) { id group }
+  }
+`;
+const deleteAnnotationSet = /* GraphQL */ `
+  mutation DeleteAnnotationSet($input: DeleteAnnotationSetInput!) {
+    deleteAnnotationSet(input: $input) { id group }
+  }
+`;
+const deleteImage = /* GraphQL */ `
+  mutation DeleteImage($input: DeleteImageInput!) {
+    deleteImage(input: $input) { id group }
+  }
+`;
+const deleteObject = /* GraphQL */ `
+  mutation DeleteObject($input: DeleteObjectInput!) {
+    deleteObject(input: $input) { id group }
+  }
+`;
+const deleteTasksOnAnnotationSet = /* GraphQL */ `
+  mutation DeleteTasksOnAnnotationSet($input: DeleteTasksOnAnnotationSetInput!) {
+    deleteTasksOnAnnotationSet(input: $input) { id group }
+  }
+`;
+const deleteImageSetMembership = /* GraphQL */ `
+  mutation DeleteImageSetMembership($input: DeleteImageSetMembershipInput!) {
+    deleteImageSetMembership(input: $input) { id group }
+  }
+`;
+const deleteImageFile = /* GraphQL */ `
+  mutation DeleteImageFile($input: DeleteImageFileInput!) {
+    deleteImageFile(input: $input) { id group }
+  }
+`;
+const deleteAnnotation = /* GraphQL */ `
+  mutation DeleteAnnotation($input: DeleteAnnotationInput!) {
+    deleteAnnotation(input: $input) { id group }
+  }
+`;
+const deleteLocation = /* GraphQL */ `
+  mutation DeleteLocation($input: DeleteLocationInput!) {
+    deleteLocation(input: $input) { id group }
+  }
+`;
 
 Amplify.configure(
   {
@@ -129,6 +183,8 @@ export const handler: DeleteProjectInFullHandler = async (
     if (!project) {
       throw new Error(`Project ${projectId} not found`);
     }
+
+    authorizeRequest(event.identity, project.organizationId);
 
     //delete project
     await client.graphql({

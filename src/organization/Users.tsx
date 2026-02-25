@@ -1,6 +1,5 @@
-import Button from 'react-bootstrap/Button';
+import { Button } from 'react-bootstrap';
 import MyTable from '../Table';
-import { useOptimisticUpdates } from '../useOptimisticUpdates';
 import { Schema } from '../amplify/client-schema';
 import { useContext, useState, useEffect } from 'react';
 import { GlobalContext, UserContext } from '../Context';
@@ -8,32 +7,41 @@ import { useUsers } from '../apiInterface';
 import InviteUserModal from './InviteUserModal';
 import ExceptionsModal from './ExceptionsModal';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
-import { fetchAllPaginatedResults } from '../utils';
 import ConfirmationModal from '../ConfirmationModal';
-import { Minimize2, Maximize2 } from 'lucide-react';
+import { Minimize2, Maximize2, RefreshCw } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 
 const STORAGE_KEY_COMPACT_MODE = 'usersCompactMode';
 
 export default function Users({
   organization,
-  hook,
   setOnClick,
 }: {
   organization: { id: string; name: string };
-  hook: ReturnType<
-    typeof useOptimisticUpdates<
-      Schema['OrganizationMembership']['type'],
-      'OrganizationMembership'
-    >
-  >;
   setOnClick: (onClick: { name: string; function: () => void }) => void;
 }) {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
   const { user: authUser } = useContext(UserContext)!;
   const { users } = useUsers();
 
-  // Only show users when both users and membership data are loaded
-  const isLoading = !users || !hook.data;
+  const { data: memberships, isLoading: membershipsLoading, refetch, isFetching } = useQuery<Schema['OrganizationMembership']['type'][]>({
+    queryKey: ['OrganizationMembership', organization.id],
+    queryFn: async () => {
+      const allItems: Schema['OrganizationMembership']['type'][] = [];
+      let nextToken: string | undefined;
+      do {
+        const result = await client.models.OrganizationMembership.membershipsByOrganizationId({
+          organizationId: organization.id,
+          nextToken,
+        });
+        allItems.push(...result.data);
+        nextToken = result.nextToken ?? undefined;
+      } while (nextToken);
+      return allItems;
+    },
+  });
+
+  const isLoading = !users || membershipsLoading;
   const [userToEdit, setUserToEdit] = useState<{
     id: string;
     name: string;
@@ -56,74 +64,26 @@ export default function Users({
     typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
 
   const [isMobile, setIsMobile] = useState(getIsMobile);
+  const [isMutating, setIsMutating] = useState(false);
 
   async function updateUser(userId: string, isAdmin: boolean) {
-    hook.update({
-      organizationId: organization.id,
-      userId: userId,
-      isAdmin: isAdmin,
-    });
+    setIsMutating(true);
+    try {
+      const { errors } = await client.mutations.updateOrganizationMemberAdmin({
+        organizationId: organization.id,
+        userId,
+        isAdmin,
+      });
 
-    const organizationProjects = await fetchAllPaginatedResults(
-      client.models.Project.list,
-      {
-        selectionSet: ['id'],
-        filter: {
-          organizationId: {
-            eq: organization.id,
-          },
-        },
+      if (errors?.length) {
+        alert(errors[0].message);
+        return;
       }
-    );
-
-    const userProjectMemberships = await fetchAllPaginatedResults(
-      client.models.UserProjectMembership.userProjectMembershipsByUserId,
-      {
-        userId: userId,
-        selectionSet: ['id', 'projectId', 'isAdmin'],
-      }
-    );
-
-    const userOrganizationProjectMemberships = userProjectMemberships.filter(
-      (membership) =>
-        organizationProjects.some(
-          (project) => project.id === membership.projectId
-        )
-    );
-
-    if (isAdmin) {
-      await Promise.all(
-        organizationProjects.map(async (project) => {
-          const userProjectMembership = userOrganizationProjectMemberships.find(
-            (membership) => membership.projectId === project.id
-          );
-          if (userProjectMembership) {
-            if (!userProjectMembership.isAdmin) {
-              await client.models.UserProjectMembership.update({
-                id: userProjectMembership.id,
-                isAdmin: true,
-              });
-            }
-          } else {
-            await client.models.UserProjectMembership.create({
-              userId: userId,
-              projectId: project.id,
-              isAdmin: true,
-            });
-          }
-        })
-      );
-    } else {
-      await Promise.all(
-        userOrganizationProjectMemberships.map(async (membership) => {
-          if (membership.isAdmin) {
-            await client.models.UserProjectMembership.update({
-              id: membership.id,
-              isAdmin: false,
-            });
-          }
-        })
-      );
+      refetch();
+    } catch (err: any) {
+      alert(err.message ?? 'Failed to update admin status');
+    } finally {
+      setIsMutating(false);
     }
   }
 
@@ -137,71 +97,68 @@ export default function Users({
 
   const tableData = isLoading
     ? []
-    : hook.data.map((membership) => {
-        const user = users.find((user) => user.id === membership.userId);
-        return {
-          id: membership.organizationId + membership.userId,
-          rowData: [
-            user?.name,
-            user?.email,
-            <LabeledToggleSwitch
-              className='mb-0'
-              leftLabel='No'
-              rightLabel='Yes'
-              checked={membership.isAdmin ?? false}
-              onChange={(checked) => {
-                if (user?.id === authUser.userId) {
-                  alert('You cannot change your own admin status');
-                  return;
-                }
-                updateUser(membership.userId, checked);
-              }}
-            />,
-            <div className='d-flex justify-content-center'>
-              <Button
-                size={compactMode ? 'sm' : undefined}
-                className='fixed-width-button'
-                disabled={
-                  process.env.NODE_ENV === 'development'
-                    ? false
-                    : membership.isAdmin
+    : (memberships ?? []).map((membership) => {
+      const user = users.find((user) => user.id === membership.userId);
+      return {
+        id: membership.organizationId + membership.userId,
+        rowData: [
+          user?.name,
+          user?.email,
+          <LabeledToggleSwitch
+            className='mb-0'
+            leftLabel='No'
+            rightLabel='Yes'
+            checked={membership.isAdmin ?? false}
+            disabled={isMutating || membership.userId === authUser.userId}
+            onChange={(checked) => {
+              updateUser(membership.userId, checked);
+            }}
+          />,
+          <div className='d-flex justify-content-center'>
+            <Button
+              size={compactMode ? 'sm' : undefined}
+              className='fixed-width-button'
+              disabled={
+                process.env.NODE_ENV === 'development'
+                  ? false
+                  : membership.isAdmin
                     ? true
                     : false
-                }
-                variant={'info'}
-                onClick={() => {
-                  setUserToEdit({
-                    id: user?.id || '',
-                    name: user?.name || '',
-                    organizationName: organization.name,
-                  });
-                  showModal('exceptions');
-                }}
-              >
-                Edit
-              </Button>
-            </div>,
-            <div className='d-flex justify-content-center'>
-              <Button
-                size={compactMode ? 'sm' : undefined}
-                className='fixed-width-button'
-                variant='danger'
-                disabled={user?.id === authUser.userId}
-                onClick={() => {
-                  setUserToEdit({
-                    id: user?.id || '',
-                    name: user?.name || '',
-                    organizationName: organization.name,
-                  });
-                  showModal('removeUser');
-                }}
-              >
-                Remove user
-              </Button>
-            </div>,
-          ],
-        };
-      });
+              }
+              variant={'info'}
+              onClick={() => {
+                setUserToEdit({
+                  id: user?.id || '',
+                  name: user?.name || '',
+                  organizationName: organization.name,
+                });
+                showModal('exceptions');
+              }}
+            >
+              Edit
+            </Button>
+          </div>,
+          <div className='d-flex justify-content-center'>
+            <Button
+              size={compactMode ? 'sm' : undefined}
+              className='fixed-width-button'
+              variant='danger'
+              disabled={isMutating || membership.userId === authUser.userId}
+              onClick={() => {
+                setUserToEdit({
+                  id: user?.id || '',
+                  name: user?.name || '',
+                  organizationName: organization.name,
+                });
+                showModal('removeUser');
+              }}
+            >
+              Remove user
+            </Button>
+          </div>,
+        ],
+      };
+    });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -233,56 +190,46 @@ export default function Users({
   }, []);
 
   async function handleRemoveUser() {
-    const userProjectMemberships = await fetchAllPaginatedResults(
-      client.models.UserProjectMembership.userProjectMembershipsByUserId,
-      {
+    setIsMutating(true);
+    try {
+      const { errors } = await client.mutations.removeUserFromOrganization({
+        organizationId: organization.id,
         userId: userToEdit!.id,
-        selectionSet: ['id', 'projectId'],
+      });
+
+      if (errors?.length) {
+        alert(errors[0].message);
+        return;
       }
-    );
-
-    const organizationProjects = await fetchAllPaginatedResults(
-      client.models.Project.list,
-      {
-        selectionSet: ['id'],
-        filter: {
-          organizationId: {
-            eq: organization.id,
-          },
-        },
-      }
-    );
-
-    const userOrganizationProjectMemberships = userProjectMemberships.filter(
-      (membership) =>
-        organizationProjects.some(
-          (project) => project.id === membership.projectId
-        )
-    );
-
-    await Promise.all(
-      userOrganizationProjectMemberships.map(async (membership) => {
-        await client.models.UserProjectMembership.delete({
-          id: membership.id,
-        });
-      })
-    );
-
-    hook.delete({
-      organizationId: organization.id,
-      userId: userToEdit!.id,
-    });
+      refetch();
+    } catch (err: any) {
+      alert(err.message ?? 'Failed to remove user');
+    } finally {
+      setIsMutating(false);
+    }
   }
 
   return (
     <>
       <div className={`d-flex flex-column ${compactMode ? 'gap-1' : 'gap-2'} mt-3 w-100 overflow-x-auto overflow-y-visible`}>
         <div className='d-flex justify-content-between align-items-center'>
-          {compactMode ? (
-            <h6 className='mb-0'>Organisation Users</h6>
-          ) : (
-            <h5 className='mb-0'>Organisation Users</h5>
-          )}
+          <div className='d-flex align-items-center gap-2'>
+            {compactMode ? (
+              <h6 className='mb-0'>Organisation Users</h6>
+            ) : (
+              <h5 className='mb-0'>Organisation Users</h5>
+            )}
+            <Button
+              variant='link'
+              size='sm'
+              className='p-0 text-muted'
+              onClick={() => refetch()}
+              disabled={isFetching}
+              title='Refresh'
+            >
+              <RefreshCw size={16} className={isFetching ? 'spinning' : undefined} />
+            </Button>
+          </div>
           {!isMobile && (
             <Button
               variant='info'
@@ -306,7 +253,6 @@ export default function Users({
         />
       </div>
       <InviteUserModal
-        memberships={hook.data}
         organization={organization}
         show={modalToShow === 'inviteUser'}
       />

@@ -61,12 +61,14 @@ export default function TestPresetsModal({
         name: presetName!,
         organizationId: organizationId,
         accuracy: annotationAccuracy,
+        group: organizationId,
       });
 
       for (const category of selectedCategories) {
         await client.models.TestPresetCategory.create({
           testPresetId: newPreset!.id,
           categoryId: category.value,
+          group: organizationId,
         });
       }
     } else {
@@ -92,6 +94,7 @@ export default function TestPresetsModal({
           await client.models.TestPresetCategory.create({
             testPresetId: preset!.id,
             categoryId: category.value,
+            group: organizationId,
           });
         }
       }

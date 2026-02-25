@@ -9,12 +9,29 @@ import {
   DeleteObjectCommand,
   PutObjectCommand,
 } from '@aws-sdk/client-s3';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import pLimit from 'p-limit';
-import {
-  createLocation as createLocationMutation,
-  updateTilingBatch as updateTilingBatchMutation,
-} from './graphql/mutations';
-import { getTilingBatch } from './graphql/queries';
+import { getTilingBatch, tilingBatchesByTaskId } from './graphql/queries';
+
+// Inline minimal mutations – return key fields + `group` to avoid nested-resolver
+// auth failures while still enabling subscription delivery via groupDefinedIn('group').
+const createLocationMutation = /* GraphQL */ `
+  mutation CreateLocation($input: CreateLocationInput!) {
+    createLocation(input: $input) { id group }
+  }
+`;
+
+const updateTilingBatchMutation = /* GraphQL */ `
+  mutation UpdateTilingBatch($input: UpdateTilingBatchInput!) {
+    updateTilingBatch(input: $input) { id group }
+  }
+`;
+
+const getProjectOrganizationId = /* GraphQL */ `
+  query GetProject($id: ID!) {
+    getProject(id: $id) { organizationId }
+  }
+`;
 
 // Configure Amplify for IAM-based GraphQL access.
 Amplify.configure(
@@ -50,6 +67,15 @@ const client = generateClient({
 });
 
 const s3Client = new S3Client({
+  region: env.AWS_REGION,
+  credentials: {
+    accessKeyId: env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+    sessionToken: env.AWS_SESSION_TOKEN,
+  },
+});
+
+const lambdaClient = new LambdaClient({
   region: env.AWS_REGION,
   credentials: {
     accessKeyId: env.AWS_ACCESS_KEY_ID,
@@ -103,8 +129,22 @@ export const handler: Handler = async (event) => {
       locationCount: locations.length,
     });
 
+    // Fetch organizationId from the project (once, before the loop)
+    const projectId = locations[0]?.projectId;
+    if (!projectId) {
+      throw new Error('No projectId found in location data');
+    }
+    const projectResult = await executeGraphql<{
+      getProject?: { organizationId: string };
+    }>(getProjectOrganizationId, { id: projectId });
+    const organizationId = projectResult.getProject?.organizationId;
+    if (!organizationId) {
+      throw new Error(`Could not fetch organizationId for project ${projectId}`);
+    }
+    console.log('Fetched organizationId for group field', { projectId, organizationId });
+
     // Create locations in DB with concurrency of 100
-    const createdLocationIds = await createLocationsInDb(locations);
+    const createdLocationIds = await createLocationsInDb(locations, organizationId);
     console.log('Created locations in DB', {
       batchId,
       createdCount: createdLocationIds.length,
@@ -122,6 +162,18 @@ export const handler: Handler = async (event) => {
     await updateBatchComplete(batchId, outputS3Key, createdLocationIds.length);
     console.log('Batch processing complete', { batchId });
 
+    // Chain to next batch for sequential processing
+    try {
+      await invokeNextBatch(batch.tilingTaskId, batch.batchIndex);
+    } catch (chainError: any) {
+      console.error('Failed to invoke next batch', {
+        batchId,
+        tilingTaskId: batch.tilingTaskId,
+        error: chainError?.message,
+      });
+      // Don't fail the current batch if chaining fails - monitor will pick up
+    }
+
     return {
       statusCode: 200,
       body: JSON.stringify({
@@ -131,17 +183,18 @@ export const handler: Handler = async (event) => {
       }),
     };
   } catch (error: any) {
-    console.error('Error processing batch', { batchId, error: error?.message });
+    const errorMessage = error?.message ?? (typeof error === 'string' ? error : JSON.stringify(error));
+    console.error('Error processing batch', { batchId, error: errorMessage, stack: error?.stack, raw: error });
 
     // Update batch as failed
-    await updateBatchFailed(batchId, error?.message ?? 'Unknown error');
+    await updateBatchFailed(batchId, errorMessage ?? 'Unknown error');
 
     return {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Failed to process batch',
         batchId,
-        error: error?.message ?? 'Unknown error',
+        error: errorMessage ?? 'Unknown error',
       }),
     };
   }
@@ -200,7 +253,7 @@ async function downloadLocationsFromS3(key: string): Promise<LocationInput[]> {
   return JSON.parse(bodyStr) as LocationInput[];
 }
 
-async function createLocationsInDb(locations: LocationInput[]): Promise<any[]> {
+async function createLocationsInDb(locations: LocationInput[], organizationId: string): Promise<any[]> {
   const limit = pLimit(100);
   const createdLocations: any[] = [];
   let createdCount = 0;
@@ -220,6 +273,7 @@ async function createLocationsInDb(locations: LocationInput[]): Promise<any[]> {
           confidence: 1,
           source: 'manual',
           setId: location.setId,
+          group: organizationId,
         },
       });
 
@@ -326,6 +380,64 @@ async function updateBatchFailed(batchId: string, errorMessage: string): Promise
       },
     }
   );
+}
+
+async function invokeNextBatch(tilingTaskId: string, currentBatchIndex: number): Promise<void> {
+  const nextBatchIndex = currentBatchIndex + 1;
+
+  // Query for the next batch by index
+  const response = await executeGraphql<{
+    tilingBatchesByTaskId?: {
+      items?: Array<{
+        id: string;
+        batchIndex: number;
+        status: string;
+      }>;
+    };
+  }>(tilingBatchesByTaskId, {
+    tilingTaskId,
+    batchIndex: { eq: nextBatchIndex },
+    limit: 1,
+  });
+
+  const nextBatch = response.tilingBatchesByTaskId?.items?.[0];
+
+  if (!nextBatch) {
+    console.log('No next batch found, chain complete', { tilingTaskId, currentBatchIndex });
+    return;
+  }
+
+  if (nextBatch.status !== 'pending') {
+    console.log('Next batch is not pending, skipping', {
+      tilingTaskId,
+      nextBatchIndex,
+      status: nextBatch.status,
+    });
+    return;
+  }
+
+  console.log('Invoking next batch', {
+    tilingTaskId,
+    nextBatchId: nextBatch.id,
+    nextBatchIndex,
+  });
+
+  // Use built-in AWS_LAMBDA_FUNCTION_NAME to invoke ourselves (avoids circular dependency)
+  const functionName = process.env.AWS_LAMBDA_FUNCTION_NAME;
+  if (!functionName) {
+    console.error('AWS_LAMBDA_FUNCTION_NAME not set, cannot chain to next batch');
+    return;
+  }
+
+  await lambdaClient.send(
+    new InvokeCommand({
+      FunctionName: functionName,
+      InvocationType: 'Event', // Async invocation
+      Payload: JSON.stringify({ batchId: nextBatch.id }),
+    })
+  );
+
+  console.log('Successfully invoked next batch', { nextBatchId: nextBatch.id });
 }
 
 async function executeGraphql<T>(

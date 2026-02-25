@@ -1,6 +1,7 @@
 import { env } from '$amplify/env/deleteProject';
 import { Amplify } from 'aws-amplify';
 import type { GenerateSurveyResultsHandler } from '../../data/resource';
+import { authorizeRequest } from '../shared/authorizeRequest';
 import {
   camerasByProjectId,
   strataByProjectId,
@@ -8,8 +9,15 @@ import {
   imagesByProjectId,
   annotationsByAnnotationSetId,
 } from './graphql/queries';
-import { createJollyResult } from './graphql/mutations';
 import { generateClient, GraphQLResult } from 'aws-amplify/data';
+
+// Inline minimal mutation – return composite key fields + `group` to avoid
+// nested-resolver auth failures while enabling subscription delivery via groupDefinedIn('group').
+const createJollyResult = /* GraphQL */ `
+  mutation CreateJollyResult($input: CreateJollyResultInput!) {
+    createJollyResult(input: $input) { surveyId stratumId annotationSetId categoryId group }
+  }
+`;
 // @ts-ignore
 import * as jStat from 'jstat';
 
@@ -44,6 +52,12 @@ Amplify.configure(
 const client = generateClient({
   authMode: 'iam',
 });
+
+const getProjectOrganizationId = /* GraphQL */ `
+  query GetProject($id: ID!) {
+    getProject(id: $id) { organizationId }
+  }
+`;
 
 // trims the outliers before calculating the mean
 function trimmedMean(values: number[], trimRatio: number = 0.2): number {
@@ -189,6 +203,18 @@ export const handler: GenerateSurveyResultsHandler =
     const categoryIds = event.arguments.categoryIds;
 
     try {
+      // fetch organization ID from the project for group-based access
+      const projectResponse = await client.graphql({
+        query: getProjectOrganizationId,
+        variables: { id: surveyId },
+      });
+      const organizationId = (projectResponse as GraphQLResult<any>).data?.getProject?.organizationId;
+
+      if (!organizationId) {
+        throw new Error('Project does not have an organizationId');
+      }
+      authorizeRequest(event.identity, organizationId);
+
       // fetch project cameras
       const cameras = await fetchAllPages<any>(
         (nextToken) =>
@@ -428,6 +454,7 @@ export const handler: GenerateSurveyResultsHandler =
                 estimate,
                 lowerBound95: lower95,
                 upperBound95: upper95,
+                group: organizationId,
               },
             },
           });

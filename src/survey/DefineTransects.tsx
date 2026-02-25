@@ -288,7 +288,7 @@ function mergeSmallSegmentsByBoundary(
 }
 
 // define transects and strata
-export default function DefineTransects({ projectId }: { projectId: string }) {
+export default function DefineTransects({ projectId, organizationId }: { projectId: string; organizationId: string }) {
   const { client, showModal } = useContext(GlobalContext)!;
   const [images, setImages] = useState<any[]>([]);
   const [partsLoading, setPartsLoading] = useState<null | number>(0);
@@ -566,6 +566,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
         area,
         baselineLength: length,
         coordinates: flatCoords,
+        group: organizationId,
       });
       const newSid = createStratumRes.data.id as string;
       stratumMap[section.id] = newSid;
@@ -587,6 +588,7 @@ export default function DefineTransects({ projectId }: { projectId: string }) {
       const createTransectRes = await (client.models.Transect.create as any)({
         projectId,
         stratumId: strId,
+        group: organizationId,
       });
       const trId = createTransectRes.data.id as string;
       transectMap[tid] = trId;

@@ -4,9 +4,7 @@ import Users from './organization/Users';
 import OrganizationSelector from './OrganizationSelector';
 import { useState, useContext } from 'react';
 import Info from './organization/Info';
-import { UserContext, GlobalContext } from './Context';
-import { useOptimisticUpdates } from './useOptimisticUpdates';
-import type { Schema } from './amplify/client-schema';
+import { UserContext } from './Context';
 
 export default function Permissions() {
   const { isOrganizationAdmin } = useContext(UserContext)!;
@@ -53,7 +51,10 @@ export default function Permissions() {
         </Card.Body>
         {onClick && (
           <Card.Footer className='d-flex justify-content-center'>
-            <Button variant='primary' onClick={onClick.function}>
+            <Button
+              variant='primary'
+              onClick={onClick.function}
+            >
               {onClick.name}
             </Button>
           </Card.Footer>
@@ -70,33 +71,12 @@ function PermissionsBody({
   organization: { id: string; name: string };
   setOnClick: (onClick: { name: string; function: () => void } | null) => void;
 }) {
-  const { client } = useContext(GlobalContext)!;
-
-  const membershipHook = useOptimisticUpdates<
-    Schema['OrganizationMembership']['type'],
-    'OrganizationMembership'
-  >(
-    'OrganizationMembership',
-    async (nextToken) =>
-      client.models.OrganizationMembership.membershipsByOrganizationId({
-        organizationId: organization.id,
-        nextToken,
-      }),
-    // Only subscribe to membership changes for this specific organization
-    { filter: { organizationId: { eq: organization.id } } },
-    {
-      compositeKey: (membership) =>
-        `${membership.organizationId}:${membership.userId}`,
-    }
-  );
-
   return (
     <Tabs defaultTab={0} onTabChange={() => setOnClick(null)}>
       <Tab label='Users'>
         <Users
           key={organization.id}
           organization={organization}
-          hook={membershipHook}
           setOnClick={setOnClick}
         />
       </Tab>

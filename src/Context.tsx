@@ -6,7 +6,7 @@ import { SQSClient } from '@aws-sdk/client-sqs';
 import type { DataClient } from '../amplify/shared/data-schema.generated';
 import type { UserType } from '../amplify/shared/types';
 import { limitedClient } from './limitedClient';
-import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+
 
 export interface ProgressType {
   [key: string]: { value?: number; detail: JSX.Element };
@@ -72,7 +72,6 @@ export interface UploadContextType {
 export interface UserContextType {
   user: AuthUser;
   getSqsClient: () => Promise<SQSClient>;
-  getDynamoClient: () => Promise<DynamoDBDocumentClient>;
   cognitoGroups: string[];
   myMembershipHook: CRUDhook<'UserProjectMembership'>;
   myOrganizationHook: CRUDhook<'OrganizationMembership'>;
@@ -113,7 +112,6 @@ export interface ManagementContextType {
   locationSetsHook: CRUDhook<'LocationSet'>;
   queuesHook: {
     data: Schema['Queue']['type'][];
-    create: (arg0: string) => string;
     update: (
       arg: Parameters<ClientType['models']['Queue']['update']>[0]
     ) => void;

@@ -3,7 +3,6 @@ import { ImageContext, UserContext, GlobalContext } from './Context';
 import type { ImageType } from './schemaTypes';
 import type { AnnotationsHook } from './Context';
 import L from 'leaflet';
-import { SendMessageCommand } from '@aws-sdk/client-sqs';
 import { inv } from 'mathjs';
 import { array2Matrix, makeTransform } from './utils';
 import { useQueries, useQuery } from '@tanstack/react-query';
@@ -13,14 +12,12 @@ export function ImageContextFromHook({
   locationId,
   image,
   children,
-  secondaryQueueUrl,
   taskTag,
 }: {
   hook: AnnotationsHook;
   locationId: string;
   image: ImageType;
   children: React.ReactNode;
-  secondaryQueueUrl?: string;
   taskTag: string;
 }) {
   const [annoCount, setAnnoCount] = useState(0);
@@ -32,7 +29,6 @@ export function ImageContextFromHook({
   const [fullyLoadedTimestamp, setFullyLoadedTimestamp] = useState<
     number | undefined
   >(undefined);
-  const { getSqsClient } = useContext(UserContext);
   const [zoom, setZoom] = useState(1);
   //testing
   const { setCurrentAnnoCount, setCurrentTaskTag } = useContext(UserContext)!;
@@ -161,29 +157,6 @@ export function ImageContextFromHook({
         annotation.id = crypto.randomUUID();
         annotation.objectId = annotation.id;
       }
-      if (secondaryQueueUrl) {
-        getSqsClient().then((sqsClient) =>
-          sqsClient.send(
-            new SendMessageCommand({
-              QueueUrl: secondaryQueueUrl,
-              MessageBody: JSON.stringify({
-                location: {
-                  id: locationId,
-                  x: annotation.x,
-                  y: annotation.y,
-                  width: 100,
-                  height: 100,
-                  image,
-                  annotationSetId: annotation.setId,
-                },
-                allowOutside: true,
-                zoom,
-                taskTag: taskTag ? taskTag + ' - Secondary' : 'Secondary',
-              }),
-            })
-          )
-        );
-      }
       setAnnoCount((old) => old + 1);
 
       setCurrentAnnoCount((old) => {
@@ -195,35 +168,11 @@ export function ImageContextFromHook({
       });
       return hook.create(annotation);
     },
-    [hook.create, setAnnoCount, secondaryQueueUrl, zoom, taskTag]
+    [hook.create, setAnnoCount, zoom, taskTag]
   );
 
   const update = useCallback(
     (annotation) => {
-      if (secondaryQueueUrl) {
-        getSqsClient().then((sqsClient) =>
-          sqsClient.send(
-            new SendMessageCommand({
-              QueueUrl: secondaryQueueUrl,
-              MessageBody: JSON.stringify({
-                location: {
-                  id: locationId,
-                  x: annotation.x,
-                  y: annotation.y,
-                  width: 100,
-                  height: 100,
-                  image,
-                  annotationSetId: annotation.setId,
-                },
-                allowOutside: true,
-                zoom,
-                taskTag: taskTag ? taskTag + ' - Secondary' : 'Secondary',
-              }),
-            })
-          )
-        );
-      }
-
       const oldAnnotation = hook.data.find((a) => a.id === annotation.id);
 
       setCurrentAnnoCount((old) => {
@@ -289,7 +238,7 @@ export function ImageContextFromHook({
         });
       }
     },
-    [hook.create, setAnnoCount, secondaryQueueUrl, zoom, taskTag]
+    [hook.create, setAnnoCount, zoom, taskTag]
   );
 
   const _delete = useCallback(

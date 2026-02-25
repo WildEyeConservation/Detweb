@@ -381,6 +381,7 @@ export default function UploadManager() {
                 imageData.altitude_agl ??
                 (elevation > 0 && altitude ? altitude - elevation : undefined),
               cameraId,
+              group: organizationId,
             });
             if (img) {
               createdImages.push({
@@ -394,6 +395,7 @@ export default function UploadManager() {
               await client.models.ImageSetMembership.create({
                 imageId: img.id,
                 imageSetId: imageSet.id,
+                group: organizationId,
               });
               const finalKey = makeKey(img.originalPath!);
               await client.models.ImageFile.create({
@@ -402,6 +404,7 @@ export default function UploadManager() {
                 key: finalKey,
                 path: finalKey,
                 type: fileType,
+                group: organizationId,
               });
             }
           }
@@ -480,6 +483,7 @@ export default function UploadManager() {
                     ? altitude - elevation
                     : undefined),
                 cameraId,
+                group: organizationId,
               });
               if (img) {
                 createdImages.push({
@@ -493,6 +497,7 @@ export default function UploadManager() {
                 await client.models.ImageSetMembership.create({
                   imageId: img.id,
                   imageSetId: imageSet.id,
+                  group: organizationId,
                 });
                 const finalKey = makeKey(img.originalPath!);
                 await client.models.ImageFile.create({
@@ -501,6 +506,7 @@ export default function UploadManager() {
                   key: finalKey,
                   path: finalKey,
                   type: file.type,
+                  group: organizationId,
                 });
               }
             }
@@ -821,6 +827,7 @@ export default function UploadManager() {
             await client.models.LocationSet.create({
               name: scoutbotSetName,
               projectId: projectId,
+              group: organizationId,
             });
           locationSet = createdLocationSet?.id ?? null;
         }
@@ -881,6 +888,7 @@ export default function UploadManager() {
           );
 
           client.mutations.runHeatmapper({
+            projectId,
             images: batchStrings,
           });
         }
@@ -899,6 +907,7 @@ export default function UploadManager() {
             await client.models.LocationSet.create({
               name: madSetName,
               projectId: projectId,
+              group: organizationId,
             });
           locationSet = createdLocationSet?.id ?? null;
         }

@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState } from 'react';
 import { UserContext, GlobalContext, UploadContext } from '../Context.tsx';
 import { Schema } from '../amplify/client-schema.ts';
-import { Card, Button, Form } from 'react-bootstrap';
+import { Card, Button, Form, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import MyTable from '../Table.tsx';
 import NewSurveyModal from './NewSurveyModal.tsx';
 import { useNavigate } from 'react-router-dom';
@@ -19,7 +19,6 @@ import FileStructureSubset from '../filestructuresubset.tsx';
 import { SquareArrowOutUpRight, X, Pause, Play, Trash, Minimize2, Maximize2 } from 'lucide-react';
 import { fetchAllPaginatedResults } from '../utils.tsx';
 import { Badge } from 'react-bootstrap';
-import { DeleteQueueCommand } from '@aws-sdk/client-sqs';
 import localforage from 'localforage';
 import UploadIntegrityChecker from '../upload/UploadIntegrityChecker.tsx';
 import ProjectProgress from '../user/ProjectProgress.tsx';
@@ -42,7 +41,6 @@ export default function Surveys() {
   const {
     myMembershipHook: myProjectsHook,
     isOrganizationAdmin,
-    getSqsClient,
     user,
   } = useContext(UserContext)!;
   const { task, setTask } = useContext(UploadContext)!;
@@ -255,7 +253,8 @@ export default function Surveys() {
       client,
       user.userId,
       `Deleted project "${projectName}" (ID: ${projectId})`,
-      projectId
+      projectId,
+      project?.organizationId || ''
     );
 
     client.mutations.deleteProjectInFull({ projectId: projectId });
@@ -278,7 +277,8 @@ export default function Surveys() {
       client,
       user.userId,
       `Deleted annotation set "${annotationSetName}" from project "${projectName}"`,
-      projectId
+      projectId,
+      project?.organizationId || ''
     );
 
     setProjects(
@@ -321,7 +321,8 @@ export default function Surveys() {
           client,
           user.userId,
           `Cancelled registration job for annotation set "${annotationSet.name}" in project "${selectedProject!.name}"`,
-          selectedProject!.id
+          selectedProject!.id,
+          selectedProject!.organizationId
         );
         return;
       }
@@ -333,14 +334,13 @@ export default function Surveys() {
         return;
       }
 
-      const sqsClient = await getSqsClient();
-      await sqsClient.send(new DeleteQueueCommand({ QueueUrl: job.url }));
-      await client.models.Queue.delete({ id: job.id });
+      await client.mutations.deleteQueueMutation({ queueId: job.id });
       await logAdminAction(
         client,
         user.userId,
         `Closed job "${job.tag || job.name || 'Unknown'}" for project "${selectedProject!.name}"`,
-        selectedProject!.id
+        selectedProject!.id,
+        selectedProject!.organizationId
       );
     } catch (error) {
       alert('An unknown error occurred. Please try again later.');
@@ -731,7 +731,7 @@ export default function Surveys() {
                 <Button
                   size={compactMode ? 'sm' : undefined}
                   className='flex align-items-center justify-content-center'
-                  disabled={disabled || scanningProjects.has(project.id)}
+                  disabled={!project.annotationSets.some((set) => set.register) && (disabled || scanningProjects.has(project.id))}
                   variant='primary'
                   onClick={() => navigate(`/jobs`)}
                 >
@@ -740,7 +740,7 @@ export default function Surveys() {
                 <Button
                   size={compactMode ? 'sm' : undefined}
                   className='flex align-items-center justify-content-center'
-                  disabled={disabled || scanningProjects.has(project.id)}
+                  disabled={!project.annotationSets.some((set) => set.register) && (disabled || scanningProjects.has(project.id))}
                   variant='danger'
                   onClick={() => {
                     setSelectedProject(project);
@@ -848,7 +848,7 @@ export default function Surveys() {
                   <Button
                     size='sm'
                     className='flex align-items-center justify-content-center'
-                    disabled={disabled || scanningProjects.has(project.id)}
+                    disabled={!project.annotationSets.some((set) => set.register) && (disabled || scanningProjects.has(project.id))}
                     variant='primary'
                     onClick={() => navigate(`/jobs`)}
                   >
@@ -857,7 +857,7 @@ export default function Surveys() {
                   <Button
                     size='sm'
                     className='flex align-items-center justify-content-center'
-                    disabled={disabled || scanningProjects.has(project.id)}
+                    disabled={!project.annotationSets.some((set) => set.register) && (disabled || scanningProjects.has(project.id))}
                     variant='danger'
                     onClick={() => {
                       setSelectedProject(project);
@@ -1004,9 +1004,12 @@ export default function Surveys() {
           </Card.Body>
           {isOrganizationAdmin && (
             <Card.Footer className='d-flex justify-content-center'>
-              <Button variant='primary' onClick={() => showModal('newSurvey')}>
-                New Survey
-              </Button>
+              <div className='d-inline-block'>
+                <Button variant='primary' onClick={() => showModal('newSurvey')}
+                >
+                  New Survey
+                </Button>
+              </div>
             </Card.Footer>
           )}
         </Card>
@@ -1163,7 +1166,8 @@ export default function Surveys() {
               client,
               user.userId,
               `Added annotation set "${annotationSet.name}" to project "${selectedProject?.name}"`,
-              selectedProject?.id
+              selectedProject?.id || '',
+              selectedProject?.organizationId || ''
             ).catch(console.error);
           }}
           categories={selectedProject.categories}

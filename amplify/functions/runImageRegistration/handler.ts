@@ -1,7 +1,8 @@
-import type { Handler } from 'aws-lambda';
+import type { RunImageRegistrationHandler } from '../../data/resource';
 import { env } from '$amplify/env/runImageRegistration';
 import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
+import { authorizeRequest } from '../shared/authorizeRequest';
 import { SendMessageBatchCommand, SQSClient } from '@aws-sdk/client-sqs';
 import type { SendMessageBatchRequestEntry } from '@aws-sdk/client-sqs';
 import type { GraphQLResult } from '@aws-amplify/api-graphql';
@@ -11,12 +12,19 @@ import {
   imagesByProjectId,
   getProject,
 } from './graphql/queries';
-import { createImageNeighbour } from './graphql/mutations';
 import {
   CameraOverlap,
   GetImageNeighbourQuery,
   GetProjectQuery,
 } from '../runImageRegistration/graphql/API';
+
+// Inline minimal mutation – return composite key fields + `group` to avoid
+// nested-resolver auth failures while enabling subscription delivery via groupDefinedIn('group').
+const createImageNeighbour = /* GraphQL */ `
+  mutation CreateImageNeighbour($input: CreateImageNeighbourInput!) {
+    createImageNeighbour(input: $input) { image1Id image2Id group }
+  }
+`;
 
 Amplify.configure(
   {
@@ -131,7 +139,8 @@ async function handlePair(
   image1: MinimalImage,
   image2: MinimalImage,
   masks: number[][][],
-  computeKey: (orig: string) => string
+  computeKey: (orig: string) => string,
+  organizationId?: string
 ) {
   try {
     console.log(`Processing pair ${image1.id} and ${image2.id}`);
@@ -170,9 +179,10 @@ async function handlePair(
               input: {
                 image1Id: image1.id,
                 image2Id: image2.id,
+                group: organizationId,
               },
             },
-          })
+          }) as Promise<GraphQLResult<any>>
         );
       } catch (e: unknown) {
         const errors = ((): unknown[] => {
@@ -235,7 +245,8 @@ function addAdjacentPairTasks(
   masks: number[][][],
   seenPairs: Set<string>,
   outTasks: Array<() => Promise<SqsEntry | null>>,
-  computeKey: (orig: string) => string
+  computeKey: (orig: string) => string,
+  organizationId?: string
 ) {
   for (let i = 0; i < images.length - 1; i++) {
     const image1 = images[i];
@@ -245,7 +256,7 @@ function addAdjacentPairTasks(
       const key = [image1.id, image2.id].sort().join('|');
       if (!seenPairs.has(key)) {
         seenPairs.add(key);
-        outTasks.push(() => handlePair(image1, image2, masks, computeKey));
+        outTasks.push(() => handlePair(image1, image2, masks, computeKey, organizationId));
       }
     } else {
       console.log(
@@ -256,14 +267,11 @@ function addAdjacentPairTasks(
   }
 }
 
-export const handler: Handler = async (event, context) => {
+export const handler: RunImageRegistrationHandler = async (event, context) => {
   try {
     // Do not wait for open handles after we return a response
-    if (context && typeof context === 'object') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (context as any).callbackWaitsForEmptyEventLoop = false;
-    }
-    const projectId = event.arguments.projectId as string;
+    context.callbackWaitsForEmptyEventLoop = false;
+    const projectId = event.arguments.projectId;
     const metadata = JSON.parse(event.arguments.metadata) as {
       masks?: number[][][];
       images?: Array<{
@@ -274,7 +282,7 @@ export const handler: Handler = async (event, context) => {
       }>;
     };
     const masks = Array.isArray(metadata?.masks) ? (metadata.masks as number[][][]) : [];
-    const queueUrl = event.arguments.queueUrl as string;
+    const queueUrl = event.arguments.queueUrl;
 
     // Fetch project info to determine key prefixing
     let organizationId: string | undefined = undefined;
@@ -294,6 +302,10 @@ export const handler: Handler = async (event, context) => {
       console.warn(
         'Unable to fetch project tags; defaulting to legacy=false behavior'
       );
+    }
+
+    if (organizationId) {
+      authorizeRequest(event.identity, organizationId);
     }
 
     const computeKey = (orig: string) =>
@@ -384,7 +396,7 @@ export const handler: Handler = async (event, context) => {
 
     // process images by camera
     Object.entries(imagesByCamera).forEach(([, images]) => {
-      addAdjacentPairTasks(images, masks, seenPairs, tasks, computeKey);
+      addAdjacentPairTasks(images, masks, seenPairs, tasks, computeKey, organizationId);
     });
 
     // process images from overlapping cameras
@@ -397,11 +409,11 @@ export const handler: Handler = async (event, context) => {
         (a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0)
       );
 
-      addAdjacentPairTasks(mergedImages, masks, seenPairs, tasks, computeKey);
+      addAdjacentPairTasks(mergedImages, masks, seenPairs, tasks, computeKey, organizationId);
     });
 
     // process images with no camera
-    addAdjacentPairTasks(noCamImgs, masks, seenPairs, tasks, computeKey);
+    addAdjacentPairTasks(noCamImgs, masks, seenPairs, tasks, computeKey, organizationId);
 
     // Limit concurrency to prevent exhausting file descriptors and network resources
     const messages = (await withConcurrency<SqsEntry | null>(tasks, 10)).filter(

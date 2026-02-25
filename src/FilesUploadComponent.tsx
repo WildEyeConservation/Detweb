@@ -1428,6 +1428,16 @@ export function FileUploadCore({
         return;
       }
 
+      // Fetch project to get organizationId for group-based access
+      const { data: proj } = await client.models.Project.get(
+        { id: projectId },
+        { selectionSet: ['id', 'organizationId'] as const }
+      );
+      const organizationId: string | undefined =
+        typeof proj?.organizationId === 'string'
+          ? proj.organizationId
+          : undefined;
+
       const allCameras: Schema['Camera']['type'][] = [];
 
       const existingCameras =
@@ -1472,6 +1482,7 @@ export function FileUploadCore({
             focalLengthMm: spec.focalLengthMm || 0,
             sensorWidthMm: spec.sensorWidthMm || 0,
             tiltDegrees: spec.tiltDegrees || 0,
+            group: organizationId,
           });
           if (newCamera) {
             allCameras.push(newCamera);
@@ -1497,6 +1508,7 @@ export function FileUploadCore({
               cameraAId: cameraA.id,
               cameraBId: cameraB.id,
               projectId: projectId,
+              group: organizationId,
             });
           }
         }
@@ -1513,6 +1525,7 @@ export function FileUploadCore({
         await client.models.ImageSet.create({
           name: name,
           projectId: projectId,
+          group: organizationId,
         });
       }
 

@@ -300,7 +300,8 @@ export default function SpeciesLabelling({
           client,
           user.userId,
           `Launched Model Guided queue for annotation set "${annotationSet.name}" in project "${project.name}" (Model: ${modelName}, ${settings})`,
-          project.id
+          project.id,
+          project.organizationId
         ).catch(console.error);
       } else {
         // Tiled annotation launch - use global tiled location set
@@ -325,7 +326,8 @@ export default function SpeciesLabelling({
           client,
           user.userId,
           `Launched Tiled Annotation queue for annotation set "${annotationSet.name}" in project "${project.name}"`,
-          project.id
+          project.id,
+          project.organizationId
         ).catch(console.error);
       }
     },
@@ -350,9 +352,6 @@ export default function SpeciesLabelling({
         await performLaunchRef.current(onProgress, onLaunchConfirmed);
       }
     });
-    return () => {
-      setSpeciesLaunchHandler(null);
-    };
   }, [setSpeciesLaunchHandler, client, user.userId, annotationSet.name, project.name, project.id, modelOptions]);
 
   return (

@@ -19,7 +19,6 @@ import { generateClient } from 'aws-amplify/api';
 import type { DataClient } from '../amplify/shared/data-schema.generated';
 import outputs from '../amplify_outputs.json';
 import { useOptimisticUpdates, useQueues } from './useOptimisticUpdates.tsx';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { useQuery } from '@tanstack/react-query';
 
 export function Project({
@@ -247,14 +246,6 @@ export function User({
     return new SQSClient({ region, credentials });
   }, []);
 
-  const getDynamoClient = useCallback(async () => {
-    const { credentials } = await fetchAuthSession();
-    return new DynamoDBClient({
-      region,
-      credentials,
-    });
-  }, []);
-
   return (
     <UserContext.Provider
       value={{
@@ -274,7 +265,6 @@ export function User({
         myMembershipHook,
         myOrganizationHook,
         isOrganizationAdmin,
-        getDynamoClient,
         isAnnotatePath,
         setIsAnnotatePath,
         sessionTestsResults,

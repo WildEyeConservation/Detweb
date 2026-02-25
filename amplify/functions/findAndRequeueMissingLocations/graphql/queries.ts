@@ -60,6 +60,7 @@ export const getProject = /* GraphQL */ `
     getProject(id: $id) {
       id
       name
+      organizationId
     }
   }
 `;

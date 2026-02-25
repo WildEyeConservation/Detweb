@@ -76,6 +76,7 @@ export default function CreateAnnotationOnClick(
             categoryId: categoryIdToUse,
             source: source,
             obscured: false,
+            group: project.organizationId,
           });
         }
       }

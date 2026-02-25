@@ -8,43 +8,72 @@ import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3'
 import { getUserStats, getQueue } from './graphql/queries'
 import { updateUserStats, createUserStats, updateQueue } from './graphql/mutations'
+import type { CreateUserStatsInput, UpdateUserStatsInput } from './graphql/API'
 
 Amplify.configure(
     {
-      API: {
-        GraphQL: {
-          endpoint: env.AMPLIFY_DATA_GRAPHQL_ENDPOINT,
-          region: env.AWS_REGION,
-          defaultAuthMode: "iam",
+        API: {
+            GraphQL: {
+                endpoint: env.AMPLIFY_DATA_GRAPHQL_ENDPOINT,
+                region: env.AWS_REGION,
+                defaultAuthMode: "iam",
+            },
         },
-      },
     },
     {
-      Auth: {
-        credentialsProvider: {
-          getCredentialsAndIdentityId: async () => ({
-            credentials: {
-              accessKeyId: env.AWS_ACCESS_KEY_ID,
-              secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
-              sessionToken: env.AWS_SESSION_TOKEN,
+        Auth: {
+            credentialsProvider: {
+                getCredentialsAndIdentityId: async () => ({
+                    credentials: {
+                        accessKeyId: env.AWS_ACCESS_KEY_ID,
+                        secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+                        sessionToken: env.AWS_SESSION_TOKEN,
+                    },
+                }),
+                clearCredentialsAndIdentityId: () => {
+                    /* noop */
+                },
             },
-          }),
-          clearCredentialsAndIdentityId: () => {
-            /* noop */
-          },
         },
-      },
     }
-  );
-  
+);
+
 const client = generateClient({
-  authMode: "iam",
+    authMode: "iam",
 });
 
 const logger = new Logger({
-  logLevel: "INFO",
-  serviceName: "dynamodb-stream-handler",
+    logLevel: "INFO",
+    serviceName: "dynamodb-stream-handler",
 });
+
+const getProjectOrganizationId = /* GraphQL */ `
+  query GetProject($id: ID!) {
+    getProject(id: $id) { organizationId }
+  }
+`;
+
+const organizationIdCache: Record<string, string | undefined> = {};
+
+async function getOrganizationId(projectId: string): Promise<string | undefined> {
+    if (projectId in organizationIdCache) return organizationIdCache[projectId];
+    try {
+        const projectResponse = await client.graphql({
+            query: getProjectOrganizationId,
+            variables: { id: projectId },
+        });
+        const organizationId = (projectResponse as any).data?.getProject?.organizationId;
+        organizationIdCache[projectId] = organizationId;
+        return organizationId;
+    } catch (error) {
+        logger.error('Failed to fetch organizationId for project', {
+            projectId,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        organizationIdCache[projectId] = undefined;
+        return undefined;
+    }
+}
 
 interface StatsEntry {
     setId: string;
@@ -79,7 +108,7 @@ function accumulateStats(input: any): boolean {
 
         const setId = input.annotationSetId.S;
         const date = input.createdAt.S.split('T')[0];
-        
+
         // Extract userId from owner field - handle different formats
         let userId: string;
         const ownerValue = input.owner.S;
@@ -100,8 +129,8 @@ function accumulateStats(input: any): boolean {
         let timeTaken = parseFloat(input.timeTaken?.N || '0') || 0;
         const waitingTime = parseFloat(input.waitingTime?.N || '0') || 0;
         const sighting = (annotationCount > 0 ? 1 : 0);
-        if (timeTaken > (sighting ? 900*1000 : 120*1000)) timeTaken = 0;
-        
+        if (timeTaken > (sighting ? 900 * 1000 : 120 * 1000)) timeTaken = 0;
+
         const key = `${setId}-${date}-${userId}-${projectId}`;
         if (!stats[key]) {
             stats[key] = {
@@ -123,7 +152,7 @@ function accumulateStats(input: any): boolean {
         stats[key].annotationCount += annotationCount;
         stats[key].sightingCount += sighting;
         stats[key].activeTime += timeTaken;
-        stats[key].searchTime += (1-sighting) * timeTaken;
+        stats[key].searchTime += (1 - sighting) * timeTaken;
         stats[key].searchCount += (1 - sighting);
         stats[key].annotationTime += sighting * timeTaken;
         stats[key].waitingTime += Math.max(waitingTime, 0);
@@ -191,36 +220,61 @@ async function applyUpdate(update: StatsEntry): Promise<boolean> {
         };
 
         // Add accumulated deltas from this batch to existing stats
-        const variables = {
-            input: {
-                userId: update.userId,
-                projectId: update.projectId,
-                setId: update.setId,
-                date: update.date,
-                observationCount: existingStats.observationCount + update.observationCount,
-                annotationCount: existingStats.annotationCount + update.annotationCount,
-                sightingCount: (existingStats.sightingCount || 0) + update.sightingCount,
-                activeTime: (existingStats.activeTime || 0) + update.activeTime,
-                searchTime: (existingStats.searchTime || 0) + update.searchTime,
-                searchCount: (existingStats.searchCount || 0) + update.searchCount,
-                annotationTime: (existingStats.annotationTime || 0) + update.annotationTime,
-                waitingTime: (existingStats.waitingTime || 0) + update.waitingTime
-            }
+        const baseInput = {
+            userId: update.userId,
+            projectId: update.projectId,
+            setId: update.setId,
+            date: update.date,
+            observationCount: existingStats.observationCount + update.observationCount,
+            annotationCount: existingStats.annotationCount + update.annotationCount,
+            sightingCount: (existingStats.sightingCount || 0) + update.sightingCount,
+            activeTime: (existingStats.activeTime || 0) + update.activeTime,
+            searchTime: (existingStats.searchTime || 0) + update.searchTime,
+            searchCount: (existingStats.searchCount || 0) + update.searchCount,
+            annotationTime: (existingStats.annotationTime || 0) + update.annotationTime,
+            waitingTime: (existingStats.waitingTime || 0) + update.waitingTime
         };
 
-        const mutationResult = statExists
-            ? await client.graphql({ query: updateUserStats, variables })
-            : await client.graphql({ query: createUserStats, variables });
+        let mutationResult;
+        if (statExists) {
+            const input: UpdateUserStatsInput = baseInput;
+            mutationResult = await client.graphql({ query: updateUserStats, variables: { input } });
+        } else {
+            const organizationId = await getOrganizationId(update.projectId);
+            const input: CreateUserStatsInput = {
+                ...baseInput,
+                ...(organizationId ? { group: organizationId } : {}),
+            };
+            mutationResult = await client.graphql({ query: createUserStats, variables: { input } });
+        }
 
         // Check for mutation errors
         if (mutationResult.errors && mutationResult.errors.length > 0) {
             logger.error('GraphQL mutation errors', {
                 errors: mutationResult.errors,
                 operation: statExists ? 'updateUserStats' : 'createUserStats',
-                variables
+                input: baseInput
             });
             return false;
         }
+
+        // Publish real-time update to clients listening on this annotation set
+        // try {
+        //     await client.graphql({
+        //         query: publish,
+        //         variables: {
+        //             channelName: `${update.setId}-userstats`,
+        //             content: JSON.stringify(baseInput),
+        //         },
+        //     });
+        // } catch (publishError: any) {
+        //     logger.warn('Failed to publish stats update', {
+        //         error: publishError instanceof Error ? publishError.message : JSON.stringify(publishError),
+        //         errors: publishError?.errors,
+        //         data: publishError?.data,
+        //         setId: update.setId,
+        //     });
+        // }
 
         return true;
     } catch (error) {
@@ -236,7 +290,7 @@ async function applyUpdate(update: StatsEntry): Promise<boolean> {
 async function updateStats() {
     const updates = Object.values(stats);
     logger.info(`Updating ${updates.length} unique stat entries`);
-    
+
     const results = await Promise.allSettled(
         updates.map(async (update) => await applyUpdate(update))
     );
@@ -290,9 +344,11 @@ async function updateQueueObservedCounts() {
                 }
             });
             logger.info(`Updated queue ${queueId} observedCount: ${queue.observedCount || 0} -> ${newCount} (+${delta})`);
-        } catch (error) {
+        } catch (error: any) {
             logger.error(`Failed to update observedCount for queue ${queueId}`, {
-                error: error instanceof Error ? error.message : String(error),
+                error: error instanceof Error ? error.message : JSON.stringify(error),
+                errors: error?.errors,
+                data: error?.data,
                 delta
             });
         }
@@ -304,7 +360,7 @@ export const handler: DynamoDBStreamHandler = async (event) => {
     queueCounts = {};
     try {
         logger.info(`Processing ${event.Records.length} records`);
-        
+
         let processedCount = 0;
         let skippedCount = 0;
 

@@ -1,17 +1,30 @@
-import { useContext, useMemo, useEffect, useState } from 'react';
+import { useContext, useState } from 'react';
 import { GlobalContext, UserContext } from '../Context';
-import { useOptimisticUpdates } from '../useOptimisticUpdates';
 import { Schema } from '../amplify/client-schema';
 import Button from 'react-bootstrap/Button';
-import { fetchAllPaginatedResults } from '../utils';
-import { Bell, Check, X } from 'lucide-react';
+import { Bell, Check, X, RefreshCw } from 'lucide-react';
 import { Card } from 'react-bootstrap';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 export default function Notifications() {
   const [show, setShow] = useState(false);
-  const [totalNotifications, setTotalNotifications] = useState(0);
   const { user } = useContext(UserContext)!;
+  const { client } = useContext(GlobalContext)!;
   const username = user.username;
+
+  const { data: allInvites, isFetching, refetch } = useQuery<Schema['OrganizationInvite']['type'][]>({
+    queryKey: ['OrganizationInvite', username],
+    queryFn: async () => {
+      const result = await client.models.OrganizationInvite.organizationInvitesByUsername({ username });
+      return result.data;
+    },
+    enabled: !!username,
+    staleTime: 0,
+    gcTime: 0,
+  });
+
+  const pendingInvites = allInvites?.filter((inv) => inv.status === 'pending') ?? [];
+  const totalNotifications = pendingInvites.length;
 
   return (
     <div className='position-relative'>
@@ -77,14 +90,23 @@ export default function Notifications() {
           }}
         >
           <Card.Header className='d-flex justify-content-between align-items-center'>
-            <Card.Title className='mb-0'>Notifications</Card.Title>
+            <div className='d-flex align-items-center gap-2'>
+              <Card.Title className='mb-0'>Notifications</Card.Title>
+              <Button
+                variant='link'
+                size='sm'
+                className='p-0 text-muted'
+                onClick={() => refetch()}
+                disabled={isFetching}
+                title='Refresh'
+              >
+                <RefreshCw size={16} className={isFetching ? 'spinning' : undefined} />
+              </Button>
+            </div>
             <X onClick={() => setShow(false)} style={{ cursor: 'pointer' }} />
           </Card.Header>
           <Card.Body>
-            <Inbox
-              username={username}
-              setTotalNotifications={setTotalNotifications}
-            />
+            <Inbox invites={pendingInvites} queryKey={['OrganizationInvite', username]} />
           </Card.Body>
         </Card>
       )}
@@ -93,117 +115,85 @@ export default function Notifications() {
 }
 
 function Inbox({
-  username,
-  setTotalNotifications,
+  invites,
+  queryKey,
 }: {
-  username: string;
-  setTotalNotifications: (totalNotifications: number) => void;
+  invites: Schema['OrganizationInvite']['type'][];
+  queryKey: unknown[];
 }) {
-  const { client } = useContext(GlobalContext)!;
-  const { user } = useContext(UserContext)!;
-  const [organizations, setOrganizations] = useState<
-    { id: string; name: string }[]
-  >([]);
-
-  const subscriptionFilter = useMemo(
-    () => ({
-      filter: { username: { eq: username } },
-    }),
-    [username]
-  );
-
-  const organizationInvitesHook = useOptimisticUpdates<
-    Schema['OrganizationInvite']['type'],
-    'OrganizationInvite'
-  >(
-    'OrganizationInvite',
-    async (nextToken) => {
-      const result =
-        await client.models.OrganizationInvite.organizationInvitesByUsername({
-          username,
-        });
-      return { data: result.data, nextToken: result.nextToken ?? undefined };
-    },
-    subscriptionFilter
-  );
-
-  useEffect(() => {
-    async function fetchOrganizations() {
-      const organizations = await fetchAllPaginatedResults(
-        client.models.Organization.list,
-        { selectionSet: ['id', 'name'] }
-      );
-
-      setOrganizations(organizations);
-    }
-    fetchOrganizations();
-  }, []);
-
-  const organizationInvites = organizationInvitesHook.data?.filter(
-    (invite) => invite.status === 'pending'
-  );
-
-  useEffect(() => {
-    setTotalNotifications(organizationInvites?.length ?? 0);
-  }, [organizationInvites]);
-
-  return organizationInvites?.length === 0 ? (
+  return invites.length === 0 ? (
     <h5 className='text-center mb-0 p-2'>Empty</h5>
   ) : (
-    organizationInvites?.map((invite, i) => (
-      <Invite
-        key={invite.id}
-        invite={invite}
-        userId={user.username}
-        organizations={organizations}
-        index={i}
-      />
-    ))
+    <>
+      {invites.map((invite, i) => (
+        <Invite key={invite.id} invite={invite} index={i} queryKey={queryKey} />
+      ))}
+    </>
   );
 }
 
 function Invite({
   invite,
-  userId,
-  organizations,
   index,
+  queryKey,
 }: {
   invite: Schema['OrganizationInvite']['type'];
-  userId: string;
-  organizations: { id: string; name: string }[];
   index: number;
+  queryKey: unknown[];
 }) {
   const { client } = useContext(GlobalContext)!;
+  const queryClient = useQueryClient();
+  const [responding, setResponding] = useState(false);
 
-  async function acceptInvite(invite: Schema['OrganizationInvite']['type']) {
-    if (invite.organizationId) {
-      await client.models.OrganizationInvite.update({
-        id: invite.id,
-        status: 'accepted',
-      });
+  function updateCacheStatus(status: 'accepted' | 'declined') {
+    queryClient.setQueryData<Schema['OrganizationInvite']['type'][]>(
+      queryKey,
+      (old) => old?.map((inv) => inv.id === invite.id ? { ...inv, status } : inv)
+    );
+  }
 
-      await client.models.OrganizationMembership.create({
-        organizationId: invite.organizationId,
-        userId: userId,
-        isAdmin: false,
+  async function acceptInvite() {
+    setResponding(true);
+    try {
+      const { errors } = await client.mutations.respondToInvite({
+        inviteId: invite.id,
+        accept: true,
       });
+      if (errors?.length) {
+        alert(errors[0].message);
+        return;
+      }
+      updateCacheStatus('accepted');
+    } catch (err: any) {
+      alert(err.message ?? 'Failed to accept invite');
+    } finally {
+      setResponding(false);
     }
   }
 
-  async function declineInvite(invite: Schema['OrganizationInvite']['type']) {
-    if (invite.organizationId) {
-      await client.models.OrganizationInvite.update({
-        id: invite.id,
-        status: 'declined',
+  async function declineInvite() {
+    setResponding(true);
+    try {
+      const { errors } = await client.mutations.respondToInvite({
+        inviteId: invite.id,
+        accept: false,
       });
+      if (errors?.length) {
+        alert(errors[0].message);
+        return;
+      }
+      updateCacheStatus('declined');
+    } catch (err: any) {
+      alert(err.message ?? 'Failed to decline invite');
+    } finally {
+      setResponding(false);
     }
   }
 
   return (
     <div
-      className={`d-flex flex-row gap-2 text-primary-subtle text-start p-2 ${
-        index % 2 !== 0 ? 'bg-secondary text-dark' : ''
-      }`}
+      className={`d-flex flex-row gap-2 text-primary-subtle text-start p-2 ${index % 2 !== 0 ? 'bg-secondary text-dark' : ''
+        }`}
     >
       <div>
         <p className='mb-2' style={{ fontSize: '1.25rem' }}>
@@ -211,16 +201,16 @@ function Invite({
         </p>
         <p className='mb-0'>
           <b>
-            {organizations.find((o) => o.id === invite.organizationId)?.name}
+            {(invite as any).organizationName ?? 'Unknown Organization'}
           </b>{' '}
           invited you to their organisation.
         </p>
       </div>
       <div className='d-flex gap-1'>
-        <Button variant='success' onClick={() => acceptInvite(invite)}>
+        <Button variant='success' onClick={acceptInvite} disabled={responding}>
           <Check />
         </Button>
-        <Button variant='danger' onClick={() => declineInvite(invite)}>
+        <Button variant='danger' onClick={declineInvite} disabled={responding}>
           <X />
         </Button>
       </div>

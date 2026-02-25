@@ -8,7 +8,7 @@ import {
 } from 'react';
 import { Button, Form, Spinner } from 'react-bootstrap';
 import { Modal, Header, Title, Body, Footer } from '../Modal';
-import { GlobalContext, UserContext } from '../Context';
+import { GlobalContext, UserContext, TestingContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
 import { FetcherType, PreloaderFactory } from '../Preloader';
 import LightLocationView from './LightLocationView';
@@ -23,6 +23,7 @@ type Props = {
 export default function EditLocationsModal({ show, preset, surveyId }: Props) {
   const { client, showModal } = useContext(GlobalContext)!;
   const { currentAnnoCount, setCurrentAnnoCount } = useContext(UserContext)!;
+  const { organizationId } = useContext(TestingContext)!;
   const locationsRef = useRef<
     { testPresetId: string; locationId: string; annotationSetId: string }[]
   >([]);
@@ -266,6 +267,7 @@ export default function EditLocationsModal({ show, preset, surveyId }: Props) {
           categoryId,
           annotationSetId: cLocation.annotationSetId,
           count,
+          group: organizationId,
         } as any);
       }
     }
