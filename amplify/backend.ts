@@ -39,6 +39,7 @@ import { respondToInvite } from './functions/respondToInvite/resource';
 import { removeUserFromOrganization } from './functions/removeUserFromOrganization/resource';
 import { updateOrganizationMemberAdmin } from './functions/updateOrganizationMemberAdmin/resource';
 import { deleteQueue } from './functions/deleteQueue/resource';
+import { updateActiveOrganizations } from './functions/updateActiveOrganizations/resource';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -75,6 +76,7 @@ const backend = defineBackend({
   removeUserFromOrganization,
   updateOrganizationMemberAdmin,
   deleteQueue,
+  updateActiveOrganizations,
 });
 
 const observationTable = backend.data.resources.tables['Observation'];

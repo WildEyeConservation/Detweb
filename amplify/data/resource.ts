@@ -31,6 +31,7 @@ import { respondToInvite } from '../functions/respondToInvite/resource';
 import { removeUserFromOrganization } from '../functions/removeUserFromOrganization/resource';
 import { updateOrganizationMemberAdmin } from '../functions/updateOrganizationMemberAdmin/resource';
 import { deleteQueue } from '../functions/deleteQueue/resource';
+import { updateActiveOrganizations } from '../functions/updateActiveOrganizations/resource';
 // import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
@@ -1133,6 +1134,14 @@ const schema = a
       .returns(a.string())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(getJwtSecret)),
+    updateActiveOrganizations: a
+      .mutation()
+      .arguments({
+        activatedOrganizationIds: a.string().array().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(updateActiveOrganizations)),
     // Dummy table used to force full deployment instead of hotswapping resources
     // fixDeploymentTable: a
     //   .model({
@@ -1169,6 +1178,7 @@ const schema = a
     allow.resource(removeUserFromOrganization),
     allow.resource(updateOrganizationMemberAdmin),
     allow.resource(deleteQueue),
+    allow.resource(updateActiveOrganizations),
     // allow.resource(consolidateUserStats),
   ]);
 
@@ -1231,6 +1241,7 @@ export type RespondToInviteHandler = MutationHandler<{ inviteId: string; accept:
 export type RemoveUserFromOrganizationHandler = MutationHandler<{ organizationId: string; userId: string }>;
 export type UpdateOrganizationMemberAdminHandler = MutationHandler<{ organizationId: string; userId: string; isAdmin: boolean }>;
 export type DeleteQueueHandler = MutationHandler<{ queueId: string }>;
+export type UpdateActiveOrganizationsHandler = MutationHandler<{ activatedOrganizationIds: string[] }>;
 
 export const data = defineData({
   schema,
