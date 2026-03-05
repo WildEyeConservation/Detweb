@@ -7,7 +7,7 @@ import { GlobalContext } from '../Context';
 import SpeciesLabelling from './SpeciesLabelling';
 import FalseNegatives from './FalseNegatives';
 
-type TaskType = 'species-labelling' | 'registration' | 'false-negatives';
+type TaskType = 'species-labelling' | 'registration' | 'false-negatives' | 'homography-creation';
 
 export default function LaunchAnnotationSetModal({
   show,
@@ -45,7 +45,7 @@ export default function LaunchAnnotationSetModal({
   const { client, showModal } = useContext(GlobalContext)! as any;
 
   useEffect(() => {
-    if (taskType === 'registration') {
+    if (taskType === 'registration' || taskType === 'homography-creation') {
       setLaunchDisabled(false);
     }
   }, [taskType]);
@@ -62,6 +62,16 @@ export default function LaunchAnnotationSetModal({
     await (client.models.AnnotationSet.update as any)({
       id: annotationSet.id,
       register: true,
+    });
+    await client.mutations.updateProjectMemberships({
+      projectId: project.id,
+    });
+  }
+
+  async function createHomographyTask() {
+    await (client.models.AnnotationSet.update as any)({
+      id: annotationSet.id,
+      createHomographies: true,
     });
     await client.mutations.updateProjectMemberships({
       projectId: project.id,
@@ -96,6 +106,9 @@ export default function LaunchAnnotationSetModal({
         case 'registration':
           await createRegistrationTask();
           break;
+        case 'homography-creation':
+          await createHomographyTask();
+          break;
       }
     } catch (error) {
       console.error('Launch error', error);
@@ -127,6 +140,9 @@ export default function LaunchAnnotationSetModal({
                   setTaskType('false-negatives');
                   break;
                 case 2:
+                  setTaskType('homography-creation');
+                  break;
+                case 3:
                   setTaskType('registration');
                   break;
               }
@@ -150,6 +166,14 @@ export default function LaunchAnnotationSetModal({
                 setLaunchDisabled={setLaunchDisabled}
                 setFalseNegativesLaunchHandler={setFalseNegativesLaunchHandler as any}
               />
+            </Tab>
+            <Tab label='Homography Creation'>
+              <div className='p-3'>
+                <p className='m-0'>
+                  This will launch a homography creation task for the annotation set.
+                  Use this to manually create missing homographies between overlapping image pairs.
+                </p>
+              </div>
             </Tab>
             <Tab label='Registration'>
               <div className='p-3'>

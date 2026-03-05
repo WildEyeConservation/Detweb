@@ -19,7 +19,7 @@ function useClickToAddPoint(
   useMapEvents({
     click: (e) => {
       const p = latLng2xy(e.latlng) as L.Point;
-      
+
       // Check if click is too close to an existing point
       const isTooClose = existingPoints.some((existing) => {
         const dx = existing.x - p.x;
@@ -27,11 +27,11 @@ function useClickToAddPoint(
         const distance = Math.sqrt(dx * dx + dy * dy);
         return distance < MIN_POINT_DISTANCE;
       });
-      
+
       if (isTooClose) {
         return; // Don't add point if too close to existing one
       }
-      
+
       onAdd({ x: p.x, y: p.y });
     },
     dblclick: (e) => {
@@ -125,8 +125,10 @@ function buildDesignMatrix(points1: Point[], points2: Point[]) {
   return { A: matrix(rows), b: matrix(b) };
 }
 
-function solveHomography(points1: Point[], points2: Point[]): Matrix | null {
-  if (points1.length < 12 || points2.length < 12) return null;
+export const MIN_HOMOGRAPHY_POINTS = 4;
+
+export function solveHomography(points1: Point[], points2: Point[]): Matrix | null {
+  if (points1.length < MIN_HOMOGRAPHY_POINTS || points2.length < MIN_HOMOGRAPHY_POINTS) return null;
   const { A, b } = buildDesignMatrix(points1, points2);
   // Normal equations: (A^T A) u = A^T b
   const At = transpose(A) as Matrix;
@@ -174,8 +176,8 @@ export function ManualHomographyEditor({
   const [isSkipping, setIsSkipping] = useState(false);
   const queryClient = useQueryClient();
   const canCompute =
-    points1.length >= 12 &&
-    points2.length >= 12 &&
+    points1.length >= MIN_HOMOGRAPHY_POINTS &&
+    points2.length >= MIN_HOMOGRAPHY_POINTS &&
     points1.length === points2.length;
 
   const handleRemovePair = useCallback(
@@ -329,15 +331,16 @@ export function ManualHomographyEditor({
               Please follow the instructions below:
             </p>
             <ul>
-              <li>Select 12 corresponding points on both images.</li>
-              <li>Drag markers to adjust.</li>
+              <li>Select up to 12 corresponding points on both images (minimum {MIN_HOMOGRAPHY_POINTS}).</li>
+              <li>Click on a feature in Image 1, then click the same feature in Image 2.</li>
+              <li>Drag markers to adjust their position.</li>
               <li>
                 <strong>Right-click</strong> a marker to remove it.
               </li>
-              <li>Points should be distributed across the images.</li>
-              <li>Aim to cover as much area as possible.</li>
-              <li>Avoid straight lines.</li>
-              <li>Click Save to compute and store the homography.</li>
+              <li>Points should be distributed across the overlapping area of both images.</li>
+              <li>Aim to cover as much area as possible and avoid placing points in a straight line.</li>
+              <li>Once you have {MIN_HOMOGRAPHY_POINTS}+ matched pairs, use the <strong>Preview homography</strong> toggle to visualise the result (cyan grid overlay).</li>
+              <li>Click <strong>Save homography</strong> when the preview looks correct.</li>
             </ul>
           </Form.Label>
         )}

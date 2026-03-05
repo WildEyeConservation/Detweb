@@ -197,6 +197,7 @@ const schema = a
         testResults: a.hasMany('TestResult', 'annotationSetId'),
         categories: a.hasMany('Category', 'annotationSetId'),
         register: a.boolean().default(false),
+        createHomographies: a.boolean().default(false),
         jollyResultsMemberships: a.hasMany(
           'JollyResultsMembership',
           'annotationSetId'
@@ -1143,12 +1144,12 @@ const schema = a
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(updateActiveOrganizations)),
     // Dummy table used to force full deployment instead of hotswapping resources
-    // fixDeploymentTable: a
-    //   .model({
-    //     name: a.string().required(),
-    //     version: a.string().required(),
-    //   })
-    //   .authorization((allow) => [allow.group("sysadmin")])
+    fixDeploymentTable: a
+      .model({
+        name: a.string().required(),
+        version: a.string().required(),
+      })
+      .authorization((allow) => [allow.group("sysadmin")])
   })
   .authorization((allow) => [
     allow.resource(processImages),

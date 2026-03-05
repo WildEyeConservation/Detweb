@@ -23,6 +23,7 @@ export default function ProjectProgress({ projectId, onScanningChange }: Project
   } | null>(null);
   const [jobsRemaining, setJobsRemaining] = useState<number>(0);
   const [registering, setRegistering] = useState<boolean>(false);
+  const [creatingHomographies, setCreatingHomographies] = useState<boolean>(false);
   const prevScanningRef = useRef<boolean>(false);
 
   useEffect(() => {
@@ -44,13 +45,16 @@ export default function ProjectProgress({ projectId, onScanningChange }: Project
               'queues.requeuesCompleted',
               'queues.emptyQueueTimestamp',
               'annotationSets.register',
+              'annotationSets.createHomographies',
             ],
           }
         )
       ).data;
 
-      const register = projectData.annotationSets.some((set) => set.register);
+      const register = projectData.annotationSets.some((set: { register?: boolean | null; createHomographies?: boolean | null }) => set.register || set.createHomographies);
 
+      const isCreatingHomographies = projectData.annotationSets.some((set: { createHomographies?: boolean | null }) => set.createHomographies);
+      setCreatingHomographies(isCreatingHomographies);
       setRegistering(register);
       if (register) {
         return;
@@ -116,7 +120,7 @@ export default function ProjectProgress({ projectId, onScanningChange }: Project
   }, [shouldDisable, onScanningChange]);
 
   if (registering) {
-    return <p className='mb-0 w-100'>Registering</p>;
+    return <p className='mb-0 w-100'>{creatingHomographies ? 'Creating Homographies' : 'Registering'}</p>;
   }
 
   if (isLoading || !queueInfo) {
