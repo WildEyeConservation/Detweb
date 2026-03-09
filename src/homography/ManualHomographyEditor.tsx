@@ -1,9 +1,6 @@
-import { useCallback, useContext, useMemo, useState } from 'react';
-import { GlobalContext } from '../Context';
-import type { ImageType } from '../schemaTypes';
-import { Matrix, inv, matrix, multiply, transpose } from 'mathjs';
+import { useCallback, useMemo, useState } from 'react';
+import { Matrix, matrix, multiply, transpose, inv } from 'mathjs';
 import { Card, Button, Badge } from 'react-bootstrap';
-import { useQueryClient } from '@tanstack/react-query';
 import {
   Trash2,
   Info,
@@ -48,14 +45,14 @@ export function solveHomography(points1: Point[], points2: Point[]): Matrix | nu
   // Solve using inverse (sufficient for small 8x8)
   const u = multiply(inv(AtA), Atb) as Matrix; // 8x1
 
-  const h11 = (u as any).get([0]);
-  const h12 = (u as any).get([1]);
-  const h13 = (u as any).get([2]);
-  const h21 = (u as any).get([3]);
-  const h22 = (u as any).get([4]);
-  const h23 = (u as any).get([5]);
-  const h31 = (u as any).get([6]);
-  const h32 = (u as any).get([7]);
+  const h11 = u.get([0]);
+  const h12 = u.get([1]);
+  const h13 = u.get([2]);
+  const h21 = u.get([3]);
+  const h22 = u.get([4]);
+  const h23 = u.get([5]);
+  const h31 = u.get([6]);
+  const h32 = u.get([7]);
   const H = matrix([
     [h11, h12, h13],
     [h21, h22, h23],
@@ -65,29 +62,27 @@ export function solveHomography(points1: Point[], points2: Point[]): Matrix | nu
 }
 
 export function ManualHomographyEditor({
-  images,
   points1,
   points2,
   setPoints1,
   setPoints2,
-  onSaved,
-  onSkipped,
+  onSave,
+  onSkip,
   onAction,
+  isSaving = false,
+  isSkipping = false,
 }: {
-  images: [ImageType, ImageType];
   points1: Point[];
   points2: Point[];
   setPoints1: (updater: Point[] | ((prev: Point[]) => Point[])) => void;
   setPoints2: (updater: Point[] | ((prev: Point[]) => Point[])) => void;
-  onSaved: (H: Matrix) => void;
-  onSkipped?: () => void;
+  onSave: (H: Matrix) => void;
+  onSkip?: () => void;
   onAction?: () => void;
+  isSaving?: boolean;
+  isSkipping?: boolean;
 }) {
-  const { client } = useContext(GlobalContext)!;
   const [moreInformation, setMoreInformation] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isSkipping, setIsSkipping] = useState(false);
-  const queryClient = useQueryClient();
   const canCompute =
     points1.length >= MIN_HOMOGRAPHY_POINTS &&
     points2.length >= MIN_HOMOGRAPHY_POINTS &&
@@ -102,104 +97,15 @@ export function ManualHomographyEditor({
     [setPoints1, setPoints2, onAction]
   );
 
-  const handleSave = useCallback(async () => {
-    setIsSaving(true);
-    const H = solveHomography(points1, points2) as Matrix;
+  const handleSave = useCallback(() => {
+    const H = solveHomography(points1, points2);
     if (!H) return;
+    onSave(H);
+  }, [points1, points2, onSave]);
 
-    const flat: number[] = (H.toArray() as number[][]).flat();
-    const flatInverse: number[] = (inv(H).toArray() as number[][]).flat();
-
-    // determine keys order
-    const nb1Resp: any = await (client.models.ImageNeighbour.get as any)({
-      image1Id: images[0].id,
-      image2Id: images[1].id,
-    });
-    const nb1 = nb1Resp?.data;
-
-    await client.models.ImageNeighbour.update({
-      image1Id: images[nb1 ? 0 : 1].id,
-      image2Id: images[nb1 ? 1 : 0].id,
-      homography: nb1 ? flat : flatInverse,
-      homographySource: 'manual',
-    });
-
-    // Force-refetch neighbours for both images so Registration and BaseImage overlays recompute
-    await Promise.all([
-      // Registration's aggregate neighbours
-      queryClient.refetchQueries({
-        queryKey: ['imageNeighbours', images[0].id],
-      }),
-      queryClient.refetchQueries({
-        queryKey: ['imageNeighbours', images[1].id],
-      }),
-      // ImageContext overlays
-      queryClient.refetchQueries({
-        queryKey: ['prevNeighbours', images[0].id],
-      }),
-      queryClient.refetchQueries({
-        queryKey: ['prevNeighbours', images[1].id],
-      }),
-      queryClient.refetchQueries({
-        queryKey: ['nextNeighbours', images[0].id],
-      }),
-      queryClient.refetchQueries({
-        queryKey: ['nextNeighbours', images[1].id],
-      }),
-    ]);
-
-    setIsSaving(false);
-    onSaved(H);
-  }, [client, images, points1, points2, onSaved]);
-
-  // Skip this image pair - mark as skipped so it won't be shown again
-  const handleSkip = useCallback(async () => {
-    if (
-      !window.confirm(
-        'Are you sure you want to skip this pair? The images will remain neighbours but won\'t require registration.'
-      )
-    )
-      return;
-
-    setIsSkipping(true);
-
-    const nb1Resp: any = await (client.models.ImageNeighbour.get as any)({
-      image1Id: images[0].id,
-      image2Id: images[1].id,
-    });
-    const nb1 = nb1Resp?.data;
-
-    await client.models.ImageNeighbour.update({
-      image1Id: images[nb1 ? 0 : 1].id,
-      image2Id: images[nb1 ? 1 : 0].id,
-      skipped: true,
-    });
-
-    // Force-refetch neighbours for both images
-    await Promise.all([
-      queryClient.refetchQueries({
-        queryKey: ['imageNeighbours', images[0].id],
-      }),
-      queryClient.refetchQueries({
-        queryKey: ['imageNeighbours', images[1].id],
-      }),
-      queryClient.refetchQueries({
-        queryKey: ['prevNeighbours', images[0].id],
-      }),
-      queryClient.refetchQueries({
-        queryKey: ['prevNeighbours', images[1].id],
-      }),
-      queryClient.refetchQueries({
-        queryKey: ['nextNeighbours', images[0].id],
-      }),
-      queryClient.refetchQueries({
-        queryKey: ['nextNeighbours', images[1].id],
-      }),
-    ]);
-
-    setIsSkipping(false);
-    onSkipped?.();
-  }, [client, images, queryClient, onSkipped]);
+  const handleSkip = useCallback(() => {
+    onSkip?.();
+  }, [onSkip]);
 
   const handleRemovePoint1 = useCallback(
     (index: number) => {
