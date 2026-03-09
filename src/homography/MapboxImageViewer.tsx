@@ -132,7 +132,7 @@ export function MapboxImageViewer({
           bounds.getNorth() >= tileBounds.getSouth()
         );
 
-        if (isVisible) {
+        if (isVisible && !isCoveredByHigherRes(z, row, col, maxZ, loadedTilesRef.current)) {
           loadedTilesRef.current.add(sourceId);
           const path = `slippymaps/${sourceKey}/${z}/${row}/${col}.png`;
           getTileBlob(path).then((blob) => {
@@ -504,6 +504,26 @@ function getPyramidInfo(image: ImageType) {
   return { maxZ, pyramidSize };
 }
 
+/** Check if a tile's area is fully covered by already-loaded higher-res tiles. */
+function isCoveredByHigherRes(
+  z: number, row: number, col: number,
+  maxZ: number, loadedTiles: Set<string>,
+): boolean {
+  if (z >= maxZ) return false;
+  const childZ = z + 1;
+  for (let dr = 0; dr < 2; dr++) {
+    for (let dc = 0; dc < 2; dc++) {
+      const cr = row * 2 + dr;
+      const cc = col * 2 + dc;
+      if (!loadedTiles.has(`tile-${childZ}-${cr}-${cc}`) &&
+          !isCoveredByHigherRes(childZ, cr, cc, maxZ, loadedTiles)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 function addTileToMap(
   map: mapboxgl.Map,
   blobUrl: string,
@@ -530,6 +550,19 @@ function addTileToMap(
     ],
   });
 
+  // Insert in z-order so higher-res tiles always render on top of lower-res
+  let beforeId: string = LAYER_CIRCLES;
+  const layers = map.getStyle().layers || [];
+  for (const layer of layers) {
+    if (layer.id.startsWith('layer-')) {
+      const layerZ = parseInt(layer.id.split('-')[1], 10);
+      if (layerZ > z) {
+        beforeId = layer.id;
+        break;
+      }
+    }
+  }
+
   map.addLayer(
     {
       id: `layer-${z}-${row}-${col}`,
@@ -537,7 +570,7 @@ function addTileToMap(
       source: sourceId,
       paint: { 'raster-fade-duration': 0 },
     },
-    LAYER_CIRCLES
+    beforeId
   );
 }
 
