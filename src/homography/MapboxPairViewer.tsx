@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useRef, useContext, useEffect } from 'react';
 import type { ImageType } from '../schemaTypes';
-import type { Point } from '../ManualHomographyEditor';
-import { MapboxImageViewer, POINT_COLORS } from './MapboxImageViewer';
+import type { Point } from './ManualHomographyEditor';
+import { MapboxImageViewer, POINT_COLORS } from '../mapbox-viewer/MapboxImageViewer';
 import { GlobalContext } from '../Context';
 
 type Props = {

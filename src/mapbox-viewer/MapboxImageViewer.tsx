@@ -3,7 +3,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { getTileBlob } from '../StorageLayer';
 import type { ImageType } from '../schemaTypes';
-import type { Point } from '../ManualHomographyEditor';
+import type { Point } from '../homography/ManualHomographyEditor';
 
 mapboxgl.accessToken = (import.meta as any).env.VITE_MAPBOX_ACCESS_TOKEN ?? '';
 

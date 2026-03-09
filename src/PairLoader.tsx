@@ -2,7 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import { GlobalContext } from './Context';
 import { RegisterPair } from './RegisterPair';
-import { ManualHomographyEditor } from './ManualHomographyEditor';
+import { ManualHomographyEditor } from './homography/ManualHomographyEditor';
 import { array2Matrix, makeTransform } from './utils';
 import { inv } from 'mathjs';
 import type { ImageType } from './schemaTypes';

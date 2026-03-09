@@ -19,9 +19,8 @@ import {
   solveHomography,
   MIN_HOMOGRAPHY_POINTS,
   type Point,
-} from '../ManualHomographyEditor';
+} from './ManualHomographyEditor';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { HomographyPairViewer } from './HomographyPairViewer';
 import { MapboxPairViewer } from './MapboxPairViewer';
 
 export function HomographyCreation({ showAnnotationSetDropdown = true }) {
@@ -108,7 +107,6 @@ export function HomographyCreation({ showAnnotationSetDropdown = true }) {
   );
 
   const [previewHomography, setPreviewHomography] = useState(false);
-  const [useMapbox, setUseMapbox] = useState(false);
 
   // Direct annotation fetch (no useOptimisticUpdates)
   const [annotations, setAnnotations] = useState<
@@ -533,14 +531,6 @@ export function HomographyCreation({ showAnnotationSetDropdown = true }) {
                     (min {MIN_HOMOGRAPHY_POINTS} point pairs)
                   </span>
                 )}
-                <Form.Check
-                  type='switch'
-                  id='use-mapbox'
-                  label='Mapbox'
-                  checked={useMapbox}
-                  onChange={(e) => setUseMapbox(e.target.checked)}
-                />
-
                 <div className='d-flex align-items-center gap-1 border-start ps-3 border-secondary'>
                   <Button
                     size='sm'
@@ -564,25 +554,14 @@ export function HomographyCreation({ showAnnotationSetDropdown = true }) {
                   </Button>
                 </div>
               </div>
-              {useMapbox ? (
-                <MapboxPairViewer
-                  key={`mapbox-${pairToFind!.primary}::${pairToFind!.secondary}`}
-                  images={[primaryImage!, secondaryImage!]}
-                  points={[points1, points2]}
-                  setPoints={[setPoints1, setPoints2]}
-                  previewTransforms={previewTransforms}
-                  onAction={recordAction}
-                />
-              ) : (
-                <HomographyPairViewer
-                  key={`leaflet-${pairToFind!.primary}::${pairToFind!.secondary}`}
-                  images={[primaryImage!, secondaryImage!]}
-                  points={[points1, points2]}
-                  setPoints={[setPoints1, setPoints2]}
-                  previewTransforms={previewTransforms}
-                  onAction={recordAction}
-                />
-              )}
+              <MapboxPairViewer
+                key={`mapbox-${pairToFind!.primary}::${pairToFind!.secondary}`}
+                images={[primaryImage!, secondaryImage!]}
+                points={[points1, points2]}
+                setPoints={[setPoints1, setPoints2]}
+                previewTransforms={previewTransforms}
+                onAction={recordAction}
+              />
             </>
           ) : (
             <>

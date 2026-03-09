@@ -26,7 +26,7 @@ import { useOptimisticUpdates } from './useOptimisticUpdates';
 import { useAnnotationNavigation } from './useAnnotationNavigation';
 import { ImageContextFromHook } from './ImageContext';
 // import { Schema } from "../amplify/data/resource";
-import { PointsOverlay } from './ManualHomographyEditor';
+import { PointsOverlay } from './PointsOverlay';
 
 type RegisterPairProps = {
   images: [ImageType, ImageType]; // The pair of images in which we need to register the annotations
