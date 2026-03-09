@@ -18,6 +18,7 @@ type Props = {
     (c: [number, number]) => [number, number],
     (c: [number, number]) => [number, number],
   ] | null;
+  onAction: () => void;
 };
 
 function LightImageContext({
@@ -185,6 +186,7 @@ export function HomographyPairViewer({
   images,
   points,
   setPoints,
+  onAction,
   previewTransforms,
 }: Props) {
   const [map1, setMap1] = useState<Map | null>(null);
@@ -213,7 +215,11 @@ export function HomographyPairViewer({
                 annotationSet={{ id: 'stub' } as any}
                 location={location}
               >
-                <PointsOverlay points={points[i]} setPoints={setPoints[i]} />
+                <PointsOverlay
+                  points={points[i]}
+                  setPoints={setPoints[i]}
+                  onAction={onAction}
+                />
                 {previewTransforms && (
                   <>
                     <HomographyPreviewOverlay

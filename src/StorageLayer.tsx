@@ -19,7 +19,7 @@ const tileCache = localforage.createInstance({
   storeName: 'tiles',
 });
 
-async function getTileBlob(path: string): Promise<Blob> {
+export async function getTileBlob(path: string): Promise<Blob> {
   // Try to get from persistent cache first
   const cached: Blob | null = await tileCache.getItem(path);
 

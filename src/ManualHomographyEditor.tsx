@@ -4,8 +4,22 @@ import L from 'leaflet';
 import { GlobalContext, ImageContext } from './Context';
 import type { ImageType } from './schemaTypes';
 import { Matrix, inv, matrix, multiply, transpose } from 'mathjs';
-import { Card, Button, Form } from 'react-bootstrap';
+import { Card, Button, Badge } from 'react-bootstrap';
 import { useQueryClient } from '@tanstack/react-query';
+import {
+  Trash2,
+  Info,
+  Save,
+  SkipForward,
+  Image as ImageIcon,
+  Target,
+  Circle,
+  ChevronDown,
+  ChevronUp,
+  X,
+  SquareDashed,
+} from 'lucide-react';
+import { POINT_COLORS } from './homography/MapboxImageViewer';
 
 type Point = { id: string; x: number; y: number };
 
@@ -43,9 +57,10 @@ function useClickToAddPoint(
 }
 
 function createDotIcon(index: number) {
+  const color = POINT_COLORS[index % POINT_COLORS.length];
   return L.divIcon({
     className: 'manual-homography-point',
-    html: `<div style="width:14px;height:14px;border-radius:7px;background:#ff3b3b;border:2px solid #ffffff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;box-shadow:0 0 2px rgba(0,0,0,0.6)"></div>`,
+    html: `<div style="width:14px;height:14px;border-radius:7px;background:${color};border:2px solid #ffffff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;box-shadow:0 0 2px rgba(0,0,0,0.6)"></div>`,
     iconSize: [16, 16],
     iconAnchor: [8, 8],
   });
@@ -54,24 +69,28 @@ function createDotIcon(index: number) {
 export function PointsOverlay({
   points,
   setPoints,
+  onAction,
 }: {
   points: Point[];
   setPoints: (pts: Point[] | ((prev: Point[]) => Point[])) => void;
+  onAction?: () => void;
 }) {
   const { xy2latLng, latLng2xy } = useContext(ImageContext)!;
 
   const handleAdd = useCallback(
     ({ x, y }: { x: number; y: number }) => {
+      onAction?.();
       setPoints((prev) => prev.concat([{ id: crypto.randomUUID(), x, y }]));
     },
-    [setPoints]
+    [setPoints, onAction]
   );
 
   const handleRemovePoint = useCallback(
     (pointId: string) => {
+      onAction?.();
       setPoints((prev) => prev.filter((p) => p.id !== pointId));
     },
-    [setPoints]
+    [setPoints, onAction]
   );
 
   useClickToAddPoint(handleAdd, points);
@@ -88,6 +107,7 @@ export function PointsOverlay({
             dragend: (e) => {
               const latlng = (e.target as L.Marker).getLatLng();
               const pt = latLng2xy(latlng) as L.Point;
+              onAction?.();
               setPoints((prev) =>
                 prev.map((q) =>
                   q.id === p.id ? { ...q, x: pt.x, y: pt.y } : q
@@ -161,6 +181,7 @@ export function ManualHomographyEditor({
   setPoints2,
   onSaved,
   onSkipped,
+  onAction,
 }: {
   images: [ImageType, ImageType];
   points1: Point[];
@@ -169,6 +190,7 @@ export function ManualHomographyEditor({
   setPoints2: (updater: Point[] | ((prev: Point[]) => Point[])) => void;
   onSaved: (H: Matrix) => void;
   onSkipped?: () => void;
+  onAction?: () => void;
 }) {
   const { client } = useContext(GlobalContext)!;
   const [moreInformation, setMoreInformation] = useState(false);
@@ -182,10 +204,11 @@ export function ManualHomographyEditor({
 
   const handleRemovePair = useCallback(
     (index: number) => {
+      onAction?.();
       setPoints1((prev) => prev.filter((_, i) => i !== index));
       setPoints2((prev) => prev.filter((_, i) => i !== index));
     },
-    [setPoints1, setPoints2]
+    [setPoints1, setPoints2, onAction]
   );
 
   const handleSave = useCallback(async () => {
@@ -289,16 +312,18 @@ export function ManualHomographyEditor({
 
   const handleRemovePoint1 = useCallback(
     (index: number) => {
+      onAction?.();
       setPoints1((prev) => prev.filter((_, i) => i !== index));
     },
-    [setPoints1]
+    [setPoints1, onAction]
   );
 
   const handleRemovePoint2 = useCallback(
     (index: number) => {
+      onAction?.();
       setPoints2((prev) => prev.filter((_, i) => i !== index));
     },
-    [setPoints2]
+    [setPoints2, onAction]
   );
 
   const tableRows = useMemo(() => {
@@ -311,141 +336,172 @@ export function ManualHomographyEditor({
   }, [points1, points2]);
 
   return (
-    <Card className='w-100 d-flex flex-column'>
-      <Card.Header>
-        <Card.Title>Manual Homography Editor</Card.Title>
-      </Card.Header>
-      <Card.Body>
-        <Button
-          variant='link'
-          className='p-0 mb-2'
-          onClick={() => setMoreInformation(!moreInformation)}
-        >
-          {moreInformation ? 'Hide instructions' : 'Show instructions'}
-        </Button>
+    <Card className='w-100 h-100 border-0 shadow-sm'>
+      <Card.Header className='border-bottom border-secondary py-3'>
+        <div className='d-flex align-items-center justify-content-between'>
+          <Card.Title className='mb-0 d-flex align-items-center gap-2'>
+            <SquareDashed size={20} className='text-info' />
+            Homography Creation
+          </Card.Title>
+          <Button
+            variant='link'
+            className='p-0 text-info text-decoration-none d-flex align-items-center gap-1 small'
+            onClick={() => setMoreInformation(!moreInformation)}
+          >
+            {moreInformation ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            {moreInformation ? 'Hide' : 'Help'}
+          </Button>
+        </div>
         {moreInformation && (
-          <Form.Label>
-            <p className='mb-1'>
-              No homography found for this pair of images.
-              <br />
-              Please follow the instructions below:
-            </p>
-            <ul>
-              <li>Select up to 12 corresponding points on both images (minimum {MIN_HOMOGRAPHY_POINTS}).</li>
-              <li>Click on a feature in Image 1, then click the same feature in Image 2.</li>
-              <li>Drag markers to adjust their position.</li>
-              <li>
-                <strong>Right-click</strong> a marker to remove it.
-              </li>
-              <li>Points should be distributed across the overlapping area of both images.</li>
-              <li>Aim to cover as much area as possible and avoid placing points in a straight line.</li>
-              <li>Once you have {MIN_HOMOGRAPHY_POINTS}+ matched pairs, use the <strong>Preview homography</strong> toggle to visualise the result (cyan grid overlay).</li>
-              <li>Click <strong>Save homography</strong> when the preview looks correct.</li>
+          <div className='mt-3 pt-3 border-top border-secondary'>
+            <div className='d-flex align-items-center gap-2 mb-2 text-info'>
+              <Info size={16} />
+              <span className='fw-bold small'>Instructions</span>
+            </div>
+            <ul className='small ps-3' style={{ opacity: 0.9, lineHeight: '1.6' }}>
+              <li>Select up to 12 corresponding points on both images (min {MIN_HOMOGRAPHY_POINTS}).</li>
+              <li>Aim to cover as much area as possible.</li>
+              <li>Avoid placing points in straight lines.</li>
+              <li>Right-click a marker to remove/swap it or press <b>Esc</b> to close the popup.</li>
+              <li>Preview will be available after 4 pairs have been created.</li>
             </ul>
-          </Form.Label>
+            <div className='d-flex align-items-center gap-2 mb-2 mt-3 text-info'>
+              <Target size={14} />
+              <span className='fw-bold small'>Shortcuts</span>
+            </div>
+            <ul className='small mb-0 ps-3 list-unstyled' style={{ lineHeight: '1.6' }}>
+              <li><kbd style={{ padding: '2px 4px', borderRadius: '4px', fontSize: '10px' }}>Ctrl + Z</kbd> Undo</li>
+              <li><kbd style={{ padding: '2px 4px', borderRadius: '4px', fontSize: '10px' }}>Ctrl + Y</kbd> / <kbd style={{ padding: '2px 4px', borderRadius: '4px', fontSize: '10px' }}>Ctrl+Shift+Z</kbd> Redo</li>
+              <li><kbd style={{ padding: '2px 4px', borderRadius: '4px', fontSize: '10px' }}>Esc</kbd> Close context menu</li>
+            </ul>
+          </div>
         )}
-        <div className='table-responsive'>
-          <table className='table table-sm table-striped table-dark align-middle mb-0'>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Image 1 (x, y)</th>
-                <th>Image 2 (x, y)</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {tableRows.map(({ i, p1, p2 }) => (
-                <tr key={`row-${i}`}>
-                  <td>{i + 1}</td>
-                  <td>
-                    {p1 ? (
-                      <span className='d-flex align-items-center gap-2'>
-                        <span>
-                          {Math.round(p1.x)}, {Math.round(p1.y)}
-                        </span>
-                        <Button
-                          size='sm'
-                          variant='outline-danger'
-                          className='py-0 px-1'
-                          onClick={() => handleRemovePoint1(i)}
-                          title='Remove this point'
-                        >
-                          ×
-                        </Button>
-                      </span>
-                    ) : (
-                      <span className='text-muted fst-italic'>—</span>
-                    )}
-                  </td>
-                  <td>
-                    {p2 ? (
-                      <span className='d-flex align-items-center gap-2'>
-                        <span>
-                          {Math.round(p2.x)}, {Math.round(p2.y)}
-                        </span>
-                        <Button
-                          size='sm'
-                          variant='outline-danger'
-                          className='py-0 px-1'
-                          onClick={() => handleRemovePoint2(i)}
-                          title='Remove this point'
-                        >
-                          ×
-                        </Button>
-                      </span>
-                    ) : (
-                      <span className='text-muted fst-italic'>—</span>
-                    )}
-                  </td>
-                  <td className='text-end'>
+      </Card.Header>
+      <Card.Body className='p-0 d-flex flex-column overflow-hidden'>
+        <div className='flex-grow-1 overflow-auto p-3'>
+          <div className='d-flex flex-column gap-2'>
+            {tableRows.map(({ i, p1, p2 }) => {
+              const color = POINT_COLORS[i % POINT_COLORS.length];
+              return (
+                <div
+                  key={`pair-${i}`}
+                  style={{
+                    background: '#5B6977',
+                    border: '1px solid rgba(255,255,255,0.05)',
+                    borderLeft: `4px solid ${color}`,
+                    borderRadius: '6px',
+                    padding: '10px'
+                  }}
+                >
+                  <div className='d-flex align-items-center justify-content-between mb-2'>
+                    <Badge
+                      pill
+                      style={{ background: color, fontSize: '0.7rem' }}
+                    >
+                      Pair {i + 1}
+                    </Badge>
                     {p1 && p2 && (
                       <Button
                         size='sm'
-                        variant='danger'
+                        variant='link'
+                        className='p-0 text-danger opacity-75 hover-opacity-100'
                         onClick={() => handleRemovePair(i)}
                       >
-                        Remove pair
+                        <X size={16} />
                       </Button>
                     )}
-                  </td>
-                </tr>
-              ))}
-              {tableRows.length === 0 && (
-                <tr>
-                  <td colSpan={4} className='text-center'>
-                    No points yet. Click on both images to add matching points.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-          <div className='d-flex gap-2 w-100 mt-2'>
+                  </div>
+
+                  <div className='d-flex gap-2'>
+                    {/* Image 1 Point */}
+                    <div className='flex-grow-1 p-2' style={{ background: '#4E5D6C', borderRadius: '4px' }}>
+                      <div className='d-flex align-items-center gap-1 mb-1 opacity-75 small'>
+                        <ImageIcon size={12} /> <span>1</span>
+                      </div>
+                      {p1 ? (
+                        <div className='d-flex align-items-center justify-content-between'>
+                          <span className='small mono'>
+                            {Math.round(p1.x)}, {Math.round(p1.y)}
+                          </span>
+                          <Button
+                            size='sm'
+                            variant='link'
+                            className='p-0 text-muted'
+                            onClick={() => handleRemovePoint1(i)}
+                          >
+                            <Trash2 size={12} />
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className='text-muted small fst-italic'>Pending...</span>
+                      )}
+                    </div>
+
+                    {/* Image 2 Point */}
+                    <div className='flex-grow-1 p-2' style={{ background: '#4E5D6C', borderRadius: '4px' }}>
+                      <div className='d-flex align-items-center gap-1 mb-1 opacity-75 small'>
+                        <ImageIcon size={12} /> <span>2</span>
+                      </div>
+                      {p2 ? (
+                        <div className='d-flex align-items-center justify-content-between'>
+                          <span className='small mono'>
+                            {Math.round(p2.x)}, {Math.round(p2.y)}
+                          </span>
+                          <Button
+                            size='sm'
+                            variant='link'
+                            className='p-0 text-muted'
+                            onClick={() => handleRemovePoint2(i)}
+                          >
+                            <Trash2 size={12} />
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className='text-muted small fst-italic'>Pending...</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {tableRows.length === 0 && (
+              <div className='text-center py-4 opacity-50 small'>
+                <Circle size={24} className='mb-2 opacity-25' />
+                <p className='mb-0'>No points yet. Click on both<br />images to begin matching.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </Card.Body>
+      <Card.Footer>
+        <div className='d-flex flex-column gap-3'>
+          <Button
+            size='sm'
+            onClick={handleSave}
+            disabled={!canCompute || isSaving}
+            className='w-100 d-flex align-items-center justify-content-center gap-2 py-2 mt-2'
+            variant={canCompute ? 'primary' : 'secondary'}
+          >
+            <Save size={16} />
+            {isSaving ? 'Saving...' : 'Save Homography'}
+          </Button>
+
+          <div className='pt-3 border-top border-secondary'>
+            <p className='small opacity-50 mb-2'>No overlap? Skip this pair.</p>
             <Button
               size='sm'
-              onClick={handleSave}
-              disabled={!canCompute || isSaving}
-              className='flex-grow-1'
+              className='w-100 d-flex align-items-center justify-content-center gap-2 mb-2'
+              variant='outline-warning'
+              onClick={() => handleSkip()}
+              disabled={isSkipping}
             >
-              {isSaving ? 'Saving...' : 'Save homography'}
+              <SkipForward size={14} />
+              {isSkipping ? 'Skipping...' : 'Skip Pair'}
             </Button>
           </div>
         </div>
-        <div className='mt-3 border-top border-dark pt-3'>
-          <Form.Label>
-            If this pair doesn't need a homography, skip it.
-          </Form.Label>
-          <Button
-            size='sm'
-            className='w-100'
-            variant='outline-warning'
-            onClick={() => handleSkip()}
-            disabled={isSkipping}
-          >
-            {isSkipping ? 'Skipping...' : 'Skip this pair'}
-          </Button>
-        </div>
-      </Card.Body>
+      </Card.Footer>
     </Card>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useMemo, useContext, useEffect } from 'react';
+import { useState, useMemo, useContext, useEffect, useCallback } from 'react';
 import { AnnotationSetDropdown } from '../AnnotationSetDropDown';
 import Select from 'react-select';
 import { ProjectContext } from '../Context';
@@ -9,13 +9,20 @@ import { inv, matrix, type Matrix } from 'mathjs';
 import { GlobalContext, ManagementContext } from '../Context';
 import { Card, Button, Form } from 'react-bootstrap';
 import { useParams } from 'react-router-dom';
-import { PanelBottom } from 'lucide-react';
+import {
+  PanelBottom,
+  Undo2,
+  Redo2,
+} from 'lucide-react';
 import {
   ManualHomographyEditor,
   solveHomography,
   MIN_HOMOGRAPHY_POINTS,
+  type Point,
 } from '../ManualHomographyEditor';
+import { useHotkeys } from 'react-hotkeys-hook';
 import { HomographyPairViewer } from './HomographyPairViewer';
+import { MapboxPairViewer } from './MapboxPairViewer';
 
 export function HomographyCreation({ showAnnotationSetDropdown = true }) {
   const { client } = useContext(GlobalContext)!;
@@ -28,13 +35,80 @@ export function HomographyCreation({ showAnnotationSetDropdown = true }) {
     useState<string>('');
   const [showFilters, setShowFilters] = useState(true);
 
-  const [points1, setPoints1] = useState<
-    { id: string; x: number; y: number }[]
-  >([]);
-  const [points2, setPoints2] = useState<
-    { id: string; x: number; y: number }[]
-  >([]);
+  const [points, setPoints] = useState<{ p1: Point[]; p2: Point[] }>({
+    p1: [],
+    p2: [],
+  });
+  const [history, setHistory] = useState<{ p1: Point[]; p2: Point[] }[]>([]);
+  const [redoStack, setRedoStack] = useState<{ p1: Point[]; p2: Point[] }[]>([]);
+
+  const recordAction = useCallback(() => {
+    setHistory((prev) => {
+      // Avoid pushing duplicate states
+      if (prev.length > 0) {
+        const last = prev[prev.length - 1];
+        if (last.p1 === points.p1 && last.p2 === points.p2) return prev;
+      }
+      return [...prev.slice(-49), points];
+    });
+    setRedoStack([]); // Clear redo stack on new action
+  }, [points]);
+
+  const undo = useCallback(() => {
+    setHistory((prev) => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      setRedoStack((redo) => [points, ...redo]);
+      setPoints(last);
+      return prev.slice(0, -1);
+    });
+  }, [points]);
+
+  const redo = useCallback(() => {
+    setRedoStack((prev) => {
+      if (prev.length === 0) return prev;
+      const next = prev[0];
+      setHistory((hist) => [...hist, points]);
+      setPoints(next);
+      return prev.slice(1);
+    });
+  }, [points]);
+
+  useHotkeys('ctrl+z, meta+z', (e) => {
+    e.preventDefault();
+    undo();
+  }, { enableOnFormTags: true });
+
+  useHotkeys('ctrl+y, meta+shift+z, ctrl+shift+z', (e) => {
+    e.preventDefault();
+    redo();
+  }, { enableOnFormTags: true });
+
+  const points1 = points.p1;
+  const points2 = points.p2;
+
+  const setPoints1 = useCallback(
+    (updater: Point[] | ((prev: Point[]) => Point[])) => {
+      setPoints((prev) => ({
+        ...prev,
+        p1: typeof updater === 'function' ? updater(prev.p1) : updater,
+      }));
+    },
+    []
+  );
+
+  const setPoints2 = useCallback(
+    (updater: Point[] | ((prev: Point[]) => Point[])) => {
+      setPoints((prev) => ({
+        ...prev,
+        p2: typeof updater === 'function' ? updater(prev.p2) : updater,
+      }));
+    },
+    []
+  );
+
   const [previewHomography, setPreviewHomography] = useState(false);
+  const [useMapbox, setUseMapbox] = useState(false);
 
   // Direct annotation fetch (no useOptimisticUpdates)
   const [annotations, setAnnotations] = useState<
@@ -265,18 +339,30 @@ export function HomographyCreation({ showAnnotationSetDropdown = true }) {
 
   // Reset points when pair changes
   useEffect(() => {
-    setPoints1([]);
-    setPoints2([]);
+    setPoints({ p1: [], p2: [] });
+    setHistory([]);
+    setRedoStack([]);
     setPreviewHomography(false);
   }, [pairToFind?.primary, pairToFind?.secondary]);
+
+  // Auto-enable preview when we first reach the minimum point pairs
+  const numPairs = Math.min(points1.length, points2.length);
+  useEffect(() => {
+    if (
+      !previewHomography &&
+      numPairs === MIN_HOMOGRAPHY_POINTS &&
+      points1.length === points2.length
+    ) {
+      setPreviewHomography(true);
+    }
+  }, [numPairs, points1.length, points2.length]);
 
   // Compute preview transforms from current points
   const previewTransforms = useMemo(() => {
     if (!previewHomography) return null;
     if (
       points1.length < MIN_HOMOGRAPHY_POINTS ||
-      points2.length < MIN_HOMOGRAPHY_POINTS ||
-      points1.length !== points2.length
+      points2.length < MIN_HOMOGRAPHY_POINTS
     )
       return null;
     const H = solveHomography(points1, points2);
@@ -296,8 +382,7 @@ export function HomographyCreation({ showAnnotationSetDropdown = true }) {
 
   const canPreview =
     points1.length >= MIN_HOMOGRAPHY_POINTS &&
-    points2.length >= MIN_HOMOGRAPHY_POINTS &&
-    points1.length === points2.length;
+    points2.length >= MIN_HOMOGRAPHY_POINTS;
 
   // Loading state
   const neighboursLoading = imageNeighboursQueries.length > 0 && !imageNeighboursQueries.every((q) => q.isSuccess);
@@ -335,6 +420,7 @@ export function HomographyCreation({ showAnnotationSetDropdown = true }) {
               setPoints1={setPoints1}
               setPoints2={setPoints2}
               onSaved={() => {}}
+              onAction={recordAction}
             />
           ) : (
             <>
@@ -447,14 +533,56 @@ export function HomographyCreation({ showAnnotationSetDropdown = true }) {
                     (min {MIN_HOMOGRAPHY_POINTS} point pairs)
                   </span>
                 )}
+                <Form.Check
+                  type='switch'
+                  id='use-mapbox'
+                  label='Mapbox'
+                  checked={useMapbox}
+                  onChange={(e) => setUseMapbox(e.target.checked)}
+                />
+
+                <div className='d-flex align-items-center gap-1 border-start ps-3 border-secondary'>
+                  <Button
+                    size='sm'
+                    variant='outline-secondary'
+                    onClick={undo}
+                    disabled={history.length === 0}
+                    title='Undo (Ctrl+Z)'
+                    className='p-1 d-flex align-items-center'
+                  >
+                    <Undo2 size={16} />
+                  </Button>
+                  <Button
+                    size='sm'
+                    variant='outline-secondary'
+                    onClick={redo}
+                    disabled={redoStack.length === 0}
+                    title='Redo (Ctrl+Y / Ctrl+Shift+Z)'
+                    className='p-1 d-flex align-items-center'
+                  >
+                    <Redo2 size={16} />
+                  </Button>
+                </div>
               </div>
-              <HomographyPairViewer
-                key={`${pairToFind!.primary}::${pairToFind!.secondary}`}
-                images={[primaryImage!, secondaryImage!]}
-                points={[points1, points2]}
-                setPoints={[setPoints1, setPoints2]}
-                previewTransforms={previewTransforms}
-              />
+              {useMapbox ? (
+                <MapboxPairViewer
+                  key={`mapbox-${pairToFind!.primary}::${pairToFind!.secondary}`}
+                  images={[primaryImage!, secondaryImage!]}
+                  points={[points1, points2]}
+                  setPoints={[setPoints1, setPoints2]}
+                  previewTransforms={previewTransforms}
+                  onAction={recordAction}
+                />
+              ) : (
+                <HomographyPairViewer
+                  key={`leaflet-${pairToFind!.primary}::${pairToFind!.secondary}`}
+                  images={[primaryImage!, secondaryImage!]}
+                  points={[points1, points2]}
+                  setPoints={[setPoints1, setPoints2]}
+                  previewTransforms={previewTransforms}
+                  onAction={recordAction}
+                />
+              )}
             </>
           ) : (
             <>
