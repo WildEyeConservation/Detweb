@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useMemo, useState } from 'react';
+import { useRef, useEffect, useCallback, useMemo, useState, type ReactNode } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { getTileBlob } from '../StorageLayer';
@@ -31,6 +31,13 @@ function getPointFeaturesAt(map: mapboxgl.Map, point: mapboxgl.Point) {
   return map.queryRenderedFeatures(point, { layers: [LAYER_CIRCLES] });
 }
 
+export type MapboxMenuItem = {
+  label: string;
+  icon?: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+};
+
 type Props = {
   image: ImageType;
   sourceKey: string | undefined;
@@ -44,6 +51,7 @@ type Props = {
   previewTransform?: (c: [number, number]) => [number, number];
   otherImage?: ImageType;
   onMapInstance?: (map: mapboxgl.Map | null, px2lngLat: (x: number, y: number) => [number, number], lngLat2px: (lng: number, lat: number) => { x: number; y: number }) => void;
+  menuItems?: MapboxMenuItem[];
 };
 
 const SOURCE_PREVIEW = 'preview';
@@ -63,9 +71,12 @@ export function MapboxImageViewer({
   previewTransform,
   otherImage,
   onMapInstance,
+  menuItems,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<mapboxgl.Map | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const dragPointRef = useRef<{ index: number } | null>(null);
   const cancelledRef = useRef(false);
   const loadedTilesRef = useRef<Set<string>>(new Set());
@@ -482,18 +493,113 @@ export function MapboxImageViewer({
     return () => { map.off('contextmenu', handleContextMenu); };
   }, [map, onContextMenu]);
 
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('mousedown', handleClick);
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      window.removeEventListener('mousedown', handleClick);
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [menuOpen]);
+
   return (
-    <div
-      ref={containerRef}
-      style={{
-        width: '100%',
-        height: '100%',
-        borderRadius: 10,
-        overflow: 'hidden',
-        background: '#ffffff',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-      }}
-    />
+    <div ref={wrapperRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <div
+        ref={containerRef}
+        style={{
+          width: '100%',
+          height: '100%',
+          borderRadius: 10,
+          overflow: 'hidden',
+          background: '#ffffff',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+        }}
+      />
+      {menuItems && menuItems.length > 0 && (
+        <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}>
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              border: '1px solid rgba(255,255,255,0.15)',
+              background: menuOpen ? 'rgba(30,30,50,0.95)' : 'rgba(30,30,50,0.75)',
+              color: '#fff',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 16,
+              padding: 0,
+              backdropFilter: 'blur(4px)',
+            }}
+            title='Options'
+          >
+            &#8942;
+          </button>
+          {menuOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 36,
+                right: 0,
+                background: '#2a2a3e',
+                border: '1px solid #444',
+                borderRadius: 6,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                minWidth: 200,
+                padding: '4px 0',
+                fontSize: '0.85rem',
+              }}
+            >
+              {menuItems.map((item, idx) => (
+                <button
+                  key={idx}
+                  disabled={item.disabled}
+                  onClick={() => {
+                    item.onClick();
+                    setMenuOpen(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    width: '100%',
+                    padding: '6px 12px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: item.disabled ? '#666' : '#ddd',
+                    cursor: item.disabled ? 'default' : 'pointer',
+                    textAlign: 'left',
+                    fontSize: 'inherit',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!item.disabled) (e.currentTarget.style.background = 'rgba(255,255,255,0.08)');
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                  }}
+                >
+                  {item.icon}
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

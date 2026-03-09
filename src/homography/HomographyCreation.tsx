@@ -561,6 +561,7 @@ export function HomographyCreation({ showAnnotationSetDropdown = true }) {
                 setPoints={[setPoints1, setPoints2]}
                 previewTransforms={previewTransforms}
                 onAction={recordAction}
+                annotationSetId={selectedAnnotationSet}
               />
             </>
           ) : (

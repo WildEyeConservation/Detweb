@@ -1,8 +1,9 @@
 import { useState, useCallback, useMemo, useRef, useContext, useEffect } from 'react';
 import type { ImageType } from '../schemaTypes';
 import type { Point } from './ManualHomographyEditor';
-import { MapboxImageViewer, POINT_COLORS } from '../mapbox-viewer/MapboxImageViewer';
+import { MapboxImageViewer, POINT_COLORS, type MapboxMenuItem } from '../mapbox-viewer/MapboxImageViewer';
 import { GlobalContext } from '../Context';
+import { useParams } from 'react-router-dom';
 
 type Props = {
   images: [ImageType, ImageType];
@@ -16,6 +17,7 @@ type Props = {
     (c: [number, number]) => [number, number],
   ] | null;
   onAction: () => void;
+  annotationSetId?: string;
 };
 
 type ContextMenuState = {
@@ -142,8 +144,11 @@ export function MapboxPairViewer({
   setPoints,
   previewTransforms,
   onAction,
+  annotationSetId: annotationSetIdProp,
 }: Props) {
   const { client } = useContext(GlobalContext)!;
+  const { surveyId, annotationSetId: annotationSetIdParam } = useParams();
+  const annotationSetId = annotationSetIdProp || annotationSetIdParam;
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [sourceKeys, setSourceKeys] = useState<[string | undefined, string | undefined]>([
@@ -265,6 +270,101 @@ export function MapboxPairViewer({
     }
   ), []);
 
+  // Fetch temporal neighbours (prev/next by timestamp) for each image
+  const [neighbours, setNeighbours] = useState<
+    [{ prev?: string; next?: string }, { prev?: string; next?: string }]
+  >([{}, {}]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(
+      images.map(async (img) => {
+        const [fwd, bwd] = await Promise.all([
+          client.models.ImageNeighbour.imageNeighboursByImage1key({ image1Id: img.id }),
+          client.models.ImageNeighbour.imageNeighboursByImage2key({ image2Id: img.id }),
+        ]);
+        const allNeighbourIds = [
+          ...fwd.data.map((n: any) => n.image2Id),
+          ...bwd.data.map((n: any) => n.image1Id),
+        ];
+        // Fetch timestamps for neighbours to determine prev/next
+        const uniqueIds = [...new Set(allNeighbourIds)];
+        const metas = await Promise.all(
+          uniqueIds.map((id) => client.models.Image.get({ id }))
+        );
+        const metaMap = new Map(
+          metas.filter((m) => m.data).map((m) => [m.data!.id, m.data!])
+        );
+        const sorted = uniqueIds
+          .filter((id) => metaMap.has(id))
+          .sort(
+            (a, b) =>
+              (metaMap.get(a)!.timestamp ?? 0) - (metaMap.get(b)!.timestamp ?? 0)
+          );
+        const myTs = img.timestamp ?? 0;
+        const prev = sorted.filter((id) => (metaMap.get(id)!.timestamp ?? 0) < myTs).pop();
+        const next = sorted.find((id) => (metaMap.get(id)!.timestamp ?? 0) > myTs);
+        return { prev, next };
+      })
+    ).then((result) => {
+      if (!cancelled) setNeighbours(result as any);
+    });
+    return () => { cancelled = true; };
+  }, [images[0].id, images[1].id, client]);
+
+  const buildImageUrl = useCallback(
+    (imageId: string) => {
+      const origin = window.location.origin;
+      if (surveyId && annotationSetId) {
+        return `${origin}/surveys/${surveyId}/image/${imageId}/${annotationSetId}`;
+      }
+      if (surveyId) {
+        return `${origin}/surveys/${surveyId}/image/${imageId}`;
+      }
+      return `${origin}/image/${imageId}`;
+    },
+    [surveyId, annotationSetId]
+  );
+
+  const buildMenuItems = useCallback(
+    (image: ImageType, idx: number): MapboxMenuItem[] => {
+      const imageName = (image as any).originalPath ?? image.id;
+      return [
+        {
+          label: 'Copy image name',
+          onClick: () => {
+            navigator.clipboard.writeText(imageName);
+          },
+        },
+        {
+          label: 'Copy link to this image',
+          onClick: () => {
+            navigator.clipboard.writeText(buildImageUrl(image.id));
+          },
+        },
+        {
+          label: 'Open previous image',
+          disabled: !neighbours[idx].prev,
+          onClick: () => {
+            if (neighbours[idx].prev) {
+              window.open(buildImageUrl(neighbours[idx].prev!), '_blank');
+            }
+          },
+        },
+        {
+          label: 'Open next image',
+          disabled: !neighbours[idx].next,
+          onClick: () => {
+            if (neighbours[idx].next) {
+              window.open(buildImageUrl(neighbours[idx].next!), '_blank');
+            }
+          },
+        },
+      ];
+    },
+    [neighbours, buildImageUrl]
+  );
+
   return (
     <div className='w-100 h-100 d-flex flex-row gap-3' style={{ position: 'relative' }}>
       {images.map((image, i) => (
@@ -292,6 +392,7 @@ export function MapboxPairViewer({
                 mapsRef.current[i] = null;
               }
             }}
+            menuItems={buildMenuItems(image, i)}
           />
         </div>
       ))}
