@@ -1,11 +1,11 @@
 import { useRef, useEffect, useCallback, useMemo, useState, type ReactNode } from 'react';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { getTileBlob } from '../StorageLayer';
 import type { ImageType } from '../schemaTypes';
 import type { Point } from '../homography/ManualHomographyEditor';
 
-mapboxgl.accessToken = (import.meta as any).env.VITE_MAPBOX_ACCESS_TOKEN ?? '';
+// MapLibre doesn't require an access token for local or open-source tiles.
 
 export const POINT_COLORS = [
   '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231',
@@ -20,18 +20,18 @@ const LAYER_LABELS = 'points-label';
 
 /**
  * Higher-resolution scale to keep coordinates very close to the equator (e.g. within 0.1 deg).
- * Mapbox Use Web Mercator, which is linear near the equator. At 45 deg lat, vertical distortion
+ * MapLibre Use Web Mercator, which is linear near the equator. At 45 deg lat, vertical distortion
  * is ~40%, but at 0.1 deg lat, it is < 0.0001%.
  */
 function getScale(width: number, height: number) {
   return 0.1 / Math.max(width, height);
 }
 
-function getPointFeaturesAt(map: mapboxgl.Map, point: mapboxgl.Point) {
+function getPointFeaturesAt(map: maplibregl.Map, point: maplibregl.Point) {
   return map.queryRenderedFeatures(point, { layers: [LAYER_CIRCLES] });
 }
 
-export type MapboxMenuItem = {
+export type MapLibreMenuItem = {
   label: string;
   icon?: ReactNode;
   onClick: () => void;
@@ -50,15 +50,15 @@ type Props = {
   maxPoints?: number;
   previewTransform?: (c: [number, number]) => [number, number];
   otherImage?: ImageType;
-  onMapInstance?: (map: mapboxgl.Map | null, px2lngLat: (x: number, y: number) => [number, number], lngLat2px: (lng: number, lat: number) => { x: number; y: number }) => void;
-  menuItems?: MapboxMenuItem[];
+  onMapInstance?: (map: maplibregl.Map | null, px2lngLat: (x: number, y: number) => [number, number], lngLat2px: (lng: number, lat: number) => { x: number; y: number }) => void;
+  menuItems?: MapLibreMenuItem[];
 };
 
 const SOURCE_PREVIEW = 'preview';
 const LAYER_OUTLINE = 'preview-outline';
 const LAYER_GRID = 'preview-grid';
 
-export function MapboxImageViewer({
+export function MapLibreImageViewer({
   image,
   sourceKey,
   points,
@@ -75,7 +75,7 @@ export function MapboxImageViewer({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const [map, setMap] = useState<mapboxgl.Map | null>(null);
+  const [map, setMap] = useState<maplibregl.Map | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const dragPointRef = useRef<{ index: number } | null>(null);
   const cancelledRef = useRef(false);
@@ -97,7 +97,7 @@ export function MapboxImageViewer({
   );
 
   // Load only visible tiles at a suitable zoom level
-  const updateVisibleTiles = useCallback(async (m: mapboxgl.Map | null) => {
+  const updateVisibleTiles = useCallback(async (m: maplibregl.Map | null) => {
     if (!m || !sourceKey || cancelledRef.current) return;
 
     const { maxZ, pyramidSize } = getPyramidInfo(image);
@@ -131,7 +131,7 @@ export function MapboxImageViewer({
 
         const c1 = px2lngLat(x0, y0);
         const c2 = px2lngLat(x1, y1);
-        const tileBounds = new mapboxgl.LngLatBounds(
+        const tileBounds = new maplibregl.LngLatBounds(
           [Math.min(c1[0], c2[0]), Math.min(c1[1], c2[1])],
           [Math.max(c1[0], c2[0]), Math.max(c1[1], c2[1])]
         );
@@ -167,11 +167,11 @@ export function MapboxImageViewer({
     loadedTilesRef.current = new Set();
     blobUrlsRef.current = [];
 
-    const m = new mapboxgl.Map({
+    const m = new maplibregl.Map({
       container: containerRef.current,
       style: {
         version: 8,
-        glyphs: 'mapbox://fonts/mapbox/{fontstack}/{range}.pbf',
+        glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
         sources: {},
         layers: [],
       },
@@ -286,7 +286,7 @@ export function MapboxImageViewer({
   // Update points GeoJSON
   useEffect(() => {
     if (!map) return;
-    const source = map.getSource(SOURCE_POINTS) as mapboxgl.GeoJSONSource | undefined;
+    const source = map.getSource(SOURCE_POINTS) as maplibregl.GeoJSONSource | undefined;
     if (!source) return;
 
     const features = points.map((p, i) => ({
@@ -309,7 +309,7 @@ export function MapboxImageViewer({
   // Update homography preview GeoJSON
   useEffect(() => {
     if (!map) return;
-    const source = map.getSource(SOURCE_PREVIEW) as mapboxgl.GeoJSONSource | undefined;
+    const source = map.getSource(SOURCE_PREVIEW) as maplibregl.GeoJSONSource | undefined;
     if (!source) return;
 
     if (!previewTransform || !otherImage) {
@@ -377,7 +377,7 @@ export function MapboxImageViewer({
 
     const MIN_POINT_DISTANCE = 20;
 
-    const handleClick = (e: mapboxgl.MapMouseEvent) => {
+    const handleClick = (e: maplibregl.MapMouseEvent) => {
       if (getPointFeaturesAt(map, e.point).length > 0) return;
 
       const { x, y } = lngLat2px(e.lngLat.lng, e.lngLat.lat);
@@ -403,7 +403,7 @@ export function MapboxImageViewer({
   useEffect(() => {
     if (!map) return;
 
-    const handleMouseMove = (e: mapboxgl.MapMouseEvent) => {
+    const handleMouseMove = (e: maplibregl.MapMouseEvent) => {
       if (dragPointRef.current) return;
       const features = getPointFeaturesAt(map, e.point);
       if (features.length > 0) {
@@ -430,7 +430,7 @@ export function MapboxImageViewer({
   useEffect(() => {
     if (!map) return;
 
-    const handleMouseDown = (e: mapboxgl.MapMouseEvent) => {
+    const handleMouseDown = (e: maplibregl.MapMouseEvent) => {
       // Only allow dragging with left mouse button
       if (e.originalEvent.button !== 0) return;
 
@@ -446,7 +446,7 @@ export function MapboxImageViewer({
       map.dragPan.disable();
     };
 
-    const handleMouseMoveForDrag = (e: mapboxgl.MapMouseEvent) => {
+    const handleMouseMoveForDrag = (e: maplibregl.MapMouseEvent) => {
       if (!dragPointRef.current) return;
       const { x, y } = lngLat2px(e.lngLat.lng, e.lngLat.lat);
       const idx = dragPointRef.current.index;
@@ -480,7 +480,7 @@ export function MapboxImageViewer({
   useEffect(() => {
     if (!map) return;
 
-    const handleContextMenu = (e: mapboxgl.MapMouseEvent) => {
+    const handleContextMenu = (e: maplibregl.MapMouseEvent) => {
       const features = getPointFeaturesAt(map, e.point);
       if (features.length === 0) return;
       e.preventDefault();
@@ -622,7 +622,7 @@ function isCoveredByHigherRes(
       const cr = row * 2 + dr;
       const cc = col * 2 + dc;
       if (!loadedTiles.has(`tile-${childZ}-${cr}-${cc}`) &&
-          !isCoveredByHigherRes(childZ, cr, cc, maxZ, loadedTiles)) {
+        !isCoveredByHigherRes(childZ, cr, cc, maxZ, loadedTiles)) {
         return false;
       }
     }
@@ -631,7 +631,7 @@ function isCoveredByHigherRes(
 }
 
 function addTileToMap(
-  map: mapboxgl.Map,
+  map: maplibregl.Map,
   blobUrl: string,
   z: number, row: number, col: number,
   tileCoverage: number,

@@ -1,7 +1,8 @@
 import { useState, useCallback, useMemo, useRef, useContext, useEffect } from 'react';
+import maplibregl from 'maplibre-gl';
 import type { ImageType } from '../schemaTypes';
 import type { Point } from './ManualHomographyEditor';
-import { MapboxImageViewer, POINT_COLORS, type MapboxMenuItem } from '../mapbox-viewer/MapboxImageViewer';
+import { MapLibreImageViewer, POINT_COLORS, type MapLibreMenuItem } from '../maplibre-viewer/MapLibreImageViewer';
 import { GlobalContext } from '../Context';
 import { useParams } from 'react-router-dom';
 
@@ -138,7 +139,7 @@ function PointContextMenu({
   );
 }
 
-export function MapboxPairViewer({
+export function MapLibrePairViewer({
   images,
   points,
   setPoints,
@@ -156,7 +157,7 @@ export function MapboxPairViewer({
     undefined,
   ]);
 
-  const mapsRef = useRef<([mapboxgl.Map, (x: number, y: number) => [number, number], (lng: number, lat: number) => { x: number; y: number }] | null)[]>([null, null]);
+  const mapsRef = useRef<([maplibregl.Map, (x: number, y: number) => [number, number], (lng: number, lat: number) => { x: number; y: number }] | null)[]>([null, null]);
 
   // Fetch source keys for each image
   useEffect(() => {
@@ -327,7 +328,7 @@ export function MapboxPairViewer({
   );
 
   const buildMenuItems = useCallback(
-    (image: ImageType, idx: number): MapboxMenuItem[] => {
+    (image: ImageType, idx: number): MapLibreMenuItem[] => {
       const imageName = (image as any).originalPath ?? image.id;
       return [
         {
@@ -374,7 +375,7 @@ export function MapboxPairViewer({
           ref={containerRefs[i]}
           style={{ position: 'relative', height: '100%', minHeight: 400 }}
         >
-          <MapboxImageViewer
+          <MapLibreImageViewer
             image={image}
             sourceKey={sourceKeys[i]}
             points={points[i]}

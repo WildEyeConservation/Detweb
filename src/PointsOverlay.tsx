@@ -2,7 +2,7 @@ import { useCallback, useContext } from 'react';
 import { Marker, Tooltip, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { ImageContext } from './Context';
-import { POINT_COLORS } from './mapbox-viewer/MapboxImageViewer';
+import { POINT_COLORS } from './maplibre-viewer/MapLibreImageViewer';
 import type { Point } from './homography/ManualHomographyEditor';
 
 const MIN_POINT_DISTANCE = 20; // Minimum pixel distance between points

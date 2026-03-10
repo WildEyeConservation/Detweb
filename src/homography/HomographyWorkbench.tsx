@@ -12,7 +12,7 @@ import {
   MIN_HOMOGRAPHY_POINTS,
   type Point,
 } from './ManualHomographyEditor';
-import { MapboxPairViewer } from './MapboxPairViewer';
+import { MapLibrePairViewer } from './MapLibrePairViewer';
 
 type Props = {
   images: [ImageType, ImageType];
@@ -223,8 +223,8 @@ export function HomographyWorkbench({
             </Button>
           </div>
         </div>
-        <MapboxPairViewer
-          key={`mapbox-${images[0].id}::${images[1].id}`}
+        <MapLibrePairViewer
+          key={`maplibre-${images[0].id}::${images[1].id}`}
           images={images}
           points={[points1, points2]}
           setPoints={[setPoints1, setPoints2]}

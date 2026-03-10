@@ -14,7 +14,7 @@ import {
   X,
   SquareDashed,
 } from 'lucide-react';
-import { POINT_COLORS } from '../mapbox-viewer/MapboxImageViewer';
+import { POINT_COLORS } from '../maplibre-viewer/MapLibreImageViewer';
 
 export type Point = { id: string; x: number; y: number };
 
