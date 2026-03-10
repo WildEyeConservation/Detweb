@@ -1,4 +1,4 @@
-import { Form, Button } from 'react-bootstrap';
+import { Form, Button, Spinner } from 'react-bootstrap';
 import { Modal, Body, Header, Footer, Title } from '../Modal';
 import { Schema } from '../amplify/client-schema';
 import { useState, useContext } from 'react';
@@ -27,6 +27,7 @@ export default function AddAnnotationSetModal({
   const [selectedAnnotationSet, setSelectedAnnotationSet] =
     useState<string>('');
   const [busy, setBusy] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
   const [importedLabels, setImportedLabels] = useState<
     Schema['Category']['type'][]
   >([]);
@@ -38,6 +39,7 @@ export default function AddAnnotationSetModal({
     }
 
     setBusy(true);
+    setStatusMessage('Creating annotation set...');
 
     await client.models.Project.update({
       id: project.id,
@@ -63,6 +65,7 @@ export default function AddAnnotationSetModal({
     }
 
     onClose();
+    setStatusMessage('');
     setBusy(false);
   }
 
@@ -148,9 +151,16 @@ export default function AddAnnotationSetModal({
             ]}
             importLabels={importedLabels}
             setHandleSave={setSaveLabels}
+            onStatusChange={setStatusMessage}
           />
         </Form>
         <Footer>
+          {statusMessage && (
+            <span className='text-muted me-auto d-flex align-items-center gap-2' style={{ fontSize: 12 }}>
+              <Spinner size='sm' />
+              {statusMessage}
+            </span>
+          )}
           <Button variant='primary' onClick={handleSave} disabled={busy}>
             {busy ? 'Creating...' : 'Create'}
           </Button>
