@@ -68,33 +68,36 @@ function PointContextMenu({
         left: screenPos.x,
         top: screenPos.y,
         zIndex: 9999,
-        background: '#2a2a3e',
-        border: '1px solid #444',
-        borderRadius: 6,
-        boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+        background: '#ffffff',
+        border: '1px solid #ccc',
+        borderRadius: 4,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
         minWidth: 160,
-        padding: '4px 0',
         fontSize: '0.85rem',
+        padding: '4px 0',
       }}
       onClick={(e) => e.stopPropagation()}
     >
       <div
         style={{
-          padding: '4px 12px',
-          color: '#aaa',
+          padding: '6px 12px',
+          color: '#666',
           fontSize: '0.75rem',
-          borderBottom: '1px solid #444',
+          borderBottom: '1px solid #eee',
+          fontWeight: 'bold',
         }}
       >
         Point {pointIndex + 1}
       </div>
       <button
-        className='btn btn-sm btn-link text-danger w-100 text-start'
-        style={{ padding: '6px 12px', textDecoration: 'none' }}
+        className='btn btn-sm w-100 text-start'
+        style={{ padding: '8px 12px', textDecoration: 'none', color: '#d9534f', background: 'transparent', border: 'none' }}
         onClick={() => {
           onRemove(imageIndex, pointIndex);
           onClose();
         }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = '#f5f5f5')}
+        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
       >
         Remove point
       </button>
@@ -103,9 +106,11 @@ function PointContextMenu({
           <div
             style={{
               padding: '4px 12px',
-              color: '#aaa',
-              fontSize: '0.75rem',
-              borderTop: '1px solid #444',
+              color: '#999',
+              fontSize: '0.70rem',
+              borderTop: '1px solid #eee',
+              marginTop: 4,
+              textTransform: 'uppercase',
             }}
           >
             Swap with...
@@ -113,12 +118,14 @@ function PointContextMenu({
           {swapTargets.map((targetIdx) => (
             <button
               key={targetIdx}
-              className='btn btn-sm btn-link text-light w-100 text-start'
-              style={{ padding: '4px 12px', textDecoration: 'none' }}
+              className='btn btn-sm w-100 text-start'
+              style={{ padding: '8px 12px', textDecoration: 'none', color: '#333', background: 'transparent', border: 'none', display: 'flex', alignItems: 'center' }}
               onClick={() => {
                 onSwap(imageIndex, pointIndex, targetIdx);
                 onClose();
               }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#f5f5f5')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             >
               <span
                 style={{

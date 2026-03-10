@@ -1,6 +1,8 @@
 import { useRef, useEffect, useCallback, useMemo, useState, type ReactNode } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { RotateCw, MoreVertical } from 'lucide-react';
 import { getTileBlob } from '../StorageLayer';
 import type { ImageType } from '../schemaTypes';
 import type { Point } from '../homography/ManualHomographyEditor';
@@ -17,6 +19,44 @@ const TILE_SIZE = 256;
 const SOURCE_POINTS = 'points';
 const LAYER_CIRCLES = 'points-circle';
 const LAYER_LABELS = 'points-label';
+
+class RotateControl implements maplibregl.IControl {
+  _map?: maplibregl.Map;
+  _container?: HTMLDivElement;
+
+  onAdd(map: maplibregl.Map) {
+    this._map = map;
+    this._container = document.createElement('div');
+    this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+    
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'maplibregl-ctrl-icon';
+    button.title = 'Rotate 90°';
+    button.style.display = 'flex';
+    button.style.alignItems = 'center';
+    button.style.justifyContent = 'center';
+    
+    button.innerHTML = renderToStaticMarkup(<RotateCw size={16} color="#333" strokeWidth={2.5} />);
+    
+    button.onclick = () => {
+      const currentBearing = map.getBearing();
+      const nextBearing = (Math.round(currentBearing / 90) * 90) + 90;
+      map.easeTo({
+        bearing: nextBearing,
+        duration: 300
+      });
+    };
+
+    this._container.appendChild(button);
+    return this._container;
+  }
+
+  onRemove() {
+    this._container?.parentNode?.removeChild(this._container);
+    this._map = undefined;
+  }
+}
 
 /**
  * Higher-resolution scale to keep coordinates very close to the equator (e.g. within 0.1 deg).
@@ -185,6 +225,14 @@ export function MapLibreImageViewer({
       pitchWithRotate: false,
       touchZoomRotate: true,
     });
+
+    m.addControl(new maplibregl.NavigationControl({
+      showCompass: false,
+      showZoom: true,
+      visualizePitch: false,
+    }), 'top-left');
+
+    m.addControl(new RotateControl(), 'top-left');
 
     m.touchZoomRotate.disableRotation();
 
@@ -526,39 +574,30 @@ export function MapLibreImageViewer({
         }}
       />
       {menuItems && menuItems.length > 0 && (
-        <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}>
+        <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10 }} className="maplibregl-ctrl maplibregl-ctrl-group">
           <button
+            className="maplibregl-ctrl-icon"
             onClick={() => setMenuOpen((v) => !v)}
             style={{
-              width: 32,
-              height: 32,
-              borderRadius: 6,
-              border: '1px solid rgba(255,255,255,0.15)',
-              background: menuOpen ? 'rgba(30,30,50,0.95)' : 'rgba(30,30,50,0.75)',
-              color: '#fff',
-              cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 16,
-              padding: 0,
-              backdropFilter: 'blur(4px)',
             }}
             title='Options'
           >
-            &#8942;
+            <MoreVertical size={16} color="#333" strokeWidth={2.5} />
           </button>
           {menuOpen && (
             <div
               style={{
                 position: 'absolute',
-                top: 36,
+                top: 32,
                 right: 0,
-                background: '#2a2a3e',
-                border: '1px solid #444',
-                borderRadius: 6,
-                boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-                minWidth: 200,
+                background: '#ffffff',
+                border: '1px solid #ccc',
+                borderRadius: 4,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                minWidth: 180,
                 padding: '4px 0',
                 fontSize: '0.85rem',
               }}
@@ -576,16 +615,16 @@ export function MapLibreImageViewer({
                     alignItems: 'center',
                     gap: 8,
                     width: '100%',
-                    padding: '6px 12px',
+                    padding: '8px 12px',
                     background: 'transparent',
                     border: 'none',
-                    color: item.disabled ? '#666' : '#ddd',
+                    color: item.disabled ? '#aaa' : '#333',
                     cursor: item.disabled ? 'default' : 'pointer',
                     textAlign: 'left',
                     fontSize: 'inherit',
                   }}
                   onMouseEnter={(e) => {
-                    if (!item.disabled) (e.currentTarget.style.background = 'rgba(255,255,255,0.08)');
+                    if (!item.disabled) (e.currentTarget.style.background = '#f5f5f5');
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = 'transparent';
