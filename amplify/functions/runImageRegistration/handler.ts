@@ -22,7 +22,7 @@ import {
 // nested-resolver auth failures while enabling subscription delivery via groupDefinedIn('group').
 const createImageNeighbour = /* GraphQL */ `
   mutation CreateImageNeighbour($input: CreateImageNeighbourInput!) {
-    createImageNeighbour(input: $input) { image1Id image2Id group }
+    createImageNeighbour(input: $input) { image1Id image2Id group projectId }
   }
 `;
 
@@ -140,6 +140,7 @@ async function handlePair(
   image2: MinimalImage,
   masks: number[][][],
   computeKey: (orig: string) => string,
+  projectId: string,
   organizationId?: string
 ) {
   try {
@@ -179,6 +180,7 @@ async function handlePair(
               input: {
                 image1Id: image1.id,
                 image2Id: image2.id,
+                projectId,
                 group: organizationId,
               },
             },
@@ -246,6 +248,7 @@ function addAdjacentPairTasks(
   seenPairs: Set<string>,
   outTasks: Array<() => Promise<SqsEntry | null>>,
   computeKey: (orig: string) => string,
+  projectId: string,
   organizationId?: string
 ) {
   for (let i = 0; i < images.length - 1; i++) {
@@ -256,7 +259,7 @@ function addAdjacentPairTasks(
       const key = [image1.id, image2.id].sort().join('|');
       if (!seenPairs.has(key)) {
         seenPairs.add(key);
-        outTasks.push(() => handlePair(image1, image2, masks, computeKey, organizationId));
+        outTasks.push(() => handlePair(image1, image2, masks, computeKey, projectId, organizationId));
       }
     } else {
       console.log(
@@ -396,7 +399,7 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
 
     // process images by camera
     Object.entries(imagesByCamera).forEach(([, images]) => {
-      addAdjacentPairTasks(images, masks, seenPairs, tasks, computeKey, organizationId);
+      addAdjacentPairTasks(images, masks, seenPairs, tasks, computeKey, projectId, organizationId);
     });
 
     // process images from overlapping cameras
@@ -409,11 +412,11 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
         (a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0)
       );
 
-      addAdjacentPairTasks(mergedImages, masks, seenPairs, tasks, computeKey, organizationId);
+      addAdjacentPairTasks(mergedImages, masks, seenPairs, tasks, computeKey, projectId, organizationId);
     });
 
     // process images with no camera
-    addAdjacentPairTasks(noCamImgs, masks, seenPairs, tasks, computeKey, organizationId);
+    addAdjacentPairTasks(noCamImgs, masks, seenPairs, tasks, computeKey, projectId, organizationId);
 
     // Limit concurrency to prevent exhausting file descriptors and network resources
     const messages = (await withConcurrency<SqsEntry | null>(tasks, 10)).filter(

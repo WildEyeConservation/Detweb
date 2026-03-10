@@ -242,6 +242,7 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
                 {
                   selectionSet: [
                     'image.id',
+                    'image.projectId',
                     'image.timestamp',
                     'image.annotations.setId',
                   ],
@@ -281,6 +282,7 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
                 await client.models.ImageNeighbour.create({
                   image1Id: previousImage.image.id,
                   image2Id: image.image.id,
+                  projectId: project.id,
                   homography,
                   group: project.organizationId,
                 });

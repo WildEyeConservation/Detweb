@@ -79,6 +79,7 @@ const schema = a
         // Global tiled location set ID for the project (no belongsTo to avoid bidirectional requirement)
         tiledLocationSetId: a.id(),
         group: a.string(),
+        imageNeighbours: a.hasMany('ImageNeighbour', 'projectId'),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')]),
     // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
@@ -427,6 +428,8 @@ const schema = a
         // When true, this pair is intentionally skipped for registration
         // (images are neighbours but don't need homography computed)
         skipped: a.boolean().default(false),
+        projectId: a.id().required(),
+        project: a.belongsTo('Project', 'projectId'),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
@@ -434,6 +437,7 @@ const schema = a
       .secondaryIndexes((index) => [
         index('image1Id').queryField('imageNeighboursByImage1key'),
         index('image2Id').queryField('imageNeighboursByImage2key'),
+        index('projectId').queryField('imageNeighboursByProjectId'),
       ]),
     Queue: a
       .model({

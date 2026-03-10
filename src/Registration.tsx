@@ -305,6 +305,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
     await client.models.ImageNeighbour.update({
       image1Id: nb1 ? activePair.primary : activePair.secondary,
       image2Id: nb1 ? activePair.secondary : activePair.primary,
+      projectId: project.id,
       skipped: true,
     });
 

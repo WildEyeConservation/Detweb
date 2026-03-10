@@ -285,6 +285,7 @@ export function HomographyCreation({ showAnnotationSetDropdown = true }) {
       await client.models.ImageNeighbour.update({
         image1Id: nb1 ? primaryImage!.id : secondaryImage!.id,
         image2Id: nb1 ? secondaryImage!.id : primaryImage!.id,
+        projectId: project.id,
         homography: nb1 ? flat : flatInverse,
         homographySource: 'manual',
       });
@@ -315,6 +316,7 @@ export function HomographyCreation({ showAnnotationSetDropdown = true }) {
     await client.models.ImageNeighbour.update({
       image1Id: nb1 ? primaryImage!.id : secondaryImage!.id,
       image2Id: nb1 ? secondaryImage!.id : primaryImage!.id,
+      projectId: project.id,
       skipped: true,
     });
 

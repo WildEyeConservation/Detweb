@@ -98,6 +98,7 @@ export default function ProcessImages({
       await client.models.ImageNeighbour.create({
         image1Id: image1.id,
         image2Id: image2.id,
+        projectId: image1.projectId,
         group: organizationId,
       });
     }
@@ -196,6 +197,7 @@ export default function ProcessImages({
                   imageSetId: selectedSet,
                   selectionSet: [
                     'image.id',
+                    'image.projectId',
                     'image.timestamp',
                     'image.originalPath',
                   ],
