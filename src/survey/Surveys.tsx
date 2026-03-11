@@ -359,7 +359,7 @@ export default function Surveys() {
       await logAdminAction(
         client,
         user.userId,
-        `Closed job "${job.tag || job.name || 'Unknown'}" for project "${selectedProject!.name}"`,
+        `Cancelled queue job "${job.tag || job.name || 'Unknown'}" for project "${selectedProject!.name}"`,
         selectedProject!.id,
         selectedProject!.organizationId
       );

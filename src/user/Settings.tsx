@@ -1,5 +1,6 @@
 import { UserIcon } from 'lucide-react';
 import { useContext, useState, useEffect, useCallback } from 'react';
+import { fetchUserAttributes } from 'aws-amplify/auth';
 import { UserContext, GlobalContext } from '../Context';
 import { useUsers } from '../apiInterface';
 import { Button, Form, Badge, Spinner, Alert } from 'react-bootstrap';
@@ -19,8 +20,16 @@ export default function Settings({ signOut }: { signOut: () => void }) {
   const { client } = useContext(GlobalContext);
   const { users } = useUsers();
 
-  const username = users?.find((u) => u.id === user.username)?.name;
-  const email = users?.find((u) => u.id === user.username)?.email;
+  const [userAttributes, setUserAttributes] = useState<{ name?: string; email?: string }>({});
+
+  useEffect(() => {
+    fetchUserAttributes().then((attrs) => {
+      setUserAttributes({ name: attrs.name, email: attrs.email });
+    });
+  }, []);
+
+  const username = users?.find((u) => u.id === user.username)?.name ?? userAttributes.name;
+  const email = users?.find((u) => u.id === user.username)?.email ?? userAttributes.email;
 
   // Active Organisations tab state
   const [memberships, setMemberships] = useState<MembershipInfo[]>([]);

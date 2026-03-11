@@ -348,6 +348,11 @@ async function handleLaunch(payload: LaunchFalseNegativesPayload, organizationId
 
   console.log('Using organizationId', { projectId, organizationId });
 
+  // If we need to create tiles from tiledRequest, use distributed tiling
+  if (!payload.locationSetId && payload.tiledRequest) {
+    return handleDistributedFalseNegativesLaunch(payload, organizationId);
+  }
+
   let selectedTiles: MinimalTile[];
 
   if (payload.isContinuation) {

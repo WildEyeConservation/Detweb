@@ -279,6 +279,15 @@ async function processTask(task: TilingTaskRecord) {
       throw new Error(`Project ${task.projectId} missing organizationId`);
     }
 
+    // Fetch organizationId from the project for group-based access
+    const projectData = await executeGraphql<{
+      getProject?: { organizationId: string };
+    }>(getProjectOrganizationId, { id: task.projectId });
+    const organizationId = projectData.getProject?.organizationId;
+    if (!organizationId) {
+      throw new Error(`Project ${task.projectId} missing organizationId`);
+    }
+
     // Download and merge all locations from batch outputs
     const allLocations = await mergeLocations(completedBatches);
     console.log('Merged locations', {

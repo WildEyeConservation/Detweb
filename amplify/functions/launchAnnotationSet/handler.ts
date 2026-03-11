@@ -81,6 +81,7 @@ const createTilingBatchMutation = /* GraphQL */ `
   }
 `;
 
+
 const updateLocationSetMutation = /* GraphQL */ `
   mutation UpdateLocationSet($input: UpdateLocationSetInput!) {
     updateLocationSet(input: $input) { id group }

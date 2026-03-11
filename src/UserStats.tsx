@@ -368,7 +368,10 @@ export default function UserStats() {
     setExporting(true);
     try {
       const userLookup = new Map<string, string>();
-      allUsers.forEach((u) => userLookup.set(u.id + '::' + u.id, u.name));
+      allUsers.forEach((u) => {
+        userLookup.set(u.id, u.name);
+        userLookup.set(u.id + '::' + u.id, u.name);
+      });
       for (const annotationSetId of selectedSets?.map((s) => s.value) || []) {
         const observations = await queryObservations(annotationSetId);
         const fileName =
