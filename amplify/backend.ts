@@ -2,7 +2,7 @@ import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { addUserToGroup } from './functions/add-user-to-group/resource';
-import { Stack, Fn } from 'aws-cdk-lib';
+import { Stack, Fn, Duration } from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { outputBucket, inputBucket } from './storage/resource';
 import { handleS3Upload } from './storage/handleS3Upload/resource';
@@ -40,9 +40,16 @@ import { removeUserFromOrganization } from './functions/removeUserFromOrganizati
 import { updateOrganizationMemberAdmin } from './functions/updateOrganizationMemberAdmin/resource';
 import { deleteQueue } from './functions/deleteQueue/resource';
 import { updateActiveOrganizations } from './functions/updateActiveOrganizations/resource';
+import { launchHomographyPool } from './functions/launchHomographyPool/resource';
+import { saveHomographyPair } from './functions/saveHomographyPair/resource';
+import { assignHomographyBatch } from './functions/assignHomographyBatch/resource';
+import { heartbeatHomographyBatch } from './functions/heartbeatHomographyBatch/resource';
+import { releaseAbandonedHomographyBatches } from './functions/releaseAbandonedHomographyBatches/resource';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 
 // Register all Amplify-managed resources in a single backend definition.
 const backend = defineBackend({
@@ -77,6 +84,11 @@ const backend = defineBackend({
   updateOrganizationMemberAdmin,
   deleteQueue,
   updateActiveOrganizations,
+  launchHomographyPool,
+  saveHomographyPair,
+  assignHomographyBatch,
+  heartbeatHomographyBatch,
+  releaseAbandonedHomographyBatches,
 });
 
 const observationTable = backend.data.resources.tables['Observation'];
@@ -768,6 +780,138 @@ backend.findAndRequeueMissingLocations.resources.lambda.addToRolePolicy(
     ],
     resources: ['*'],
   })
+);
+
+// Homography pool/batch Lambda configuration — DynamoDB direct access
+const outputsBucketName = backend.outputBucket.resources.bucket.bucketName;
+const imageNeighbourTable = backend.data.resources.tables['ImageNeighbour'];
+const homographyBatchTable = backend.data.resources.tables['HomographyBatch'];
+const homographyPoolTable = backend.data.resources.tables['HomographyPool'];
+const imageTable = backend.data.resources.tables['Image'];
+
+// DynamoDB GSI names (Amplify Gen 2 convention: partitionKey or partitionKey-sortKey)
+// If deployment fails with "index not found", check actual index names in DynamoDB console.
+const GSI_NAMES = {
+  NEIGHBOUR_IMAGE2: 'image2Id',           // ImageNeighbour by image2Id
+  NEIGHBOUR_PROJECT: 'projectId',         // ImageNeighbour by projectId
+  ANNOTATION_SET: 'setId',               // Annotation by setId
+  ANNOTATION_IMAGE_SET: 'imageId-setId',  // Annotation by imageId + setId
+  BATCH_POOL_STATUS: 'poolId-status',     // HomographyBatch by poolId + status
+  BATCH_USER_STATUS: 'assignedUserId-status', // HomographyBatch by assignedUserId + status
+};
+
+// Common table env vars for all homography lambdas
+const homographyLambdas = [
+  backend.launchHomographyPool,
+  backend.saveHomographyPair,
+  backend.assignHomographyBatch,
+  backend.heartbeatHomographyBatch,
+  backend.releaseAbandonedHomographyBatches,
+];
+for (const fn of homographyLambdas) {
+  fn.addEnvironment('HOMOGRAPHY_BATCH_TABLE', homographyBatchTable.tableName);
+  fn.addEnvironment('HOMOGRAPHY_POOL_TABLE', homographyPoolTable.tableName);
+  fn.addEnvironment('BATCH_POOL_STATUS_INDEX', GSI_NAMES.BATCH_POOL_STATUS);
+  fn.addEnvironment('BATCH_USER_STATUS_INDEX', GSI_NAMES.BATCH_USER_STATUS);
+}
+
+// saveHomographyPair: needs ImageNeighbour, Image, Annotation tables + GSIs
+backend.saveHomographyPair.addEnvironment('IMAGE_NEIGHBOUR_TABLE', imageNeighbourTable.tableName);
+backend.saveHomographyPair.addEnvironment('IMAGE_TABLE', imageTable.tableName);
+backend.saveHomographyPair.addEnvironment('ANNOTATION_TABLE', annotationTable.tableName);
+backend.saveHomographyPair.addEnvironment('NEIGHBOUR_IMAGE2_INDEX', GSI_NAMES.NEIGHBOUR_IMAGE2);
+backend.saveHomographyPair.addEnvironment('ANNOTATION_IMAGE_SET_INDEX', GSI_NAMES.ANNOTATION_IMAGE_SET);
+backend.saveHomographyPair.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['dynamodb:GetItem', 'dynamodb:UpdateItem', 'dynamodb:Query'],
+    resources: [
+      homographyBatchTable.tableArn, `${homographyBatchTable.tableArn}/index/*`,
+      homographyPoolTable.tableArn,
+      imageNeighbourTable.tableArn, `${imageNeighbourTable.tableArn}/index/*`,
+      imageTable.tableArn,
+      annotationTable.tableArn, `${annotationTable.tableArn}/index/*`,
+    ],
+  })
+);
+
+// assignHomographyBatch: needs HomographyBatch table + GSIs
+backend.assignHomographyBatch.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['dynamodb:GetItem', 'dynamodb:UpdateItem', 'dynamodb:Query'],
+    resources: [homographyBatchTable.tableArn, `${homographyBatchTable.tableArn}/index/*`],
+  })
+);
+
+// heartbeatHomographyBatch: needs HomographyBatch table
+backend.heartbeatHomographyBatch.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['dynamodb:GetItem', 'dynamodb:UpdateItem'],
+    resources: [homographyBatchTable.tableArn],
+  })
+);
+
+// releaseAbandonedHomographyBatches: needs Pool + Batch tables + AppSync for publish
+backend.releaseAbandonedHomographyBatches.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['dynamodb:Scan', 'dynamodb:Query', 'dynamodb:GetItem', 'dynamodb:UpdateItem'],
+    resources: [
+      homographyPoolTable.tableArn,
+      homographyBatchTable.tableArn, `${homographyBatchTable.tableArn}/index/*`,
+    ],
+  })
+);
+
+// launchHomographyPool: needs all tables + S3
+backend.launchHomographyPool.addEnvironment('IMAGE_NEIGHBOUR_TABLE', imageNeighbourTable.tableName);
+backend.launchHomographyPool.addEnvironment('IMAGE_TABLE', imageTable.tableName);
+backend.launchHomographyPool.addEnvironment('ANNOTATION_TABLE', annotationTable.tableName);
+backend.launchHomographyPool.addEnvironment('PROJECT_TABLE', projectTable.tableName);
+backend.launchHomographyPool.addEnvironment('OUTPUTS_BUCKET', outputsBucketName);
+backend.launchHomographyPool.addEnvironment('NEIGHBOUR_PROJECT_INDEX', GSI_NAMES.NEIGHBOUR_PROJECT);
+backend.launchHomographyPool.addEnvironment('ANNOTATION_SET_INDEX', GSI_NAMES.ANNOTATION_SET);
+backend.launchHomographyPool.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:Query', 'dynamodb:BatchGetItem'],
+    resources: [
+      annotationTable.tableArn, `${annotationTable.tableArn}/index/*`,
+      imageNeighbourTable.tableArn, `${imageNeighbourTable.tableArn}/index/*`,
+      imageTable.tableArn,
+      homographyBatchTable.tableArn,
+      homographyPoolTable.tableArn,
+      projectTable.tableArn,
+    ],
+  })
+);
+backend.launchHomographyPool.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['s3:PutObject', 's3:GetObject'],
+    resources: ['arn:aws:s3:::*/homography-batches/*'],
+  })
+);
+
+// Authenticated users need S3 read for homography manifests
+authenticatedRole.addToPrincipalPolicy(
+  new iam.PolicyStatement({
+    actions: ['s3:GetObject'],
+    resources: ['arn:aws:s3:::*/homography-batches/*'],
+  })
+);
+Object.values(backend.auth.resources.groups).forEach(({ role }) => {
+  role.addToPrincipalPolicy(
+    new iam.PolicyStatement({
+      actions: ['s3:GetObject'],
+      resources: ['arn:aws:s3:::*/homography-batches/*'],
+    })
+  );
+});
+
+// Schedule releaseAbandonedHomographyBatches every 5 minutes
+const abandonmentStack = backend.createStack('HomographyAbandonment');
+const abandonmentRule = new events.Rule(abandonmentStack, 'ReleaseAbandonedRule', {
+  schedule: events.Schedule.rate(Duration.minutes(5)),
+});
+abandonmentRule.addTarget(
+  new targets.LambdaFunction(backend.releaseAbandonedHomographyBatches.resources.lambda)
 );
 
 const generalBucketName = 'surveyscope';

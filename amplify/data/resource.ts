@@ -32,6 +32,11 @@ import { removeUserFromOrganization } from '../functions/removeUserFromOrganizat
 import { updateOrganizationMemberAdmin } from '../functions/updateOrganizationMemberAdmin/resource';
 import { deleteQueue } from '../functions/deleteQueue/resource';
 import { updateActiveOrganizations } from '../functions/updateActiveOrganizations/resource';
+import { launchHomographyPool } from '../functions/launchHomographyPool/resource';
+import { saveHomographyPair } from '../functions/saveHomographyPair/resource';
+import { assignHomographyBatch } from '../functions/assignHomographyBatch/resource';
+import { heartbeatHomographyBatch } from '../functions/heartbeatHomographyBatch/resource';
+import { releaseAbandonedHomographyBatches } from '../functions/releaseAbandonedHomographyBatches/resource';
 // import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
@@ -198,7 +203,6 @@ const schema = a
         testResults: a.hasMany('TestResult', 'annotationSetId'),
         categories: a.hasMany('Category', 'annotationSetId'),
         register: a.boolean().default(false),
-        createHomographies: a.boolean().default(false),
         jollyResultsMemberships: a.hasMany(
           'JollyResultsMembership',
           'annotationSetId'
@@ -1147,6 +1151,99 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(updateActiveOrganizations)),
+    launchHomographyPool: a
+      .mutation()
+      .arguments({
+        projectId: a.string().required(),
+        annotationSetId: a.string().required(),
+        labelIds: a.string().array().required(),
+        batchSize: a.integer().required(),
+        name: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(launchHomographyPool)),
+    saveHomographyPair: a
+      .mutation()
+      .arguments({
+        batchId: a.string().required(),
+        pairIndex: a.integer().required(),
+        image1Id: a.string().required(),
+        image2Id: a.string().required(),
+        homography: a.float().array(),
+        skip: a.boolean().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(saveHomographyPair)),
+    assignHomographyBatch: a
+      .mutation()
+      .arguments({
+        poolId: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(assignHomographyBatch)),
+    heartbeatHomographyBatch: a
+      .mutation()
+      .arguments({
+        batchId: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(heartbeatHomographyBatch)),
+    HomographyPool: a
+      .model({
+        projectId: a.id().required(),
+        project: a.belongsTo('Project', 'projectId'),
+        annotationSetId: a.id().required(),
+        name: a.string().required(),
+        labelIds: a.string().array().required(),
+        batchSize: a.integer().required(),
+        totalPairs: a.integer().required(),
+        totalBatches: a.integer().required(),
+        completedBatches: a.integer().default(0),
+        abandonedBatches: a.integer().default(0),
+        status: a.string().required(), // active, completed, archived, error
+        pairManifestS3Key: a.string(),
+        createdBy: a.string(),
+        group: a.string(),
+      })
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
+      .secondaryIndexes((index) => [
+        index('projectId').queryField('homographyPoolsByProjectId'),
+      ]),
+    HomographyBatch: a
+      .model({
+        poolId: a.id().required(),
+        pool: a.belongsTo('HomographyPool', 'poolId'),
+        projectId: a.id().required(),
+        batchIndex: a.integer().required(),
+        status: a.string().required(), // available, assigned, completed, abandoned
+        assignedUserId: a.string(),
+        assignedAt: a.datetime(),
+        completedAt: a.datetime(),
+        lastHeartbeat: a.datetime(),
+        warningIssuedAt: a.datetime(),
+        pairKeys: a.string().array().required(),
+        pairCount: a.integer().required(),
+        currentIndex: a.integer().default(0),
+        pairManifestS3Key: a.string(),
+        annotationSetId: a.id().required(),
+        group: a.string(),
+      })
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
+      .secondaryIndexes((index) => [
+        index('poolId')
+          .sortKeys(['batchIndex'])
+          .queryField('homographyBatchesByPoolIdAndIndex'),
+        index('poolId')
+          .sortKeys(['status'])
+          .queryField('homographyBatchesByPoolIdAndStatus'),
+        index('assignedUserId')
+          .sortKeys(['status'])
+          .queryField('homographyBatchesByUserAndStatus'),
+      ]),
     // Dummy table used to force full deployment instead of hotswapping resources
     fixDeploymentTable: a
       .model({
@@ -1184,6 +1281,11 @@ const schema = a
     allow.resource(updateOrganizationMemberAdmin),
     allow.resource(deleteQueue),
     allow.resource(updateActiveOrganizations),
+    allow.resource(launchHomographyPool),
+    allow.resource(saveHomographyPair),
+    allow.resource(assignHomographyBatch),
+    allow.resource(heartbeatHomographyBatch),
+    allow.resource(releaseAbandonedHomographyBatches),
     // allow.resource(consolidateUserStats),
   ]);
 
@@ -1247,6 +1349,16 @@ export type RemoveUserFromOrganizationHandler = MutationHandler<{ organizationId
 export type UpdateOrganizationMemberAdminHandler = MutationHandler<{ organizationId: string; userId: string; isAdmin: boolean }>;
 export type DeleteQueueHandler = MutationHandler<{ queueId: string }>;
 export type UpdateActiveOrganizationsHandler = MutationHandler<{ activatedOrganizationIds: string[] }>;
+
+// Homography pool/batch workflow
+export type LaunchHomographyPoolHandler = MutationHandler<{
+  projectId: string; annotationSetId: string; labelIds: string[]; batchSize: number; name: string;
+}>;
+export type SaveHomographyPairHandler = MutationHandler<{
+  batchId: string; pairIndex: number; image1Id: string; image2Id: string; homography?: number[] | null; skip: boolean;
+}>;
+export type AssignHomographyBatchHandler = MutationHandler<{ poolId: string }>;
+export type HeartbeatHomographyBatchHandler = MutationHandler<{ batchId: string }>;
 
 export const data = defineData({
   schema,

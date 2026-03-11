@@ -27,7 +27,6 @@ type Project = {
   annotationSets: {
     id: string;
     register: boolean;
-    createHomographies: boolean;
   }[];
   createdAt: string;
   queues: Schema['Queue']['type'][];
@@ -54,13 +53,6 @@ export default function Jobs() {
       register: boolean;
     }[]
   >([]);
-  const [homographyCreationJobs, setHomographyCreationJobs] = useState<
-    {
-      id: string;
-      projectId: string;
-      createHomographies: boolean;
-    }[]
-  >([]);
   const [isLoading, setIsLoading] = useState(false);
   const [takingJob, setTakingJob] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<
@@ -69,6 +61,17 @@ export default function Jobs() {
   const [deletingJob, setDeletingJob] = useState(false);
   const [scanningProjects, setScanningProjects] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
+  const [homographyPools, setHomographyPools] = useState<
+    {
+      id: string;
+      projectId: string;
+      name: string;
+      totalBatches: number;
+      completedBatches: number;
+      status: string;
+    }[]
+  >([]);
+  const [takingBatch, setTakingBatch] = useState<string | null>(null);
 
   // Initialize sortBy from localStorage or use default
   const getInitialSortBy = () => {
@@ -172,7 +175,6 @@ export default function Jobs() {
               'organization.name',
               'annotationSets.id',
               'annotationSets.register',
-              'annotationSets.createHomographies',
               'createdAt',
               'queues.*',
             ],
@@ -187,7 +189,7 @@ export default function Jobs() {
           (project): project is Project =>
             project !== null &&
             (project.queues.length > 0 ||
-              project.annotationSets.some((set) => set.register || set.createHomographies))
+              project.annotationSets.some((set) => set.register))
         )
         .map((project) => ({
           ...project,
@@ -248,22 +250,40 @@ export default function Jobs() {
 
         setRegistrationJobs(registrationJobs.filter((job) => job.register));
 
-        const homographyJobs = validProjects.flatMap((project) =>
-          project.annotationSets.map((set) => ({
-            id: set.id,
-            projectId: project.id,
-            createHomographies: set.createHomographies || false,
-          }))
-        );
-        setHomographyCreationJobs(homographyJobs.filter((job) => job.createHomographies));
-
         const filteredProjects = validProjects.filter(
           (project) =>
             project.queues.length > 0 ||
-            project.annotationSets.some((set) => set.register || set.createHomographies)
+            project.annotationSets.some((set) => set.register)
         );
         setDisplayProjects(filteredProjects);
       }
+
+      // Fetch homography pools for projects the user belongs to
+      async function fetchHomographyPools() {
+        if (cancelled) return;
+        try {
+          const allPools: typeof homographyPools = [];
+          for (const project of validProjects) {
+            const resp = await (client.models as any).HomographyPool.homographyPoolsByProjectId(
+              { projectId: project.id },
+              { filter: { status: { eq: 'active' } } }
+            );
+            const pools = (resp?.data ?? []).map((p: any) => ({
+              id: p.id,
+              projectId: project.id,
+              name: p.name,
+              totalBatches: p.totalBatches ?? 0,
+              completedBatches: p.completedBatches ?? 0,
+              status: p.status,
+            }));
+            allPools.push(...pools);
+          }
+          if (!cancelled) setHomographyPools(allPools);
+        } catch (e) {
+          console.error('Failed to fetch homography pools:', e);
+        }
+      }
+      fetchHomographyPools();
 
       // Kick off the first polling call immediately
       getJobsRemaining();
@@ -360,6 +380,24 @@ export default function Jobs() {
     }
 
     setTakingJob(false);
+  }
+
+  async function handleTakeHomographyBatch(pool: { id: string; projectId: string }) {
+    setTakingBatch(pool.id);
+    try {
+      const result = await (client.mutations as any).assignHomographyBatch({ poolId: pool.id });
+      const parsed = typeof result?.data === 'string' ? JSON.parse(result.data) : result?.data;
+      if (parsed?.id && !parsed?.error) {
+        navigate(`/surveys/${pool.projectId}/homography-pool/${pool.id}/batch/${parsed.id}`);
+      } else {
+        alert(parsed?.error || 'No batches available');
+      }
+    } catch (e) {
+      console.error('Failed to take batch:', e);
+      alert('Failed to take batch');
+    } finally {
+      setTakingBatch(null);
+    }
   }
 
   const tableData = [
@@ -542,9 +580,9 @@ export default function Jobs() {
           ],
         };
       }),
-    ...homographyCreationJobs
-      .filter((job) => {
-        const project = displayProjects.find((p) => p.id === job.projectId);
+    ...homographyPools
+      .filter((pool) => {
+        const project = displayProjects.find((p) => p.id === pool.projectId);
         if (!project) return false;
 
         const searchLower = search.toLowerCase();
@@ -552,43 +590,41 @@ export default function Jobs() {
           !organizationFilter || project.organization.id === organizationFilter;
         const matchesSearch =
           searchLower === '' ||
+          pool.name.toLowerCase().includes(searchLower) ||
           project.name.toLowerCase().includes(searchLower) ||
           project.organization.name.toLowerCase().includes(searchLower) ||
-          'homography creation'.includes(searchLower);
+          'homography pool'.includes(searchLower);
 
         return matchesOrganization && matchesSearch;
       })
-      .map((job) => {
-        const project = displayProjects.find(
-          (project) => project.id === job.projectId
-        );
-
-        if (!project) {
-          return <></>;
-        }
+      .map((pool) => {
+        const project = displayProjects.find((p) => p.id === pool.projectId);
+        if (!project) return { id: `hp-${pool.id}`, rowData: [<></>] };
 
         const paddingClass = compactMode ? 'p-1' : 'p-2';
-        const gapClass = compactMode ? 'gap-1' : 'gap-2';
         const rowGapClass = compactMode ? 'gap-1' : 'gap-3';
         const typeFontSize = compactMode ? '12px' : '14px';
+        const progress = pool.totalBatches > 0
+          ? Math.round((pool.completedBatches / pool.totalBatches) * 100)
+          : 0;
 
         return {
-          id: `hc-${job.id}`,
+          id: `hp-${pool.id}`,
           rowData: [
             <div
               className={`d-flex justify-content-between align-items-center ${paddingClass}`}
-              key={`hc-${job.id}`}
+              key={`hp-${pool.id}`}
             >
               <div className={`d-flex flex-row ${rowGapClass} align-items-center`}>
                 <div>
                   {compactMode ? (
-                    <h6 className='mb-0'>{project.name}</h6>
+                    <h6 className='mb-0'>{pool.name}</h6>
                   ) : (
-                    <h5 className='mb-0'>{project.name}</h5>
+                    <h5 className='mb-0'>{pool.name}</h5>
                   )}
                   {!compactMode && (
                     <i style={{ fontSize: '14px', display: 'block' }}>
-                      {project.organization.name}
+                      {project.organization.name} - {project.name}
                     </i>
                   )}
                   <p
@@ -598,20 +634,29 @@ export default function Jobs() {
                       marginBottom: '0px',
                     }}
                   >
-                    Type: Homography Creation
+                    Type: Homography Pool
                   </p>
                 </div>
               </div>
-              <Button
-                size={compactMode ? 'sm' : undefined}
-                className='ms-1'
-                variant='primary'
-                onClick={() =>
-                  navigate(`/surveys/${project.id}/set/${job.id}/homography-creation`)
-                }
-              >
-                Take Job
-              </Button>
+              <div className='d-flex flex-row gap-2 align-items-center' style={{ maxWidth: '400px', width: '100%' }}>
+                <div className='d-flex flex-column w-100'>
+                  <ProgressBar
+                    now={progress}
+                    label={`${pool.completedBatches}/${pool.totalBatches}`}
+                    style={{ height: compactMode ? '16px' : '20px' }}
+                  />
+                </div>
+                <Button
+                  size={compactMode ? 'sm' : undefined}
+                  className='ms-1'
+                  variant='primary'
+                  disabled={takingBatch === pool.id || pool.completedBatches >= pool.totalBatches}
+                  onClick={() => handleTakeHomographyBatch(pool)}
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  {takingBatch === pool.id ? 'Assigning...' : 'Take Batch'}
+                </Button>
+              </div>
             </div>,
           ],
         };
