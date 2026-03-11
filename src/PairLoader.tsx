@@ -2,9 +2,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import { GlobalContext } from './Context';
 import { RegisterPair } from './RegisterPair';
-import { ManualHomographyEditor } from './ManualHomographyEditor';
+import { ManualHomographyEditor } from './homography/ManualHomographyEditor';
 import { array2Matrix, makeTransform } from './utils';
-import { inv } from 'mathjs';
+import { inv, matrix, type Matrix } from 'mathjs';
 import type { ImageType } from './schemaTypes';
 
 type Point = { id: string; x: number; y: number };
@@ -58,18 +58,11 @@ export function PairLoader() {
           const homographyMatrix = array2Matrix(data.homography ?? null);
           const hasHomography = Boolean(homographyMatrix);
 
-          const transforms = hasHomography
+          const H = homographyMatrix ? matrix(homographyMatrix) : null;
+          const transforms = H
             ? [
-                makeTransform(
-                  reversed
-                    ? inv(homographyMatrix as any)
-                    : (homographyMatrix as any)
-                ),
-                makeTransform(
-                  reversed
-                    ? (homographyMatrix as any)
-                    : inv(homographyMatrix as any)
-                ),
+                makeTransform(reversed ? inv(H) : H),
+                makeTransform(reversed ? H : inv(H)),
               ]
             : null;
 
@@ -109,11 +102,33 @@ export function PairLoader() {
     };
   }, [client, image1Id, image2Id, selectedSet]);
 
-  const handleHomographySaved = useCallback((H: any) => {
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSkipping, setIsSkipping] = useState(false);
+
+  const handleSave = useCallback(async (H: Matrix) => {
+    if (!pair) return;
+    setIsSaving(true);
+
+    const flat: number[] = (H.toArray() as number[][]).flat();
+    const flatInverse: number[] = (inv(H).toArray() as number[][]).flat();
+
+    const nb1Resp = await client.models.ImageNeighbour.get({
+      image1Id: pair.neighbourKey.image1Id,
+      image2Id: pair.neighbourKey.image2Id,
+    });
+    const nb1 = nb1Resp?.data;
+
+    await client.models.ImageNeighbour.update({
+      image1Id: nb1 ? pair.neighbourKey.image1Id : pair.neighbourKey.image2Id,
+      image2Id: nb1 ? pair.neighbourKey.image2Id : pair.neighbourKey.image1Id,
+      homography: nb1 ? flat : flatInverse,
+      homographySource: 'manual',
+    });
+
     setPair((prev) => {
       if (!prev) return prev;
-      const fwd = makeTransform(H as any);
-      const bwd = makeTransform(inv(H as any) as any);
+      const fwd = makeTransform(H);
+      const bwd = makeTransform(inv(H));
       return {
         ...prev,
         transforms: [fwd, bwd],
@@ -122,20 +137,21 @@ export function PairLoader() {
     });
     setPoints1([]);
     setPoints2([]);
-  }, []);
+    setIsSaving(false);
+  }, [pair, client]);
 
-  // Skip this image pair - mark as skipped so it won't be shown again
   const handleSkip = useCallback(async () => {
     if (!pair) return;
-    
     if (
       !window.confirm(
-        'Are you sure you want to skip this pair? The images will remain neighbours but won\'t require registration.'
+        "Are you sure you want to skip this pair? The images will remain neighbours but won't require registration."
       )
     )
       return;
 
-    const nb1Resp: any = await (client.models.ImageNeighbour.get as any)({
+    setIsSkipping(true);
+
+    const nb1Resp = await client.models.ImageNeighbour.get({
       image1Id: pair.neighbourKey.image1Id,
       image2Id: pair.neighbourKey.image2Id,
     });
@@ -147,14 +163,9 @@ export function PairLoader() {
       skipped: true,
     });
 
-    // Mark as skipped in UI
     setSkipped(true);
+    setIsSkipping(false);
   }, [pair, client]);
-
-  const handleSkipped = useCallback(() => {
-    // When skipped from ManualHomographyEditor, also mark in database
-    handleSkip();
-  }, [handleSkip]);
 
   const content = useMemo(() => {
     if (loading) {
@@ -208,13 +219,14 @@ export function PairLoader() {
               style={{ maxWidth: '360px' }}
             >
               <ManualHomographyEditor
-                images={pair.images}
                 points1={points1}
                 points2={points2}
                 setPoints1={setPoints1}
                 setPoints2={setPoints2}
-                onSaved={handleHomographySaved}
-                onSkipped={handleSkipped}
+                onSave={handleSave}
+                onSkip={handleSkip}
+                isSaving={isSaving}
+                isSkipping={isSkipping}
               />
             </div>
           )}
@@ -240,9 +252,10 @@ export function PairLoader() {
     );
   }, [
     error,
-    handleHomographySaved,
+    handleSave,
     handleSkip,
-    handleSkipped,
+    isSaving,
+    isSkipping,
     loading,
     navigate,
     pair,

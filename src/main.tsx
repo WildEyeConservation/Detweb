@@ -22,6 +22,7 @@ import Surveys from './survey/Surveys.tsx';
 import Permissions from './Permissions.tsx';
 import Testing from './Testing/Testing';
 import { Registration } from './Registration';
+import { HomographyCreation } from './homography/HomographyCreation';
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import Admin from './Admin';
@@ -99,6 +100,10 @@ const router = createBrowserRouter([
             element: <Registration />,
           },
           {
+            path: 'homography-creation',
+            element: <HomographyCreation />,
+          },
+          {
             path: 'manage',
             element: <ProjectManagement />,
           },
@@ -131,6 +136,10 @@ const router = createBrowserRouter([
           {
             path: 'registration',
             element: <Registration showAnnotationSetDropdown={false} />,
+          },
+          {
+            path: 'homography-creation',
+            element: <HomographyCreation showAnnotationSetDropdown={false} />,
           },
         ],
       },

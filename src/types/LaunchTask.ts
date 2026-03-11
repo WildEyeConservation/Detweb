@@ -23,6 +23,8 @@ export type TiledLaunchRequest = {
   maxY: number;
   images: TiledLaunchImage[];
   locationCount: number;
+  /** Optional: Reuse this existing location set instead of creating a new one */
+  existingLocationSetId?: string;
   launchImageIds?: string[];
 };
 

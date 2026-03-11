@@ -60,6 +60,7 @@
     "localforage": "^1.10.0",
     "lucide-react": "^0.475.0",
     "luxon": "^3.5.0",
+    "maplibre-gl": "^5.20.0",
     "mathjs": "^13.0.3",
     "mdb-react-ui-kit": "^8.0.0",
     "munkres-js": "^1.2.2",

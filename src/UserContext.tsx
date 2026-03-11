@@ -197,7 +197,7 @@ export function User({
     subscriptionFilter
   );
 
-  const myOrganizationHook = useOptimisticUpdates<
+  const allOrganizationHook = useOptimisticUpdates<
     Schema['OrganizationMembership']['type'],
     'OrganizationMembership'
   >(
@@ -212,6 +212,25 @@ export function User({
       compositeKey: (membership) =>
         `${membership.organizationId}:${membership.userId}`,
     }
+  );
+
+  // Filter memberships to only include organisations the user has active cognito groups for
+  const activeCognitoOrgIds = useMemo(
+    () => new Set(cognitoGroups.filter((g) => g !== 'sysadmin' && g !== 'orgadmin')),
+    [cognitoGroups]
+  );
+
+  const isSysadmin = cognitoGroups.includes('sysadmin');
+
+  const myOrganizationHook = useMemo(
+    () => ({
+      ...allOrganizationHook,
+      // Sysadmin users can access all organisations regardless of active cognito groups
+      data: isSysadmin
+        ? allOrganizationHook.data ?? []
+        : allOrganizationHook.data?.filter((m) => activeCognitoOrgIds.has(m.organizationId)) ?? [],
+    }),
+    [allOrganizationHook, activeCognitoOrgIds, isSysadmin]
   );
 
   const isOrganizationAdmin = myOrganizationHook.data?.some(

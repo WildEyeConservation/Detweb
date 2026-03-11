@@ -36,6 +36,7 @@ interface ShowMarkersProps {
   // Optional categories list to use instead of the current project's categories
   categoriesOverride?: CategoryType[];
   onSelectAnnotation?: (annotation: ExtendedAnnotationType) => void;
+  hideFnAnnotations?: boolean;
 }
 
 /* ShowMarkers uses a annotationHook that is passed as a parameter to display the annotations on the map and to allow for editing/deleting of annotations.
@@ -97,6 +98,7 @@ export function ShowMarkers(props: ShowMarkersProps) {
       <>
         {annotations
           ?.filter((a) => a.setId === props.annotationSetId)
+          .filter((a) => !(props.hideFnAnnotations && String((a as any).source || '').includes('false-negative')))
           .map((annotation) => (
             <DetwebMarker
               key={annotation.id}
