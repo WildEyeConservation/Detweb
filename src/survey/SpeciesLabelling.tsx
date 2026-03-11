@@ -500,14 +500,16 @@ export default function SpeciesLabelling({
         </div>
       )}
 
+      {/* TILES - TODO */}
       <LabeledToggleSwitch
         className='m-0 border-top pt-2 mt-2 border-dark'
         leftLabel='Model Guided'
-        rightLabel='Tiled Annotation'
+        rightLabel='Tiled Annotation (Under Development)'
         checked={!modelGuided}
         onChange={(checked) => {
           setModelGuided(!checked);
         }}
+        disabled
       />
 
       {modelGuided ? (

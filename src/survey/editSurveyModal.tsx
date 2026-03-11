@@ -36,9 +36,10 @@ export default function EditSurveyModal({
           <Tab label='Process Images'>
             <ProcessImages key={project.id} projectId={project.id} organizationId={project.organizationId} />
           </Tab>
-          <Tab label='Manage Tiles'>
+          {/* TILES - TODO */}
+          {/* <Tab label='Manage Tiles'>
             <ManageTiles key={project.id} project={project} />
-          </Tab>
+          </Tab> */}
           <Tab label='Edit Cameras'>
             <EditCameras key={project.id} projectId={project.id} organizationId={project.organizationId} />
           </Tab>
