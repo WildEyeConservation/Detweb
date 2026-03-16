@@ -111,16 +111,28 @@ export function ManualHomographyEditor({
     (index: number) => {
       onAction?.();
       setPoints1((prev) => prev.filter((_, i) => i !== index));
+      // Move the orphaned point2 to the end so existing pairings stay intact
+      setPoints2((prev) => {
+        if (index >= prev.length) return prev;
+        const orphan = prev[index];
+        return [...prev.filter((_, i) => i !== index), orphan];
+      });
     },
-    [setPoints1, onAction]
+    [setPoints1, setPoints2, onAction]
   );
 
   const handleRemovePoint2 = useCallback(
     (index: number) => {
       onAction?.();
       setPoints2((prev) => prev.filter((_, i) => i !== index));
+      // Move the orphaned point1 to the end so existing pairings stay intact
+      setPoints1((prev) => {
+        if (index >= prev.length) return prev;
+        const orphan = prev[index];
+        return [...prev.filter((_, i) => i !== index), orphan];
+      });
     },
-    [setPoints2, onAction]
+    [setPoints1, setPoints2, onAction]
   );
 
   const tableRows = useMemo(() => {
