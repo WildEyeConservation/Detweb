@@ -294,10 +294,12 @@ async function processQueue(queue: QueueRecord): Promise<number> {
   const missingLocationIds = launchedLocationIds.filter(
     (id) => !observedLocationIds.has(id) && !annotatedUnobservedLocationIds.has(id)
   );
+  const observedFromLaunched = launchedLocationIds.filter((id) => observedLocationIds.has(id)).length;
   console.log('Computed missing locations', {
     queueId: queue.id,
     launched: launchedLocationIds.length,
-    observed: observedLocationIds.size,
+    observedFromLaunched,
+    observedTotal: observedLocationIds.size,
     annotated: annotatedUnobservedLocationIds.size,
     missingCount: missingLocationIds.length,
   });
