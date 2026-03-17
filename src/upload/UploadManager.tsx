@@ -329,7 +329,8 @@ export default function UploadManager() {
             (img) => img.originalPath === originalPath
           );
           if (imageData) {
-            // Double-check existence to avoid duplicates
+            // Optimistic lock: claim this path before any async work
+            // to prevent other concurrent workers from also creating it
             if (knownDbPaths.has(originalPath)) {
               setProgress((prev) => ({
                 ...prev,
@@ -337,6 +338,8 @@ export default function UploadManager() {
               }));
               continue;
             }
+            knownDbPaths.add(originalPath);
+
             const fileObj = files.find(
               (f) => f.webkitRelativePath === originalPath
             );
@@ -390,7 +393,6 @@ export default function UploadManager() {
                 timestamp: img.timestamp!,
                 cameraId: img.cameraId ?? undefined,
               });
-              knownDbPaths.add(img.originalPath!);
               await createdImagesStore.setItem(projectId, createdImages);
               await client.models.ImageSetMembership.create({
                 imageId: img.id,
@@ -442,10 +444,12 @@ export default function UploadManager() {
               uploadedFiles.push(image.originalPath);
               await fileStoreUploaded.setItem(projectId, uploadedFiles);
 
-              // If image DB entry already exists, skip DB creates to avoid duplicates
+              // Optimistic lock: claim this path before any async work
+              // to prevent other concurrent workers from also creating it
               if (knownDbPaths.has(image.originalPath)) {
                 continue;
               }
+              knownDbPaths.add(image.originalPath);
 
               let elevation = 0;
               if (image.latitude && image.longitude && !image.altitude_agl) {
@@ -492,7 +496,6 @@ export default function UploadManager() {
                   timestamp: image.timestamp,
                   cameraId: img.cameraId ?? undefined,
                 });
-                knownDbPaths.add(image.originalPath);
                 await createdImagesStore.setItem(projectId, createdImages);
                 await client.models.ImageSetMembership.create({
                   imageId: img.id,
@@ -739,12 +742,20 @@ export default function UploadManager() {
       const allCreatedImages =
         ((await createdImagesStore.getItem(projectId)) as CreatedImage[]) ?? [];
 
-      // Only process images that were part of this upload session
+      // Only process images that were part of this upload session,
+      // and deduplicate by originalPath (keep first occurrence) to avoid
+      // processing the same image twice if duplicates exist
       const sessionOriginalPaths = new Set(
         uploadedFiles.map((f) => f.originalPath)
       );
+      const seenPaths = new Set<string>();
       const createdImages = allCreatedImages
-        .filter((img) => sessionOriginalPaths.has(img.originalPath))
+        .filter((img) => {
+          if (!sessionOriginalPaths.has(img.originalPath)) return false;
+          if (seenPaths.has(img.originalPath)) return false;
+          seenPaths.add(img.originalPath);
+          return true;
+        })
         .sort((a, b) => a.timestamp - b.timestamp);
 
       const {
@@ -753,10 +764,11 @@ export default function UploadManager() {
         projectId: projectId,
       });
 
-      // Preserve correct total image count by using all created images
+      // Preserve correct total image count using deduplicated images from DB
+      const uniqueAllPaths = new Set(allCreatedImages.map((img) => img.originalPath));
       await client.models.ImageSet.update({
         id: imageSet.id,
-        imageCount: allCreatedImages.length,
+        imageCount: uniqueAllPaths.size,
       });
 
       // Determine legacy vs new key structure
