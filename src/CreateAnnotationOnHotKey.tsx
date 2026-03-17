@@ -10,6 +10,17 @@ export default function CreateAnnotationOnHotKey({
   imageId,
   source,
   isTest = false,
+  location,
+  allowOutside,
+}: {
+  hotkey: string;
+  category: any;
+  setId: string;
+  imageId: string;
+  source: string;
+  isTest?: boolean;
+  location?: { x: number; y: number; width?: number; height?: number };
+  allowOutside?: boolean;
 }) {
   const {
     annotationsHook: { create: createAnnotation },
@@ -25,12 +36,23 @@ export default function CreateAnnotationOnHotKey({
   });
 
   const handleHotkey = useCallback(() => {
+    const x = Math.round(currentPosition.x);
+    const y = Math.round(currentPosition.y);
+    // Boundary check: skip if outside location bounds (same logic as CreateAnnotationOnClick)
+    if (
+      location?.width && location?.height &&
+      !allowOutside &&
+      !(Math.abs(x - location.x) < location.width / 2 &&
+        Math.abs(y - location.y) < location.height / 2)
+    ) {
+      return;
+    }
     createAnnotation({
       categoryId: category.id,
       setId,
       imageId,
-      x: Math.round(currentPosition.x),
-      y: Math.round(currentPosition.y),
+      x,
+      y,
       projectId: project.id,
       source: source,
       group: project.organizationId,
@@ -44,6 +66,8 @@ export default function CreateAnnotationOnHotKey({
     setId,
     project.id,
     source,
+    location,
+    allowOutside,
   ]);
 
   useHotkeys(

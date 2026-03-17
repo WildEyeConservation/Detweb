@@ -15,6 +15,20 @@ import type {
 import { ManagementContext, GlobalContext } from './Context';
 import ChangeCategoryModal from './ChangeCategoryModal';
 
+interface LocationBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function isInsideLocation(px: number, py: number, loc: LocationBounds): boolean {
+  return (
+    Math.abs(px - loc.x) < loc.width / 2 &&
+    Math.abs(py - loc.y) < loc.height / 2
+  );
+}
+
 interface DetwebMarkerProps {
   annotation: ExtendedAnnotationType;
   categories: CategoryType[];
@@ -32,6 +46,7 @@ interface DetwebMarkerProps {
   onShadowDrag?: (id: string, x: number, y: number) => void;
   hideIdenticon?: boolean;
   onClick?: (annotation: ExtendedAnnotationType) => void;
+  locationBounds?: LocationBounds;
 }
 
 function createIcon(
@@ -126,13 +141,28 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
       xy2latLng,
       onShadowDrag,
       onClick,
+      locationBounds,
     } = props;
     const { allUsers } = useContext(ManagementContext)!;
     const { client } = useContext(GlobalContext)!;
     const [showCategoryModal, setShowCategoryModal] = useState(false);
 
+    // If locationBounds is set, annotations outside the bounds are read-only
+    const isOutsideBounds = locationBounds
+      ? !isInsideLocation(annotation.x, annotation.y, locationBounds)
+      : false;
+
     function getContextMenuItems() {
       let contextmenuItems = [];
+      // If annotation is outside location bounds, show no editable actions
+      if (isOutsideBounds) {
+        contextmenuItems.push({
+          text: 'Outside location (read-only)',
+          index: 0,
+          disabled: true,
+        });
+        return contextmenuItems;
+      }
       if (!annotation.shadow) {
         contextmenuItems.push({
           text: 'Delete',
@@ -318,6 +348,12 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
                 const coords = latLng2xy(e.target.getLatLng()) as L.Point;
                 const x = Math.round(coords.x);
                 const y = Math.round(coords.y);
+                // Revert if dragged outside location bounds
+                if (locationBounds && !isInsideLocation(x, y, locationBounds)) {
+                  const originalPos = xy2latLng(annotation);
+                  e.target.setLatLng(originalPos);
+                  return;
+                }
                 if (annotation.shadow && onShadowDrag) {
                   onShadowDrag(annotation.id, x, y);
                 } else {
@@ -339,13 +375,13 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
               },
               keydown: (e) => {
                 //if the user presses the backspace key, delete the annotation
-                if (e.originalEvent.key === 'Backspace') {
+                if (e.originalEvent.key === 'Backspace' && !isOutsideBounds) {
                   deleteAnnotation(annotation);
                 }
               },
             }}
             position={xy2latLng(annotation)}
-            draggable={true}
+            draggable={!isOutsideBounds}
             autopan={true}
             icon={createIcon(
               categories,
@@ -419,7 +455,8 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
       prevAnno.obscured === nextAnno.obscured &&
       prevAnno.createdAt === nextAnno.createdAt &&
       prevAnno.owner === nextAnno.owner &&
-      prevProps.activeAnnotation?.id === nextProps.activeAnnotation?.id;
+      prevProps.activeAnnotation?.id === nextProps.activeAnnotation?.id &&
+      prevProps.locationBounds === nextProps.locationBounds;
     return arePropsEqual;
   }
 );
