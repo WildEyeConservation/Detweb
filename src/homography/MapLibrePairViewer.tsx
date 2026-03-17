@@ -240,7 +240,15 @@ export function MapLibrePairViewer({
   const handleRemove = useCallback(
     (imageIndex: number, pointIndex: number) => {
       onAction();
+      // Remove the point from the clicked image
       setPoints[imageIndex]((prev) => prev.filter((_, i) => i !== pointIndex));
+      // Move the counterpart on the other image to the end (unmatched)
+      const otherIndex = imageIndex === 0 ? 1 : 0;
+      setPoints[otherIndex]((prev) => {
+        if (pointIndex >= prev.length) return prev;
+        const orphan = prev[pointIndex];
+        return [...prev.filter((_, i) => i !== pointIndex), orphan];
+      });
     },
     [setPoints, onAction]
   );

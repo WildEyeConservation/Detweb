@@ -584,6 +584,16 @@ backend.deleteQueue.resources.lambda.addToRolePolicy(
     resources: ['*'],
   })
 );
+backend.deleteQueue.addEnvironment(
+  'RECONCILE_FALSE_NEGATIVES_FUNCTION_NAME',
+  backend.reconcileFalseNegatives.resources.lambda.functionName
+);
+backend.deleteQueue.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['lambda:InvokeFunction'],
+    resources: [backend.reconcileFalseNegatives.resources.lambda.functionArn],
+  })
+);
 // cleanupJobs needs S3 permissions to delete location manifests and FN manifests
 backend.cleanupJobs.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({

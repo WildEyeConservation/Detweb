@@ -43,18 +43,7 @@ type FnHistory = {
   launches: FnLaunchEntry[];
 };
 
-export default function FalseNegatives() {
-  return (
-    <div className='px-3 pb-3 pt-3'>
-      <span className='text-muted'>This feature is currently under development.</span>
-      <br />
-      <span className='text-muted'>We apologize for any inconvenience caused.</span>
-    </div>
-  )
-}
-
-//TILES - TODO - export default function FalseNegatives({
-export function OriginalFalseNegatives({
+export default function FalseNegatives({
   project,
   annotationSet,
   launching,

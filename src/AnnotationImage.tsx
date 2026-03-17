@@ -208,6 +208,11 @@ export default function AnnotationImage(props: any) {
         realAnnotationSetId={annotationSetId}
         categoriesOverride={legendCategories ?? undefined}
         hideFnAnnotations={!isFalseNegativesJob}
+        locationBounds={
+          !allowOutside && location?.width && location?.height
+            ? { x: location.x, y: location.y, width: location.width, height: location.height }
+            : undefined
+        }
       />,
       <Location key='location' {...location} />,
       <MapLegend
@@ -229,6 +234,8 @@ export default function AnnotationImage(props: any) {
             imageId={location.image.id}
             source={source}
             isTest={isTest}
+            location={location}
+            allowOutside={allowOutside}
           />
         ))
     );
