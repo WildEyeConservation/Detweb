@@ -5,7 +5,7 @@ import { GlobalContext } from '../Context';
 import { Schema } from '../amplify/client-schema';
 import TileConfiguration from '../TileConfiguration';
 import type { TiledLaunchRequest } from '../types/LaunchTask';
-import { uploadData } from 'aws-amplify/storage';
+import { uploadData, downloadData } from 'aws-amplify/storage';
 
 // Threshold in bytes above which we upload the payload to S3.
 const PAYLOAD_SIZE_THRESHOLD = 200 * 1024; // 200KB
@@ -34,6 +34,8 @@ export default function ManageTiles({
     (() => Promise<TiledLaunchRequest>) | null
   >(null);
   const [error, setError] = useState<string | null>(null);
+  const [hasFnData, setHasFnData] = useState(false);
+  const [checkingFnData, setCheckingFnData] = useState(true);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const isActiveRef = useRef(true);
 
@@ -117,6 +119,44 @@ export default function ManageTiles({
     }
     checkActiveTilingTask();
   }, [client.models.TilingTask, project.id, tiledLocationSetId]);
+
+  // Check if any annotation sets in this project have FN data
+  useEffect(() => {
+    let mounted = true;
+    async function checkForFnData() {
+      setCheckingFnData(true);
+      try {
+        const { data: annotationSets } =
+          await client.models.AnnotationSet.annotationSetsByProjectId(
+            { projectId: project.id },
+            { selectionSet: ['id'], limit: 100 }
+          );
+        if (!annotationSets?.length || !mounted) return;
+
+        for (const as of annotationSets) {
+          try {
+            await downloadData({
+              path: `false-negative-pools/${as.id}.json`,
+              options: { bucket: 'outputs' },
+            }).result;
+            // If download succeeds, FN data exists
+            if (mounted) setHasFnData(true);
+            return;
+          } catch {
+            // No pool for this annotation set, continue checking
+          }
+        }
+      } catch (err) {
+        console.error('Failed to check for FN data', err);
+      } finally {
+        if (mounted) setCheckingFnData(false);
+      }
+    }
+    checkForFnData();
+    return () => {
+      mounted = false;
+    };
+  }, [client.models.AnnotationSet, project.id]);
 
   const startPollingProgress = useCallback(
     (tilingTaskId: string) => {
@@ -290,9 +330,10 @@ export default function ManageTiles({
 
     // Confirm with user if there are existing tiles
     if (currentTileCount && currentTileCount > 0) {
-      const confirmed = window.confirm(
-        `This will delete all ${currentTileCount} existing tiles and create new ones. Are you sure you want to continue?`
-      );
+      const message = hasFnData
+        ? `This will delete all ${currentTileCount} existing tiles and create new ones. All false-negative data (annotations, observations, and pool files) will also be permanently deleted. Are you sure you want to continue?`
+        : `This will delete all ${currentTileCount} existing tiles and create new ones. Are you sure you want to continue?`;
+      const confirmed = window.confirm(message);
       if (!confirmed) return;
     }
 
@@ -432,6 +473,15 @@ export default function ManageTiles({
           )}
         </div>
 
+        {/* FN data warning */}
+        {hasFnData && currentTileCount != null && currentTileCount > 0 && (
+          <Alert variant='warning'>
+            <strong>Warning:</strong> This project has existing false-negative
+            data (annotations, observations, and pool files). Regenerating tiles
+            will permanently delete all false-negative work.
+          </Alert>
+        )}
+
         {/* Error display */}
         {error && (
           <Alert variant='danger' dismissible onClose={() => setError(null)}>
@@ -490,7 +540,7 @@ export default function ManageTiles({
         <Button
           variant='primary'
           onClick={handleRegenerateTiles}
-          disabled={launchDisabled || processing}
+          disabled={launchDisabled || processing || checkingFnData}
         >
           {processing ? (
             <>

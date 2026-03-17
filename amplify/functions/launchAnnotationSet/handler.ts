@@ -106,6 +106,23 @@ const deleteObservationMutation = /* GraphQL */ `
   }
 `;
 
+const annotationSetsByProjectIdQuery = /* GraphQL */ `
+  query AnnotationSetsByProjectId(
+    $projectId: ID!
+    $limit: Int
+    $nextToken: String
+  ) {
+    annotationSetsByProjectId(
+      projectId: $projectId
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items { id }
+      nextToken
+    }
+  }
+`;
+
 const locationsBySetIdAndConfidence = /* GraphQL */ `
   query LocationsBySetIdAndConfidence(
     $setId: ID!
@@ -490,6 +507,10 @@ async function handleDistributedTiling(payload: LaunchLambdaPayload, organizatio
 
     // Clear existing locations from the location set
     await clearLocationSetLocations(locationSetId);
+
+    // Wipe all false-negative data for every annotation set in the project,
+    // since tiles are changing and FN pools reference the old tile geometries.
+    await deleteFalseNegativeDataForProject(payload.projectId);
 
     // Update the location set with new description and count
     await executeGraphql<{ updateLocationSet?: { id: string } }>(
@@ -1143,6 +1164,62 @@ async function deleteFalseNegativeData(annotationSetId: string): Promise<void> {
 
   // Delete the FN manifest from S3 (for continuation detection)
   await deleteFnManifest(annotationSetId);
+}
+
+// Delete all false-negative data across every annotation set in a project.
+// Called when tiles are regenerated, since FN pools reference old tile geometries.
+async function deleteFalseNegativeDataForProject(
+  projectId: string
+): Promise<void> {
+  console.log('Deleting FN data for all annotation sets in project', {
+    projectId,
+  });
+
+  type AnnotationSetsResponse = {
+    annotationSetsByProjectId?: {
+      items?: Array<{ id?: string | null }>;
+      nextToken?: string | null;
+    };
+  };
+
+  let nextToken: string | null | undefined = undefined;
+  const annotationSetIds: string[] = [];
+
+  do {
+    const response: AnnotationSetsResponse =
+      await executeGraphql<AnnotationSetsResponse>(
+        annotationSetsByProjectIdQuery,
+        {
+          projectId,
+          limit: 100,
+          nextToken,
+        }
+      );
+
+    const page = response.annotationSetsByProjectId;
+    for (const item of page?.items || []) {
+      if (item?.id) annotationSetIds.push(item.id);
+    }
+    nextToken = page?.nextToken ?? undefined;
+  } while (nextToken);
+
+  if (annotationSetIds.length === 0) {
+    console.log('No annotation sets found, nothing to clean');
+    return;
+  }
+
+  console.log('Found annotation sets to clean FN data', {
+    count: annotationSetIds.length,
+  });
+
+  for (const annotationSetId of annotationSetIds) {
+    await deleteFalseNegativeData(annotationSetId);
+  }
+
+  console.log('Finished deleting FN data for project', {
+    projectId,
+    annotationSetsCleaned: annotationSetIds.length,
+  });
 }
 
 // Delete all FN manifests from S3 when FN data is being cleared.
