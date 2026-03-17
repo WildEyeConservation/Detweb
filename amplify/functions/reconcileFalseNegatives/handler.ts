@@ -668,6 +668,7 @@ async function saveFnPool(
       Key: key,
       Body: JSON.stringify(pool),
       ContentType: 'application/json',
+      CacheControl: 'no-store',
     })
   );
   console.log('Saved updated FN pool', { key, poolSize: pool.poolSize });
@@ -689,6 +690,7 @@ async function saveFnHistory(
       Key: key,
       Body: JSON.stringify(history),
       ContentType: 'application/json',
+      CacheControl: 'no-store',
     })
   );
   console.log('Saved updated FN history', {

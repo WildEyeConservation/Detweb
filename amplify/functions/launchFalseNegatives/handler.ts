@@ -1164,6 +1164,7 @@ async function saveFnPool(
         Key: key,
         Body: JSON.stringify(pool),
         ContentType: 'application/json',
+        CacheControl: 'no-store',
       })
     );
     console.log('Saved FN pool to S3', { key, poolSize: pool.poolSize });
@@ -1215,6 +1216,7 @@ async function saveFnHistory(
         Key: key,
         Body: JSON.stringify(history),
         ContentType: 'application/json',
+        CacheControl: 'no-store',
       })
     );
     console.log('Saved FN history to S3', {
