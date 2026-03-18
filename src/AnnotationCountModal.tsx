@@ -59,7 +59,7 @@ const AnnotationCountModal: React.FC<Props> = ({
 
   //reduce to group by category
   const annotationByCategory = annotations.reduce((acc, annotation) => {
-    const category = annotation.category.name;
+    const category = annotation.category?.name ?? 'Unknown';
     if (!acc[category]) {
       acc[category] = [];
     }
@@ -68,7 +68,7 @@ const AnnotationCountModal: React.FC<Props> = ({
   }, {} as { [category: string]: Schema['Annotation']['type'][] });
 
   const falseNegativesByCategory = annotations.reduce((acc, annotation) => {
-    const category = annotation.category.name;
+    const category = annotation.category?.name ?? 'Unknown';
     if (!acc[category]) {
       acc[category] = 0;
     }
@@ -85,8 +85,8 @@ const AnnotationCountModal: React.FC<Props> = ({
         category,
         primaryOnly
           ? annotations.filter(
-              (annotation) => annotation.objectId === annotation.id
-            ).length
+            (annotation) => annotation.objectId === annotation.id
+          ).length
           : annotations.length,
       ].concat(hasFalseNegatives ? [falseNegativesByCategory[category]] : []),
     })

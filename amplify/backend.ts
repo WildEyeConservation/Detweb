@@ -32,12 +32,14 @@ import { monitorScoutbotDlq } from './functions/monitorScoutbotDlq/resource';
 import { processTilingBatch } from './functions/processTilingBatch/resource';
 import { monitorTilingTasks } from './functions/monitorTilingTasks/resource';
 import { findAndRequeueMissingLocations } from './functions/findAndRequeueMissingLocations/resource';
+import { reconcileFalseNegatives } from './functions/reconcileFalseNegatives/resource';
 import { createOrganization } from './functions/createOrganization/resource';
 import { inviteUserToOrganization } from './functions/inviteUserToOrganization/resource';
 import { respondToInvite } from './functions/respondToInvite/resource';
 import { removeUserFromOrganization } from './functions/removeUserFromOrganization/resource';
 import { updateOrganizationMemberAdmin } from './functions/updateOrganizationMemberAdmin/resource';
 import { deleteQueue } from './functions/deleteQueue/resource';
+import { updateActiveOrganizations } from './functions/updateActiveOrganizations/resource';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -67,12 +69,14 @@ const backend = defineBackend({
   processTilingBatch,
   monitorTilingTasks,
   findAndRequeueMissingLocations,
+  reconcileFalseNegatives,
   createOrganization,
   inviteUserToOrganization,
   respondToInvite,
   removeUserFromOrganization,
   updateOrganizationMemberAdmin,
   deleteQueue,
+  updateActiveOrganizations,
 });
 
 const observationTable = backend.data.resources.tables['Observation'];
@@ -200,6 +204,44 @@ const groupS3ListPolicy = new iam.PolicyStatement({
   resources: ['arn:aws:s3:::*'],
 });
 
+const groupS3ObjectsPolicy = new iam.PolicyStatement({
+  actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+  resources: ['arn:aws:s3:::*/images/*'],
+});
+
+// Allow reading tiles and results from the outputs bucket prefixes
+const groupS3OutputsReadPolicy = new iam.PolicyStatement({
+  actions: ['s3:GetObject', 's3:DeleteObject'],
+  resources: [
+    'arn:aws:s3:::*/slippymaps/*',
+    'arn:aws:s3:::*/heatmaps/*',
+    'arn:aws:s3:::*/false-negative-manifests/*',
+    'arn:aws:s3:::*/false-negative-pools/*',
+    'arn:aws:s3:::*/false-negative-history/*',
+  ],
+});
+
+// Allow writing launch payloads to the outputs bucket
+const groupS3LaunchPayloadsPolicy = new iam.PolicyStatement({
+  actions: ['s3:PutObject'],
+  resources: ['arn:aws:s3:::*/launch-payloads/*'],
+});
+
+// Allow writing queue manifests to the outputs bucket
+const groupS3QueueManifestsPolicy = new iam.PolicyStatement({
+  actions: ['s3:PutObject'],
+  resources: ['arn:aws:s3:::*/queue-manifests/*'],
+});
+
+// Allow Cognito group roles to query DynamoDB tables and GSIs without
+// referencing specific data resources to avoid circular dependencies.
+const groupDynamoDbQueryPolicy = new iam.PolicyStatement({
+  actions: ['dynamodb:Query', 'dynamodb:Scan', 'dynamodb:BatchGetItem'],
+  resources: [
+    'arn:aws:dynamodb:*:*:table/*',
+    'arn:aws:dynamodb:*:*:table/*/index/*',
+  ],
+});
 
 const groupEcsListPolicy = new iam.PolicyStatement({
   actions: ['ecs:ListClusters', 'ecs:DescribeClusters', 'ecs:ListServices', 'ecs:DescribeServices'],
@@ -215,7 +257,12 @@ authenticatedRole.addToPrincipalPolicy(generalBucketPolicy);
 Object.values(backend.auth.resources.groups).forEach(({ role }) => {
   role.addToPrincipalPolicy(generalBucketPolicy);
   role.addToPrincipalPolicy(groupS3ListPolicy);
+  role.addToPrincipalPolicy(groupS3ObjectsPolicy);
+  role.addToPrincipalPolicy(groupDynamoDbQueryPolicy);
   role.addToPrincipalPolicy(sqsAnnotatorStatement);
+  role.addToPrincipalPolicy(groupS3OutputsReadPolicy);
+  role.addToPrincipalPolicy(groupS3LaunchPayloadsPolicy);
+  role.addToPrincipalPolicy(groupS3QueueManifestsPolicy);
 });
 
 // Only sysadmin gets elevated SQS and ECS permissions.
@@ -537,11 +584,45 @@ backend.deleteQueue.resources.lambda.addToRolePolicy(
     resources: ['*'],
   })
 );
-// cleanupJobs needs S3 permissions to delete location manifests
+backend.deleteQueue.addEnvironment(
+  'RECONCILE_FALSE_NEGATIVES_FUNCTION_NAME',
+  backend.reconcileFalseNegatives.resources.lambda.functionName
+);
+backend.deleteQueue.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['lambda:InvokeFunction'],
+    resources: [backend.reconcileFalseNegatives.resources.lambda.functionArn],
+  })
+);
+// cleanupJobs needs S3 permissions to delete location manifests and FN manifests
 backend.cleanupJobs.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: ['s3:DeleteObject'],
-    resources: ['arn:aws:s3:::*/queue-manifests/*'],
+    resources: [
+      'arn:aws:s3:::*/queue-manifests/*',
+      'arn:aws:s3:::*/false-negative-manifests/*',
+    ],
+  })
+);
+// cleanupJobs triggers reconcileFalseNegatives when species labelling jobs complete
+backend.cleanupJobs.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['lambda:InvokeFunction'],
+    resources: [backend.reconcileFalseNegatives.resources.lambda.functionArn],
+  })
+);
+backend.cleanupJobs.addEnvironment(
+  'RECONCILE_FALSE_NEGATIVES_FUNCTION_NAME',
+  backend.reconcileFalseNegatives.resources.lambda.functionName
+);
+// reconcileFalseNegatives needs S3 permissions for FN pool and history manifests
+backend.reconcileFalseNegatives.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['s3:GetObject', 's3:PutObject'],
+    resources: [
+      'arn:aws:s3:::*/false-negative-pools/*',
+      'arn:aws:s3:::*/false-negative-history/*',
+    ],
   })
 );
 backend.launchAnnotationSet.resources.lambda.addToRolePolicy(
@@ -577,6 +658,29 @@ backend.launchFalseNegatives.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: ['lambda:InvokeFunction'],
     resources: ['*'],
+  })
+);
+// launchFalseNegatives needs S3 permissions to write queue manifests and FN manifests
+backend.launchFalseNegatives.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['s3:PutObject', 's3:GetObject'],
+    resources: [
+      'arn:aws:s3:::*/queue-manifests/*',
+      'arn:aws:s3:::*/false-negative-manifests/*',
+      'arn:aws:s3:::*/false-negative-pools/*',
+      'arn:aws:s3:::*/false-negative-history/*',
+    ],
+  })
+);
+// launchAnnotationSet needs S3 permissions to delete FN manifests when hasFN=true
+backend.launchAnnotationSet.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['s3:DeleteObject'],
+    resources: [
+      'arn:aws:s3:::*/false-negative-manifests/*',
+      'arn:aws:s3:::*/false-negative-pools/*',
+      'arn:aws:s3:::*/false-negative-history/*',
+    ],
   })
 );
 // processTilingBatch needs Lambda invoke for sequential chaining

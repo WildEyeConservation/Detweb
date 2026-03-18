@@ -88,7 +88,7 @@ const sqsClient = new SQSClient({
 
 // Constants
 const EMPTY_QUEUE_WAIT_MINUTES = 10;
-const MAX_REQUEUES = 3;
+const MAX_REQUEUES = 1;
 
 type QueueRecord = {
   id: string;
@@ -294,10 +294,12 @@ async function processQueue(queue: QueueRecord): Promise<number> {
   const missingLocationIds = launchedLocationIds.filter(
     (id) => !observedLocationIds.has(id) && !annotatedUnobservedLocationIds.has(id)
   );
+  const observedFromLaunched = launchedLocationIds.filter((id) => observedLocationIds.has(id)).length;
   console.log('Computed missing locations', {
     queueId: queue.id,
     launched: launchedLocationIds.length,
-    observed: observedLocationIds.size,
+    observedFromLaunched,
+    observedTotal: observedLocationIds.size,
     annotated: annotatedUnobservedLocationIds.size,
     missingCount: missingLocationIds.length,
   });

@@ -27,6 +27,9 @@ export type LaunchTaskArgs = {
   onProgress?: (message: string) => void;
   queueOptions: LaunchQueueOptions;
   tiledRequest?: TiledLaunchRequest | null;
+  /** If true, delete false negative annotations/observations before launching */
+  hasFN?: boolean;
+  onLaunchConfirmed?: () => void;
   launchImageIds?: string[];
 };
 
@@ -44,6 +47,8 @@ type LaunchLambdaPayload = {
   tiledRequest?: TiledLaunchRequest | null;
   locationManifestS3Key?: string | null;
   launchedCount?: number | null;
+  /** If true, delete false negative annotations/observations before launching */
+  hasFN?: boolean;
   launchImageIds?: string[];
 };
 
@@ -62,7 +67,7 @@ export function useLaunchTask(
     imageId: string;
   };
 
-  type AnnotationPoint = { x: number; y: number };
+  type AnnotationPoint = { x: number; y: number; imageId: string };
 
   async function queryLocations(
     locationSetId: string,
@@ -108,7 +113,7 @@ export function useLaunchTask(
     return allObs.map(o => o.locationId);
   }
 
-  // Query all annotations for an annotation set (for filtering locations with existing annotations)
+  // Query normal (non-FN) annotations for an annotation set (for filtering locations with existing annotations)
   async function queryAnnotations(
     annotationSetId: string,
     onProgress?: (message: string) => void
@@ -118,11 +123,17 @@ export function useLaunchTask(
       client.models.Annotation.annotationsByAnnotationSetId,
       {
         setId: annotationSetId,
+        filter: {
+          or: [
+            { source: { attributeExists: false } },
+            { source: { notContains: 'false-negative' } },
+          ],
+        },
         limit: 1000,
-        selectionSet: ['x', 'y'] as const,
+        selectionSet: ['x', 'y', 'imageId'] as const,
       }
     );
-    return allAnnos.map(a => ({ x: a.x, y: a.y }));
+    return allAnnos.map(a => ({ x: a.x, y: a.y, imageId: a.imageId }));
   }
 
   // Check if an annotation falls within a location's bounds
@@ -146,7 +157,7 @@ export function useLaunchTask(
     );
   }
 
-  // Filter out locations that have annotations within their bounds
+  // Filter out locations that have annotations within their bounds (same image only)
   function filterLocationsWithAnnotations(
     locations: LocationWithConfidence[],
     annotations: AnnotationPoint[],
@@ -154,9 +165,22 @@ export function useLaunchTask(
   ): LocationWithConfidence[] {
     onProgress?.(`Filtering ${locations.length} locations against ${annotations.length} annotations...`);
 
+    // Group annotations by imageId so we only check annotations on the same image
+    const annotationsByImage = new Map<string, AnnotationPoint[]>();
+    for (const a of annotations) {
+      let list = annotationsByImage.get(a.imageId);
+      if (!list) {
+        list = [];
+        annotationsByImage.set(a.imageId, list);
+      }
+      list.push(a);
+    }
+
     const filtered = locations.filter((location) => {
-      // Check if any annotation falls within this location's bounds
-      const hasAnnotationWithin = annotations.some((annotation) =>
+      const imageAnnotations = annotationsByImage.get(location.imageId);
+      if (!imageAnnotations) return true; // No annotations on this image, keep location
+      // Check if any annotation on the same image falls within this location's bounds
+      const hasAnnotationWithin = imageAnnotations.some((annotation) =>
         isAnnotationWithinLocation(annotation, location)
       );
       // Keep the location only if it has NO annotations within
@@ -175,6 +199,8 @@ export function useLaunchTask(
       onProgress,
       queueOptions,
       tiledRequest,
+      hasFN,
+      onLaunchConfirmed,
       launchImageIds,
     }: LaunchTaskArgs) => {
       onProgress?.('Preparing launch request');
@@ -294,6 +320,7 @@ export function useLaunchTask(
           tiledRequest: tiledRequest ?? null,
           locationManifestS3Key,
           launchedCount,
+          hasFN: hasFN ?? false,
         };
 
         onProgress?.('Enqueuing jobs...');
@@ -301,6 +328,8 @@ export function useLaunchTask(
         onProgress?.('Launch request submitted');
         return; // Exit early for model-guided
       }
+
+      onLaunchConfirmed?.();
 
       const payload: LaunchLambdaPayload = {
         projectId: options.projectId,
@@ -314,7 +343,8 @@ export function useLaunchTask(
         locationIds: collectedLocations,
         locationSetIds: selectedTasks,
         tiledRequest: tiledRequest ?? null,
-        launchImageIds: launchImageIds ?? tiledRequest?.launchImageIds, // Prioritize explicit argument
+        hasFN: hasFN ?? false,
+        launchImageIds: launchImageIds ?? tiledRequest?.launchImageIds,
       };
 
       onProgress?.('Enqueuing jobs...');

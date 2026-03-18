@@ -184,11 +184,16 @@ export default function AnnotationImage(props: any) {
     subscriptionFilter
   );
   const stats = useImageStats(annotationsHook);
-  const memoizedChildren = useMemo(() => {
+
+  // Compute source tag for annotations and observations
+  const source = useMemo(() => {
     const baseSource = props.taskTag ? `manual-${props.taskTag}` : 'manual';
-    const source = isFalseNegativesJob
+    return isFalseNegativesJob
       ? `${baseSource}-false-negative`
       : baseSource;
+  }, [props.taskTag, isFalseNegativesJob]);
+
+  const memoizedChildren = useMemo(() => {
     return [
       <CreateAnnotationOnClick
         key='caok'
@@ -202,6 +207,12 @@ export default function AnnotationImage(props: any) {
         annotationSetId={testSetId}
         realAnnotationSetId={annotationSetId}
         categoriesOverride={legendCategories ?? undefined}
+        hideFnAnnotations={!isFalseNegativesJob}
+        locationBounds={
+          !allowOutside && location?.width && location?.height
+            ? { x: location.x, y: location.y, width: location.width, height: location.height }
+            : undefined
+        }
       />,
       <Location key='location' {...location} />,
       <MapLegend
@@ -223,17 +234,23 @@ export default function AnnotationImage(props: any) {
             imageId={location.image.id}
             source={source}
             isTest={isTest}
+            location={location}
+            allowOutside={allowOutside}
           />
         ))
     );
   }, [
-    props.taskTag,
+    source,
     location.image.id,
     annotationSetId,
     legendCategories,
     projectCategories,
-    isFalseNegativesJob,
     legendCollapsed,
+    allowOutside,
+    location,
+    testSetId,
+    isTest,
+    isFalseNegativesJob,
   ]);
 
   async function handleShare() {
@@ -339,6 +356,7 @@ export default function AnnotationImage(props: any) {
             testSetId={testSetId}
             config={config}
             queueId={queueId}
+            observationSource={source}
           >
             {visible && memoizedChildren}
           </Image>
@@ -354,9 +372,7 @@ export default function AnnotationImage(props: any) {
             legendCollapsed ? (
               <Button
                 variant='success'
-                onClick={() => {
-                  navigate('/jobs');
-                }}
+                onClick={() => navigate('/jobs')}
                 className='d-none d-md-flex align-items-center justify-content-center'
                 style={{ width: '40px', height: '40px', padding: 0 }}
                 title='Save & Exit'
@@ -364,24 +380,22 @@ export default function AnnotationImage(props: any) {
                 <LogOut size={20} />
               </Button>
             ) : (
-              <Button
-                variant='success'
-                onClick={() => {
-                  navigate('/jobs');
-                }}
-                className='w-100 d-none d-md-block'
-              >
-                Save & Exit
-              </Button>
+              <div className='d-none d-md-block w-100 ps-2'>
+                <Button
+                  variant='success'
+                  onClick={() => navigate('/jobs')}
+                  className='d-none d-md-block w-100'
+                >
+                  Save & Exit
+                </Button>
+              </div>
             )
           )}
           {/* Mobile Save & Exit button (always shown on mobile) */}
           {isAnnotatePath && (
             <Button
               variant='success'
-              onClick={() => {
-                navigate('/jobs');
-              }}
+              onClick={() => navigate('/jobs')}
               className='w-100 d-md-none'
             >
               Save & Exit

@@ -7,7 +7,7 @@ import { GlobalContext } from '../Context';
 import SpeciesLabelling from './SpeciesLabelling';
 import FalseNegatives from './FalseNegatives';
 
-type TaskType = 'species-labelling' | 'registration' | 'false-negatives';
+type TaskType = 'species-labelling' | 'registration' | 'false-negatives' | 'homography-creation';
 
 export default function LaunchAnnotationSetModal({
   show,
@@ -27,19 +27,25 @@ export default function LaunchAnnotationSetModal({
   const [launching, setLaunching] = useState(false);
   const [progressMessage, setProgressMessage] = useState<string>('');
   const [launchDisabled, setLaunchDisabled] = useState<boolean>(false);
-  const [speciesLaunchHandler, setSpeciesLaunchHandler] = useState<
-    ((onProgress: (msg: string) => void) => Promise<void>) | null
-  >(null);
+  const [speciesLaunchHandler, setSpeciesLaunchHandler] = useState<{
+    execute: (
+      onProgress: (msg: string) => void,
+      onLaunchConfirmed: () => void
+    ) => Promise<void>;
+  } | null>(null);
   const [falseNegativesLaunchHandler, setFalseNegativesLaunchHandler] =
-    useState<((onProgress: (msg: string) => void) => Promise<void>) | null>(
-      null
-    );
+    useState<{
+      execute: (
+        onProgress: (msg: string) => void,
+        onLaunchConfirmed: () => void
+      ) => Promise<void>;
+    } | null>(null);
 
   // set up queue creation helper
   const { client, showModal } = useContext(GlobalContext)! as any;
 
   useEffect(() => {
-    if (taskType === 'registration') {
+    if (taskType === 'registration' || taskType === 'homography-creation') {
       setLaunchDisabled(false);
     }
   }, [taskType]);
@@ -62,52 +68,47 @@ export default function LaunchAnnotationSetModal({
     });
   }
 
+  async function createHomographyTask() {
+    await (client.models.AnnotationSet.update as any)({
+      id: annotationSet.id,
+      createHomographies: true,
+    });
+    await client.mutations.updateProjectMemberships({
+      projectId: project.id,
+    });
+  }
+
   async function handleSubmit() {
     const originalStatus = project.status ?? 'active';
     let optimisticStatusApplied = false;
-    if (
-      taskType === 'species-labelling' &&
-      typeof speciesLaunchHandler !== 'function'
-    )
-      return;
-    if (
-      taskType === 'false-negatives' &&
-      typeof falseNegativesLaunchHandler !== 'function'
-    )
-      return;
     setLaunching(true);
-
-    let dispatched: Promise<void> | null = null;
 
     try {
       switch (taskType) {
         case 'species-labelling':
-          if (typeof speciesLaunchHandler === 'function') {
+          if (speciesLaunchHandler) {
             setProgressMessage('Initializing launch...');
-            onOptimisticStatus?.(project.id, 'launching');
-            optimisticStatusApplied = true;
-            dispatched = speciesLaunchHandler(
-              setProgressMessage
-            ) as Promise<void>;
+            await speciesLaunchHandler.execute(setProgressMessage, () => {
+              onOptimisticStatus?.(project.id, 'launching');
+              optimisticStatusApplied = true;
+            });
           }
           break;
         case 'false-negatives':
-          if (typeof falseNegativesLaunchHandler === 'function') {
+          if (falseNegativesLaunchHandler) {
             setProgressMessage('Initializing launch...');
-            onOptimisticStatus?.(project.id, 'launching');
-            optimisticStatusApplied = true;
-            dispatched = falseNegativesLaunchHandler(
-              setProgressMessage
-            ) as Promise<void>;
+            await falseNegativesLaunchHandler.execute(setProgressMessage, () => {
+              onOptimisticStatus?.(project.id, 'launching');
+              optimisticStatusApplied = true;
+            });
           }
           break;
         case 'registration':
           await createRegistrationTask();
           break;
-      }
-
-      if (dispatched) {
-        await dispatched;
+        case 'homography-creation':
+          await createHomographyTask();
+          break;
       }
     } catch (error) {
       console.error('Launch error', error);
@@ -118,8 +119,6 @@ export default function LaunchAnnotationSetModal({
     } finally {
       setLaunching(false);
       onClose();
-      setTaskType('species-labelling');
-      setProgressMessage('');
     }
   }
 
@@ -141,6 +140,9 @@ export default function LaunchAnnotationSetModal({
                   setTaskType('false-negatives');
                   break;
                 case 2:
+                  setTaskType('homography-creation');
+                  break;
+                case 3:
                   setTaskType('registration');
                   break;
               }
@@ -153,7 +155,7 @@ export default function LaunchAnnotationSetModal({
                 annotationSet={annotationSet}
                 launching={launching}
                 setLaunchDisabled={setLaunchDisabled}
-                setSpeciesLaunchHandler={setSpeciesLaunchHandler}
+                setSpeciesLaunchHandler={setSpeciesLaunchHandler as any}
               />
             </Tab>
             <Tab label='False Negatives'>
@@ -162,8 +164,16 @@ export default function LaunchAnnotationSetModal({
                 annotationSet={annotationSet}
                 launching={launching}
                 setLaunchDisabled={setLaunchDisabled}
-                setFalseNegativesLaunchHandler={setFalseNegativesLaunchHandler}
+                setFalseNegativesLaunchHandler={setFalseNegativesLaunchHandler as any}
               />
+            </Tab>
+            <Tab label='Homography Creation'>
+              <div className='p-3'>
+                <p className='m-0'>
+                  This will launch a homography creation task for the annotation set.
+                  Use this to manually create missing homographies between overlapping image pairs.
+                </p>
+              </div>
             </Tab>
             <Tab label='Registration'>
               <div className='p-3'>
@@ -188,10 +198,8 @@ export default function LaunchAnnotationSetModal({
             disabled={
               launchDisabled ||
               launching ||
-              (taskType === 'species-labelling' &&
-                typeof speciesLaunchHandler !== 'function') ||
-              (taskType === 'false-negatives' &&
-                typeof falseNegativesLaunchHandler !== 'function')
+              (taskType === 'species-labelling' && !speciesLaunchHandler) ||
+              (taskType === 'false-negatives' && !falseNegativesLaunchHandler)
             }
             onClick={handleSubmit}
           >

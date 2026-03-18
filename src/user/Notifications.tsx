@@ -155,7 +155,7 @@ function Invite({
   async function acceptInvite() {
     setResponding(true);
     try {
-      const { errors } = await client.mutations.respondToInvite({
+      const { data, errors } = await client.mutations.respondToInvite({
         inviteId: invite.id,
         accept: true,
       });
@@ -164,6 +164,26 @@ function Invite({
         return;
       }
       updateCacheStatus('accepted');
+
+      // Check if user was added to the cognito group or hit the limit
+      let parsed = data;
+      while (typeof parsed === 'string') parsed = JSON.parse(parsed);
+      if (parsed?.addedToGroup) {
+        // Clear cache and reload to pick up new cognito group
+        localStorage.clear();
+        sessionStorage.clear();
+        if (window.indexedDB && 'databases' in indexedDB) {
+          indexedDB.databases().then((dbs) => {
+            dbs.forEach((db) => { if (db.name) indexedDB.deleteDatabase(db.name); });
+          });
+        }
+        if ('caches' in window) {
+          caches.keys().then((names) => { names.forEach((n) => caches.delete(n)); });
+        }
+        window.location.reload();
+      } else if (parsed && !parsed.addedToGroup) {
+        alert('You belong to too many organisations. Go to Settings > Active Organisations to choose which ones are active.');
+      }
     } catch (err: any) {
       alert(err.message ?? 'Failed to accept invite');
     } finally {

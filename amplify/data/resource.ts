@@ -24,12 +24,14 @@ import { monitorScoutbotDlq } from '../functions/monitorScoutbotDlq/resource';
 import { processTilingBatch } from '../functions/processTilingBatch/resource';
 import { monitorTilingTasks } from '../functions/monitorTilingTasks/resource';
 import { findAndRequeueMissingLocations } from '../functions/findAndRequeueMissingLocations/resource';
+import { reconcileFalseNegatives } from '../functions/reconcileFalseNegatives/resource';
 import { createOrganization } from '../functions/createOrganization/resource';
 import { inviteUserToOrganization } from '../functions/inviteUserToOrganization/resource';
 import { respondToInvite } from '../functions/respondToInvite/resource';
 import { removeUserFromOrganization } from '../functions/removeUserFromOrganization/resource';
 import { updateOrganizationMemberAdmin } from '../functions/updateOrganizationMemberAdmin/resource';
 import { deleteQueue } from '../functions/deleteQueue/resource';
+import { updateActiveOrganizations } from '../functions/updateActiveOrganizations/resource';
 // import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
@@ -74,6 +76,8 @@ const schema = a
         cameraOverlaps: a.hasMany('CameraOverlap', 'projectId'),
         shapefileExclusions: a.hasMany('ShapefileExclusions', 'projectId'),
         adminActionLogs: a.hasMany('AdminActionLog', 'projectId'),
+        // Global tiled location set ID for the project (no belongsTo to avoid bidirectional requirement)
+        tiledLocationSetId: a.id(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')]),
@@ -193,6 +197,7 @@ const schema = a
         testResults: a.hasMany('TestResult', 'annotationSetId'),
         categories: a.hasMany('Category', 'annotationSetId'),
         register: a.boolean().default(false),
+        createHomographies: a.boolean().default(false),
         jollyResultsMemberships: a.hasMany(
           'JollyResultsMembership',
           'annotationSetId'
@@ -311,6 +316,7 @@ const schema = a
         location: a.belongsTo('Location', 'locationId'),
         annotationSetId: a.id().required(),
         annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
+        source: a.string(),
         createdAt: a.string().required(),
         queueId: a.id(), // Queue ID for requeue detection (observedCount tracking)
         group: a.string(),
@@ -1129,13 +1135,21 @@ const schema = a
       .returns(a.string())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(getJwtSecret)),
+    updateActiveOrganizations: a
+      .mutation()
+      .arguments({
+        activatedOrganizationIds: a.string().array().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(updateActiveOrganizations)),
     // Dummy table used to force full deployment instead of hotswapping resources
-    // fixDeploymentTable: a
-    //   .model({
-    //     name: a.string().required(),
-    //     version: a.string().required(),
-    //   })
-    //   .authorization((allow) => [allow.group("sysadmin")])
+    fixDeploymentTable: a
+      .model({
+        name: a.string().required(),
+        version: a.string().required(),
+      })
+      .authorization((allow) => [allow.group("sysadmin")])
   })
   .authorization((allow) => [
     allow.resource(processImages),
@@ -1158,12 +1172,14 @@ const schema = a
     allow.resource(processTilingBatch),
     allow.resource(monitorTilingTasks),
     allow.resource(findAndRequeueMissingLocations),
+    allow.resource(reconcileFalseNegatives),
     allow.resource(createOrganization),
     allow.resource(inviteUserToOrganization),
     allow.resource(respondToInvite),
     allow.resource(removeUserFromOrganization),
     allow.resource(updateOrganizationMemberAdmin),
     allow.resource(deleteQueue),
+    allow.resource(updateActiveOrganizations),
     // allow.resource(consolidateUserStats),
   ]);
 
@@ -1202,7 +1218,11 @@ export type ListGroupsForUserHandler = MutationHandler<{ userId: string; nextTok
 
 // Lambdas authorize user requests based on user groups (event.identity.groups)
 export type DeleteProjectInFullHandler = MutationHandler<{ projectId: string }>;
-export type GenerateSurveyResultsHandler = MutationHandler<{ surveyId: string; annotationSetId: string; categoryIds: string[] }>;
+export type GenerateSurveyResultsHandler = MutationHandler<{
+  surveyId: string;
+  annotationSetId: string;
+  categoryIds: string[];
+}>;
 export type LaunchAnnotationSetHandler = MutationHandler<{ request: string }>;
 export type LaunchFalseNegativesHandler = MutationHandler<{ request: string }>;
 export type ProcessImagesHandler = MutationHandler<{ s3key: string; model: string; threshold?: number | null }>; //legacy
@@ -1222,6 +1242,7 @@ export type RespondToInviteHandler = MutationHandler<{ inviteId: string; accept:
 export type RemoveUserFromOrganizationHandler = MutationHandler<{ organizationId: string; userId: string }>;
 export type UpdateOrganizationMemberAdminHandler = MutationHandler<{ organizationId: string; userId: string; isAdmin: boolean }>;
 export type DeleteQueueHandler = MutationHandler<{ queueId: string }>;
+export type UpdateActiveOrganizationsHandler = MutationHandler<{ activatedOrganizationIds: string[] }>;
 
 export const data = defineData({
   schema,

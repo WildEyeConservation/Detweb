@@ -18,6 +18,7 @@ export default function LabelEditor({
   importLabels = [],
   setHandleSave,
   isEditing = false,
+  onStatusChange,
 }: {
   defaultLabels?: Label[];
   importLabels?: Label[];
@@ -27,12 +28,15 @@ export default function LabelEditor({
     >
   >;
   isEditing?: boolean;
+  onStatusChange?: (status: string) => void;
 }) {
   const [keys, { start, stop, isRecording }] = useRecordHotkeys();
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
   const [labels, setLabels] = useState<Label[]>(defaultLabels);
   const { client } = useContext(GlobalContext)!;
   const defaultLabelsRef = useRef<Label[]>(defaultLabels);
+  const onStatusChangeRef = useRef(onStatusChange);
+  useEffect(() => { onStatusChangeRef.current = onStatusChange; }, [onStatusChange]);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -45,77 +49,58 @@ export default function LabelEditor({
         (l) => l.name !== '' && l.shortcutKey !== ''
       );
 
+      onStatusChangeRef.current?.('Updating labels...');
+
       if (isEditing) {
         const currentDefaultLabels: Label[] = defaultLabelsRef.current;
-        const filteredLabelIdsArray: string[] = filteredLabels.map(
-          (l: Label) => l.id
-        );
-        const defaultLabelIdsArray: string[] = currentDefaultLabels.map(
-          (l: Label) => l.id
-        );
-        const filteredLabelIds = new Set<string>(filteredLabelIdsArray);
-        const defaultLabelIds = new Set<string>(defaultLabelIdsArray);
-        // labels to delete
-        await Promise.all(
-          currentDefaultLabels
+        const filteredLabelIds = new Set<string>(filteredLabels.map((l: Label) => l.id));
+        const defaultLabelIds = new Set<string>(currentDefaultLabels.map((l: Label) => l.id));
+
+        await Promise.all([
+          // labels to delete
+          ...currentDefaultLabels
             .filter((l) => !filteredLabelIds.has(l.id))
-            .map(async (l) => {
-              await client.models.Category.delete({ id: l.id });
-            })
-        );
-
-        //labels to create
-        await Promise.all(
-          filteredLabels
+            .map((l) => client.models.Category.delete({ id: l.id })),
+          // labels to create
+          ...filteredLabels
             .filter((l) => !defaultLabelIds.has(l.id))
-            .map(async (l) => {
-              await client.models.Category.create({
-                projectId: projectId,
-                name: l.name,
-                shortcutKey: l.shortcutKey,
-                color: l.color,
-                annotationSetId: annotationSetId,
-                group,
-              });
-            })
-        );
-
-        //labels to update
-        await Promise.all(
-          filteredLabels
-            .filter((l) => defaultLabelIds.has(l.id))
-            .map(async (l) => {
-              await client.models.Category.update({
-                id: l.id,
-                name: l.name,
-                shortcutKey: l.shortcutKey,
-                color: l.color,
-              });
-            })
-        );
-      } else {
-        await Promise.all(
-          filteredLabels.map(async (l) => {
-            await client.models.Category.create({
+            .map((l) => client.models.Category.create({
+              projectId,
               name: l.name,
               shortcutKey: l.shortcutKey,
               color: l.color,
-              annotationSetId: annotationSetId,
-              projectId: projectId,
+              annotationSetId,
               group,
-            });
-          })
+            })),
+          // labels to update
+          ...filteredLabels
+            .filter((l) => defaultLabelIds.has(l.id))
+            .map((l) => client.models.Category.update({
+              id: l.id,
+              name: l.name,
+              shortcutKey: l.shortcutKey,
+              color: l.color,
+            })),
+        ]);
+      } else {
+        await Promise.all(
+          filteredLabels.map((l) => client.models.Category.create({
+            name: l.name,
+            shortcutKey: l.shortcutKey,
+            color: l.color,
+            annotationSetId,
+            projectId,
+            group,
+          }))
         );
       }
 
-      await client.models.Project.update({
-        id: projectId,
-        status: 'active',
-      });
+      onStatusChangeRef.current?.('Refreshing project...');
 
-      await client.mutations.updateProjectMemberships({
-        projectId: projectId,
-      });
+      await Promise.all([
+        client.models.Project.update({ id: projectId, status: 'active' }),
+        client.mutations.updateProjectMemberships({ projectId }),
+      ]);
 
       // Ensure any persisted/react-query caches for categories are refreshed
       await queryClient.invalidateQueries({ queryKey: ['Category'] });

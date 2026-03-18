@@ -21,7 +21,7 @@ export default function UserStats() {
     {
       id: string;
       name: string;
-      annotationSets: { id: string; name: string }[];
+      annotationSets?: { id: string; name: string }[];
       organization: { name: string };
     }[]
   >([]);
@@ -32,7 +32,7 @@ export default function UserStats() {
   const [stats, setStats] = useState<
     Record<
       string,
-      { observationCount: number; annotationCount: number; activeTime: number }
+      { observationCount: number; annotationCount: number; activeTime: number; sightingCount: number; searchTime: number; annotationTime: number; waitingTime: number }
     >
   >({});
   const [startDate, setStartDate] = useState<Date | null>(new Date());
@@ -99,7 +99,7 @@ export default function UserStats() {
           (project): project is NonNullable<typeof project> => project !== null
         );
 
-      setProjects(validProjects);
+      setProjects(validProjects as typeof projects);
     }
 
     loadProjects();
@@ -279,10 +279,10 @@ export default function UserStats() {
                 newStats[s.userId].annotationCount + s.annotationCount
               );
               newStats[s.userId].activeTime += s.activeTime;
-              newStats[s.userId].sightingCount += s.sightingCount;
-              newStats[s.userId].searchTime += s.searchTime;
-              newStats[s.userId].annotationTime += s.annotationTime;
-              newStats[s.userId].waitingTime += s.waitingTime;
+              newStats[s.userId].sightingCount += s.sightingCount || 0;
+              newStats[s.userId].searchTime += s.searchTime || 0;
+              newStats[s.userId].annotationTime += s.annotationTime || 0;
+              newStats[s.userId].waitingTime += s.waitingTime || 0;
             }
           }
         });
@@ -363,12 +363,67 @@ export default function UserStats() {
     }));
   }
 
+  const handleExportDetailedStats = () => {
+    if (!project || !selectedSets || selectedSets.length === 0) return;
+
+    const setLabelMap = new Map(selectedSets.map((s) => [s.value, s.label]));
+    const userLookup = new Map(allUsers.map((u) => [u.id, u.name]));
+
+    const filtered = userStats
+      .filter((s) => s != null)
+      .filter((s) => {
+        if (!selectedSets.some((set) => set.value === s.setId)) return false;
+        if (startString && s.date < startString) return false;
+        if (endString && s.date > endString) return false;
+        return true;
+      });
+
+    const rows = filtered
+      .map((s) => ({
+        date: s.date,
+        username: userLookup.get(s.userId) || s.userId,
+        annotationSet: setLabelMap.get(s.setId) || s.setId,
+        time_spent: formatDuration(s.activeTime),
+        activeTime_ms: s.activeTime,
+        jobs_completed: s.observationCount,
+        avg_search_s_per_job:
+          s.observationCount > 0
+            ? ((s.searchTime || 0) / s.observationCount / 1000).toFixed(1)
+            : '0.0',
+        total_annotations: Math.max(0, s.annotationCount),
+        total_sightings: s.sightingCount || 0,
+        total_search_time: formatDuration(s.searchTime || 0),
+        searchTime_ms: s.searchTime || 0,
+        total_annotation_time: formatDuration(s.annotationTime || 0),
+        annotationTime_ms: s.annotationTime || 0,
+        locations_per_sighting:
+          (s.sightingCount || 0) > 0
+            ? (s.observationCount / s.sightingCount!).toFixed(1)
+            : '0.0',
+        waiting_time: formatDuration(s.waitingTime || 0),
+        waitingTime_ms: s.waitingTime || 0,
+      }))
+      .sort((a, b) =>
+        a.date < b.date ? -1 : a.date > b.date ? 1 : a.username < b.username ? -1 : 1
+      );
+
+    const fileName =
+      `${project.label}_DetailedStats_${startString || 'all'}_${endString || 'all'}`.replace(
+        / /g,
+        '_'
+      );
+    exportFromJSON({ data: rows, fileName, exportType: exportFromJSON.types.csv });
+  };
+
   const handleExportData = async () => {
     // Start export loading
     setExporting(true);
     try {
       const userLookup = new Map<string, string>();
-      allUsers.forEach((u) => userLookup.set(u.id + '::' + u.id, u.name));
+      allUsers.forEach((u) => {
+        userLookup.set(u.id, u.name || u.id);
+        userLookup.set(u.id + '::' + u.id, u.name || u.id);
+      });
       for (const annotationSetId of selectedSets?.map((s) => s.value) || []) {
         const observations = await queryObservations(annotationSetId);
         const fileName =
@@ -420,12 +475,12 @@ export default function UserStats() {
               </label>
               <DatePicker
                 id='start-date'
-                selected={startDate}
+                selected={startDate ?? undefined}
                 onChange={(date) => setStartDate(date)}
                 selectsStart
                 timeZone='UTC'
-                startDate={startDate}
-                endDate={endDate}
+                startDate={startDate ?? undefined}
+                endDate={endDate ?? undefined}
                 className='form-control'
                 isClearable
                 dateFormat='yyyy/MM/dd'
@@ -438,12 +493,12 @@ export default function UserStats() {
               </label>
               <DatePicker
                 id='end-date'
-                selected={endDate}
+                selected={endDate ?? undefined}
                 onChange={(date) => setEndDate(date)}
                 selectsEnd
                 timeZone='UTC'
-                startDate={startDate}
-                endDate={endDate}
+                startDate={startDate ?? undefined}
+                endDate={endDate ?? undefined}
                 className='form-control'
                 isClearable
                 dateFormat='yyyy/MM/dd'
@@ -479,13 +534,13 @@ export default function UserStats() {
             <Select
               className='text-black basic-multi-select'
               value={selectedSets}
-              onChange={(e) => setSelectedSets(e)}
+              onChange={(e) => setSelectedSets([...e])}
               isMulti
               name='Annotation sets'
               options={
                 projects
                   .find((p) => p.id == project?.value)
-                  ?.annotationSets.map((s) => ({
+                  ?.annotationSets?.map((s) => ({
                     label: s.name,
                     value: s.id,
                   })) || []
@@ -522,10 +577,11 @@ export default function UserStats() {
             )}
           </div>
         </Card.Body>
-        {isProjectAdmin && (
+        {isProjectAdmin && selectedSets && selectedSets.length > 0 && !loadingStats && (
           <Card.Footer className='d-flex justify-content-center gap-2'>
             <Button
-              variant='outline-primary'
+              variant='primary'
+              style={{ flex: 1 }}
               onClick={() => showModal('snapshotStats')}
               disabled={!project || !selectedSets?.length}
             >
@@ -533,6 +589,15 @@ export default function UserStats() {
             </Button>
             <Button
               variant='primary'
+              style={{ flex: 1 }}
+              onClick={handleExportDetailedStats}
+              disabled={!project || !selectedSets?.length || loadingStats}
+            >
+              Export Daily Stats
+            </Button>
+            <Button
+              variant='primary'
+              style={{ flex: 1 }}
               onClick={handleExportData}
               disabled={exporting}
             >
@@ -550,7 +615,7 @@ export default function UserStats() {
         startString={startString}
         endString={endString}
         selectedSets={selectedSets}
-        allUsers={allUsers}
+        allUsers={allUsers.map((u) => ({ id: u.id, name: u.name || u.id }))}
         queryObservations={queryObservations}
       />
     </div>

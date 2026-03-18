@@ -10,16 +10,12 @@ import { inv, matrix, type Matrix } from 'mathjs';
 import { GlobalContext, ManagementContext } from './Context';
 import { RegisterPair } from './RegisterPair';
 import { Card, Button, Form } from 'react-bootstrap';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { PanelBottom } from 'lucide-react';
-import { ManualHomographyEditor } from './ManualHomographyEditor';
 
 export function Registration({ showAnnotationSetDropdown = true }) {
   const { client } = useContext(GlobalContext)!;
-  const navigate = useNavigate();
   const { annotationSetId } = useParams();
-  const [searchParams] = useSearchParams();
-  const hackMode = searchParams.get('fixMissingHomographies') === 'true';
   const queryClient = useQueryClient();
   const [selectedCategories, setSelectedCategories] = useState<
     { label: string; value: string }[]
@@ -40,16 +36,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
   } | null>(null);
   const [numLoaded, setNumLoaded] = useState(0);
   const [showFilters, setShowFilters] = useState(true);
-  const [points1, setPoints1] = useState<
-    { id: string; x: number; y: number }[]
-  >([]);
-  const [points2, setPoints2] = useState<
-    { id: string; x: number; y: number }[]
-  >([]);
-  const [localTransforms, setLocalTransforms] = useState<
-    Record<string, ((c: [number, number]) => [number, number])[]>
-  >({});
-  
+
   // selectedCategoryIDs contains the ids of the selected categories.
   const selectedCategoryIDs = useMemo(
     () => selectedCategories.map((c) => c.value),
@@ -99,10 +86,10 @@ export function Registration({ showAnnotationSetDropdown = true }) {
       if (!selectedAnnotationSet || selectedCategoryIDs.length === 0) {
         return { data: [], nextToken: undefined };
       }
-      
+
       return client.models.Annotation.annotationsByAnnotationSetId(
         { setId: selectedAnnotationSet },
-        { 
+        {
           nextToken,
           limit: 1000,
           filter: annotationFilter?.filter,
@@ -243,163 +230,56 @@ export function Registration({ showAnnotationSetDropdown = true }) {
       });
   }, [imageMetaData, imageNeighbours, annotations]);
 
-  // Count pairs with missing homographies in hackMode
-  const missingHomographyCount = useMemo(() => {
-    if (!hackMode) return 0;
-    
-    let count = 0;
-    const seenPairs = new Set<string>();
-    
+  const pairToRegister = useMemo(() => {
     for (const t of targetData) {
       if (!imageMetaData[t.id]) {
         continue;
       }
       const annotationsPrimary = annotationsByImage[t.id];
-      
       for (const n of t.neighbours) {
-        // Create a unique pair key to avoid counting the same pair twice
-        const pairKey = [t.id, n.id].sort().join('::');
-        if (seenPairs.has(pairKey)) {
-          continue;
-        }
-        seenPairs.add(pairKey);
-        
         const forward = imageNeighbours[t.id]?.[n.id];
         const backward = imageNeighbours[n.id]?.[t.id];
         const secondaryImage = imageMetaData[n.id];
-        
-        // Secondary image metadata must exist
-        if (!secondaryImage) {
+        if (!forward || !backward || !secondaryImage) {
           continue;
         }
-        
-        // At least one neighbour must exist
-        if (!forward && !backward) {
-          continue;
-        }
-        
-        // At least one direction must not have a homography
-        const forwardMissingHomography = forward?.noHomography ?? false;
-        const backwardMissingHomography = backward?.noHomography ?? false;
-        if (!forwardMissingHomography && !backwardMissingHomography) {
-          continue;
-        }
-        
-        // At least one image must have annotations
-        const annotationsSecondary = annotationsByImage[n.id];
-        const hasPrimaryAnnotations = annotationsPrimary && annotationsPrimary.length > 0;
-        const hasSecondaryAnnotations = annotationsSecondary && annotationsSecondary.length > 0;
-        
-        if (!hasPrimaryAnnotations && !hasSecondaryAnnotations) {
-          continue;
-        }
-        
-        count++;
-      }
-    }
-    
-    return count;
-  }, [hackMode, targetData, imageMetaData, annotationsByImage, imageNeighbours]);
 
-  const pairToRegister = useMemo(() => {
-    if (hackMode) {
-      // Hack mode: Find pairs where at least one image has annotations, at least one neighbour exists,
-      // and at least one neighbour doesn't have a homography
-      for (const t of targetData) {
-        if (!imageMetaData[t.id]) {
+        // Skip pairs without homographies — those are handled by HomographyCreation
+        if (forward.noHomography || backward.noHomography) {
           continue;
         }
-        const annotationsPrimary = annotationsByImage[t.id];
-        
-        for (const n of t.neighbours) {
-          const forward = imageNeighbours[t.id]?.[n.id];
-          const backward = imageNeighbours[n.id]?.[t.id];
-          const secondaryImage = imageMetaData[n.id];
-          
-          // Secondary image metadata must exist
-          if (!secondaryImage) {
-            continue;
-          }
-          
-          // At least one neighbour must exist
-          if (!forward && !backward) {
-            continue;
-          }
-          
-          // At least one direction must not have a homography
-          const forwardMissingHomography = forward?.noHomography ?? false;
-          const backwardMissingHomography = backward?.noHomography ?? false;
-          if (!forwardMissingHomography && !backwardMissingHomography) {
-            continue;
-          }
-          
-          // At least one image must have annotations
-          const annotationsSecondary = annotationsByImage[n.id];
-          const hasPrimaryAnnotations = annotationsPrimary && annotationsPrimary.length > 0;
-          const hasSecondaryAnnotations = annotationsSecondary && annotationsSecondary.length > 0;
-          
-          if (!hasPrimaryAnnotations && !hasSecondaryAnnotations) {
-            continue;
-          }
-          
-          // Found a valid pair - return it with annotations from the image that has them
-          // (or primary annotations if both have them)
-          const annotationsToUse = hasPrimaryAnnotations ? annotationsPrimary : annotationsSecondary;
+
+        const tf = forward.tf;
+        const annotationsSecondary = annotationsByImage[n.id]?.map(
+          (a: Schema['Annotation']['type']) => a.objectId
+        );
+        const width = secondaryImage.width;
+        const height = secondaryImage.height;
+        const annotationsToLink = annotationsPrimary
+          // Only keep annotations that are not already matched to some object in the secondary image
+          ?.filter((a: Schema['Annotation']['type']) =>
+            a.objectId ? !annotationsSecondary?.includes(a.objectId) : true
+          )
+          // And that map to some point inside the secondary image
+          ?.filter((a: Schema['Annotation']['type']) => {
+            const transformed = tf([a.x, a.y]);
+            return (
+              transformed[0] >= 0 &&
+              transformed[1] >= 0 &&
+              transformed[0] < width &&
+              transformed[1] < height
+            );
+          });
+        if (annotationsToLink.length > 0) {
           return {
-            primary: hasPrimaryAnnotations ? t.id : n.id,
-            secondary: hasPrimaryAnnotations ? n.id : t.id,
-            annotations: annotationsToUse,
+            primary: t.id,
+            secondary: n.id,
+            annotations: annotationsToLink,
           };
         }
       }
-      return undefined;
-    } else {
-      // Normal mode: Original logic
-      for (const t of targetData) {
-        if (!imageMetaData[t.id]) {
-          continue;
-        }
-        const annotationsPrimary = annotationsByImage[t.id];
-        for (const n of t.neighbours) {
-          const forward = imageNeighbours[t.id]?.[n.id];
-          const backward = imageNeighbours[n.id]?.[t.id];
-          const secondaryImage = imageMetaData[n.id];
-          if (!forward || !backward || !secondaryImage) {
-            continue;
-          }
-
-          const tf = forward.tf;
-          const annotationsSecondary = annotationsByImage[n.id]?.map(
-            (a: Schema['Annotation']['type']) => a.objectId
-          );
-          const width = secondaryImage.width;
-          const height = secondaryImage.height;
-          const annotationsToLink = annotationsPrimary
-            // Only keep annotations that are not already matched to some object in the secondary image
-            ?.filter((a: Schema['Annotation']['type']) =>
-              a.objectId ? !annotationsSecondary?.includes(a.objectId) : true
-            )
-            // And that map to some point inside the secondary image
-            ?.filter((a: Schema['Annotation']['type']) => {
-              const transformed = tf([a.x, a.y]);
-              return (
-                transformed[0] >= 0 &&
-                transformed[1] >= 0 &&
-                transformed[0] < width &&
-                transformed[1] < height
-              );
-            });
-          if (annotationsToLink.length > 0) {
-            return {
-              primary: t.id,
-              secondary: n.id,
-              annotations: annotationsToLink,
-            };
-          }
-        }
-      }
     }
-  }, [targetData, annotationsByImage, imageNeighbours, imageMetaData, hackMode]);
+  }, [targetData, annotationsByImage, imageNeighbours, imageMetaData]);
 
   const nextPair = useCallback(() => {
     setActivePair(pairToRegister ?? null);
@@ -408,7 +288,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
   // Skip this image pair - mark as skipped so it won't be shown again
   const handleSkip = useCallback(async () => {
     if (!activePair) return;
-    
+
     if (
       !window.confirm(
         'Are you sure you want to skip this pair? The images will remain neighbours but won\'t require registration.'
@@ -500,16 +380,6 @@ export function Registration({ showAnnotationSetDropdown = true }) {
     }
   }, [annotationSetId]);
 
-  // Reset manual points when pair changes
-  useEffect(() => {
-    setPoints1([]);
-    setPoints2([]);
-  }, [activePair?.primary, activePair?.secondary]);
-
-  const pairKey = activePair
-    ? `${activePair.primary}::${activePair.secondary}`
-    : '';
-
   const activePrimaryImage = activePair
     ? imageMetaData[activePair.primary]
     : undefined;
@@ -546,108 +416,74 @@ export function Registration({ showAnnotationSetDropdown = true }) {
           className='d-flex flex-column gap-3 w-100'
           style={{ maxWidth: '360px' }}
         >
-          {activePair &&
-          activePrimaryImage &&
-          activeSecondaryImage &&
-          activeForwardNeighbour?.noHomography &&
-          !localTransforms[pairKey] ? (
-            <div className='w-100'>
-              <ManualHomographyEditor
-                images={[
-                  activePrimaryImage,
-                  activeSecondaryImage,
-                ]}
-                points1={points1}
-                points2={points2}
-                setPoints1={setPoints1}
-                setPoints2={setPoints2}
-                onSaved={(H) => {
-                  // Optimistically enable linking with local transforms
-                  const fwd = makeTransform(H as any);
-                  const bwd = makeTransform(inv(H as any) as any);
-                  setLocalTransforms((old) => ({
-                    ...old,
-                    [pairKey]: [fwd, bwd],
-                  }));
-                }}
-                onSkipped={() => {
-                  // Move to next pair when this one is skipped
-                  nextPair();
-                }}
+          <Card className='d-sm-block d-none w-100'>
+            <Card.Header>
+              <Card.Title className='mb-0'>Information</Card.Title>
+            </Card.Header>
+            <Card.Body className='d-flex flex-column gap-2'>
+              <InfoTag label='Survey' value={project.name} />
+              <InfoTag
+                label='Annotation Set'
+                value={
+                  annotationSets?.find(
+                    (set) => set.id === selectedAnnotationSet
+                  )?.name ?? 'Unknown'
+                }
               />
-            </div>
-          ) : (
-            <>
-              <Card className='d-sm-block d-none w-100'>
-                <Card.Header>
-                  <Card.Title className='mb-0'>Information</Card.Title>
-                </Card.Header>
-                <Card.Body className='d-flex flex-column gap-2'>
-                  <InfoTag label='Survey' value={project.name} />
-                  <InfoTag
-                    label='Annotation Set'
-                    value={
-                      annotationSets?.find(
-                        (set) => set.id === selectedAnnotationSet
-                      )?.name ?? 'Unknown'
-                    }
+            </Card.Body>
+          </Card>
+          <Card className='w-100 flex-grow-1'>
+            <Card.Header>
+              <Card.Title className='mb-0 d-flex align-items-center'>
+                <Button
+                  className='p-0 mb-0'
+                  variant='outline'
+                  onClick={() => setShowFilters(!showFilters)}
+                >
+                  <PanelBottom
+                    className='d-sm-none'
+                    style={{
+                      transform: showFilters
+                        ? 'rotate(180deg)'
+                        : 'rotate(0deg)',
+                    }}
                   />
-                </Card.Body>
-              </Card>
-              <Card className='w-100 flex-grow-1'>
-                <Card.Header>
-                  <Card.Title className='mb-0 d-flex align-items-center'>
-                    <Button
-                      className='p-0 mb-0'
-                      variant='outline'
-                      onClick={() => setShowFilters(!showFilters)}
-                    >
-                      <PanelBottom
-                        className='d-sm-none'
-                        style={{
-                          transform: showFilters
-                            ? 'rotate(180deg)'
-                            : 'rotate(0deg)',
-                        }}
-                      />
-                    </Button>
-                    Filters
-                  </Card.Title>
-                </Card.Header>
-                {showFilters && (
-                  <Card.Body className='d-flex flex-column gap-2'>
-                    <div className='w-100'>
-                      <Form.Label>Labels</Form.Label>
-                      <Select
-                        value={selectedCategories}
-                        onChange={(newValue) => setSelectedCategories(newValue as { label: string; value: string }[])}
-                        isMulti
-                        name='Labels to register'
-                        options={categories
-                          ?.filter(
-                            (c) => c.annotationSetId === selectedAnnotationSet
-                          )
-                          .map((q) => ({
-                            label: q.name,
-                            value: q.id,
-                          }))}
-                        className='text-black w-100'
-                        closeMenuOnSelect={false}
-                      />
-                    </div>
+                </Button>
+                Filters
+              </Card.Title>
+            </Card.Header>
+            {showFilters && (
+              <Card.Body className='d-flex flex-column gap-2'>
+                <div className='w-100'>
+                  <Form.Label>Labels</Form.Label>
+                  <Select
+                    value={selectedCategories}
+                    onChange={(newValue) => setSelectedCategories(newValue as { label: string; value: string }[])}
+                    isMulti
+                    name='Labels to register'
+                    options={categories
+                      ?.filter(
+                        (c) => c.annotationSetId === selectedAnnotationSet
+                      )
+                      .map((q) => ({
+                        label: q.name,
+                        value: q.id,
+                      }))}
+                    className='text-black w-100'
+                    closeMenuOnSelect={false}
+                  />
+                </div>
 
-                    {showAnnotationSetDropdown && (
-                      <AnnotationSetDropdown
-                        selectedSet={selectedAnnotationSet}
-                        setAnnotationSet={setSelectedAnnotationSet}
-                        canCreate={false}
-                      />
-                    )}
-                  </Card.Body>
+                {showAnnotationSetDropdown && (
+                  <AnnotationSetDropdown
+                    selectedSet={selectedAnnotationSet}
+                    setAnnotationSet={setSelectedAnnotationSet}
+                    canCreate={false}
+                  />
                 )}
-              </Card>
-            </>
-          )}
+              </Card.Body>
+            )}
+          </Card>
         </div>
         <div className='d-flex flex-column align-items-center h-100 w-100'>
           {annotationHook.meta?.isLoading ? (
@@ -676,59 +512,26 @@ export function Registration({ showAnnotationSetDropdown = true }) {
           ) : selectedCategories.length === 0 ? (
             <div>No label selected</div>
           ) : canRenderRegisterPair ? (
-            <>
-              {hackMode && (
-                <div className='mb-2' style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
-                  {missingHomographyCount} pair{missingHomographyCount !== 1 ? 's' : ''} with missing homograph{missingHomographyCount !== 1 ? 'ies' : 'y'} remaining
-                </div>
-              )}
-              <RegisterPair
-                key={activePair.primary + activePair.secondary}
-                images={[
-                  activePrimaryImage!,
-                  activeSecondaryImage!,
-                ]}
-                selectedCategoryIDs={selectedCategoryIDs}
-                selectedSet={selectedAnnotationSet}
-                transforms={
-                  localTransforms[pairKey] || [
-                    activeForwardNeighbour!.tf,
-                    activeBackwardNeighbour!.tf,
-                  ]
-                }
-                next={nextPair}
-                prev={() => {}}
-                visible={true}
-                ack={() => {}}
-                noHomography={
-                  (activeForwardNeighbour?.noHomography ?? false) &&
-                  !localTransforms[pairKey]
-                }
-                points1={points1}
-                points2={points2}
-                setPoints1={setPoints1}
-                setPoints2={setPoints2}
-                onSkip={handleSkip}
-                isEditingHomography={
-                  !!(
-                    activePair &&
-                    activePrimaryImage &&
-                    activeSecondaryImage &&
-                    activeForwardNeighbour?.noHomography &&
-                    !localTransforms[pairKey]
-                  )
-                }
-              />
-            </>
+            <RegisterPair
+              key={activePair.primary + activePair.secondary}
+              images={[
+                activePrimaryImage!,
+                activeSecondaryImage!,
+              ]}
+              selectedCategoryIDs={selectedCategoryIDs}
+              selectedSet={selectedAnnotationSet}
+              transforms={[
+                activeForwardNeighbour!.tf,
+                activeBackwardNeighbour!.tf,
+              ]}
+              next={nextPair}
+              prev={() => {}}
+              visible={true}
+              ack={() => {}}
+              onSkip={handleSkip}
+            />
           ) : (
-            <>
-              {hackMode && (
-                <div className='mb-2' style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
-                  {missingHomographyCount} pair{missingHomographyCount !== 1 ? 's' : ''} with missing homograph{missingHomographyCount !== 1 ? 'ies' : 'y'} remaining
-                </div>
-              )}
-              <div>No more items to register</div>
-            </>
+            <div>No more items to register</div>
           )}
         </div>
       </div>

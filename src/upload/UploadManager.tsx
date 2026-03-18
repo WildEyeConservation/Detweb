@@ -67,6 +67,7 @@ export default function UploadManager() {
   const cancelledRef = useRef<boolean>(false);
   const pausedRef = useRef<boolean>(false);
   const finalizeAfterMaxAttemptsRef = useRef<boolean>(false);
+  const completingRef = useRef<boolean>(false);
 
   async function findLocationSetByName(name: string) {
     let nextToken: string | null | undefined = undefined;
@@ -243,8 +244,7 @@ export default function UploadManager() {
 
       if (invalidPaths.length > 0) {
         console.warn(
-          `Skipping ${invalidPaths.length} image${
-            invalidPaths.length === 1 ? '' : 's'
+          `Skipping ${invalidPaths.length} image${invalidPaths.length === 1 ? '' : 's'
           } with missing GPS coordinates:`,
           invalidPaths
         );
@@ -329,7 +329,8 @@ export default function UploadManager() {
             (img) => img.originalPath === originalPath
           );
           if (imageData) {
-            // Double-check existence to avoid duplicates
+            // Optimistic lock: claim this path before any async work
+            // to prevent other concurrent workers from also creating it
             if (knownDbPaths.has(originalPath)) {
               setProgress((prev) => ({
                 ...prev,
@@ -337,6 +338,8 @@ export default function UploadManager() {
               }));
               continue;
             }
+            knownDbPaths.add(originalPath);
+
             const fileObj = files.find(
               (f) => f.webkitRelativePath === originalPath
             );
@@ -390,7 +393,6 @@ export default function UploadManager() {
                 timestamp: img.timestamp!,
                 cameraId: img.cameraId ?? undefined,
               });
-              knownDbPaths.add(img.originalPath!);
               await createdImagesStore.setItem(projectId, createdImages);
               await client.models.ImageSetMembership.create({
                 imageId: img.id,
@@ -442,10 +444,12 @@ export default function UploadManager() {
               uploadedFiles.push(image.originalPath);
               await fileStoreUploaded.setItem(projectId, uploadedFiles);
 
-              // If image DB entry already exists, skip DB creates to avoid duplicates
+              // Optimistic lock: claim this path before any async work
+              // to prevent other concurrent workers from also creating it
               if (knownDbPaths.has(image.originalPath)) {
                 continue;
               }
+              knownDbPaths.add(image.originalPath);
 
               let elevation = 0;
               if (image.latitude && image.longitude && !image.altitude_agl) {
@@ -492,7 +496,6 @@ export default function UploadManager() {
                   timestamp: image.timestamp,
                   cameraId: img.cameraId ?? undefined,
                 });
-                knownDbPaths.add(image.originalPath);
                 await createdImagesStore.setItem(projectId, createdImages);
                 await client.models.ImageSetMembership.create({
                   imageId: img.id,
@@ -716,6 +719,9 @@ export default function UploadManager() {
   }
 
   async function handleComplete() {
+    if (completingRef.current) return;
+    completingRef.current = true;
+
     const filesOnS3 = await fetchFilesFromS3();
     const filesToUpload =
       ((await fileStore.getItem(projectId)) as ImageData[]) ?? [];
@@ -732,20 +738,11 @@ export default function UploadManager() {
 
     const forceFinalize = finalizeAfterMaxAttemptsRef.current === true;
     if (uploadedFiles.length !== filesToUpload.length && !forceFinalize) {
+      completingRef.current = false;
       await retryWithBackoff();
     } else {
       finalizeAfterMaxAttemptsRef.current = false;
       // finish upload
-      const allCreatedImages =
-        ((await createdImagesStore.getItem(projectId)) as CreatedImage[]) ?? [];
-
-      // Only process images that were part of this upload session
-      const sessionOriginalPaths = new Set(
-        uploadedFiles.map((f) => f.originalPath)
-      );
-      const createdImages = allCreatedImages
-        .filter((img) => sessionOriginalPaths.has(img.originalPath))
-        .sort((a, b) => a.timestamp - b.timestamp);
 
       const {
         data: [imageSet],
@@ -753,10 +750,112 @@ export default function UploadManager() {
         projectId: projectId,
       });
 
-      // Preserve correct total image count by using all created images
+      //DB-level deduplication guardrail
+      // Fetch images with their related memberships and files in one query
+      // so we don't need extra round-trips when deleting duplicates
+      const allDbImages = (await fetchAllPaginatedResults(
+        client.models.Image.imagesByProjectId,
+        {
+          projectId,
+          selectionSet: [
+            'id',
+            'originalPath',
+            'timestamp',
+            'cameraId',
+            'createdAt',
+            'memberships.id',
+            'files.id',
+          ],
+        }
+      )) as {
+        id: string;
+        originalPath: string;
+        timestamp: number;
+        cameraId?: string | null;
+        createdAt?: string;
+        memberships: { id: string }[];
+        files: { id: string }[];
+      }[];
+
+      const imagesByPath = new Map<string, typeof allDbImages>();
+      for (const img of allDbImages) {
+        const existing = imagesByPath.get(img.originalPath);
+        if (existing) {
+          existing.push(img);
+        } else {
+          imagesByPath.set(img.originalPath, [img]);
+        }
+      }
+
+      const duplicateImages: typeof allDbImages = [];
+      imagesByPath.forEach((images) => {
+        if (images.length <= 1) return;
+        // Keep the earliest record (by createdAt), delete the rest
+        images.sort((a, b) =>
+          (a.createdAt ?? '').localeCompare(b.createdAt ?? '')
+        );
+        for (let i = 1; i < images.length; i++) {
+          duplicateImages.push(images[i]);
+        }
+      });
+
+      if (duplicateImages.length > 0) {
+        console.warn(
+          `Removing ${duplicateImages.length} duplicate Image record(s) for project ${projectId}`
+        );
+        const DUP_CONCURRENCY = 10;
+        const dupIterator = duplicateImages[Symbol.iterator]();
+        const dupWorker = async () => {
+          for (
+            let next = dupIterator.next();
+            !next.done;
+            next = dupIterator.next()
+          ) {
+            const dupImage = next.value as (typeof allDbImages)[number];
+            try {
+              // Delete related memberships and files (already fetched inline)
+              for (const m of dupImage.memberships ?? []) {
+                await client.models.ImageSetMembership.delete({ id: m.id });
+              }
+              for (const f of dupImage.files ?? []) {
+                await client.models.ImageFile.delete({ id: f.id });
+              }
+              await client.models.Image.delete({ id: dupImage.id });
+            } catch (err) {
+              console.error(`Failed to delete duplicate image ${dupImage.id}:`, err);
+            }
+          }
+        };
+        const dupWorkers: Promise<void>[] = [];
+        for (let i = 0; i < DUP_CONCURRENCY; i++) {
+          dupWorkers.push(dupWorker());
+        }
+        await Promise.all(dupWorkers);
+      }
+
+      // Build deduplicated list from authoritative DB records (after cleanup)
+      const dedupedDbImages = Array.from(imagesByPath.values()).map(
+        (images) => images[0]
+      );
+
+      // Only process images that were part of this upload session
+      const sessionOriginalPaths = new Set(
+        uploadedFiles.map((f) => f.originalPath)
+      );
+      const createdImages = dedupedDbImages
+        .filter((img) => sessionOriginalPaths.has(img.originalPath))
+        .map((img) => ({
+          id: img.id,
+          originalPath: img.originalPath,
+          timestamp: img.timestamp,
+          cameraId: img.cameraId ?? undefined,
+        }))
+        .sort((a, b) => a.timestamp - b.timestamp);
+
+      // Set image count from authoritative deduplicated DB records
       await client.models.ImageSet.update({
         id: imageSet.id,
-        imageCount: allCreatedImages.length,
+        imageCount: dedupedDbImages.length,
       });
 
       // Determine legacy vs new key structure
@@ -842,7 +941,7 @@ export default function UploadManager() {
         // Note: ImageProcessedBy model types will be available after schema deployment
         const processedRecords = await fetchAllPaginatedResults(
           client.models.ImageProcessedBy.processedByProjectIdAndSource ??
-            (async () => ({ data: [] })),
+          (async () => ({ data: [] })),
           {
             projectId,
             source: { eq: 'scoutbotv3' },
@@ -1129,6 +1228,7 @@ export default function UploadManager() {
   function resetRefs() {
     pausedRef.current = false;
     deletingRef.current = false;
+    completingRef.current = false;
   }
 
   // Show pause modal when pauseId is set

@@ -6,6 +6,7 @@ import type { GraphQLResult } from '@aws-amplify/api-graphql';
 import {
   CognitoIdentityProviderClient,
   AdminAddUserToGroupCommand,
+  AdminListGroupsForUserCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 
 const getOrganizationInviteQuery = /* GraphQL */ `
@@ -127,22 +128,36 @@ export const handler: RespondToInviteHandler = async (event) => {
       },
     });
 
-    // 5. Add user to Cognito group
-    await cognitoClient.send(
-      new AdminAddUserToGroupCommand({
+    // 5. Check user's current group count before adding to cognito group
+    const groupsResult = await cognitoClient.send(
+      new AdminListGroupsForUserCommand({
         Username: callerSub,
-        GroupName: invite.organizationId,
         UserPoolId: env.AMPLIFY_AUTH_USERPOOL_ID,
       })
     );
+    const currentGroupCount = groupsResult.Groups?.length ?? 0;
+    let addedToGroup = false;
+
+    if (currentGroupCount < 5) {
+      await cognitoClient.send(
+        new AdminAddUserToGroupCommand({
+          Username: callerSub,
+          GroupName: invite.organizationId,
+          UserPoolId: env.AMPLIFY_AUTH_USERPOOL_ID,
+        })
+      );
+      addedToGroup = true;
+    } else {
+      console.log(`User ${callerSub} already in ${currentGroupCount} groups, skipping cognito group assignment.`);
+    }
 
     // 6. Update invite status
     await executeGraphql(updateOrganizationInviteMutation, {
       input: { id: inviteId, status: 'accepted' },
     });
 
-    console.log(`Invite ${inviteId} accepted, user ${callerSub} added to org ${invite.organizationId}`);
-    return JSON.stringify({ success: true, action: 'accepted' });
+    console.log(`Invite ${inviteId} accepted, user ${callerSub} added to org ${invite.organizationId} (cognitoGroup: ${addedToGroup})`);
+    return JSON.stringify({ success: true, action: 'accepted', addedToGroup });
   } catch (err) {
     console.error('respondToInvite failed:', err instanceof Error ? err.message : String(err));
     throw err instanceof Error ? err : new Error(String(err));

@@ -1,0 +1,478 @@
+import { useState, useMemo, useContext, useEffect, useCallback } from 'react';
+import { AnnotationSetDropdown } from '../AnnotationSetDropDown';
+import Select from 'react-select';
+import { ProjectContext } from '../Context';
+import { Schema } from '../amplify/client-schema';
+import type { ModelFilter } from '../../amplify/shared/data-schema.generated';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
+import { makeTransform, array2Matrix } from '../utils';
+import { inv, matrix, type Matrix } from 'mathjs';
+import { GlobalContext, ManagementContext } from '../Context';
+import { Card, Button, Form } from 'react-bootstrap';
+import { useParams } from 'react-router-dom';
+import { PanelBottom } from 'lucide-react';
+import { HomographyWorkbench } from './HomographyWorkbench';
+
+export function HomographyCreation({ showAnnotationSetDropdown = true }) {
+  const { client } = useContext(GlobalContext)!;
+  const { annotationSetId } = useParams();
+  const queryClient = useQueryClient();
+
+  const [selectedCategories, setSelectedCategories] = useState<
+    { label: string; value: string }[]
+  >([]);
+  const [selectedAnnotationSet, setSelectedAnnotationSet] =
+    useState<string>('');
+  const [showFilters, setShowFilters] = useState(true);
+
+  // Direct annotation fetch (no useOptimisticUpdates)
+  const [annotations, setAnnotations] = useState<
+    Schema['Annotation']['type'][]
+  >([]);
+  const [loadingAnnotations, setLoadingAnnotations] = useState(false);
+
+  const {
+    categoriesHook: { data: categories },
+    project,
+  } = useContext(ProjectContext)!;
+  const {
+    annotationSetsHook: { data: annotationSets },
+  } = useContext(ManagementContext)!;
+
+  const selectedCategoryIDs = useMemo(
+    () => selectedCategories.map((c) => c.value),
+    [selectedCategories]
+  );
+
+  useEffect(() => {
+    if (annotationSetId && !showAnnotationSetDropdown) {
+      setSelectedAnnotationSet(annotationSetId);
+    }
+  }, [annotationSetId]);
+
+  // Fetch annotations when filters change
+  useEffect(() => {
+    if (!selectedAnnotationSet || selectedCategoryIDs.length === 0) {
+      setAnnotations([]);
+      setLoadingAnnotations(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingAnnotations(true);
+
+    (async () => {
+      const all: Schema['Annotation']['type'][] = [];
+      let nextToken: string | undefined;
+
+      do {
+        const resp =
+          await client.models.Annotation.annotationsByAnnotationSetId(
+            { setId: selectedAnnotationSet },
+            {
+              nextToken,
+              limit: 1000,
+              filter: {
+                or: selectedCategoryIDs.map((id) => ({
+                  categoryId: { eq: id },
+                })),
+              } as ModelFilter<Schema['Annotation']['type']>,
+            }
+          );
+        if (cancelled) return;
+        all.push(...resp.data);
+        nextToken = resp.nextToken ?? undefined;
+      } while (nextToken);
+
+      if (!cancelled) {
+        setAnnotations(all);
+        setLoadingAnnotations(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAnnotationSet, selectedCategoryIDs, client]);
+
+  const annotationsByImage = useMemo(() => {
+    return annotations.reduce(
+      (acc, a) => {
+        (acc[a.imageId] ??= []).push(a);
+        return acc;
+      },
+      {} as Record<string, Schema['Annotation']['type'][]>
+    );
+  }, [annotations]);
+
+  const imageNeighboursQueries = useQueries({
+    queries: Object.keys(annotationsByImage).map((imageId) => ({
+      queryKey: ['imageNeighbours', imageId],
+      queryFn: async () => {
+        const { data: n1 } =
+          await client.models.ImageNeighbour.imageNeighboursByImage1key({
+            image1Id: imageId,
+          });
+        const { data: n2 } =
+          await client.models.ImageNeighbour.imageNeighboursByImage2key({
+            image2Id: imageId,
+          });
+        return [...n1, ...n2];
+      },
+      staleTime: Infinity,
+      cacheTime: 1000 * 60 * 60,
+    })),
+  });
+
+  const imageNeighbours = useMemo(() => {
+    const defaultH = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+    return imageNeighboursQueries
+      .filter((q) => q.isSuccess)
+      .reduce(
+        (acc, q) => {
+          q.data
+            .filter((n) => !n.skipped)
+            .forEach((n) => {
+              const isDefault = !(n.homography?.length === 9);
+              const rawH =
+                n.homography?.length === 9 ? n.homography : defaultH;
+              const MArray = array2Matrix(rawH);
+              if (!MArray) return;
+              const M = matrix(MArray) as Matrix;
+
+              (acc[n.image1Id] ??= {})[n.image2Id] = {
+                tf: makeTransform(M),
+                noHomography: isDefault,
+              };
+              const invM = inv(M) as Matrix;
+              (acc[n.image2Id] ??= {})[n.image1Id] = {
+                tf: makeTransform(invM),
+                noHomography: isDefault,
+              };
+            });
+          return acc;
+        },
+        {} as Record<
+          string,
+          Record<
+            string,
+            {
+              tf: (c: [number, number]) => [number, number];
+              noHomography: boolean;
+            }
+          >
+        >
+      );
+  }, [imageNeighboursQueries]);
+
+  const imageMetaDataQueries = useQueries({
+    queries: Object.keys(imageNeighbours).map((imageId) => ({
+      queryKey: ['imageMetaData', imageId],
+      queryFn: () => client.models.Image.get({ id: imageId }),
+      staleTime: Infinity,
+      cacheTime: 1000 * 60 * 60,
+    })),
+  });
+
+  const imageMetaData = useMemo(() => {
+    if (imageMetaDataQueries.some((q) => !q.isSuccess)) return {};
+    return imageMetaDataQueries
+      .filter((q) => q.isSuccess)
+      .reduce(
+        (acc, q) => {
+          const img = q.data?.data;
+          if (img) acc[img.id] = img;
+          return acc;
+        },
+        {} as Record<string, Schema['Image']['type']>
+      );
+  }, [imageMetaDataQueries]);
+
+  // Find pairs with missing homographies
+  const { pairToFind, missingCount } = useMemo(() => {
+    let firstPair:
+      | { primary: string; secondary: string }
+      | undefined;
+    let count = 0;
+    const seenPairs = new Set<string>();
+
+    const imageIds = Object.keys(annotationsByImage).sort(
+      (a, b) =>
+        (imageMetaData[a]?.timestamp ?? 0) -
+        (imageMetaData[b]?.timestamp ?? 0)
+    );
+
+    for (const imageId of imageIds) {
+      if (!imageMetaData[imageId]) continue;
+      const neighbours = Object.keys(
+        imageNeighbours[imageId] || {}
+      ).sort(
+        (a, b) =>
+          (imageMetaData[a]?.timestamp ?? 0) -
+          (imageMetaData[b]?.timestamp ?? 0)
+      );
+
+      for (const nId of neighbours) {
+        const pairKey = [imageId, nId].sort().join('::');
+        if (seenPairs.has(pairKey)) continue;
+        seenPairs.add(pairKey);
+
+        const fwd = imageNeighbours[imageId]?.[nId];
+        const bwd = imageNeighbours[nId]?.[imageId];
+        if (!fwd && !bwd) continue;
+        if (!imageMetaData[nId]) continue;
+        if (
+          !(fwd?.noHomography ?? false) &&
+          !(bwd?.noHomography ?? false)
+        )
+          continue;
+
+        const hasAnno1 = (annotationsByImage[imageId]?.length ?? 0) > 0;
+        const hasAnno2 = (annotationsByImage[nId]?.length ?? 0) > 0;
+        if (!hasAnno1 && !hasAnno2) continue;
+
+        count++;
+        if (!firstPair) {
+          firstPair = {
+            primary: hasAnno1 ? imageId : nId,
+            secondary: hasAnno1 ? nId : imageId,
+          };
+        }
+      }
+    }
+
+    return { pairToFind: firstPair, missingCount: count };
+  }, [annotationsByImage, imageNeighbours, imageMetaData]);
+
+  const primaryImage = pairToFind
+    ? imageMetaData[pairToFind.primary]
+    : undefined;
+  const secondaryImage = pairToFind
+    ? imageMetaData[pairToFind.secondary]
+    : undefined;
+  const hasPair = !!(pairToFind && primaryImage && secondaryImage);
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSkipping, setIsSkipping] = useState(false);
+
+  const refetchNeighbours = useCallback(
+    async (imageIds: [string, string]) => {
+      await Promise.all(
+        imageIds.flatMap((id) => [
+          queryClient.refetchQueries({ queryKey: ['imageNeighbours', id] }),
+          queryClient.refetchQueries({ queryKey: ['prevNeighbours', id] }),
+          queryClient.refetchQueries({ queryKey: ['nextNeighbours', id] }),
+        ])
+      );
+    },
+    [queryClient]
+  );
+
+  const handleSave = useCallback(
+    async (H: Matrix) => {
+      if (!pairToFind) return;
+      setIsSaving(true);
+
+      const flat: number[] = (H.toArray() as number[][]).flat();
+      const flatInverse: number[] = (inv(H).toArray() as number[][]).flat();
+
+      const nb1Resp = await client.models.ImageNeighbour.get({
+        image1Id: primaryImage!.id,
+        image2Id: secondaryImage!.id,
+      });
+      const nb1 = nb1Resp?.data;
+
+      await client.models.ImageNeighbour.update({
+        image1Id: nb1 ? primaryImage!.id : secondaryImage!.id,
+        image2Id: nb1 ? secondaryImage!.id : primaryImage!.id,
+        homography: nb1 ? flat : flatInverse,
+        homographySource: 'manual',
+      });
+
+      await refetchNeighbours([primaryImage!.id, secondaryImage!.id]);
+      setIsSaving(false);
+    },
+    [client, pairToFind, primaryImage, secondaryImage, refetchNeighbours]
+  );
+
+  const handleSkip = useCallback(async () => {
+    if (!pairToFind) return;
+    if (
+      !window.confirm(
+        "Are you sure you want to skip this pair? The images will remain neighbours but won't require registration."
+      )
+    )
+      return;
+
+    setIsSkipping(true);
+
+    const nb1Resp = await client.models.ImageNeighbour.get({
+      image1Id: primaryImage!.id,
+      image2Id: secondaryImage!.id,
+    });
+    const nb1 = nb1Resp?.data;
+
+    await client.models.ImageNeighbour.update({
+      image1Id: nb1 ? primaryImage!.id : secondaryImage!.id,
+      image2Id: nb1 ? secondaryImage!.id : primaryImage!.id,
+      skipped: true,
+    });
+
+    await refetchNeighbours([primaryImage!.id, secondaryImage!.id]);
+    setIsSkipping(false);
+  }, [client, pairToFind, primaryImage, secondaryImage, refetchNeighbours]);
+
+  // Loading state
+  const neighboursLoading = imageNeighboursQueries.length > 0 && !imageNeighboursQueries.every((q) => q.isSuccess);
+  const metadataLoading = imageMetaDataQueries.length > 0 && !imageMetaDataQueries.every((q) => q.isSuccess);
+  const isLoading = loadingAnnotations || neighboursLoading || metadataLoading;
+
+  const loadingMessage = loadingAnnotations
+    ? `Loading annotations... (${annotations.length} loaded)`
+    : neighboursLoading
+      ? `Loading image neighbours... (${imageNeighboursQueries.filter((q) => q.isSuccess).length}/${imageNeighboursQueries.length})`
+      : metadataLoading
+        ? `Loading image metadata... (${imageMetaDataQueries.filter((q) => q.isSuccess).length}/${imageMetaDataQueries.length})`
+        : '';
+
+  return (
+    <div
+      style={{
+        width: '100%',
+        paddingTop: '16px',
+        paddingBottom: '16px',
+        height: '100%',
+      }}
+    >
+      {selectedCategories.length === 0 || !hasPair ? (
+        <div className='w-100 h-100 d-flex flex-column flex-md-row gap-3'>
+          {/* Sidebar filters (shown when no pair is active) */}
+          <div
+            className='d-flex flex-column gap-3 w-100'
+            style={{ maxWidth: '360px' }}
+          >
+            <Card className='d-sm-block d-none w-100'>
+              <Card.Header>
+                <Card.Title className='mb-0'>Information</Card.Title>
+              </Card.Header>
+              <Card.Body className='d-flex flex-column gap-2'>
+                <InfoTag label='Survey' value={project.name} />
+                <InfoTag
+                  label='Annotation Set'
+                  value={
+                    annotationSets?.find(
+                      (s) => s.id === selectedAnnotationSet
+                    )?.name ?? 'Unknown'
+                  }
+                />
+              </Card.Body>
+            </Card>
+            <Card className='w-100 flex-grow-1'>
+              <Card.Header>
+                <Card.Title className='mb-0 d-flex align-items-center'>
+                  <Button
+                    className='p-0 mb-0'
+                    variant='outline'
+                    onClick={() => setShowFilters(!showFilters)}
+                  >
+                    <PanelBottom
+                      className='d-sm-none'
+                      style={{
+                        transform: showFilters
+                          ? 'rotate(180deg)'
+                          : 'rotate(0deg)',
+                      }}
+                    />
+                  </Button>
+                  Filters
+                </Card.Title>
+              </Card.Header>
+              {showFilters && (
+                <Card.Body className='d-flex flex-column gap-2'>
+                  <div className='w-100'>
+                    <Form.Label>Labels</Form.Label>
+                    <Select
+                      value={selectedCategories}
+                      onChange={(v) =>
+                        setSelectedCategories(
+                          v as { label: string; value: string }[]
+                        )
+                      }
+                      isMulti
+                      name='Labels to register'
+                      options={categories
+                        ?.filter(
+                          (c) =>
+                            c.annotationSetId === selectedAnnotationSet
+                        )
+                        .map((q) => ({
+                          label: q.name,
+                          value: q.id,
+                        }))}
+                      className='text-black w-100'
+                      closeMenuOnSelect={false}
+                    />
+                  </div>
+                  {showAnnotationSetDropdown && (
+                    <AnnotationSetDropdown
+                      selectedSet={selectedAnnotationSet}
+                      setAnnotationSet={setSelectedAnnotationSet}
+                      canCreate={false}
+                    />
+                  )}
+                </Card.Body>
+              )}
+            </Card>
+          </div>
+
+          {/* Main content placeholder */}
+          <div className='d-flex flex-column align-items-center h-100 w-100'>
+            {selectedCategories.length === 0 ? (
+              <div>No label selected</div>
+            ) : isLoading ? (
+              <div>{loadingMessage}</div>
+            ) : (
+              <>
+                <div
+                  className='mb-2'
+                  style={{ fontSize: '1.1rem', fontWeight: 'bold' }}
+                >
+                  {missingCount} pair
+                  {missingCount !== 1 ? 's' : ''} remaining
+                </div>
+                <div>No more items to process</div>
+              </>
+            )}
+          </div>
+        </div>
+      ) : isLoading ? (
+        <div className='d-flex align-items-center justify-content-center h-100'>
+          {loadingMessage}
+        </div>
+      ) : (
+        <HomographyWorkbench
+          images={[primaryImage!, secondaryImage!]}
+          onSave={handleSave}
+          onSkip={handleSkip}
+          isSaving={isSaving}
+          isSkipping={isSkipping}
+          annotationSetId={selectedAnnotationSet}
+          header={
+            <span style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
+              {missingCount} pair{missingCount !== 1 ? 's' : ''} remaining
+            </span>
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function InfoTag({ label, value }: { label: string; value: string }) {
+  return (
+    <p className='mb-0 d-flex flex-row gap-2 justify-content-between'>
+      <span>{label}:</span>
+      <span>{value}</span>
+    </p>
+  );
+}

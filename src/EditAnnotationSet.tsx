@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { Button, Form } from 'react-bootstrap';
+import { Button, Form, Spinner } from 'react-bootstrap';
 import { Modal, Body, Header, Footer, Title } from './Modal';
 import { GlobalContext } from './Context';
 import { Tab, Tabs } from './Tabs';
@@ -28,12 +28,17 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
   const { client } = useContext(GlobalContext)!;
   const [newName, setNewName] = useState<string>('');
   const [busy, setBusy] = useState<boolean>(false);
+  const [statusMessage, setStatusMessage] = useState('');
   const [tab, setTab] = useState<number>(0);
   const [handleMove, setHandleMove] = useState<() => Promise<void>>(() =>
     Promise.resolve()
   );
   const [saveLabels, setSaveLabels] = useState<
-    ((annotationSetId: string, projectId: string) => Promise<void>) | null
+    ((
+      annotationSetId: string,
+      projectId: string,
+      group: string
+    ) => Promise<void>) | null
   >(null);
 
   const handleSave = async () => {
@@ -48,11 +53,16 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
       if (setAnnotationSet && result) {
         setAnnotationSet({ id: result.id, name: result.name });
         if (saveLabels) {
-          await saveLabels(annotationSet.id, project.id);
+          await saveLabels(
+            annotationSet.id,
+            project.id,
+            project.group || project.organizationId
+          );
         }
       }
 
       handleClose();
+      setStatusMessage('');
 
       if (setSelectedSets) {
         setSelectedSets([]);
@@ -99,11 +109,18 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
                   }))}
                 isEditing
                 setHandleSave={setSaveLabels}
+                onStatusChange={setStatusMessage}
               />
             </Form>
           </Tab>
         </Tabs>
         <Footer>
+          {statusMessage && (
+            <span className='text-muted me-auto d-flex align-items-center gap-2' style={{ fontSize: 12 }}>
+              <Spinner size='sm' />
+              {statusMessage}
+            </span>
+          )}
           <Button
             variant='primary'
             disabled={busy}

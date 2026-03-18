@@ -7,4 +7,12 @@ export default defineConfig({
   define: {
     global: {},
   },
+  build: {
+    target: 'esnext',
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      target: 'esnext',
+    },
+  },
 })

@@ -33,6 +33,7 @@ const STORAGE_KEYS = {
   ORGANIZATION_FILTER: 'surveysOrganizationFilter',
   SORT_BY: 'surveysSortBy',
   COMPACT_MODE: 'surveysCompactMode',
+  SEARCH: 'surveysSearch',
 };
 
 export default function Surveys() {
@@ -53,8 +54,20 @@ export default function Surveys() {
   const [selectedAnnotationSet, setSelectedAnnotationSet] = useState<
     Schema['AnnotationSet']['type'] | null
   >(null);
-  const [search, setSearch] = useState('');
   const [selectedSets, setSelectedSets] = useState<string[]>([]);
+
+  // Initialize search from localStorage or use default
+  const getInitialSearch = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEYS.SEARCH);
+      if (stored !== null) {
+        return stored;
+      }
+    }
+    return '';
+  };
+
+  const [search, setSearch] = useState(getInitialSearch);
   const [hasUploadedFiles, setHasUploadedFiles] = useState<{
     [projectId: string]: boolean;
   }>({});
@@ -147,6 +160,13 @@ export default function Surveys() {
     }
   }, [compactMode]);
 
+  // Persist search to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.SEARCH, search);
+    }
+  }, [search]);
+
   useEffect(() => {
     async function getProjects() {
       const myAdminProjects = myProjectsHook.data?.filter(
@@ -168,6 +188,7 @@ export default function Surveys() {
                     'annotationSets.id',
                     'annotationSets.name',
                     'annotationSets.register',
+                    'annotationSets.createHomographies',
                     'locationSets.id',
                     'locationSets.name',
                     'annotationSets.categories.id',
@@ -184,6 +205,7 @@ export default function Surveys() {
                     'updatedAt',
                     'createdAt',
                     'imageSets.imageCount',
+                    'tiledLocationSetId',
                   ],
                 }
               )
@@ -245,7 +267,7 @@ export default function Surveys() {
   ) {
     const project = projects.find((p) => p.id === projectId);
     const annotationSet = project?.annotationSets.find(
-      (set) => set.id === annotationSetId
+      (set: { id: string }) => set.id === annotationSetId
     );
     const annotationSetName = annotationSet?.name || 'Unknown';
     const projectName = project?.name || 'Unknown';
@@ -266,7 +288,7 @@ export default function Surveys() {
           return {
             ...project,
             annotationSets: project.annotationSets.filter(
-              (set) => set.id !== annotationSetId
+              (set: { id: string }) => set.id !== annotationSetId
             ),
           };
         }
@@ -286,9 +308,29 @@ export default function Surveys() {
     );
 
     try {
+      // cancel homography creation job if it exists
+      const homographySet = selectedProject?.annotationSets.find(
+        (set: { createHomographies?: boolean | null }) => set.createHomographies
+      );
+
+      if (homographySet) {
+        await client.models.AnnotationSet.update({
+          id: homographySet.id,
+          createHomographies: false,
+        });
+        await logAdminAction(
+          client,
+          user.userId,
+          `Cancelled homography creation job for annotation set "${homographySet.name}" in project "${selectedProject!.name}"`,
+          selectedProject!.id,
+          selectedProject!.organizationId
+        );
+        return;
+      }
+
       // cancel registration job if it exists
       const annotationSet = selectedProject?.annotationSets.find(
-        (set) => set.register
+        (set: { register?: boolean | null }) => set.register
       );
 
       if (annotationSet) {
@@ -337,7 +379,7 @@ export default function Surveys() {
       project.status !== 'deleted' && project.status !== 'hidden';
     const matchesOrganization =
       !organizationFilter || project.organizationId === organizationFilter;
-    const matchesAnnotationSet = project.annotationSets.some((set) =>
+    const matchesAnnotationSet = project.annotationSets.some((set: { name: string }) =>
       set.name.toLowerCase().includes(searchLower)
     );
     const matchesSearch =
@@ -621,7 +663,7 @@ export default function Surveys() {
 
     const hasJobs =
       project.queues.length > 0 ||
-      project.annotationSets.some((set) => set.register);
+      project.annotationSets.some((set: { register?: boolean | null; createHomographies?: boolean | null }) => set.register || set.createHomographies);
 
     const showResumeButton =
       !task.projectId &&
@@ -710,7 +752,7 @@ export default function Surveys() {
                 <Button
                   size={compactMode ? 'sm' : undefined}
                   className='flex align-items-center justify-content-center'
-                  disabled={!project.annotationSets.some((set) => set.register) && (disabled || scanningProjects.has(project.id))}
+                  disabled={!project.annotationSets.some((set: { register?: boolean | null; createHomographies?: boolean | null }) => set.register || set.createHomographies) && (disabled || scanningProjects.has(project.id))}
                   variant='primary'
                   onClick={() => navigate(`/jobs`)}
                 >
@@ -719,7 +761,7 @@ export default function Surveys() {
                 <Button
                   size={compactMode ? 'sm' : undefined}
                   className='flex align-items-center justify-content-center'
-                  disabled={!project.annotationSets.some((set) => set.register) && (disabled || scanningProjects.has(project.id))}
+                  disabled={!project.annotationSets.some((set: { register?: boolean | null; createHomographies?: boolean | null }) => set.register || set.createHomographies) && (disabled || scanningProjects.has(project.id))}
                   variant='danger'
                   onClick={() => {
                     setSelectedProject(project);
@@ -746,7 +788,7 @@ export default function Surveys() {
 
     const hasJobs =
       project.queues.length > 0 ||
-      project.annotationSets.some((set) => set.register);
+      project.annotationSets.some((set: { register?: boolean | null; createHomographies?: boolean | null }) => set.register || set.createHomographies);
 
     const showResumeButton =
       !task.projectId &&
@@ -827,7 +869,7 @@ export default function Surveys() {
                   <Button
                     size='sm'
                     className='flex align-items-center justify-content-center'
-                    disabled={!project.annotationSets.some((set) => set.register) && (disabled || scanningProjects.has(project.id))}
+                    disabled={!project.annotationSets.some((set: { register?: boolean | null; createHomographies?: boolean | null }) => set.register || set.createHomographies) && (disabled || scanningProjects.has(project.id))}
                     variant='primary'
                     onClick={() => navigate(`/jobs`)}
                   >
@@ -836,7 +878,7 @@ export default function Surveys() {
                   <Button
                     size='sm'
                     className='flex align-items-center justify-content-center'
-                    disabled={!project.annotationSets.some((set) => set.register) && (disabled || scanningProjects.has(project.id))}
+                    disabled={!project.annotationSets.some((set: { register?: boolean | null; createHomographies?: boolean | null }) => set.register || set.createHomographies) && (disabled || scanningProjects.has(project.id))}
                     variant='danger'
                     onClick={() => {
                       setSelectedProject(project);
@@ -1102,7 +1144,7 @@ export default function Surveys() {
                 if (project.id === selectedProject?.id) {
                   return {
                     ...project,
-                    annotationSets: project.annotationSets.map((set) =>
+                    annotationSets: project.annotationSets.map((set: { id: string }) =>
                       set.id === annotationSet.id ? annotationSet : set
                     ),
                   };
