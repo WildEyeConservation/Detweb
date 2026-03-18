@@ -106,6 +106,12 @@ const deleteObservationMutation = /* GraphQL */ `
   }
 `;
 
+const getLocationSetQuery = /* GraphQL */ `
+  query GetLocationSet($id: ID!) {
+    getLocationSet(id: $id) { id name }
+  }
+`;
+
 const annotationSetsByProjectIdQuery = /* GraphQL */ `
   query AnnotationSetsByProjectId(
     $projectId: ID!
@@ -500,32 +506,75 @@ async function handleDistributedTiling(payload: LaunchLambdaPayload, organizatio
   const tiledRequest = payload.tiledRequest!;
   let locationSetId: string;
 
-  // Check if we should reuse an existing location set
   if (tiledRequest.existingLocationSetId) {
-    locationSetId = tiledRequest.existingLocationSetId;
-    console.log('Reusing existing location set', { locationSetId });
+    // Retile: archive the old location set and create a fresh one.
+    //
+    // We deliberately do NOT delete the old locations — doing so via GraphQL is
+    // too slow for large projects (some have ~1M locations) and a single Lambda
+    // invocation cannot paginate and delete that many records within its timeout.
+    // Retiling is a rare, intentional action so leaving stale locations in the
+    // archived set is an acceptable trade-off for now. When an efficient
+    // bulk-delete mechanism is available (e.g. DynamoDB BatchWriteItem scan or a
+    // dedicated cleanup Lambda), add the deletion step here.
 
-    // Clear existing locations from the location set
-    await clearLocationSetLocations(locationSetId);
+    const oldLocationSetId = tiledRequest.existingLocationSetId;
 
-    // Wipe all false-negative data for every annotation set in the project,
-    // since tiles are changing and FN pools reference the old tile geometries.
-    await deleteFalseNegativeDataForProject(payload.projectId);
+    // Fetch the old set's name so we can form a meaningful archive label.
+    const oldSetData = await executeGraphql<{
+      getLocationSet?: { id: string; name: string };
+    }>(getLocationSetQuery, { id: oldLocationSetId });
+    const oldName = oldSetData.getLocationSet?.name ?? 'Location Set';
 
-    // Update the location set with new description and count
+    // Rename the old set so it's identifiable but clearly no longer active.
+    const archiveTimestamp = new Date().toISOString().replace('T', ' ').substring(0, 16);
     await executeGraphql<{ updateLocationSet?: { id: string } }>(
       updateLocationSetMutation,
       {
         input: {
-          id: locationSetId,
-          description: tiledRequest.description,
-          locationCount: tiledRequest.locationCount,
+          id: oldLocationSetId,
+          name: `${oldName} (archived ${archiveTimestamp})`,
         },
       }
     );
-    console.log('Updated location set', { locationSetId });
+    console.log('Archived old location set', { oldLocationSetId });
+
+    // Wipe FN data — it references old tile geometries and must be cleared.
+    await deleteFalseNegativeDataForProject(payload.projectId);
+
+    // Create a brand-new location set to receive the new tiles.
+    const newLocationSetData = await executeGraphql<{
+      createLocationSet?: { id: string };
+    }>(createLocationSetMutation, {
+      input: {
+        name: tiledRequest.name,
+        projectId: payload.projectId,
+        description: tiledRequest.description,
+        locationCount: tiledRequest.locationCount,
+        group: organizationId,
+      },
+    });
+
+    locationSetId = newLocationSetData.createLocationSet?.id!;
+    if (!locationSetId) {
+      throw new Error('Unable to create replacement location set');
+    }
+
+    // Point the project at the new set so all subsequent workflows use it.
+    await executeGraphql<{ updateProject?: { id: string } }>(
+      updateProjectMutation,
+      {
+        input: {
+          id: payload.projectId,
+          tiledLocationSetId: locationSetId,
+        },
+      }
+    );
+    console.log('Created new location set and updated project pointer', {
+      oldLocationSetId,
+      newLocationSetId: locationSetId,
+    });
   } else {
-    // Create a new location set
+    // First-time tiling: create the location set from scratch.
     const locationSetData = await executeGraphql<{
       createLocationSet?: { id: string };
     }>(createLocationSetMutation, {
