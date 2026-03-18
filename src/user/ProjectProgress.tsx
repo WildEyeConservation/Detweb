@@ -120,7 +120,7 @@ export default function ProjectProgress({ projectId, onScanningChange }: Project
   }, [shouldDisable, onScanningChange]);
 
   if (registering) {
-    return <p className='mb-0 w-100'>{creatingHomographies ? 'Creating Homographies' : 'Registering'}</p>;
+    return <p className='mb-0 w-100'>{creatingHomographies ? 'Manual Homographies' : 'Registering'}</p>;
   }
 
   if (isLoading || !queueInfo) {
