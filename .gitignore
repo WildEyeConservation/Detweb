@@ -31,3 +31,4 @@ amplifyconfiguration*
 src/DevActions.tsx
 amplify/shared/types.ts
 amplify/shared/data-schema.generated.ts
+scripts/
