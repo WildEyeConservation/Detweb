@@ -95,16 +95,31 @@ type LocationInput = {
   setId: string;
 };
 
+const MAX_INVOCATION_DEPTH = 100;
+
 type ProcessBatchPayload = {
   batchId: string;
+  depth: number;
 };
 
 // Entry point invoked by the orchestrating lambda.
 export const handler: Handler = async (event) => {
   const payload = parsePayload(event);
-  const { batchId } = payload;
+  const { batchId, depth } = payload;
 
-  console.log('processTilingBatch invoked', { batchId });
+  console.log('processTilingBatch invoked', { batchId, depth });
+
+  if (depth >= MAX_INVOCATION_DEPTH) {
+    console.error('MAX_INVOCATION_DEPTH reached — aborting chain to prevent infinite loop', {
+      batchId,
+      depth,
+    });
+    await updateBatchFailed(batchId, `Invocation depth limit (${MAX_INVOCATION_DEPTH}) reached — possible infinite loop`);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ message: 'Invocation depth limit reached', batchId, depth }),
+    };
+  }
 
   try {
     // Mark batch as processing
@@ -164,7 +179,7 @@ export const handler: Handler = async (event) => {
 
     // Chain to next batch for sequential processing
     try {
-      await invokeNextBatch(batch.tilingTaskId, batch.batchIndex);
+      await invokeNextBatch(batch.tilingTaskId, batch.batchIndex, depth);
     } catch (chainError: any) {
       console.error('Failed to invoke next batch', {
         batchId,
@@ -203,15 +218,15 @@ export const handler: Handler = async (event) => {
 function parsePayload(event: any): ProcessBatchPayload {
   // Handle both direct invocation and Lambda event formats
   if (event.batchId) {
-    return { batchId: event.batchId };
+    return { batchId: event.batchId, depth: event.depth ?? 0 };
   }
   if (event.arguments?.batchId) {
-    return { batchId: event.arguments.batchId };
+    return { batchId: event.arguments.batchId, depth: event.arguments.depth ?? 0 };
   }
   if (typeof event.body === 'string') {
     const parsed = JSON.parse(event.body);
     if (parsed.batchId) {
-      return { batchId: parsed.batchId };
+      return { batchId: parsed.batchId, depth: parsed.depth ?? 0 };
     }
   }
   throw new Error('batchId is required');
@@ -382,7 +397,7 @@ async function updateBatchFailed(batchId: string, errorMessage: string): Promise
   );
 }
 
-async function invokeNextBatch(tilingTaskId: string, currentBatchIndex: number): Promise<void> {
+async function invokeNextBatch(tilingTaskId: string, currentBatchIndex: number, depth: number): Promise<void> {
   const nextBatchIndex = currentBatchIndex + 1;
 
   // Query for the next batch by index
@@ -433,7 +448,7 @@ async function invokeNextBatch(tilingTaskId: string, currentBatchIndex: number):
     new InvokeCommand({
       FunctionName: functionName,
       InvocationType: 'Event', // Async invocation
-      Payload: JSON.stringify({ batchId: nextBatch.id }),
+      Payload: JSON.stringify({ batchId: nextBatch.id, depth: depth + 1 }),
     })
   );
 
