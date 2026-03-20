@@ -6,6 +6,7 @@ import {
 } from '@aws-sdk/client-sqs';
 import { Schema } from './amplify/client-schema';
 import useTesting from './TestSource';
+import type { Identifiable } from './Preloader';
 
 export default function useSQS(
   filterPredicate: (message: any) => Promise<boolean> = async () => {

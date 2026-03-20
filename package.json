@@ -12,8 +12,9 @@
     "generate-types": "tsx script.ts"
   },
   "dependencies": {
-    "@aws-amplify/api": "^6.0.53",
-    "@aws-amplify/auth": "^6.3.16",
+    "@aws-amplify/api": "^6.3.24",
+    "@aws-amplify/auth": "^6.19.1",
+    "@aws-amplify/core": "^6.16.1",
     "@aws-amplify/ui-react": "^6.1.13",
     "@aws-amplify/ui-react-storage": "^3.3.4",
     "@aws-crypto/sha256-js": "^5.2.0",

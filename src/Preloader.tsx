@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { UserContext } from './Context';
 
-interface Identifiable {
+export interface Identifiable {
   id: string;
   [key: string]: any;
 }
