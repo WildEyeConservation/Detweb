@@ -104,28 +104,11 @@ function createIcon(
   return L.divIcon({
     className: 'my-custom-pin',
     iconAnchor: [0, 0],
-    labelAnchor: [0, -100],
     popupAnchor: [0, -30],
     html: html,
   });
 }
 
-function detectionToAnnotation(det: any): Partial<ExtendedAnnotationType> {
-  const result: Partial<ExtendedAnnotationType> = {};
-  result.id = det.id;
-  result.x = det.x;
-  result.y = det.y;
-  result.imageId = det.imageId;
-  result.setId = det.setId;
-  result.source = det.source;
-  result.projectId = det.projectId;
-  result.shadow = det.shadow;
-  result.obscured = det.obscured;
-  result.categoryId = det.categoryId;
-  result.objectId = det.objectId;
-  result.proposedObjectId = det.proposedObjectId;
-  return result;
-}
 
 const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
   (props) => {
@@ -133,7 +116,6 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
       annotation,
       categories,
       activeAnnotation,
-      user,
       updateAnnotation,
       deleteAnnotation,
       getType,
@@ -199,7 +181,7 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
           });
           const newName = uniqueNamesGenerator({
             dictionaries: [adjectives, names],
-            seed: activeAnnotation.objectId,
+            seed: activeAnnotation.objectId ?? '',
             style: 'capital',
             separator: ' ',
           });
@@ -270,33 +252,7 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
           setShowCategoryModal(true);
         },
       });
-      if (user.isAdmin) {
-        const item = {
-          text: 'Send message to ' + annotation.owner,
-          index: contextmenuItems.length,
-          callback: async () => {
-            let msg = prompt(
-              'Type the message here',
-              'This is not an elephant'
-            );
-            /* I do not know if a suitable message queue exists. But it seems that if it does allready exist, createQueue will simply return the URL for
-            the existing queue. So no need to check.*/
-            const { QueueUrl: url } = await createQueue({
-              QueueName: `${annotation.owner}_${currentProject}`, // required
-              Attributes: {
-                MessageRetentionPeriod: '1209600', //This value is in seconds. 1209600 corresponds to 14 days and is the maximum AWS supports
-              },
-            });
-            annotation.message = msg;
-            sendToQueue({
-              QueueUrl: url,
-              MessageBody: JSON.stringify(annotation),
-            });
-            console.log(msg);
-          },
-        };
-        contextmenuItems.push(item);
-      }
+      // TODO: re-implement admin messaging when SQS APIs are available
       return contextmenuItems;
     }
 
@@ -339,18 +295,20 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
 
     if (xy2latLng) {
       console.log(`creating marker for ${annotation.id}`);
+      // Cast to any to allow leaflet-contextmenu props (contextmenu, contextmenuItems, etc.)
+      const MarkerWithContextMenu = Marker as any;
       return (
         <>
-          <Marker
+          <MarkerWithContextMenu
             key={crypto.randomUUID()}
             eventHandlers={{
-              dragend: (e) => {
+              dragend: (e: any) => {
                 const coords = latLng2xy(e.target.getLatLng()) as L.Point;
                 const x = Math.round(coords.x);
                 const y = Math.round(coords.y);
                 // Revert if dragged outside location bounds
                 if (locationBounds && !isInsideLocation(x, y, locationBounds)) {
-                  const originalPos = xy2latLng(annotation);
+                  const originalPos = xy2latLng(L.point(annotation.x, annotation.y)) as L.LatLng;
                   e.target.setLatLng(originalPos);
                   return;
                 }
@@ -365,22 +323,22 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
                   onClick(annotation);
                 }
               },
-              mouseover: (e) => {
+              mouseover: (e: any) => {
                 //If the user hovers over the marker, move the input focus here.
                 e.target.getElement().focus();
               },
-              mouseout: (e) => {
+              mouseout: (e: any) => {
                 //If the user moves the mouse away from the marker, blur the input field.
                 e.target.getElement().blur();
               },
-              keydown: (e) => {
+              keydown: (e: any) => {
                 //if the user presses the backspace key, delete the annotation
                 if (e.originalEvent.key === 'Backspace' && !isOutsideBounds) {
                   deleteAnnotation(annotation);
                 }
               },
             }}
-            position={xy2latLng(annotation)}
+            position={xy2latLng(L.point(annotation.x, annotation.y)) as L.LatLng}
             draggable={!isOutsideBounds}
             autopan={true}
             icon={createIcon(
@@ -427,7 +385,7 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
                   separator: ' ',
                 })}`}
             </Tooltip>
-          </Marker>
+          </MarkerWithContextMenu>
           <ChangeCategoryModal
             show={showCategoryModal}
             onClose={() => setShowCategoryModal(false)}

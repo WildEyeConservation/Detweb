@@ -132,10 +132,7 @@ export default function EditInformation({ projectId }: { projectId: string }) {
 
       // In case there are no cameras, add a default camera
       if (cameras.length === 0) {
-        cameras.push({
-          id: '0000',
-          name: 'Survey Camera',
-        });
+        (cameras as any[]).push({ id: '0000', name: 'Survey Camera' });
       }
 
       const structure = cameras.map((camera) => {

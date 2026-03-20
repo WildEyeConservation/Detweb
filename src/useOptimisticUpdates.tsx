@@ -45,10 +45,9 @@ const { data, create, update, delete } = useOptimisticUpdates(
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useContext, useMemo, useCallback } from 'react';
 import type { Schema } from './amplify/client-schema';
-import { V6Client } from '@aws-amplify/api-graphql';
-import { GlobalContext, UserContext, ProjectContext } from './Context';
+import type { DataModels, SubscriptionOptions } from '../amplify/shared/data-schema.generated';
+import { GlobalContext, ProjectContext } from './Context';
 
-type ClientType = V6Client<Schema>;
 
 // Options interface to optionally pass a composite key resolver and subscription auth mode
 export interface OptimisticOptions<T> {
@@ -58,22 +57,21 @@ export interface OptimisticOptions<T> {
 
 export function useOptimisticUpdates<
   T,
-  ModelKey extends keyof ClientType['models']
+  ModelKey extends keyof DataModels
 >(
   modelKey: ModelKey,
   listFunction: (
     nextToken?: string
-  ) => Promise<{ data: T[]; nextToken?: string }>,
-  subscriptionFilter?: Parameters<
-    ClientType['models'][ModelKey]['onCreate']
-  >[0],
+  ) => Promise<{ data: T[]; nextToken?: string | null }>,
+  subscriptionFilter?: SubscriptionOptions<any>,
   options?: OptimisticOptions<T>,
-  updateFunction?: (item: T) => Promise<void>
+  updateFunction?: (progress: number) => Promise<void>
 ) {
   const { client } = useContext(GlobalContext);
   const queryClient = useQueryClient();
   const queryKey = [modelKey, subscriptionFilter];
-  const model = client.models[modelKey];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const model = client.models[modelKey] as any;
 
   // Use the compositeKey function from options if provided, otherwise use id
   const getKey = (item: any) =>
@@ -95,11 +93,11 @@ export function useOptimisticUpdates<
       const allResults: T[] = [];
       do {
         const result = await effectiveListFunction(nextToken);
-        allResults.push(...result.data);
+        allResults.push(...(result.data as T[]));
         if (updateFunction) {
-          updateFunction(allResults.length);
+          await updateFunction(allResults.length);
         }
-        nextToken = result.nextToken;
+        nextToken = result.nextToken ?? undefined;
       } while (nextToken);
       return allResults;
     },
@@ -160,7 +158,7 @@ export function useOptimisticUpdates<
 
   const createMutation = useMutation({
     mutationFn: model.create,
-    onMutate: async (newItem: Parameters<typeof model.create>[0]) => {
+    onMutate: async (newItem: any) => {
       newItem.id ||= crypto.randomUUID(); // If the item does not have an id, generate a random UUID for it.
       await queryClient.cancelQueries({ queryKey });
       const previousItems = queryClient.getQueryData<T[]>(queryKey);
@@ -216,9 +214,9 @@ export function useOptimisticUpdates<
     data: data || [],
     meta: queryResult,
     create: (item: T) => {
-      item.id ||= crypto.randomUUID(); // If the item does not have an id, we generate a random UUID for it.
+      (item as any).id ||= crypto.randomUUID(); // If the item does not have an id, we generate a random UUID for it.
       createMutation.mutate(item);
-      return item.id;
+      return (item as any).id as string;
     },
     update: updateMutation.mutate,
     delete: deleteMutation.mutate,
@@ -235,7 +233,7 @@ export const useQueues = () => {
     [project.id]
   );
 
-  const originalHook = useOptimisticUpdates<Schema['Queue']['type'], 'Queue'>(
+  const originalHook = useOptimisticUpdates<Schema['Queue']['type'], 'Queue'>( // eslint-disable-line @typescript-eslint/no-explicit-any
     'Queue',
     async (nextToken) =>
       client.models.Queue.list({
@@ -248,7 +246,7 @@ export const useQueues = () => {
     client.mutations.deleteQueueMutation({ queueId: id }).catch((err: any) =>
       console.error('deleteQueueMutation failed:', err)
     );
-    originalHook.delete({ id });
+    originalHook.delete({ id } as Schema['Queue']['type']);
   };
   return { ...originalHook, delete: remove };
 };

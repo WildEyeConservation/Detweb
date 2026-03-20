@@ -9,14 +9,14 @@ interface S3ImageOverlayProps extends ImageOverlayProps {
 }
 export function S3ImageOverlay({ bounds, source }: S3ImageOverlayProps) {
   const [url, setUrl] = useState<string | undefined>(undefined);
-  const { getObject } = useContext(UserContext)!;
+  const { getObject } = useContext(UserContext) as any;
 
   useEffect(() => {
     getObject({
-      Bucket: backend.custom.outputBucket,
+      Bucket: (backend.custom as any).outputBucket,
       Key: `public/images/${source}`,
     })
-      .then((response) => {
+      .then((response: any) => {
         // Check if response.Body is already a Blob
         if (response.Body instanceof Blob) {
           return response.Body;
@@ -30,8 +30,8 @@ export function S3ImageOverlay({ bounds, source }: S3ImageOverlayProps) {
           throw new Error('Unexpected response body type');
         }
       })
-      .then((blob) => URL.createObjectURL(blob))
-      .then((url) => setUrl(url));
+      .then((blob: any) => URL.createObjectURL(blob))
+      .then((url: any) => setUrl(url));
   }, [source, getObject]);
 
   return url ? <ImageOverlay bounds={bounds} url={url} /> : null;

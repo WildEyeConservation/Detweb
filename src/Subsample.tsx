@@ -4,7 +4,7 @@ import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import ImageSetDropdown from './survey/ImageSetDropdown';
 import { GlobalContext } from './Context';
-import { Schema } from '../amplify/data/resource';
+import { Schema } from './amplify/client-schema';
 interface SubsampleModalProps {
   show: boolean;
   handleClose: () => void;
@@ -30,8 +30,8 @@ const SubsampleModal: React.FC<SubsampleModalProps> = ({
     for (const imageSet of selectedImageSets) {
       const allImages: { id: string; timestamp: number }[] = [];
       const { data } = await client.models.ImageSet.get({ id: imageSet });
-      const { name, images } = data;
-      let prevNextToken: String | undefined = undefined;
+      const name = data?.name;
+      let prevNextToken: string | null | undefined = undefined;
       do {
         const result =
           await client.models.ImageSetMembership.imageSetMembershipsByImageSetId(
@@ -42,7 +42,7 @@ const SubsampleModal: React.FC<SubsampleModalProps> = ({
             }
           );
         const { data, nextToken } = result;
-        prevNextToken = nextToken;
+        prevNextToken = nextToken ?? null;
         allImages.push(...data.map(({ image }) => image));
       } while (prevNextToken);
       //Sort images by timestamp

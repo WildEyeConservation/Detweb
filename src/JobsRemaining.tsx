@@ -24,18 +24,18 @@ export function JobsRemaining() {
   useEffect(() => {
     if (currentPM.queueId) {
       client.models.Queue.get({ id: currentPM.queueId }).then(
-        ({ data: { url, batchSize } }) => {
-          setUrl(url);
-
-          if (batchSize) {
-            setBatchSize(batchSize);
+        ({ data }) => {
+          if (!data) return;
+          setUrl(data.url ?? undefined);
+          if (data.batchSize) {
+            setBatchSize(data.batchSize);
           }
         }
       );
       if (currentPM.backupQueueId) {
         client.models.Queue.get({ id: currentPM.backupQueueId }).then(
-          ({ data: { url } }) => {
-            setBackupUrl(url);
+          ({ data }) => {
+            setBackupUrl(data?.url ?? undefined);
           }
         );
       }

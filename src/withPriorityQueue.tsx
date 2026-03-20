@@ -40,7 +40,7 @@ export function withPreloading2(WrappedComponent: React.ComponentType<any>) {
     //     el?.focus();
     //   }
     // });
-    const { buffer, index, next, prev, inject } = useSQS();
+    const { buffer, index, next, prev } = useSQS();
     const [errorprops, setErrorprops] = useState<any>(false);
     console.log('preloading render runs');
     //useTesting(inject, setErrorprops);

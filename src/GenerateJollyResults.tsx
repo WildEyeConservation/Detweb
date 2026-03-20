@@ -98,7 +98,7 @@ export default function GenerateJollyResults({
               isMulti
               options={categoryOptions}
               value={selectedCategories}
-              onChange={setSelectedCategories}
+              onChange={(value) => setSelectedCategories([...value])}
               className='text-black'
             />
           </Form.Group>

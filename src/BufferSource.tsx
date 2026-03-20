@@ -1,5 +1,3 @@
-import { FetcherType } from './Preloader';
-
 export default class BufferSource {
   private index: number = 0;
   private buffer: any[];

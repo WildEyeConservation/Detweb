@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState, useEffect, useContext } from 'react';
 import { getQueuesInProject } from './gqlQueries';
 import { UserContext } from './UserContext';

@@ -10,8 +10,8 @@ interface ExtendedAnnotationHook {
 
 interface UseAnnotationNavigationInput {
   annotationHooks: [ExtendedAnnotationHook, ExtendedAnnotationHook];
-  create: (anno: AnnotationType) => void;
-  update: (anno: AnnotationType) => void;
+  create: (anno: ExtendedAnnotationType) => void;
+  update: (anno: ExtendedAnnotationType) => void;
   next: () => void;
   prev: () => void;
   selectedCategoryIDs: string[];
@@ -85,7 +85,7 @@ export function useAnnotationNavigation(input: UseAnnotationNavigationInput) {
     const nearest = pairedAnnotations.map((annotations, i) =>
       annotations.reduce(
         (result, anno) => {
-          if (history.includes(anno.proposedObjectId) || anno.objectId) {
+          if (history.includes(anno.proposedObjectId ?? '') || anno.objectId) {
             return result;
           } else {
             const thisDist = dist(anno, target[i]);
@@ -94,7 +94,7 @@ export function useAnnotationNavigation(input: UseAnnotationNavigationInput) {
               : result;
           }
         },
-        { dist: Infinity, objectId: undefined }
+        { dist: Infinity, objectId: undefined as string | undefined }
       )
     );
     // We will have found two (potentially different) objects in the two images. Go the the one that requires the least movement to get to.
@@ -118,7 +118,7 @@ export function useAnnotationNavigation(input: UseAnnotationNavigationInput) {
   };
 
   const confirmMatch = () => {
-    annotationHooks.forEach(({ update, data: annotations }, i) => {
+    annotationHooks.forEach(({ update, data: annotations }) => {
       const anno = annotations.find(
         (anno) => anno.proposedObjectId === activeObjectId
       );

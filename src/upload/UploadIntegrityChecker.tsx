@@ -71,7 +71,7 @@ export default function UploadIntegrityChecker() {
   useEffect(() => {
     async function getProjectNames() {
       if (projects.length > 0 && count === 0) {
-        const projectNames = [];
+        const projectNames: [string, string][] = [];
         for (const project of projects) {
           const projectResult: any = await client.models.Project.get({
             id: project.projectId,

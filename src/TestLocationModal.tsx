@@ -97,10 +97,10 @@ export default function TestLocationModal({
 
     // Below counts the annotations per category for this location
 
-    const { data: location } = await client.models.Location.get({
-      id: locationId,
-      selectionSet: ['imageId', 'width', 'height', 'x', 'y'],
-    });
+    const { data: location } = await client.models.Location.get(
+      { id: locationId },
+      { selectionSet: ['imageId', 'width', 'height', 'x', 'y'] }
+    );
 
     const rawAnnotations = await fetchAllPaginatedResults(
       client.models.Annotation.annotationsByImageIdAndSetId,
@@ -113,8 +113,10 @@ export default function TestLocationModal({
 
     const selectedPresetCategories: { categoryId: string }[] = [];
     for (const preset of selectedPresets) {
+      // @ts-ignore - TestPresetCategory not yet in schema
+      const testPresetCategoryModel = (client.models as any).TestPresetCategory;
       const { data: categories } =
-        await client.models.TestPresetCategory.categoriesByTestPresetId({
+        await testPresetCategoryModel.categoriesByTestPresetId({
           testPresetId: preset.value,
           selectionSet: ['categoryId'],
         });
@@ -126,8 +128,8 @@ export default function TestLocationModal({
     );
 
     const boundsxy: [number, number][] = [
-      [location!.x - location!.width / 2, location!.y - location!.height / 2],
-      [location!.x + location!.width / 2, location!.y + location!.height / 2],
+      [(location!.x ?? 0) - (location!.width ?? 0) / 2, (location!.y ?? 0) - (location!.height ?? 0) / 2],
+      [(location!.x ?? 0) + (location!.width ?? 0) / 2, (location!.y ?? 0) + (location!.height ?? 0) / 2],
     ];
 
     // keep count of annotations per category
@@ -186,7 +188,7 @@ export default function TestLocationModal({
               className='text-black'
               value={selectedPresets}
               options={presets.map((p) => ({ label: p.name, value: p.id }))}
-              onChange={setSelectedPresets}
+              onChange={(val) => setSelectedPresets(val as { label: string; value: string }[])}
               isMulti
               styles={{
                 valueContainer: (base) => ({

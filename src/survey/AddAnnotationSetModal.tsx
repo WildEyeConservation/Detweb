@@ -75,7 +75,7 @@ export default function AddAnnotationSetModal({
 
     const annotationSet = allProjects
       .find((p) => p.id === selectedProject)
-      ?.annotationSets.find((s) => s.id === annotationSetId);
+      ?.annotationSets.find((s: any) => s.id === annotationSetId);
 
     if (annotationSet) {
       setImportedLabels(annotationSet.categories);
@@ -133,7 +133,7 @@ export default function AddAnnotationSetModal({
               <option value=''>Select an annotation set</option>
               {allProjects
                 .find((p) => p.id === selectedProject)
-                ?.annotationSets.map((s) => (
+                ?.annotationSets.map((s: any) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
                   </option>
@@ -149,7 +149,7 @@ export default function AddAnnotationSetModal({
                 color: '#ff2643',
               },
             ]}
-            importLabels={importedLabels}
+            importLabels={importedLabels as any}
             setHandleSave={setSaveLabels}
             onStatusChange={setStatusMessage}
           />

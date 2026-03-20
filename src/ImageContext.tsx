@@ -3,13 +3,13 @@ import { ImageContext, UserContext, GlobalContext } from './Context';
 import type { ImageType } from './schemaTypes';
 import type { AnnotationsHook } from './Context';
 import L from 'leaflet';
-import { inv } from 'mathjs';
+import { inv, type Matrix } from 'mathjs';
+import type { Schema } from './amplify/client-schema';
 import { array2Matrix, makeTransform } from './utils';
 import { useQueries, useQuery } from '@tanstack/react-query';
 
 export function ImageContextFromHook({
   hook,
-  locationId,
   image,
   children,
   taskTag,
@@ -42,22 +42,23 @@ export function ImageContextFromHook({
       });
     },
     staleTime: Infinity, // Data will never become stale automatically
-    cacheTime: 1000 * 60 * 60, // Cache for 1 hour
+    gcTime: 1000 * 60 * 60, // Cache for 1 hour
   });
 
   const prevNeighbours = useMemo(() => {
     //return a dictionary using the image1Id as the key and the transform as the value
     return prevNeighboursQuery.data?.data?.reduce((acc, n) => {
       if (n.homography) {
+        const m = array2Matrix(n.homography) as unknown as Matrix;
         acc[n.image1Id] = {
-          fwd: makeTransform(inv(array2Matrix(n.homography))),
-          bwd: makeTransform(array2Matrix(n.homography)),
+          fwd: makeTransform(inv(m) as Matrix),
+          bwd: makeTransform(m),
         };
       } else {
         acc[n.image1Id] = { fwd: undefined, bwd: undefined };
       }
       return acc;
-    }, {} as Record<string, { fwd: (c1: [number, number]) => [number, number]; bwd: (c1: [number, number]) => [number, number] }>);
+    }, {} as Record<string, { fwd: ((c1: [number, number]) => [number, number]) | undefined; bwd: ((c1: [number, number]) => [number, number]) | undefined }>);
   }, [prevNeighboursQuery.data]);
 
   const nextNeighboursQuery = useQuery({
@@ -68,22 +69,23 @@ export function ImageContextFromHook({
       });
     },
     staleTime: Infinity, // Data will never become stale automatically
-    cacheTime: 1000 * 60 * 60, // Cache for 1 hour
+    gcTime: 1000 * 60 * 60, // Cache for 1 hour
   });
 
   const nextNeighbours = useMemo(() => {
     //return a dictionary using the image2Id as the key and the transform as the value
     return nextNeighboursQuery.data?.data?.reduce((acc, n) => {
       if (n.homography) {
+        const m = array2Matrix(n.homography) as unknown as Matrix;
         acc[n.image2Id] = {
-          fwd: makeTransform(array2Matrix(n.homography)),
-          bwd: makeTransform(inv(array2Matrix(n.homography))),
+          fwd: makeTransform(m),
+          bwd: makeTransform(inv(m) as Matrix),
         };
       } else {
         acc[n.image2Id] = { fwd: undefined, bwd: undefined };
       }
       return acc;
-    }, {} as Record<string, { fwd: (c1: [number, number]) => [number, number]; bwd: (c1: [number, number]) => [number, number] }>);
+    }, {} as Record<string, { fwd: ((c1: [number, number]) => [number, number]) | undefined; bwd: ((c1: [number, number]) => [number, number]) | undefined }>);
   }, [nextNeighboursQuery.data]);
 
   const imageMetaDataQueries = useQueries({
@@ -97,20 +99,21 @@ export function ImageContextFromHook({
         return client.models.Image.get({ id: n });
       },
       staleTime: Infinity, // Data will never become stale automatically
-      cacheTime: 1000 * 60 * 60, // Cache for 1 hour
+      gcTime: 1000 * 60 * 60, // Cache for 1 hour
     })),
   });
 
   const imageMetaData = useMemo(() => {
     return imageMetaDataQueries
       .filter((q) => q.isSuccess)
-      .map((q) => q.data.data);
+      .map((q) => q.data.data)
+      .filter((d): d is Schema['Image']['type'] => d != null);
   }, [imageMetaDataQueries]);
 
   const prevImages = useMemo(() => {
     const prevImages = imageMetaData
       ?.filter((i) => Object.keys(prevNeighbours || {}).includes(i.id))
-      .sort((a, b) => b.timestamp - a.timestamp);
+      .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
     return prevImages?.map((i) => ({
       image: i,
       transform: prevNeighbours?.[i.id],
@@ -120,7 +123,7 @@ export function ImageContextFromHook({
   const nextImages = useMemo(() => {
     const nextImages = imageMetaData
       ?.filter((i) => Object.keys(nextNeighbours || {}).includes(i.id))
-      .sort((a, b) => a.timestamp - b.timestamp);
+      .sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
     return nextImages?.map((i) => ({
       image: i,
       transform: nextNeighbours?.[i.id],
@@ -137,7 +140,7 @@ export function ImageContextFromHook({
   }, []);
 
   const create = useCallback(
-    (annotation) => {
+    (annotation: Schema['Annotation']['type']) => {
       //Check if this annotation maps to the interior of any of the previous images
       const insidePreviousImage = prevImages.reduce((acc, im) => {
         if (!im?.transform?.fwd) return acc;
@@ -172,7 +175,7 @@ export function ImageContextFromHook({
   );
 
   const update = useCallback(
-    (annotation) => {
+    (annotation: Schema['Annotation']['type']) => {
       const oldAnnotation = hook.data.find((a) => a.id === annotation.id);
 
       setCurrentAnnoCount((old) => {
@@ -242,7 +245,7 @@ export function ImageContextFromHook({
   );
 
   const _delete = useCallback(
-    (annotation) => {
+    (annotation: Schema['Annotation']['type']) => {
       setAnnoCount((old) => old - 1);
       setCurrentAnnoCount((old) => {
         const newCount = { ...old };
@@ -308,7 +311,7 @@ export function ImageContextFromHook({
       value={{
         latLng2xy,
         xy2latLng,
-        annotationsHook: { ...hook, create, update, delete: _delete },
+        annotationsHook: { ...hook, create: create as AnnotationsHook['create'], update: update as AnnotationsHook['update'], delete: _delete as AnnotationsHook['delete'] },
         annoCount,
         startLoadingTimestamp,
         visibleTimestamp,

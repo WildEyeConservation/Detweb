@@ -528,7 +528,7 @@ export default function ManageTiles({
           <TileConfiguration
             name={`${project.name} - Tiles`}
             projectId={project.id}
-            existingLocationSetId={tiledLocationSetId}
+            existingLocationSetId={tiledLocationSetId ?? undefined}
             setHandleCreateTask={setHandleCreateTask}
             setLaunchDisabled={setLaunchDisabled}
             disabled={processing}

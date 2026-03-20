@@ -27,7 +27,7 @@ export default function EditQueueModal({
       setLimitedBatchSize(queue.batchSize !== 0 && queue.batchSize !== null);
       setBatchSize(queue.batchSize || 100);
       setZoom(queue.zoom || undefined);
-      setHidden(queue.hidden);
+      setHidden(queue.hidden ?? false);
     }
   }, [show, queues]);
 
@@ -62,7 +62,7 @@ export default function EditQueueModal({
               <Form.Control
                 type='number'
                 value={batchSize}
-                onChange={(e) => setBatchSize(e.target.value)}
+                onChange={(e) => setBatchSize(Number(e.target.value))}
               />
             )}
           </Form.Group>

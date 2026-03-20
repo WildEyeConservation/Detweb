@@ -32,10 +32,10 @@ const OverlapLoader: React.FC<OverlapLoaderProps> = ({
             image2Id: image.id,
           });
       }
-      if (neighbours.data.length && neighbours.data[0].homography.length) {
-        const H = array2Matrix(neighbours.data[0].homography);
+      if (neighbours.data.length && neighbours.data[0].homography?.length) {
+        const H = array2Matrix(neighbours.data[0].homography ?? null);
         if (H) {
-          const f = loadPrevious ? makeTransform(H) : makeTransform(inv(H));
+          const f = loadPrevious ? makeTransform(H as any) : makeTransform(inv(H as any) as any);
           setTransform(() => f);
         }
       }

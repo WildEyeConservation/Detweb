@@ -8,7 +8,7 @@ import React, {
 import Modal from 'react-bootstrap/Modal';
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
-import { ProjectContext, GlobalContext } from './Context';
+import { GlobalContext } from './Context';
 import {
   MapContainer,
   TileLayer,
@@ -27,7 +27,7 @@ import * as turf from '@turf/turf';
 import L from 'leaflet';
 import { getUrl } from 'aws-amplify/storage';
 import Spinner from 'react-bootstrap/Spinner';
-import { Schema } from '../amplify/data/resource';
+import { Schema } from './amplify/client-schema';
 interface CreateSubsetModalProps {
   show: boolean;
   handleClose: () => void;
@@ -40,6 +40,8 @@ interface ImageData {
   timestamp: string;
   latitude: number;
   longitude: number;
+  width: number;
+  height: number;
 }
 
 interface ImageSetData {
@@ -123,8 +125,8 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({
           do {
             const { data: images, nextToken } =
               await client.models.ImageSetMembership.imageSetMembershipsByImageSetId(
+                { imageSetId: selectedSetId },
                 {
-                  imageSetId: selectedSetId,
                   selectionSet: [
                     'image.timestamp',
                     'image.id',
@@ -144,8 +146,8 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({
             { selectionSet: ['id', 'name'] }
           );
           return {
-            id: imageSet.id,
-            name: imageSet.name,
+            id: imageSet!.id,
+            name: imageSet!.name,
             images: allImages
               .filter(({ image }) => image.latitude && image.longitude)
               .map(({ image }) => image),
@@ -351,6 +353,7 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({
                 />
               </LayersControl.BaseLayer>
               <FeatureGroup ref={featureGroupRef}>
+                {/* @ts-ignore - react-leaflet-draw types are incomplete */}
                 <EditControl
                   position='topright'
                   onCreated={handleCreated}
@@ -422,7 +425,7 @@ const SpatiotemporalSubset: React.FC<CreateSubsetModalProps> = ({
                             {image.timestamp ? (
                               <>
                                 Timestamp:{' '}
-                                {DateTime.fromSeconds(image.timestamp).toFormat(
+                                {DateTime.fromSeconds(Number(image.timestamp)).toFormat(
                                   'yyyy-MM-dd HH:mm:ss'
                                 )}
                               </>

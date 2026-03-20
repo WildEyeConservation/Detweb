@@ -17,4 +17,4 @@ function inferReturnType(f: typeof firstElement) {
   return 'Hannes';
 }
 
-export const y = inferReturnType(firstElement, x);
+export const y = inferReturnType(firstElement);

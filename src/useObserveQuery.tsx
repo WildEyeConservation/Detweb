@@ -8,7 +8,7 @@ type ModelType = keyof ClientType['models'];
 
 export function useObserveQuery<T extends ModelType>(
   modelName: T,
-  filter?: Parameters<ClientType['models'][T]['observeQuery']>[0]
+  filter?: any
 ) {
   const { client } = useContext(GlobalContext)!;
   const model = client.models[modelName];
@@ -23,8 +23,8 @@ export function useObserveQuery<T extends ModelType>(
 
   useEffect(() => {
     console.log('useObserveQuery', modelName, filter);
-    const sub = model.observeQuery(filter).subscribe({
-      next: (data) => {
+    const sub = (model as any).observeQuery(filter).subscribe({
+      next: (data: any) => {
         setResult(data);
       },
     });

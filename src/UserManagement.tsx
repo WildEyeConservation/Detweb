@@ -3,12 +3,14 @@ import Button from 'react-bootstrap/Button';
 import { Row, Col } from 'react-bootstrap';
 import { ProjectContext, ManagementContext, GlobalContext } from './Context';
 import { useContext } from 'react';
-import { QueueDropdown } from './QueueDropDown';
-import ConfigureUserTestModal from './ConfigureUserTestModal';
 import { useState } from 'react';
 import './UserManagement.css'; // Import the CSS file
 import TestPresetsModal from './TestPresetsModal';
+// @ts-ignore
+import ConfigureUserTestModal from './ConfigureUserTestModal';
+// @ts-ignore
 import ReviewTestsModal from './ReviewTests';
+// @ts-ignore
 import UserTestResultsModal from './UserTestResultsModal';
 import ActionsDropdown from './ActionsDropdown';
 
@@ -17,7 +19,6 @@ export default function UserManagement() {
     allUsers,
     projectMembershipHook: {
       data: projectMemberships,
-      update: updateProjectMembership,
     },
   } = useContext(ManagementContext)!;
   const { project } = useContext(ProjectContext)!;
@@ -32,10 +33,6 @@ export default function UserManagement() {
     )
     .map((user) => {
       const { id, name, email } = user;
-      const belongsToCurrentProject = projectMemberships?.find(
-        (pm) => pm.userId == user.id && pm.projectId == project.id
-      );
-
       return {
         id,
         rowData: [
@@ -147,6 +144,8 @@ export default function UserManagement() {
         <TestPresetsModal
           show={modalToShow === 'testPresetsModal'}
           onClose={() => showModal(null)}
+          isNewPreset={true}
+          organizationId={project.organizationId}
         />
         <ReviewTestsModal
           show={modalToShow === 'reviewTestsModal'}

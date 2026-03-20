@@ -1,5 +1,4 @@
 import { Marker, Popup } from 'react-leaflet';
-import { DetwebMarker } from './DetwebMarker';
 
 function DummyMarkers({ number: number = 500 }) {
   return Array.from({ length: number }, (_, i) => (

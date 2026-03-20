@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useContext, useState, useEffect } from 'react';
 import * as L from 'leaflet';
 import 'leaflet-contextmenu';

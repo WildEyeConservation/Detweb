@@ -20,8 +20,8 @@ const CreateSubset: React.FC<CreateSubsetModalProps> = ({
     <Form>
       <ImageSetDropdown
         imageSets={imageSets}
-        selectedSets={selectedImageSets}
-        setImageSets={(sets: string[]) => {
+        selectedImageSets={selectedImageSets}
+        setSelectedImageSets={(sets: string[]) => {
           setSelectedImageSets(sets);
           setSelectedSets(sets);
         }}

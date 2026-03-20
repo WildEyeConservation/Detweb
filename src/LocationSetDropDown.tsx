@@ -1,5 +1,5 @@
 import { Form } from 'react-bootstrap';
-import React, { useContext } from 'react';
+import { useContext } from 'react';
 import { ProjectContext, ManagementContext } from './Context';
 import Select, { MultiValue, Options } from 'react-select';
 
@@ -23,7 +23,7 @@ export function LocationSetDropdown<IsMulti extends boolean = true>({
   setTasks,
   isMulti = true as IsMulti,
 }: LocationSetDropdownProps<IsMulti>) {
-  const { project } = useContext(ProjectContext)!;
+  useContext(ProjectContext);
   const {
     locationSetsHook: { data: tasks },
   } = useContext(ManagementContext)!;

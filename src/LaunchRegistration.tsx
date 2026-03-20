@@ -5,7 +5,7 @@ import { fetchAllPaginatedResults, makeTransform, array2Matrix } from './utils';
 import { SendMessageCommand } from '@aws-sdk/client-sqs';
 import ImageSetDropdown from './survey/ImageSetDropdown';
 import * as math from 'mathjs';
-import { inv } from 'mathjs';
+import { inv, type Matrix } from 'mathjs';
 import { useUpdateProgress } from './useUpdateProgress';
 import { Schema } from './amplify/client-schema';
 
@@ -45,7 +45,7 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
           { image1Id: currentId },
           { selectionSet: ['image2.id', 'image2.timestamp', 'homography'] }
         );
-      homographies.push(neighbour[0].homography);
+      homographies.push(neighbour[0].homography!);
       if (neighbour[0].image2.id == image2.id) break;
       currentId = neighbour[0].image2.id;
     } while (true);
@@ -60,7 +60,7 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
 
     return math.reshape(totalTransform, [9]);
     // Normalize the homography
-    const normalizedTransform = normalizeHomography(totalTransform);
+    const normalizedTransform = normalizeHomography(totalTransform as unknown as math.Matrix);
 
     // Convert the result back to a 2D array
     const finalHomography = normalizedTransform.toArray() as number[][];
@@ -96,17 +96,16 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
       if (!selectedType) {
         setTotalSteps(0);
         for (const annotationSetId of selectedSets) {
-          const annotations: { image: { id: string; timestamp: number } }[] =
-            await fetchAllPaginatedResults(
+          const annotations = (await fetchAllPaginatedResults(
               client.models.Annotation.annotationsByAnnotationSetId,
               {
                 setId: annotationSetId,
                 selectionSet: ['image.id', 'image.timestamp', 'x', 'y'],
               },
               () => setStepsCompleted((x) => x + 1)
-            );
+            )) as { image: { id: string; timestamp: number }; x: number; y: number }[];
 
-          const images: Record<number, string> = annotations.reduce(
+          const images = annotations.reduce(
             (acc, annotation) => {
               const current = acc[annotation.image.timestamp];
               if (current) {
@@ -124,7 +123,7 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
           setTotalSteps(Object.keys(images).length);
           setStepsCompleted(0);
           for (const timestamp of Object.keys(images)) {
-            const image = images[timestamp];
+            const image = images[Number(timestamp)];
             setStepsCompleted((x) => x + 1);
             const { data: prevneighbours } =
               await client.models.ImageNeighbour.imageNeighboursByImage2key(
@@ -143,10 +142,9 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
               if (images[neighbour.image1.timestamp] || !neighbour.homography) {
                 continue;
               } else {
-                const transform = makeTransform(
-                  inv(array2Matrix(neighbour.homography))
-                );
-                const tfAnnotations = image.annotations.map(transform);
+                const m1 = array2Matrix(neighbour.homography) as unknown as Matrix;
+                const transform = makeTransform(inv(m1) as Matrix);
+                const tfAnnotations = image.annotations.map((a) => transform(a as [number, number]));
                 const tfAnnotationsInside = tfAnnotations.filter(
                   (annotation) =>
                     annotation[0] >= 0 &&
@@ -157,7 +155,7 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
                 if (tfAnnotationsInside.length > 0) {
                   images[neighbour.image1.timestamp] = {
                     id: neighbour.image1Id,
-                    annotations: [],
+                    annotations: [] as number[][],
                   };
                 }
               }
@@ -179,10 +177,9 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
               if (images[neighbour.image2.timestamp] || !neighbour.homography) {
                 continue;
               } else {
-                const transform = makeTransform(
-                  array2Matrix(neighbour.homography)
-                );
-                const tfAnnotations = image.annotations.map(transform);
+                const m2 = array2Matrix(neighbour.homography) as unknown as Matrix;
+                const transform = makeTransform(m2);
+                const tfAnnotations = image.annotations.map((a) => transform(a as [number, number]));
                 const tfAnnotationsInside = tfAnnotations.filter(
                   (annotation) =>
                     annotation[0] >= 0 &&
@@ -193,7 +190,7 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
                 if (tfAnnotationsInside.length > 0) {
                   images[neighbour.image2.timestamp] = {
                     id: neighbour.image2Id,
-                    annotations: [],
+                    annotations: [] as number[][],
                   };
                 }
               }
@@ -201,8 +198,8 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
           }
           const sortedTimestamps = Object.keys(images).sort();
           for (let i = 0; i < sortedTimestamps.length - 1; i++) {
-            const image1 = images[sortedTimestamps[i]].id;
-            const image2 = images[sortedTimestamps[i + 1]].id;
+            const image1 = images[Number(sortedTimestamps[i])].id;
+            const image2 = images[Number(sortedTimestamps[i + 1])].id;
             const { data } = await client.models.ImageNeighbour.get(
               { image1Id: image1, image2Id: image2 },
               { selectionSet: ['homography'] }
@@ -249,39 +246,32 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
                 }
               );
             //Filter out images that don't have annotations in the selected annotation sets
-            images.push(...imageBatch);
-            nextToken = nextTokenBatch;
+            images.push(...(imageBatch as unknown as typeof images));
+            nextToken = nextTokenBatch ?? undefined;
           } while (nextToken);
           //Sort the images by timestamp
           images.sort((a, b) => a.image.timestamp - b.image.timestamp);
           // Iterate through the images in chronological order, keep a record of the previous image
-          let previousImage:
-            | {
-                id: string;
-                timestamp: number;
-                annotations: { setId: string }[];
-              }
-            | undefined = undefined;
+          let previousImage: typeof images[0] | undefined = undefined;
           for (const image of images) {
             //Check if the image or the previous image has any annotations in the selected annotation sets
             if (
-              image.image.annotations?.some((annotation) =>
+              previousImage &&
+              (image.image.annotations?.some((annotation) =>
                 selectedSets.includes(annotation.setId)
               ) ||
-              (previousImage &&
-                previousImage.image.annotations.some((annotation) =>
-                  selectedSets.includes(annotation.setId)
-                ))
+              previousImage.image.annotations.some((annotation) =>
+                selectedSets.includes(annotation.setId)
+              ))
             ) {
               const homography = await findPath(
                 previousImage.image,
                 image.image
               );
-              const { data: imageNeighbour } =
-                await client.models.ImageNeighbour.create({
+              await client.models.ImageNeighbour.create({
                   image1Id: previousImage.image.id,
                   image2Id: image.image.id,
-                  homography,
+                  homography: homography as number[],
                   group: project.organizationId,
                 });
               await getSqsClient().then((sqsClient) =>
@@ -290,7 +280,7 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
                     QueueUrl: url,
                     MessageBody: JSON.stringify({
                       selectedSet: selectedSets[0],
-                      images: [previousImage.image.id, image.image.id],
+                      images: [previousImage!.image.id, image.image.id],
                     }),
                   })
                 )
@@ -298,7 +288,7 @@ const LaunchRegistration: React.FC<LaunchRegistrationProps> = ({
             }
             previousImage = image;
           }
-          console.log(imageSetMemberships);
+          console.log(images);
         }
       }
     },

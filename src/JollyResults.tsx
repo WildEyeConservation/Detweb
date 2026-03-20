@@ -12,7 +12,7 @@ import { X } from 'lucide-react';
 import { createToken, verifyToken } from './utils/jwt';
 import { DateTime } from 'luxon';
 import { useOptimisticUpdates } from './useOptimisticUpdates.tsx';
-import { Schema } from '../amplify/data/resource.ts';
+import { Schema } from './amplify/client-schema';
 // @ts-ignore
 import * as jStat from 'jstat';
 import { useNavigate } from 'react-router-dom';
@@ -68,7 +68,7 @@ export default function JollyResults() {
     'JollyResultsMembership'
   >(
     'JollyResultsMembership',
-    async (nextToken) => {
+    async (_nextToken) => {
       const result = await client.models.JollyResultsMembership.list({
         filter: {
           surveyId: { eq: surveyId },
@@ -297,14 +297,14 @@ export default function JollyResults() {
           const { data: survey } = await client.models.Project.get({
             id: surveyId,
           });
-          setSurveyName(survey.name);
+          setSurveyName(survey?.name ?? '');
 
           const { data: annotationSet } = await client.models.AnnotationSet.get(
             {
               id: annotationSetId,
             }
           );
-          setAnnotationSetName(annotationSet.name);
+          setAnnotationSetName(annotationSet?.name ?? '');
 
           const { data: categories } =
             await client.models.Category.categoriesByAnnotationSetId({
@@ -342,7 +342,7 @@ export default function JollyResults() {
             }
             setCurrentToken(sharingLink.jwt);
             const { exp } = await verifyToken(sharingLink.jwt, secret);
-            setTokenExpiry(DateTime.fromMillis(exp * 1000).toJSDate());
+            if (exp != null) setTokenExpiry(DateTime.fromMillis(exp * 1000).toJSDate());
           }
         }
       } catch (error) {

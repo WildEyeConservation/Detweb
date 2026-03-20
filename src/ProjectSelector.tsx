@@ -1,5 +1,4 @@
-import { useContext, useEffect, useState, useMemo } from 'react';
-import Form from 'react-bootstrap/Form';
+import { useContext, useEffect, useState } from 'react';
 import { GlobalContext, UserContext } from './Context';
 import { Schema } from './amplify/client-schema';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -22,32 +21,6 @@ function ProjectSelector({ currentPM, setCurrentPM }: ProjectSelectorProps) {
   const { projectId, organizationId } = useParams();
 
   const navigate = useNavigate();
-  // useEffect(() => {
-  //   console.log("myMemberships", myMemberships)
-  //   Promise.all(myMemberships?.map(async (membership) => (await client.models.Project.get({ id: membership.projectId })).data))
-  //     .then((projects) => {
-  //       setProjects(projects.filter(project => project !== null));
-  //       if (projectId) {
-  //         setCurrentPM(myMemberships.find(membership => membership.projectId === projectId));
-  //       }
-  //     });
-  // }, [myMemberships.length])
-
-  const projectsQueries = useQueries({
-    queries: myMemberships.map((membership) => ({
-      queryKey: ['project', membership.id],
-      queryFn: () => client.models.Project.get({ id: membership.projectId }),
-    })),
-  });
-
-  const projects = useMemo(
-    () =>
-      projectsQueries
-        .filter((query) => query.isSuccess)
-        .map((query) => query.data?.data),
-    [projectsQueries]
-  );
-
   useEffect(() => {
     console.log('myMemberships', myMemberships);
     Promise.all(
@@ -58,7 +31,7 @@ function ProjectSelector({ currentPM, setCurrentPM }: ProjectSelectorProps) {
     ).then((projects) => {
       setProjects(
         projects.filter(
-          (project) =>
+          (project): project is Schema['Project']['type'] =>
             project !== null && project.organizationId === organizationId
         )
       );

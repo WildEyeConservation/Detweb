@@ -4,7 +4,7 @@ import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import Spinner from 'react-bootstrap/Spinner';
 import { GlobalContext } from './Context';
-import { Schema } from '../amplify/data/resource';
+import { Schema } from './amplify/client-schema';
 
 interface CreateSubsetModalProps {
   show: boolean;
@@ -28,9 +28,9 @@ interface Subset {
   id: string;
   name: string;
   filePaths: string[];
+  ids: string[];
 }
 
-const INITIAL_ITEMS_PER_PAGE = 10;
 const LOAD_MORE_ITEMS = 20;
 
 const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({
@@ -52,12 +52,10 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({
   const [nextTokens, setNextTokens] = useState<{
     [key: string]: string | null;
   }>({});
-  const [loadingAllItems, setLoadingAllItems] = useState<{
+  const [loadingAllItems] = useState<{
     [key: string]: boolean;
   }>({});
-  const [loadingImageSetName, setLoadingImageSetName] = useState<string | null>(
-    null
-  );
+  const [loadingImageSetName] = useState<string | null>(null);
 
   // Utility function to build a tree from file paths
   const buildFileTree = (fileNodes: FileNode[]): FileNode[] => {
@@ -136,10 +134,10 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({
               //console.log(`Fetching files for ImageSet ID: ${imageSetId} with nextToken: ${nextToken}`);
               const response =
                 await client.models.ImageSetMembership.imageSetMembershipsByImageSetId(
+                  { imageSetId },
                   {
-                    imageSetId,
                     selectionSet: ['image.id', 'image.files.path'],
-                    nextToken: nextToken,
+                    nextToken: nextToken ?? undefined,
                   }
                 );
 
@@ -182,10 +180,10 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({
             .map(({ name }) => name) || [];
 
         const structuredFileNodes = selectedImageSets.map(
-          (imageSetId, index) => ({
+          (imageSetId, index): FileNode => ({
             id: imageSetId,
-            name: selectedImageSetNames[index],
-            path: selectedImageSetNames[index], // Remove the '/images/' prefix
+            name: selectedImageSetNames[index] ?? '',
+            path: selectedImageSetNames[index] ?? '', // Remove the '/images/' prefix
             type: 'directory',
             children: buildFileTree(allFileNodes[imageSetId]),
             loaded: true,
@@ -280,12 +278,14 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({
         data: imageSetMemberships,
         nextToken: newNextToken,
       }: { data: any[]; nextToken?: string | null } =
-        await client.models.ImageSetMembership.imageSetMembershipsByImageSetId({
-          imageSetId,
-          selectionSet: ['image.id', 'image.files.id', 'image.files.path'],
-          nextToken,
-          limit: LOAD_MORE_ITEMS,
-        });
+        await client.models.ImageSetMembership.imageSetMembershipsByImageSetId(
+          { imageSetId },
+          {
+            selectionSet: ['image.id', 'image.files.id', 'image.files.path'],
+            nextToken,
+            limit: LOAD_MORE_ITEMS,
+          }
+        );
 
       const newFileNodes = imageSetMemberships.flatMap((membership: any) =>
         membership.image.files.map((file: any) => ({
@@ -315,7 +315,7 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({
 
       setNextTokens((prev) => ({
         ...prev,
-        [imageSetId]: newNextToken,
+        [imageSetId]: newNextToken ?? null,
       }));
     }
   };
@@ -325,6 +325,7 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({
       const newSubset: Subset = {
         id: Date.now().toString(),
         name: newSubsetName,
+        filePaths: [],
         ids: selectedImageIds,
       };
       setSubsets([...subsets, newSubset]);
@@ -367,7 +368,7 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({
     setSubsets([]);
   };
 
-  const renderTreeNodes = (nodes: FileNode[], isRoot = true) => {
+  const renderTreeNodes = (nodes: FileNode[], isRoot = true): React.ReactNode[] => {
     return nodes
       .map((node) => {
         const hasMoreItems = !!nextTokens[node.id];
@@ -512,7 +513,7 @@ const FileStructureSubset: React.FC<CreateSubsetModalProps> = ({
           <p>Selected files: {selectedImageIds.length}</p>
           <p>Defined subsets: {subsets.length}</p>
           <div>
-            {subsets.map((subset, index) => (
+            {subsets.map((subset) => (
               <div key={subset.id}>
                 <strong>{subset.name}</strong>: {subset.ids.length} files
                 selected

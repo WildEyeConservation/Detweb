@@ -119,7 +119,7 @@ export default function MoveObservations({
       }
 
       const previousAnnotationSetName = (
-        project.annotationSets.find((set) => set.id === annotationSetId)
+        project.annotationSets.find((set: { id: string; name: string | null | undefined }) => set.id === annotationSetId)
           ?.name || 'set'
       ).replace(/ /g, '_');
       const user = allUsers.find((user) => user.id === selectedUserId)?.name;
@@ -140,9 +140,9 @@ export default function MoveObservations({
           projectId: project.id,
           group: project.organizationId,
         });
-        targetAnnotationSetId = result?.id;
+        targetAnnotationSetId = result!.id;
       } else {
-        targetAnnotationSetId = existingAnnotationSetId;
+        targetAnnotationSetId = existingAnnotationSetId!;
       }
 
       // move observations to new/other annotation set
@@ -189,9 +189,9 @@ export default function MoveObservations({
         <Form.Label>Select Location Sets (Tasks)</Form.Label>
         <Select
           className='text-black'
-          options={project.locationSets.map((set) => ({
+          options={project.locationSets.map((set: { id: string; name: string | null | undefined }) => ({
             value: set.id,
-            label: set.name,
+            label: set.name ?? '',
           }))}
           isMulti
           value={selectedLocationSets}
@@ -220,7 +220,7 @@ export default function MoveObservations({
             onChange={(option) => setSelectedUser(option)}
             options={allUsers.map((user) => ({
               value: user.id,
-              label: user.name,
+              label: user.name ?? '',
             }))}
             isDisabled={!filterByUser}
             isClearable
@@ -266,9 +266,9 @@ export default function MoveObservations({
       >
         <Select
           className='text-black'
-          options={project.annotationSets.map((set) => ({
+          options={project.annotationSets.map((set: { id: string; name: string | null | undefined }) => ({
             value: set.id,
-            label: set.name,
+            label: set.name ?? '',
           }))}
           value={existingAnnotationSet}
           onChange={(option) => setExistingAnnotationSet(option)}

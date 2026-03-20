@@ -2,12 +2,11 @@ import { Card } from 'react-bootstrap';
 import { useContext, useEffect, useState } from 'react';
 import { UserContext, GlobalContext } from '../Context';
 import { Schema } from '../amplify/client-schema';
-import { Spinner, Button, ProgressBar, Form } from 'react-bootstrap';
+import { Spinner, Button, Form } from 'react-bootstrap';
 import MyTable from '../Table';
 import { useNavigate } from 'react-router-dom';
 import { type GetQueueAttributesCommandInput } from '@aws-sdk/client-sqs';
 import { GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
-import ConfirmationModal from '../ConfirmationModal';
 import ProjectProgress from './ProjectProgress';
 import { Minimize2, Maximize2 } from 'lucide-react';
 
@@ -40,7 +39,7 @@ export default function Jobs() {
     user,
     getSqsClient,
   } = useContext(UserContext)!;
-  const { client, showModal, modalToShow } = useContext(GlobalContext)!;
+  const { client } = useContext(GlobalContext)!;
   const navigate = useNavigate();
 
   const [displayProjects, setDisplayProjects] = useState<Project[]>([]);
@@ -63,10 +62,7 @@ export default function Jobs() {
   >([]);
   const [isLoading, setIsLoading] = useState(false);
   const [takingJob, setTakingJob] = useState(false);
-  const [jobToDelete, setJobToDelete] = useState<
-    Schema['Queue']['type'] | null
-  >(null);
-  const [deletingJob, setDeletingJob] = useState(false);
+  const [deletingJob] = useState(false);
   const [scanningProjects, setScanningProjects] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
 
@@ -338,32 +334,12 @@ export default function Jobs() {
     )[0];
 
     if (currentMembership) {
-      userProjectMembershipHook.update(
-        { id: currentMembership.id, queueId: job.queueId },
-        {
-          onSuccess: () => {
-            navigate(`/surveys/${job.projectId}/annotate`);
-          },
-          onError: (error) => {
-            alert('Failed to take job');
-            console.error(error);
-          },
-        }
-      );
+      userProjectMembershipHook.update({ id: currentMembership.id, queueId: job.queueId });
+      navigate(`/surveys/${job.projectId}/annotate`);
     } else {
       const jobProject = displayProjects.find(p => p.id === job.projectId);
-      userProjectMembershipHook.create(
-        { userId: user.userId, projectId: job.projectId, queueId: job.queueId, group: jobProject?.organization.id },
-        {
-          onSuccess: () => {
-            navigate(`/surveys/${job.projectId}/annotate`);
-          },
-          onError: (error) => {
-            alert('Failed to take job');
-            console.error(error);
-          },
-        }
-      );
+      userProjectMembershipHook.create({ userId: user.userId, projectId: job.projectId, queueId: job.queueId, group: jobProject?.organization.id });
+      navigate(`/surveys/${job.projectId}/annotate`);
     }
 
     setTakingJob(false);
@@ -374,9 +350,6 @@ export default function Jobs() {
       project.queues
         .map((queue) => {
           const numJobsRemaining = Number(jobsRemaining[queue.url || ''] || 0);
-          const batchesRemaining = Math.ceil(
-            numJobsRemaining / (queue.batchSize || 0)
-          );
 
           if (
             numJobsRemaining === 0 &&
@@ -390,7 +363,6 @@ export default function Jobs() {
           const paddingClass = compactMode ? 'p-1' : 'p-2';
           const gapClass = compactMode ? 'gap-1' : 'gap-2';
           const rowGapClass = compactMode ? 'gap-1' : 'gap-3';
-          const titleSize = compactMode ? 'h6' : 'h5';
           const badgeFontSize = compactMode ? '11px' : '14px';
           const typeFontSize = compactMode ? '12px' : '14px';
 
@@ -501,13 +473,11 @@ export default function Jobs() {
         );
 
         if (!project) {
-          return <></>;
+          return null;
         }
 
         const paddingClass = compactMode ? 'p-1' : 'p-2';
-        const gapClass = compactMode ? 'gap-1' : 'gap-2';
         const rowGapClass = compactMode ? 'gap-1' : 'gap-3';
-        const titleSize = compactMode ? 'h6' : 'h5';
         const typeFontSize = compactMode ? '12px' : '14px';
 
         return {
@@ -553,7 +523,7 @@ export default function Jobs() {
             </div>,
           ],
         };
-      }),
+      }).filter((item): item is NonNullable<typeof item> => item !== null),
     ...homographyCreationJobs
       .filter((job) => {
         const project = displayProjects.find((p) => p.id === job.projectId);
@@ -576,11 +546,10 @@ export default function Jobs() {
         );
 
         if (!project) {
-          return <></>;
+          return null;
         }
 
         const paddingClass = compactMode ? 'p-1' : 'p-2';
-        const gapClass = compactMode ? 'gap-1' : 'gap-2';
         const rowGapClass = compactMode ? 'gap-1' : 'gap-3';
         const typeFontSize = compactMode ? '12px' : '14px';
 
@@ -627,7 +596,7 @@ export default function Jobs() {
             </div>,
           ],
         };
-      }),
+      }).filter((item): item is NonNullable<typeof item> => item !== null),
   ];
 
   return (

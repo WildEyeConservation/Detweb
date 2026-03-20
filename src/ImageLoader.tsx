@@ -24,6 +24,7 @@ export function ImageLoader() {
         ],
       }
     ).then(({ data }) => {
+      if (!data) return;
       setElement(
         <AnnotationImage
           visible={true}

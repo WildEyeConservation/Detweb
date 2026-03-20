@@ -44,7 +44,8 @@ export const queryClient = new QueryClient({
 });
 
 persistQueryClient({
-  queryClient,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  queryClient: queryClient as any,
   persister,
 });
 
