@@ -32,6 +32,7 @@ import { removeUserFromOrganization } from '../functions/removeUserFromOrganizat
 import { updateOrganizationMemberAdmin } from '../functions/updateOrganizationMemberAdmin/resource';
 import { deleteQueue } from '../functions/deleteQueue/resource';
 import { updateActiveOrganizations } from '../functions/updateActiveOrganizations/resource';
+import { launchQCReview } from '../functions/launchQCReview/resource';
 // import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
@@ -93,6 +94,7 @@ const schema = a
         color: a.string(),
         shortcutKey: a.string(),
         annotations: a.hasMany('Annotation', 'categoryId'),
+        ogAnnotations: a.hasMany('Annotation', 'ogCategoryId'),
         annotationCount: a.integer().default(0),
         objects: a.hasMany('Object', 'categoryId'),
         locationAnnotationCounts: a.hasMany(
@@ -225,6 +227,9 @@ const schema = a
         obscured: a.boolean(),
         objectId: a.id(),
         object: a.belongsTo('Object', 'objectId'),
+        ogCategoryId: a.string(),
+        ogCategory: a.belongsTo('Category', 'ogCategoryId'),
+        reviewedBy: a.string(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.owner(), allow.groupDefinedIn('group')])
@@ -1129,6 +1134,23 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(launchFalseNegatives)),
+    launchQCReview: a
+      .mutation()
+      .arguments({
+        request: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(launchQCReview)),
+    incrementQueueCount: a
+      .mutation()
+      .arguments({ id: a.id().required() })
+      .returns(a.integer())
+      .handler(a.handler.custom({
+        entry: './incrementQueueCount.js',
+        dataSource: a.ref('Queue'),
+      }))
+      .authorization((allow) => [allow.authenticated()]),
     //TODO: Rethink sharing completely
     getJwtSecret: a
       .mutation()
@@ -1164,6 +1186,7 @@ const schema = a
     allow.resource(runMadDetector),
     allow.resource(launchAnnotationSet),
     allow.resource(launchFalseNegatives),
+    allow.resource(launchQCReview),
     allow.resource(requeueProjectQueues),
     allow.resource(deleteProject),
     allow.resource(generateSurveyResults),
@@ -1225,6 +1248,7 @@ export type GenerateSurveyResultsHandler = MutationHandler<{
 }>;
 export type LaunchAnnotationSetHandler = MutationHandler<{ request: string }>;
 export type LaunchFalseNegativesHandler = MutationHandler<{ request: string }>;
+export type LaunchQCReviewHandler = MutationHandler<{ request: string }>;
 export type ProcessImagesHandler = MutationHandler<{ s3key: string; model: string; threshold?: number | null }>; //legacy
 export type UpdateProjectMembershipsHandler = MutationHandler<{ projectId: string }>;
 export type RunImageRegistrationHandler = MutationHandler<{ projectId: string; metadata: string; queueUrl: string; images?: string[] | null }>;

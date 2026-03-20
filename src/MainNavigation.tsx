@@ -38,7 +38,10 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
   const belongsToOrganization = myOrganizationHook.data.length > 0;
 
   useEffect(() => {
-    setIsAnnotatePath(/^\/surveys\/[^/]+\/annotate$/.test(location.pathname));
+    setIsAnnotatePath(
+      /^\/surveys\/[^/]+\/annotate$/.test(location.pathname) ||
+      /^\/surveys\/[^/]+\/qc-review\/[^/]+$/.test(location.pathname)
+    );
   }, [location.pathname]);
 
   useEffect(() => {

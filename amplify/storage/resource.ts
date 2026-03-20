@@ -11,6 +11,7 @@ import { monitorTilingTasks } from "../functions/monitorTilingTasks/resource"
 import { cleanupJobs } from "../functions/cleanupJobs/resource"
 import { findAndRequeueMissingLocations } from "../functions/findAndRequeueMissingLocations/resource"
 import { reconcileFalseNegatives } from "../functions/reconcileFalseNegatives/resource"
+import { launchQCReview } from "../functions/launchQCReview/resource"
 
 export const outputBucket = defineStorage({
   name: "outputs",
@@ -52,9 +53,16 @@ export const outputBucket = defineStorage({
     'queue-manifests/*': [
       allow.authenticated.to(['write', 'read']),
       allow.resource(launchAnnotationSet).to(['write']),
+      allow.resource(launchQCReview).to(['write']),
       allow.resource(monitorTilingTasks).to(['write']),
       allow.resource(findAndRequeueMissingLocations).to(['read']),
       allow.resource(cleanupJobs).to(['delete']),
+      allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
+    ],
+    // QC review manifests for tracking sampled annotations
+    'qc-review-manifests/*': [
+      allow.authenticated.to(['read']),
+      allow.resource(launchQCReview).to(['write']),
       allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ],
     // False negative pools for species labelling reconciliation

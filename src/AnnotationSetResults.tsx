@@ -94,6 +94,8 @@ export default function AnnotationSetResults({
               'obscured',
               'id',
               'objectId',
+              'ogCategory.name',
+              'reviewedBy',
               'image.originalPath',
               'image.timestamp',
               'image.latitude',
@@ -119,18 +121,20 @@ export default function AnnotationSetResults({
       exportFromJSON({
         data: annotations.map((anno) => {
           return {
-            category: anno.category?.name,
+            category: anno.category?.name || 'Unknown',
             image: anno.image.originalPath || 'Unknown',
             timestamp: anno.image.timestamp,
             latitude: anno.image.latitude,
             longitude: anno.image.longitude,
-            obscured: anno.obscured,
+            obscured: anno.obscured ?? false,
             annotator: userMap[anno.owner ?? ''] || 'Unknown',
             isPrimary: anno.objectId === anno.id,
             objectId: anno.objectId,
             x: anno.x,
             y: anno.y,
             source: anno.source,
+            reviewedBy: userMap[anno.reviewedBy ?? ''],
+            ogCategory: anno.ogCategory?.name,
           };
         }),
         fileName,

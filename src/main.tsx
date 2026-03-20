@@ -30,6 +30,7 @@ import { DevActions } from './DevActions';
 import JollyResults from './JollyResults';
 import SharedResults from './SharedResults.tsx';
 import ImageNeighbourViewer from './ImageNeighbourViewer';
+import QCReviewTask from './QCReviewTask';
 
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
@@ -122,6 +123,10 @@ const router = createBrowserRouter([
           {
             path: 'register/:image1Id/:image2Id/:selectedSet',
             element: <PairLoader />,
+          },
+          {
+            path: 'qc-review/:queueId',
+            element: <QCReviewTask />,
           },
         ],
       },

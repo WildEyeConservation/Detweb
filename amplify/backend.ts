@@ -40,6 +40,7 @@ import { removeUserFromOrganization } from './functions/removeUserFromOrganizati
 import { updateOrganizationMemberAdmin } from './functions/updateOrganizationMemberAdmin/resource';
 import { deleteQueue } from './functions/deleteQueue/resource';
 import { updateActiveOrganizations } from './functions/updateActiveOrganizations/resource';
+import { launchQCReview } from './functions/launchQCReview/resource';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -77,6 +78,7 @@ const backend = defineBackend({
   updateOrganizationMemberAdmin,
   deleteQueue,
   updateActiveOrganizations,
+  launchQCReview,
 });
 
 const observationTable = backend.data.resources.tables['Observation'];
@@ -218,6 +220,7 @@ const groupS3OutputsReadPolicy = new iam.PolicyStatement({
     'arn:aws:s3:::*/false-negative-manifests/*',
     'arn:aws:s3:::*/false-negative-pools/*',
     'arn:aws:s3:::*/false-negative-history/*',
+    'arn:aws:s3:::*/qc-review-manifests/*',
   ],
 });
 
@@ -601,6 +604,7 @@ backend.cleanupJobs.resources.lambda.addToRolePolicy(
     resources: [
       'arn:aws:s3:::*/queue-manifests/*',
       'arn:aws:s3:::*/false-negative-manifests/*',
+      'arn:aws:s3:::*/qc-review-manifests/*',
     ],
   })
 );
@@ -669,6 +673,28 @@ backend.launchFalseNegatives.resources.lambda.addToRolePolicy(
       'arn:aws:s3:::*/false-negative-manifests/*',
       'arn:aws:s3:::*/false-negative-pools/*',
       'arn:aws:s3:::*/false-negative-history/*',
+    ],
+  })
+);
+// launchQCReview needs SQS permissions to create queues and send messages
+backend.launchQCReview.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'sqs:CreateQueue',
+      'sqs:SendMessage',
+      'sqs:GetQueueAttributes',
+      'sqs:GetQueueUrl',
+    ],
+    resources: ['*'],
+  })
+);
+// launchQCReview needs S3 permissions to write queue manifests and QC review manifests
+backend.launchQCReview.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['s3:PutObject'],
+    resources: [
+      'arn:aws:s3:::*/queue-manifests/*',
+      'arn:aws:s3:::*/qc-review-manifests/*',
     ],
   })
 );
