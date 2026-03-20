@@ -13,9 +13,6 @@ import EditAnnotationSetModal from '../EditAnnotationSet.tsx';
 import AddAnnotationSetModal from './AddAnnotationSetModal.tsx';
 import LaunchAnnotationSetModal from './LaunchAnnotationSetModal.tsx';
 import EditSurveyModal from './editSurveyModal.tsx';
-import SpatioTemporalSubset from '../SpatioTemporalSubset.tsx';
-import SubsampleModal from '../Subsample.tsx';
-import FileStructureSubset from '../filestructuresubset.tsx';
 import { SquareArrowOutUpRight, X, Play, Trash, Minimize2, Maximize2 } from 'lucide-react';
 import { Badge } from 'react-bootstrap';
 import localforage from 'localforage';
@@ -52,7 +49,6 @@ export default function Surveys() {
   const [selectedAnnotationSet, setSelectedAnnotationSet] = useState<
     Schema['AnnotationSet']['type'] | null
   >(null);
-  const [selectedSets, setSelectedSets] = useState<string[]>([]);
 
   // Initialize search from localStorage or use default
   const getInitialSearch = () => {
@@ -1206,36 +1202,10 @@ export default function Surveys() {
           onClose={() => {
             showModal(null);
             // setSelectedProject(null);
-            // setSelectedSets([]);
           }}
           project={selectedProject}
           openTab={tab}
-          setSelectedSets={setSelectedSets}
         />
-      )}
-      {selectedProject && (
-        <>
-          <SpatioTemporalSubset
-            show={modalToShow == 'SpatiotemporalSubset'}
-            handleClose={() => showModal(null)}
-            selectedImageSets={selectedSets}
-            project={selectedProject}
-          />
-          <SubsampleModal
-            show={modalToShow == 'Subsample'}
-            handleClose={() => showModal(null)}
-            selectedImageSets={selectedSets}
-            setSelectedImageSets={setSelectedSets}
-            project={selectedProject}
-          />
-          <FileStructureSubset
-            show={modalToShow == 'FileStructureSubset'}
-            handleClose={() => showModal(null)}
-            selectedImageSets={selectedSets}
-            imageSets={selectedProject.imageSets}
-            project={selectedProject}
-          />
-        </>
       )}
     </>
   );
