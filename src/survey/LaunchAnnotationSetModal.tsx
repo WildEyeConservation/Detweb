@@ -6,8 +6,9 @@ import { Schema } from '../amplify/client-schema';
 import { GlobalContext } from '../Context';
 import SpeciesLabelling from './SpeciesLabelling';
 import FalseNegatives from './FalseNegatives';
+import QCReview from './QCReview';
 
-type TaskType = 'species-labelling' | 'registration' | 'false-negatives' | 'homographies';
+type TaskType = 'species-labelling' | 'registration' | 'false-negatives' | 'homographies' | 'qc-review';
 
 export default function LaunchAnnotationSetModal({
   show,
@@ -40,6 +41,12 @@ export default function LaunchAnnotationSetModal({
         onLaunchConfirmed: () => void
       ) => Promise<void>;
     } | null>(null);
+  const [qcLaunchHandler, setQCLaunchHandler] = useState<{
+    execute: (
+      onProgress: (msg: string) => void,
+      onLaunchConfirmed: () => void
+    ) => Promise<void>;
+  } | null>(null);
 
   // set up queue creation helper
   const { client, showModal } = useContext(GlobalContext)! as any;
@@ -48,6 +55,7 @@ export default function LaunchAnnotationSetModal({
     if (taskType === 'registration' || taskType === 'homographies') {
       setLaunchDisabled(false);
     }
+    // QC review manages its own disabled state via setLaunchDisabled
   }, [taskType]);
 
   function onClose() {
@@ -103,6 +111,15 @@ export default function LaunchAnnotationSetModal({
             });
           }
           break;
+        case 'qc-review':
+          if (qcLaunchHandler) {
+            setProgressMessage('Initializing launch...');
+            await qcLaunchHandler.execute(setProgressMessage, () => {
+              onOptimisticStatus?.(project.id, 'launching');
+              optimisticStatusApplied = true;
+            });
+          }
+          break;
         case 'registration':
           await createRegistrationTask();
           break;
@@ -140,9 +157,12 @@ export default function LaunchAnnotationSetModal({
                   setTaskType('false-negatives');
                   break;
                 case 2:
-                  setTaskType('homographies');
+                  setTaskType('qc-review');
                   break;
                 case 3:
+                  setTaskType('homographies');
+                  break;
+                case 4:
                   setTaskType('registration');
                   break;
               }
@@ -165,6 +185,15 @@ export default function LaunchAnnotationSetModal({
                 launching={launching}
                 setLaunchDisabled={setLaunchDisabled}
                 setFalseNegativesLaunchHandler={setFalseNegativesLaunchHandler as any}
+              />
+            </Tab>
+            <Tab label='QC Review'>
+              <QCReview
+                project={project}
+                annotationSet={annotationSet}
+                launching={launching}
+                setLaunchDisabled={setLaunchDisabled}
+                setQCLaunchHandler={setQCLaunchHandler as any}
               />
             </Tab>
             <Tab label='Homographies'>
@@ -199,7 +228,8 @@ export default function LaunchAnnotationSetModal({
               launchDisabled ||
               launching ||
               (taskType === 'species-labelling' && !speciesLaunchHandler) ||
-              (taskType === 'false-negatives' && !falseNegativesLaunchHandler)
+              (taskType === 'false-negatives' && !falseNegativesLaunchHandler) ||
+              (taskType === 'qc-review' && !qcLaunchHandler)
             }
             onClick={handleSubmit}
           >

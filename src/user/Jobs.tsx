@@ -323,8 +323,15 @@ export default function Jobs() {
     return 0;
   });
 
-  async function handleTakeJob(job: { queueId: string; projectId: string }) {
+  async function handleTakeJob(job: { queueId: string; projectId: string; tag?: string | null }) {
     setTakingJob(true);
+
+    // QC review jobs navigate directly to the QC review route (no membership update needed).
+    if (job.tag === 'qc-review') {
+      navigate(`/surveys/${job.projectId}/qc-review/${job.queueId}`);
+      setTakingJob(false);
+      return;
+    }
 
     const currentMembership = userProjectMembershipHook.data.filter(
       (membership) => membership.projectId === job.projectId
@@ -397,9 +404,13 @@ export default function Jobs() {
                 <div className={`d-flex flex-row ${rowGapClass} align-items-center`}>
                   <div>
                     {compactMode ? (
-                      <h6 className='mb-0'>{queue.tag || project.name}</h6>
+                      <h6 className='mb-0'>
+                        {queue.tag === 'qc-review' ? queue.name : (queue.tag || project.name)}
+                      </h6>
                     ) : (
-                      <h5 className='mb-0'>{queue.tag || project.name}</h5>
+                      <h5 className='mb-0'>
+                        {queue.tag === 'qc-review' ? queue.name : (queue.tag || project.name)}
+                      </h5>
                     )}
                     {!compactMode && (
                       <i style={{ fontSize: '14px', display: 'block' }}>
@@ -413,7 +424,7 @@ export default function Jobs() {
                         marginBottom: '0px',
                       }}
                     >
-                      Type: {queue.name}
+                      Type: {queue.tag === 'qc-review' ? 'QC Review' : queue.name}
                     </p>
                   </div>
                   {myOrganizationHook.data?.find(
@@ -454,6 +465,7 @@ export default function Jobs() {
                       handleTakeJob({
                         queueId: queue.id,
                         projectId: project.id,
+                        tag: queue.tag,
                       })
                     }
                     style={{ whiteSpace: 'nowrap' }}

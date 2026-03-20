@@ -1,0 +1,567 @@
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Form, Spinner } from 'react-bootstrap';
+import { Schema } from '../amplify/client-schema';
+import { GlobalContext, UserContext } from '../Context';
+import { fetchAllPaginatedResults } from '../utils';
+import { DataClient } from '../../amplify/shared/data-schema.generated';
+import { logAdminAction } from '../utils/adminActionLogger';
+import { useUsers } from '../apiInterface';
+
+type LaunchHandler = {
+  execute: (
+    onProgress: (msg: string) => void,
+    onLaunchConfirmed: () => void
+  ) => Promise<void>;
+};
+
+type CategoryOption = {
+  id: string;
+  name: string;
+  shortcutKey?: string | null;
+};
+
+export default function QCReview({
+  project,
+  annotationSet,
+  launching,
+  setLaunchDisabled,
+  setQCLaunchHandler,
+}: {
+  project: Schema['Project']['type'];
+  annotationSet: Schema['AnnotationSet']['type'];
+  launching: boolean;
+  setLaunchDisabled: React.Dispatch<React.SetStateAction<boolean>>;
+  setQCLaunchHandler: React.Dispatch<
+    React.SetStateAction<LaunchHandler | null>
+  >;
+}) {
+  const { client } = useContext(GlobalContext)!;
+  const { user } = useContext(UserContext)!;
+
+  // Category selection
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+
+  // Annotation counts
+  const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [unreviewedCount, setUnreviewedCount] = useState<number | null>(null);
+  const [loadingCounts, setLoadingCounts] = useState(false);
+
+  // Launch settings
+  const [samplePercent, setSamplePercent] = useState<number>(10);
+  const [batchSize, setBatchSize] = useState<number>(200);
+  const [hidden, setHidden] = useState(false);
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+
+  // Annotator filter
+  const [selectedAnnotatorIds, setSelectedAnnotatorIds] = useState<string[]>([]);
+  const [allAnnotations, setAllAnnotations] = useState<
+    Array<{ id: string; ogCategoryId: string | null; owner: string | null }>
+  >([]);
+
+  const { users } = useUsers();
+  const userMap = useMemo(() => {
+    return users.reduce((acc, user) => {
+      acc[user.id] = user.name ?? user.email ?? user.id;
+      return acc;
+    }, {} as Record<string, string>);
+  }, [users]);
+
+  // Distinct annotators who have annotations in the selected category
+  const annotatorOptions = useMemo(() => {
+    const ownerIds = new Set<string>();
+    for (const a of allAnnotations) {
+      if (a.owner) ownerIds.add(a.owner);
+    }
+    return Array.from(ownerIds).sort((a, b) =>
+      (userMap[a] ?? a).localeCompare(userMap[b] ?? b)
+    );
+  }, [allAnnotations, userMap]);
+
+  // Computed sample size (respects annotator filter)
+  const filteredUnreviewedCount = useMemo(() => {
+    if (allAnnotations.length === 0) return unreviewedCount;
+    let candidates = allAnnotations.filter((a) => !a.ogCategoryId);
+    if (selectedAnnotatorIds.length > 0) {
+      const filterSet = new Set(selectedAnnotatorIds);
+      candidates = candidates.filter((a) => a.owner && filterSet.has(a.owner));
+    }
+    return candidates.length;
+  }, [allAnnotations, unreviewedCount, selectedAnnotatorIds]);
+
+  const sampleCount =
+    filteredUnreviewedCount !== null
+      ? Math.max(1, Math.round((filteredUnreviewedCount * samplePercent) / 100))
+      : null;
+
+  // Load categories on mount
+  useEffect(() => {
+    let mounted = true;
+    async function loadCategories() {
+      setLoadingCategories(true);
+      try {
+        const cats = await fetchAllPaginatedResults(
+          client.models.Category.categoriesByAnnotationSetId,
+          {
+            annotationSetId: annotationSet.id,
+            selectionSet: ['id', 'name', 'shortcutKey'] as const,
+          }
+        );
+        if (mounted) {
+          setCategories(
+            cats.map((c) => ({
+              id: c.id,
+              name: c.name,
+              shortcutKey: (c as any).shortcutKey ?? null,
+            }))
+          );
+        }
+      } catch (err) {
+        console.error('Failed to load categories', err);
+      }
+      if (mounted) setLoadingCategories(false);
+    }
+    loadCategories();
+    return () => {
+      mounted = false;
+    };
+  }, [client.models.Category.categoriesByAnnotationSetId, annotationSet.id]);
+
+  // Load annotation counts when category changes
+  useEffect(() => {
+    if (!selectedCategoryId) {
+      setTotalCount(null);
+      setUnreviewedCount(null);
+      setAllAnnotations([]);
+      setSelectedAnnotatorIds([]);
+      return;
+    }
+
+    let mounted = true;
+    async function loadCounts() {
+      setLoadingCounts(true);
+      setSelectedAnnotatorIds([]);
+      try {
+        const annotations = await fetchAnnotationsByCategory(
+          client,
+          selectedCategoryId,
+          annotationSet.id
+        );
+        if (!mounted) return;
+
+        setAllAnnotations(annotations);
+        setTotalCount(annotations.length);
+        const unreviewed = annotations.filter((a) => !a.ogCategoryId);
+        setUnreviewedCount(unreviewed.length);
+      } catch (err) {
+        console.error('Failed to load annotation counts', err);
+        if (mounted) {
+          setTotalCount(null);
+          setUnreviewedCount(null);
+          setAllAnnotations([]);
+        }
+      }
+      if (mounted) setLoadingCounts(false);
+    }
+    loadCounts();
+    return () => {
+      mounted = false;
+    };
+  }, [client, selectedCategoryId, annotationSet.id]);
+
+  // Enable/disable Launch button
+  useEffect(() => {
+    const shouldDisable =
+      loadingCategories ||
+      !selectedCategoryId ||
+      loadingCounts ||
+      filteredUnreviewedCount === null ||
+      filteredUnreviewedCount === 0 ||
+      launching;
+    setLaunchDisabled(shouldDisable);
+  }, [
+    loadingCategories,
+    selectedCategoryId,
+    loadingCounts,
+    filteredUnreviewedCount,
+    launching,
+    setLaunchDisabled,
+  ]);
+
+  // Refs for stable launch handler
+  const selectedCategoryIdRef = useRef(selectedCategoryId);
+  const samplePercentRef = useRef(samplePercent);
+  const batchSizeRef = useRef(batchSize);
+  const hiddenRef = useRef(hidden);
+  const selectedAnnotatorIdsRef = useRef(selectedAnnotatorIds);
+
+  useEffect(() => {
+    selectedCategoryIdRef.current = selectedCategoryId;
+  }, [selectedCategoryId]);
+  useEffect(() => {
+    samplePercentRef.current = samplePercent;
+  }, [samplePercent]);
+  useEffect(() => {
+    batchSizeRef.current = batchSize;
+  }, [batchSize]);
+  useEffect(() => {
+    hiddenRef.current = hidden;
+  }, [hidden]);
+  useEffect(() => {
+    selectedAnnotatorIdsRef.current = selectedAnnotatorIds;
+  }, [selectedAnnotatorIds]);
+
+  // Expose launch handler to parent
+  useEffect(() => {
+    setQCLaunchHandler({
+      execute: async (
+        onProgress: (msg: string) => void,
+        onLaunchConfirmed: () => void
+      ) => {
+        const categoryId = selectedCategoryIdRef.current;
+        if (!categoryId) {
+          onProgress('No category selected.');
+          return;
+        }
+
+        onLaunchConfirmed();
+        onProgress('Launching QC review...');
+
+        const categoryName =
+          categories.find((c) => c.id === categoryId)?.name ?? undefined;
+        const payload: Record<string, unknown> = {
+          projectId: project.id,
+          annotationSetId: annotationSet.id,
+          categoryId,
+          categoryName,
+          samplePercent: samplePercentRef.current,
+          batchSize: batchSizeRef.current,
+          hidden: hiddenRef.current,
+        };
+        if (selectedAnnotatorIdsRef.current.length > 0) {
+          payload.annotatorUserIds = selectedAnnotatorIdsRef.current;
+        }
+
+        onProgress('Submitting QC review request...');
+        await sendLaunchQCReviewRequest(client, payload);
+        onProgress('QC review launch submitted');
+
+        await logAdminAction(
+          client,
+          user.userId,
+          `Launched QC Review for category "${categoryName ?? categoryId}" in annotation set "${annotationSet.name}" (${samplePercentRef.current}% sample)`,
+          project.id,
+          (project as any).organizationId
+        ).catch(console.error);
+      },
+    });
+    return () => {
+      setQCLaunchHandler(null);
+    };
+  }, [
+    annotationSet.id,
+    annotationSet.name,
+    categories,
+    client,
+    project.id,
+    project.name,
+    setQCLaunchHandler,
+    user.userId,
+  ]);
+
+  const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
+
+  return (
+    <div className='px-3 pb-3 pt-1'>
+      <div className='d-flex flex-column gap-3 mt-2'>
+        {loadingCategories ? (
+          <p
+            className='text-muted mb-0 text-center'
+            style={{ fontSize: '12px' }}
+          >
+            Loading categories...
+          </p>
+        ) : categories.length === 0 ? (
+          <Alert variant='warning' className='mb-0'>
+            No labels found for this annotation set.
+          </Alert>
+        ) : (
+          <>
+            {/* Category selector */}
+            <Form.Group>
+              <Form.Label className='mb-0'>Label to review</Form.Label>
+              <span
+                className='text-muted d-block mb-1'
+                style={{ fontSize: '12px' }}
+              >
+                Select the label whose annotations should be reviewed.
+              </span>
+              <Form.Select
+                value={selectedCategoryId}
+                onChange={(e) => setSelectedCategoryId(e.target.value)}
+                disabled={launching}
+              >
+                <option value=''>Select a label...</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+
+            {/* Annotation count stats */}
+            {selectedCategoryId && (
+              <div
+                className='border border-dark shadow-sm p-2'
+                style={{ backgroundColor: '#697582' }}
+              >
+                {loadingCounts ? (
+                  <div className='d-flex align-items-center gap-2 text-white'>
+                    <Spinner animation='border' size='sm' />
+                    <span style={{ fontSize: '12px' }}>
+                      Loading annotation counts...
+                    </span>
+                  </div>
+                ) : (
+                  <div className='text-white' style={{ fontSize: '12px' }}>
+                    <div>
+                      Total annotations for{' '}
+                      <strong>{selectedCategory?.name}</strong>:{' '}
+                      <strong>{totalCount ?? '—'}</strong>
+                    </div>
+                    <div>
+                      Not yet reviewed:{' '}
+                      <strong>{unreviewedCount ?? '—'}</strong>
+                      {selectedAnnotatorIds.length > 0 &&
+                        filteredUnreviewedCount !== unreviewedCount && (
+                          <span>
+                            {' '}
+                            (filtered: <strong>{filteredUnreviewedCount}</strong>)
+                          </span>
+                        )}
+                    </div>
+                    {sampleCount !== null && filteredUnreviewedCount !== null && filteredUnreviewedCount > 0 && (
+                      <div>
+                        Sample size ({samplePercent}%):{' '}
+                        <strong>{sampleCount}</strong>
+                      </div>
+                    )}
+                    {filteredUnreviewedCount === 0 && (
+                      <div className='mt-1 text-warning'>
+                        {selectedAnnotatorIds.length > 0
+                          ? 'No unreviewed annotations for the selected annotators.'
+                          : 'All annotations for this label have already been reviewed.'}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Sample percentage */}
+            {selectedCategoryId &&
+              filteredUnreviewedCount !== null &&
+              filteredUnreviewedCount > 0 && (
+                <>
+                  <Form.Group>
+                    <Form.Label className='mb-0'>Sample size (%)</Form.Label>
+                    <span
+                      className='text-muted d-block mb-1'
+                      style={{ fontSize: '12px' }}
+                    >
+                      Percentage of unreviewed annotations to sample for review.
+                    </span>
+                    <Form.Control
+                      type='number'
+                      min={1}
+                      max={100}
+                      step={1}
+                      value={samplePercent}
+                      onChange={(e) =>
+                        setSamplePercent(
+                          Number((e.target as HTMLInputElement).value)
+                        )
+                      }
+                      disabled={launching}
+                    />
+                  </Form.Group>
+
+                  {/* Advanced options toggle */}
+                  <Form.Group>
+                    <Form.Switch
+                      label='Show Advanced Options'
+                      checked={showAdvancedOptions}
+                      onChange={() =>
+                        setShowAdvancedOptions(!showAdvancedOptions)
+                      }
+                      disabled={launching}
+                    />
+                  </Form.Group>
+
+                  {showAdvancedOptions && (
+                    <div
+                      className='d-flex flex-column gap-3 border border-dark shadow-sm p-2'
+                      style={{ backgroundColor: '#697582' }}
+                    >
+                      <Form.Group>
+                        <Form.Label className='mb-0'>Batch Size</Form.Label>
+                        <span
+                          className='text-muted d-block mb-1'
+                          style={{ fontSize: '12px' }}
+                        >
+                          The number of reviews a user can pick up at a time.
+                        </span>
+                        <Form.Control
+                          type='number'
+                          value={batchSize}
+                          onChange={(e) =>
+                            setBatchSize(
+                              Number((e.target as HTMLInputElement).value)
+                            )
+                          }
+                          disabled={launching}
+                        />
+                      </Form.Group>
+
+                      <Form.Group>
+                        <Form.Switch
+                          label='Hide Job From Non-Admin Workers'
+                          checked={hidden}
+                          onChange={() => setHidden(!hidden)}
+                          disabled={launching}
+                        />
+                        <span
+                          className='text-muted d-block'
+                          style={{ fontSize: '12px' }}
+                        >
+                          When enabled, only admin users will see this job on
+                          the Jobs page.
+                        </span>
+                      </Form.Group>
+
+                      {annotatorOptions.length > 1 && (
+                        <Form.Group>
+                          <Form.Label className='mb-0'>
+                            Filter by Annotator
+                          </Form.Label>
+                          <span
+                            className='text-muted d-block mb-1'
+                            style={{ fontSize: '12px' }}
+                          >
+                            Only review annotations made by the selected
+                            annotators. Leave all unchecked to include everyone.
+                          </span>
+                          <div
+                            style={{
+                              maxHeight: '150px',
+                              overflowY: 'auto',
+                              backgroundColor: 'rgba(0,0,0,0.15)',
+                              borderRadius: '4px',
+                              padding: '6px 8px',
+                            }}
+                          >
+                            {annotatorOptions.map((ownerId) => (
+                              <Form.Check
+                                key={ownerId}
+                                type='checkbox'
+                                label={userMap[ownerId] ?? ownerId}
+                                checked={selectedAnnotatorIds.includes(ownerId)}
+                                disabled={launching}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedAnnotatorIds((prev) => [
+                                      ...prev,
+                                      ownerId,
+                                    ]);
+                                  } else {
+                                    setSelectedAnnotatorIds((prev) =>
+                                      prev.filter((id) => id !== ownerId)
+                                    );
+                                  }
+                                }}
+                                style={{ fontSize: '13px' }}
+                              />
+                            ))}
+                          </div>
+                        </Form.Group>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Fetch annotations for a category, filtered to a specific annotation set.
+// Returns minimal fields needed for counting, filtering, and annotator identification.
+async function fetchAnnotationsByCategory(
+  client: DataClient,
+  categoryId: string,
+  annotationSetId: string
+): Promise<Array<{ id: string; ogCategoryId: string | null; owner: string | null }>> {
+  const allItems: Array<{ id: string; ogCategoryId: string | null; owner: string | null }> = [];
+  let nextToken: string | null | undefined = undefined;
+
+  do {
+    const { data, nextToken: nt } =
+      await client.models.Annotation.annotationsByCategoryId(
+        { categoryId },
+        {
+          filter: { setId: { eq: annotationSetId } },
+          selectionSet: ['id', 'ogCategoryId', 'owner'] as const,
+          limit: 10000,
+          nextToken,
+        }
+      );
+    for (const item of data || []) {
+      allItems.push({
+        id: item.id,
+        ogCategoryId: (item as any).ogCategoryId ?? null,
+        owner: (item as any).owner ?? null,
+      });
+    }
+    nextToken = nt as string | null | undefined;
+  } while (nextToken);
+
+  return allItems;
+}
+
+// Send the QC review launch request to the Lambda.
+async function sendLaunchQCReviewRequest(
+  client: DataClient,
+  payload: Record<string, unknown>
+) {
+  const requestPayload = JSON.stringify(payload);
+
+  try {
+    await (client as any).mutations.launchQCReview({
+      request: requestPayload,
+    });
+  } catch (error: any) {
+    // Ignore timeout errors - the Lambda may still be processing.
+    if (shouldIgnoreLaunchError(error)) {
+      console.warn('Ignoring launch lambda timeout response', error);
+      return;
+    }
+    throw error;
+  }
+}
+
+function shouldIgnoreLaunchError(error: any): boolean {
+  const messages: string[] = [];
+  if (error?.message) messages.push(String(error.message));
+  if (Array.isArray(error?.errors)) {
+    for (const err of error.errors) {
+      if (err?.message) messages.push(String(err.message));
+    }
+  }
+  return messages.some((msg) =>
+    /timed out|timeout|Task timed out|socket hang up/i.test(msg)
+  );
+}

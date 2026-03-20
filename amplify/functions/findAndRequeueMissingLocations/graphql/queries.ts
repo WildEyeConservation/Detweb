@@ -88,6 +88,7 @@ export const annotationsByImageIdAndSetId = /* GraphQL */ `query AnnotationsByIm
       imageId
       objectId
       obscured
+      ogCategoryId
       owner
       projectId
       setId
