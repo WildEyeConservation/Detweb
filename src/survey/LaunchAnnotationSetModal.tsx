@@ -8,7 +8,7 @@ import SpeciesLabelling from './SpeciesLabelling';
 import FalseNegatives from './FalseNegatives';
 import QCReview from './QCReview';
 
-type TaskType = 'species-labelling' | 'registration' | 'false-negatives' | 'homography-creation' | 'qc-review';
+type TaskType = 'species-labelling' | 'registration' | 'false-negatives' | 'homographies' | 'qc-review';
 
 export default function LaunchAnnotationSetModal({
   show,
@@ -52,7 +52,7 @@ export default function LaunchAnnotationSetModal({
   const { client, showModal } = useContext(GlobalContext)! as any;
 
   useEffect(() => {
-    if (taskType === 'registration' || taskType === 'homography-creation') {
+    if (taskType === 'registration' || taskType === 'homographies') {
       setLaunchDisabled(false);
     }
     // QC review manages its own disabled state via setLaunchDisabled
@@ -123,7 +123,7 @@ export default function LaunchAnnotationSetModal({
         case 'registration':
           await createRegistrationTask();
           break;
-        case 'homography-creation':
+        case 'homographies':
           await createHomographyTask();
           break;
       }
@@ -160,7 +160,7 @@ export default function LaunchAnnotationSetModal({
                   setTaskType('qc-review');
                   break;
                 case 3:
-                  setTaskType('homography-creation');
+                  setTaskType('homographies');
                   break;
                 case 4:
                   setTaskType('registration');
@@ -196,7 +196,7 @@ export default function LaunchAnnotationSetModal({
                 setQCLaunchHandler={setQCLaunchHandler as any}
               />
             </Tab>
-            <Tab label='Homography Creation'>
+            <Tab label='Homographies'>
               <div className='p-3'>
                 <p className='m-0'>
                   This will launch a homography creation task for the annotation set.
