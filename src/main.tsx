@@ -6,7 +6,6 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Progress } from './UserContext';
 import { GlobalContextProvider } from './Context';
 import ScratchPad from './ScratchPad';
-import ProjectManagement from './ProjectManagement';
 import UserStats from './UserStats';
 import { LocationLoader } from './LocationLoader';
 import { ImageLoader } from './ImageLoader';
@@ -103,10 +102,6 @@ const router = createBrowserRouter([
           {
             path: 'homography-creation',
             element: <HomographyCreation />,
-          },
-          {
-            path: 'manage',
-            element: <ProjectManagement />,
           },
           {
             path: 'quickTest',

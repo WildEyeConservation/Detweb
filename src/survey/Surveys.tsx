@@ -559,13 +559,9 @@ export default function Surveys() {
             <Button
               size={size}
               variant='primary'
-              onClick={(e) => {
-                if (e.ctrlKey) {
-                  navigate(`/surveys/${project.id}/manage`);
-                } else {
-                  setSelectedProject(project);
-                  showModal('editSurvey');
-                }
+              onClick={() => {
+                setSelectedProject(project);
+                showModal('editSurvey');
               }}
               disabled={
                 process.env.NODE_ENV !== 'development' && (disabled || hasJobs)
