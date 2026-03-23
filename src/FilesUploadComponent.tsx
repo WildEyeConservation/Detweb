@@ -1738,18 +1738,38 @@ export function FileUploadCore({
         }
 
         // Build raw GPX track points
-        const rawPoints = gpxFile.tracks
-          .flatMap((track) =>
-            track.points.map((point) => ({
-              timestamp: Number(point.time),
-              lat: point.latitude,
-              lng: point.longitude,
-              alt: convertAltitude(point.elevation || 0),
-            }))
-          )
+        const allPoints = gpxFile.tracks.flatMap((track) =>
+          track.points.map((point) => ({
+            timestamp: Number(point.time),
+            lat: point.latitude,
+            lng: point.longitude,
+            alt: convertAltitude(point.elevation || 0),
+          }))
+        );
+
+        if (allPoints.length === 0) {
+          alert(
+            'No trackpoints found in the GPX file. Please ensure the file contains track segments with individual trackpoints.'
+          );
+          return;
+        }
+
+        // Check for missing timestamps
+        const pointsWithValidTime = allPoints.filter((p) =>
+          Number.isFinite(p.timestamp)
+        );
+        if (pointsWithValidTime.length === 0) {
+          alert(
+            'The GPX file does not contain valid timestamps on its trackpoints. Each <trkpt> must include a <time> element. Please re-export the file with timestamps included.'
+          );
+          return;
+        }
+
+        const rawPoints = allPoints
           .filter((point) => {
-            // Validate GPS coordinates are valid numbers and in range
+            // Validate GPS coordinates and timestamp are valid numbers and in range
             return (
+              Number.isFinite(point.timestamp) &&
               Number.isFinite(point.lat) &&
               Number.isFinite(point.lng) &&
               Number.isFinite(point.alt) &&
@@ -1760,6 +1780,13 @@ export function FileUploadCore({
             );
           })
           .sort((a, b) => a.timestamp - b.timestamp);
+
+        if (rawPoints.length === 0) {
+          alert(
+            'No valid trackpoints found in the GPX file. All points had invalid coordinates or timestamps.'
+          );
+          return;
+        }
 
         // Georeference each image by EXIF timestamp
         const imagePoints = filteredImageFiles
