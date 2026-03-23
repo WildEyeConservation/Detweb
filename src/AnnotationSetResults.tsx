@@ -129,7 +129,6 @@ export default function AnnotationSetResults({
             obscured: anno.obscured ?? false,
             annotator: userMap[anno.owner ?? ''] || 'Unknown',
             isPrimary: anno.objectId === anno.id,
-            objectId: anno.objectId,
             x: anno.x,
             y: anno.y,
             source: anno.source,
