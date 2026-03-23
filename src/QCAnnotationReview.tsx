@@ -414,10 +414,32 @@ export default function QCAnnotationReview({
     }
   }, [client, queueId]);
 
+  const isAlreadyReviewed = useCallback(async (): Promise<boolean> => {
+    try {
+      const { data } = await client.models.Annotation.get(
+        { id: annotation.id },
+        { selectionSet: ['id', 'reviewedBy'] as const }
+      );
+      return !!(data as any)?.reviewedBy;
+    } catch {
+      return false;
+    }
+  }, [client, annotation.id]);
+
   const handleApprove = useCallback(async () => {
     if (saving) return;
     setSaving(true);
     try {
+      if (await isAlreadyReviewed()) {
+        // Already reviewed — skip update to avoid overwriting with stale SQS data.
+        await ack?.();
+        if (next) {
+          next();
+        } else {
+          startWaiting();
+        }
+        return;
+      }
       await Promise.all([
         client.models.Annotation.update({
           id: annotation.id,
@@ -437,7 +459,7 @@ export default function QCAnnotationReview({
     } finally {
       setSaving(false);
     }
-  }, [annotation, client, ack, next, saving, user.userId, incrementObservedCount]);
+  }, [annotation, client, ack, next, saving, user.userId, incrementObservedCount, isAlreadyReviewed]);
 
   const handleRelabel = useCallback(
     async (newCategoryId: string) => {
@@ -445,6 +467,16 @@ export default function QCAnnotationReview({
       setSaving(true);
       setShowDenyModal(false);
       try {
+        if (await isAlreadyReviewed()) {
+          // Already reviewed — skip update to avoid overwriting with stale SQS data.
+          await ack?.();
+          if (next) {
+            next();
+          } else {
+            startWaiting();
+          }
+          return;
+        }
         await Promise.all([
           client.models.Annotation.update({
             id: annotation.id,
@@ -466,7 +498,7 @@ export default function QCAnnotationReview({
         setSaving(false);
       }
     },
-    [annotation, client, ack, next, saving, user.userId, incrementObservedCount]
+    [annotation, client, ack, next, saving, user.userId, incrementObservedCount, isAlreadyReviewed]
   );
 
   const startWaiting = useCallback(() => {
