@@ -33,6 +33,8 @@ import { updateOrganizationMemberAdmin } from '../functions/updateOrganizationMe
 import { deleteQueue } from '../functions/deleteQueue/resource';
 import { updateActiveOrganizations } from '../functions/updateActiveOrganizations/resource';
 import { launchQCReview } from '../functions/launchQCReview/resource';
+import { launchHomography } from '../functions/launchHomography/resource';
+import { reconcileHomographies } from '../functions/reconcileHomographies/resource';
 // import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
@@ -199,7 +201,6 @@ const schema = a
         testResults: a.hasMany('TestResult', 'annotationSetId'),
         categories: a.hasMany('Category', 'annotationSetId'),
         register: a.boolean().default(false),
-        createHomographies: a.boolean().default(false),
         jollyResultsMemberships: a.hasMany(
           'JollyResultsMembership',
           'annotationSetId'
@@ -1142,6 +1143,14 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(launchQCReview)),
+    launchHomography: a
+      .mutation()
+      .arguments({
+        request: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(launchHomography)),
     incrementQueueCount: a
       .mutation()
       .arguments({ id: a.id().required() })
@@ -1187,6 +1196,8 @@ const schema = a
     allow.resource(launchAnnotationSet),
     allow.resource(launchFalseNegatives),
     allow.resource(launchQCReview),
+    allow.resource(launchHomography),
+    allow.resource(reconcileHomographies),
     allow.resource(requeueProjectQueues),
     allow.resource(deleteProject),
     allow.resource(generateSurveyResults),
@@ -1249,6 +1260,7 @@ export type GenerateSurveyResultsHandler = MutationHandler<{
 export type LaunchAnnotationSetHandler = MutationHandler<{ request: string }>;
 export type LaunchFalseNegativesHandler = MutationHandler<{ request: string }>;
 export type LaunchQCReviewHandler = MutationHandler<{ request: string }>;
+export type LaunchHomographyHandler = MutationHandler<{ request: string }>;
 export type ProcessImagesHandler = MutationHandler<{ s3key: string; model: string; threshold?: number | null }>; //legacy
 export type UpdateProjectMembershipsHandler = MutationHandler<{ projectId: string }>;
 export type RunImageRegistrationHandler = MutationHandler<{ projectId: string; metadata: string; queueUrl: string; images?: string[] | null }>;

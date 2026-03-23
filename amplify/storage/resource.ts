@@ -12,6 +12,7 @@ import { cleanupJobs } from "../functions/cleanupJobs/resource"
 import { findAndRequeueMissingLocations } from "../functions/findAndRequeueMissingLocations/resource"
 import { reconcileFalseNegatives } from "../functions/reconcileFalseNegatives/resource"
 import { launchQCReview } from "../functions/launchQCReview/resource"
+import { launchHomography } from "../functions/launchHomography/resource"
 
 export const outputBucket = defineStorage({
   name: "outputs",
@@ -54,6 +55,7 @@ export const outputBucket = defineStorage({
       allow.authenticated.to(['write', 'read']),
       allow.resource(launchAnnotationSet).to(['write']),
       allow.resource(launchQCReview).to(['write']),
+      allow.resource(launchHomography).to(['read']),
       allow.resource(monitorTilingTasks).to(['write']),
       allow.resource(findAndRequeueMissingLocations).to(['read']),
       allow.resource(cleanupJobs).to(['delete']),

@@ -12,6 +12,7 @@ const getQueueQuery = /* GraphQL */ `
       id
       url
       name
+      tag
       projectId
       annotationSetId
       group
@@ -100,7 +101,7 @@ export const handler: DeleteQueueHandler = async (event) => {
 
     // 1. Fetch the Queue record
     const queueData = await executeGraphql<{
-      getQueue?: { id: string; url: string | null; name: string | null; projectId: string; annotationSetId: string | null } | null;
+      getQueue?: { id: string; url: string | null; name: string | null; tag: string | null; projectId: string; annotationSetId: string | null } | null;
     }>(getQueueQuery, { id: queueId });
 
     const queue = queueData.getQueue;
@@ -201,6 +202,38 @@ export const handler: DeleteQueueHandler = async (event) => {
         }
       } catch (err) {
         console.error('Failed to trigger FN reconciliation', err);
+      }
+    }
+
+    // 7. Trigger homography reconciliation for homography queues
+    if (queue.tag === 'homography' && queue.annotationSetId) {
+      try {
+        const functionName = (env as any).RECONCILE_HOMOGRAPHIES_FUNCTION_NAME;
+        if (functionName) {
+          const lambdaClient = new LambdaClient({
+            region: env.AWS_REGION,
+            credentials: {
+              accessKeyId: env.AWS_ACCESS_KEY_ID,
+              secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+              sessionToken: env.AWS_SESSION_TOKEN,
+            },
+          });
+          await lambdaClient.send(
+            new InvokeCommand({
+              FunctionName: functionName,
+              InvocationType: 'Event',
+              Payload: new TextEncoder().encode(
+                JSON.stringify({ annotationSetId: queue.annotationSetId, queueId })
+              ),
+            })
+          );
+          console.log('Triggered homography reconciliation', {
+            annotationSetId: queue.annotationSetId,
+            queueId,
+          });
+        }
+      } catch (err) {
+        console.error('Failed to trigger homography reconciliation', err);
       }
     }
 

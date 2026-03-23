@@ -23,6 +23,10 @@ type Props = {
   annotationSetId?: string;
   /** Content rendered above the pair viewer (e.g. pair count, status text) */
   header?: React.ReactNode;
+  /** Initial points to restore (e.g. when navigating back to a previously visited pair) */
+  initialPoints?: { p1: Point[]; p2: Point[] };
+  /** Called whenever the point state changes, so the parent can snapshot for back navigation */
+  onPointsChange?: (points: { p1: Point[]; p2: Point[] }) => void;
 };
 
 export function HomographyWorkbench({
@@ -33,11 +37,12 @@ export function HomographyWorkbench({
   isSkipping = false,
   annotationSetId,
   header,
+  initialPoints,
+  onPointsChange,
 }: Props) {
-  const [points, setPoints] = useState<{ p1: Point[]; p2: Point[] }>({
-    p1: [],
-    p2: [],
-  });
+  const [points, setPoints] = useState<{ p1: Point[]; p2: Point[] }>(
+    initialPoints ?? { p1: [], p2: [] }
+  );
   const [history, setHistory] = useState<{ p1: Point[]; p2: Point[] }[]>([]);
   const [redoStack, setRedoStack] = useState<{ p1: Point[]; p2: Point[] }[]>(
     []
@@ -119,11 +124,16 @@ export function HomographyWorkbench({
 
   // Reset when images change
   useEffect(() => {
-    setPoints({ p1: [], p2: [] });
+    setPoints(initialPoints ?? { p1: [], p2: [] });
     setHistory([]);
     setRedoStack([]);
     setPreviewHomography(false);
   }, [images[0].id, images[1].id]);
+
+  // Notify parent of points changes
+  useEffect(() => {
+    onPointsChange?.(points);
+  }, [points, onPointsChange]);
 
   // Auto-enable preview at minimum point count
   const numPairs = Math.min(points1.length, points2.length);
