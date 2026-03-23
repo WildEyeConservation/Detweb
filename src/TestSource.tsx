@@ -1,6 +1,7 @@
 import { useContext, useCallback, useState, useEffect, useRef } from 'react';
 import { ProjectContext, GlobalContext } from './Context';
 import { fetchAllPaginatedResults } from './utils';
+import type { Identifiable } from './Preloader';
 
 export default function useTesting() {
   const { currentPM, project, categoriesHook } = useContext(ProjectContext)!;
@@ -27,8 +28,8 @@ export default function useTesting() {
 
       if (currentPM.queueId) {
         client.models.Queue.get({ id: currentPM.queueId }).then(
-          ({ data: { zoom } }) => {
-            setZoom(zoom);
+          ({ data }) => {
+            if (data?.zoom) setZoom(data.zoom);
           }
         );
       }
@@ -79,7 +80,7 @@ export default function useTesting() {
       )
       .sort(
         (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
       )
       .filter(
         (location, index, self) =>
@@ -121,7 +122,7 @@ export default function useTesting() {
       )
       .sort(
         (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
       );
 
     // add seen locations to the end of the array as backup (only if still part of current test presets)

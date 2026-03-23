@@ -15,7 +15,7 @@ interface UseCreateObservationProps {
   ack: () => void;
   location?: Schema['Location']['type'];
   annotationSet: Schema['AnnotationSet']['type'];
-  isTest: boolean;
+  isTest?: boolean;
   config?: Schema['ProjectTestConfig']['type'];
   testPresetId?: string;
   testSetId?: string;
@@ -30,7 +30,7 @@ const MAX_TIME_WITHOUT_ANNOTATIONS = 120 * 1000; // 2 minutes
 
 export default function useCreateObservation(props: UseCreateObservationProps) {
   const {
-    location: { annotationSetId, id },
+    location,
     isTest,
     ack,
     // Do not use config for pass/fail here anymore; keep prop for compatibility
@@ -41,6 +41,8 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     queueId,
     observationSource,
   } = props;
+  const annotationSetId = location?.annotationSetId;
+  const id = location?.id;
   const annotationSetToUse = isTest && testSetId ? testSetId : annotationSetId;
   const {
     annoCount,
@@ -77,10 +79,10 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
       {} as Record<string, string>
     );
 
-    const { data: location } = await client.models.Location.get({
-      id: id,
-      selectionSet: ['x', 'y', 'width', 'height'],
-    });
+    const { data: location } = await client.models.Location.get(
+      { id: id! },
+      { selectionSet: ['x', 'y', 'width', 'height'] }
+    );
 
     if (!location) {
       console.error('No location found');
@@ -92,7 +94,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
       client.models.LocationAnnotationCount
         .categoryCountsByLocationIdAndAnnotationSetId,
       {
-        locationId: id,
+        locationId: id!,
         annotationSetId: { eq: annotationSetId },
         selectionSet: ['categoryId', 'category.name', 'count'],
       }
@@ -103,9 +105,10 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
       return;
     }
 
+    const lx = location.x ?? 0, ly = location.y ?? 0, lw = location.width ?? 0, lh = location.height ?? 0;
     const boundsxy: [number, number][] = [
-      [location!.x - location!.width / 2, location!.y - location!.height / 2],
-      [location!.x + location!.width / 2, location!.y + location!.height / 2],
+      [lx - lw / 2, ly - lh / 2],
+      [lx + lw / 2, ly + lh / 2],
     ];
 
     // Filter annotations to those within the test location and count them per category
@@ -149,13 +152,13 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
           passedOnTotal: false,
         }
       );
-      testResult = updatedTestResult;
+      testResult = updatedTestResult!;
     } else {
       const { data: newTestResult } = await client.models.TestResult.create({
         userId: currentPM.userId,
         projectId: project.id,
         testPresetId: testPresetId!,
-        locationId: id,
+        locationId: id!,
         annotationSetId: annotationSetId,
         testAnimals: totalTestCounts,
         totalMissedAnimals: totalTestCounts - totalUserCounts,
@@ -163,7 +166,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
         passedOnTotal: false,
         group: project.organizationId,
       });
-      testResult = newTestResult;
+      testResult = newTestResult!;
     }
 
     if (!testResult) {
@@ -229,8 +232,8 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
         ...prev,
         {
           id: testResult.id,
-          locationId: id,
-          annotationSetId: annotationSetToUse,
+          locationId: id!,
+          annotationSetId: annotationSetToUse!,
         },
       ]);
     }
@@ -242,7 +245,7 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
     const submittedTimestamp = Date.now() - 2000;
     if (!acked && location && annotationSetId && project) {
       // Calculate time taken
-      let timeTaken = submittedTimestamp ? submittedTimestamp - visibleTimestamp : 0;
+      let timeTaken = submittedTimestamp ? submittedTimestamp - (visibleTimestamp ?? 0) : 0;
 
       // Apply client-side time validation (matching server-side logic)
       const hasSighting = annoCount > 0;
@@ -260,12 +263,12 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
         annotationCount: annoCount,
         timeTaken,
         waitingTime: startLoadingTimestamp
-          ? fullyLoadedTimestamp - visibleTimestamp
+          ? (fullyLoadedTimestamp ?? 0) - (visibleTimestamp ?? 0)
           : 0,
         loadingTime: fullyLoadedTimestamp
-          ? fullyLoadedTimestamp - startLoadingTimestamp
+          ? fullyLoadedTimestamp - (startLoadingTimestamp ?? 0)
           : 0,
-        locationId: id,
+        locationId: id!,
         projectId: project.id,
         queueId: queueId || undefined, // Track which queue this observation belongs to
         source: observationSource,
@@ -312,7 +315,7 @@ export function withCreateObservation<T extends CombinedProps>(
 ) {
   const WithCreateObservation: React.FC<T> = (props) => {
     const { location, ack, isTest, config, testPresetId, testSetId, observationSource, queueId, annotationSet } = props;
-    const newAck = location.id
+    const newAck = location?.id
       ? useCreateObservation({
         location,
         ack,

@@ -166,7 +166,7 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({ setMasks }) => {
     updateMasks();
   };
 
-  const handleDeleted = (e: any) => {
+  const handleDeleted = (_e: any) => {
     updateMasks();
   };
 

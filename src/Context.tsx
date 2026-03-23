@@ -125,12 +125,12 @@ export interface ManagementContextType {
 
 export interface ProjectContextType {
   currentPM: Schema['UserProjectMembership']['type'];
-  annotationsHook: CRUDhook<'Annotation'>;
+  annotationsHook?: CRUDhook<'Annotation'>;
   project: Schema['Project']['type'];
   categoriesHook: CRUDhook<'Category'>;
-  currentCategory: Schema['Category']['type'];
+  currentCategory: Schema['Category']['type'] | undefined;
   setCurrentCategory: React.Dispatch<
-    React.SetStateAction<Schema['Category']['type']>
+    React.SetStateAction<Schema['Category']['type'] | undefined>
   >;
   expandLegend: boolean;
   setExpandLegend: React.Dispatch<React.SetStateAction<boolean>>;
@@ -149,6 +149,11 @@ export interface TestingContextType {
   organizationMembershipsHook: CRUDhook<'OrganizationMembership'>;
 }
 
+type NeighbourTransform = {
+  fwd: ((c1: [number, number]) => [number, number]) | undefined;
+  bwd: ((c1: [number, number]) => [number, number]) | undefined;
+} | undefined;
+
 interface ImageContextType {
   latLng2xy: (
     input: L.LatLng | [number, number] | Array<L.LatLng | [number, number]>
@@ -157,18 +162,24 @@ interface ImageContextType {
     input: L.Point | [number, number] | Array<L.Point | [number, number]>
   ) => L.LatLng | L.LatLng[];
   annotationsHook: AnnotationsHook;
+  annoCount: number;
+  startLoadingTimestamp: number;
+  visibleTimestamp: number | undefined;
+  fullyLoadedTimestamp: number | undefined;
+  setVisibleTimestamp: React.Dispatch<React.SetStateAction<number | undefined>>;
+  setFullyLoadedTimestamp: React.Dispatch<React.SetStateAction<number | undefined>>;
   zoom: number;
   setZoom: React.Dispatch<React.SetStateAction<number>>;
   prevImages:
     | {
         image: Schema['Image']['type'];
-        transform: (c1: [number, number]) => [number, number];
+        transform: NeighbourTransform;
       }[]
     | undefined;
   nextImages:
     | {
         image: Schema['Image']['type'];
-        transform: (c1: [number, number]) => [number, number];
+        transform: NeighbourTransform;
       }[]
     | undefined;
   queriesComplete: boolean;

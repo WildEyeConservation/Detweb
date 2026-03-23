@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useContext, useEffect, useState, useCallback } from 'react';
 import { UserContext } from './UserContext';
 import * as subs from './graphql/subscriptions';

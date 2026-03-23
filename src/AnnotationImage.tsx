@@ -20,7 +20,8 @@ import useImageStats from './useImageStats';
 import { Badge, Button } from 'react-bootstrap';
 import { Share2, SearchCheck, RotateCcw, LogOut } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
-const Image = withCreateObservation(withAckOnTimeout(BaseImage));
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const Image = withCreateObservation(withAckOnTimeout(BaseImage as any) as any);
 
 export default function AnnotationImage(props: any) {
   const {
@@ -101,9 +102,7 @@ export default function AnnotationImage(props: any) {
   const {
     categoriesHook: { data: projectCategories },
   } = useContext(ProjectContext)!;
-  const [externalCategories, setExternalCategories] = useState<any[] | null>(
-    null
-  );
+  const [, setExternalCategories] = useState<any[] | null>(null);
   const [legendCategories, setLegendCategories] = useState<any[] | null>(null);
   const [legendCollapsed, setLegendCollapsed] = useState<boolean>(() => {
     if (surveyId) {
@@ -171,18 +170,16 @@ export default function AnnotationImage(props: any) {
       cancelled = true;
     };
   }, [client, annotationSetId, surveyId, projectCategories]);
-  const annotationsHook = useOptimisticUpdates<
-    Schema['Annotation']['type'],
-    'Annotation'
-  >(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const annotationsHook = (useOptimisticUpdates as any)(
     'Annotation',
-    async (nextToken) =>
+    async (nextToken: string | null | undefined) =>
       client.models.Annotation.annotationsByImageIdAndSetId(
         { imageId: location.image.id, setId: { eq: location.annotationSetId } },
         { limit: 1000, nextToken }
       ) as any,
     subscriptionFilter
-  );
+  ) as ReturnType<typeof useOptimisticUpdates<Schema['Annotation']['type'], never>>;
   const stats = useImageStats(annotationsHook);
 
   // Compute source tag for annotations and observations
@@ -343,7 +340,7 @@ export default function AnnotationImage(props: any) {
             location={location}
             image={location.image}
             taskTag={props.taskTag}
-            zoom={defaultZoom}
+            zoom={defaultZoom ?? undefined}
             viewBoundsScale={props.viewBoundsScale}
             id={id}
             prev={prev}

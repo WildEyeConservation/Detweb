@@ -1,13 +1,9 @@
 import { useContext, useEffect, useState } from 'react';
-import { ImageContext } from './Context';
 import { ProjectContext } from './Context';
-import type { LocationType, AnnotationSetType, ImageType } from './schemaTypes';
+import type { CRUDhook } from './Context';
 
 export default function useImageStats(
-  annotationsHook: OptimisticUpdatesHook<
-    Schema['Annotation']['type'],
-    'Annotation'
-  >
+  annotationsHook: CRUDhook<'Annotation'>
 ) {
   const [stats, setStats] = useState<Record<string, number>>({});
   const { data: annotations } = annotationsHook;
@@ -17,7 +13,7 @@ export default function useImageStats(
 
   useEffect(() => {
     if (annotations.length > 0 && categories.length > 0) {
-      const tempStats = annotations?.reduce((acc, annotation) => {
+      const tempStats = annotations?.reduce((acc: Record<string, number>, annotation) => {
         const category = categories?.find(
           (c) => c.id === annotation.categoryId
         );

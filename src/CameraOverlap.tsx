@@ -1,5 +1,5 @@
 import { Form, Button } from 'react-bootstrap';
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, Dispatch, SetStateAction } from 'react';
 
 export default function CameraOverlap({
   cameraSelection,
@@ -8,7 +8,7 @@ export default function CameraOverlap({
 }: {
   cameraSelection: [string, string[]];
   overlaps: { cameraA: string; cameraB: string }[];
-  setOverlaps: (overlaps: { cameraA: string; cameraB: string }[]) => void;
+  setOverlaps: Dispatch<SetStateAction<{ cameraA: string; cameraB: string }[]>>;
 }) {
   const cameraList = useMemo(() => cameraSelection[1], [cameraSelection]);
 

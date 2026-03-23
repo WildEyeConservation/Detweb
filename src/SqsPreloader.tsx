@@ -62,8 +62,8 @@ export default function SqsPreloader({
     );
 
     const boundsxy: [number, number][] = [
-      [location.x - location.width / 2, location.y - location.height / 2],
-      [location.x + location.width / 2, location.y + location.height / 2],
+      [location.x - (location.width ?? 0) / 2, location.y - (location.height ?? 0) / 2],
+      [location.x + (location.width ?? 0) / 2, location.y + (location.height ?? 0) / 2],
     ];
 
     // Using the x, y, width, height, check if any of the annotations fall within the location

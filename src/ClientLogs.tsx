@@ -6,7 +6,7 @@ import MyTable from './Table';
 import { GlobalContext } from './Context';
 import { useUsers } from './apiInterface';
 import { fetchAllPaginatedResults } from './utils';
-import type { Schema } from '../amplify/data/resource';
+import type { Schema } from './amplify/client-schema';
 
 type Option = { label: string; value: string };
 

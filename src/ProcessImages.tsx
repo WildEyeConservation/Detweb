@@ -4,7 +4,6 @@ import { UserContext } from './Context';
 import { useUpdateProgress } from './useUpdateProgress';
 import { GlobalContext } from './Context';
 import {
-  SendMessageCommand,
   SendMessageBatchCommand,
 } from '@aws-sdk/client-sqs';
 import { fetchAllPaginatedResults } from './utils';
@@ -106,7 +105,7 @@ export default function ProcessImages({
     return {
       Id: `${image1.id}-${image2.id}`, // Required unique ID for batch entries
       MessageBody: JSON.stringify({
-        inputBucket: backend.custom.inputsBucket,
+        inputBucket: (backend.custom as any).inputsBucket,
         image1Id: image1.id,
         image2Id: image2.id,
         keys: [image1.originalPath, image2.originalPath],
@@ -154,7 +153,7 @@ export default function ProcessImages({
               (imageFile) => imageFile.type == 'image/jpeg'
             )?.path;
             if (path) {
-              await client.mutations.processImages({
+              await (client.mutations as any).processImages({
                 s3key: path!,
                 model: 'heatmap',
               });
@@ -262,8 +261,8 @@ export default function ProcessImages({
     <Form>
       <ImageSetDropdown
         imageSets={imageSets}
-        selectedSets={selectedImageSets}
-        setImageSets={setSelectedImageSets}
+        selectedImageSets={selectedImageSets}
+        setSelectedImageSets={setSelectedImageSets}
         hideIfOneImageSet
       />
       <Form.Group>

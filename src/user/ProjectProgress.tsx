@@ -51,9 +51,9 @@ export default function ProjectProgress({ projectId, onScanningChange }: Project
         )
       ).data;
 
-      const register = projectData.annotationSets.some((set: { register?: boolean | null; createHomographies?: boolean | null }) => set.register || set.createHomographies);
+      const register = projectData?.annotationSets.some((set: { register?: boolean | null; createHomographies?: boolean | null }) => set.register || set.createHomographies) ?? false;
 
-      const isCreatingHomographies = projectData.annotationSets.some((set: { createHomographies?: boolean | null }) => set.createHomographies);
+      const isCreatingHomographies = projectData?.annotationSets.some((set: { createHomographies?: boolean | null }) => set.createHomographies) ?? false;
       setCreatingHomographies(isCreatingHomographies);
       setRegistering(register);
       if (register) {
@@ -80,7 +80,7 @@ export default function ProjectProgress({ projectId, onScanningChange }: Project
         const sqsClient = await getSqsClient();
         const params = {
           QueueUrl: url,
-          AttributeNames: ['ApproximateNumberOfMessages'] as const,
+          AttributeNames: ['ApproximateNumberOfMessages'] as any[],
         };
         const attrs = await sqsClient.send(
           new GetQueueAttributesCommand(params)

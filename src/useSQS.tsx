@@ -26,8 +26,8 @@ export default function useSQS() {
 
   useEffect(() => {
     if (currentPM.queueId) {
-      currentPM.queue().then(({ data: { url } }) => {
-        setUrl(url);
+      currentPM.queue().then((res: any) => {
+        setUrl(res?.data?.url ?? undefined);
       });
     }
   }, [currentPM]);
@@ -47,8 +47,8 @@ export default function useSQS() {
         )
         .then((messages) => {
           if ('Messages' in messages) {
-            const bodies = messages.Messages.map(
-              (entity: { ReceiptHandle: any; Body: string }) => {
+            const bodies = messages.Messages!.map(
+              (entity: any) => {
                 // const timer = setInterval(() => {
                 //   refreshVisibility({
                 //     // ChangeMessageVisibilityRequest

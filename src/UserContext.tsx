@@ -1,23 +1,20 @@
 import { useState, useEffect, useContext, useMemo, useCallback } from 'react';
 import { SQSClient } from '@aws-sdk/client-sqs';
-import { LambdaClient } from '@aws-sdk/client-lambda';
-import { S3Client } from '@aws-sdk/client-s3';
-import { AuthUser, fetchAuthSession } from 'aws-amplify/auth';
-import { Schema } from '../amplify/data/resource'; // Path to your backend resource definition
+import { AuthUser, fetchAuthSession } from '@aws-amplify/auth';
+import type { Schema } from './amplify/client-schema';
 import { useUsers } from './apiInterface.tsx';
 import {
   GlobalContext,
   ProjectContext,
+  ProjectContextType,
   UserContext,
+  UserContextType,
   ManagementContext,
+  ManagementContextType,
   ProgressContext,
   ProgressType,
-  OrganizationContext,
   UploadContext,
 } from './Context.tsx';
-import { generateClient } from 'aws-amplify/api';
-import type { DataClient } from '../amplify/shared/data-schema.generated';
-import outputs from '../amplify_outputs.json';
 import { useOptimisticUpdates, useQueues } from './useOptimisticUpdates.tsx';
 import { useQuery } from '@tanstack/react-query';
 
@@ -81,10 +78,10 @@ export function Project({
       <ProjectContext.Provider
         value={{
           project: currentProject,
-          categoriesHook,
+          categoriesHook: categoriesHook as unknown as ProjectContextType['categoriesHook'],
           currentPM: myMembershipHook.data.find(
             (m) => m.projectId == currentProject.id
-          ),
+          )!,
           currentCategory,
           setCurrentCategory,
           expandLegend,
@@ -157,7 +154,7 @@ export function User({
   const [currentTaskTag, setCurrentTaskTag] = useState<string>('');
   const [isRegistering, setIsRegistering] = useState<boolean>(false);
   const [currentAnnoCount, setCurrentAnnoCount] = useState<{
-    [key: string]: number;
+    [key: string]: { x: number; y: number }[];
   }>({});
   const [isAnnotatePath, setIsAnnotatePath] = useState<boolean>(false);
   const [sessionTestsResults, setSessionTestsResults] = useState<
@@ -281,8 +278,8 @@ export function User({
         setCurrentAnnoCount,
         isRegistering,
         setIsRegistering,
-        myMembershipHook,
-        myOrganizationHook,
+        myMembershipHook: myMembershipHook as unknown as UserContextType['myMembershipHook'],
+        myOrganizationHook: myOrganizationHook as unknown as UserContextType['myOrganizationHook'],
         isOrganizationAdmin,
         isAnnotatePath,
         setIsAnnotatePath,
@@ -363,11 +360,11 @@ export function Management({ children }: { children: React.ReactNode }) {
     <ManagementContext.Provider
       value={{
         allUsers,
-        projectMembershipHook,
-        imageSetsHook,
-        locationSetsHook,
-        annotationSetsHook,
-        queuesHook,
+        projectMembershipHook: projectMembershipHook as unknown as ManagementContextType['projectMembershipHook'],
+        imageSetsHook: imageSetsHook as unknown as ManagementContextType['imageSetsHook'],
+        locationSetsHook: locationSetsHook as unknown as ManagementContextType['locationSetsHook'],
+        annotationSetsHook: annotationSetsHook as unknown as ManagementContextType['annotationSetsHook'],
+        queuesHook: queuesHook as unknown as ManagementContextType['queuesHook'],
       }}
     >
       {allUsers &&

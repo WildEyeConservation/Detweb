@@ -3,7 +3,7 @@ import { Button, Form, Spinner } from 'react-bootstrap';
 import { Modal, Body, Header, Footer, Title } from './Modal';
 import { GlobalContext } from './Context';
 import { Tab, Tabs } from './Tabs';
-import { Schema } from '../amplify/data/resource';
+import { Schema } from './amplify/client-schema';
 import LabelEditor from './survey/LabelEditor';
 
 interface EditAnnotationSetModalProps {
@@ -30,7 +30,7 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
   const [busy, setBusy] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [tab, setTab] = useState<number>(0);
-  const [handleMove, setHandleMove] = useState<() => Promise<void>>(() =>
+  const [handleMove, _setHandleMove] = useState<() => Promise<void>>(() =>
     Promise.resolve()
   );
   const [saveLabels, setSaveLabels] = useState<
@@ -100,8 +100,8 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
               </Form.Group>
               <LabelEditor
                 defaultLabels={project.annotationSets
-                  .find((set) => set.id === annotationSet.id)
-                  ?.categories.map((category) => ({
+                  .find((set: any) => set.id === annotationSet.id)
+                  ?.categories.map((category: any) => ({
                     id: category.id,
                     name: category.name,
                     shortcutKey: category.shortcutKey,

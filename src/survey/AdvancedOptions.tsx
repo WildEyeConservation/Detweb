@@ -25,7 +25,7 @@ type NeighbourGeoJSON = {
 export default function AdvancedOptions({ projectId }: { projectId: string }) {
   const { client, showModal } = useContext(GlobalContext)!;
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState<string>('');
   const { users } = useUsers();
 
@@ -78,6 +78,7 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
     []
   );
 
+  // @ts-ignore -- used in commented-out JSX block
   const onFetchNeighbours = useCallback(async () => {
     setLoading(true);
     setError(null);

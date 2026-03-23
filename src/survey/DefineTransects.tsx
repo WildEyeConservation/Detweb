@@ -56,6 +56,7 @@ function toLatLngPairs(
   return pairs;
 }
 
+// @ts-ignore -- reserved for future use
 function filterValidImages<T extends { latitude: any; longitude: any }>(
   imgs: T[]
 ): T[] {

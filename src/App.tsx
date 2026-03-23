@@ -86,7 +86,7 @@ function App({ signOut = () => { }, user }: AppProps) {
 
   return session ? (
     continueOnMobile ? (
-      <User user={user!} cognitoGroups={cognitoGroups}>
+      <User user={user! as any} cognitoGroups={cognitoGroups}>
         {user?.userId && <ClientLogger userId={user.userId} />}
         <Upload>
           <UploadManager />
@@ -96,7 +96,7 @@ function App({ signOut = () => { }, user }: AppProps) {
     ) : (
       <>
         <BrowserView>
-          <User user={user!} cognitoGroups={cognitoGroups}>
+          <User user={user! as any} cognitoGroups={cognitoGroups}>
             {user?.userId && <ClientLogger userId={user.userId} />}
             <Upload>
               <UploadManager />

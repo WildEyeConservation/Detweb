@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState } from 'react';
 import { UserContext, GlobalContext, UploadContext } from '../Context.tsx';
 import { Schema } from '../amplify/client-schema.ts';
-import { Card, Button, Form, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Card, Button, Form } from 'react-bootstrap';
 import MyTable from '../Table.tsx';
 import NewSurveyModal from './NewSurveyModal.tsx';
 import { useNavigate } from 'react-router-dom';
@@ -13,14 +13,9 @@ import EditAnnotationSetModal from '../EditAnnotationSet.tsx';
 import AddAnnotationSetModal from './AddAnnotationSetModal.tsx';
 import LaunchAnnotationSetModal from './LaunchAnnotationSetModal.tsx';
 import EditSurveyModal from './editSurveyModal.tsx';
-import SpatioTemporalSubset from '../SpatioTemporalSubset.tsx';
-import SubsampleModal from '../Subsample.tsx';
-import FileStructureSubset from '../filestructuresubset.tsx';
-import { SquareArrowOutUpRight, X, Pause, Play, Trash, Minimize2, Maximize2 } from 'lucide-react';
-import { fetchAllPaginatedResults } from '../utils.tsx';
+import { SquareArrowOutUpRight, X, Play, Trash, Minimize2, Maximize2 } from 'lucide-react';
 import { Badge } from 'react-bootstrap';
 import localforage from 'localforage';
-import UploadIntegrityChecker from '../upload/UploadIntegrityChecker.tsx';
 import ProjectProgress from '../user/ProjectProgress.tsx';
 import { logAdminAction } from '../utils/adminActionLogger.ts';
 
@@ -54,7 +49,6 @@ export default function Surveys() {
   const [selectedAnnotationSet, setSelectedAnnotationSet] = useState<
     Schema['AnnotationSet']['type'] | null
   >(null);
-  const [selectedSets, setSelectedSets] = useState<string[]>([]);
 
   // Initialize search from localStorage or use default
   const getInitialSearch = () => {
@@ -393,10 +387,10 @@ export default function Surveys() {
 
   const sortedProjects = [...filteredProjects].sort((a, b) => {
     if (sortBy === 'createdAt') {
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      return new Date(b.createdAt ?? '').getTime() - new Date(a.createdAt ?? '').getTime();
     }
     if (sortBy === 'createdAt-reverse') {
-      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      return new Date(a.createdAt ?? '').getTime() - new Date(b.createdAt ?? '').getTime();
     }
     if (sortBy === 'name') {
       return a.name.localeCompare(b.name);
@@ -461,10 +455,7 @@ export default function Surveys() {
           variant='primary'
           onClick={() => {
             setSelectedProject(project);
-            setSelectedAnnotationSet({
-              id: annotationSet.id,
-              name: annotationSet.name,
-            });
+            setSelectedAnnotationSet({ id: annotationSet.id, name: annotationSet.name } as Schema['AnnotationSet']['type']);
             showModal('annotationSetResults');
           }}
           disabled={disabled || hasJobs}
@@ -559,13 +550,9 @@ export default function Surveys() {
             <Button
               size={size}
               variant='primary'
-              onClick={(e) => {
-                if (e.ctrlKey) {
-                  navigate(`/surveys/${project.id}/manage`);
-                } else {
-                  setSelectedProject(project);
-                  showModal('editSurvey');
-                }
+              onClick={() => {
+                setSelectedProject(project);
+                showModal('editSurvey');
               }}
               disabled={
                 process.env.NODE_ENV !== 'development' && (disabled || hasJobs)
@@ -675,7 +662,7 @@ export default function Surveys() {
 
     const isStale =
       project.status === 'uploading' &&
-      new Date(project.updatedAt).getTime() < Date.now() - 1000 * 60 * 5;
+      new Date(project.updatedAt ?? '').getTime() < Date.now() - 1000 * 60 * 5;
 
     const gapClass = compactMode ? 'gap-1' : 'gap-2';
     const columnGapClass = compactMode ? 'gap-1' : 'gap-3';
@@ -712,9 +699,9 @@ export default function Surveys() {
               >
                 {project.status === 'launching'
                   ? 'Launching - please wait'
-                  : project.status.includes('processing')
+                  : project.status?.includes('processing')
                     ? 'Processing'
-                    : project.status.replace(/\b\w/g, (char) =>
+                    : project.status?.replace(/\b\w/g, (char) =>
                       char.toUpperCase()
                     )}
               </Badge>
@@ -800,7 +787,7 @@ export default function Surveys() {
 
     const isStale =
       project.status === 'uploading' &&
-      new Date(project.updatedAt).getTime() < Date.now() - 1000 * 60 * 5;
+      new Date(project.updatedAt ?? '').getTime() < Date.now() - 1000 * 60 * 5;
 
     return (
       <Card
@@ -830,9 +817,9 @@ export default function Surveys() {
                   >
                     {project.status === 'launching'
                       ? 'Launching - please wait'
-                      : project.status.includes('processing')
+                      : project.status?.includes('processing')
                         ? 'Processing'
-                        : project.status.replace(/\b\w/g, (char) =>
+                        : project.status?.replace(/\b\w/g, (char) =>
                           char.toUpperCase()
                         )}
                   </Badge>
@@ -1039,7 +1026,6 @@ export default function Surveys() {
       <NewSurveyModal
         show={modalToShow === 'newSurvey'}
         projects={projects.map((project) => project.name.toLowerCase())}
-        onClose={() => showModal(null)}
       />
       <ConfirmationModal
         show={modalToShow === 'deleteSurvey'}
@@ -1191,14 +1177,11 @@ export default function Surveys() {
               selectedProject?.organizationId || ''
             ).catch(console.error);
           }}
-          categories={selectedProject.categories}
-          setTab={setTab}
         />
       )}
       {selectedProject && selectedAnnotationSet && (
         <LaunchAnnotationSetModal
           show={modalToShow === 'launchAnnotationSet'}
-          onClose={() => showModal(null)}
           annotationSet={selectedAnnotationSet}
           project={selectedProject}
           onOptimisticStatus={(projectId, status) => {
@@ -1219,36 +1202,10 @@ export default function Surveys() {
           onClose={() => {
             showModal(null);
             // setSelectedProject(null);
-            // setSelectedSets([]);
           }}
           project={selectedProject}
           openTab={tab}
-          setSelectedSets={setSelectedSets}
         />
-      )}
-      {selectedProject && (
-        <>
-          <SpatioTemporalSubset
-            show={modalToShow == 'SpatiotemporalSubset'}
-            handleClose={() => showModal(null)}
-            selectedImageSets={selectedSets}
-            project={selectedProject}
-          />
-          <SubsampleModal
-            show={modalToShow == 'Subsample'}
-            handleClose={() => showModal(null)}
-            selectedImageSets={selectedSets}
-            setSelectedImageSets={setSelectedSets}
-            project={selectedProject}
-          />
-          <FileStructureSubset
-            show={modalToShow == 'FileStructureSubset'}
-            handleClose={() => showModal(null)}
-            selectedImageSets={selectedSets}
-            imageSets={selectedProject.imageSets}
-            project={selectedProject}
-          />
-        </>
       )}
     </>
   );

@@ -1,4 +1,3 @@
-// @flow
 import React, {
   ReactNode,
   useState,
@@ -7,7 +6,6 @@ import React, {
   memo,
   useMemo,
   useRef,
-  useCallback,
 } from 'react';
 import { MapContainer, LayersControl, LayerGroup } from 'react-leaflet';
 import { NavButtons } from './NavButtons';
@@ -33,7 +31,6 @@ import { StorageLayer } from './StorageLayer';
 import { getUrl } from 'aws-amplify/storage';
 import ZoomTracker from './ZoomTracker';
 import OverlapOutline from './OverlapOutline';
-import { fetchAllPaginatedResults } from './utils';
 
 export interface BaseImageProps {
   image: ImageType;
@@ -53,6 +50,7 @@ export interface BaseImageProps {
   // Controls how tightly we fit bounds around a location. 0.5 = exact bbox, 1.5 = padded
   viewBoundsScale?: number;
   queueId?: string;
+  stats?: Record<string, number>;
 }
 
 const BaseImage: React.FC<BaseImageProps> = memo(
@@ -79,8 +77,6 @@ const BaseImage: React.FC<BaseImageProps> = memo(
       next,
       prev,
       visible,
-      containerheight,
-      containerwidth,
       children,
       location,
       zoom,
@@ -149,9 +145,9 @@ const BaseImage: React.FC<BaseImageProps> = memo(
       // Compare current props with previous props
       if (prevPropsRef.current) {
         Object.entries(props).forEach(([key, value]) => {
-          if (prevPropsRef.current[key] !== value) {
+          if ((prevPropsRef.current as any)[key] !== value) {
             console.log(`Prop "${key}" changed:`, {
-              from: prevPropsRef.current[key],
+              from: (prevPropsRef.current as any)[key],
               to: value,
             });
           }
@@ -416,7 +412,6 @@ const BaseImage: React.FC<BaseImageProps> = memo(
     //     }
     //   }
     // });
-    const fullImageTypes = ['Complete JPG', 'Complete TIFF', 'Complete PNG'];
     //If a location is provided, use the location bounds, otherwise use the image bounds
     const imageBounds = useMemo(
       () =>
@@ -435,7 +430,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
       [fullyLoaded]
     );
     const viewBounds = useMemo(() => {
-      if (!location?.x) return imageBounds;
+      if (!location?.x || !location.width || !location.height) return imageBounds;
       const scale = props.viewBoundsScale ?? 1.5;
       // Compute desired bounds and clamp to image edges so view never goes off-image
       const left = Math.max(0, location.x - location.width * scale);
@@ -450,10 +445,10 @@ const BaseImage: React.FC<BaseImageProps> = memo(
         [right, bottom],
       ]);
     }, [
-      location.x,
-      location.y,
-      location.width,
-      location.height,
+      location?.x,
+      location?.y,
+      location?.width,
+      location?.height,
       image.width,
       image.height,
       imageBounds,
@@ -464,7 +459,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
         location?.x
           ? xy2latLng([location.x, location.y])
           : xy2latLng([image.width / 2, image.height / 2]),
-      [location.x, location.y, image.width, image.height]
+      [location?.x, location?.y, image.width, image.height]
     );
 
     return useMemo(
@@ -478,18 +473,20 @@ const BaseImage: React.FC<BaseImageProps> = memo(
             }}
           >
             {queriesComplete ? (
-              <MapContainer
-                key={`${location.id}-${location.annotationSetId}-${visible}-${zoom}`}
-                style={style}
-                crs={L.CRS.Simple}
-                bounds={zoom ? undefined : viewBounds}
-                center={zoom && viewCenter}
-                contextmenu={true}
-                contextmenuItems={contextMenuItems}
-                zoom={zoom}
-                zoomSnap={1}
-                zoomDelta={1}
-                keyboardPanDelta={0}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              <MapContainer {...{
+                key: `${location?.id}-${location?.annotationSetId}-${visible}-${zoom}`,
+                style,
+                crs: L.CRS.Simple,
+                bounds: zoom ? undefined : viewBounds as unknown as L.LatLngBoundsExpression,
+                center: zoom ? viewCenter as L.LatLng : undefined,
+                contextmenu: true,
+                contextmenuItems: contextMenuItems,
+                zoom,
+                zoomSnap: 1,
+                zoomDelta: 1,
+                keyboardPanDelta: 0,
+              } as any}
               >
                 <LayersControl position='topright'>
                   {imageFilesLoading ? (
@@ -526,20 +523,17 @@ const BaseImage: React.FC<BaseImageProps> = memo(
                         name={image.type}
                         checked={true}
                       >
-                        <StorageLayer
-                          eventHandlers={{
-                            load: () => {
-                              setFullyLoaded(true);
-                            },
-                            error: (error) => {
-                              console.error('StorageLayer error:', error);
-                            },
-                          }}
-                          source={sourceKey}
-                          bounds={imageBounds}
-                          maxNativeZoom={5}
-                          noWrap={true}
-                        />
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                        <StorageLayer {...{
+                          eventHandlers: {
+                            load: () => setFullyLoaded(true),
+                            error: (error: unknown) => console.error('StorageLayer error:', error),
+                          },
+                          source: sourceKey!,
+                          bounds: imageBounds as unknown as L.LatLngBoundsExpression,
+                          maxNativeZoom: 5,
+                          noWrap: true,
+                        } as any} />
                       </LayersControl.BaseLayer>
                     ))
                   ) : (
@@ -574,17 +568,19 @@ const BaseImage: React.FC<BaseImageProps> = memo(
                     </div>
                   )}
                   {!isAnnotatePath &&
-                    prevImages?.toReversed()?.map((im, idx) => (
+                    [...(prevImages ?? [])].reverse().map((im, idx) => (
                       <LayersControl.Overlay
                         name={`Overlap ${im.image.originalPath}`}
                         key={idx}
                         checked={im.image.id == otherImageId}
                       >
                         <LayerGroup>
-                          <OverlapOutline
-                            transform={im.transform.bwd}
-                            image={im.image}
-                          />
+                          {im.transform?.bwd && (
+                            <OverlapOutline
+                              transform={im.transform.bwd}
+                              image={im.image}
+                            />
+                          )}
                         </LayerGroup>
                       </LayersControl.Overlay>
                     ))}
@@ -596,10 +592,12 @@ const BaseImage: React.FC<BaseImageProps> = memo(
                         checked={im.image.id == otherImageId}
                       >
                         <LayerGroup>
-                          <OverlapOutline
-                            transform={im.transform.bwd}
-                            image={im.image}
-                          />
+                          {im.transform?.bwd && (
+                            <OverlapOutline
+                              transform={im.transform.bwd}
+                              image={im.image}
+                            />
+                          )}
                         </LayerGroup>
                       </LayersControl.Overlay>
                     ))}

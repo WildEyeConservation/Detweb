@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { GlobalContext, UserContext } from './Context.tsx';
 import { Card, Button } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
@@ -14,7 +14,7 @@ export default function SharedResults() {
 
   useEffect(() => {
     async function fetchAnnotationSets() {
-      const jollyResultsMemberships = await fetchAllPaginatedResults<any, any>(
+      const jollyResultsMemberships = await fetchAllPaginatedResults<any>(
         client.models.JollyResultsMembership.list as any,
         { filter: { userId: { eq: user?.userId } }, limit: 1000 } as any
       );
@@ -31,12 +31,14 @@ export default function SharedResults() {
       );
       if (annotationSets) {
         setAnnotationSets(
-          annotationSets.map((annotationSet) => ({
-            id: annotationSet.id,
-            name: annotationSet.name,
-            projectId: annotationSet.projectId,
-            projectName: annotationSet.project.name,
-          }))
+          annotationSets
+            .filter((annotationSet): annotationSet is NonNullable<typeof annotationSet> => annotationSet !== null)
+            .map((annotationSet) => ({
+              id: annotationSet.id,
+              name: annotationSet.name,
+              projectId: annotationSet.projectId,
+              projectName: annotationSet.project.name,
+            }))
         );
       }
     }
