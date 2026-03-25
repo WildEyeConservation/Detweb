@@ -165,6 +165,34 @@ export function MapLibrePairViewer({
   ]);
 
   const mapsRef = useRef<([maplibregl.Map, (x: number, y: number) => [number, number], (lng: number, lat: number) => { x: number; y: number }] | null)[]>([null, null]);
+  const [mapsReady, setMapsReady] = useState(0);
+
+  const onMapInstance0 = useCallback(
+    (m: maplibregl.Map | null, px2l: (x: number, y: number) => [number, number], l2px: (lng: number, lat: number) => { x: number; y: number }) => {
+      const wasNull = mapsRef.current[0] === null;
+      if (m) {
+        mapsRef.current[0] = [m, px2l, l2px];
+      } else {
+        mapsRef.current[0] = null;
+      }
+      // Only bump when mount/unmount changes
+      if (wasNull !== (m === null)) setMapsReady((c) => c + 1);
+    },
+    []
+  );
+
+  const onMapInstance1 = useCallback(
+    (m: maplibregl.Map | null, px2l: (x: number, y: number) => [number, number], l2px: (lng: number, lat: number) => { x: number; y: number }) => {
+      const wasNull = mapsRef.current[1] === null;
+      if (m) {
+        mapsRef.current[1] = [m, px2l, l2px];
+      } else {
+        mapsRef.current[1] = null;
+      }
+      if (wasNull !== (m === null)) setMapsReady((c) => c + 1);
+    },
+    []
+  );
 
   // Fetch source keys for each image
   useEffect(() => {
@@ -235,7 +263,7 @@ export function MapLibrePairViewer({
     return () => {
       listeners.forEach((l) => l?.map.off('move', l.handler));
     };
-  }, [previewTransforms]);
+  }, [previewTransforms, mapsReady]);
 
   const handleRemove = useCallback(
     (imageIndex: number, pointIndex: number) => {
@@ -401,13 +429,7 @@ export function MapLibrePairViewer({
             onContextMenu={contextMenuHandlers[i]}
             previewTransform={previewTransforms?.[1 - i]}
             otherImage={images[1 - i]}
-            onMapInstance={(m, px2l, l2px) => {
-              if (m) {
-                mapsRef.current[i] = [m, px2l, l2px];
-              } else {
-                mapsRef.current[i] = null;
-              }
-            }}
+            onMapInstance={i === 0 ? onMapInstance0 : onMapInstance1}
             menuItems={buildMenuItems(image, i)}
           />
         </div>

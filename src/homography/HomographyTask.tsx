@@ -30,6 +30,8 @@ export default function HomographyTask() {
   const savedPointsRef = useRef<Map<string, { p1: Point[]; p2: Point[] }>>(
     new Map()
   );
+  // Tracks which pairs have been successfully saved
+  const [savedPairs, setSavedPairs] = useState<Set<string>>(new Set());
   // Tracks the highest index the user has advanced to (via complete/skip)
   const frontierIndexRef = useRef(0);
 
@@ -173,7 +175,8 @@ export default function HomographyTask() {
     return () => clearTimeout(timer);
   }, [countdown, navigate]);
 
-  const handleComplete = useCallback(() => {
+  const handleComplete = useCallback((pairKey: string) => {
+    setSavedPairs((prev) => new Set(prev).add(pairKey));
     setSessionCompleted((prev) => prev + 1);
     setQueueEmpty(false);
     setIndex((prev) => {
@@ -228,6 +231,7 @@ export default function HomographyTask() {
             onForward={index < frontierIndexRef.current ? handleForward : undefined}
             onExit={() => navigate('/jobs')}
             onSavePoints={handleSavePoints}
+            isSaved={savedPairs.has(currentPair.pairKey)}
           />
         ) : queueEmpty || countdown !== null ? (
           <div className='d-flex flex-column justify-content-center align-items-center h-100 gap-3'>

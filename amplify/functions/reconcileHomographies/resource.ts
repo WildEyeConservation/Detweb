@@ -4,5 +4,5 @@ export const reconcileHomographies = defineFunction({
   name: 'reconcileHomographies',
   timeoutSeconds: 900,
   runtime: 20,
-  memoryMB: 512,
+  memoryMB: 2048,
 });

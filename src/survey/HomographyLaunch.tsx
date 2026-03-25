@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Form, Spinner } from 'react-bootstrap';
 import Select from 'react-select';
 import { uploadData } from 'aws-amplify/storage';
@@ -18,7 +18,7 @@ type LaunchHandler = {
 
 type CategoryOption = { label: string; value: string };
 
-type AnnotationItem = { id: string; imageId: string };
+type AnnotationItem = { id: string; imageId: string; categoryId: string };
 
 type NeighbourItem = {
   image1Id: string;
@@ -52,21 +52,15 @@ type HomographyPairManifestItem = {
 
 type PairInfo = { primaryId: string; secondaryId: string };
 
-// ── Pair calculation (pure computation, reused by preview + launch) ──
+// ── Pair calculation (pure computation, works from cached data) ──
 
 function calculatePairs(
-  annotationsByCategory: Map<string, AnnotationItem[]>,
-  selectedCategoryIds: string[],
-  neighbourCache: Map<string, NeighbourItem[]>
+  annotations: AnnotationItem[],
+  neighbourCache: Map<string, NeighbourItem[]>,
+  includeSkipped: boolean
 ): { pairs: Map<string, PairInfo>; annotatedImageIds: Set<string> } {
-  // Union annotations from selected categories
   const annotatedImageIds = new Set<string>();
-  for (const catId of selectedCategoryIds) {
-    const annotations = annotationsByCategory.get(catId);
-    if (annotations) {
-      for (const a of annotations) annotatedImageIds.add(a.imageId);
-    }
-  }
+  for (const a of annotations) annotatedImageIds.add(a.imageId);
 
   const pairs = new Map<string, PairInfo>();
 
@@ -80,7 +74,7 @@ function calculatePairs(
       if (pairs.has(pairKey)) continue;
 
       const noHomography = !nb.homography || nb.homography.length !== 9;
-      if (!noHomography || nb.skipped) continue;
+      if (!noHomography || (nb.skipped && !includeSkipped)) continue;
 
       if (!annotatedImageIds.has(imageId) && !annotatedImageIds.has(otherId)) continue;
 
@@ -111,203 +105,165 @@ export default function HomographyLaunch({
   const { client } = useContext(GlobalContext)!;
   const { user } = useContext(UserContext)!;
 
-  const [categories, setCategories] = useState<Schema['Category']['type'][]>([]);
-  const [selectedCategories, setSelectedCategories] = useState<
-    CategoryOption[]
-  >([]);
+  // ── Up-front data loading state ──
+  const [loading, setLoading] = useState(true);
+  const [loadingStatus, setLoadingStatus] = useState('');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Fetch categories for this project directly (component is not inside ProjectContext)
-  useEffect(() => {
-    let cancelled = false;
-    async function fetchCategories() {
-      const allCategories: Schema['Category']['type'][] = [];
-      let nextToken: string | null | undefined = undefined;
-      do {
-        const result = await client.models.Category.list({
-          filter: { projectId: { eq: project.id } },
-          nextToken,
-          limit: 1000,
-        });
-        allCategories.push(...(result.data ?? []));
-        nextToken = result.nextToken;
-      } while (nextToken);
-      if (!cancelled) setCategories(allCategories);
-    }
-    fetchCategories();
-    return () => { cancelled = true; };
-  }, [client, project.id]);
+  // ── Cached data (populated once on mount) ──
+  const [allAnnotations, setAllAnnotations] = useState<AnnotationItem[]>([]);
+  const neighbourCacheRef = useRef(new Map<string, NeighbourItem[]>());
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
 
+  // ── User options ──
+  const [selectedCategories, setSelectedCategories] = useState<CategoryOption[]>([]);
   const [batchSize, setBatchSize] = useState<number>(50);
   const [hidden, setHidden] = useState(false);
+  const [includeSkipped, setIncludeSkipped] = useState(false);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [queueName, setQueueName] = useState<string>(`Homography - ${annotationSet.name}`);
 
-  // ── Incremental caches (persist across selection changes) ──
-  const annotationsCacheRef = useRef(new Map<string, AnnotationItem[]>());
-  const neighbourCacheRef = useRef(new Map<string, NeighbourItem[]>());
+  // ── Up-front fetch: categories + all annotations + neighbours ──
+  useEffect(() => {
+    let cancelled = false;
 
-  // ── Preview state ──
-  const [pairCount, setPairCount] = useState<number | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewStatus, setPreviewStatus] = useState<string>('');
-  const previewAbortRef = useRef(0); // incremented to cancel stale previews
+    async function loadAll() {
+      try {
+        // 1. Fetch categories for this annotation set
+        setLoadingStatus('Fetching categories...');
+        const allCategories: Schema['Category']['type'][] = [];
+        let nextToken: string | null | undefined = undefined;
+        do {
+          const result = await client.models.Category.list({
+            filter: { projectId: { eq: project.id } },
+            nextToken,
+            limit: 1000,
+          });
+          allCategories.push(...(result.data ?? []));
+          nextToken = result.nextToken;
+        } while (nextToken);
 
-  // Filter categories to this annotation set
-  const categoryOptions: CategoryOption[] = (categories ?? [])
-    .filter((c) => c.annotationSetId === annotationSet.id)
-    .map((c) => ({ label: c.name, value: c.id }));
+        if (cancelled) return;
+        const options = allCategories
+          .filter((c) => c.annotationSetId === annotationSet.id)
+          .map((c) => ({ label: c.name, value: c.id }));
+        setCategoryOptions(options);
 
-  // ── Debounced preview calculation on selection change ──
-  // Fetches always run to completion (populating caches for later runs).
-  // Only the final pair calculation + UI update is skipped if a newer run has started.
-  const updatePreview = useCallback(async (selected: CategoryOption[]) => {
-    const selectedIds = selected.map((c) => c.value);
-
-    if (selectedIds.length === 0) {
-      setPairCount(null);
-      setPreviewStatus('');
-      setPreviewLoading(false);
-      return;
-    }
-
-    const runId = ++previewAbortRef.current;
-    const isLatest = () => previewAbortRef.current === runId;
-    setPreviewLoading(true);
-    if (isLatest()) setPreviewStatus('Fetching annotations...');
-
-    try {
-      const annotationsCache = annotationsCacheRef.current;
-      const neighbourCache = neighbourCacheRef.current;
-
-      // 1. Fetch annotations for any categories not yet cached
-      // Always let fetches complete so the cache is populated for future runs
-      const uncachedCategoryIds = selectedIds.filter((id) => !annotationsCache.has(id));
-      if (uncachedCategoryIds.length > 0) {
-        const limit = pLimit(5);
-        await Promise.all(
-          uncachedCategoryIds.map((catId) =>
-            limit(async () => {
-              const annotations = await fetchAnnotations(client, annotationSet.id, [catId]);
-              annotationsCache.set(catId, annotations);
-            })
-          )
+        // 2. Fetch ALL annotations for the set (no category filter)
+        setLoadingStatus('Fetching annotations...');
+        const annotations = await fetchAllPaginatedResults<AnnotationItem>(
+          (client.models.Annotation as any).annotationsByAnnotationSetId,
+          {
+            setId: annotationSet.id,
+            limit: 1000,
+            selectionSet: ['id', 'imageId', 'categoryId'] as const,
+          }
         );
-      }
+        if (cancelled) return;
+        setAllAnnotations(annotations);
 
-      // 2. Determine which images need neighbour fetching
-      const allAnnotatedImageIds = new Set<string>();
-      for (const catId of selectedIds) {
-        const annotations = annotationsCache.get(catId);
-        if (annotations) {
-          for (const a of annotations) allAnnotatedImageIds.add(a.imageId);
-        }
-      }
+        // 3. Determine unique image IDs that have annotations
+        const annotatedImageIds = new Set<string>();
+        for (const a of annotations) annotatedImageIds.add(a.imageId);
 
-      const uncachedImageIds = [...allAnnotatedImageIds].filter(
-        (id) => !neighbourCache.has(id)
-      );
+        // 4. Fetch neighbours for all annotated images
+        const totalImages = annotatedImageIds.size;
+        setLoadingStatus(`Fetching neighbours for ${totalImages.toLocaleString()} images...`);
 
-      if (uncachedImageIds.length > 0) {
-        if (isLatest()) {
-          setPreviewStatus(`Fetching neighbours for ${uncachedImageIds.length} images...`);
-        }
-        const limit = pLimit(15);
-        let completed = 0;
+        const neighbourCache = neighbourCacheRef.current;
+        const uncachedImageIds = [...annotatedImageIds].filter((id) => !neighbourCache.has(id));
 
-        await Promise.all(
-          uncachedImageIds.map((imageId) =>
-            limit(async () => {
-              const [n1, n2] = await Promise.all([
-                fetchAllPaginatedResults<NeighbourItem>(
-                  (client.models.ImageNeighbour as any).imageNeighboursByImage1key,
-                  { image1Id: imageId, limit: 1000, selectionSet: NEIGHBOUR_SELECTION }
-                ),
-                fetchAllPaginatedResults<NeighbourItem>(
-                  (client.models.ImageNeighbour as any).imageNeighboursByImage2key,
-                  { image2Id: imageId, limit: 1000, selectionSet: NEIGHBOUR_SELECTION }
-                ),
-              ]);
-              neighbourCache.set(imageId, [...n1, ...n2]);
-              completed++;
-              if (completed % 50 === 0 || completed === uncachedImageIds.length) {
-                if (isLatest()) {
-                  setPreviewStatus(
-                    `Fetched neighbours for ${completed}/${uncachedImageIds.length} images...`
-                  );
+        if (uncachedImageIds.length > 0) {
+          const limit = pLimit(15);
+          let completed = 0;
+
+          await Promise.all(
+            uncachedImageIds.map((imageId) =>
+              limit(async () => {
+                const [n1, n2] = await Promise.all([
+                  fetchAllPaginatedResults<NeighbourItem>(
+                    (client.models.ImageNeighbour as any).imageNeighboursByImage1key,
+                    { image1Id: imageId, limit: 1000, selectionSet: NEIGHBOUR_SELECTION }
+                  ),
+                  fetchAllPaginatedResults<NeighbourItem>(
+                    (client.models.ImageNeighbour as any).imageNeighboursByImage2key,
+                    { image2Id: imageId, limit: 1000, selectionSet: NEIGHBOUR_SELECTION }
+                  ),
+                ]);
+                neighbourCache.set(imageId, [...n1, ...n2]);
+                completed++;
+                if (completed % 50 === 0 || completed === uncachedImageIds.length) {
+                  if (!cancelled) {
+                    setLoadingStatus(
+                      `Fetched neighbours for ${completed.toLocaleString()}/${totalImages.toLocaleString()} images...`
+                    );
+                  }
                 }
-              }
-            })
-          )
-        );
-      }
+              })
+            )
+          );
+        }
 
-      // Only update UI if this is still the latest run
-      if (!isLatest()) return;
-
-      // 3. Calculate pairs
-      const { pairs } = calculatePairs(annotationsCache, selectedIds, neighbourCache);
-      setPairCount(pairs.size);
-      setPreviewStatus('');
-    } catch (err) {
-      console.error('Preview calculation failed', err);
-      if (isLatest()) {
-        setPreviewStatus('Failed to calculate pairs');
-        setPairCount(null);
-      }
-    } finally {
-      if (isLatest()) {
-        setPreviewLoading(false);
+        if (cancelled) return;
+        setLoadingStatus('');
+        setLoading(false);
+      } catch (err: any) {
+        console.error('Failed to load homography data', err);
+        if (!cancelled) {
+          setLoadError(err?.message ?? 'Failed to load data');
+          setLoading(false);
+        }
       }
     }
-  }, [client, annotationSet.id]);
 
-  // Debounce selection changes
+    loadAll();
+    return () => { cancelled = true; };
+  }, [client, project.id, annotationSet.id]);
+
+  // ── Compute effective annotations (filtered by selected categories, or all) ──
+  const effectiveAnnotations = useMemo(() => {
+    if (selectedCategories.length === 0) return allAnnotations;
+    const selectedIds = new Set(selectedCategories.map((c) => c.value));
+    return allAnnotations.filter((a) => selectedIds.has(a.categoryId));
+  }, [allAnnotations, selectedCategories]);
+
+  // ── Calculate pairs from cache (instant, no network) ──
+  const pairCount = useMemo(() => {
+    if (loading) return null;
+    const { pairs } = calculatePairs(effectiveAnnotations, neighbourCacheRef.current, includeSkipped);
+    return pairs.size;
+  }, [loading, effectiveAnnotations, includeSkipped]);
+
+  // ── Enable/disable Launch button ──
   useEffect(() => {
-    const timer = setTimeout(() => {
-      updatePreview(selectedCategories);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [selectedCategories, updatePreview]);
+    setLaunchDisabled(loading || launching || pairCount === 0 || pairCount === null);
+  }, [loading, launching, pairCount, setLaunchDisabled]);
 
-  // Enable/disable Launch button
-  useEffect(() => {
-    setLaunchDisabled(
-      selectedCategories.length === 0 ||
-      launching ||
-      previewLoading ||
-      pairCount === 0 ||
-      pairCount === null
-    );
-  }, [selectedCategories, launching, previewLoading, pairCount, setLaunchDisabled]);
-
-  // Refs for stable launch handler
+  // ── Refs for stable launch handler ──
   const batchSizeRef = useRef(batchSize);
   const hiddenRef = useRef(hidden);
   const queueNameRef = useRef(queueName);
+  const includeSkippedRef = useRef(includeSkipped);
+  const effectiveAnnotationsRef = useRef(effectiveAnnotations);
 
   useEffect(() => { batchSizeRef.current = batchSize; }, [batchSize]);
   useEffect(() => { hiddenRef.current = hidden; }, [hidden]);
   useEffect(() => { queueNameRef.current = queueName; }, [queueName]);
+  useEffect(() => { includeSkippedRef.current = includeSkipped; }, [includeSkipped]);
+  useEffect(() => { effectiveAnnotationsRef.current = effectiveAnnotations; }, [effectiveAnnotations]);
 
-  // Expose launch handler to parent
+  // ── Expose launch handler to parent ──
   useEffect(() => {
     setHomographyLaunchHandler({
       execute: async (
         onProgress: (msg: string) => void,
         onLaunchConfirmed: () => void
       ) => {
-        const selectedIds = selectedCategories.map((c) => c.value);
-        if (selectedIds.length === 0) {
-          onProgress('No categories selected.');
-          return;
-        }
-
-        const annotationsCache = annotationsCacheRef.current;
         const neighbourCache = neighbourCacheRef.current;
+        const annotations = effectiveAnnotationsRef.current;
 
-        // Recalculate pairs from cache (should already be populated by preview)
         const { pairs } = calculatePairs(
-          annotationsCache, selectedIds, neighbourCache
+          annotations, neighbourCache, includeSkippedRef.current
         );
 
         if (pairs.size === 0) {
@@ -378,10 +334,11 @@ export default function HomographyLaunch({
         await sendLaunchRequest(client, payload);
         onProgress('Homography launch submitted');
 
+        const labelCount = selectedCategories.length || categoryOptions.length;
         await logAdminAction(
           client,
           user.userId,
-          `Launched Homography task for ${selectedIds.length} categories, ${manifestItems.length} pairs in annotation set "${annotationSet.name}"`,
+          `Launched Homography task for ${labelCount} categories, ${manifestItems.length} pairs in annotation set "${annotationSet.name}"`,
           project.id,
           (project as any).organizationId
         ).catch(console.error);
@@ -393,62 +350,89 @@ export default function HomographyLaunch({
   }, [
     annotationSet.id,
     annotationSet.name,
+    categoryOptions.length,
     client,
     project.id,
-    selectedCategories,
+    selectedCategories.length,
     setHomographyLaunchHandler,
     user.userId,
   ]);
 
-  return (
-    <div className='px-3 pb-3 pt-1'>
-      <div className='d-flex flex-column gap-3 mt-2'>
-        <Form.Group>
-          <Form.Label className='mb-0'>Labels</Form.Label>
-          <span
-            className='text-muted d-block mb-1'
-            style={{ fontSize: '12px' }}
-          >
-            Select the labels whose annotations define which image pairs need
-            homographies.
-          </span>
-          <Select
-            value={selectedCategories}
-            onChange={(v) =>
-              setSelectedCategories(v as CategoryOption[])
-            }
-            isMulti
-            name='Labels for homography'
-            options={categoryOptions}
-            className='text-black w-100'
-            closeMenuOnSelect={false}
-            isDisabled={launching}
-          />
-        </Form.Group>
+  // ── Render ──
 
-        {selectedCategories.length > 0 && (
-          <>
-            <div className='d-flex align-items-center gap-2'>
-              {previewLoading ? (
+  if (loadError) {
+    return (
+      <div className='px-3 pb-3 pt-1'>
+        <span className='text-danger'>Failed to load: {loadError}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className='px-3 pb-3'>
+      <div className='d-flex flex-column gap-3 pt-2'>
+        {/* Progress / pair count */}
+        <div className='d-flex align-items-center gap-2'>
+          {loading ? (
+            <>
+              <Spinner animation='border' size='sm' />
+              <span className='text-muted' style={{ fontSize: '13px' }}>
+                {loadingStatus || 'Loading...'}
+              </span>
+            </>
+          ) : pairCount !== null ? (
+            <span style={{ fontSize: '14px' }}>
+              {pairCount === 0 ? (
+                <span className='text-warning'>No pairs requiring homography found.</span>
+              ) : (
                 <>
-                  <Spinner animation='border' size='sm' />
-                  <span className='text-muted' style={{ fontSize: '13px' }}>
-                    {previewStatus || 'Calculating pairs...'}
-                  </span>
-                </>
-              ) : pairCount !== null ? (
-                <span style={{ fontSize: '14px' }}>
-                  {pairCount === 0 ? (
-                    <span className='text-warning'>No pairs requiring homography found.</span>
-                  ) : (
-                    <>
-                      <strong>{pairCount.toLocaleString()}</strong>{' '}
-                      pair{pairCount !== 1 ? 's' : ''} to launch
-                    </>
+                  <strong>{pairCount.toLocaleString()}</strong>{' '}
+                  pair{pairCount !== 1 ? 's' : ''} to launch
+                  {selectedCategories.length > 0 && (
+                    <span className='text-muted'>
+                      {' '}(filtered to {selectedCategories.length} label{selectedCategories.length !== 1 ? 's' : ''})
+                    </span>
                   )}
+                </>
+              )}
+            </span>
+          ) : null}
+        </div>
+
+        {/* Label filter (only after loading) */}
+        {!loading && (
+          <>
+            <Form.Group>
+              <Form.Label className='mb-0'>Filter by Labels</Form.Label>
+              <span
+                className='text-muted d-block mb-1'
+                style={{ fontSize: '12px' }}
+              >
+                By default all labels are included. Select specific labels to
+                narrow which annotations define image pairs.
+              </span>
+              <Select
+                value={selectedCategories}
+                onChange={(v) => setSelectedCategories(v as CategoryOption[])}
+                isMulti
+                name='Labels for homography'
+                options={categoryOptions}
+                className='text-black w-100'
+                closeMenuOnSelect={false}
+                isDisabled={launching}
+                placeholder='All labels (default)'
+              />
+              {selectedCategories.length > 0 && (
+                <span
+                  className='text-warning d-block mt-1'
+                  style={{ fontSize: '12px' }}
+                >
+                  Note: After homographies are created, all annotations in this set
+                  will have their primary/secondary status recalculated including
+                  labels not selected here.
                 </span>
-              ) : null}
-            </div>
+              )}
+            </Form.Group>
 
             <Form.Group>
               <Form.Switch
@@ -515,6 +499,22 @@ export default function HomographyLaunch({
                     page.
                   </span>
                 </Form.Group>
+
+                <Form.Group>
+                  <Form.Switch
+                    label='Include Previously Skipped Pairs'
+                    checked={includeSkipped}
+                    onChange={() => setIncludeSkipped(!includeSkipped)}
+                    disabled={launching}
+                  />
+                  <span
+                    className='text-muted d-block'
+                    style={{ fontSize: '12px' }}
+                  >
+                    When enabled, pairs that were previously skipped will be
+                    included for review.
+                  </span>
+                </Form.Group>
               </div>
             )}
           </>
@@ -527,22 +527,6 @@ export default function HomographyLaunch({
 // ── Data fetching helpers ──
 
 const NEIGHBOUR_SELECTION = ['image1Id', 'image2Id', 'homography', 'skipped'] as const;
-
-async function fetchAnnotations(
-  client: DataClient,
-  annotationSetId: string,
-  categoryIds: string[]
-): Promise<AnnotationItem[]> {
-  return fetchAllPaginatedResults(
-    (client.models.Annotation as any).annotationsByAnnotationSetId,
-    {
-      setId: annotationSetId,
-      filter: { or: categoryIds.map((id) => ({ categoryId: { eq: id } })) },
-      limit: 1000,
-      selectionSet: ['id', 'imageId'] as const,
-    }
-  );
-}
 
 const IMAGE_SELECTION = [
   'id', 'width', 'height', 'timestamp', 'originalPath', 'projectId',

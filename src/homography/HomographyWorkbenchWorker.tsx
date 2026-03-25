@@ -32,12 +32,13 @@ type Props = {
   pair: HomographyMessage;
   savedPoints?: { p1: Point[]; p2: Point[] };
   queueId: string;
-  onComplete: () => void;
+  onComplete: (pairKey: string) => void;
   onBack?: () => void;
   onForward?: () => void;
   onExit?: () => void;
   onSavePoints: (pairKey: string, points: { p1: Point[]; p2: Point[] }) => void;
   header?: React.ReactNode;
+  isSaved?: boolean;
 };
 
 async function resolveNeighbourDirection(
@@ -74,6 +75,7 @@ export function HomographyWorkbenchWorker({
   onExit,
   onSavePoints,
   header,
+  isSaved = false,
 }: Props) {
   const { client } = useContext(GlobalContext)!;
   const [isSaving, setIsSaving] = useState(false);
@@ -110,7 +112,7 @@ export function HomographyWorkbenchWorker({
         await (client as any).mutations.incrementQueueCount({ id: queueId });
         await pair.ack();
         onSavePoints(pair.pairKey, currentPointsRef.current);
-        onComplete();
+        onComplete(pair.pairKey);
       } catch (error) {
         console.error('Failed to save homography', error);
       } finally {
@@ -145,7 +147,7 @@ export function HomographyWorkbenchWorker({
       await (client as any).mutations.incrementQueueCount({ id: queueId });
       await pair.ack();
       onSavePoints(pair.pairKey, currentPointsRef.current);
-      onComplete();
+      onComplete(pair.pairKey);
     } catch (error) {
       console.error('Failed to skip pair', error);
     } finally {
@@ -173,37 +175,40 @@ export function HomographyWorkbenchWorker({
       annotationSetId={pair.annotationSetId}
       initialPoints={savedPoints}
       onPointsChange={handlePointsChange}
-      header={
-        <div className='d-flex align-items-center gap-3'>
+      isSaved={isSaved}
+      headerLeft={
+        <div className='d-flex align-items-center gap-2'>
           {header}
           {onBack && (
             <button
-              className='btn btn-sm btn-outline-secondary'
+              className='btn btn-sm btn-outline-primary'
               onClick={handleBack}
               disabled={isSaving || isSkipping}
             >
-              Back
+              Previous Pair
             </button>
           )}
           {onForward && (
             <button
-              className='btn btn-sm btn-outline-secondary'
+              className='btn btn-sm btn-outline-primary'
               onClick={handleForward}
               disabled={isSaving || isSkipping}
             >
-              Forward
-            </button>
-          )}
-          {onExit && (
-            <button
-              className='btn btn-sm btn-outline-warning'
-              onClick={onExit}
-              disabled={isSaving || isSkipping}
-            >
-              Save &amp; Exit
+              Next Pair
             </button>
           )}
         </div>
+      }
+      headerRight={
+        onExit ? (
+          <button
+            className='btn btn-sm btn-outline-success'
+            onClick={onExit}
+            disabled={isSaving || isSkipping}
+          >
+            Save &amp; Exit
+          </button>
+        ) : undefined
       }
     />
   );
