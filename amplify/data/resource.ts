@@ -94,7 +94,6 @@ const schema = a
         color: a.string(),
         shortcutKey: a.string(),
         annotations: a.hasMany('Annotation', 'categoryId'),
-        ogAnnotations: a.hasMany('Annotation', 'ogCategoryId'),
         annotationCount: a.integer().default(0),
         objects: a.hasMany('Object', 'categoryId'),
         locationAnnotationCounts: a.hasMany(
@@ -228,7 +227,6 @@ const schema = a
         objectId: a.id(),
         object: a.belongsTo('Object', 'objectId'),
         ogCategoryId: a.string(),
-        ogCategory: a.belongsTo('Category', 'ogCategoryId'),
         reviewedBy: a.string(),
         group: a.string(),
       })

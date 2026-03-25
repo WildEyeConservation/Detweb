@@ -94,7 +94,7 @@ export default function AnnotationSetResults({
               'obscured',
               'id',
               'objectId',
-              'ogCategory.name',
+              'ogCategoryId',
               'reviewedBy',
               'image.originalPath',
               'image.timestamp',
@@ -109,6 +109,23 @@ export default function AnnotationSetResults({
         );
       })
     );
+
+    const categories = await fetchAllPaginatedResults(
+      client.models.Category.categoriesByProjectId,
+      {
+        projectId: surveyId,
+        selectionSet: ['id', 'name'],
+        limit: 100,
+      },
+      (stepsCompleted) => {
+        setExportStatus(`Fetching labels... (${stepsCompleted} fetched)`);
+      }
+    );
+
+    const categoryMap = categories.reduce((acc, category) => {
+      acc[category.id] = category.name;
+      return acc;
+    }, {} as Record<string, string>);
 
     let i = 0;
     let a = 0;
@@ -133,7 +150,7 @@ export default function AnnotationSetResults({
             y: anno.y,
             source: anno.source,
             reviewedBy: userMap[anno.reviewedBy ?? ''],
-            ogCategory: anno.ogCategory?.name,
+            ogCategory: categoryMap[anno.ogCategoryId ?? ''],
           };
         }),
         fileName,
