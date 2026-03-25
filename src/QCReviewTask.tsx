@@ -23,6 +23,7 @@ export default function QCReviewTask() {
   const { getSqsClient } = useContext(UserContext)!;
   const { client } = useContext(GlobalContext)!;
   const [index, setIndex] = useState(0);
+  const [legendCollapsed, setLegendCollapsed] = useState(false);
   const [queueUrl, setQueueUrl] = useState<string | undefined>(undefined);
   const [annotationSetId, setAnnotationSetId] = useState<string | undefined>(
     undefined
@@ -179,6 +180,8 @@ export default function QCReviewTask() {
             historyN={2}
             categories={categories}
             queueId={queueId}
+            legendCollapsed={legendCollapsed}
+            setLegendCollapsed={setLegendCollapsed}
           />
         ) : (
           <div className='d-flex justify-content-center align-items-center h-100'>

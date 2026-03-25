@@ -94,7 +94,7 @@ export default function AnnotationSetResults({
               'obscured',
               'id',
               'objectId',
-              'ogCategoryId',
+              'reviewCatId',
               'reviewedBy',
               'image.originalPath',
               'image.timestamp',
@@ -150,7 +150,7 @@ export default function AnnotationSetResults({
             y: anno.y,
             source: anno.source,
             reviewedBy: userMap[anno.reviewedBy ?? ''],
-            ogCategory: categoryMap[anno.ogCategoryId ?? ''],
+            reviewedCategory: categoryMap[anno.reviewCatId ?? ''],
           };
         }),
         fileName,

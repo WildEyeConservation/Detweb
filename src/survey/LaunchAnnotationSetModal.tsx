@@ -187,7 +187,7 @@ export default function LaunchAnnotationSetModal({
                 setFalseNegativesLaunchHandler={setFalseNegativesLaunchHandler as any}
               />
             </Tab>
-            <Tab label='QC Review'>
+            <Tab label='Review'>
               <QCReview
                 project={project}
                 annotationSet={annotationSet}

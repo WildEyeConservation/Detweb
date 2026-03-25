@@ -57,7 +57,7 @@ export default function QCReview({
   // Annotator filter
   const [selectedAnnotatorIds, setSelectedAnnotatorIds] = useState<string[]>([]);
   const [allAnnotations, setAllAnnotations] = useState<
-    Array<{ id: string; ogCategoryId: string | null; owner: string | null }>
+    Array<{ id: string; reviewCatId: string | null; owner: string | null }>
   >([]);
 
   const { users } = useUsers();
@@ -82,7 +82,7 @@ export default function QCReview({
   // Computed sample size (respects annotator filter)
   const filteredUnreviewedCount = useMemo(() => {
     if (allAnnotations.length === 0) return unreviewedCount;
-    let candidates = allAnnotations.filter((a) => !a.ogCategoryId);
+    let candidates = allAnnotations.filter((a) => !a.reviewCatId);
     if (selectedAnnotatorIds.length > 0) {
       const filterSet = new Set(selectedAnnotatorIds);
       candidates = candidates.filter((a) => a.owner && filterSet.has(a.owner));
@@ -152,7 +152,7 @@ export default function QCReview({
 
         setAllAnnotations(annotations);
         setTotalCount(annotations.length);
-        const unreviewed = annotations.filter((a) => !a.ogCategoryId);
+        const unreviewed = annotations.filter((a) => !a.reviewCatId);
         setUnreviewedCount(unreviewed.length);
       } catch (err) {
         console.error('Failed to load annotation counts', err);
@@ -504,8 +504,8 @@ async function fetchAnnotationsByCategory(
   client: DataClient,
   categoryId: string,
   annotationSetId: string
-): Promise<Array<{ id: string; ogCategoryId: string | null; owner: string | null }>> {
-  const allItems: Array<{ id: string; ogCategoryId: string | null; owner: string | null }> = [];
+): Promise<Array<{ id: string; reviewCatId: string | null; owner: string | null }>> {
+  const allItems: Array<{ id: string; reviewCatId: string | null; owner: string | null }> = [];
   let nextToken: string | null | undefined = undefined;
 
   do {
@@ -514,7 +514,7 @@ async function fetchAnnotationsByCategory(
         { categoryId },
         {
           filter: { setId: { eq: annotationSetId } },
-          selectionSet: ['id', 'ogCategoryId', 'owner'] as const,
+          selectionSet: ['id', 'reviewCatId', 'owner'] as const,
           limit: 10000,
           nextToken,
         }
@@ -522,7 +522,7 @@ async function fetchAnnotationsByCategory(
     for (const item of data || []) {
       allItems.push({
         id: item.id,
-        ogCategoryId: (item as any).ogCategoryId ?? null,
+        reviewCatId: (item as any).reviewCatId ?? null,
         owner: (item as any).owner ?? null,
       });
     }

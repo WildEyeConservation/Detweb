@@ -801,7 +801,7 @@ async function fetchUnreviewedQCAnnotations(
                 setId: string;
                 x: number;
                 y: number;
-                ogCategoryId?: string | null;
+                reviewCatId?: string | null;
               } | null>;
               nextToken?: string | null;
             };
@@ -816,7 +816,7 @@ async function fetchUnreviewedQCAnnotations(
           const page = response.data?.annotationsByImageIdAndSetId;
           for (const item of page?.items || []) {
             // Include only annotations that are in the manifest AND still unreviewed.
-            if (item && manifestSet.has(item.id) && !item.ogCategoryId) {
+            if (item && manifestSet.has(item.id) && !item.reviewCatId) {
               unreviewed.push({
                 id: item.id,
                 imageId: item.imageId,

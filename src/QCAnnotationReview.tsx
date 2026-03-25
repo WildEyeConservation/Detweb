@@ -9,8 +9,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Badge, Button, Modal } from 'react-bootstrap';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Badge, Button, Card } from 'react-bootstrap';
+import { ChevronLeft, ChevronRight, Undo2 } from 'lucide-react';
 import { GlobalContext, UserContext } from './Context';
 import { getTileBlob } from './StorageLayer';
 import type { Schema } from './amplify/client-schema';
@@ -19,7 +19,7 @@ import type { Schema } from './amplify/client-schema';
 
 const TILE_SIZE = 256;
 const SOURCE_MARKER = 'qc-marker';
-const LAYER_MARKER_CIRCLE = 'qc-marker-circle';
+const LAYER_MARKER_CROSSHAIR = 'qc-marker-crosshair';
 const LAYER_MARKER_LABEL = 'qc-marker-label';
 
 type CategoryOption = {
@@ -48,6 +48,8 @@ type QCReviewProps = {
   visible: boolean;
   // Passed through by Preloader from QCReviewTask
   categories: CategoryOption[];
+  legendCollapsed: boolean;
+  setLegendCollapsed: (collapsed: boolean) => void;
 };
 
 export default function QCAnnotationReview({
@@ -58,6 +60,8 @@ export default function QCAnnotationReview({
   prev,
   visible,
   categories,
+  legendCollapsed,
+  setLegendCollapsed,
 }: QCReviewProps) {
   const { client } = useContext(GlobalContext)!;
   const { user } = useContext(UserContext)!;
@@ -75,12 +79,10 @@ export default function QCAnnotationReview({
   const cancelledRef = useRef(false);
 
   // ── UI state ──
-  const [showDenyModal, setShowDenyModal] = useState(false);
   const [, setHideMarker] = useState(false);
-  const [saving, setSaving] = useState(false);
 
-  // ── Legend sidebar ──
-  const [legendOpen, setLegendOpen] = useState(false);
+  // ── Review state (tracks what the user chose, persists across undo) ──
+  const [reviewedCatId, setReviewedCatId] = useState<string | null>(null);
 
   // ── Waiting state for empty queue ──
   const [waiting, setWaiting] = useState(false);
@@ -107,9 +109,29 @@ export default function QCAnnotationReview({
     };
   }, []);
 
-  const currentCategory = categories.find(
-    (c) => c.id === annotation.categoryId
-  );
+  // The label to display: if reviewed, show the reviewed category; otherwise original.
+  const displayCategoryId = reviewedCatId ?? annotation.categoryId;
+  const displayCategory = categories.find((c) => c.id === displayCategoryId);
+
+  // ── Update marker label when reviewedCatId changes or on undo (visible + reviewed) ──
+  useEffect(() => {
+    if (!map || !visible) return;
+    const source = map.getSource(SOURCE_MARKER) as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+    source.setData({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { label: displayCategory?.name ?? 'Unknown' },
+          geometry: {
+            type: 'Point',
+            coordinates: px2lngLat(annotation.x, annotation.y),
+          },
+        },
+      ],
+    });
+  }, [map, visible, displayCategoryId]);
 
   // ── Fetch image + sourceKey ──
   useEffect(() => {
@@ -218,7 +240,7 @@ export default function QCAnnotationReview({
                   ],
                 });
 
-                let beforeId: string = LAYER_MARKER_CIRCLE;
+                let beforeId: string = LAYER_MARKER_CROSSHAIR;
                 const layers = m.getStyle().layers || [];
                 for (const layer of layers) {
                   if (layer.id.startsWith('layer-')) {
@@ -297,7 +319,7 @@ export default function QCAnnotationReview({
             {
               type: 'Feature',
               properties: {
-                label: currentCategory?.name ?? 'Unknown',
+                label: displayCategory?.name ?? 'Unknown',
               },
               geometry: {
                 type: 'Point',
@@ -308,16 +330,36 @@ export default function QCAnnotationReview({
         },
       });
 
+      // Generate a + crosshair image on a canvas
+      const size = 32;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d')!;
+      ctx.strokeStyle = '#ff0000ff';
+      ctx.lineWidth = 3;
+      // Vertical line
+      ctx.beginPath();
+      ctx.moveTo(size / 2, 2);
+      ctx.lineTo(size / 2, size - 2);
+      ctx.stroke();
+      // Horizontal line
+      ctx.beginPath();
+      ctx.moveTo(2, size / 2);
+      ctx.lineTo(size - 2, size / 2);
+      ctx.stroke();
+
+      m.addImage('crosshair', { width: size, height: size, data: ctx.getImageData(0, 0, size, size).data });
+
       m.addLayer({
-        id: LAYER_MARKER_CIRCLE,
-        type: 'circle',
+        id: LAYER_MARKER_CROSSHAIR,
+        type: 'symbol',
         source: SOURCE_MARKER,
-        paint: {
-          'circle-radius': 10,
-          'circle-color': '#e6194b',
-          'circle-stroke-width': 3,
-          'circle-stroke-color': '#ffffff',
-          'circle-opacity': 0.9,
+        layout: {
+          'icon-image': 'crosshair',
+          'icon-size': 1,
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
         },
       });
 
@@ -348,7 +390,7 @@ export default function QCAnnotationReview({
       // Temporarily fit to get the base zoom, then override.
       m.fitBounds(imageBounds, { padding: 20, animate: false });
       const baseZoom = m.getZoom();
-      const targetZoom = baseZoom + 5;
+      const targetZoom = baseZoom + 6;
 
       m.jumpTo({
         center: px2lngLat(annotation.x, annotation.y),
@@ -375,8 +417,8 @@ export default function QCAnnotationReview({
     if (!map || !visible) return;
 
     const setVisibility = (vis: 'visible' | 'none') => {
-      if (map.getLayer(LAYER_MARKER_CIRCLE))
-        map.setLayoutProperty(LAYER_MARKER_CIRCLE, 'visibility', vis);
+      if (map.getLayer(LAYER_MARKER_CROSSHAIR))
+        map.setLayoutProperty(LAYER_MARKER_CROSSHAIR, 'visibility', vis);
       if (map.getLayer(LAYER_MARKER_LABEL))
         map.setLayoutProperty(LAYER_MARKER_LABEL, 'visibility', vis);
     };
@@ -414,91 +456,77 @@ export default function QCAnnotationReview({
     }
   }, [client, queueId]);
 
-  const isAlreadyReviewed = useCallback(async (): Promise<boolean> => {
+  const isReviewedByOther = useCallback(async (): Promise<boolean> => {
     try {
       const { data } = await client.models.Annotation.get(
         { id: annotation.id },
         { selectionSet: ['id', 'reviewedBy'] as const }
       );
-      return !!(data as any)?.reviewedBy;
+      const reviewer = (data as any)?.reviewedBy;
+      // Allow re-review by same user (undo case), block if different user reviewed
+      return !!reviewer && reviewer !== user.userId;
     } catch {
       return false;
     }
-  }, [client, annotation.id]);
+  }, [client, annotation.id, user.userId]);
 
-  const handleApprove = useCallback(async () => {
-    if (saving) return;
-    setSaving(true);
-    try {
-      if (await isAlreadyReviewed()) {
-        // Already reviewed — skip update to avoid overwriting with stale SQS data.
-        await ack?.();
-        if (next) {
-          next();
-        } else {
-          startWaiting();
-        }
+  const handleApprove = useCallback(() => {
+
+    setReviewedCatId(annotation.categoryId);
+
+    // Fire and forget — don't block navigation on network requests.
+    isReviewedByOther().then((reviewed) => {
+      if (reviewed) {
+        ack?.().catch((err) => console.error('Failed to ack', err));
         return;
       }
-      await Promise.all([
+      Promise.all([
         client.models.Annotation.update({
           id: annotation.id,
-          ogCategoryId: annotation.categoryId,
+          reviewCatId: annotation.categoryId,
           reviewedBy: user.userId,
         } as any),
         incrementObservedCount(),
-      ]);
-      await ack?.();
+        ack?.(),
+      ]).catch((err) => console.error('Failed to approve annotation', err));
+    });
+
+    if (next) {
+      next();
+    } else {
+      startWaiting();
+    }
+  }, [annotation, client, ack, next,user.userId, incrementObservedCount, isReviewedByOther]);
+
+  const handleRelabel = useCallback(
+    (newCategoryId: string) => {
+  
+      setReviewedCatId(newCategoryId);
+
+      // Fire and forget — don't block navigation on network requests.
+      isReviewedByOther().then((reviewed) => {
+        if (reviewed) {
+          ack?.().catch((err) => console.error('Failed to ack', err));
+          return;
+        }
+        Promise.all([
+          client.models.Annotation.update({
+            id: annotation.id,
+            reviewCatId: newCategoryId,
+            reviewedBy: user.userId,
+          } as any),
+          incrementObservedCount(),
+          ack?.(),
+        ]).catch((err) => console.error('Failed to relabel annotation', err));
+      });
+
       if (next) {
         next();
       } else {
         startWaiting();
       }
-    } catch (err) {
-      console.error('Failed to approve annotation', err);
-    } finally {
-      setSaving(false);
-    }
-  }, [annotation, client, ack, next, saving, user.userId, incrementObservedCount, isAlreadyReviewed]);
-
-  const handleRelabel = useCallback(
-    async (newCategoryId: string) => {
-      if (saving) return;
-      setSaving(true);
-      setShowDenyModal(false);
-      try {
-        if (await isAlreadyReviewed()) {
-          // Already reviewed — skip update to avoid overwriting with stale SQS data.
-          await ack?.();
-          if (next) {
-            next();
-          } else {
-            startWaiting();
-          }
-          return;
-        }
-        await Promise.all([
-          client.models.Annotation.update({
-            id: annotation.id,
-            ogCategoryId: annotation.categoryId, // Store the ORIGINAL (wrong) category
-            categoryId: newCategoryId, // Update to the CORRECT category
-            reviewedBy: user.userId,
-          } as any),
-          incrementObservedCount(),
-        ]);
-        await ack?.();
-        if (next) {
-          next();
-        } else {
-          startWaiting();
-        }
-      } catch (err) {
-        console.error('Failed to relabel annotation', err);
-      } finally {
-        setSaving(false);
-      }
     },
-    [annotation, client, ack, next, saving, user.userId, incrementObservedCount, isAlreadyReviewed]
+    [annotation, client, ack, next,user.userId, incrementObservedCount, isReviewedByOther]
   );
 
   const startWaiting = useCallback(() => {
@@ -525,21 +553,12 @@ export default function QCAnnotationReview({
     }, 60000);
   }, [waiting, navigate]);
 
-  // Determine which default keys are available (not claimed by a category shortcut).
-  const approveKeyAvailable = !categories.some(
-    (c) => c.shortcutKey?.toLowerCase() === 'a'
-  );
-  const denyKeyAvailable = !categories.some(
-    (c) => c.shortcutKey?.toLowerCase() === 'd'
-  );
-
   // ── Hotkey handling ──
   useEffect(() => {
-    if (!visible || showDenyModal) return;
+    if (!visible) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (saving) return;
-      // Don't handle if inside an input.
+  
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement
@@ -548,15 +567,10 @@ export default function QCAnnotationReview({
 
       const key = e.key;
 
-      // Arrow keys for navigation — always active.
+      // Arrow left = undo (go back)
       if (key === 'ArrowLeft') {
         e.preventDefault();
         prev?.();
-        return;
-      }
-      if (key === 'ArrowRight') {
-        e.preventDefault();
-        next?.();
         return;
       }
 
@@ -571,25 +585,15 @@ export default function QCAnnotationReview({
         if (matchingCategory.id === annotation.categoryId) {
           handleApprove(); // Confirmed correct
         } else {
-          handleRelabel(matchingCategory.id); // Immediately relabel
+          handleRelabel(matchingCategory.id); // Fix: relabel
         }
         return;
       }
 
-      // Default approve keys (each only if not claimed by a category shortcut).
-      if (
-        (lowerKey === 'a' && approveKeyAvailable) ||
-        (lowerKey === ' ' && !categories.some((c) => c.shortcutKey === ' '))
-      ) {
+      // Spacebar = approve (reserved, never a category shortcut)
+      if (key === ' ') {
         e.preventDefault();
         handleApprove();
-        return;
-      }
-
-      // Deny key (only if not claimed by a category shortcut).
-      if (lowerKey === 'd' && denyKeyAvailable) {
-        e.preventDefault();
-        setShowDenyModal(true);
         return;
       }
     };
@@ -598,47 +602,12 @@ export default function QCAnnotationReview({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     visible,
-    showDenyModal,
-    saving,
     categories,
     annotation.categoryId,
     handleApprove,
     handleRelabel,
-    approveKeyAvailable,
-    denyKeyAvailable,
     prev,
-    next,
   ]);
-
-  // ── Deny modal hotkeys ──
-  useEffect(() => {
-    if (!showDenyModal) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowDenyModal(false);
-        return;
-      }
-
-      const key = e.key.toLowerCase();
-      const matchingCategory = categories.find(
-        (c) => c.shortcutKey?.toLowerCase() === key
-      );
-      if (matchingCategory) {
-        e.preventDefault();
-        if (matchingCategory.id === annotation.categoryId) {
-          // Same category = approve (shouldn't normally happen from deny modal, but handle it)
-          setShowDenyModal(false);
-          handleApprove();
-        } else {
-          handleRelabel(matchingCategory.id);
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showDenyModal, categories, annotation.categoryId, handleApprove, handleRelabel]);
 
   // ── Render ──
 
@@ -662,170 +631,152 @@ export default function QCAnnotationReview({
       >
         <div className='d-flex align-items-center gap-3'>
           <Badge bg='danger'>
-            {currentCategory?.name ?? 'Unknown'}
+            {displayCategory?.name ?? 'Unknown'}
           </Badge>
+          {reviewedCatId && (
+            <Badge bg='success' style={{ fontSize: '11px' }}>
+              Reviewed
+            </Badge>
+          )}
           <span className='text-muted' style={{ fontSize: '12px' }}>
             Tip: Hold Tab to hide the marker
           </span>
         </div>
-        <Button
-          variant='outline-warning'
-          style={{ width: 120 }}
-          onClick={() => navigate('/jobs')}
-          disabled={saving}
-        >
-          Save &amp; Exit
-        </Button>
       </div>
 
-      {/* Map container */}
-      <div style={{ flex: 1, position: 'relative' }}>
-        <div
-          ref={containerRef}
-          style={{
-            width: '100%',
-            height: '100%',
-            background: '#fff',
-            borderRadius: '8px',
-            overflow: 'hidden',
-          }}
-        />
-        {waiting && (
+      {/* Map + side legend */}
+      <div className='d-flex' style={{ flex: 1, overflow: 'hidden' }}>
+        {/* Map container */}
+        <div style={{ flex: 1, position: 'relative' }}>
           <div
+            ref={containerRef}
             style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              zIndex: 1000,
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-              borderRadius: '12px',
-              padding: '20px 32px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '12px',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+              width: '100%',
+              height: '100%',
+              background: '#ffffff',
+              borderRadius: 10,
+              overflow: 'hidden',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
             }}
-          >
+          />
+          {waiting && (
             <div
               style={{
-                width: '32px',
-                height: '32px',
-                border: '3px solid rgba(255, 255, 255, 0.2)',
-                borderTopColor: '#fff',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                zIndex: 1000,
+                backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                borderRadius: '12px',
+                padding: '20px 32px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '12px',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
               }}
-            />
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-            <div style={{ color: '#fff', fontSize: '14px', textAlign: 'center' }}>
-              Waiting for new work... ({secondsRemaining}s remaining)
-            </div>
-          </div>
-        )}
-
-        {/* Collapsible legend sidebar */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            height: '100%',
-            display: 'flex',
-            zIndex: 900,
-            pointerEvents: 'none',
-          }}
-        >
-          {/* Toggle tab */}
-          <button
-            onClick={() => setLegendOpen((o) => !o)}
-            style={{
-              alignSelf: 'center',
-              pointerEvents: 'auto',
-              width: '28px',
-              height: '64px',
-              border: 'none',
-              borderRadius: '6px 0 0 6px',
-              backgroundColor: 'rgba(43, 62, 80, 0.85)',
-              color: '#fff',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 0,
-            }}
-            title={legendOpen ? 'Hide legend' : 'Show legend'}
-          >
-            {legendOpen ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-          </button>
-
-          {/* Panel */}
-          <div
-            style={{
-              pointerEvents: 'auto',
-              width: legendOpen ? '220px' : '0px',
-              overflow: 'hidden',
-              transition: 'width 0.2s ease',
-              backgroundColor: 'rgba(43, 62, 80, 0.92)',
-              height: '100%',
-            }}
-          >
-            <div style={{ width: '220px', padding: '12px' }}>
+            >
               <div
                 style={{
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: '#adb5bd',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                  marginBottom: '10px',
+                  width: '32px',
+                  height: '32px',
+                  border: '3px solid rgba(255, 255, 255, 0.2)',
+                  borderTopColor: '#fff',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite',
                 }}
-              >
-                Labels
+              />
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+              <div style={{ color: '#fff', fontSize: '14px', textAlign: 'center' }}>
+                Waiting for new work... ({secondsRemaining}s remaining)
               </div>
-              {categories.map((cat) => (
-                <div
-                  key={cat.id}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '6px 8px',
-                    borderRadius: '4px',
-                    marginBottom: '4px',
-                    backgroundColor:
-                      cat.id === annotation.categoryId
-                        ? 'rgba(231, 76, 60, 0.3)'
-                        : 'transparent',
-                    color: '#fff',
-                    fontSize: '13px',
-                  }}
-                >
-                  <span>{cat.name}</span>
-                  {cat.shortcutKey && (
-                    <kbd
-                      style={{
-                        backgroundColor: 'rgba(255,255,255,0.15)',
-                        padding: '2px 6px',
-                        borderRadius: '3px',
-                        fontSize: '12px',
-                        fontFamily: 'inherit',
-                      }}
-                    >
-                      {cat.shortcutKey.toUpperCase()}
-                    </kbd>
-                  )}
-                </div>
-              ))}
             </div>
-          </div>
+          )}
         </div>
+
+        {/* Collapsible side legend */}
+        {legendCollapsed ? (
+          <div className='d-flex align-items-center' style={{ padding: '0 4px', flexShrink: 0, height: '100%', marginLeft: '12px' }}>
+            <Button
+              variant='secondary'
+              size='sm'
+              onClick={() => setLegendCollapsed(false)}
+              className='d-flex align-items-center justify-content-center'
+              style={{
+                width: '28px',
+                height: '100%',
+                borderRadius: '4px',
+                padding: 0,
+              }}
+              title='Expand legend'
+            >
+              <ChevronLeft size={18} />
+            </Button>
+          </div>
+        ) : (
+          <div className='d-flex flex-column' style={{ position: 'relative', height: '100%', flexShrink: 0, marginLeft: '24px' }}>
+            <Button
+              variant='secondary'
+              size='sm'
+              onClick={() => setLegendCollapsed(true)}
+              className='d-flex align-items-center justify-content-center'
+              style={{
+                position: 'absolute',
+                left: '-16px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                zIndex: 10,
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                padding: 0,
+              }}
+              title='Collapse legend'
+            >
+              <ChevronRight size={18} />
+            </Button>
+
+            <Card className='d-flex flex-column h-100 overflow-hidden' style={{ width: '220px' }}>
+              <Card.Header>
+                <Card.Title className='d-flex flex-row align-items-center gap-2 mb-2'>
+                  <span>Legend</span>
+                </Card.Title>
+                <span className='text-muted' style={{ fontSize: '14px' }}>
+                  Press a shortcut key to approve or fix
+                </span>
+              </Card.Header>
+              <Card.Body className='d-flex flex-column gap-2 overflow-auto'>
+                {categories
+                  .slice()
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((cat) => (
+                    <Button
+                      variant={cat.id === displayCategoryId ? 'danger' : 'primary'}
+                      key={cat.id}
+                      className='d-flex flex-row align-items-center justify-content-between gap-2'
+                      onClick={() => {
+                        if (cat.id === annotation.categoryId) {
+                          handleApprove();
+                        } else {
+                          handleRelabel(cat.id);
+                        }
+                      }}
+          
+                    >
+                      <div>{cat.name}</div>
+                      {cat.shortcutKey && <div>({cat.shortcutKey.toUpperCase()})</div>}
+                    </Button>
+                  ))}
+              </Card.Body>
+            </Card>
+          </div>
+        )}
       </div>
 
       {/* Bottom action bar */}
       <div
-        className='d-flex align-items-center justify-content-between py-2'
+        className='d-flex align-items-center justify-content-between py-2 mt-2'
         style={{
           backgroundColor: '#2b3e50',
           flexShrink: 0,
@@ -833,85 +784,37 @@ export default function QCAnnotationReview({
       >
         <div className='d-flex align-items-center gap-2'>
           <Button
-            className='d-flex align-items-center justify-content-center'
+            className='d-flex align-items-center justify-content-center gap-1'
             variant='primary'
-            style={{ width: 120 }}
+            style={{ width: 160 }}
             onClick={prev}
-            disabled={saving || !prev}
+            disabled={!prev}
           >
-            <ChevronLeft />
-            <span>Previous</span>
+            <Undo2 size={16} />
+            <span>Undo</span>
           </Button>
         </div>
         <div className='d-flex align-items-center gap-2'>
           <Button
             variant='success'
-            style={{ width: 120 }}
+            style={{ width: 160 }}
             onClick={handleApprove}
-            disabled={saving}
+
           >
-            {approveKeyAvailable ? 'Approve (A)' : 'Approve'}
-          </Button>
-          <Button
-            variant='danger'
-            style={{ width: 120 }}
-            onClick={() => setShowDenyModal(true)}
-            disabled={saving}
-          >
-            {denyKeyAvailable ? 'Deny (D)' : 'Deny'}
+            Approve (Space)
           </Button>
         </div>
         <div className='d-flex align-items-center gap-2'>
           <Button
-            className='d-flex align-items-center justify-content-center'
             variant='primary'
-            style={{ width: 120 }}
-            onClick={next}
-            disabled={saving || !next}
+            style={{ width: 160 }}
+            onClick={() => navigate('/jobs')}
+
           >
-            <span>Next</span>
-            <ChevronRight />
+            Save &amp; Exit
           </Button>
         </div>
       </div>
-
-      {/* Deny modal — pick the correct category */}
-      <Modal show={showDenyModal} onHide={() => setShowDenyModal(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Select Correct Label</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <p style={{ fontSize: '14px' }} className='text-muted mb-3'>
-            Current label: <strong>{currentCategory?.name}</strong>. Select the
-            correct label or press its shortcut key.
-          </p>
-          <div className='d-flex flex-wrap gap-2'>
-            {categories
-              .filter((c) => c.id !== annotation.categoryId)
-              .map((cat) => (
-                <Button
-                  key={cat.id}
-                  variant='outline-primary'
-                  size='sm'
-                  onClick={() => handleRelabel(cat.id)}
-                  disabled={saving}
-                >
-                  {cat.name}
-                  {cat.shortcutKey && (
-                    <span className='ms-1 text-muted'>
-                      ({cat.shortcutKey.toUpperCase()})
-                    </span>
-                  )}
-                </Button>
-              ))}
-          </div>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant='secondary' onClick={() => setShowDenyModal(false)}>
-            Cancel
-          </Button>
-        </Modal.Footer>
-      </Modal>
     </div>
   );
 }

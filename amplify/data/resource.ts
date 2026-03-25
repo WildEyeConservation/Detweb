@@ -226,7 +226,7 @@ const schema = a
         obscured: a.boolean(),
         objectId: a.id(),
         object: a.belongsTo('Object', 'objectId'),
-        ogCategoryId: a.string(),
+        reviewCatId: a.string(),
         reviewedBy: a.string(),
         group: a.string(),
       })

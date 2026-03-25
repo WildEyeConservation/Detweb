@@ -43,7 +43,7 @@ const getProjectOrganizationId = /* GraphQL */ `
   }
 `;
 
-// Custom query to fetch annotations by categoryId GSI with ogCategoryId for filtering.
+// Custom query to fetch annotations by categoryId GSI with reviewCatId for filtering.
 const annotationsByCategoryIdQuery = /* GraphQL */ `
   query AnnotationsByCategoryId(
     $categoryId: ID!
@@ -65,7 +65,7 @@ const annotationsByCategoryIdQuery = /* GraphQL */ `
         x
         y
         owner
-        ogCategoryId
+        reviewCatId
       }
       nextToken
     }
@@ -147,7 +147,7 @@ type AnnotationItem = {
   x: number;
   y: number;
   owner: string | null;
-  ogCategoryId: string | null;
+  reviewCatId: string | null;
 };
 
 type QCManifest = {
@@ -241,8 +241,8 @@ async function handleLaunch(payload: LaunchQCReviewPayload, organizationId: stri
     });
   }
 
-  // 3. Exclude already-reviewed annotations (ogCategoryId is set).
-  candidates = candidates.filter((a) => !a.ogCategoryId);
+  // 3. Exclude already-reviewed annotations (reviewCatId is set).
+  candidates = candidates.filter((a) => !a.reviewCatId);
   console.log('Excluded already-reviewed', { remaining: candidates.length });
 
   if (candidates.length === 0) {
