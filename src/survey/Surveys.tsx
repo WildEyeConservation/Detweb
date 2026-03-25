@@ -182,7 +182,6 @@ export default function Surveys() {
                     'annotationSets.id',
                     'annotationSets.name',
                     'annotationSets.register',
-                    'annotationSets.createHomographies',
                     'locationSets.id',
                     'locationSets.name',
                     'annotationSets.categories.id',
@@ -302,26 +301,6 @@ export default function Surveys() {
     );
 
     try {
-      // cancel homography creation job if it exists
-      const homographySet = selectedProject?.annotationSets.find(
-        (set: { createHomographies?: boolean | null }) => set.createHomographies
-      );
-
-      if (homographySet) {
-        await client.models.AnnotationSet.update({
-          id: homographySet.id,
-          createHomographies: false,
-        });
-        await logAdminAction(
-          client,
-          user.userId,
-          `Cancelled homography creation job for annotation set "${homographySet.name}" in project "${selectedProject!.name}"`,
-          selectedProject!.id,
-          selectedProject!.organizationId
-        );
-        return;
-      }
-
       // cancel registration job if it exists
       const annotationSet = selectedProject?.annotationSets.find(
         (set: { register?: boolean | null }) => set.register
@@ -650,7 +629,7 @@ export default function Surveys() {
 
     const hasJobs =
       project.queues.length > 0 ||
-      project.annotationSets.some((set: { register?: boolean | null; createHomographies?: boolean | null }) => set.register || set.createHomographies);
+      project.annotationSets.some((set: { register?: boolean | null }) => set.register);
 
     const showResumeButton =
       !task.projectId &&
@@ -739,7 +718,7 @@ export default function Surveys() {
                 <Button
                   size={compactMode ? 'sm' : undefined}
                   className='flex align-items-center justify-content-center'
-                  disabled={!project.annotationSets.some((set: { register?: boolean | null; createHomographies?: boolean | null }) => set.register || set.createHomographies) && (disabled || scanningProjects.has(project.id))}
+                  disabled={!project.annotationSets.some((set: { register?: boolean | null }) => set.register) && (disabled || scanningProjects.has(project.id))}
                   variant='primary'
                   onClick={() => navigate(`/jobs`)}
                 >
@@ -748,7 +727,7 @@ export default function Surveys() {
                 <Button
                   size={compactMode ? 'sm' : undefined}
                   className='flex align-items-center justify-content-center'
-                  disabled={!project.annotationSets.some((set: { register?: boolean | null; createHomographies?: boolean | null }) => set.register || set.createHomographies) && (disabled || scanningProjects.has(project.id))}
+                  disabled={!project.annotationSets.some((set: { register?: boolean | null }) => set.register) && (disabled || scanningProjects.has(project.id))}
                   variant='danger'
                   onClick={() => {
                     setSelectedProject(project);
@@ -775,7 +754,7 @@ export default function Surveys() {
 
     const hasJobs =
       project.queues.length > 0 ||
-      project.annotationSets.some((set: { register?: boolean | null; createHomographies?: boolean | null }) => set.register || set.createHomographies);
+      project.annotationSets.some((set: { register?: boolean | null }) => set.register);
 
     const showResumeButton =
       !task.projectId &&
@@ -856,7 +835,7 @@ export default function Surveys() {
                   <Button
                     size='sm'
                     className='flex align-items-center justify-content-center'
-                    disabled={!project.annotationSets.some((set: { register?: boolean | null; createHomographies?: boolean | null }) => set.register || set.createHomographies) && (disabled || scanningProjects.has(project.id))}
+                    disabled={!project.annotationSets.some((set: { register?: boolean | null }) => set.register) && (disabled || scanningProjects.has(project.id))}
                     variant='primary'
                     onClick={() => navigate(`/jobs`)}
                   >
@@ -865,7 +844,7 @@ export default function Surveys() {
                   <Button
                     size='sm'
                     className='flex align-items-center justify-content-center'
-                    disabled={!project.annotationSets.some((set: { register?: boolean | null; createHomographies?: boolean | null }) => set.register || set.createHomographies) && (disabled || scanningProjects.has(project.id))}
+                    disabled={!project.annotationSets.some((set: { register?: boolean | null }) => set.register) && (disabled || scanningProjects.has(project.id))}
                     variant='danger'
                     onClick={() => {
                       setSelectedProject(project);

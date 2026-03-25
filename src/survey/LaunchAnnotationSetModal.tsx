@@ -7,8 +7,16 @@ import { GlobalContext } from '../Context';
 import SpeciesLabelling from './SpeciesLabelling';
 import FalseNegatives from './FalseNegatives';
 import QCReview from './QCReview';
+import HomographyLaunch from './HomographyLaunch';
 
 type TaskType = 'species-labelling' | 'registration' | 'false-negatives' | 'homographies' | 'qc-review';
+
+type LaunchHandlerType = {
+  execute: (
+    onProgress: (msg: string) => void,
+    onLaunchConfirmed: () => void
+  ) => Promise<void>;
+} | null;
 
 export default function LaunchAnnotationSetModal({
   show,
@@ -28,34 +36,19 @@ export default function LaunchAnnotationSetModal({
   const [launching, setLaunching] = useState(false);
   const [progressMessage, setProgressMessage] = useState<string>('');
   const [launchDisabled, setLaunchDisabled] = useState<boolean>(false);
-  const [speciesLaunchHandler, setSpeciesLaunchHandler] = useState<{
-    execute: (
-      onProgress: (msg: string) => void,
-      onLaunchConfirmed: () => void
-    ) => Promise<void>;
-  } | null>(null);
-  const [falseNegativesLaunchHandler, setFalseNegativesLaunchHandler] =
-    useState<{
-      execute: (
-        onProgress: (msg: string) => void,
-        onLaunchConfirmed: () => void
-      ) => Promise<void>;
-    } | null>(null);
-  const [qcLaunchHandler, setQCLaunchHandler] = useState<{
-    execute: (
-      onProgress: (msg: string) => void,
-      onLaunchConfirmed: () => void
-    ) => Promise<void>;
-  } | null>(null);
+  const [speciesLaunchHandler, setSpeciesLaunchHandler] = useState<LaunchHandlerType>(null);
+  const [falseNegativesLaunchHandler, setFalseNegativesLaunchHandler] = useState<LaunchHandlerType>(null);
+  const [qcLaunchHandler, setQCLaunchHandler] = useState<LaunchHandlerType>(null);
+  const [homographyLaunchHandler, setHomographyLaunchHandler] = useState<LaunchHandlerType>(null);
 
   // set up queue creation helper
   const { client, showModal } = useContext(GlobalContext)! as any;
 
   useEffect(() => {
-    if (taskType === 'registration' || taskType === 'homographies') {
+    if (taskType === 'registration') {
       setLaunchDisabled(false);
     }
-    // QC review manages its own disabled state via setLaunchDisabled
+    // Other tabs manage their own disabled state via setLaunchDisabled
   }, [taskType]);
 
   function onClose() {
@@ -70,16 +63,6 @@ export default function LaunchAnnotationSetModal({
     await (client.models.AnnotationSet.update as any)({
       id: annotationSet.id,
       register: true,
-    });
-    await client.mutations.updateProjectMemberships({
-      projectId: project.id,
-    });
-  }
-
-  async function createHomographyTask() {
-    await (client.models.AnnotationSet.update as any)({
-      id: annotationSet.id,
-      createHomographies: true,
     });
     await client.mutations.updateProjectMemberships({
       projectId: project.id,
@@ -120,11 +103,17 @@ export default function LaunchAnnotationSetModal({
             });
           }
           break;
+        case 'homographies':
+          if (homographyLaunchHandler) {
+            setProgressMessage('Initializing launch...');
+            await homographyLaunchHandler.execute(setProgressMessage, () => {
+              onOptimisticStatus?.(project.id, 'launching');
+              optimisticStatusApplied = true;
+            });
+          }
+          break;
         case 'registration':
           await createRegistrationTask();
-          break;
-        case 'homographies':
-          await createHomographyTask();
           break;
       }
     } catch (error) {
@@ -197,12 +186,13 @@ export default function LaunchAnnotationSetModal({
               />
             </Tab>
             <Tab label='Homographies'>
-              <div className='p-3'>
-                <p className='m-0'>
-                  This will launch a homography creation task for the annotation set.
-                  Use this to manually create missing homographies between overlapping image pairs.
-                </p>
-              </div>
+              <HomographyLaunch
+                project={project}
+                annotationSet={annotationSet}
+                launching={launching}
+                setLaunchDisabled={setLaunchDisabled}
+                setHomographyLaunchHandler={setHomographyLaunchHandler as any}
+              />
             </Tab>
             <Tab label='Registration'>
               <div className='p-3'>
@@ -229,7 +219,8 @@ export default function LaunchAnnotationSetModal({
               launching ||
               (taskType === 'species-labelling' && !speciesLaunchHandler) ||
               (taskType === 'false-negatives' && !falseNegativesLaunchHandler) ||
-              (taskType === 'qc-review' && !qcLaunchHandler)
+              (taskType === 'qc-review' && !qcLaunchHandler) ||
+              (taskType === 'homographies' && !homographyLaunchHandler)
             }
             onClick={handleSubmit}
           >

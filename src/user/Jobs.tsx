@@ -26,7 +26,6 @@ type Project = {
   annotationSets: {
     id: string;
     register: boolean;
-    createHomographies: boolean;
   }[];
   createdAt: string;
   queues: Schema['Queue']['type'][];
@@ -51,13 +50,6 @@ export default function Jobs() {
       id: string;
       projectId: string;
       register: boolean;
-    }[]
-  >([]);
-  const [homographyCreationJobs, setHomographyCreationJobs] = useState<
-    {
-      id: string;
-      projectId: string;
-      createHomographies: boolean;
     }[]
   >([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -168,8 +160,7 @@ export default function Jobs() {
               'organization.name',
               'annotationSets.id',
               'annotationSets.register',
-              'annotationSets.createHomographies',
-              'createdAt',
+                            'createdAt',
               'queues.*',
             ],
           }
@@ -183,7 +174,7 @@ export default function Jobs() {
           (project): project is Project =>
             project !== null &&
             (project.queues.length > 0 ||
-              project.annotationSets.some((set) => set.register || set.createHomographies))
+              project.annotationSets.some((set) => set.register))
         )
         .map((project) => ({
           ...project,
@@ -244,19 +235,10 @@ export default function Jobs() {
 
         setRegistrationJobs(registrationJobs.filter((job) => job.register));
 
-        const homographyJobs = validProjects.flatMap((project) =>
-          project.annotationSets.map((set) => ({
-            id: set.id,
-            projectId: project.id,
-            createHomographies: set.createHomographies || false,
-          }))
-        );
-        setHomographyCreationJobs(homographyJobs.filter((job) => job.createHomographies));
-
         const filteredProjects = validProjects.filter(
           (project) =>
             project.queues.length > 0 ||
-            project.annotationSets.some((set) => set.register || set.createHomographies)
+            project.annotationSets.some((set) => set.register)
         );
         setDisplayProjects(filteredProjects);
       }
@@ -322,9 +304,15 @@ export default function Jobs() {
   async function handleTakeJob(job: { queueId: string; projectId: string; tag?: string | null }) {
     setTakingJob(true);
 
-    // QC review jobs navigate directly to the QC review route (no membership update needed).
+    // QC review and homography jobs navigate directly to their routes (no membership update needed).
     if (job.tag === 'qc-review') {
       navigate(`/surveys/${job.projectId}/qc-review/${job.queueId}`);
+      setTakingJob(false);
+      return;
+    }
+
+    if (job.tag === 'homography') {
+      navigate(`/surveys/${job.projectId}/homography/${job.queueId}`);
       setTakingJob(false);
       return;
     }
@@ -377,11 +365,11 @@ export default function Jobs() {
                   <div>
                     {compactMode ? (
                       <h6 className='mb-0'>
-                        {queue.tag === 'qc-review' ? queue.name : (queue.tag || project.name)}
+                        {queue.tag === 'qc-review' || queue.tag === 'homography' ? queue.name : (queue.tag || project.name)}
                       </h6>
                     ) : (
                       <h5 className='mb-0'>
-                        {queue.tag === 'qc-review' ? queue.name : (queue.tag || project.name)}
+                        {queue.tag === 'qc-review' || queue.tag === 'homography' ? queue.name : (queue.tag || project.name)}
                       </h5>
                     )}
                     {!compactMode && (
@@ -396,7 +384,7 @@ export default function Jobs() {
                         marginBottom: '0px',
                       }}
                     >
-                      Type: {queue.tag === 'qc-review' ? 'QC Review' : queue.name}
+                      Type: {queue.tag === 'qc-review' ? 'QC Review' : queue.tag === 'homography' ? 'Homography' : queue.name}
                     </p>
                   </div>
                   {myOrganizationHook.data?.find(
@@ -516,79 +504,6 @@ export default function Jobs() {
                 variant='primary'
                 onClick={() =>
                   navigate(`/surveys/${project.id}/set/${job.id}/registration`)
-                }
-              >
-                Take Job
-              </Button>
-            </div>,
-          ],
-        };
-      }).filter((item): item is NonNullable<typeof item> => item !== null),
-    ...homographyCreationJobs
-      .filter((job) => {
-        const project = displayProjects.find((p) => p.id === job.projectId);
-        if (!project) return false;
-
-        const searchLower = search.toLowerCase();
-        const matchesOrganization =
-          !organizationFilter || project.organization.id === organizationFilter;
-        const matchesSearch =
-          searchLower === '' ||
-          project.name.toLowerCase().includes(searchLower) ||
-          project.organization.name.toLowerCase().includes(searchLower) ||
-          'homography creation'.includes(searchLower);
-
-        return matchesOrganization && matchesSearch;
-      })
-      .map((job) => {
-        const project = displayProjects.find(
-          (project) => project.id === job.projectId
-        );
-
-        if (!project) {
-          return null;
-        }
-
-        const paddingClass = compactMode ? 'p-1' : 'p-2';
-        const rowGapClass = compactMode ? 'gap-1' : 'gap-3';
-        const typeFontSize = compactMode ? '12px' : '14px';
-
-        return {
-          id: `hc-${job.id}`,
-          rowData: [
-            <div
-              className={`d-flex justify-content-between align-items-center ${paddingClass}`}
-              key={`hc-${job.id}`}
-            >
-              <div className={`d-flex flex-row ${rowGapClass} align-items-center`}>
-                <div>
-                  {compactMode ? (
-                    <h6 className='mb-0'>{project.name}</h6>
-                  ) : (
-                    <h5 className='mb-0'>{project.name}</h5>
-                  )}
-                  {!compactMode && (
-                    <i style={{ fontSize: '14px', display: 'block' }}>
-                      {project.organization.name}
-                    </i>
-                  )}
-                  <p
-                    style={{
-                      fontSize: typeFontSize,
-                      display: 'block',
-                      marginBottom: '0px',
-                    }}
-                  >
-                    Type: Homography Creation
-                  </p>
-                </div>
-              </div>
-              <Button
-                size={compactMode ? 'sm' : undefined}
-                className='ms-1'
-                variant='primary'
-                onClick={() =>
-                  navigate(`/surveys/${project.id}/set/${job.id}/homography-creation`)
                 }
               >
                 Take Job

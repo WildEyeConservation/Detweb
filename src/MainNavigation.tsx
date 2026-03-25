@@ -40,7 +40,8 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
   useEffect(() => {
     setIsAnnotatePath(
       /^\/surveys\/[^/]+\/annotate$/.test(location.pathname) ||
-      /^\/surveys\/[^/]+\/qc-review\/[^/]+$/.test(location.pathname)
+      /^\/surveys\/[^/]+\/qc-review\/[^/]+$/.test(location.pathname) ||
+      /^\/surveys\/[^/]+\/homography\/[^/]+$/.test(location.pathname)
     );
   }, [location.pathname]);
 

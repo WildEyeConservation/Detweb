@@ -244,7 +244,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
           continue;
         }
 
-        // Skip pairs without homographies — those are handled by HomographyCreation
+        // Skip pairs without homographies — those are handled by the homography workflow
         if (forward.noHomography || backward.noHomography) {
           continue;
         }

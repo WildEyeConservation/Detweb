@@ -285,6 +285,11 @@ async function processQueue(queue: QueueRecord): Promise<number> {
     return processQCRequeue(queue);
   }
 
+  // Branch for homography queues — completion = real homography or skipped.
+  if (queue.tag === 'homography') {
+    return processHomographyRequeue(queue);
+  }
+
   // Step 4: Download S3 manifest
   console.log('Downloading location manifest', { key: queue.locationManifestS3Key });
   const launchedLocations = await downloadManifest(queue.locationManifestS3Key!);
@@ -896,6 +901,163 @@ async function requeueQCAnnotations(
 
   await Promise.all(tasks);
   console.log('Finished requeuing QC annotations');
+}
+
+// ── Homography requeue logic ──
+
+const getImageNeighbourQuery = /* GraphQL */ `
+  query GetImageNeighbour($image1Id: ID!, $image2Id: ID!) {
+    getImageNeighbour(image1Id: $image1Id, image2Id: $image2Id) {
+      image1Id image2Id homography skipped
+    }
+  }
+`;
+
+type HomographyManifestItem = {
+  pairKey: string;
+  image1Id: string;
+  image2Id: string;
+  annotationSetId: string;
+  primaryImage: Record<string, unknown>;
+  secondaryImage: Record<string, unknown>;
+};
+
+async function processHomographyRequeue(queue: QueueRecord): Promise<number> {
+  console.log('Processing homography queue', { queueId: queue.id });
+
+  const manifest = await downloadHomographyManifest(queue.locationManifestS3Key!);
+  console.log('Downloaded homography manifest', { itemCount: manifest.length });
+
+  // Check each pair for completion
+  const limit = pLimit(20);
+  const unfinished: HomographyManifestItem[] = [];
+
+  await Promise.all(
+    manifest.map((item) =>
+      limit(async () => {
+        // pairKey is sorted, so id1 < id2 lexicographically
+        const [id1, id2] = item.pairKey.split('::');
+
+        // Try canonical ordering
+        let nb = await getImageNeighbour(id1, id2);
+        if (!nb) {
+          nb = await getImageNeighbour(id2, id1);
+        }
+
+        const homographyComplete = nb?.homography && nb.homography.length === 9;
+        const skipped = nb?.skipped === true;
+
+        if (!homographyComplete && !skipped) {
+          unfinished.push(item);
+        }
+      })
+    )
+  );
+
+  console.log('Homography requeue check', {
+    queueId: queue.id,
+    launched: manifest.length,
+    unfinished: unfinished.length,
+  });
+
+  if (unfinished.length === 0) {
+    await executeGraphql(updateQueue, {
+      input: {
+        id: queue.id,
+        emptyQueueTimestamp: null,
+        requeuesCompleted: (queue.requeuesCompleted ?? 0) + 1,
+      },
+    });
+    return 0;
+  }
+
+  // Requeue unfinished pairs
+  await requeueHomographyPairs(queue, unfinished);
+
+  await executeGraphql(updateQueue, {
+    input: {
+      id: queue.id,
+      emptyQueueTimestamp: null,
+      requeuesCompleted: (queue.requeuesCompleted ?? 0) + 1,
+      approximateSize: unfinished.length,
+    },
+  });
+
+  await logRequeueAction(queue, unfinished.length);
+
+  console.log('Homography requeue complete', {
+    queueId: queue.id,
+    requeuedCount: unfinished.length,
+  });
+
+  return unfinished.length;
+}
+
+async function downloadHomographyManifest(key: string): Promise<HomographyManifestItem[]> {
+  const bucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!bucketName) throw new Error('OUTPUTS_BUCKET_NAME not set');
+
+  const response = await s3Client.send(
+    new GetObjectCommand({ Bucket: bucketName, Key: key })
+  );
+  const bodyStr = await response.Body?.transformToString();
+  if (!bodyStr) throw new Error('Empty homography manifest file');
+
+  const manifest = JSON.parse(bodyStr);
+  return manifest.items as HomographyManifestItem[];
+}
+
+async function getImageNeighbour(
+  image1Id: string,
+  image2Id: string
+): Promise<{ homography: number[] | null; skipped: boolean | null } | null> {
+  try {
+    const result = await executeGraphql<{
+      getImageNeighbour?: {
+        image1Id: string;
+        image2Id: string;
+        homography: number[] | null;
+        skipped: boolean | null;
+      } | null;
+    }>(getImageNeighbourQuery, { image1Id, image2Id });
+    return result.getImageNeighbour ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function requeueHomographyPairs(
+  queue: QueueRecord,
+  pairs: HomographyManifestItem[]
+): Promise<void> {
+  const batchSize = 10;
+  const limit = pLimit(10);
+  const tasks: Array<Promise<void>> = [];
+
+  for (let i = 0; i < pairs.length; i += batchSize) {
+    const batch = pairs.slice(i, i + batchSize);
+    const entries = batch.map((pair, j) => ({
+      Id: `msg-${i + j}`,
+      MessageBody: JSON.stringify({
+        pairKey: pair.pairKey,
+        queueId: queue.id,
+        annotationSetId: pair.annotationSetId,
+        primaryImage: pair.primaryImage,
+        secondaryImage: pair.secondaryImage,
+      }),
+    }));
+
+    tasks.push(
+      limit(async () => {
+        await sqsClient.send(
+          new SendMessageBatchCommand({ QueueUrl: queue.url, Entries: entries })
+        );
+      })
+    );
+  }
+
+  await Promise.all(tasks);
+  console.log('Finished requeuing homography pairs', { count: pairs.length });
 }
 
 async function executeGraphql<T>(

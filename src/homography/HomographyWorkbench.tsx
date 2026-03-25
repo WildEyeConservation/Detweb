@@ -21,8 +21,16 @@ type Props = {
   isSaving?: boolean;
   isSkipping?: boolean;
   annotationSetId?: string;
-  /** Content rendered above the pair viewer (e.g. pair count, status text) */
-  header?: React.ReactNode;
+  /** Navigation buttons rendered on the left of the toolbar (e.g. Back / Forward) */
+  headerLeft?: React.ReactNode;
+  /** Action buttons rendered on the right of the toolbar (e.g. Save & Exit) */
+  headerRight?: React.ReactNode;
+  /** Initial points to restore (e.g. when navigating back to a previously visited pair) */
+  initialPoints?: { p1: Point[]; p2: Point[] };
+  /** Called whenever the point state changes, so the parent can snapshot for back navigation */
+  onPointsChange?: (points: { p1: Point[]; p2: Point[] }) => void;
+  /** Whether this pair has already been saved */
+  isSaved?: boolean;
 };
 
 export function HomographyWorkbench({
@@ -32,17 +40,25 @@ export function HomographyWorkbench({
   isSaving = false,
   isSkipping = false,
   annotationSetId,
-  header,
+  headerLeft,
+  headerRight,
+  initialPoints,
+  onPointsChange,
+  isSaved = false,
 }: Props) {
-  const [points, setPoints] = useState<{ p1: Point[]; p2: Point[] }>({
-    p1: [],
-    p2: [],
-  });
+  const [points, setPoints] = useState<{ p1: Point[]; p2: Point[] }>(
+    initialPoints ?? { p1: [], p2: [] }
+  );
   const [history, setHistory] = useState<{ p1: Point[]; p2: Point[] }[]>([]);
   const [redoStack, setRedoStack] = useState<{ p1: Point[]; p2: Point[] }[]>(
     []
   );
-  const [previewHomography, setPreviewHomography] = useState(false);
+  const [previewHomography, setPreviewHomography] = useState(
+    () =>
+      !!initialPoints &&
+      initialPoints.p1.length >= MIN_HOMOGRAPHY_POINTS &&
+      initialPoints.p2.length >= MIN_HOMOGRAPHY_POINTS
+  );
 
   const points1 = points.p1;
   const points2 = points.p2;
@@ -119,11 +135,20 @@ export function HomographyWorkbench({
 
   // Reset when images change
   useEffect(() => {
-    setPoints({ p1: [], p2: [] });
+    setPoints(initialPoints ?? { p1: [], p2: [] });
     setHistory([]);
     setRedoStack([]);
-    setPreviewHomography(false);
+    setPreviewHomography(
+      !!initialPoints &&
+      initialPoints.p1.length >= MIN_HOMOGRAPHY_POINTS &&
+      initialPoints.p2.length >= MIN_HOMOGRAPHY_POINTS
+    );
   }, [images[0].id, images[1].id]);
+
+  // Notify parent of points changes
+  useEffect(() => {
+    onPointsChange?.(points);
+  }, [points, onPointsChange]);
 
   // Auto-enable preview at minimum point count
   const numPairs = Math.min(points1.length, points2.length);
@@ -151,9 +176,9 @@ export function HomographyWorkbench({
         makeTransform(H),
         makeTransform(inv(H)),
       ] as [
-        (c: [number, number]) => [number, number],
-        (c: [number, number]) => [number, number],
-      ];
+          (c: [number, number]) => [number, number],
+          (c: [number, number]) => [number, number],
+        ];
     } catch {
       return null;
     }
@@ -180,47 +205,55 @@ export function HomographyWorkbench({
           onAction={recordAction}
           isSaving={isSaving}
           isSkipping={isSkipping}
+          isSaved={isSaved}
         />
       </div>
 
       {/* Main content */}
       <div className='d-flex flex-column align-items-center h-100 w-100'>
-        <div className='mb-2 d-flex align-items-center gap-3'>
-          {header}
-          <Form.Check
-            type='switch'
-            id='preview-homography'
-            label='Preview homography'
-            checked={previewHomography}
-            onChange={(e) => setPreviewHomography(e.target.checked)}
-            disabled={!canPreview}
-          />
-          {!canPreview && (
-            <span className='text-muted' style={{ fontSize: '0.85rem' }}>
-              (min {MIN_HOMOGRAPHY_POINTS} point pairs)
-            </span>
-          )}
-          <div className='d-flex align-items-center gap-1 border-start ps-3 border-secondary'>
-            <Button
-              size='sm'
-              variant='outline-secondary'
-              onClick={undo}
-              disabled={history.length === 0}
-              title='Undo (Ctrl+Z)'
-              className='p-1 d-flex align-items-center'
-            >
-              <Undo2 size={16} />
-            </Button>
-            <Button
-              size='sm'
-              variant='outline-secondary'
-              onClick={redo}
-              disabled={redoStack.length === 0}
-              title='Redo (Ctrl+Y / Ctrl+Shift+Z)'
-              className='p-1 d-flex align-items-center'
-            >
-              <Redo2 size={16} />
-            </Button>
+        <div className='mb-2 d-flex align-items-center w-100'>
+          {/* Left: navigation */}
+          <div className='d-flex align-items-center gap-2'>
+            {headerLeft}
+          </div>
+
+          {/* Center: preview toggle + undo/redo */}
+          <div className='d-flex align-items-center gap-3 mx-auto'>
+            <Form.Check
+              type='switch'
+              id='preview-homography'
+              label='Preview'
+              checked={previewHomography}
+              onChange={(e) => setPreviewHomography(e.target.checked)}
+              disabled={!canPreview}
+            />
+            <div className='d-flex align-items-center gap-1 border-start ps-3 border-secondary'>
+              <Button
+                size='sm'
+                variant='outline-secondary'
+                onClick={undo}
+                disabled={history.length === 0}
+                title='Undo (Ctrl+Z)'
+                className='p-1 d-flex align-items-center'
+              >
+                <Undo2 size={16} />
+              </Button>
+              <Button
+                size='sm'
+                variant='outline-secondary'
+                onClick={redo}
+                disabled={redoStack.length === 0}
+                title='Redo (Ctrl+Y / Ctrl+Shift+Z)'
+                className='p-1 d-flex align-items-center'
+              >
+                <Redo2 size={16} />
+              </Button>
+            </div>
+          </div>
+
+          {/* Right: save & exit */}
+          <div className='d-flex align-items-center gap-2'>
+            {headerRight}
           </div>
         </div>
         <MapLibrePairViewer
