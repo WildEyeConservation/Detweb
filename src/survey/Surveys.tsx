@@ -377,6 +377,12 @@ export default function Surveys() {
     if (sortBy === 'name-reverse') {
       return b.name.localeCompare(a.name);
     }
+    if (sortBy === 'activeJobs') {
+      const hasJobA = a.queues.length > 0 || a.annotationSets.some((set: { register?: boolean | null }) => set.register);
+      const hasJobB = b.queues.length > 0 || b.annotationSets.some((set: { register?: boolean | null }) => set.register);
+      if (hasJobA !== hasJobB) return hasJobA ? -1 : 1;
+      return new Date(b.createdAt ?? '').getTime() - new Date(a.createdAt ?? '').getTime();
+    }
     return 0;
   });
 
@@ -942,6 +948,7 @@ export default function Surveys() {
                 </option>
                 <option value='name'>Name (A-Z)</option>
                 <option value='name-reverse'>Name (Z-A)</option>
+                <option value='activeJobs'>Active jobs first</option>
               </Form.Select>
               {!isMobile && (
                 <Button
