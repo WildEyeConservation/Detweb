@@ -48,6 +48,9 @@ type QCReviewProps = {
   visible: boolean;
   // Passed through by Preloader from QCReviewTask
   categories: CategoryOption[];
+  setCategories: React.Dispatch<React.SetStateAction<CategoryOption[]>>;
+  projectId?: string;
+  annotationSetId?: string;
   legendCollapsed: boolean;
   setLegendCollapsed: (collapsed: boolean) => void;
 };
@@ -60,6 +63,9 @@ export default function QCAnnotationReview({
   prev,
   visible,
   categories,
+  setCategories,
+  projectId,
+  annotationSetId,
   legendCollapsed,
   setLegendCollapsed,
 }: QCReviewProps) {
@@ -112,6 +118,24 @@ export default function QCAnnotationReview({
   // The label to display: if reviewed, show the reviewed category; otherwise original.
   const displayCategoryId = reviewedCatId ?? annotation.categoryId;
   const displayCategory = categories.find((c) => c.id === displayCategoryId);
+
+  // ── False Positive logic ──
+  const existingFpCategory = useMemo(
+    () => categories.find((c) => c.name.toLowerCase() === 'false positive'),
+    [categories]
+  );
+  const fpHotkey = existingFpCategory ? existingFpCategory.shortcutKey : '+';
+  const fpLabel = `False Positive (${fpHotkey ? fpHotkey.toUpperCase() : '+'})`;
+  const [creatingFp, setCreatingFp] = useState(false);
+
+  // Filter false positive category from legend if it exists
+  const legendCategories = useMemo(
+    () =>
+      existingFpCategory
+        ? categories.filter((c) => c.id !== existingFpCategory.id)
+        : categories,
+    [categories, existingFpCategory]
+  );
 
   // ── Update marker label when reviewedCatId changes or on undo (visible + reviewed) ──
   useEffect(() => {
@@ -496,11 +520,11 @@ export default function QCAnnotationReview({
     } else {
       startWaiting();
     }
-  }, [annotation, client, ack, next,user.userId, incrementObservedCount, isReviewedByOther]);
+  }, [annotation, client, ack, next, user.userId, incrementObservedCount, isReviewedByOther]);
 
   const handleRelabel = useCallback(
     (newCategoryId: string) => {
-  
+
       setReviewedCatId(newCategoryId);
 
       // Fire and forget — don't block navigation on network requests.
@@ -526,7 +550,7 @@ export default function QCAnnotationReview({
         startWaiting();
       }
     },
-    [annotation, client, ack, next,user.userId, incrementObservedCount, isReviewedByOther]
+    [annotation, client, ack, next, user.userId, incrementObservedCount, isReviewedByOther]
   );
 
   const startWaiting = useCallback(() => {
@@ -553,12 +577,79 @@ export default function QCAnnotationReview({
     }, 60000);
   }, [waiting, navigate]);
 
+  const handleFalsePositive = useCallback(async () => {
+    let fpCatId: string;
+
+    if (existingFpCategory) {
+      fpCatId = existingFpCategory.id;
+    } else {
+      if (!projectId || !annotationSetId) {
+        console.error('Cannot create False Positive category: missing projectId or annotationSetId');
+        return;
+      }
+      if (creatingFp) return;
+      setCreatingFp(true);
+      try {
+        const { data } = await client.models.Category.create({
+          projectId,
+          annotationSetId,
+          name: 'False Positive',
+          shortcutKey: '+',
+          color: '#888888',
+        } as any);
+        if (data) {
+          fpCatId = data.id;
+          setCategories((prev) => [
+            ...prev,
+            { id: data.id, name: 'False Positive', shortcutKey: '+' },
+          ]);
+        } else {
+          setCreatingFp(false);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to create False Positive category', err);
+        setCreatingFp(false);
+        return;
+      }
+      setCreatingFp(false);
+    }
+
+    setReviewedCatId(fpCatId);
+
+    isReviewedByOther().then((reviewed) => {
+      if (reviewed) {
+        ack?.().catch((err) => console.error('Failed to ack', err));
+        return;
+      }
+      Promise.all([
+        client.models.Annotation.update({
+          id: annotation.id,
+          reviewCatId: fpCatId,
+          reviewedBy: user.userId,
+        } as any),
+        incrementObservedCount(),
+        ack?.(),
+      ]).catch((err) => console.error('Failed to mark as false positive', err));
+    });
+
+    if (next) {
+      next();
+    } else {
+      startWaiting();
+    }
+  }, [
+    existingFpCategory, projectId, annotationSetId, creatingFp,
+    client, annotation, ack, next, user.userId, incrementObservedCount,
+    isReviewedByOther, setCategories, startWaiting,
+  ]);
+
   // ── Hotkey handling ──
   useEffect(() => {
     if (!visible) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-  
+
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement
@@ -590,6 +681,13 @@ export default function QCAnnotationReview({
         return;
       }
 
+      // "+" = false positive (when no existing FP category with its own shortcut)
+      if (key === '+' && !existingFpCategory) {
+        e.preventDefault();
+        handleFalsePositive();
+        return;
+      }
+
       // Spacebar = approve (reserved, never a category shortcut)
       if (key === ' ') {
         e.preventDefault();
@@ -606,6 +704,8 @@ export default function QCAnnotationReview({
     annotation.categoryId,
     handleApprove,
     handleRelabel,
+    handleFalsePositive,
+    existingFpCategory,
     prev,
   ]);
 
@@ -737,7 +837,7 @@ export default function QCAnnotationReview({
               <ChevronRight size={18} />
             </Button>
 
-            <Card className='d-flex flex-column h-100 overflow-hidden' style={{ width: '220px' }}>
+            <Card className='d-flex flex-column h-100 overflow-hidden' style={{ width: '280px' }}>
               <Card.Header>
                 <Card.Title className='d-flex flex-row align-items-center gap-2 mb-2'>
                   <span>Legend</span>
@@ -747,7 +847,7 @@ export default function QCAnnotationReview({
                 </span>
               </Card.Header>
               <Card.Body className='d-flex flex-column gap-2 overflow-auto'>
-                {categories
+                {legendCategories
                   .slice()
                   .sort((a, b) => a.name.localeCompare(b.name))
                   .map((cat) => (
@@ -762,7 +862,7 @@ export default function QCAnnotationReview({
                           handleRelabel(cat.id);
                         }
                       }}
-          
+
                     >
                       <div>{cat.name}</div>
                       {cat.shortcutKey && <div>({cat.shortcutKey.toUpperCase()})</div>}
@@ -799,9 +899,15 @@ export default function QCAnnotationReview({
             variant='success'
             style={{ width: 160 }}
             onClick={handleApprove}
-
           >
             Approve (Space)
+          </Button>
+          <Button
+            variant='warning'
+            style={{ width: 200 }}
+            onClick={handleFalsePositive}
+          >
+            {fpLabel}
           </Button>
         </div>
         <div className='d-flex align-items-center gap-2'>

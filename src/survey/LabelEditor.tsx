@@ -167,6 +167,12 @@ export default function LabelEditor({
                   );
                   return;
                 }
+                if (newShortcutKey === '+') {
+                  alert(
+                    '"+" is reserved for False Positive and cannot be used as a label shortcut.'
+                  );
+                  return;
+                }
                 if (
                   labels.some(
                     (l) => l.id !== label.id && l.shortcutKey === newShortcutKey
