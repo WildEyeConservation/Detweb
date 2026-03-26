@@ -210,8 +210,10 @@ export const handler: Handler = async (event, context) => {
           console.error(`Failed to fetch project name for ${queue.projectId}:`, err);
         }
 
-        // Delete the S3 manifest if it exists
-        if (queue.locationManifestS3Key) {
+        // Delete the S3 manifest if it exists (skip for homography queues —
+        // reconcileHomographies reads the manifest for targeted dedup, then deletes it)
+        const isHomographyQueue = queue.tag === 'homography';
+        if (queue.locationManifestS3Key && !isHomographyQueue) {
           try {
             const bucketName = env.OUTPUTS_BUCKET_NAME;
             if (bucketName) {
@@ -277,10 +279,9 @@ export const handler: Handler = async (event, context) => {
 
         // Trigger post-completion Lambdas based on queue type
         const isFnQueue = queue.name === 'False Negatives';
-        const isHomographyQueue = queue.tag === 'homography';
 
         if (isHomographyQueue && queue.annotationSetId) {
-          // Trigger homography reconciliation
+          // Trigger homography reconciliation — pass manifest key for targeted dedup
           try {
             const functionName = (env as any).RECONCILE_HOMOGRAPHIES_FUNCTION_NAME;
             if (functionName) {
@@ -297,12 +298,17 @@ export const handler: Handler = async (event, context) => {
                   FunctionName: functionName,
                   InvocationType: 'Event',
                   Payload: new TextEncoder().encode(
-                    JSON.stringify({ annotationSetId: queue.annotationSetId, queueId: queue.id })
+                    JSON.stringify({
+                      annotationSetId: queue.annotationSetId,
+                      queueId: queue.id,
+                      manifestS3Key: queue.locationManifestS3Key ?? null,
+                    })
                   ),
                 })
               );
               console.log('Triggered homography reconciliation', {
                 annotationSetId: queue.annotationSetId,
+                manifestS3Key: queue.locationManifestS3Key,
               });
             }
           } catch (err) {

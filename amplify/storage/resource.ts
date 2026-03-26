@@ -13,6 +13,7 @@ import { findAndRequeueMissingLocations } from "../functions/findAndRequeueMissi
 import { reconcileFalseNegatives } from "../functions/reconcileFalseNegatives/resource"
 import { launchQCReview } from "../functions/launchQCReview/resource"
 import { launchHomography } from "../functions/launchHomography/resource"
+import { reconcileHomographies } from "../functions/reconcileHomographies/resource"
 
 export const outputBucket = defineStorage({
   name: "outputs",
@@ -59,6 +60,7 @@ export const outputBucket = defineStorage({
       allow.resource(monitorTilingTasks).to(['write']),
       allow.resource(findAndRequeueMissingLocations).to(['read']),
       allow.resource(cleanupJobs).to(['delete']),
+      allow.resource(reconcileHomographies).to(['read', 'delete']),
       allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ],
     // QC review manifests for tracking sampled annotations
