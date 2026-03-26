@@ -427,9 +427,8 @@ export default function HomographyLaunch({
                   className='text-warning d-block mt-1'
                   style={{ fontSize: '12px' }}
                 >
-                  Note: After homographies are created, all annotations in this set
-                  will have their primary/secondary status recalculated including
-                  labels not selected here.
+                  Note: After homographies are created, all labels affected by the
+                  new homographies will be updated, not just the ones in this filter.
                 </span>
               )}
             </Form.Group>

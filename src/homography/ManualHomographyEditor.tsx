@@ -259,9 +259,11 @@ export function ManualHomographyEditor({
                   key={`pair-${i}`}
                   style={{
                     background: '#5B6977',
-                    border: isOutlier
-                      ? '1px solid rgba(255, 193, 7, 0.5)'
-                      : '1px solid rgba(255,255,255,0.05)',
+                    // TODO: requires testing – outlier highlighting
+                    // border: isOutlier
+                    //   ? '1px solid rgba(255, 193, 7, 0.5)'
+                    //   : '1px solid rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.05)',
                     borderLeft: `4px solid ${color}`,
                     borderRadius: '6px',
                     padding: '10px'
@@ -276,6 +278,7 @@ export function ManualHomographyEditor({
                       >
                         Pair {i + 1}
                       </Badge>
+                      {/* TODO: requires testing – per-point reprojection error display
                       {error !== null && (
                         <OverlayTrigger
                           placement='top'
@@ -299,6 +302,7 @@ export function ManualHomographyEditor({
                           </span>
                         </OverlayTrigger>
                       )}
+                      */}
                     </div>
                     {p1 && p2 && (
                       <Button
@@ -376,6 +380,7 @@ export function ManualHomographyEditor({
       </Card.Body>
       <Card.Footer>
         <div className='d-flex flex-column gap-3'>
+          {/* TODO: requires testing – Total RMS display
           {reprojErrors && reprojErrors.length > 0 && (
             <div className='text-center small mb-1' style={{ opacity: 0.8 }}>
               Total RMS:{' '}
@@ -401,6 +406,7 @@ export function ManualHomographyEditor({
               </span>
             </div>
           )}
+          */}
           {isSaved && (
             <Badge bg='success' className='align-self-center'>
               Saved

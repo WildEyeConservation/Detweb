@@ -3,7 +3,11 @@ import { GlobalContext } from '../Context';
 import { HomographyWorkbench } from './HomographyWorkbench';
 import type { Matrix } from 'mathjs';
 import { inv } from 'mathjs';
-import type { Point } from './ManualHomographyEditor';
+import {
+  type Point,
+  MIN_HOMOGRAPHY_POINTS,
+  solveHomography,
+} from './ManualHomographyEditor';
 
 export type HomographyImageMeta = {
   id: string;
@@ -155,6 +159,26 @@ export function HomographyWorkbenchWorker({
     }
   }, [client, pair, queueId, onComplete, onSavePoints]);
 
+  const handleSaveAndExit = useCallback(async () => {
+    if (!onExit) return;
+    const { p1, p2 } = currentPointsRef.current;
+    if (
+      p1.length >= MIN_HOMOGRAPHY_POINTS &&
+      p2.length >= MIN_HOMOGRAPHY_POINTS
+    ) {
+      const shouldSave = window.confirm(
+        'You have enough points to save a homography. Save before exiting?'
+      );
+      if (shouldSave) {
+        const H = solveHomography(p1, p2);
+        if (H) {
+          await handleSave(H);
+        }
+      }
+    }
+    onExit();
+  }, [onExit, handleSave]);
+
   const handleBack = useCallback(() => {
     onSavePoints(pair.pairKey, currentPointsRef.current);
     onBack?.();
@@ -203,7 +227,7 @@ export function HomographyWorkbenchWorker({
         onExit ? (
           <button
             className='btn btn-sm btn-outline-success'
-            onClick={onExit}
+            onClick={handleSaveAndExit}
             disabled={isSaving || isSkipping}
           >
             Save &amp; Exit
