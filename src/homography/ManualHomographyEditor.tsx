@@ -259,111 +259,96 @@ export function ManualHomographyEditor({
                   key={`pair-${i}`}
                   style={{
                     background: '#5B6977',
-                    // TODO: requires testing – outlier highlighting
-                    // border: isOutlier
-                    //   ? '1px solid rgba(255, 193, 7, 0.5)'
-                    //   : '1px solid rgba(255,255,255,0.05)',
                     border: '1px solid rgba(255,255,255,0.05)',
-                    borderLeft: `4px solid ${color}`,
                     borderRadius: '6px',
-                    padding: '10px'
+                    overflow: 'hidden',
+                    display: 'flex',
                   }}
                 >
-                  <div className='d-flex align-items-center justify-content-between mb-2'>
-                    <div className='d-flex align-items-center gap-2'>
-                      <Badge
-                        pill
-                        bg=''
-                        style={{ backgroundColor: color, fontSize: '0.7rem' }}
-                      >
-                        Pair {i + 1}
-                      </Badge>
-                      {/* TODO: requires testing – per-point reprojection error display
-                      {error !== null && (
-                        <OverlayTrigger
-                          placement='top'
-                          overlay={
-                            <Tooltip id={`error-tooltip-${i}`}>
-                              Symmetric reprojection error: {error.toFixed(1)}px
-                              {isOutlier ? ' — likely misplaced' : ''}
-                            </Tooltip>
-                          }
-                        >
-                          <span
-                            className='d-flex align-items-center gap-1'
-                            style={{
-                              fontSize: '0.7rem',
-                              color: isOutlier ? '#ffc107' : error < 3 ? '#3cb44b' : '#adb5bd',
-                              cursor: 'help',
-                            }}
-                          >
-                            {isOutlier && <AlertTriangle size={12} />}
-                            {error.toFixed(1)}px
-                          </span>
-                        </OverlayTrigger>
-                      )}
-                      */}
-                    </div>
-                    {p1 && p2 && (
-                      <Button
-                        size='sm'
-                        variant='link'
-                        className='p-0 text-danger opacity-75 hover-opacity-100'
-                        onClick={() => handleRemovePair(i)}
-                      >
-                        <X size={16} />
-                      </Button>
-                    )}
+                  {/* Colored number strip */}
+                  <div
+                    style={{
+                      background: color,
+                      width: '24px',
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      color: '#fff',
+                    }}
+                  >
+                    {i + 1}
                   </div>
-
-                  <div className='d-flex gap-2'>
+                  <div className='d-flex align-items-center gap-2 flex-grow-1' style={{ padding: '8px' }}>
                     {/* Image 1 Point */}
                     <div className='flex-grow-1 p-2' style={{ background: '#4E5D6C', borderRadius: '4px' }}>
-                      <div className='d-flex align-items-center gap-1 mb-1 opacity-75 small'>
-                        <ImageIcon size={12} /> <span>1</span>
-                      </div>
                       {p1 ? (
-                        <div className='d-flex align-items-center justify-content-between'>
-                          <span className='small mono'>
-                            {Math.round(p1.x)}, {Math.round(p1.y)}
-                          </span>
-                          <Button
-                            size='sm'
-                            variant='link'
-                            className='p-0 text-muted'
-                            onClick={() => handleRemovePoint1(i)}
-                          >
-                            <Trash2 size={12} />
-                          </Button>
-                        </div>
+                        <OverlayTrigger
+                          placement='top'
+                          overlay={<Tooltip id={`p1-tooltip-${i}`}>{Math.round(p1.x)}, {Math.round(p1.y)}</Tooltip>}
+                        >
+                          <div className='d-flex align-items-center justify-content-between' style={{ cursor: 'default' }}>
+                            <span className='d-flex align-items-center gap-1 opacity-75 small'>
+                              <ImageIcon size={12} /> <span>1</span>
+                            </span>
+                            <Button
+                              size='sm'
+                              variant='link'
+                              className='p-0 text-muted'
+                              onClick={() => handleRemovePoint1(i)}
+                            >
+                              <Trash2 size={12} />
+                            </Button>
+                          </div>
+                        </OverlayTrigger>
                       ) : (
-                        <span className='text-muted small fst-italic'>Pending...</span>
+                        <span className='d-flex align-items-center gap-1 opacity-50 small fst-italic'>
+                          <ImageIcon size={12} /> <span>1</span>
+                        </span>
                       )}
                     </div>
 
                     {/* Image 2 Point */}
                     <div className='flex-grow-1 p-2' style={{ background: '#4E5D6C', borderRadius: '4px' }}>
-                      <div className='d-flex align-items-center gap-1 mb-1 opacity-75 small'>
-                        <ImageIcon size={12} /> <span>2</span>
-                      </div>
                       {p2 ? (
-                        <div className='d-flex align-items-center justify-content-between'>
-                          <span className='small mono'>
-                            {Math.round(p2.x)}, {Math.round(p2.y)}
-                          </span>
-                          <Button
-                            size='sm'
-                            variant='link'
-                            className='p-0 text-muted'
-                            onClick={() => handleRemovePoint2(i)}
-                          >
-                            <Trash2 size={12} />
-                          </Button>
-                        </div>
+                        <OverlayTrigger
+                          placement='top'
+                          overlay={<Tooltip id={`p2-tooltip-${i}`}>{Math.round(p2.x)}, {Math.round(p2.y)}</Tooltip>}
+                        >
+                          <div className='d-flex align-items-center justify-content-between' style={{ cursor: 'default' }}>
+                            <span className='d-flex align-items-center gap-1 opacity-75 small'>
+                              <ImageIcon size={12} /> <span>2</span>
+                            </span>
+                            <Button
+                              size='sm'
+                              variant='link'
+                              className='p-0 text-muted'
+                              onClick={() => handleRemovePoint2(i)}
+                            >
+                              <Trash2 size={12} />
+                            </Button>
+                          </div>
+                        </OverlayTrigger>
                       ) : (
-                        <span className='text-muted small fst-italic'>Pending...</span>
+                        <span className='d-flex align-items-center gap-1 opacity-50 small fst-italic'>
+                          <ImageIcon size={12} /> <span>2</span>
+                        </span>
                       )}
                     </div>
+
+                    {/* Pair removal */}
+                    {p1 && p2 && (
+                      <Button
+                        size='sm'
+                        variant='link'
+                        className='p-0 text-danger opacity-75'
+                        onClick={() => handleRemovePair(i)}
+                      >
+                        <X size={16} />
+                      </Button>
+                    )}
                   </div>
                 </div>
               );

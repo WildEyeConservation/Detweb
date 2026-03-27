@@ -372,14 +372,7 @@ export function MapLibrePairViewer({
 
   const buildMenuItems = useCallback(
     (image: ImageType, idx: number): MapLibreMenuItem[] => {
-      const imageName = (image as any).originalPath ?? image.id;
       return [
-        {
-          label: 'Copy image name',
-          onClick: () => {
-            navigator.clipboard.writeText(imageName);
-          },
-        },
         {
           label: 'Copy link to this image',
           onClick: () => {
