@@ -160,7 +160,7 @@ export default function Jobs() {
               'organization.name',
               'annotationSets.id',
               'annotationSets.register',
-                            'createdAt',
+              'createdAt',
               'queues.*',
             ],
           }
@@ -384,7 +384,7 @@ export default function Jobs() {
                         marginBottom: '0px',
                       }}
                     >
-                      Type: {queue.tag === 'qc-review' ? 'QC Review' : queue.tag === 'homography' ? 'Homography' : queue.name}
+                      Type: {queue.tag === 'qc-review' ? 'Review' : queue.tag === 'homography' ? 'Homography' : queue.name}
                     </p>
                   </div>
                   {myOrganizationHook.data?.find(
