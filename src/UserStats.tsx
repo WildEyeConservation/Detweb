@@ -516,7 +516,10 @@ export default function UserStats() {
               }))}
               onChange={(e) => {
                 setProject(e);
-                setSelectedSets([]);
+                const sets = projects
+                  .find((p) => p.id === e?.value)
+                  ?.annotationSets?.map((s) => ({ label: s.name, value: s.id })) || [];
+                setSelectedSets(sets);
               }}
               styles={{
                 valueContainer: (base) => ({
