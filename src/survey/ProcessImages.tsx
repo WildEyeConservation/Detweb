@@ -17,7 +17,6 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
     }[]
   >([]);
   const [imagesLoaded, setImagesLoaded] = useState<number | null>(null);
-  const [locationsLoaded, setLocationsLoaded] = useState<number | null>(null);
   const [scanned, setScanned] = useState(false);
   const [disabled, setDisabled] = useState(false);
   const isActiveRef = useRef(true);
@@ -62,8 +61,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
   const scanImages = useCallback(async () => {
     if (!model) return;
     setLoading(true);
-    // Paginated fetch with cancellation
-    let allImages: { id: string; originalPath: string }[] = [];
+    let unprocessed: { id: string; originalPath: string }[] = [];
     let nextToken: string | null | undefined = undefined;
     let imgCount = 0;
     do {
@@ -73,63 +71,23 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
       }
       const res = await client.models.Image.imagesByProjectId(
         { projectId },
-        { selectionSet: ['id', 'originalPath'], nextToken, limit: 1000 }
+        { selectionSet: ['id', 'originalPath', 'processedBy.source'], nextToken, limit: 1000 }
       );
-      const page =
-        (res.data ?? []).flatMap((img) =>
-          img?.id && img?.originalPath
-            ? [{ id: img.id, originalPath: img.originalPath }]
-            : []
-        );
-      allImages = allImages.concat(page);
+      const page = (res.data ?? []).flatMap((img) =>
+        img?.id && img?.originalPath && !img.processedBy?.some((p: { source: string }) => p.source === model.value)
+          ? [{ id: img.id, originalPath: img.originalPath }]
+          : []
+      );
+      unprocessed = unprocessed.concat(page);
       nextToken = res.nextToken as string | null | undefined;
-      imgCount += page.length;
+      imgCount += (res.data ?? []).length;
       setImagesLoaded(imgCount);
-    } while (nextToken);
-
-    let allLocations: { id: string; imageId: string; source: string }[] = [];
-    nextToken = undefined;
-    let locCount = 0;
-    do {
-      if (!isActiveRef.current) {
-        setLoading(false);
-        return;
-      }
-      const res = await client.models.Location.locationsByProjectIdAndSource(
-        {
-          projectId,
-          source: { beginsWith: model.value },
-        },
-        {
-          selectionSet: ['id', 'imageId', 'source'],
-          nextToken,
-          limit: 1000,
-        }
-      );
-      const page =
-        (res.data ?? []).flatMap((loc) =>
-          loc?.id && loc?.imageId && loc?.source
-            ? [{ id: loc.id, imageId: loc.imageId, source: loc.source }]
-            : []
-        );
-      allLocations = allLocations.concat(page);
-      nextToken = res.nextToken as string | null | undefined;
-      locCount += page.length;
-      setLocationsLoaded(locCount);
     } while (nextToken);
 
     if (!isActiveRef.current) {
       setLoading(false);
       return;
     }
-    const unprocessed = allImages
-      .filter(
-        (img) =>
-          !allLocations.some(
-            (loc) => loc.imageId === img.id && loc.source.includes(model.value)
-          )
-      )
-      .map((img) => ({ id: img.id, originalPath: img.originalPath }));
     setUnprocessedImages(unprocessed);
     setLoading(false);
     setScanned(true);
@@ -140,7 +98,6 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
     setScanned(false);
     setUnprocessedImages([]);
     setImagesLoaded(null);
-    setLocationsLoaded(null);
   }, [model]);
 
   const processImages = async () => {
@@ -295,12 +252,6 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
               <Spinner animation='border' role='status' />
               <p className='mb-0'>Determining images to process...</p>
               <p className='mb-1'>Found {imagesLoaded ?? 0} images</p>
-              {locationsLoaded !== null && (
-                <>
-                  <p className='mb-0'>Searching for detections on images...</p>
-                  <p className='mb-0'>Found {locationsLoaded} detections</p>
-                </>
-              )}
             </div>
           ) : scanned ? (
             unprocessedImages.length > 0 ? (
