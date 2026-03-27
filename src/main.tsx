@@ -19,6 +19,8 @@ import ProjectView from './ProjectView';
 import Jobs from './user/Jobs.tsx';
 import Surveys from './survey/Surveys.tsx';
 import Permissions from './Permissions.tsx';
+import Collections from './collection/Collections.tsx';
+import CollectionView from './collection/CollectionView.tsx';
 import Testing from './Testing/Testing';
 import { Registration } from './Registration';
 import HomographyTask from './homography/HomographyTask';
@@ -151,6 +153,14 @@ const router = createBrowserRouter([
       {
         path: 'permissions',
         element: <Permissions />,
+      },
+      {
+        path: 'collections',
+        element: <Collections />,
+      },
+      {
+        path: 'collections/:collectionId',
+        element: <CollectionView />,
       },
       {
         path: 'annotation-statistics',

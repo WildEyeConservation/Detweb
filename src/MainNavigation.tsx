@@ -213,6 +213,14 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                   </Nav.Link>
                   <Nav.Link
                     as={NavLink}
+                    eventKey={`collections`}
+                    to={`collections`}
+                    className='px-2'
+                  >
+                    Collections
+                  </Nav.Link>
+                  <Nav.Link
+                    as={NavLink}
                     eventKey={`testing`}
                     to={`testing`}
                     className='px-2'

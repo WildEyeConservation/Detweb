@@ -79,6 +79,7 @@ const schema = a
         cameraOverlaps: a.hasMany('CameraOverlap', 'projectId'),
         shapefileExclusions: a.hasMany('ShapefileExclusions', 'projectId'),
         adminActionLogs: a.hasMany('AdminActionLog', 'projectId'),
+        collectionMemberships: a.hasMany('CollectionProject', 'projectId'),
         // Global tiled location set ID for the project (no belongsTo to avoid bidirectional requirement)
         tiledLocationSetId: a.id(),
         group: a.string(),
@@ -889,6 +890,32 @@ const schema = a
     //     level: a.float(),
     //   })
 
+    Collection: a
+      .model({
+        organizationId: a.id().required(),
+        organization: a.belongsTo('Organization', 'organizationId'),
+        name: a.string().required(),
+        description: a.string(),
+        projects: a.hasMany('CollectionProject', 'collectionId'),
+        group: a.string(),
+      })
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
+      .secondaryIndexes((index) => [
+        index('organizationId').queryField('collectionsByOrganizationId'),
+      ]),
+    CollectionProject: a
+      .model({
+        collectionId: a.id().required(),
+        collection: a.belongsTo('Collection', 'collectionId'),
+        projectId: a.id().required(),
+        project: a.belongsTo('Project', 'projectId'),
+        group: a.string(),
+      })
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
+      .secondaryIndexes((index) => [
+        index('collectionId').queryField('collectionProjectsByCollectionId'),
+        index('projectId').queryField('collectionProjectsByProjectId'),
+      ]),
     Organization: a
       .model({
         name: a.string().required(),
@@ -897,6 +924,7 @@ const schema = a
         projects: a.hasMany('Project', 'organizationId'),
         invites: a.hasMany('OrganizationInvite', 'organizationId'),
         testPresets: a.hasMany('TestPreset', 'organizationId'),
+        collections: a.hasMany('Collection', 'organizationId'),
         group: a.string(),
       })
       .authorization((allow) => [allow.group("sysadmin"), allow.groupDefinedIn("group").to(['read'])]),
