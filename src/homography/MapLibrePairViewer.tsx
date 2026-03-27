@@ -403,7 +403,10 @@ export function MapLibrePairViewer({
   );
 
   return (
-    <div className='w-100 h-100 d-flex flex-row gap-3' style={{ position: 'relative' }}>
+    <div className='w-100 h-100 d-flex flex-row gap-3' style={{
+      position: 'relative',
+      flexDirection: (images[0].timestamp ?? 0) > (images[1].timestamp ?? 0) ? 'row-reverse' : undefined,
+    }}>
       {images.map((image, i) => (
         <div
           className='w-50'

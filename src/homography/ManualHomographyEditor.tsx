@@ -285,56 +285,42 @@ export function ManualHomographyEditor({
                     {/* Image 1 Point */}
                     <div className='flex-grow-1 p-2' style={{ background: '#4E5D6C', borderRadius: '4px' }}>
                       {p1 ? (
-                        <OverlayTrigger
-                          placement='top'
-                          overlay={<Tooltip id={`p1-tooltip-${i}`}>{Math.round(p1.x)}, {Math.round(p1.y)}</Tooltip>}
-                        >
-                          <div className='d-flex align-items-center justify-content-between' style={{ cursor: 'default' }}>
-                            <span className='d-flex align-items-center gap-1 opacity-75 small'>
-                              <ImageIcon size={12} /> <span>1</span>
-                            </span>
-                            <Button
-                              size='sm'
-                              variant='link'
-                              className='p-0 text-muted'
-                              onClick={() => handleRemovePoint1(i)}
-                            >
-                              <Trash2 size={12} />
-                            </Button>
-                          </div>
-                        </OverlayTrigger>
+                        <div className='d-flex align-items-center justify-content-between'>
+                          <span className='small mono'>
+                            {Math.round(p1.x)}, {Math.round(p1.y)}
+                          </span>
+                          <Button
+                            size='sm'
+                            variant='link'
+                            className='p-0 text-muted'
+                            onClick={() => handleRemovePoint1(i)}
+                          >
+                            <Trash2 size={12} />
+                          </Button>
+                        </div>
                       ) : (
-                        <span className='d-flex align-items-center gap-1 opacity-50 small fst-italic'>
-                          <ImageIcon size={12} /> <span>1</span>
-                        </span>
+                        <span className='opacity-50 small fst-italic'>Pending...</span>
                       )}
                     </div>
 
                     {/* Image 2 Point */}
                     <div className='flex-grow-1 p-2' style={{ background: '#4E5D6C', borderRadius: '4px' }}>
                       {p2 ? (
-                        <OverlayTrigger
-                          placement='top'
-                          overlay={<Tooltip id={`p2-tooltip-${i}`}>{Math.round(p2.x)}, {Math.round(p2.y)}</Tooltip>}
-                        >
-                          <div className='d-flex align-items-center justify-content-between' style={{ cursor: 'default' }}>
-                            <span className='d-flex align-items-center gap-1 opacity-75 small'>
-                              <ImageIcon size={12} /> <span>2</span>
-                            </span>
-                            <Button
-                              size='sm'
-                              variant='link'
-                              className='p-0 text-muted'
-                              onClick={() => handleRemovePoint2(i)}
-                            >
-                              <Trash2 size={12} />
-                            </Button>
-                          </div>
-                        </OverlayTrigger>
+                        <div className='d-flex align-items-center justify-content-between'>
+                          <span className='small mono'>
+                            {Math.round(p2.x)}, {Math.round(p2.y)}
+                          </span>
+                          <Button
+                            size='sm'
+                            variant='link'
+                            className='p-0 text-muted'
+                            onClick={() => handleRemovePoint2(i)}
+                          >
+                            <Trash2 size={12} />
+                          </Button>
+                        </div>
                       ) : (
-                        <span className='d-flex align-items-center gap-1 opacity-50 small fst-italic'>
-                          <ImageIcon size={12} /> <span>2</span>
-                        </span>
+                        <span className='opacity-50 small fst-italic'>Pending...</span>
                       )}
                     </div>
 
