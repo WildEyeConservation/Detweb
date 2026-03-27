@@ -167,9 +167,9 @@ export default function LabelEditor({
                   );
                   return;
                 }
-                if (newShortcutKey === '+') {
+                if (newShortcutKey === 'equal' || newShortcutKey === 'shift+equal' || newShortcutKey === 'add') {
                   alert(
-                    '"+" is reserved for False Positive and cannot be used as a label shortcut.'
+                    '"+" and "=" are reserved for False Positive and cannot be used as a label shortcut.'
                   );
                   return;
                 }

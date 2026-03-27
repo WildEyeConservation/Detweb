@@ -29,6 +29,7 @@ export default function QCReviewTask() {
     undefined
   );
   const [projectId, setProjectId] = useState<string | undefined>(undefined);
+  const [group, setGroup] = useState<string | undefined>(undefined);
   const processedRef = useRef<Set<string>>(new Set());
 
   // Fetch queue URL and annotationSetId on mount.
@@ -38,6 +39,7 @@ export default function QCReviewTask() {
       if (data?.url) setQueueUrl(data.url as string);
       if (data?.annotationSetId) setAnnotationSetId(data.annotationSetId);
       if (data?.projectId) setProjectId(data.projectId);
+      if (data?.group) setGroup(data.group);
     });
   }, [queueId, client]);
 
@@ -184,6 +186,7 @@ export default function QCReviewTask() {
             setCategories={setCategories}
             projectId={projectId}
             annotationSetId={annotationSetId}
+            group={group}
             queueId={queueId}
             legendCollapsed={legendCollapsed}
             setLegendCollapsed={setLegendCollapsed}

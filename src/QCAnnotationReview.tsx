@@ -51,6 +51,7 @@ type QCReviewProps = {
   setCategories: React.Dispatch<React.SetStateAction<CategoryOption[]>>;
   projectId?: string;
   annotationSetId?: string;
+  group?: string;
   legendCollapsed: boolean;
   setLegendCollapsed: (collapsed: boolean) => void;
 };
@@ -66,6 +67,7 @@ export default function QCAnnotationReview({
   setCategories,
   projectId,
   annotationSetId,
+  group,
   legendCollapsed,
   setLegendCollapsed,
 }: QCReviewProps) {
@@ -125,7 +127,7 @@ export default function QCAnnotationReview({
     [categories]
   );
   const fpHotkey = existingFpCategory ? existingFpCategory.shortcutKey : '+';
-  const fpLabel = `False Positive (${fpHotkey ? fpHotkey.toUpperCase() : '+'})`;
+  const fpLabel = `False Positive (${fpHotkey ? fpHotkey.toUpperCase() : '+/='})`;
   const [creatingFp, setCreatingFp] = useState(false);
 
   // Filter false positive category from legend if it exists
@@ -596,7 +598,8 @@ export default function QCAnnotationReview({
           name: 'False Positive',
           shortcutKey: '+',
           color: '#888888',
-        } as any);
+          group,
+        });
         if (data) {
           fpCatId = data.id;
           setCategories((prev) => [
@@ -681,8 +684,8 @@ export default function QCAnnotationReview({
         return;
       }
 
-      // "+" = false positive (when no existing FP category with its own shortcut)
-      if (key === '+' && !existingFpCategory) {
+      // "=" and "+" always triggers false positive (never a valid category shortcut)
+      if (key === '=' || (key === '+' && !existingFpCategory)) {
         e.preventDefault();
         handleFalsePositive();
         return;
