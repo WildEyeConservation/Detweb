@@ -1,5 +1,5 @@
 import { Form, Alert, Button } from 'react-bootstrap';
-import { useState, useEffect, useContext, useCallback } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { Footer } from '../Modal';
 import { GlobalContext } from '../Context';
 import { Schema } from '../amplify/client-schema';

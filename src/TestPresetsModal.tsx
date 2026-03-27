@@ -64,8 +64,10 @@ export default function TestPresetsModal({
         group: organizationId,
       });
 
+      // @ts-ignore - TestPresetCategory not yet in schema
+      const testPresetCategoryModel = (client.models as any).TestPresetCategory;
       for (const category of selectedCategories) {
-        await client.models.TestPresetCategory.create({
+        await testPresetCategoryModel.create({
           testPresetId: newPreset!.id,
           categoryId: category.value,
           group: organizationId,
@@ -78,10 +80,13 @@ export default function TestPresetsModal({
         accuracy: annotationAccuracy,
       });
 
+      // @ts-ignore - TestPresetCategory not yet in schema
+      const testPresetCategoryModel = (client.models as any).TestPresetCategory;
+
       // delete categories that are not in selectedCategories
       for (const categoryId of ogDetails.current!.categories) {
         if (!selectedCategories.some((c) => c.value === categoryId)) {
-          await client.models.TestPresetCategory.delete({
+          await testPresetCategoryModel.delete({
             testPresetId: preset!.id,
             categoryId: categoryId,
           });
@@ -91,7 +96,7 @@ export default function TestPresetsModal({
       // add new categories that are not in ogDetails
       for (const category of selectedCategories) {
         if (!ogDetails.current!.categories.includes(category.value)) {
-          await client.models.TestPresetCategory.create({
+          await testPresetCategoryModel.create({
             testPresetId: preset!.id,
             categoryId: category.value,
             group: organizationId,
@@ -148,8 +153,10 @@ export default function TestPresetsModal({
       }));
 
       if (preset) {
+        // @ts-ignore - TestPresetCategory not yet in schema
+        const testPresetCategoryModel = (client.models as any).TestPresetCategory;
         const activeCategories = await fetchAllPaginatedResults(
-          client.models.TestPresetCategory.categoriesByTestPresetId,
+          testPresetCategoryModel.categoriesByTestPresetId,
           {
             testPresetId: preset!.id,
             selectionSet: ['categoryId'],
@@ -162,7 +169,7 @@ export default function TestPresetsModal({
 
         ogDetails.current = {
           accuracy: annoAccuracy,
-          categories: activeCategories.map((c) => c.categoryId),
+          categories: activeCategories.map((c: any) => c.categoryId),
         };
 
         setAnnotationAccuracy(annoAccuracy);
@@ -171,7 +178,7 @@ export default function TestPresetsModal({
           value: c.id,
         }));
         setSelectedCategories(
-          activeCategories.map((c) => ({
+          activeCategories.map((c: any) => ({
             label: allCategories.find((cat) => cat.value === c.categoryId)!
               .label,
             value: c.categoryId,
@@ -198,7 +205,7 @@ export default function TestPresetsModal({
           <Form.Control
             type='text'
             placeholder='Enter pool name'
-            value={presetName}
+            value={presetName ?? ''}
             onChange={(e) => setPresetName(e.target.value)}
           />
         </Form.Group>
@@ -209,7 +216,7 @@ export default function TestPresetsModal({
             value={selectedCategories}
             options={categories?.map((q) => ({ label: q.name, value: q.id }))}
             isMulti
-            onChange={setSelectedCategories}
+            onChange={(val) => setSelectedCategories(val as { label: string; value: string }[])}
             styles={{
               valueContainer: (base) => ({
                 ...base,
@@ -223,7 +230,7 @@ export default function TestPresetsModal({
           <Form.Control
             type='number'
             value={annotationAccuracy}
-            onChange={(e) => setAnnotationAccuracy(e.target.value)}
+            onChange={(e) => setAnnotationAccuracy(Number(e.target.value))}
             min={0}
             max={100}
           />

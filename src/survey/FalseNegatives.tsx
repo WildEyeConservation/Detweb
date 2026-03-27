@@ -76,6 +76,7 @@ export default function FalseNegatives({
   const [loadingTileCount, setLoadingTileCount] = useState<boolean>(true);
 
   // Sampling (first launch + additional sample modes)
+  const [batchSize, setBatchSize] = useState<number>(200);
   const [samplePercent, setSamplePercent] = useState<number>(5);
   const [showAdvancedOptions, setShowAdvancedOptions] =
     useState<boolean>(false);
@@ -212,7 +213,7 @@ export default function FalseNegatives({
         );
 
         // Collect all launched tiles across all launches
-        const allLaunchedTiles = fnHistory.launches.flatMap((l) => l.items);
+        const allLaunchedTiles = fnHistory!.launches.flatMap((l) => l.items);
 
         const remaining = allLaunchedTiles.filter((tile) => {
           // Check if this specific tile was observed (by location ID)
@@ -376,6 +377,7 @@ export default function FalseNegatives({
   const remainingTilesRef = useRef(remainingTiles);
   const queueTagRef = useRef(queueTag);
   const samplePercentRef = useRef(samplePercent);
+  const batchSizeRef = useRef(batchSize);
   const tiledLocationSetIdRef = useRef(tiledLocationSetId);
 
   useEffect(() => {
@@ -390,6 +392,9 @@ export default function FalseNegatives({
   useEffect(() => {
     samplePercentRef.current = samplePercent;
   }, [samplePercent]);
+  useEffect(() => {
+    batchSizeRef.current = batchSize;
+  }, [batchSize]);
   useEffect(() => {
     tiledLocationSetIdRef.current = tiledLocationSetId;
   }, [tiledLocationSetId]);
@@ -432,7 +437,7 @@ export default function FalseNegatives({
             samplePercent: 100,
             locationSetId: currentTiledLocationSetId,
             locationTiles: remaining,
-            batchSize: 200,
+            batchSize: batchSizeRef.current,
             isContinuation: true,
           };
 
@@ -464,7 +469,7 @@ export default function FalseNegatives({
             samplePercent: samplePercentRef.current,
             locationSetId: currentTiledLocationSetId,
             locationTiles: [], // Empty – Lambda loads from pool
-            batchSize: 200,
+            batchSize: batchSizeRef.current,
           };
 
           onProgress('Enqueuing jobs...');
@@ -504,7 +509,7 @@ export default function FalseNegatives({
             samplePercent: samplePercentRef.current,
             locationSetId: currentTiledLocationSetId,
             locationTiles,
-            batchSize: 200,
+            batchSize: batchSizeRef.current,
           };
 
           onProgress('Enqueuing jobs...');
@@ -862,6 +867,26 @@ export default function FalseNegatives({
                     style={{ backgroundColor: '#697582' }}
                   >
                     <Form.Group>
+                      <Form.Label className='mb-0'>Batch Size</Form.Label>
+                      <span
+                        className='text-muted d-block mb-1'
+                        style={{ fontSize: '12px' }}
+                      >
+                        The number of annotation jobs a user can pick up at a
+                        time.
+                      </span>
+                      <Form.Control
+                        type='number'
+                        value={batchSize}
+                        onChange={(e) =>
+                          setBatchSize(
+                            Number((e.target as HTMLInputElement).value)
+                          )
+                        }
+                        disabled={launching}
+                      />
+                    </Form.Group>
+                    <Form.Group>
                       <Form.Label className='mb-0'>Job Name</Form.Label>
                       <span
                         className='text-muted d-block mb-1'
@@ -971,6 +996,25 @@ export default function FalseNegatives({
                 className='d-flex flex-column gap-3 border border-dark shadow-sm p-2'
                 style={{ backgroundColor: '#697582' }}
               >
+                <Form.Group>
+                  <Form.Label className='mb-0'>Batch Size</Form.Label>
+                  <span
+                    className='text-muted d-block mb-1'
+                    style={{ fontSize: '12px' }}
+                  >
+                    The number of annotation jobs a user can pick up at a time.
+                  </span>
+                  <Form.Control
+                    type='number'
+                    value={batchSize}
+                    onChange={(e) =>
+                      setBatchSize(
+                        Number((e.target as HTMLInputElement).value)
+                      )
+                    }
+                    disabled={launching}
+                  />
+                </Form.Group>
                 <Form.Group>
                   <Form.Label className='mb-0'>Job Name</Form.Label>
                   <span

@@ -40,6 +40,9 @@ import { removeUserFromOrganization } from './functions/removeUserFromOrganizati
 import { updateOrganizationMemberAdmin } from './functions/updateOrganizationMemberAdmin/resource';
 import { deleteQueue } from './functions/deleteQueue/resource';
 import { updateActiveOrganizations } from './functions/updateActiveOrganizations/resource';
+import { launchQCReview } from './functions/launchQCReview/resource';
+import { launchHomography } from './functions/launchHomography/resource';
+import { reconcileHomographies } from './functions/reconcileHomographies/resource';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -77,6 +80,9 @@ const backend = defineBackend({
   updateOrganizationMemberAdmin,
   deleteQueue,
   updateActiveOrganizations,
+  launchQCReview,
+  launchHomography,
+  reconcileHomographies,
 });
 
 const observationTable = backend.data.resources.tables['Observation'];
@@ -218,6 +224,7 @@ const groupS3OutputsReadPolicy = new iam.PolicyStatement({
     'arn:aws:s3:::*/false-negative-manifests/*',
     'arn:aws:s3:::*/false-negative-pools/*',
     'arn:aws:s3:::*/false-negative-history/*',
+    'arn:aws:s3:::*/qc-review-manifests/*',
   ],
 });
 
@@ -588,10 +595,17 @@ backend.deleteQueue.addEnvironment(
   'RECONCILE_FALSE_NEGATIVES_FUNCTION_NAME',
   backend.reconcileFalseNegatives.resources.lambda.functionName
 );
+backend.deleteQueue.addEnvironment(
+  'RECONCILE_HOMOGRAPHIES_FUNCTION_NAME',
+  backend.reconcileHomographies.resources.lambda.functionName
+);
 backend.deleteQueue.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: ['lambda:InvokeFunction'],
-    resources: [backend.reconcileFalseNegatives.resources.lambda.functionArn],
+    resources: [
+      backend.reconcileFalseNegatives.resources.lambda.functionArn,
+      backend.reconcileHomographies.resources.lambda.functionArn,
+    ],
   })
 );
 // cleanupJobs needs S3 permissions to delete location manifests and FN manifests
@@ -601,6 +615,7 @@ backend.cleanupJobs.resources.lambda.addToRolePolicy(
     resources: [
       'arn:aws:s3:::*/queue-manifests/*',
       'arn:aws:s3:::*/false-negative-manifests/*',
+      'arn:aws:s3:::*/qc-review-manifests/*',
     ],
   })
 );
@@ -671,6 +686,60 @@ backend.launchFalseNegatives.resources.lambda.addToRolePolicy(
       'arn:aws:s3:::*/false-negative-history/*',
     ],
   })
+);
+// launchQCReview needs SQS permissions to create queues and send messages
+backend.launchQCReview.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'sqs:CreateQueue',
+      'sqs:SendMessage',
+      'sqs:GetQueueAttributes',
+      'sqs:GetQueueUrl',
+    ],
+    resources: ['*'],
+  })
+);
+// launchQCReview needs S3 permissions to write queue manifests and QC review manifests
+backend.launchQCReview.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['s3:PutObject'],
+    resources: [
+      'arn:aws:s3:::*/queue-manifests/*',
+      'arn:aws:s3:::*/qc-review-manifests/*',
+    ],
+  })
+);
+// launchHomography needs SQS permissions to create queues and send messages
+backend.launchHomography.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'sqs:CreateQueue',
+      'sqs:SendMessage',
+      'sqs:GetQueueAttributes',
+      'sqs:GetQueueUrl',
+    ],
+    resources: ['*'],
+  })
+);
+// launchHomography needs S3 permissions to read the pre-computed manifest
+backend.launchHomography.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['s3:GetObject'],
+    resources: [
+      'arn:aws:s3:::*/queue-manifests/*',
+    ],
+  })
+);
+// cleanupJobs triggers reconcileHomographies when homography jobs complete
+backend.cleanupJobs.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['lambda:InvokeFunction'],
+    resources: [backend.reconcileHomographies.resources.lambda.functionArn],
+  })
+);
+backend.cleanupJobs.addEnvironment(
+  'RECONCILE_HOMOGRAPHIES_FUNCTION_NAME',
+  backend.reconcileHomographies.resources.lambda.functionName
 );
 // launchAnnotationSet needs S3 permissions to delete FN manifests when hasFN=true
 backend.launchAnnotationSet.resources.lambda.addToRolePolicy(

@@ -1,7 +1,7 @@
 import { useContext, useState, useEffect, useRef } from 'react';
 import AnnotationImage from './AnnotationImage';
 import { RegisterPair } from './RegisterPair';
-import { GlobalContext, UserContext } from './Context';
+import { GlobalContext } from './Context';
 import { array2Matrix, makeTransform } from './utils';
 import { inv } from 'mathjs';
 
@@ -77,14 +77,17 @@ export function TaskSelector(props: TaskSelectorProps) {
       client.models.ImageNeighbour.get(
         { image1Id: props.images[0], image2Id: props.images[1] },
         { selectionSet: ['homography', 'image1.*', 'image2.*'] }
-      ).then(({ data: { homography, image1, image2 } }) => {
-        const H = array2Matrix(homography);
+      ).then(({ data }) => {
+        const homography = data?.homography;
+        const image1 = data?.image1;
+        const image2 = data?.image2;
+        const H = array2Matrix(homography as any);
         const transforms = H
-          ? [makeTransform(H), makeTransform(inv(H))]
+          ? [makeTransform(H as any), makeTransform(inv(H as any))]
           : undefined;
         setElement(
           <RegisterPair
-            {...props}
+            {...(props as any)}
             transforms={transforms}
             images={[image1, image2]}
           />

@@ -2,7 +2,7 @@ import MyTable from './Table';
 import { useContext, useState } from 'react';
 import { GlobalContext } from './Context';
 import { useOptimisticUpdates } from './useOptimisticUpdates';
-import { Schema } from '../amplify/data/resource';
+import type { Schema } from './amplify/client-schema';
 import { useUsers } from './apiInterface';
 import { Button } from 'react-bootstrap';
 import CreateOrganization from './organization/CreateOrganization';
@@ -12,7 +12,7 @@ export default function PendingOrganizations() {
   const { users } = useUsers();
 
   const [selectedRequest, setSelectedRequest] = useState<
-    Schema['OrganizationRegistration']['type'] | null
+    (Schema['OrganizationRegistration']['type'] & { requestedByEmail: string }) | null
   >(null);
 
   const { data: requests } = useOptimisticUpdates<
@@ -37,7 +37,7 @@ export default function PendingOrganizations() {
           <div>
             {requestedBy?.name} ({requestedBy?.email})
           </div>,
-          <div>{new Date(request.createdAt).toLocaleDateString()}</div>,
+          <div>{new Date(request.createdAt ?? '').toLocaleDateString()}</div>,
           <Button
             variant='primary'
             onClick={() => {
@@ -86,7 +86,7 @@ export default function PendingOrganizations() {
           showModal(null);
           setSelectedRequest(null);
         }}
-        request={selectedRequest}
+        request={selectedRequest ?? undefined}
       />
     </div>
   );

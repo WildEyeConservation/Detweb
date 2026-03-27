@@ -121,6 +121,20 @@ type Annotation = {
   y: number;
 };
 
+type QCManifestItem = {
+  annotationId: string;
+  imageId: string;
+};
+
+type QCAnnotationForRequeue = {
+  id: string;
+  imageId: string;
+  categoryId: string;
+  setId: string;
+  x: number;
+  y: number;
+};
+
 // Entry point invoked by EventBridge schedule.
 export const handler: Handler = async () => {
   console.log('findAndRequeueMissingLocations invoked');
@@ -264,6 +278,16 @@ async function processQueue(queue: QueueRecord): Promise<number> {
       },
     });
     return 0;
+  }
+
+  // Branch for QC review queues — manifest format and completion check differ.
+  if (queue.tag === 'qc-review') {
+    return processQCRequeue(queue);
+  }
+
+  // Branch for homography queues — completion = real homography or skipped.
+  if (queue.tag === 'homography') {
+    return processHomographyRequeue(queue);
   }
 
   // Step 4: Download S3 manifest
@@ -636,7 +660,8 @@ async function logRequeueAction(queue: QueueRecord, count: number): Promise<void
 
   const queueName = queue.tag || queue.name || 'Unknown';
   const attemptNumber = (queue.requeuesCompleted ?? 0) + 1;
-  const message = `Requeued ${count} missing locations for queue "${queueName}" (attempt ${attemptNumber}/${MAX_REQUEUES}) in project "${projectName}"`;
+  const itemType = queue.tag === 'qc-review' ? 'unreviewed annotations' : 'missing locations';
+  const message = `Requeued ${count} ${itemType} for queue "${queueName}" (attempt ${attemptNumber}/${MAX_REQUEUES}) in project "${projectName}"`;
 
   try {
     await executeGraphql(createAdminActionLog, {
@@ -650,6 +675,389 @@ async function logRequeueAction(queue: QueueRecord, count: number): Promise<void
   } catch (logError) {
     console.warn('Failed to create admin action log', logError);
   }
+}
+
+// ── QC Review requeue logic ──
+
+async function processQCRequeue(queue: QueueRecord): Promise<number> {
+  console.log('Processing QC review queue', { queueId: queue.id });
+
+  // Download QC manifest (items are { annotationId, imageId }).
+  const manifest = await downloadQCManifest(queue.locationManifestS3Key!);
+  console.log('Downloaded QC manifest', { itemCount: manifest.length });
+
+  // Group manifest items by imageId for efficient batch fetching.
+  const manifestByImage = new Map<string, string[]>();
+  for (const item of manifest) {
+    const arr = manifestByImage.get(item.imageId);
+    if (arr) arr.push(item.annotationId);
+    else manifestByImage.set(item.imageId, [item.annotationId]);
+  }
+
+  // Fetch annotations by image, check which are still unreviewed.
+  const unreviewedAnnotations = await fetchUnreviewedQCAnnotations(
+    manifestByImage,
+    queue.annotationSetId!
+  );
+
+  console.log('QC requeue check', {
+    queueId: queue.id,
+    launched: manifest.length,
+    unreviewed: unreviewedAnnotations.length,
+  });
+
+  if (unreviewedAnnotations.length === 0) {
+    console.log('No unreviewed QC annotations, updating requeuesCompleted', { queueId: queue.id });
+    await executeGraphql(updateQueue, {
+      input: {
+        id: queue.id,
+        emptyQueueTimestamp: null,
+        requeuesCompleted: (queue.requeuesCompleted ?? 0) + 1,
+      },
+    });
+    return 0;
+  }
+
+  // Requeue unreviewed annotations.
+  console.log('Requeuing unreviewed QC annotations', {
+    queueId: queue.id,
+    count: unreviewedAnnotations.length,
+  });
+
+  await requeueQCAnnotations(queue, unreviewedAnnotations);
+
+  // Update queue record.
+  await executeGraphql(updateQueue, {
+    input: {
+      id: queue.id,
+      emptyQueueTimestamp: null,
+      requeuesCompleted: (queue.requeuesCompleted ?? 0) + 1,
+      approximateSize: unreviewedAnnotations.length,
+    },
+  });
+
+  // Log to AdminActionLog.
+  await logRequeueAction(queue, unreviewedAnnotations.length);
+
+  console.log('QC requeue complete', {
+    queueId: queue.id,
+    requeuedCount: unreviewedAnnotations.length,
+    attemptNumber: (queue.requeuesCompleted ?? 0) + 1,
+  });
+
+  return unreviewedAnnotations.length;
+}
+
+async function downloadQCManifest(key: string): Promise<QCManifestItem[]> {
+  const bucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!bucketName) {
+    throw new Error('OUTPUTS_BUCKET_NAME environment variable not set');
+  }
+
+  const response = await s3Client.send(
+    new GetObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    })
+  );
+
+  const bodyStr = await response.Body?.transformToString();
+  if (!bodyStr) {
+    throw new Error('Empty QC manifest file');
+  }
+
+  const manifest = JSON.parse(bodyStr);
+  return manifest.items as QCManifestItem[];
+}
+
+async function fetchUnreviewedQCAnnotations(
+  manifestByImage: Map<string, string[]>,
+  annotationSetId: string
+): Promise<QCAnnotationForRequeue[]> {
+  const limit = pLimit(50);
+  const unreviewed: QCAnnotationForRequeue[] = [];
+
+  console.log('Fetching QC annotations for images', {
+    imageCount: manifestByImage.size,
+    annotationSetId,
+  });
+
+  await Promise.all(
+    Array.from(manifestByImage.entries()).map(([imageId, annotationIds]) =>
+      limit(async () => {
+        const manifestSet = new Set(annotationIds);
+        let nextToken: string | undefined = undefined;
+
+        do {
+          const response = (await client.graphql({
+            query: annotationsByImageIdAndSetId,
+            variables: {
+              imageId,
+              setId: { eq: annotationSetId },
+              limit: 1000,
+              nextToken,
+            },
+          } as any)) as GraphQLResult<{
+            annotationsByImageIdAndSetId?: {
+              items?: Array<{
+                id: string;
+                imageId: string;
+                categoryId: string;
+                setId: string;
+                x: number;
+                y: number;
+                reviewCatId?: string | null;
+              } | null>;
+              nextToken?: string | null;
+            };
+          }>;
+
+          if (response.errors && response.errors.length > 0) {
+            throw new Error(
+              `GraphQL error: ${JSON.stringify(response.errors.map((e) => e.message))}`
+            );
+          }
+
+          const page = response.data?.annotationsByImageIdAndSetId;
+          for (const item of page?.items || []) {
+            // Include only annotations that are in the manifest AND still unreviewed.
+            if (item && manifestSet.has(item.id) && !item.reviewCatId) {
+              unreviewed.push({
+                id: item.id,
+                imageId: item.imageId,
+                categoryId: item.categoryId,
+                setId: item.setId,
+                x: item.x,
+                y: item.y,
+              });
+            }
+          }
+          nextToken = page?.nextToken ?? undefined;
+        } while (nextToken);
+      })
+    )
+  );
+
+  return unreviewed;
+}
+
+async function requeueQCAnnotations(
+  queue: QueueRecord,
+  annotations: QCAnnotationForRequeue[]
+): Promise<void> {
+  const queueType = await getQueueType(queue.url);
+  const groupId = randomUUID();
+  const batchSize = 10;
+  const limit = pLimit(10);
+  const tasks: Array<Promise<void>> = [];
+
+  console.log('Sending QC requeue messages to SQS', {
+    queueUrl: queue.url,
+    queueType,
+    totalAnnotations: annotations.length,
+  });
+
+  for (let i = 0; i < annotations.length; i += batchSize) {
+    const batch = annotations.slice(i, i + batchSize);
+    const entries = batch.map((annotation) => {
+      const messageBody = JSON.stringify({
+        annotation: {
+          id: annotation.id,
+          annotationSetId: annotation.setId,
+          imageId: annotation.imageId,
+          categoryId: annotation.categoryId,
+          x: annotation.x,
+          y: annotation.y,
+        },
+        queueId: queue.id,
+      });
+
+      if (queueType === 'FIFO') {
+        return {
+          Id: `msg-${annotation.id}`,
+          MessageBody: messageBody,
+          MessageGroupId: groupId,
+          MessageDeduplicationId: `requeue-${queue.requeuesCompleted ?? 0}-${annotation.id}`.substring(0, 128),
+        };
+      }
+
+      return {
+        Id: `msg-${annotation.id}`,
+        MessageBody: messageBody,
+      };
+    });
+
+    tasks.push(
+      limit(async () => {
+        await sqsClient.send(
+          new SendMessageBatchCommand({
+            QueueUrl: queue.url,
+            Entries: entries,
+          })
+        );
+      })
+    );
+  }
+
+  await Promise.all(tasks);
+  console.log('Finished requeuing QC annotations');
+}
+
+// ── Homography requeue logic ──
+
+const getImageNeighbourQuery = /* GraphQL */ `
+  query GetImageNeighbour($image1Id: ID!, $image2Id: ID!) {
+    getImageNeighbour(image1Id: $image1Id, image2Id: $image2Id) {
+      image1Id image2Id homography skipped
+    }
+  }
+`;
+
+type HomographyManifestItem = {
+  pairKey: string;
+  image1Id: string;
+  image2Id: string;
+  annotationSetId: string;
+  primaryImage: Record<string, unknown>;
+  secondaryImage: Record<string, unknown>;
+};
+
+async function processHomographyRequeue(queue: QueueRecord): Promise<number> {
+  console.log('Processing homography queue', { queueId: queue.id });
+
+  const manifest = await downloadHomographyManifest(queue.locationManifestS3Key!);
+  console.log('Downloaded homography manifest', { itemCount: manifest.length });
+
+  // Check each pair for completion
+  const limit = pLimit(20);
+  const unfinished: HomographyManifestItem[] = [];
+
+  await Promise.all(
+    manifest.map((item) =>
+      limit(async () => {
+        // pairKey is sorted, so id1 < id2 lexicographically
+        const [id1, id2] = item.pairKey.split('::');
+
+        // Try canonical ordering
+        let nb = await getImageNeighbour(id1, id2);
+        if (!nb) {
+          nb = await getImageNeighbour(id2, id1);
+        }
+
+        const homographyComplete = nb?.homography && nb.homography.length === 9;
+        const skipped = nb?.skipped === true;
+
+        if (!homographyComplete && !skipped) {
+          unfinished.push(item);
+        }
+      })
+    )
+  );
+
+  console.log('Homography requeue check', {
+    queueId: queue.id,
+    launched: manifest.length,
+    unfinished: unfinished.length,
+  });
+
+  if (unfinished.length === 0) {
+    await executeGraphql(updateQueue, {
+      input: {
+        id: queue.id,
+        emptyQueueTimestamp: null,
+        requeuesCompleted: (queue.requeuesCompleted ?? 0) + 1,
+      },
+    });
+    return 0;
+  }
+
+  // Requeue unfinished pairs
+  await requeueHomographyPairs(queue, unfinished);
+
+  await executeGraphql(updateQueue, {
+    input: {
+      id: queue.id,
+      emptyQueueTimestamp: null,
+      requeuesCompleted: (queue.requeuesCompleted ?? 0) + 1,
+      approximateSize: unfinished.length,
+    },
+  });
+
+  await logRequeueAction(queue, unfinished.length);
+
+  console.log('Homography requeue complete', {
+    queueId: queue.id,
+    requeuedCount: unfinished.length,
+  });
+
+  return unfinished.length;
+}
+
+async function downloadHomographyManifest(key: string): Promise<HomographyManifestItem[]> {
+  const bucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!bucketName) throw new Error('OUTPUTS_BUCKET_NAME not set');
+
+  const response = await s3Client.send(
+    new GetObjectCommand({ Bucket: bucketName, Key: key })
+  );
+  const bodyStr = await response.Body?.transformToString();
+  if (!bodyStr) throw new Error('Empty homography manifest file');
+
+  const manifest = JSON.parse(bodyStr);
+  return manifest.items as HomographyManifestItem[];
+}
+
+async function getImageNeighbour(
+  image1Id: string,
+  image2Id: string
+): Promise<{ homography: number[] | null; skipped: boolean | null } | null> {
+  try {
+    const result = await executeGraphql<{
+      getImageNeighbour?: {
+        image1Id: string;
+        image2Id: string;
+        homography: number[] | null;
+        skipped: boolean | null;
+      } | null;
+    }>(getImageNeighbourQuery, { image1Id, image2Id });
+    return result.getImageNeighbour ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function requeueHomographyPairs(
+  queue: QueueRecord,
+  pairs: HomographyManifestItem[]
+): Promise<void> {
+  const batchSize = 10;
+  const limit = pLimit(10);
+  const tasks: Array<Promise<void>> = [];
+
+  for (let i = 0; i < pairs.length; i += batchSize) {
+    const batch = pairs.slice(i, i + batchSize);
+    const entries = batch.map((pair, j) => ({
+      Id: `msg-${i + j}`,
+      MessageBody: JSON.stringify({
+        pairKey: pair.pairKey,
+        queueId: queue.id,
+        annotationSetId: pair.annotationSetId,
+        primaryImage: pair.primaryImage,
+        secondaryImage: pair.secondaryImage,
+      }),
+    }));
+
+    tasks.push(
+      limit(async () => {
+        await sqsClient.send(
+          new SendMessageBatchCommand({ QueueUrl: queue.url, Entries: entries })
+        );
+      })
+    );
+  }
+
+  await Promise.all(tasks);
+  console.log('Finished requeuing homography pairs', { count: pairs.length });
 }
 
 async function executeGraphql<T>(

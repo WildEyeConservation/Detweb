@@ -8,7 +8,7 @@ import Container from 'react-bootstrap/Container';
 import Notifications from './user/Notifications.tsx';
 import { UserContext, GlobalContext } from './Context.tsx';
 import Settings from './user/Settings.tsx';
-import { Card, Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Card, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import UploadProgress from './upload/UploadProgress.tsx';
 import { verifyToken } from './utils/jwt.ts';
 import { useQueryClient } from '@tanstack/react-query';
@@ -26,7 +26,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
   const queryClient = useQueryClient();
 
   const { client } = useContext(GlobalContext)!;
-  const [checkingToken, setCheckingToken] = useState(false);
+  const [, setCheckingToken] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -38,7 +38,11 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
   const belongsToOrganization = myOrganizationHook.data.length > 0;
 
   useEffect(() => {
-    setIsAnnotatePath(/^\/surveys\/[^/]+\/annotate$/.test(location.pathname));
+    setIsAnnotatePath(
+      /^\/surveys\/[^/]+\/annotate$/.test(location.pathname) ||
+      /^\/surveys\/[^/]+\/qc-review\/[^/]+$/.test(location.pathname) ||
+      /^\/surveys\/[^/]+\/homography\/[^/]+$/.test(location.pathname)
+    );
   }, [location.pathname]);
 
   useEffect(() => {

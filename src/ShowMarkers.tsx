@@ -1,32 +1,18 @@
-import React, {
+import {
   useContext,
   useState,
-  useEffect,
-  useMemo,
   useCallback,
 } from 'react';
 import { UserContext, ImageContext } from './Context';
 import './index.css';
 import { isHotkeyPressed, useHotkeys } from 'react-hotkeys-hook';
-import { Marker, Tooltip } from 'react-leaflet';
-import {
-  uniqueNamesGenerator,
-  adjectives,
-  names,
-} from 'unique-names-generator';
-import * as L from 'leaflet';
-import * as jdenticon from 'jdenticon';
-import { useMap } from 'react-leaflet';
 import { ProjectContext } from './Context';
 import type {
   AnnotationType,
   CategoryType,
   ExtendedAnnotationType,
 } from './schemaTypes';
-import type { AnnotationsHook } from './Context';
 import DetwebMarker from './DetwebMarker';
-import { random } from 'mathjs';
-import DummyMarkers from './DummyMarkers';
 
 interface ShowMarkersProps {
   activeAnnotation?: AnnotationType;
@@ -61,7 +47,6 @@ export function ShowMarkers(props: ShowMarkersProps) {
     data: annotations,
     delete: deleteAnnotation,
     update: updateAnnotation,
-    create: createAnnotation,
   } = annotationsHook;
   const activeAnnotation = props.activeAnnotation;
   const isInsidePrevImage = useCallback(
@@ -87,7 +72,7 @@ export function ShowMarkers(props: ShowMarkersProps) {
   );
 
   const getType = useCallback(
-    (annotation) =>
+    (annotation: AnnotationType) =>
       effectiveCategories?.find(
         (category) => category.id === annotation.categoryId
       )?.name ?? 'Unknown',
@@ -111,7 +96,7 @@ export function ShowMarkers(props: ShowMarkersProps) {
               )}
               activeAnnotation={activeAnnotation}
               user={user}
-              updateAnnotation={updateAnnotation}
+              updateAnnotation={updateAnnotation as (annotation: Partial<AnnotationType>) => void}
               deleteAnnotation={deleteAnnotation}
               latLng2xy={latLng2xy}
               xy2latLng={xy2latLng}

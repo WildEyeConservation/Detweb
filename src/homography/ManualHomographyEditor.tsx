@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Matrix, matrix, multiply, transpose, inv } from 'mathjs';
-import { Card, Button, Badge } from 'react-bootstrap';
+import { Card, Button, Badge, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import {
   Trash2,
   Info,
@@ -13,6 +13,7 @@ import {
   ChevronUp,
   X,
   SquareDashed,
+  AlertTriangle,
 } from 'lucide-react';
 import { POINT_COLORS } from '../maplibre-viewer/MapLibreImageViewer';
 
@@ -61,6 +62,48 @@ export function solveHomography(points1: Point[], points2: Point[]): Matrix | nu
   return H;
 }
 
+/**
+ * Compute per-point symmetric reprojection error.
+ * For each pair, measures how far H(p1) is from p2 AND how far H_inv(p2) is from p1,
+ * then returns the RMS of both directions per point.
+ */
+export function computeReprojectionErrors(
+  points1: Point[],
+  points2: Point[]
+): number[] | null {
+  const n = Math.min(points1.length, points2.length);
+  if (n < MIN_HOMOGRAPHY_POINTS) return null;
+  const H = solveHomography(
+    points1.slice(0, n),
+    points2.slice(0, n)
+  );
+  if (!H) return null;
+
+  let Hinv: Matrix;
+  try {
+    Hinv = inv(H);
+  } catch {
+    return null;
+  }
+
+  const apply = (M: Matrix, x: number, y: number): [number, number] => {
+    const r = multiply(M, [x, y, 1]).valueOf() as number[];
+    return [r[0] / r[2], r[1] / r[2]];
+  };
+
+  const errors: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const [px, py] = apply(H, points1[i].x, points1[i].y);
+    const fwdErr2 = (px - points2[i].x) ** 2 + (py - points2[i].y) ** 2;
+
+    const [qx, qy] = apply(Hinv, points2[i].x, points2[i].y);
+    const bwdErr2 = (qx - points1[i].x) ** 2 + (qy - points1[i].y) ** 2;
+
+    errors.push(Math.sqrt((fwdErr2 + bwdErr2) / 2));
+  }
+  return errors;
+}
+
 export function ManualHomographyEditor({
   points1,
   points2,
@@ -71,6 +114,7 @@ export function ManualHomographyEditor({
   onAction,
   isSaving = false,
   isSkipping = false,
+  isSaved = false,
 }: {
   points1: Point[];
   points2: Point[];
@@ -81,6 +125,7 @@ export function ManualHomographyEditor({
   onAction?: () => void;
   isSaving?: boolean;
   isSkipping?: boolean;
+  isSaved?: boolean;
 }) {
   const [moreInformation, setMoreInformation] = useState(false);
   const canCompute =
@@ -135,14 +180,31 @@ export function ManualHomographyEditor({
     [setPoints1, setPoints2, onAction]
   );
 
+  const reprojErrors = useMemo(
+    () => computeReprojectionErrors(points1, points2),
+    [points1, points2]
+  );
+
+  // Threshold: errors above median + 2*MAD are flagged as outliers
+  const errorThreshold = useMemo(() => {
+    if (!reprojErrors || reprojErrors.length < MIN_HOMOGRAPHY_POINTS) return null;
+    const sorted = [...reprojErrors].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const mad = sorted.map((e) => Math.abs(e - median)).sort((a, b) => a - b)[
+      Math.floor(sorted.length / 2)
+    ];
+    return median + 2 * Math.max(mad, 1); // floor of 1px to avoid flagging when all errors are tiny
+  }, [reprojErrors]);
+
   const tableRows = useMemo(() => {
     const maxLen = Math.max(points1.length, points2.length);
     return new Array(maxLen).fill(0).map((_, i) => ({
       i,
       p1: points1[i] ?? null,
       p2: points2[i] ?? null,
+      error: reprojErrors?.[i] ?? null,
     }));
-  }, [points1, points2]);
+  }, [points1, points2, reprojErrors]);
 
   return (
     <Card className='w-100 h-100 border-0 shadow-sm'>
@@ -189,13 +251,18 @@ export function ManualHomographyEditor({
       <Card.Body className='p-0 d-flex flex-column overflow-hidden'>
         <div className='flex-grow-1 overflow-auto p-3'>
           <div className='d-flex flex-column gap-2'>
-            {tableRows.map(({ i, p1, p2 }) => {
+            {tableRows.map(({ i, p1, p2, error }) => {
               const color = POINT_COLORS[i % POINT_COLORS.length];
+              const isOutlier = error !== null && errorThreshold !== null && error > errorThreshold;
               return (
                 <div
                   key={`pair-${i}`}
                   style={{
                     background: '#5B6977',
+                    // TODO: requires testing – outlier highlighting
+                    // border: isOutlier
+                    //   ? '1px solid rgba(255, 193, 7, 0.5)'
+                    //   : '1px solid rgba(255,255,255,0.05)',
                     border: '1px solid rgba(255,255,255,0.05)',
                     borderLeft: `4px solid ${color}`,
                     borderRadius: '6px',
@@ -203,13 +270,40 @@ export function ManualHomographyEditor({
                   }}
                 >
                   <div className='d-flex align-items-center justify-content-between mb-2'>
-                    <Badge
-                      pill
-                      bg=''
-                      style={{ backgroundColor: color, fontSize: '0.7rem' }}
-                    >
-                      Pair {i + 1}
-                    </Badge>
+                    <div className='d-flex align-items-center gap-2'>
+                      <Badge
+                        pill
+                        bg=''
+                        style={{ backgroundColor: color, fontSize: '0.7rem' }}
+                      >
+                        Pair {i + 1}
+                      </Badge>
+                      {/* TODO: requires testing – per-point reprojection error display
+                      {error !== null && (
+                        <OverlayTrigger
+                          placement='top'
+                          overlay={
+                            <Tooltip id={`error-tooltip-${i}`}>
+                              Symmetric reprojection error: {error.toFixed(1)}px
+                              {isOutlier ? ' — likely misplaced' : ''}
+                            </Tooltip>
+                          }
+                        >
+                          <span
+                            className='d-flex align-items-center gap-1'
+                            style={{
+                              fontSize: '0.7rem',
+                              color: isOutlier ? '#ffc107' : error < 3 ? '#3cb44b' : '#adb5bd',
+                              cursor: 'help',
+                            }}
+                          >
+                            {isOutlier && <AlertTriangle size={12} />}
+                            {error.toFixed(1)}px
+                          </span>
+                        </OverlayTrigger>
+                      )}
+                      */}
+                    </div>
                     {p1 && p2 && (
                       <Button
                         size='sm'
@@ -286,30 +380,68 @@ export function ManualHomographyEditor({
       </Card.Body>
       <Card.Footer>
         <div className='d-flex flex-column gap-3'>
+          {/* TODO: requires testing – Total RMS display
+          {reprojErrors && reprojErrors.length > 0 && (
+            <div className='text-center small mb-1' style={{ opacity: 0.8 }}>
+              Total RMS:{' '}
+              <span
+                style={{
+                  fontWeight: 600,
+                  color:
+                    Math.sqrt(
+                      reprojErrors.reduce((s, e) => s + e * e, 0) / reprojErrors.length
+                    ) < 3
+                      ? '#3cb44b'
+                      : Math.sqrt(
+                          reprojErrors.reduce((s, e) => s + e * e, 0) / reprojErrors.length
+                        ) < 10
+                      ? '#ffc107'
+                      : '#e6194b',
+                }}
+              >
+                {Math.sqrt(
+                  reprojErrors.reduce((s, e) => s + e * e, 0) / reprojErrors.length
+                ).toFixed(1)}
+                px
+              </span>
+            </div>
+          )}
+          */}
+          {isSaved && (
+            <Badge bg='success' className='align-self-center'>
+              Saved
+            </Badge>
+          )}
           <Button
             size='sm'
             onClick={handleSave}
             disabled={!canCompute || isSaving}
             className='w-100 d-flex align-items-center justify-content-center gap-2 py-2 mt-2'
-            variant={canCompute ? 'primary' : 'secondary'}
+            variant={canCompute ? (isSaved ? 'warning' : 'primary') : 'secondary'}
           >
             <Save size={16} />
-            {isSaving ? 'Saving...' : 'Save Homography'}
+            {isSaving
+              ? 'Saving...'
+              : isSaved
+              ? 'Overwrite Homography'
+              : 'Save Homography'}
           </Button>
 
-          <div className='pt-3 border-top border-secondary'>
-            <p className='small opacity-50 mb-2'>No overlap? Skip this pair.</p>
-            <Button
-              size='sm'
-              className='w-100 d-flex align-items-center justify-content-center gap-2 mb-2'
-              variant='outline-warning'
-              onClick={() => handleSkip()}
-              disabled={isSkipping}
-            >
-              <SkipForward size={14} />
-              {isSkipping ? 'Skipping...' : 'Skip Pair'}
-            </Button>
-          </div>
+          {!isSaved && (
+            <div className='pt-3 border-top border-secondary'>
+              <p className='small opacity-50 mb-2'>No overlap? Skip this pair.</p>
+              <Button
+                size='sm'
+                className='w-100 d-flex align-items-center justify-content-center gap-2 mb-2'
+                variant='outline-warning'
+                onClick={() => handleSkip()}
+                disabled={isSkipping}
+              >
+                <SkipForward size={14} />
+                {isSkipping ? 'Skipping...' : 'Skip Pair'}
+              </Button>
+            </div>
+          )}
         </div>
       </Card.Footer>
     </Card>

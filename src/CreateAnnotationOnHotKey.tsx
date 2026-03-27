@@ -9,7 +9,7 @@ export default function CreateAnnotationOnHotKey({
   setId,
   imageId,
   source,
-  isTest = false,
+  isTest: _isTest = false,
   location,
   allowOutside,
 }: {
@@ -26,12 +26,12 @@ export default function CreateAnnotationOnHotKey({
     annotationsHook: { create: createAnnotation },
   } = useContext(ImageContext)!;
   const [currentPosition, setCurrentPosition] = React.useState({ x: 0, y: 0 });
-  const { latLng2xy } = useContext(ImageContext);
+  const { latLng2xy } = useContext(ImageContext)!;
   const { project, setCurrentCategory } = useContext(ProjectContext)!;
 
   useMapEvents({
     mousemove: (e) => {
-      setCurrentPosition(latLng2xy(e.latlng));
+      setCurrentPosition(latLng2xy(e.latlng) as { x: number; y: number });
     },
   });
 

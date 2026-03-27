@@ -21,7 +21,6 @@ export default function EditSurveyModal({
   onClose: () => void;
   project: Schema['Project']['type'];
   openTab?: number;
-  setSelectedSets: (sets: string[]) => void;
 }) {
   return (
     <Modal show={show} onHide={onClose} strict={true}>

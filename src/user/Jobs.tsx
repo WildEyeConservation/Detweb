@@ -2,12 +2,11 @@ import { Card } from 'react-bootstrap';
 import { useContext, useEffect, useState } from 'react';
 import { UserContext, GlobalContext } from '../Context';
 import { Schema } from '../amplify/client-schema';
-import { Spinner, Button, ProgressBar, Form } from 'react-bootstrap';
+import { Spinner, Button, Form } from 'react-bootstrap';
 import MyTable from '../Table';
 import { useNavigate } from 'react-router-dom';
 import { type GetQueueAttributesCommandInput } from '@aws-sdk/client-sqs';
 import { GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
-import ConfirmationModal from '../ConfirmationModal';
 import ProjectProgress from './ProjectProgress';
 import { Minimize2, Maximize2 } from 'lucide-react';
 
@@ -27,7 +26,6 @@ type Project = {
   annotationSets: {
     id: string;
     register: boolean;
-    createHomographies: boolean;
   }[];
   createdAt: string;
   queues: Schema['Queue']['type'][];
@@ -40,7 +38,7 @@ export default function Jobs() {
     user,
     getSqsClient,
   } = useContext(UserContext)!;
-  const { client, showModal, modalToShow } = useContext(GlobalContext)!;
+  const { client } = useContext(GlobalContext)!;
   const navigate = useNavigate();
 
   const [displayProjects, setDisplayProjects] = useState<Project[]>([]);
@@ -54,19 +52,9 @@ export default function Jobs() {
       register: boolean;
     }[]
   >([]);
-  const [homographyCreationJobs, setHomographyCreationJobs] = useState<
-    {
-      id: string;
-      projectId: string;
-      createHomographies: boolean;
-    }[]
-  >([]);
   const [isLoading, setIsLoading] = useState(false);
   const [takingJob, setTakingJob] = useState(false);
-  const [jobToDelete, setJobToDelete] = useState<
-    Schema['Queue']['type'] | null
-  >(null);
-  const [deletingJob, setDeletingJob] = useState(false);
+  const [deletingJob] = useState(false);
   const [scanningProjects, setScanningProjects] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
 
@@ -172,8 +160,7 @@ export default function Jobs() {
               'organization.name',
               'annotationSets.id',
               'annotationSets.register',
-              'annotationSets.createHomographies',
-              'createdAt',
+                            'createdAt',
               'queues.*',
             ],
           }
@@ -187,7 +174,7 @@ export default function Jobs() {
           (project): project is Project =>
             project !== null &&
             (project.queues.length > 0 ||
-              project.annotationSets.some((set) => set.register || set.createHomographies))
+              project.annotationSets.some((set) => set.register))
         )
         .map((project) => ({
           ...project,
@@ -248,19 +235,10 @@ export default function Jobs() {
 
         setRegistrationJobs(registrationJobs.filter((job) => job.register));
 
-        const homographyJobs = validProjects.flatMap((project) =>
-          project.annotationSets.map((set) => ({
-            id: set.id,
-            projectId: project.id,
-            createHomographies: set.createHomographies || false,
-          }))
-        );
-        setHomographyCreationJobs(homographyJobs.filter((job) => job.createHomographies));
-
         const filteredProjects = validProjects.filter(
           (project) =>
             project.queues.length > 0 ||
-            project.annotationSets.some((set) => set.register || set.createHomographies)
+            project.annotationSets.some((set) => set.register)
         );
         setDisplayProjects(filteredProjects);
       }
@@ -323,40 +301,33 @@ export default function Jobs() {
     return 0;
   });
 
-  async function handleTakeJob(job: { queueId: string; projectId: string }) {
+  async function handleTakeJob(job: { queueId: string; projectId: string; tag?: string | null }) {
     setTakingJob(true);
+
+    // QC review and homography jobs navigate directly to their routes (no membership update needed).
+    if (job.tag === 'qc-review') {
+      navigate(`/surveys/${job.projectId}/qc-review/${job.queueId}`);
+      setTakingJob(false);
+      return;
+    }
+
+    if (job.tag === 'homography') {
+      navigate(`/surveys/${job.projectId}/homography/${job.queueId}`);
+      setTakingJob(false);
+      return;
+    }
 
     const currentMembership = userProjectMembershipHook.data.filter(
       (membership) => membership.projectId === job.projectId
     )[0];
 
     if (currentMembership) {
-      userProjectMembershipHook.update(
-        { id: currentMembership.id, queueId: job.queueId },
-        {
-          onSuccess: () => {
-            navigate(`/surveys/${job.projectId}/annotate`);
-          },
-          onError: (error) => {
-            alert('Failed to take job');
-            console.error(error);
-          },
-        }
-      );
+      userProjectMembershipHook.update({ id: currentMembership.id, queueId: job.queueId });
+      navigate(`/surveys/${job.projectId}/annotate`);
     } else {
       const jobProject = displayProjects.find(p => p.id === job.projectId);
-      userProjectMembershipHook.create(
-        { userId: user.userId, projectId: job.projectId, queueId: job.queueId, group: jobProject?.organization.id },
-        {
-          onSuccess: () => {
-            navigate(`/surveys/${job.projectId}/annotate`);
-          },
-          onError: (error) => {
-            alert('Failed to take job');
-            console.error(error);
-          },
-        }
-      );
+      userProjectMembershipHook.create({ userId: user.userId, projectId: job.projectId, queueId: job.queueId, group: jobProject?.organization.id });
+      navigate(`/surveys/${job.projectId}/annotate`);
     }
 
     setTakingJob(false);
@@ -367,9 +338,6 @@ export default function Jobs() {
       project.queues
         .map((queue) => {
           const numJobsRemaining = Number(jobsRemaining[queue.url || ''] || 0);
-          const batchesRemaining = Math.ceil(
-            numJobsRemaining / (queue.batchSize || 0)
-          );
 
           if (
             numJobsRemaining === 0 &&
@@ -383,7 +351,6 @@ export default function Jobs() {
           const paddingClass = compactMode ? 'p-1' : 'p-2';
           const gapClass = compactMode ? 'gap-1' : 'gap-2';
           const rowGapClass = compactMode ? 'gap-1' : 'gap-3';
-          const titleSize = compactMode ? 'h6' : 'h5';
           const badgeFontSize = compactMode ? '11px' : '14px';
           const typeFontSize = compactMode ? '12px' : '14px';
 
@@ -397,9 +364,13 @@ export default function Jobs() {
                 <div className={`d-flex flex-row ${rowGapClass} align-items-center`}>
                   <div>
                     {compactMode ? (
-                      <h6 className='mb-0'>{queue.tag || project.name}</h6>
+                      <h6 className='mb-0'>
+                        {queue.tag === 'qc-review' || queue.tag === 'homography' ? queue.name : (queue.tag || project.name)}
+                      </h6>
                     ) : (
-                      <h5 className='mb-0'>{queue.tag || project.name}</h5>
+                      <h5 className='mb-0'>
+                        {queue.tag === 'qc-review' || queue.tag === 'homography' ? queue.name : (queue.tag || project.name)}
+                      </h5>
                     )}
                     {!compactMode && (
                       <i style={{ fontSize: '14px', display: 'block' }}>
@@ -413,7 +384,7 @@ export default function Jobs() {
                         marginBottom: '0px',
                       }}
                     >
-                      Type: {queue.name}
+                      Type: {queue.tag === 'qc-review' ? 'QC Review' : queue.tag === 'homography' ? 'Homography' : queue.name}
                     </p>
                   </div>
                   {myOrganizationHook.data?.find(
@@ -454,6 +425,7 @@ export default function Jobs() {
                       handleTakeJob({
                         queueId: queue.id,
                         projectId: project.id,
+                        tag: queue.tag,
                       })
                     }
                     style={{ whiteSpace: 'nowrap' }}
@@ -489,13 +461,11 @@ export default function Jobs() {
         );
 
         if (!project) {
-          return <></>;
+          return null;
         }
 
         const paddingClass = compactMode ? 'p-1' : 'p-2';
-        const gapClass = compactMode ? 'gap-1' : 'gap-2';
         const rowGapClass = compactMode ? 'gap-1' : 'gap-3';
-        const titleSize = compactMode ? 'h6' : 'h5';
         const typeFontSize = compactMode ? '12px' : '14px';
 
         return {
@@ -541,81 +511,7 @@ export default function Jobs() {
             </div>,
           ],
         };
-      }),
-    ...homographyCreationJobs
-      .filter((job) => {
-        const project = displayProjects.find((p) => p.id === job.projectId);
-        if (!project) return false;
-
-        const searchLower = search.toLowerCase();
-        const matchesOrganization =
-          !organizationFilter || project.organization.id === organizationFilter;
-        const matchesSearch =
-          searchLower === '' ||
-          project.name.toLowerCase().includes(searchLower) ||
-          project.organization.name.toLowerCase().includes(searchLower) ||
-          'homography creation'.includes(searchLower);
-
-        return matchesOrganization && matchesSearch;
-      })
-      .map((job) => {
-        const project = displayProjects.find(
-          (project) => project.id === job.projectId
-        );
-
-        if (!project) {
-          return <></>;
-        }
-
-        const paddingClass = compactMode ? 'p-1' : 'p-2';
-        const gapClass = compactMode ? 'gap-1' : 'gap-2';
-        const rowGapClass = compactMode ? 'gap-1' : 'gap-3';
-        const typeFontSize = compactMode ? '12px' : '14px';
-
-        return {
-          id: `hc-${job.id}`,
-          rowData: [
-            <div
-              className={`d-flex justify-content-between align-items-center ${paddingClass}`}
-              key={`hc-${job.id}`}
-            >
-              <div className={`d-flex flex-row ${rowGapClass} align-items-center`}>
-                <div>
-                  {compactMode ? (
-                    <h6 className='mb-0'>{project.name}</h6>
-                  ) : (
-                    <h5 className='mb-0'>{project.name}</h5>
-                  )}
-                  {!compactMode && (
-                    <i style={{ fontSize: '14px', display: 'block' }}>
-                      {project.organization.name}
-                    </i>
-                  )}
-                  <p
-                    style={{
-                      fontSize: typeFontSize,
-                      display: 'block',
-                      marginBottom: '0px',
-                    }}
-                  >
-                    Type: Homography Creation
-                  </p>
-                </div>
-              </div>
-              <Button
-                size={compactMode ? 'sm' : undefined}
-                className='ms-1'
-                variant='primary'
-                onClick={() =>
-                  navigate(`/surveys/${project.id}/set/${job.id}/homography-creation`)
-                }
-              >
-                Take Job
-              </Button>
-            </div>,
-          ],
-        };
-      }),
+      }).filter((item): item is NonNullable<typeof item> => item !== null),
   ];
 
   return (

@@ -94,6 +94,8 @@ export default function AnnotationSetResults({
               'obscured',
               'id',
               'objectId',
+              'reviewCatId',
+              'reviewedBy',
               'image.originalPath',
               'image.timestamp',
               'image.latitude',
@@ -108,6 +110,23 @@ export default function AnnotationSetResults({
       })
     );
 
+    const categories = await fetchAllPaginatedResults(
+      client.models.Category.categoriesByProjectId,
+      {
+        projectId: surveyId,
+        selectionSet: ['id', 'name'],
+        limit: 100,
+      },
+      (stepsCompleted) => {
+        setExportStatus(`Fetching labels... (${stepsCompleted} fetched)`);
+      }
+    );
+
+    const categoryMap = categories.reduce((acc, category) => {
+      acc[category.id] = category.name;
+      return acc;
+    }, {} as Record<string, string>);
+
     let i = 0;
     let a = 0;
 
@@ -119,18 +138,19 @@ export default function AnnotationSetResults({
       exportFromJSON({
         data: annotations.map((anno) => {
           return {
-            category: anno.category?.name,
+            category: anno.category?.name || 'Unknown',
             image: anno.image.originalPath || 'Unknown',
             timestamp: anno.image.timestamp,
             latitude: anno.image.latitude,
             longitude: anno.image.longitude,
-            obscured: anno.obscured,
+            obscured: anno.obscured ?? false,
             annotator: userMap[anno.owner ?? ''] || 'Unknown',
             isPrimary: anno.objectId === anno.id,
-            objectId: anno.objectId,
             x: anno.x,
             y: anno.y,
             source: anno.source,
+            reviewedBy: userMap[anno.reviewedBy ?? ''],
+            reviewedCategory: categoryMap[anno.reviewCatId ?? ''],
           };
         }),
         fileName,

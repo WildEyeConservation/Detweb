@@ -114,7 +114,7 @@ export default function Surveys() {
               label: pool.name,
               value: pool.id,
             }))}
-            onChange={(e) => handlePoolsChange(survey.id, e)}
+            onChange={(e) => handlePoolsChange(survey.id, e as Option[])}
           />,
           <Button
             variant='success'

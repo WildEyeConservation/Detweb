@@ -10,7 +10,6 @@ import { useUsers } from '../apiInterface';
 import { fetchAllPaginatedResults } from '../utils';
 import { FilesUploadForm } from '../FilesUploadComponent';
 import { saveShapefileForProject } from '../utils/shapefileUtils';
-import { useUpdateProgress } from '../useUpdateProgress';
 import { X, Check } from 'lucide-react';
 import { logAdminAction } from '../utils/adminActionLogger';
 
@@ -69,6 +68,7 @@ export default function NewSurveyModal({
   const canSubmit = !loading && filesReady && name && organization && gpsReady;
 
   async function handleSave() {
+    if (!organization) return;
     if (projects.includes(name.toLowerCase())) {
       alert('A project with this name already exists');
       return;
@@ -167,6 +167,12 @@ export default function NewSurveyModal({
       group: organization.value,
     });
 
+    if (!testPreset) {
+      alert('Failed to create test preset');
+      setLoading(false);
+      return;
+    }
+
     await client.models.TestPresetProject.create({
       testPresetId: testPreset.id,
       projectId: project.id,
@@ -230,14 +236,14 @@ export default function NewSurveyModal({
       ).then((organizations) => {
         setOrganizations(
           organizations
-            .filter((o) => o !== null)
+            .filter((o): o is NonNullable<typeof o> => o !== null)
             .map((o) => ({
               label: o.name,
               value: o.id,
             }))
         );
 
-        if (organizations.length === 1) {
+        if (organizations.length === 1 && organizations[0]) {
           setOrganization({
             label: organizations[0].name,
             value: organizations[0].id,
@@ -246,13 +252,13 @@ export default function NewSurveyModal({
 
         setUsers(
           organizations
-            .filter((o) => o !== null)
+            .filter((o): o is NonNullable<typeof o> => o !== null)
             .reduce(
               (acc, o) => ({
                 ...acc,
                 [o.id]: o.memberships
-                  .filter((m) => !m.isAdmin)
-                  .map((m) => ({
+                  .filter((m: { isAdmin: boolean | null; userId: string }) => !m.isAdmin)
+                  .map((m: { userId: string }) => ({
                     id: m.userId,
                     name: allUsers.find((u) => u.id === m.userId)?.name || '',
                   })),

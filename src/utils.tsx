@@ -14,8 +14,6 @@ type PaginatedQueryResult<T> = {
   nextToken?: string | null;
 };
 
-type SelectionSet<T> = (keyof T)[] | string[];
-
 function splitInputAndOptions(params: any): { input?: any; options: any } {
   if (!params) {
     return { input: undefined, options: {} };
@@ -51,8 +49,8 @@ export async function fetchAllPaginatedResults<T>(
   const { input, options: baseOptions } = splitInputAndOptions(params);
 
   do {
-    const options = { ...baseOptions, nextToken };
-    const result =
+    const options: Record<string, any> = { ...baseOptions, nextToken };
+    const result: PaginatedQueryResult<T> =
       input === undefined
         ? await (queryFn as any)(options)
         : await (queryFn as any)(input, options);

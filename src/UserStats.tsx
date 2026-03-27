@@ -478,7 +478,6 @@ export default function UserStats() {
                 selected={startDate ?? undefined}
                 onChange={(date) => setStartDate(date)}
                 selectsStart
-                timeZone='UTC'
                 startDate={startDate ?? undefined}
                 endDate={endDate ?? undefined}
                 className='form-control'
@@ -496,7 +495,6 @@ export default function UserStats() {
                 selected={endDate ?? undefined}
                 onChange={(date) => setEndDate(date)}
                 selectsEnd
-                timeZone='UTC'
                 startDate={startDate ?? undefined}
                 endDate={endDate ?? undefined}
                 className='form-control'

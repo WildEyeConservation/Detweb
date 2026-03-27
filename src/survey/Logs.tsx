@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState, useMemo } from 'react';
 import { Button, Form, Card, Spinner } from 'react-bootstrap';
-import { GlobalContext, UserContext } from '../Context';
+import { GlobalContext } from '../Context';
 import { Schema } from '../amplify/client-schema';
 import { fetchAllPaginatedResults } from '../utils';
 import { Download } from 'lucide-react';
@@ -11,7 +11,6 @@ import { Footer } from '../Modal';
 
 export default function Logs({ projectId }: { projectId: string }) {
   const { client, showModal } = useContext(GlobalContext)!;
-  const { user } = useContext(UserContext)!;
   const { users } = useUsers();
   const [logs, setLogs] = useState<Schema['AdminActionLog']['type'][]>([]);
   const [loading, setLoading] = useState(false);
@@ -78,7 +77,7 @@ export default function Logs({ projectId }: { projectId: string }) {
           }
         );
         return allProjectLogs.filter((log) => {
-          const logDate = new Date(log.createdAt);
+          const logDate = new Date(log.createdAt ?? '');
           const start = new Date(startDateTime);
           const end = new Date(endDateTime);
           return logDate >= start && logDate <= end;
@@ -87,8 +86,8 @@ export default function Logs({ projectId }: { projectId: string }) {
 
       // Sort by createdAt descending (newest first)
       const sortedLogs = allLogs.sort((a, b) => {
-        const dateA = new Date(a.createdAt).getTime();
-        const dateB = new Date(b.createdAt).getTime();
+        const dateA = new Date(a.createdAt ?? '').getTime();
+        const dateB = new Date(b.createdAt ?? '').getTime();
         return dateB - dateA;
       });
 
@@ -115,7 +114,7 @@ export default function Logs({ projectId }: { projectId: string }) {
 
     // Format logs for export
     const exportData = logs.map((log) => ({
-      Timestamp: new Date(log.createdAt).toLocaleString(),
+      Timestamp: new Date(log.createdAt ?? '').toLocaleString(),
       'User Name': userMap[log.userId] || log.userId,
       'User ID': log.userId,
       Message: log.message,
@@ -129,8 +128,8 @@ export default function Logs({ projectId }: { projectId: string }) {
     });
   };
 
-  const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString();
+  const formatTimestamp = (timestamp: string | null | undefined) => {
+    return new Date(timestamp ?? '').toLocaleString();
   };
 
   // Convert logs to tableData format

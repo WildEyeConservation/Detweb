@@ -19,10 +19,7 @@ interface UseOptimalAssignmentProps {
   leniency: number;
 }
 
-const MISMATCH_TOLERANCE = 400;
-/* This parameter determines the minimum distance between two annotations (in pixels), for which the algorithm will consider 
-proposing a match. It may need to be adjusted in future based on resolution of input images and expected accuracy of 
-annotations/regsitration.*/
+/* MISMATCH_TOLERANCE: minimum distance in pixels for proposing a match. May need adjustment. */
 
 /* This is a custom hook that assists us with performing optimal assignment between two sets of annotations, based on the 
 distances between them. It is used by the RegisterPair component. Because the annotations may be in two different coordinate 
@@ -60,10 +57,10 @@ export function useOptimalAssignment({
 
   useEffect(() => {
     setDataLoaded(
-      annotationsHooks[0].meta.status == 'success' &&
-        annotationsHooks[1].meta.status == 'success'
+      (annotationsHooks[0] as any).meta?.status == 'success' &&
+        (annotationsHooks[1] as any).meta?.status == 'success'
     );
-  }, [annotationsHooks[0].meta.status, annotationsHooks[1].meta.status]);
+  }, [(annotationsHooks[0] as any).meta?.status, (annotationsHooks[1] as any).meta?.status]);
 
   const [enhancedAnnotations, setEnhancedAnnotations] = useState<
     [ExtendedAnnotationType[], ExtendedAnnotationType[]]
@@ -196,9 +193,9 @@ export function useOptimalAssignment({
               if (shadowAnnotation.obscured) {
                 return;
               }
-              proposed[1].push(shadowAnnotation);
+              proposed[1].push(shadowAnnotation as ExtendedAnnotationType);
               proposedObjectIdMap[a.id] = id;
-              proposedObjectIdMap[shadowAnnotation.id] = id;
+              proposedObjectIdMap[shadowAnnotation.id!] = id!
               return;
             }
             if (b) {
@@ -212,9 +209,9 @@ export function useOptimalAssignment({
               if (shadowAnnotation.obscured) {
                 return;
               }
-              proposed[0].push(shadowAnnotation);
-              proposedObjectIdMap[b.id] = shadowAnnotation.id;
-              proposedObjectIdMap[shadowAnnotation.id] = shadowAnnotation.id;
+              proposed[0].push(shadowAnnotation as ExtendedAnnotationType);
+              proposedObjectIdMap[b.id] = shadowAnnotation.id!;
+              proposedObjectIdMap[shadowAnnotation.id!] = shadowAnnotation.id!;
               return;
             }
           });

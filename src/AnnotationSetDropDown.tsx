@@ -1,4 +1,4 @@
-import { useContext, ChangeEvent } from 'react';
+import { useContext } from 'react';
 import { ProjectContext, ManagementContext } from './Context';
 import Select, { SingleValue } from 'react-select';
 
@@ -29,7 +29,8 @@ export function AnnotationSetDropdown({
     options.push({ label: 'Add a new annotation set', value: 'new' });
   }
 
-  const onSelect = (e: SingleValue<OptionType>) => {
+  const onSelect = (e: SingleValue<{ label: string; value: string }>) => {
+    if (!e) return;
     if (e.value == 'new') {
       onNewAnnotationSet();
     } else {

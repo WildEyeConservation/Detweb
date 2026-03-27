@@ -30,10 +30,10 @@ export default function Users({
       const allItems: Schema['OrganizationMembership']['type'][] = [];
       let nextToken: string | undefined;
       do {
-        const result = await client.models.OrganizationMembership.membershipsByOrganizationId({
-          organizationId: organization.id,
-          nextToken,
-        });
+        const result = await client.models.OrganizationMembership.membershipsByOrganizationId(
+          { organizationId: organization.id },
+          { nextToken }
+        );
         allItems.push(...result.data);
         nextToken = result.nextToken ?? undefined;
       } while (nextToken);

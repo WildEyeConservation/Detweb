@@ -161,6 +161,18 @@ export default function LabelEditor({
               onBlur={() => {
                 stop();
                 const newShortcutKey = Array.from(keys).join('+');
+                if (newShortcutKey === ' ' || newShortcutKey.toLowerCase() === 'space') {
+                  alert(
+                    'Spacebar is reserved and cannot be used as a label shortcut.'
+                  );
+                  return;
+                }
+                if (newShortcutKey === '+') {
+                  alert(
+                    '"+" is reserved for False Positive and cannot be used as a label shortcut.'
+                  );
+                  return;
+                }
                 if (
                   labels.some(
                     (l) => l.id !== label.id && l.shortcutKey === newShortcutKey
@@ -175,9 +187,9 @@ export default function LabelEditor({
                   labels.map((l) =>
                     l.id === label.id
                       ? {
-                          ...l,
-                          shortcutKey: newShortcutKey,
-                        }
+                        ...l,
+                        shortcutKey: newShortcutKey,
+                      }
                       : l
                   )
                 );
@@ -188,7 +200,7 @@ export default function LabelEditor({
                   setActiveRowId(null);
                 }
               }}
-              onChange={() => {}}
+              onChange={() => { }}
             />,
             <Form.Control
               type='color'

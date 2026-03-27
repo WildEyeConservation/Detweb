@@ -6,6 +6,7 @@ import {
 } from '@aws-sdk/client-sqs';
 import { Schema } from './amplify/client-schema';
 import useTesting from './TestSource';
+import type { Identifiable } from './Preloader';
 
 export default function useSQS(
   filterPredicate: (message: any) => Promise<boolean> = async () => {
@@ -82,16 +83,18 @@ export default function useSQS(
   useEffect(() => {
     if (currentPM.queueId) {
       client.models.Queue.get({ id: currentPM.queueId }).then(
-        ({ data: { url, zoom } }) => {
-          setUrl(url);
-          setZoom(zoom);
+        ({ data }) => {
+          if (!data) return;
+          setUrl(data.url ?? undefined);
+          setZoom(data.zoom ?? undefined);
         }
       );
       if (currentPM.backupQueueId) {
         client.models.Queue.get({ id: currentPM.backupQueueId }).then(
-          ({ data: { url, zoom } }) => {
-            setBackupUrl(url);
-            setBackupZoom(zoom);
+          ({ data }) => {
+            if (!data) return;
+            setBackupUrl(data.url ?? undefined);
+            setBackupZoom(data.zoom ?? undefined);
           }
         );
       }
@@ -144,7 +147,7 @@ export default function useSQS(
           return {
             ...testLocation,
             config: config,
-          };
+          } as unknown as Identifiable;
         }
       }
 

@@ -6,7 +6,6 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Progress } from './UserContext';
 import { GlobalContextProvider } from './Context';
 import ScratchPad from './ScratchPad';
-import ProjectManagement from './ProjectManagement';
 import UserStats from './UserStats';
 import { LocationLoader } from './LocationLoader';
 import { ImageLoader } from './ImageLoader';
@@ -22,7 +21,7 @@ import Surveys from './survey/Surveys.tsx';
 import Permissions from './Permissions.tsx';
 import Testing from './Testing/Testing';
 import { Registration } from './Registration';
-import { HomographyCreation } from './homography/HomographyCreation';
+import HomographyTask from './homography/HomographyTask';
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import Admin from './Admin';
@@ -30,6 +29,7 @@ import { DevActions } from './DevActions';
 import JollyResults from './JollyResults';
 import SharedResults from './SharedResults.tsx';
 import ImageNeighbourViewer from './ImageNeighbourViewer';
+import QCReviewTask from './QCReviewTask';
 
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
@@ -44,7 +44,8 @@ export const queryClient = new QueryClient({
 });
 
 persistQueryClient({
-  queryClient,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  queryClient: queryClient as any,
   persister,
 });
 
@@ -100,12 +101,8 @@ const router = createBrowserRouter([
             element: <Registration />,
           },
           {
-            path: 'homography-creation',
-            element: <HomographyCreation />,
-          },
-          {
-            path: 'manage',
-            element: <ProjectManagement />,
+            path: 'homography/:queueId',
+            element: <HomographyTask />,
           },
           {
             path: 'quickTest',
@@ -123,6 +120,10 @@ const router = createBrowserRouter([
             path: 'register/:image1Id/:image2Id/:selectedSet',
             element: <PairLoader />,
           },
+          {
+            path: 'qc-review/:queueId',
+            element: <QCReviewTask />,
+          },
         ],
       },
       {
@@ -136,10 +137,6 @@ const router = createBrowserRouter([
           {
             path: 'registration',
             element: <Registration showAnnotationSetDropdown={false} />,
-          },
-          {
-            path: 'homography-creation',
-            element: <HomographyCreation showAnnotationSetDropdown={false} />,
           },
         ],
       },

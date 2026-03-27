@@ -2,14 +2,14 @@ import type { Handler } from "aws-lambda";
 import { env } from "$amplify/env/cleanupJobs";
 import { Amplify } from "aws-amplify";
 import { generateClient } from "aws-amplify/data";
-import { listQueues, listUserProjectMemberships, getProject } from "./graphql/queries";
+import { listQueues, getProject } from "./graphql/queries";
 import type { GraphQLResult } from "@aws-amplify/api-graphql";
 import {
   DeleteQueueCommand,
   type GetQueueAttributesCommandInput,
   GetQueueAttributesCommand,
 } from "@aws-sdk/client-sqs";
-import { Queue, UserProjectMembership } from "./graphql/API";
+import { Queue } from "./graphql/API";
 import { SQSClient } from "@aws-sdk/client-sqs";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
@@ -28,9 +28,9 @@ const deleteQueue = /* GraphQL */ `
   }
 `;
 
-const updateUserProjectMembership = /* GraphQL */ `
-  mutation UpdateUserProjectMembership($input: UpdateUserProjectMembershipInput!) {
-    updateUserProjectMembership(input: $input) { id group }
+const updateProjectMembershipsMutation = /* GraphQL */ `
+  mutation UpdateProjectMemberships($projectId: String!) {
+    updateProjectMemberships(projectId: $projectId)
   }
 `;
 
@@ -210,8 +210,10 @@ export const handler: Handler = async (event, context) => {
           console.error(`Failed to fetch project name for ${queue.projectId}:`, err);
         }
 
-        // Delete the S3 manifest if it exists
-        if (queue.locationManifestS3Key) {
+        // Delete the S3 manifest if it exists (skip for homography queues —
+        // reconcileHomographies reads the manifest for targeted dedup, then deletes it)
+        const isHomographyQueue = queue.tag === 'homography';
+        if (queue.locationManifestS3Key && !isHomographyQueue) {
           try {
             const bucketName = env.OUTPUTS_BUCKET_NAME;
             if (bucketName) {
@@ -275,9 +277,45 @@ export const handler: Handler = async (event, context) => {
           console.error("Failed to log admin action:", logError);
         }
 
-        // Trigger FN pool reconciliation for non-FN (species labelling) queues
+        // Trigger post-completion Lambdas based on queue type
         const isFnQueue = queue.name === 'False Negatives';
-        if (!isFnQueue && queue.annotationSetId) {
+
+        if (isHomographyQueue && queue.annotationSetId) {
+          // Trigger homography reconciliation — pass manifest key for targeted dedup
+          try {
+            const functionName = (env as any).RECONCILE_HOMOGRAPHIES_FUNCTION_NAME;
+            if (functionName) {
+              const lambdaClient = new LambdaClient({
+                region: env.AWS_REGION,
+                credentials: {
+                  accessKeyId: env.AWS_ACCESS_KEY_ID,
+                  secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+                  sessionToken: env.AWS_SESSION_TOKEN,
+                },
+              });
+              await lambdaClient.send(
+                new InvokeCommand({
+                  FunctionName: functionName,
+                  InvocationType: 'Event',
+                  Payload: new TextEncoder().encode(
+                    JSON.stringify({
+                      annotationSetId: queue.annotationSetId,
+                      queueId: queue.id,
+                      manifestS3Key: queue.locationManifestS3Key ?? null,
+                    })
+                  ),
+                })
+              );
+              console.log('Triggered homography reconciliation', {
+                annotationSetId: queue.annotationSetId,
+                manifestS3Key: queue.locationManifestS3Key,
+              });
+            }
+          } catch (err) {
+            console.error('Failed to trigger homography reconciliation', err);
+          }
+        } else if (!isFnQueue && !isHomographyQueue && queue.annotationSetId) {
+          // Trigger FN pool reconciliation for species labelling queues
           try {
             const functionName = (env as any).RECONCILE_FALSE_NEGATIVES_FUNCTION_NAME;
             if (functionName) {
@@ -323,39 +361,10 @@ export const handler: Handler = async (event, context) => {
     }
 
     for (const projectId of deletedProjectIds) {
-      const userMemberships = await fetchAllPages<
-        UserProjectMembership,
-        "listUserProjectMemberships"
-      >(
-        (nextToken) =>
-          client.graphql({
-            query: listUserProjectMemberships,
-            variables: {
-              filter: {
-                projectId: {
-                  eq: projectId,
-                },
-              },
-              nextToken,
-            },
-          }) as Promise<
-            GraphQLResult<{
-              listUserProjectMemberships: PagedList<UserProjectMembership>;
-            }>
-          >,
-        "listUserProjectMemberships"
-      );
-
-      for (const membership of userMemberships) {
-        await client.graphql({
-          query: updateUserProjectMembership,
-          variables: {
-            input: {
-              id: membership.id,
-            },
-          },
-        });
-      }
+      (client.graphql({
+        query: updateProjectMembershipsMutation,
+        variables: { projectId },
+      }) as Promise<any>).catch((err: any) => console.warn('Failed to update project memberships', err));
     }
 
     console.log("Job status monitoring completed successfully");
