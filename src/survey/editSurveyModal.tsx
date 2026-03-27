@@ -10,6 +10,7 @@ import AdvancedOptions from './AdvancedOptions';
 import DeleteImages from './DeleteImages';
 import Logs from './Logs';
 import ManageTiles from './ManageTiles';
+import ManageUsers from './ManageUsers';
 
 export default function EditSurveyModal({
   show,
@@ -32,12 +33,6 @@ export default function EditSurveyModal({
           <Tab label='Information'>
             <EditInformation key={project.id} projectId={project.id} />
           </Tab>
-          <Tab label='Process Images'>
-            <ProcessImages key={project.id} projectId={project.id} organizationId={project.organizationId} />
-          </Tab>
-          <Tab label='Manage Tiles'>
-            <ManageTiles key={project.id} project={project} />
-          </Tab>
           <Tab label='Edit Cameras'>
             <EditCameras key={project.id} projectId={project.id} organizationId={project.organizationId} />
           </Tab>
@@ -46,6 +41,15 @@ export default function EditSurveyModal({
           </Tab>
           <Tab label='Define Transects & Strata'>
             <DefineTransects key={project.id} projectId={project.id} organizationId={project.organizationId} />
+          </Tab>
+          <Tab label='Manage Tiles'>
+            <ManageTiles key={project.id} project={project} />
+          </Tab>
+          <Tab label='Process Images'>
+            <ProcessImages key={project.id} projectId={project.id} organizationId={project.organizationId} />
+          </Tab>
+          <Tab label='Manage Users'>
+            <ManageUsers key={project.id} projectId={project.id} organizationId={project.organizationId} />
           </Tab>
           <Tab label='Delete Images'>
             <DeleteImages key={project.id} projectId={project.id} />
