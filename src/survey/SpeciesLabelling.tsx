@@ -60,6 +60,9 @@ export default function SpeciesLabelling({
   const [globalTileCount, setGlobalTileCount] = useState<number | null>(null);
   const [loadingTileCount, setLoadingTileCount] = useState<boolean>(false);
 
+  // JSON image ID filter for tiled annotation
+  const [launchImageIds, setLaunchImageIds] = useState<string[] | null>(null);
+
 
   // Get the tiled location set ID from project
   const tiledLocationSetId = (project as any).tiledLocationSetId as
@@ -209,6 +212,7 @@ export default function SpeciesLabelling({
   const zoomRef = useRef(zoom);
   const taskTagRef = useRef(taskTag);
   const tiledLocationSetIdRef = useRef(tiledLocationSetId);
+  const launchImageIdsRef = useRef(launchImageIds);
 
   useEffect(() => {
     modelGuidedRef.current = modelGuided;
@@ -255,6 +259,9 @@ export default function SpeciesLabelling({
   useEffect(() => {
     tiledLocationSetIdRef.current = tiledLocationSetId;
   }, [tiledLocationSetId]);
+  useEffect(() => {
+    launchImageIdsRef.current = launchImageIds;
+  }, [launchImageIds]);
 
 
   // The actual launch logic
@@ -320,6 +327,7 @@ export default function SpeciesLabelling({
             fifo: false,
           },
           onLaunchConfirmed,
+          launchImageIds: launchImageIdsRef.current ?? undefined,
         });
         // Log the launch action
         await logAdminAction(
@@ -571,6 +579,71 @@ export default function SpeciesLabelling({
               <p className='mb-0 mt-1 text-muted' style={{ fontSize: '12px' }}>
                 To modify tiles, go to Edit Survey &gt; Manage Tiles.
               </p>
+              {process.env.NODE_ENV === 'development' && (
+                <Form.Group className='mt-2'>
+                  <Form.Label className='mb-0 text-white' style={{ fontSize: '13px' }}>
+                    Filter by Image IDs (optional)
+                  </Form.Label>
+                  <span
+                    className='text-muted d-block mb-1'
+                    style={{ fontSize: '12px' }}
+                  >
+                    Upload a JSON file containing an array of image IDs to only
+                    launch tiles from those images.
+                  </span>
+                  <div className='d-flex align-items-center gap-2'>
+                    <Form.Control
+                      type='file'
+                      accept='.json'
+                      size='sm'
+                      disabled={launching}
+                      onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+                        const file = event.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                          try {
+                            const content = e.target?.result as string;
+                            const parsed = JSON.parse(content);
+                            if (
+                              Array.isArray(parsed) &&
+                              parsed.every((id) => typeof id === 'string')
+                            ) {
+                              setLaunchImageIds(parsed);
+                            } else {
+                              alert(
+                                'Invalid JSON format. Expected an array of image ID strings.'
+                              );
+                            }
+                          } catch {
+                            alert('Failed to parse JSON file.');
+                          }
+                        };
+                        reader.readAsText(file);
+                        event.target.value = '';
+                      }}
+                    />
+                    {launchImageIds && (
+                      <button
+                        type='button'
+                        className='btn btn-sm btn-outline-light'
+                        onClick={() => setLaunchImageIds(null)}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  {launchImageIds && (
+                    <p
+                      className='mb-0 mt-1 text-white'
+                      style={{ fontSize: '12px' }}
+                    >
+                      <strong>{launchImageIds.length}</strong> image IDs loaded
+                      — only tiles from these images will be launched.
+                    </p>
+                  )}
+                </Form.Group>
+              )}
             </div>
           )}
         </div>
