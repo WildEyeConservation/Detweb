@@ -421,7 +421,7 @@ export default function UploadManager() {
       await Promise.all(seedWorkers);
 
       // 2) upload new files to S3 with concurrency, continuing progress count
-      const CONCURRENCY = 20;
+      const CONCURRENCY = 6;
       const iterator = images[Symbol.iterator]();
       const runWorker = async () => {
         for (
@@ -623,10 +623,12 @@ export default function UploadManager() {
     cancelledRef.current = true;
     retryPendingRef.current = true;
 
+    // Clear isComplete on progress so the useEffect falls through to uploadProject()
+    setProgress((prev) => ({ ...prev, isComplete: false }));
+
     setTask((task) => ({
       ...task,
       retryDelay: retryDelay,
-      isComplete: false,
     }));
 
     setProjectBackOff((prev) => ({
@@ -636,6 +638,7 @@ export default function UploadManager() {
   }
 
   async function fetchFilesFromS3() {
+    if (!projectId) return new Set<string>();
     try {
       // Restrict S3 matches to only the files selected for the current project
       const filesToUpload =
@@ -720,6 +723,7 @@ export default function UploadManager() {
 
   async function handleComplete() {
     if (completingRef.current) return;
+    if (!projectId) return;
     completingRef.current = true;
 
     const filesOnS3 = await fetchFilesFromS3();
@@ -744,11 +748,11 @@ export default function UploadManager() {
       finalizeAfterMaxAttemptsRef.current = false;
       // finish upload
 
-      const {
-        data: [imageSet],
-      } = await client.models.ImageSet.imageSetsByProjectId({
-        projectId: projectId,
-      });
+      const { data: imageSetData } =
+        await client.models.ImageSet.imageSetsByProjectId({
+          projectId: projectId,
+        });
+      const imageSet = imageSetData?.[0];
 
       //DB-level deduplication guardrail
       // Fetch images with their related memberships and files in one query
@@ -833,17 +837,14 @@ export default function UploadManager() {
         await Promise.all(dupWorkers);
       }
 
-      // Build deduplicated list from authoritative DB records (after cleanup)
+      // Build deduplicated list from authoritative DB records (after cleanup).
       const dedupedDbImages = Array.from(imagesByPath.values()).map(
         (images) => images[0]
       );
 
-      // Only process images that were part of this upload session
-      const sessionOriginalPaths = new Set(
-        uploadedFiles.map((f) => f.originalPath)
-      );
-      const createdImages = dedupedDbImages
-        .filter((img) => sessionOriginalPaths.has(img.originalPath))
+      // All project images — used by models that have their own processedBy
+      // guards (scoutbot, MAD) so they can catch previously-missed images.
+      const allProjectImages = dedupedDbImages
         .map((img) => ({
           id: img.id,
           originalPath: img.originalPath,
@@ -851,6 +852,17 @@ export default function UploadManager() {
           cameraId: img.cameraId ?? undefined,
         }))
         .sort((a, b) => a.timestamp - b.timestamp);
+
+      // Session images — used by models without processedBy tracking
+      // (image registration, heatmapper) to avoid redundant ECS work.
+      // The fileStore merge in FilesUploadComponent ensures this includes
+      // images from prior crashed sessions too.
+      const sessionOriginalPaths = new Set(
+        uploadedFiles.map((f) => f.originalPath)
+      );
+      const sessionImages = allProjectImages.filter((img) =>
+        sessionOriginalPaths.has(img.originalPath)
+      );
 
       // Set image count from authoritative deduplicated DB records
       await client.models.ImageSet.update({
@@ -886,13 +898,13 @@ export default function UploadManager() {
 
       const BATCH_SIZE = 500;
 
-      for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
-        const batch = createdImages.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < sessionImages.length; i += BATCH_SIZE) {
+        const batch = sessionImages.slice(i, i + BATCH_SIZE);
         // include 10 prior images to enable adjacency linking across batch boundaries (and across cameras)
         const overlapCount = 10;
         const overlapStart = Math.max(0, i - overlapCount);
         const overlap: CreatedImage[] =
-          i > 0 ? createdImages.slice(overlapStart, i) : [];
+          i > 0 ? sessionImages.slice(overlapStart, i) : [];
         const payload = overlap.concat(batch).map((img) => ({
           id: img.id,
           originalPath: img.originalPath,
@@ -953,8 +965,8 @@ export default function UploadManager() {
           (processedRecords as { imageId: string }[]).map((r) => r.imageId)
         );
 
-        // Filter out images that are already processed (createdImages minus processedImageIds)
-        const unprocessedImages = createdImages.filter(
+        // Filter out images that are already processed (allProjectImages minus processedImageIds)
+        const unprocessedImages = allProjectImages.filter(
           (img) => !processedImageIds.has(img.id)
         );
 
@@ -980,8 +992,8 @@ export default function UploadManager() {
       }
 
       if (model === 'elephant-detection-nadir') {
-        for (let i = 0; i < createdImages.length; i += BATCH_SIZE) {
-          const batch = createdImages.slice(i, i + BATCH_SIZE);
+        for (let i = 0; i < sessionImages.length; i += BATCH_SIZE) {
+          const batch = sessionImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map((image) =>
             makeKey(image.originalPath)
           );
@@ -1033,8 +1045,8 @@ export default function UploadManager() {
           (processedRecords as { imageId: string }[]).map((r) => r.imageId)
         );
 
-        // Filter out images that are already processed (createdImages minus processedImageIds)
-        const unprocessedImages = createdImages.filter(
+        // Filter out images that are already processed (allProjectImages minus processedImageIds)
+        const unprocessedImages = allProjectImages.filter(
           (img) => !processedImageIds.has(img.id)
         );
 
