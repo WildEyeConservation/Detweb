@@ -1673,7 +1673,19 @@ export function FileUploadCore({
       }
 
       //store image data & model in local storage
-      await fileStore.setItem(projectId, images);
+      // Merge with existing stored images so that retries/resumes preserve
+      // metadata for files already uploaded in a prior session.  New entries
+      // overwrite any with the same originalPath.
+      const existingStoredImages =
+        ((await fileStore.getItem(projectId)) as typeof images) ?? [];
+      const newPaths = new Set(images.map((img) => img.originalPath));
+      const merged = [
+        ...existingStoredImages.filter(
+          (img) => !newPaths.has(img.originalPath)
+        ),
+        ...images,
+      ];
+      await fileStore.setItem(projectId, merged);
       await metadataStore.setItem(projectId, {
         model: model.value,
         masks: masks,

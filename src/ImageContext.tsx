@@ -1,4 +1,4 @@
-import { useCallback, useState, useContext, useEffect, useMemo } from 'react';
+import { useCallback, useState, useContext, useEffect, useMemo, useRef } from 'react';
 import { ImageContext, UserContext, GlobalContext } from './Context';
 import type { ImageType } from './schemaTypes';
 import type { AnnotationsHook } from './Context';
@@ -21,6 +21,7 @@ export function ImageContextFromHook({
   taskTag: string;
 }) {
   const [annoCount, setAnnoCount] = useState(0);
+  const lastAnnotationTimeRef = useRef<number>(0);
   const { client } = useContext(GlobalContext);
   const [startLoadingTimestamp, _] = useState<number>(Date.now());
   const [visibleTimestamp, setVisibleTimestamp] = useState<number | undefined>(
@@ -141,6 +142,14 @@ export function ImageContextFromHook({
 
   const create = useCallback(
     (annotation: Schema['Annotation']['type']) => {
+      // Reject annotations at exactly (0, 0) — these are phantom clicks/hotkeys
+      if (annotation.x === 0 && annotation.y === 0) return;
+      // Debounce: ignore annotations placed within 100ms of the last one
+      const now = Date.now();
+      if (now - lastAnnotationTimeRef.current < 300) return;
+      lastAnnotationTimeRef.current = now;
+      // Reject if an annotation already exists at the exact same position
+      if (hook.data.some((a) => a.x === annotation.x && a.y === annotation.y)) return;
       //Check if this annotation maps to the interior of any of the previous images
       const insidePreviousImage = prevImages.reduce((acc, im) => {
         if (!im?.transform?.fwd) return acc;
@@ -171,7 +180,7 @@ export function ImageContextFromHook({
       });
       return hook.create(annotation);
     },
-    [hook.create, setAnnoCount, zoom, taskTag]
+    [hook.create, hook.data, setAnnoCount, zoom, taskTag]
   );
 
   const update = useCallback(
