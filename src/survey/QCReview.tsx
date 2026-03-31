@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Form, Spinner } from 'react-bootstrap';
+import { Alert, Form } from 'react-bootstrap';
 import { Schema } from '../amplify/client-schema';
 import { GlobalContext, UserContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
@@ -38,15 +38,14 @@ export default function QCReview({
   const { client } = useContext(GlobalContext)!;
   const { user } = useContext(UserContext)!;
 
-  // Category selection
+  // Data loading
   const [categories, setCategories] = useState<CategoryOption[]>([]);
-  const [loadingCategories, setLoadingCategories] = useState(true);
+  const [allAnnotations, setAllAnnotations] = useState<
+    Array<{ id: string; categoryId: string; reviewCatId: string | null; owner: string | null }>
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
-
-  // Annotation counts
-  const [totalCount, setTotalCount] = useState<number | null>(null);
-  const [unreviewedCount, setUnreviewedCount] = useState<number | null>(null);
-  const [loadingCounts, setLoadingCounts] = useState(false);
 
   // Launch settings
   const [samplePercent, setSamplePercent] = useState<number>(10);
@@ -56,9 +55,6 @@ export default function QCReview({
 
   // Annotator filter
   const [selectedAnnotatorIds, setSelectedAnnotatorIds] = useState<string[]>([]);
-  const [allAnnotations, setAllAnnotations] = useState<
-    Array<{ id: string; reviewCatId: string | null; owner: string | null }>
-  >([]);
 
   const { users } = useUsers();
   const userMap = useMemo(() => {
@@ -68,122 +64,120 @@ export default function QCReview({
     }, {} as Record<string, string>);
   }, [users]);
 
+  // Categories that have annotations, with completion status
+  const availableCategories = useMemo(() => {
+    const catMap = new Map<string, { total: number; unreviewed: number }>();
+    for (const a of allAnnotations) {
+      let entry = catMap.get(a.categoryId);
+      if (!entry) {
+        entry = { total: 0, unreviewed: 0 };
+        catMap.set(a.categoryId, entry);
+      }
+      entry.total++;
+      if (!a.reviewCatId) entry.unreviewed++;
+    }
+    return categories
+      .filter((c) => catMap.has(c.id))
+      .map((c) => ({
+        ...c,
+        total: catMap.get(c.id)!.total,
+        unreviewed: catMap.get(c.id)!.unreviewed,
+        complete: catMap.get(c.id)!.unreviewed === 0,
+      }));
+  }, [categories, allAnnotations]);
+
+  // Annotations for the selected category
+  const categoryAnnotations = useMemo(() => {
+    if (!selectedCategoryId) return [];
+    return allAnnotations.filter((a) => a.categoryId === selectedCategoryId);
+  }, [allAnnotations, selectedCategoryId]);
+
+  const totalCount = categoryAnnotations.length;
+  const unreviewedCount = categoryAnnotations.filter((a) => !a.reviewCatId).length;
+
   // Distinct annotators who have annotations in the selected category
   const annotatorOptions = useMemo(() => {
     const ownerIds = new Set<string>();
-    for (const a of allAnnotations) {
+    for (const a of categoryAnnotations) {
       if (a.owner) ownerIds.add(a.owner);
     }
     return Array.from(ownerIds).sort((a, b) =>
       (userMap[a] ?? a).localeCompare(userMap[b] ?? b)
     );
-  }, [allAnnotations, userMap]);
+  }, [categoryAnnotations, userMap]);
 
   // Computed sample size (respects annotator filter)
   const filteredUnreviewedCount = useMemo(() => {
-    if (allAnnotations.length === 0) return unreviewedCount;
-    let candidates = allAnnotations.filter((a) => !a.reviewCatId);
+    if (!selectedCategoryId) return null;
+    let candidates = categoryAnnotations.filter((a) => !a.reviewCatId);
     if (selectedAnnotatorIds.length > 0) {
       const filterSet = new Set(selectedAnnotatorIds);
       candidates = candidates.filter((a) => a.owner && filterSet.has(a.owner));
     }
     return candidates.length;
-  }, [allAnnotations, unreviewedCount, selectedAnnotatorIds]);
+  }, [categoryAnnotations, selectedCategoryId, selectedAnnotatorIds]);
 
   const sampleCount =
     filteredUnreviewedCount !== null
       ? Math.max(1, Math.round((filteredUnreviewedCount * samplePercent) / 100))
       : null;
 
-  // Load categories on mount
+  // Load categories and all annotations on mount
   useEffect(() => {
     let mounted = true;
-    async function loadCategories() {
-      setLoadingCategories(true);
+    async function loadData() {
+      setLoading(true);
+      setLoadingProgress(0);
       try {
-        const cats = await fetchAllPaginatedResults(
-          client.models.Category.categoriesByAnnotationSetId,
-          {
-            annotationSetId: annotationSet.id,
-            selectionSet: ['id', 'name', 'shortcutKey'] as const,
-          }
-        );
-        if (mounted) {
-          setCategories(
-            cats.map((c) => ({
-              id: c.id,
-              name: c.name,
-              shortcutKey: (c as any).shortcutKey ?? null,
-            }))
-          );
-        }
-      } catch (err) {
-        console.error('Failed to load categories', err);
-      }
-      if (mounted) setLoadingCategories(false);
-    }
-    loadCategories();
-    return () => {
-      mounted = false;
-    };
-  }, [client.models.Category.categoriesByAnnotationSetId, annotationSet.id]);
-
-  // Load annotation counts when category changes
-  useEffect(() => {
-    if (!selectedCategoryId) {
-      setTotalCount(null);
-      setUnreviewedCount(null);
-      setAllAnnotations([]);
-      setSelectedAnnotatorIds([]);
-      return;
-    }
-
-    let mounted = true;
-    async function loadCounts() {
-      setLoadingCounts(true);
-      setSelectedAnnotatorIds([]);
-      try {
-        const annotations = await fetchAnnotationsByCategory(
-          client,
-          selectedCategoryId,
-          annotationSet.id
-        );
+        const [cats, annotations] = await Promise.all([
+          fetchAllPaginatedResults(
+            client.models.Category.categoriesByAnnotationSetId,
+            {
+              annotationSetId: annotationSet.id,
+              selectionSet: ['id', 'name', 'shortcutKey'] as const,
+            }
+          ),
+          fetchAnnotationsByAnnotationSet(client, annotationSet.id, (count) => {
+            if (mounted) setLoadingProgress(count);
+          }),
+        ]);
         if (!mounted) return;
-
+        setCategories(
+          cats.map((c) => ({
+            id: c.id,
+            name: c.name,
+            shortcutKey: (c as any).shortcutKey ?? null,
+          }))
+        );
         setAllAnnotations(annotations);
-        setTotalCount(annotations.length);
-        const unreviewed = annotations.filter((a) => !a.reviewCatId);
-        setUnreviewedCount(unreviewed.length);
       } catch (err) {
-        console.error('Failed to load annotation counts', err);
-        if (mounted) {
-          setTotalCount(null);
-          setUnreviewedCount(null);
-          setAllAnnotations([]);
-        }
+        console.error('Failed to load QC review data', err);
       }
-      if (mounted) setLoadingCounts(false);
+      if (mounted) setLoading(false);
     }
-    loadCounts();
+    loadData();
     return () => {
       mounted = false;
     };
-  }, [client, selectedCategoryId, annotationSet.id]);
+  }, [client, annotationSet.id]);
+
+  // Reset annotator filter when category changes
+  useEffect(() => {
+    setSelectedAnnotatorIds([]);
+  }, [selectedCategoryId]);
 
   // Enable/disable Launch button
   useEffect(() => {
     const shouldDisable =
-      loadingCategories ||
+      loading ||
       !selectedCategoryId ||
-      loadingCounts ||
       filteredUnreviewedCount === null ||
       filteredUnreviewedCount === 0 ||
       launching;
     setLaunchDisabled(shouldDisable);
   }, [
-    loadingCategories,
+    loading,
     selectedCategoryId,
-    loadingCounts,
     filteredUnreviewedCount,
     launching,
     setLaunchDisabled,
@@ -270,21 +264,21 @@ export default function QCReview({
     user.userId,
   ]);
 
-  const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
+  const selectedCategory = availableCategories.find((c) => c.id === selectedCategoryId);
 
   return (
     <div className='px-3 pb-3 pt-1'>
       <div className='d-flex flex-column gap-3 mt-2'>
-        {loadingCategories ? (
+        {loading ? (
           <p
             className='text-muted mb-0 text-center'
             style={{ fontSize: '12px' }}
           >
-            Loading categories...
+            Loading annotations{loadingProgress > 0 ? ` (${loadingProgress.toLocaleString()} fetched)` : ''}...
           </p>
-        ) : categories.length === 0 ? (
+        ) : availableCategories.length === 0 ? (
           <Alert variant='warning' className='mb-0'>
-            No labels found for this annotation set.
+            No labels with annotations found for this annotation set.
           </Alert>
         ) : (
           <>
@@ -303,9 +297,9 @@ export default function QCReview({
                 disabled={launching}
               >
                 <option value=''>Select a label...</option>
-                {categories.map((cat) => (
+                {availableCategories.map((cat) => (
                   <option key={cat.id} value={cat.id}>
-                    {cat.name}
+                    {cat.name}{cat.complete ? ' (complete)' : ''}
                   </option>
                 ))}
               </Form.Select>
@@ -317,46 +311,37 @@ export default function QCReview({
                 className='border border-dark shadow-sm p-2'
                 style={{ backgroundColor: '#697582' }}
               >
-                {loadingCounts ? (
-                  <div className='d-flex align-items-center gap-2 text-white'>
-                    <Spinner animation='border' size='sm' />
-                    <span style={{ fontSize: '12px' }}>
-                      Loading annotation counts...
-                    </span>
+                <div className='text-white' style={{ fontSize: '12px' }}>
+                  <div>
+                    Total annotations for{' '}
+                    <strong>{selectedCategory?.name}</strong>:{' '}
+                    <strong>{totalCount}</strong>
                   </div>
-                ) : (
-                  <div className='text-white' style={{ fontSize: '12px' }}>
-                    <div>
-                      Total annotations for{' '}
-                      <strong>{selectedCategory?.name}</strong>:{' '}
-                      <strong>{totalCount ?? '—'}</strong>
-                    </div>
-                    <div>
-                      Not yet reviewed:{' '}
-                      <strong>{unreviewedCount ?? '—'}</strong>
-                      {selectedAnnotatorIds.length > 0 &&
-                        filteredUnreviewedCount !== unreviewedCount && (
-                          <span>
-                            {' '}
-                            (filtered: <strong>{filteredUnreviewedCount}</strong>)
-                          </span>
-                        )}
-                    </div>
-                    {sampleCount !== null && filteredUnreviewedCount !== null && filteredUnreviewedCount > 0 && (
-                      <div>
-                        Sample size ({samplePercent}%):{' '}
-                        <strong>{sampleCount}</strong>
-                      </div>
-                    )}
-                    {filteredUnreviewedCount === 0 && (
-                      <div className='mt-1 text-warning'>
-                        {selectedAnnotatorIds.length > 0
-                          ? 'No unreviewed annotations for the selected annotators.'
-                          : 'All annotations for this label have already been reviewed.'}
-                      </div>
-                    )}
+                  <div>
+                    Not yet reviewed:{' '}
+                    <strong>{unreviewedCount}</strong>
+                    {selectedAnnotatorIds.length > 0 &&
+                      filteredUnreviewedCount !== unreviewedCount && (
+                        <span>
+                          {' '}
+                          (filtered: <strong>{filteredUnreviewedCount}</strong>)
+                        </span>
+                      )}
                   </div>
-                )}
+                  {sampleCount !== null && filteredUnreviewedCount !== null && filteredUnreviewedCount > 0 && (
+                    <div>
+                      Sample size ({samplePercent}%):{' '}
+                      <strong>{sampleCount}</strong>
+                    </div>
+                  )}
+                  {filteredUnreviewedCount === 0 && (
+                    <div className='mt-1 text-warning'>
+                      {selectedAnnotatorIds.length > 0
+                        ? 'No unreviewed annotations for the selected annotators.'
+                        : 'All annotations for this label have already been reviewed.'}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -498,23 +483,23 @@ export default function QCReview({
   );
 }
 
-// Fetch annotations for a category, filtered to a specific annotation set.
+// Fetch all annotations for an annotation set.
 // Returns minimal fields needed for counting, filtering, and annotator identification.
-async function fetchAnnotationsByCategory(
+async function fetchAnnotationsByAnnotationSet(
   client: DataClient,
-  categoryId: string,
-  annotationSetId: string
-): Promise<Array<{ id: string; reviewCatId: string | null; owner: string | null }>> {
-  const allItems: Array<{ id: string; reviewCatId: string | null; owner: string | null }> = [];
+  annotationSetId: string,
+  onProgress?: (count: number) => void
+): Promise<Array<{ id: string; categoryId: string; reviewCatId: string | null; owner: string | null }>> {
+  const allItems: Array<{ id: string; categoryId: string; reviewCatId: string | null; owner: string | null }> = [];
   let nextToken: string | null | undefined = undefined;
+  let lastReported = 0;
 
   do {
     const { data, nextToken: nt } =
-      await client.models.Annotation.annotationsByCategoryId(
-        { categoryId },
+      await client.models.Annotation.annotationsByAnnotationSetId(
+        { setId: annotationSetId },
         {
-          filter: { setId: { eq: annotationSetId } },
-          selectionSet: ['id', 'reviewCatId', 'owner'] as const,
+          selectionSet: ['id', 'categoryId', 'reviewCatId', 'owner'] as const,
           limit: 10000,
           nextToken,
         }
@@ -522,9 +507,15 @@ async function fetchAnnotationsByCategory(
     for (const item of data || []) {
       allItems.push({
         id: item.id,
+        categoryId: item.categoryId,
         reviewCatId: (item as any).reviewCatId ?? null,
         owner: (item as any).owner ?? null,
       });
+    }
+    const currentThousand = Math.floor(allItems.length / 1000);
+    if (onProgress && currentThousand > lastReported) {
+      lastReported = currentThousand;
+      onProgress(allItems.length);
     }
     nextToken = nt as string | null | undefined;
   } while (nextToken);
