@@ -220,6 +220,22 @@ export default function HomographyLaunch({
     return () => { cancelled = true; };
   }, [client, project.id, annotationSet.id]);
 
+  // ── Enrich category options with completion status ──
+  const enrichedCategoryOptions = useMemo(() => {
+    if (loading) return categoryOptions;
+    return categoryOptions
+      .filter((opt) => allAnnotations.some((a) => a.categoryId === opt.value))
+      .map((opt) => {
+        const catAnnotations = allAnnotations.filter((a) => a.categoryId === opt.value);
+        const { pairs } = calculatePairs(catAnnotations, neighbourCacheRef.current, false);
+        const complete = pairs.size === 0;
+        return {
+          ...opt,
+          label: complete ? `${opt.label} (complete)` : opt.label,
+        };
+      });
+  }, [loading, categoryOptions, allAnnotations]);
+
   // ── Compute effective annotations (filtered by selected categories, or all) ──
   const effectiveAnnotations = useMemo(() => {
     if (selectedCategories.length === 0) return allAnnotations;
@@ -416,7 +432,7 @@ export default function HomographyLaunch({
                 onChange={(v) => setSelectedCategories(v as CategoryOption[])}
                 isMulti
                 name='Labels for homography'
-                options={categoryOptions}
+                options={enrichedCategoryOptions}
                 className='text-black w-100'
                 closeMenuOnSelect={false}
                 isDisabled={launching}
