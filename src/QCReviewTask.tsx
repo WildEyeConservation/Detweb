@@ -20,7 +20,7 @@ import { fetchAllPaginatedResults } from './utils';
  */
 export default function QCReviewTask() {
   const { queueId } = useParams<{ queueId: string }>();
-  const { getSqsClient } = useContext(UserContext)!;
+  const { getSqsClient, myMembershipHook } = useContext(UserContext)!;
   const { client } = useContext(GlobalContext)!;
   const [index, setIndex] = useState(0);
   const [legendCollapsed, setLegendCollapsed] = useState(false);
@@ -32,6 +32,8 @@ export default function QCReviewTask() {
   const [group, setGroup] = useState<string | undefined>(undefined);
   const processedRef = useRef<Set<string>>(new Set());
 
+  const [queueZoom, setQueueZoom] = useState<number | null>(null);
+
   // Fetch queue URL and annotationSetId on mount.
   useEffect(() => {
     if (!queueId) return;
@@ -40,6 +42,7 @@ export default function QCReviewTask() {
       if (data?.annotationSetId) setAnnotationSetId(data.annotationSetId);
       if (data?.projectId) setProjectId(data.projectId);
       if (data?.group) setGroup(data.group);
+      if (data?.zoom != null) setQueueZoom(data.zoom);
     });
   }, [queueId, client]);
 
@@ -188,6 +191,14 @@ export default function QCReviewTask() {
             annotationSetId={annotationSetId}
             group={group}
             queueId={queueId}
+            queueZoom={queueZoom}
+            setQueueZoom={setQueueZoom}
+            adminMemberships={myMembershipHook.data
+              ?.filter((membership: any) => membership.isAdmin)
+              .map((membership: any) => ({
+                projectId: membership.projectId,
+                queueId: membership.queueId!,
+              }))}
             legendCollapsed={legendCollapsed}
             setLegendCollapsed={setLegendCollapsed}
           />
