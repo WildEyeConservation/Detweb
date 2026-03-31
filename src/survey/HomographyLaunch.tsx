@@ -223,15 +223,17 @@ export default function HomographyLaunch({
   // ── Enrich category options with completion status ──
   const enrichedCategoryOptions = useMemo(() => {
     if (loading) return categoryOptions;
-    return categoryOptions.map((opt) => {
-      const catAnnotations = allAnnotations.filter((a) => a.categoryId === opt.value);
-      const { pairs } = calculatePairs(catAnnotations, neighbourCacheRef.current, false);
-      const complete = pairs.size === 0;
-      return {
-        ...opt,
-        label: complete ? `${opt.label} (complete)` : opt.label,
-      };
-    });
+    return categoryOptions
+      .filter((opt) => allAnnotations.some((a) => a.categoryId === opt.value))
+      .map((opt) => {
+        const catAnnotations = allAnnotations.filter((a) => a.categoryId === opt.value);
+        const { pairs } = calculatePairs(catAnnotations, neighbourCacheRef.current, false);
+        const complete = pairs.size === 0;
+        return {
+          ...opt,
+          label: complete ? `${opt.label} (complete)` : opt.label,
+        };
+      });
   }, [loading, categoryOptions, allAnnotations]);
 
   // ── Compute effective annotations (filtered by selected categories, or all) ──
