@@ -1,19 +1,17 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Matrix, matrix, multiply, transpose, inv } from 'mathjs';
-import { Card, Button, Badge, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Card, Button, Badge } from 'react-bootstrap';
 import {
   Trash2,
   Info,
   Save,
   SkipForward,
-  Image as ImageIcon,
   Target,
   Circle,
   ChevronDown,
   ChevronUp,
   X,
   SquareDashed,
-  AlertTriangle,
 } from 'lucide-react';
 import { POINT_COLORS } from '../maplibre-viewer/MapLibreImageViewer';
 
@@ -185,17 +183,6 @@ export function ManualHomographyEditor({
     [points1, points2]
   );
 
-  // Threshold: errors above median + 2*MAD are flagged as outliers
-  const errorThreshold = useMemo(() => {
-    if (!reprojErrors || reprojErrors.length < MIN_HOMOGRAPHY_POINTS) return null;
-    const sorted = [...reprojErrors].sort((a, b) => a - b);
-    const median = sorted[Math.floor(sorted.length / 2)];
-    const mad = sorted.map((e) => Math.abs(e - median)).sort((a, b) => a - b)[
-      Math.floor(sorted.length / 2)
-    ];
-    return median + 2 * Math.max(mad, 1); // floor of 1px to avoid flagging when all errors are tiny
-  }, [reprojErrors]);
-
   const tableRows = useMemo(() => {
     const maxLen = Math.max(points1.length, points2.length);
     return new Array(maxLen).fill(0).map((_, i) => ({
@@ -251,9 +238,8 @@ export function ManualHomographyEditor({
       <Card.Body className='p-0 d-flex flex-column overflow-hidden'>
         <div className='flex-grow-1 overflow-auto p-3'>
           <div className='d-flex flex-column gap-2'>
-            {tableRows.map(({ i, p1, p2, error }) => {
+            {tableRows.map(({ i, p1, p2 }) => {
               const color = POINT_COLORS[i % POINT_COLORS.length];
-              const isOutlier = error !== null && errorThreshold !== null && error > errorThreshold;
               return (
                 <div
                   key={`pair-${i}`}
