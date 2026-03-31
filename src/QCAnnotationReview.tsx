@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Badge, Button, Card } from 'react-bootstrap';
-import { ChevronLeft, ChevronRight, Undo2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Undo2, SearchCheck, RotateCcw } from 'lucide-react';
 import { GlobalContext, UserContext } from './Context';
 import { getTileBlob } from './StorageLayer';
 import type { Schema } from './amplify/client-schema';
@@ -52,9 +52,14 @@ type QCReviewProps = {
   projectId?: string;
   annotationSetId?: string;
   group?: string;
+  queueZoom: number | null;
+  setQueueZoom: (zoom: number | null) => void;
+  adminMemberships?: { projectId: string; queueId: string }[];
   legendCollapsed: boolean;
   setLegendCollapsed: (collapsed: boolean) => void;
 };
+
+const DEFAULT_ZOOM_OFFSET = 6;
 
 export default function QCAnnotationReview({
   annotation,
@@ -68,6 +73,9 @@ export default function QCAnnotationReview({
   projectId,
   annotationSetId,
   group,
+  queueZoom,
+  setQueueZoom,
+  adminMemberships,
   legendCollapsed,
   setLegendCollapsed,
 }: QCReviewProps) {
@@ -85,6 +93,19 @@ export default function QCAnnotationReview({
   const loadedTilesRef = useRef<Set<string>>(new Set());
   const blobUrlsRef = useRef<string[]>([]);
   const cancelledRef = useRef(false);
+
+  // ── Zoom state ──
+  const baseZoomRef = useRef<number | null>(null);
+  const [zoomOffset, setZoomOffset] = useState<number>(() => {
+    if (queueId) {
+      const stored = localStorage.getItem(`qcDefaultZoom-${queueId}`);
+      if (stored != null) return Number(stored);
+    }
+    return queueZoom ?? DEFAULT_ZOOM_OFFSET;
+  });
+  const [hasLocalZoom, setHasLocalZoom] = useState<boolean>(() => {
+    return queueId ? localStorage.getItem(`qcDefaultZoom-${queueId}`) != null : false;
+  });
 
   // ── UI state ──
   const [, setHideMarker] = useState(false);
@@ -408,7 +429,7 @@ export default function QCAnnotationReview({
         },
       });
 
-      // Compute the zoom level that fits the whole image, then start 5 levels closer.
+      // Compute the zoom level that fits the whole image, then add the offset.
       const imageBounds = new maplibregl.LngLatBounds(
         px2lngLat(0, image.height),
         px2lngLat(image.width, 0)
@@ -416,7 +437,8 @@ export default function QCAnnotationReview({
       // Temporarily fit to get the base zoom, then override.
       m.fitBounds(imageBounds, { padding: 20, animate: false });
       const baseZoom = m.getZoom();
-      const targetZoom = baseZoom + 6;
+      baseZoomRef.current = baseZoom;
+      const targetZoom = baseZoom + zoomOffset;
 
       m.jumpTo({
         center: px2lngLat(annotation.x, annotation.y),
@@ -436,7 +458,7 @@ export default function QCAnnotationReview({
       setMap(null);
       blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [image?.id, sourceKey, scale]);
+  }, [image?.id, sourceKey, scale, zoomOffset]);
 
   // ── Toggle marker visibility on Tab hold ──
   useEffect(() => {
@@ -578,6 +600,50 @@ export default function QCAnnotationReview({
       navigate('/surveys');
     }, 60000);
   }, [waiting, navigate]);
+
+  const saveDefaultZoom = useCallback(async () => {
+    if (!map) return;
+    const currentZoom = map.getZoom();
+    const base = baseZoomRef.current;
+    if (base == null) return;
+    const newOffset = Math.round(currentZoom - base);
+
+    if (!hasLocalZoom) {
+      // Check if admin on this project — offer to save for everyone
+      const isAdmin = adminMemberships?.some(
+        (m) => m.projectId === projectId
+      );
+      if (isAdmin) {
+        const result = window.prompt(
+          'Set as default zoom for all users on this job? (y/n)'
+        );
+        if (result === null) return;
+        if (result?.toLowerCase() === 'y') {
+          await client.models.Queue.update({
+            id: queueId,
+            zoom: newOffset,
+          });
+          setQueueZoom(newOffset);
+          alert(
+            'Default zoom updated for all users. Save & Exit for changes to take effect.'
+          );
+          return;
+        }
+      }
+    }
+
+    if (hasLocalZoom) {
+      // Reset personal zoom
+      localStorage.removeItem(`qcDefaultZoom-${queueId}`);
+      setHasLocalZoom(false);
+      setZoomOffset(queueZoom ?? DEFAULT_ZOOM_OFFSET);
+    } else {
+      // Save personal zoom
+      localStorage.setItem(`qcDefaultZoom-${queueId}`, String(newOffset));
+      setHasLocalZoom(true);
+      setZoomOffset(newOffset);
+    }
+  }, [map, hasLocalZoom, adminMemberships, projectId, client, queueId, queueZoom, setQueueZoom]);
 
   const handleFalsePositive = useCallback(async () => {
     let fpCatId: string;
@@ -745,6 +811,15 @@ export default function QCAnnotationReview({
             Tip: Hold Tab to hide the marker
           </span>
         </div>
+        <button
+          className='p-0 m-0 border-0 bg-transparent d-flex align-items-center text-white'
+          onClick={saveDefaultZoom}
+        >
+          {hasLocalZoom ? <RotateCcw size={20} /> : <SearchCheck size={20} />}
+          <span className='ms-2 mb-0 d-none d-md-block' style={{ fontSize: '13px' }}>
+            {hasLocalZoom ? 'Reset zoom' : 'Set as default zoom'}
+          </span>
+        </button>
       </div>
 
       {/* Map + side legend */}
