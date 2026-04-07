@@ -391,9 +391,9 @@ async function sendLaunchLambdaRequest(
   }
 
   try {
-    await client.mutations.launchAnnotationSet({
+    await (client as any).mutations.launchAnnotationSet({
       request: requestPayload,
-    });
+    }, { retry: false });
   } catch (error: any) {
     if (shouldIgnoreLaunchError(error)) {
       console.warn('Ignoring launch lambda timeout response', error);

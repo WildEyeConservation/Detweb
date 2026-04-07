@@ -71,45 +71,38 @@ export default function LaunchAnnotationSetModal({
 
   async function handleSubmit() {
     const originalStatus = project.status ?? 'active';
-    let optimisticStatusApplied = false;
     setLaunching(true);
+
+    // Set optimistic status immediately so the project is blocked for the
+    // user even before the modal closes, preventing rapid re-launches.
+    if (taskType !== 'registration') {
+      onOptimisticStatus?.(project.id, 'launching');
+    }
 
     try {
       switch (taskType) {
         case 'species-labelling':
           if (speciesLaunchHandler) {
             setProgressMessage('Initializing launch...');
-            await speciesLaunchHandler.execute(setProgressMessage, () => {
-              onOptimisticStatus?.(project.id, 'launching');
-              optimisticStatusApplied = true;
-            });
+            await speciesLaunchHandler.execute(setProgressMessage, () => {});
           }
           break;
         case 'false-negatives':
           if (falseNegativesLaunchHandler) {
             setProgressMessage('Initializing launch...');
-            await falseNegativesLaunchHandler.execute(setProgressMessage, () => {
-              onOptimisticStatus?.(project.id, 'launching');
-              optimisticStatusApplied = true;
-            });
+            await falseNegativesLaunchHandler.execute(setProgressMessage, () => {});
           }
           break;
         case 'qc-review':
           if (qcLaunchHandler) {
             setProgressMessage('Initializing launch...');
-            await qcLaunchHandler.execute(setProgressMessage, () => {
-              onOptimisticStatus?.(project.id, 'launching');
-              optimisticStatusApplied = true;
-            });
+            await qcLaunchHandler.execute(setProgressMessage, () => {});
           }
           break;
         case 'homographies':
           if (homographyLaunchHandler) {
             setProgressMessage('Initializing launch...');
-            await homographyLaunchHandler.execute(setProgressMessage, () => {
-              onOptimisticStatus?.(project.id, 'launching');
-              optimisticStatusApplied = true;
-            });
+            await homographyLaunchHandler.execute(setProgressMessage, () => {});
           }
           break;
         case 'registration':
@@ -118,9 +111,7 @@ export default function LaunchAnnotationSetModal({
       }
     } catch (error) {
       console.error('Launch error', error);
-      if (optimisticStatusApplied) {
-        onOptimisticStatus?.(project.id, originalStatus);
-      }
+      onOptimisticStatus?.(project.id, originalStatus);
       throw error;
     } finally {
       setLaunching(false);

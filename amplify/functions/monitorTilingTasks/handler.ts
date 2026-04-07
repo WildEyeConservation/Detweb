@@ -66,6 +66,14 @@ const updateTilingTaskMutation = /* GraphQL */ `
   }
 `;
 
+const queuesByProjectIdQuery = /* GraphQL */ `
+  query QueuesByProjectId($projectId: ID!, $limit: Int) {
+    queuesByProjectId(projectId: $projectId, limit: $limit) {
+      items { id }
+    }
+  }
+`;
+
 // Configure Amplify for IAM-based GraphQL access.
 Amplify.configure(
   {
@@ -331,6 +339,20 @@ async function processTask(task: TilingTaskRecord) {
       }
     }
 
+    // Guard: prevent duplicate queues for the same project and tag
+    const existingQueue = await findExistingQueue(task.projectId);
+    if (existingQueue) {
+      console.warn('Duplicate queue launch blocked', {
+        projectId: task.projectId,
+        existingQueueId: existingQueue.id,
+        taskId: task.id,
+      });
+      await setProjectStatus(task.projectId, 'active');
+      await cleanupBatchOutputs(completedBatches);
+      await updateTaskCompleted(task.id);
+      return;
+    }
+
     // Create queue and enqueue locations
     const mainQueue = await createQueue(
       launchConfig.queueOptions,
@@ -539,6 +561,22 @@ async function cleanupBatchOutputs(batches: TilingBatchRecord[]): Promise<void> 
     );
 
   await Promise.all(deleteTasks);
+}
+
+// Check if any queue already exists for this project.
+async function findExistingQueue(
+  projectId: string
+): Promise<{ id: string } | null> {
+  const data = await executeGraphql<{
+    queuesByProjectId?: {
+      items: Array<{ id: string }>;
+    };
+  }>(queuesByProjectIdQuery, {
+    projectId,
+    limit: 1,
+  });
+  const first = data.queuesByProjectId?.items?.[0];
+  return first ? { id: first.id } : null;
 }
 
 async function createQueue(

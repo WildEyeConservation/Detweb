@@ -64,8 +64,8 @@ const createTasksOnAnnotationSetMutation = /* GraphQL */ `
 `;
 
 const updateProjectMutation = /* GraphQL */ `
-  mutation UpdateProject($input: UpdateProjectInput!) {
-    updateProject(input: $input) { id group }
+  mutation UpdateProject($input: UpdateProjectInput!, $condition: ModelProjectConditionInput) {
+    updateProject(input: $input, condition: $condition) { id group }
   }
 `;
 
@@ -84,6 +84,14 @@ const createTilingTaskMutation = /* GraphQL */ `
 const createTilingBatchMutation = /* GraphQL */ `
   mutation CreateTilingBatch($input: CreateTilingBatchInput!) {
     createTilingBatch(input: $input) { id group }
+  }
+`;
+
+const queuesByProjectIdQuery = /* GraphQL */ `
+  query QueuesByProjectId($projectId: ID!, $limit: Int) {
+    queuesByProjectId(projectId: $projectId, limit: $limit) {
+      items { id }
+    }
   }
 `;
 
@@ -300,7 +308,30 @@ export const handler: LaunchFalseNegativesHandler = async (event) => {
 
     authorizeRequest(event.identity, organizationId);
 
-    await setProjectStatus(payload.projectId, 'launching');
+    // Conditional update: only proceed if the project is currently 'active'.
+    try {
+      await setProjectStatus(payload.projectId, 'launching', {
+        status: { eq: 'active' },
+      });
+    } catch (err: any) {
+      const msg = err?.message ?? '';
+      const errMsgs = Array.isArray(err?.errors)
+        ? err.errors.map((e: any) => e?.message ?? '').join(' ')
+        : '';
+      if (msg.includes('ConditionalCheckFailed') || errMsgs.includes('ConditionalCheckFailed')) {
+        console.warn('Launch rejected: project is not in active status', {
+          projectId: payload.projectId,
+        });
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            message: 'Project is already launching or processing',
+          }),
+        };
+      }
+      throw err;
+    }
+
     await executeGraphql<{ updateProjectMemberships?: string | null }>(
       updateProjectMembershipsMutation,
       { projectId: payload.projectId }
@@ -601,6 +632,21 @@ async function handleLaunch(payload: LaunchFalseNegativesPayload, organizationId
       message: 'No candidate tiles discovered',
       locationCount: 0,
       queueId: null,
+    };
+  }
+
+  // Guard: prevent duplicate queues for the same project and tag
+  const existingQueue = await findExistingQueue(projectId);
+  if (existingQueue) {
+    console.warn('Duplicate queue launch blocked', {
+      projectId,
+      existingQueueId: existingQueue.id,
+    });
+    await setProjectStatus(projectId, 'active');
+    return {
+      message: 'A queue already exists for this project',
+      locationCount: 0,
+      queueId: existingQueue.id,
     };
   }
 
@@ -1522,6 +1568,22 @@ async function createQueue(
   return { id: createdQueue.id, url: queueUrl };
 }
 
+// Check if any queue already exists for this project.
+async function findExistingQueue(
+  projectId: string
+): Promise<{ id: string } | null> {
+  const data = await executeGraphql<{
+    queuesByProjectId?: {
+      items: Array<{ id: string }>;
+    };
+  }>(queuesByProjectIdQuery, {
+    projectId,
+    limit: 1,
+  });
+  const first = data.queuesByProjectId?.items?.[0];
+  return first ? { id: first.id } : null;
+}
+
 // Fan selected tiles into SQS batches respecting FIFO rules.
 async function enqueueTiles(
   queueUrl: string,
@@ -1780,13 +1842,18 @@ function makeSafeQueueName(input: string): string {
 }
 
 // Persist project status transitions for UI feedback.
-async function setProjectStatus(projectId: string, status: string) {
+async function setProjectStatus(
+  projectId: string,
+  status: string,
+  condition?: { status: { eq: string } }
+) {
   await withTiming(`setProjectStatus:${status}`, () =>
     executeGraphql<{ updateProject?: { id: string } }>(updateProjectMutation, {
       input: {
         id: projectId,
         status,
       },
+      ...(condition ? { condition } : {}),
     })
   );
 }

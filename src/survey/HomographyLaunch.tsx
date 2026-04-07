@@ -588,7 +588,7 @@ async function sendLaunchRequest(
 ) {
   const requestPayload = JSON.stringify(payload);
   try {
-    await (client as any).mutations.launchHomography({ request: requestPayload });
+    await (client as any).mutations.launchHomography({ request: requestPayload }, { retry: false });
   } catch (error: any) {
     if (shouldIgnoreLaunchError(error)) {
       console.warn('Ignoring launch lambda timeout response', error);

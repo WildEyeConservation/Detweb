@@ -533,7 +533,7 @@ async function sendLaunchQCReviewRequest(
   try {
     await (client as any).mutations.launchQCReview({
       request: requestPayload,
-    });
+    }, { retry: false });
   } catch (error: any) {
     // Ignore timeout errors - the Lambda may still be processing.
     if (shouldIgnoreLaunchError(error)) {
