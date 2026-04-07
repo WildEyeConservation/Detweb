@@ -1226,9 +1226,9 @@ async function sendLaunchFalseNegativesRequest(
   }
 
   try {
-    await client.mutations.launchFalseNegatives({
+    await (client as any).mutations.launchFalseNegatives({
       request: requestPayload,
-    });
+    }, { retry: false });
   } catch (error: any) {
     if (shouldIgnoreLaunchError(error)) {
       console.warn('Ignoring launch lambda timeout response', error);

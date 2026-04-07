@@ -58,8 +58,8 @@ const createTasksOnAnnotationSetMutation = /* GraphQL */ `
 `;
 
 const updateProjectMutation = /* GraphQL */ `
-  mutation UpdateProject($input: UpdateProjectInput!) {
-    updateProject(input: $input) { id group }
+  mutation UpdateProject($input: UpdateProjectInput!, $condition: ModelProjectConditionInput) {
+    updateProject(input: $input, condition: $condition) { id group }
   }
 `;
 
@@ -144,6 +144,14 @@ const locationsBySetIdAndConfidence = /* GraphQL */ `
         id
       }
       nextToken
+    }
+  }
+`;
+
+const queuesByProjectIdQuery = /* GraphQL */ `
+  query QueuesByProjectId($projectId: ID!, $limit: Int) {
+    queuesByProjectId(projectId: $projectId, limit: $limit) {
+      items { id }
     }
   }
 `;
@@ -367,11 +375,33 @@ export const handler: LaunchAnnotationSetHandler = async (event) => {
 
     authorizeRequest(event.identity, organizationId);
 
-    // Use 'processing' for tiling-only, 'launching' for actual annotation set launches
-    await setProjectStatus(
-      payload.projectId,
-      isTilingOnly ? 'processing' : 'launching'
-    );
+    // Use 'processing' for tiling-only, 'launching' for actual annotation set launches.
+    // Conditional update: only proceed if the project is currently 'active'.
+    // This acts as an atomic lock — if two launches race, only one wins.
+    try {
+      await setProjectStatus(
+        payload.projectId,
+        isTilingOnly ? 'processing' : 'launching',
+        { status: { eq: 'active' } }
+      );
+    } catch (err: any) {
+      const msg = err?.message ?? '';
+      const errMsgs = Array.isArray(err?.errors)
+        ? err.errors.map((e: any) => e?.message ?? '').join(' ')
+        : '';
+      if (msg.includes('ConditionalCheckFailed') || errMsgs.includes('ConditionalCheckFailed')) {
+        console.warn('Launch rejected: project is not in active status', {
+          projectId: payload.projectId,
+        });
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            message: 'Project is already launching or processing',
+          }),
+        };
+      }
+      throw err;
+    }
 
     await executeGraphql<{ updateProjectMemberships?: string | null }>(
       updateProjectMembershipsMutation,
@@ -430,6 +460,21 @@ async function handleLaunch(payload: LaunchLambdaPayload, organizationId: string
 
   if (!locationIds || locationIds.length === 0) {
     throw new Error('No locations provided to launch');
+  }
+
+  // Guard: prevent duplicate queues for the same project and tag
+  const existingQueue = await findExistingQueue(payload.projectId);
+  if (existingQueue) {
+    console.warn('Duplicate queue launch blocked', {
+      projectId: payload.projectId,
+      existingQueueId: existingQueue.id,
+    });
+    await setProjectStatus(payload.projectId, 'active');
+    return {
+      message: 'A queue already exists for this project',
+      locationCount: 0,
+      queueId: existingQueue.id,
+    };
   }
 
   console.log('Creating queues', {
@@ -1070,6 +1115,22 @@ async function createQueue(
   };
 }
 
+// Check if any queue already exists for this project.
+async function findExistingQueue(
+  projectId: string
+): Promise<{ id: string } | null> {
+  const data = await executeGraphql<{
+    queuesByProjectId?: {
+      items: Array<{ id: string }>;
+    };
+  }>(queuesByProjectIdQuery, {
+    projectId,
+    limit: 1,
+  });
+  const first = data.queuesByProjectId?.items?.[0];
+  return first ? { id: first.id } : null;
+}
+
 // writeLocationManifest removed - now handled by client or tiling task monitor
 
 // Batch SQS writes so we stay within SDK limits.
@@ -1191,7 +1252,11 @@ function makeSafeQueueName(input: string): string {
 }
 
 // Flip project status in AppSync so the UI reflects progress.
-async function setProjectStatus(projectId: string, status: string) {
+async function setProjectStatus(
+  projectId: string,
+  status: string,
+  condition?: { status: { eq: string } }
+) {
   await executeGraphql<{ updateProject?: { id: string } }>(
     updateProjectMutation,
     {
@@ -1199,6 +1264,7 @@ async function setProjectStatus(projectId: string, status: string) {
         id: projectId,
         status,
       },
+      ...(condition ? { condition } : {}),
     }
   );
 }

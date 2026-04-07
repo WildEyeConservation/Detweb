@@ -251,7 +251,7 @@ export default function Surveys() {
       project?.organizationId || ''
     );
 
-    client.mutations.deleteProjectInFull({ projectId: projectId });
+    (client as any).mutations.deleteProjectInFull({ projectId: projectId }, { retry: false });
   }
 
   async function deleteAnnotationSet(

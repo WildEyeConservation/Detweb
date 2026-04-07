@@ -158,13 +158,13 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
             (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
 
-          client.mutations.runScoutbot({
+          (client as any).mutations.runScoutbot({
             projectId: projectId,
             images: batchStrings,
             setId: locationSet.id,
             bucket: backend.storage.buckets[1].bucket_name,
             queueUrl: backend.custom.scoutbotTaskQueueUrl,
-          });
+          }, { retry: false });
 
           await client.models.Project.update({
             id: projectId,
@@ -179,10 +179,10 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
             makeKey(image.originalPath)
           );
 
-          client.mutations.runHeatmapper({
+          (client as any).mutations.runHeatmapper({
             projectId,
             images: batchStrings,
-          });
+          }, { retry: false });
         }
 
         await client.models.Project.update({
@@ -197,13 +197,13 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
             (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
 
-          client.mutations.runMadDetector({
+          (client as any).mutations.runMadDetector({
             projectId: projectId,
             images: batchStrings,
             setId: locationSet.id,
             bucket: backend.storage.buckets[1].bucket_name,
             queueUrl: backend.custom.madDetectorTaskQueueUrl,
-          });
+          }, { retry: false });
 
           await client.models.Project.update({
             id: projectId,

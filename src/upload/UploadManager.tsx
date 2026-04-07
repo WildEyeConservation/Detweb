@@ -912,14 +912,14 @@ export default function UploadManager() {
           cameraId: img.cameraId,
         }));
 
-        client.mutations.runImageRegistration({
+        (client as any).mutations.runImageRegistration({
           projectId: projectId,
           metadata: JSON.stringify({
             masks: masks,
             images: payload,
           }),
           queueUrl: backend.custom.lightglueTaskQueueUrl,
-        });
+        }, { retry: false });
       }
 
       if (model === 'manual') {
@@ -976,13 +976,13 @@ export default function UploadManager() {
             (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
 
-          client.mutations.runScoutbot({
+          (client as any).mutations.runScoutbot({
             projectId: projectId,
             images: batchStrings,
             setId: locationSet,
             bucket: backend.storage.buckets[1].bucket_name,
             queueUrl: backend.custom.scoutbotTaskQueueUrl,
-          });
+          }, { retry: false });
         }
 
         await client.models.Project.update({
@@ -998,10 +998,10 @@ export default function UploadManager() {
             makeKey(image.originalPath)
           );
 
-          client.mutations.runHeatmapper({
+          (client as any).mutations.runHeatmapper({
             projectId,
             images: batchStrings,
-          });
+          }, { retry: false });
         }
 
         await client.models.Project.update({
@@ -1056,13 +1056,13 @@ export default function UploadManager() {
             (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
 
-          client.mutations.runMadDetector({
+          (client as any).mutations.runMadDetector({
             projectId: projectId,
             images: batchStrings,
             setId: locationSet,
             bucket: backend.storage.buckets[1].bucket_name,
             queueUrl: backend.custom.madDetectorTaskQueueUrl,
-          });
+          }, { retry: false });
         }
 
         await client.models.Project.update({
