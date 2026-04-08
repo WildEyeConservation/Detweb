@@ -14,6 +14,17 @@ interface MembershipInfo {
   isActive: boolean;
 }
 
+const STORAGE_KEYS = {
+  SHOW_WORKFLOW_STATUS: 'showWorkflowStatus',
+};
+
+export function getShowWorkflowStatus(): boolean {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem(STORAGE_KEYS.SHOW_WORKFLOW_STATUS) === 'true';
+  }
+  return false;
+}
+
 export default function Settings({ signOut }: { signOut: () => void }) {
   const [show, setShow] = useState(false);
   const { user, cognitoGroups } = useContext(UserContext)!;
@@ -39,6 +50,7 @@ export default function Settings({ signOut }: { signOut: () => void }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [showWorkflowStatus, setShowWorkflowStatus] = useState(getShowWorkflowStatus);
 
   const currentCognitoGroupOrgIds = cognitoGroups.filter(
     (g) => g !== 'sysadmin' && g !== 'orgadmin'
@@ -274,6 +286,31 @@ export default function Settings({ signOut }: { signOut: () => void }) {
                     )}
                   </>
                 )}
+              </div>
+            </Tab>
+            <Tab label='Experimental'>
+              <div className='p-3'>
+                <div
+                  className='d-flex align-items-center justify-content-between p-2 rounded'
+                  style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
+                >
+                  <div className='d-flex align-items-center gap-2'>
+                    <Form.Check
+                      type='switch'
+                      checked={showWorkflowStatus}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setShowWorkflowStatus(val);
+                        localStorage.setItem(STORAGE_KEYS.SHOW_WORKFLOW_STATUS, String(val));
+                      }}
+                    />
+                    <span>Show workflow status on annotation sets</span>
+                    <Badge bg='warning' text='dark'>Experimental</Badge>
+                  </div>
+                </div>
+                <p className='text-muted mt-2 mb-0' style={{ fontSize: '13px' }}>
+                  Displays badges on each annotation set showing the status of Model Guided, False Negatives, QC Review, and Homography workflows based on admin action logs.
+                </p>
               </div>
             </Tab>
           </Tabs>

@@ -18,6 +18,7 @@ import { Badge } from 'react-bootstrap';
 import localforage from 'localforage';
 import ProjectProgress from '../user/ProjectProgress.tsx';
 import { logAdminAction } from '../utils/adminActionLogger.ts';
+import WorkflowBadges from '../workflow-status/WorkflowBadges.tsx';
 
 const fileStoreUploaded = localforage.createInstance({
   name: 'fileStoreUploaded',
@@ -495,7 +496,14 @@ export default function Surveys() {
             key={annotationSet.id}
           >
             <div className={`d-flex justify-content-between align-items-center ${gapClass} flex-wrap`}>
-              <div style={{ fontSize: '16px' }}>{annotationSet.name}</div>
+              <div className='d-flex flex-column gap-1'>
+                <div style={{ fontSize: '16px' }}>{annotationSet.name}</div>
+                <WorkflowBadges
+                  projectId={project.id}
+                  annotationSetNames={sortedAnnotationSets.map((s) => s.name)}
+                  annotationSetName={annotationSet.name}
+                />
+              </div>
               {!hasJobs &&
                 renderAnnotationSetActions(
                   project,
