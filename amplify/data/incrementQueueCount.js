@@ -8,6 +8,9 @@ export function request(ctx) {
       expression: 'ADD observedCount :inc',
       expressionValues: util.dynamodb.toMapValues({ ':inc': 1 }),
     },
+    condition: {
+      expression: 'attribute_exists(id)',
+    },
   }
 }
 

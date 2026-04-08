@@ -1,19 +1,17 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Matrix, matrix, multiply, transpose, inv } from 'mathjs';
-import { Card, Button, Badge, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Card, Button, Badge } from 'react-bootstrap';
 import {
   Trash2,
   Info,
   Save,
   SkipForward,
-  Image as ImageIcon,
   Target,
   Circle,
   ChevronDown,
   ChevronUp,
   X,
   SquareDashed,
-  AlertTriangle,
 } from 'lucide-react';
 import { POINT_COLORS } from '../maplibre-viewer/MapLibreImageViewer';
 
@@ -185,17 +183,6 @@ export function ManualHomographyEditor({
     [points1, points2]
   );
 
-  // Threshold: errors above median + 2*MAD are flagged as outliers
-  const errorThreshold = useMemo(() => {
-    if (!reprojErrors || reprojErrors.length < MIN_HOMOGRAPHY_POINTS) return null;
-    const sorted = [...reprojErrors].sort((a, b) => a - b);
-    const median = sorted[Math.floor(sorted.length / 2)];
-    const mad = sorted.map((e) => Math.abs(e - median)).sort((a, b) => a - b)[
-      Math.floor(sorted.length / 2)
-    ];
-    return median + 2 * Math.max(mad, 1); // floor of 1px to avoid flagging when all errors are tiny
-  }, [reprojErrors]);
-
   const tableRows = useMemo(() => {
     const maxLen = Math.max(points1.length, points2.length);
     return new Array(maxLen).fill(0).map((_, i) => ({
@@ -251,77 +238,38 @@ export function ManualHomographyEditor({
       <Card.Body className='p-0 d-flex flex-column overflow-hidden'>
         <div className='flex-grow-1 overflow-auto p-3'>
           <div className='d-flex flex-column gap-2'>
-            {tableRows.map(({ i, p1, p2, error }) => {
+            {tableRows.map(({ i, p1, p2 }) => {
               const color = POINT_COLORS[i % POINT_COLORS.length];
-              const isOutlier = error !== null && errorThreshold !== null && error > errorThreshold;
               return (
                 <div
                   key={`pair-${i}`}
                   style={{
                     background: '#5B6977',
-                    // TODO: requires testing – outlier highlighting
-                    // border: isOutlier
-                    //   ? '1px solid rgba(255, 193, 7, 0.5)'
-                    //   : '1px solid rgba(255,255,255,0.05)',
                     border: '1px solid rgba(255,255,255,0.05)',
-                    borderLeft: `4px solid ${color}`,
                     borderRadius: '6px',
-                    padding: '10px'
+                    overflow: 'hidden',
+                    display: 'flex',
                   }}
                 >
-                  <div className='d-flex align-items-center justify-content-between mb-2'>
-                    <div className='d-flex align-items-center gap-2'>
-                      <Badge
-                        pill
-                        bg=''
-                        style={{ backgroundColor: color, fontSize: '0.7rem' }}
-                      >
-                        Pair {i + 1}
-                      </Badge>
-                      {/* TODO: requires testing – per-point reprojection error display
-                      {error !== null && (
-                        <OverlayTrigger
-                          placement='top'
-                          overlay={
-                            <Tooltip id={`error-tooltip-${i}`}>
-                              Symmetric reprojection error: {error.toFixed(1)}px
-                              {isOutlier ? ' — likely misplaced' : ''}
-                            </Tooltip>
-                          }
-                        >
-                          <span
-                            className='d-flex align-items-center gap-1'
-                            style={{
-                              fontSize: '0.7rem',
-                              color: isOutlier ? '#ffc107' : error < 3 ? '#3cb44b' : '#adb5bd',
-                              cursor: 'help',
-                            }}
-                          >
-                            {isOutlier && <AlertTriangle size={12} />}
-                            {error.toFixed(1)}px
-                          </span>
-                        </OverlayTrigger>
-                      )}
-                      */}
-                    </div>
-                    {p1 && p2 && (
-                      <Button
-                        size='sm'
-                        variant='link'
-                        className='p-0 text-danger opacity-75 hover-opacity-100'
-                        onClick={() => handleRemovePair(i)}
-                      >
-                        <X size={16} />
-                      </Button>
-                    )}
+                  {/* Colored number strip */}
+                  <div
+                    style={{
+                      background: color,
+                      width: '24px',
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      color: '#fff',
+                    }}
+                  >
+                    {i + 1}
                   </div>
-
-                  <div className='d-flex gap-2'>
+                  <div className='d-flex align-items-center gap-2 flex-grow-1' style={{ padding: '8px' }}>
                     {/* Image 1 Point */}
                     <div className='flex-grow-1 p-2' style={{ background: '#4E5D6C', borderRadius: '4px' }}>
-                      <div className='d-flex align-items-center gap-1 mb-1 opacity-75 small'>
-                        <ImageIcon size={12} /> <span>1</span>
-                      </div>
                       {p1 ? (
                         <div className='d-flex align-items-center justify-content-between'>
                           <span className='small mono'>
@@ -337,15 +285,12 @@ export function ManualHomographyEditor({
                           </Button>
                         </div>
                       ) : (
-                        <span className='text-muted small fst-italic'>Pending...</span>
+                        <span className='opacity-50 small fst-italic'>Pending...</span>
                       )}
                     </div>
 
                     {/* Image 2 Point */}
                     <div className='flex-grow-1 p-2' style={{ background: '#4E5D6C', borderRadius: '4px' }}>
-                      <div className='d-flex align-items-center gap-1 mb-1 opacity-75 small'>
-                        <ImageIcon size={12} /> <span>2</span>
-                      </div>
                       {p2 ? (
                         <div className='d-flex align-items-center justify-content-between'>
                           <span className='small mono'>
@@ -361,9 +306,21 @@ export function ManualHomographyEditor({
                           </Button>
                         </div>
                       ) : (
-                        <span className='text-muted small fst-italic'>Pending...</span>
+                        <span className='opacity-50 small fst-italic'>Pending...</span>
                       )}
                     </div>
+
+                    {/* Pair removal */}
+                    {p1 && p2 && (
+                      <Button
+                        size='sm'
+                        variant='link'
+                        className='p-0 text-danger opacity-75'
+                        onClick={() => handleRemovePair(i)}
+                      >
+                        <X size={16} />
+                      </Button>
+                    )}
                   </div>
                 </div>
               );

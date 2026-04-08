@@ -67,6 +67,7 @@ export const outputBucket = defineStorage({
     'qc-review-manifests/*': [
       allow.authenticated.to(['read']),
       allow.resource(launchQCReview).to(['write']),
+      allow.resource(findAndRequeueMissingLocations).to(['read']),
       allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ],
     // False negative pools for species labelling reconciliation

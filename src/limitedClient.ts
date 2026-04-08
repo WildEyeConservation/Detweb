@@ -45,7 +45,7 @@ function checkForErrors(result: any) {
 
 async function executeWithRetry<T>(
   operation: () => Promise<T>,
-  maxRetries: number = 1,
+  maxRetries: number = 4,
   baseDelay: number = 1000,
   maxDelay: number = 30000
 ): Promise<T> {
@@ -80,6 +80,12 @@ async function executeWithRetry<T>(
   throw new Error('Unexpected end of retry loop');
 }
 
+// Options that can be passed as the last argument to any wrapped client method.
+type ClientCallOptions = {
+  /** Set to false to skip retry logic (e.g. for long-running launch mutations). Defaults to true. */
+  retry?: boolean;
+};
+
 // Recursive function to wrap client methods with retry logic
 function wrapClientMethods(obj: any): any {
   if (typeof obj !== 'object' || obj === null) {
@@ -95,9 +101,20 @@ function wrapClientMethods(obj: any): any {
         wrappedObj[key] = value;
       } else {
         wrappedObj[key] = async (...args: any[]) => {
-          const result = await executeWithRetry(() =>
-            limit(() => value(...args))
-          );
+          // Check if the last argument is a ClientCallOptions object
+          const lastArg = args[args.length - 1];
+          const hasOptions =
+            lastArg &&
+            typeof lastArg === 'object' &&
+            'retry' in lastArg;
+          const options: ClientCallOptions = hasOptions ? args.pop() : {};
+          const shouldRetry = options.retry !== false;
+
+          const execute = () => limit(() => value(...args));
+
+          const result = shouldRetry
+            ? await executeWithRetry(execute)
+            : await execute();
           const checkedResult = checkForErrors(result);
           return wrapClientMethods(checkedResult);
         };

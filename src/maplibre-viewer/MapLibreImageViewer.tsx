@@ -2,7 +2,7 @@ import { useRef, useEffect, useCallback, useMemo, useState, type ReactNode } fro
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { RotateCw, MoreVertical } from 'lucide-react';
+import { RotateCw, MoreVertical, Copy, Check } from 'lucide-react';
 import { getTileBlob } from '../StorageLayer';
 import type { ImageType } from '../schemaTypes';
 import type { Point } from '../homography/ManualHomographyEditor';
@@ -560,6 +560,15 @@ export function MapLibreImageViewer({
     };
   }, [menuOpen]);
 
+  const imageName = (image as any).originalPath ?? image.id;
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyName = useCallback(() => {
+    navigator.clipboard.writeText(imageName);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, [imageName]);
+
   return (
     <div ref={wrapperRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
       <div
@@ -573,6 +582,44 @@ export function MapLibreImageViewer({
           border: '1px solid rgba(255, 255, 255, 0.1)',
         }}
       />
+      <div
+        style={{
+          position: 'absolute',
+          top: 10,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 10,
+          width: 200,
+        }}
+        className="maplibregl-ctrl maplibregl-ctrl-group"
+      >
+        <button
+          className="maplibregl-ctrl-icon"
+          title={copied ? 'Copied!' : `Click to copy: ${imageName}`}
+          onClick={handleCopyName}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            padding: '0 8px',
+            fontSize: '0.75rem',
+            color: copied ? '#2e7d32' : '#333',
+            width: '100%',
+            cursor: 'pointer',
+            height: 29,
+            transition: 'color 0.2s',
+          }}
+        >
+          {copied
+            ? <Check size={12} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+            : <Copy size={12} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+          }
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {copied ? 'Copied!' : imageName}
+          </span>
+        </button>
+      </div>
       {menuItems && menuItems.length > 0 && (
         <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10 }} className="maplibregl-ctrl maplibregl-ctrl-group">
           <button

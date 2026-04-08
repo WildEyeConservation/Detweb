@@ -372,14 +372,7 @@ export function MapLibrePairViewer({
 
   const buildMenuItems = useCallback(
     (image: ImageType, idx: number): MapLibreMenuItem[] => {
-      const imageName = (image as any).originalPath ?? image.id;
       return [
-        {
-          label: 'Copy image name',
-          onClick: () => {
-            navigator.clipboard.writeText(imageName);
-          },
-        },
         {
           label: 'Copy link to this image',
           onClick: () => {
@@ -410,7 +403,10 @@ export function MapLibrePairViewer({
   );
 
   return (
-    <div className='w-100 h-100 d-flex flex-row gap-3' style={{ position: 'relative' }}>
+    <div className='w-100 h-100 d-flex flex-row gap-3' style={{
+      position: 'relative',
+      flexDirection: (images[0].timestamp ?? 0) > (images[1].timestamp ?? 0) ? 'row-reverse' : undefined,
+    }}>
       {images.map((image, i) => (
         <div
           className='w-50'

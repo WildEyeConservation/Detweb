@@ -1,4 +1,4 @@
-import React, { useCallback, useContext } from 'react';
+import React, { useCallback, useContext, useRef } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { useMapEvents } from 'react-leaflet';
 import { ImageContext, ProjectContext } from './Context';
@@ -26,16 +26,25 @@ export default function CreateAnnotationOnHotKey({
     annotationsHook: { create: createAnnotation },
   } = useContext(ImageContext)!;
   const [currentPosition, setCurrentPosition] = React.useState({ x: 0, y: 0 });
+  const [isMouseOverMap, setIsMouseOverMap] = React.useState(false);
   const { latLng2xy } = useContext(ImageContext)!;
   const { project, setCurrentCategory } = useContext(ProjectContext)!;
+  const keyHeldRef = useRef(false);
 
   useMapEvents({
     mousemove: (e) => {
       setCurrentPosition(latLng2xy(e.latlng) as { x: number; y: number });
     },
+    mouseover: () => setIsMouseOverMap(true),
+    mouseout: () => setIsMouseOverMap(false),
   });
 
   const handleHotkey = useCallback(() => {
+    // Skip if cursor is not over the map
+    if (!isMouseOverMap) return;
+    // Skip if key is already held down (prevent repeat keydown events)
+    if (keyHeldRef.current) return;
+    keyHeldRef.current = true;
     const x = Math.round(currentPosition.x);
     const y = Math.round(currentPosition.y);
     // Boundary check: skip if outside location bounds (same logic as CreateAnnotationOnClick)
@@ -68,6 +77,7 @@ export default function CreateAnnotationOnHotKey({
     source,
     location,
     allowOutside,
+    isMouseOverMap,
   ]);
 
   useHotkeys(
@@ -79,6 +89,15 @@ export default function CreateAnnotationOnHotKey({
     },
     { keydown: true, keyup: false },
     [handleHotkey]
+  );
+
+  useHotkeys(
+    hotkey,
+    () => {
+      keyHeldRef.current = false;
+    },
+    { keydown: false, keyup: true },
+    []
   );
 
   return null;

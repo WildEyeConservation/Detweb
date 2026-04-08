@@ -26,8 +26,8 @@ const createQueueMutation = /* GraphQL */ `
 `;
 
 const updateProjectMutation = /* GraphQL */ `
-  mutation UpdateProject($input: UpdateProjectInput!) {
-    updateProject(input: $input) { id group }
+  mutation UpdateProject($input: UpdateProjectInput!, $condition: ModelProjectConditionInput) {
+    updateProject(input: $input, condition: $condition) { id group }
   }
 `;
 
@@ -40,6 +40,14 @@ const updateProjectMembershipsMutation = /* GraphQL */ `
 const getProjectOrganizationId = /* GraphQL */ `
   query GetProject($id: ID!) {
     getProject(id: $id) { organizationId }
+  }
+`;
+
+const queuesByProjectIdQuery = /* GraphQL */ `
+  query QueuesByProjectId($projectId: ID!, $limit: Int) {
+    queuesByProjectId(projectId: $projectId, limit: $limit) {
+      items { id }
+    }
   }
 `;
 
@@ -184,7 +192,29 @@ export const handler: LaunchQCReviewHandler = async (event) => {
 
     authorizeRequest(event.identity, organizationId);
 
-    await setProjectStatus(payload.projectId, 'launching');
+    // Conditional update: only proceed if the project is currently 'active'.
+    try {
+      await setProjectStatus(payload.projectId, 'launching', {
+        status: { eq: 'active' },
+      });
+    } catch (err: any) {
+      const msg = err?.message ?? '';
+      const errMsgs = Array.isArray(err?.errors)
+        ? err.errors.map((e: any) => e?.message ?? '').join(' ')
+        : '';
+      if (msg.includes('ConditionalCheckFailed') || errMsgs.includes('ConditionalCheckFailed')) {
+        console.warn('Launch rejected: project is not in active status', {
+          projectId: payload.projectId,
+        });
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            message: 'Project is already launching or processing',
+          }),
+        };
+      }
+      throw err;
+    }
 
     const result = await handleLaunch(payload, organizationId);
 
@@ -291,7 +321,24 @@ async function handleLaunch(payload: LaunchQCReviewPayload, organizationId: stri
   );
   console.log('Wrote QC manifest to S3', { manifestKey, itemCount: sampled.length });
 
-  // 6. Create the SQS queue and Queue record.
+  // 6. Guard: prevent duplicate queues for the same project.
+  const existingQueue = await findExistingQueue(projectId);
+  if (existingQueue) {
+    console.warn('Duplicate queue launch blocked', {
+      projectId,
+      existingQueueId: existingQueue.id,
+    });
+    await setProjectStatus(projectId, 'active');
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        message: 'A queue already exists for this project',
+        queueId: existingQueue.id,
+      }),
+    };
+  }
+
+  // 7. Create the SQS queue and Queue record.
   // `name` carries the category name (displayed as the heading on Jobs page).
   // `tag` stays 'qc-review' (used by requeue lambda for branching).
   const queueDisplayName = payload.categoryName || 'QC Review';
@@ -445,6 +492,22 @@ async function createQueue(
   return { id: createdQueue.id, url: queueUrl };
 }
 
+// Check if any queue already exists for this project.
+async function findExistingQueue(
+  projectId: string
+): Promise<{ id: string } | null> {
+  const data = await executeGraphql<{
+    queuesByProjectId?: {
+      items: Array<{ id: string }>;
+    };
+  }>(queuesByProjectIdQuery, {
+    projectId,
+    limit: 1,
+  });
+  const first = data.queuesByProjectId?.items?.[0];
+  return first ? { id: first.id } : null;
+}
+
 // ── SQS enqueueing ──
 
 async function enqueueAnnotations(
@@ -555,9 +618,14 @@ function makeSafeQueueName(input: string): string {
   return sanitized;
 }
 
-async function setProjectStatus(projectId: string, status: string) {
+async function setProjectStatus(
+  projectId: string,
+  status: string,
+  condition?: { status: { eq: string } }
+) {
   await executeGraphql<{ updateProject?: { id: string } }>(updateProjectMutation, {
     input: { id: projectId, status },
+    ...(condition ? { condition } : {}),
   });
 }
 
