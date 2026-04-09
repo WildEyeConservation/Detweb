@@ -864,6 +864,42 @@ export default function UploadManager() {
         sessionOriginalPaths.has(img.originalPath)
       );
 
+      // For registration: augment sessionImages with the immediate neighbours
+      // of each session image in the full per-camera sorted sequence.
+      // This ensures bridging pairs are created when new images are injected
+      // between existing ones (e.g. A_old … B_new … C_old).
+      const sessionIdsForReg = new Set(sessionImages.map((img) => img.id));
+
+      // Group ALL project images by camera (null/undefined → own bucket)
+      const allByCamera = new Map<string | null, typeof allProjectImages>();
+      for (const img of allProjectImages) {
+        const camKey = img.cameraId ?? null;
+        let bucket = allByCamera.get(camKey);
+        if (!bucket) { bucket = []; allByCamera.set(camKey, bucket); }
+        bucket.push(img);
+      }
+      // Each bucket is already sorted ascending by timestamp (allProjectImages is sorted)
+
+      const boundaryIds = new Set<string>();
+      for (const [, bucket] of allByCamera) {
+        for (let idx = 0; idx < bucket.length; idx++) {
+          if (!sessionIdsForReg.has(bucket[idx].id)) continue;
+          // immediate predecessor
+          if (idx > 0 && !sessionIdsForReg.has(bucket[idx - 1].id)) {
+            boundaryIds.add(bucket[idx - 1].id);
+          }
+          // immediate successor
+          if (idx < bucket.length - 1 && !sessionIdsForReg.has(bucket[idx + 1].id)) {
+            boundaryIds.add(bucket[idx + 1].id);
+          }
+        }
+      }
+
+      const registrationImages = [
+        ...sessionImages,
+        ...allProjectImages.filter((img) => boundaryIds.has(img.id)),
+      ].sort((a, b) => a.timestamp - b.timestamp);
+
       // Set image count from authoritative deduplicated DB records
       await client.models.ImageSet.update({
         id: imageSet.id,
@@ -898,13 +934,13 @@ export default function UploadManager() {
 
       const BATCH_SIZE = 500;
 
-      for (let i = 0; i < sessionImages.length; i += BATCH_SIZE) {
-        const batch = sessionImages.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < registrationImages.length; i += BATCH_SIZE) {
+        const batch = registrationImages.slice(i, i + BATCH_SIZE);
         // include 10 prior images to enable adjacency linking across batch boundaries (and across cameras)
         const overlapCount = 10;
         const overlapStart = Math.max(0, i - overlapCount);
         const overlap: CreatedImage[] =
-          i > 0 ? sessionImages.slice(overlapStart, i) : [];
+          i > 0 ? registrationImages.slice(overlapStart, i) : [];
         const payload = overlap.concat(batch).map((img) => ({
           id: img.id,
           originalPath: img.originalPath,
@@ -912,11 +948,16 @@ export default function UploadManager() {
           cameraId: img.cameraId,
         }));
 
+        const payloadSessionIds = payload
+          .filter((img) => sessionIdsForReg.has(img.id))
+          .map((img) => img.id);
+
         (client as any).mutations.runImageRegistration({
           projectId: projectId,
           metadata: JSON.stringify({
             masks: masks,
             images: payload,
+            sessionIds: payloadSessionIds,
           }),
           queueUrl: backend.custom.lightglueTaskQueueUrl,
         }, { retry: false });
