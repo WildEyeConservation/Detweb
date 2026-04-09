@@ -26,6 +26,12 @@ const createImageNeighbour = /* GraphQL */ `
   }
 `;
 
+const deleteImageNeighbour = /* GraphQL */ `
+  mutation DeleteImageNeighbour($input: DeleteImageNeighbourInput!) {
+    deleteImageNeighbour(input: $input) { image1Id image2Id }
+  }
+`;
+
 Amplify.configure(
   {
     API: {
@@ -267,6 +273,48 @@ function addAdjacentPairTasks(
   }
 }
 
+// For each maximal contiguous run of session images flanked by boundary images,
+// queue a deletion of the now-stale direct pair between those flanking images.
+// Runs in O(n) — one pass through the sorted list per camera/overlap group.
+function addStalePairDeletionTasks(
+  images: MinimalImage[],
+  sessionIdSet: Set<string>,
+  outTasks: Array<() => Promise<void>>
+) {
+  let leftBoundary: MinimalImage | null = null;
+  let hasSessionSince = false;
+
+  for (const img of images) {
+    if (sessionIdSet.has(img.id)) {
+      hasSessionSince = true;
+    } else {
+      if (leftBoundary && hasSessionSince) {
+        const lb = leftBoundary;
+        const rb = img;
+        outTasks.push(async () => {
+          const resp = (await gqlWithRetry(() =>
+            client.graphql({
+              query: getImageNeighbour,
+              variables: { image1Id: lb.id, image2Id: rb.id },
+            })
+          )) as GraphQLResult<GetImageNeighbourQuery>;
+          if (resp.data?.getImageNeighbour) {
+            await gqlWithRetry(() =>
+              client.graphql({
+                query: deleteImageNeighbour,
+                variables: { input: { image1Id: lb.id, image2Id: rb.id } },
+              }) as Promise<GraphQLResult<any>>
+            );
+            console.log(`Deleted stale pair ${lb.id} / ${rb.id}`);
+          }
+        });
+      }
+      leftBoundary = img;
+      hasSessionSince = false;
+    }
+  }
+}
+
 export const handler: RunImageRegistrationHandler = async (event, context) => {
   try {
     // Do not wait for open handles after we return a response
@@ -280,6 +328,7 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
         timestamp?: number | null;
         cameraId?: string | null;
       }>;
+      sessionIds?: string[];
     };
     const masks = Array.isArray(metadata?.masks) ? (metadata.masks as number[][][]) : [];
     const queueUrl = event.arguments.queueUrl;
@@ -393,10 +442,17 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
 
     const tasks: Array<() => Promise<SqsEntry | null>> = [];
     const seenPairs = new Set<string>();
+    const deletionTasks: Array<() => Promise<void>> = [];
+    const sessionIdSet = new Set<string>(
+      Array.isArray(metadata?.sessionIds) ? metadata.sessionIds : []
+    );
 
     // process images by camera
     Object.entries(imagesByCamera).forEach(([, images]) => {
       addAdjacentPairTasks(images, masks, seenPairs, tasks, computeKey, organizationId);
+      if (sessionIdSet.size > 0) {
+        addStalePairDeletionTasks(images, sessionIdSet, deletionTasks);
+      }
     });
 
     // process images from overlapping cameras
@@ -410,10 +466,22 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
       );
 
       addAdjacentPairTasks(mergedImages, masks, seenPairs, tasks, computeKey, organizationId);
+      if (sessionIdSet.size > 0) {
+        addStalePairDeletionTasks(mergedImages, sessionIdSet, deletionTasks);
+      }
     });
 
     // process images with no camera
     addAdjacentPairTasks(noCamImgs, masks, seenPairs, tasks, computeKey, organizationId);
+    if (sessionIdSet.size > 0 && noCamImgs.length > 0) {
+      addStalePairDeletionTasks(noCamImgs, sessionIdSet, deletionTasks);
+    }
+
+    // Delete stale pairs before queuing new registration work
+    if (deletionTasks.length > 0) {
+      console.log(`Deleting ${deletionTasks.length} stale neighbour pair(s)`);
+      await withConcurrency(deletionTasks, 10);
+    }
 
     // Limit concurrency to prevent exhausting file descriptors and network resources
     const messages = (await withConcurrency<SqsEntry | null>(tasks, 10)).filter(
