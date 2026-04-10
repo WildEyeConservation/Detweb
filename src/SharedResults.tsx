@@ -16,7 +16,7 @@ export default function SharedResults() {
     async function fetchAnnotationSets() {
       const jollyResultsMemberships = await fetchAllPaginatedResults<any>(
         client.models.JollyResultsMembership.list as any,
-        { filter: { userId: { eq: user?.userId } }, limit: 1000 } as any
+        { filter: { userId: { eq: user?.userId } }, limit: 10000 } as any
       );
       const annotationSets = await Promise.all(
         jollyResultsMemberships.map(async (result) => {

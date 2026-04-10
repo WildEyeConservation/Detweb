@@ -373,7 +373,7 @@ async function fetchAnnotationsForImages(
             variables: {
               imageId,
               setId: { eq: setId },
-              limit: 1000,
+              limit: 10000,
               nextToken,
             },
           } as any)) as GraphQLResult<{

@@ -373,8 +373,8 @@ export function FileUploadCore({
       const uploadFiles = newProject
         ? imageFiles
         : imageFiles.filter(
-            (file) => !existingImagePathSet.has(file.webkitRelativePath)
-          );
+          (file) => !existingImagePathSet.has(file.webkitRelativePath)
+        );
       setToUploadFiles(uploadFiles);
       setToUploadSize(uploadFiles.reduce((acc, f) => acc + f.size, 0));
 

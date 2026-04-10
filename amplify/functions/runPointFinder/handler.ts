@@ -100,7 +100,7 @@ export const handler: Handler = async (event, context) => {
           query: imagesByProjectId,
           variables: {
             projectId,
-            limit: 1000,
+            limit: 10000,
             nextToken,
           },
         }) as Promise<GraphQLResult<{ imagesByProjectId: PagedList<Image> }>>,

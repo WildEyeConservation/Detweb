@@ -370,38 +370,38 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
 
     const images: MinimalImage[] = providedBatch.length
       ? providedBatch.map((it) => ({
-          id: it.id,
-          originalPath: it.originalPath,
-          timestamp:
-            typeof it.timestamp === 'number' ? (it.timestamp as number) : null,
-          cameraId: (it.cameraId ?? null) as string | null,
-        }))
+        id: it.id,
+        originalPath: it.originalPath,
+        timestamp:
+          typeof it.timestamp === 'number' ? (it.timestamp as number) : null,
+        cameraId: (it.cameraId ?? null) as string | null,
+      }))
       : (await fetchAllPages<
-          // Fetch full Image records then map down to MinimalImage to keep types narrow
-          { id: string; originalPath?: string | null; timestamp?: number | null; cameraId?: string | null },
-          'imagesByProjectId'
-        >(
-          (nextToken) =>
-            client.graphql({
-              query: imagesByProjectId,
-              variables: { projectId, nextToken, limit: 1000 },
-            }) as Promise<
-              GraphQLResult<{
-                imagesByProjectId: PagedList<{
-                  id: string;
-                  originalPath?: string | null;
-                  timestamp?: number | null;
-                  cameraId?: string | null;
-                }>;
-              }>
-            >,
-          'imagesByProjectId'
-        )).map((img) => ({
-          id: img.id,
-          originalPath: img.originalPath ?? null,
-          timestamp: typeof img.timestamp === 'number' ? img.timestamp : null,
-          cameraId: (img.cameraId ?? null) as string | null,
-        }));
+        // Fetch full Image records then map down to MinimalImage to keep types narrow
+        { id: string; originalPath?: string | null; timestamp?: number | null; cameraId?: string | null },
+        'imagesByProjectId'
+      >(
+        (nextToken) =>
+          client.graphql({
+            query: imagesByProjectId,
+            variables: { projectId, nextToken, limit: 10000 },
+          }) as Promise<
+            GraphQLResult<{
+              imagesByProjectId: PagedList<{
+                id: string;
+                originalPath?: string | null;
+                timestamp?: number | null;
+                cameraId?: string | null;
+              }>;
+            }>
+          >,
+        'imagesByProjectId'
+      )).map((img) => ({
+        id: img.id,
+        originalPath: img.originalPath ?? null,
+        timestamp: typeof img.timestamp === 'number' ? img.timestamp : null,
+        cameraId: (img.cameraId ?? null) as string | null,
+      }));
 
     const sortedImages = images.sort(
       (a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0)
@@ -414,7 +414,7 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
       (nextToken) =>
         client.graphql({
           query: cameraOverlapsByProjectId,
-          variables: { projectId, nextToken, limit: 1000 },
+          variables: { projectId, nextToken, limit: 10000 },
         }) as Promise<
           GraphQLResult<{ cameraOverlapsByProjectId: PagedList<CameraOverlap> }>
         >,

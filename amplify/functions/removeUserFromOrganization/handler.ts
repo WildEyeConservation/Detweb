@@ -143,7 +143,7 @@ export const handler: RemoveUserFromOrganizationHandler = async (event) => {
       'listProjects'
     >(listProjectsByOrgQuery, {
       filter: { organizationId: { eq: organizationId } },
-      limit: 1000,
+      limit: 10000,
     }, 'listProjects');
 
     const orgProjectIds = new Set(orgProjects.map((p) => p.id));
@@ -151,7 +151,7 @@ export const handler: RemoveUserFromOrganizationHandler = async (event) => {
     const userMemberships = await fetchAllPages<
       { id: string; projectId: string },
       'userProjectMembershipsByUserId'
-    >(listUserProjectMembershipsQuery, { userId, limit: 1000 }, 'userProjectMembershipsByUserId');
+    >(listUserProjectMembershipsQuery, { userId, limit: 10000 }, 'userProjectMembershipsByUserId');
 
     const toDelete = userMemberships.filter((m) => orgProjectIds.has(m.projectId));
 

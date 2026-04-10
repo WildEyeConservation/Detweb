@@ -82,7 +82,7 @@ export default function UploadManager() {
         },
         {
           selectionSet: ['id', 'name'],
-          limit: 1000,
+          limit: 10000,
         }
       );
       const match =
@@ -999,7 +999,7 @@ export default function UploadManager() {
             projectId,
             source: { eq: 'scoutbotv3' },
             selectionSet: ['imageId'],
-            limit: 1000,
+            limit: 10000,
           }
         );
         const processedImageIds = new Set(
@@ -1079,7 +1079,7 @@ export default function UploadManager() {
             projectId,
             source: { eq: 'mad-v2' },
             selectionSet: ['imageId'],
-            limit: 1000,
+            limit: 10000,
           }
         );
         const processedImageIds = new Set(

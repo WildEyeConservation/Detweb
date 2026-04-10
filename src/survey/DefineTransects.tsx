@@ -138,9 +138,8 @@ function normalizeToMillis(ts: any): number {
 function getUTMProjection(lon: number, lat: number) {
   const zone = Math.floor((lon + 180) / 6) + 1;
   const hemisphere = lat >= 0 ? 'north' : 'south';
-  const projStr = `+proj=utm +zone=${zone} +datum=WGS84 +units=m +no_defs ${
-    hemisphere === 'south' ? '+south' : ''
-  }`;
+  const projStr = `+proj=utm +zone=${zone} +datum=WGS84 +units=m +no_defs ${hemisphere === 'south' ? '+south' : ''
+    }`;
   return projStr;
 }
 
@@ -351,7 +350,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
     if (removeLayer) {
       try {
         pendingPolygon?.layer.remove();
-      } catch {}
+      } catch { }
     }
     setDrawnPolygonLayer(null);
     setPendingPolygon(null);
@@ -396,7 +395,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
     if (drawnPolygonLayer) {
       try {
         drawnPolygonLayer.remove();
-      } catch {}
+      } catch { }
       setDrawnPolygonLayer(null);
     }
   };
@@ -460,7 +459,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
     // delete all existing strata so we can recreate them fresh
     const existingStrata = await fetchAllPaginatedResults(
       client.models.Stratum.strataByProjectId as any,
-      { projectId, limit: 1000, selectionSet: ['id'] } as any
+      { projectId, limit: 10000, selectionSet: ['id'] } as any
     );
     await Promise.all(
       existingStrata.map((st: any) =>
@@ -528,9 +527,9 @@ export default function DefineTransects({ projectId, organizationId }: { project
         // ensure closure
         if (
           excCoordsLngLat[0][0] !==
-            excCoordsLngLat[excCoordsLngLat.length - 1][0] ||
+          excCoordsLngLat[excCoordsLngLat.length - 1][0] ||
           excCoordsLngLat[0][1] !==
-            excCoordsLngLat[excCoordsLngLat.length - 1][1]
+          excCoordsLngLat[excCoordsLngLat.length - 1][1]
         ) {
           excCoordsLngLat.push(excCoordsLngLat[0]);
         }
@@ -618,7 +617,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
     // cleanup: delete unused transects from the database
     const allTransects = await fetchAllPaginatedResults(
       client.models.Transect.transectsByProjectId as any,
-      { projectId, limit: 1000, selectionSet: ['id'] } as any
+      { projectId, limit: 10000, selectionSet: ['id'] } as any
     );
     const usedTransectIds = new Set(Object.values(transectMap));
     await Promise.all(
@@ -633,7 +632,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
       client.models.JollyResult.jollyResultsBySurveyId as any,
       {
         surveyId: projectId,
-        limit: 1000,
+        limit: 10000,
         selectionSet: [
           'surveyId',
           'stratumId',
@@ -671,7 +670,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
         client.models.Image.imagesByProjectId as any,
         {
           projectId,
-          limit: 1000,
+          limit: 10000,
           selectionSet: [
             'id',
             'timestamp',
@@ -708,7 +707,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
         client.models.Stratum.strataByProjectId as any,
         {
           projectId,
-          limit: 1000,
+          limit: 10000,
           selectionSet: ['id', 'coordinates', 'name'],
         } as any
       );
@@ -718,7 +717,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
           client.models.Image.imagesByProjectId as any,
           {
             projectId,
-            limit: 1000,
+            limit: 10000,
             selectionSet: [
               'id',
               'timestamp',
@@ -819,9 +818,9 @@ export default function DefineTransects({ projectId, organizationId }: { project
           });
           if (
             excCoordsLngLat[0][0] !==
-              excCoordsLngLat[excCoordsLngLat.length - 1][0] ||
+            excCoordsLngLat[excCoordsLngLat.length - 1][0] ||
             excCoordsLngLat[0][1] !==
-              excCoordsLngLat[excCoordsLngLat.length - 1][1]
+            excCoordsLngLat[excCoordsLngLat.length - 1][1]
           ) {
             excCoordsLngLat.push(excCoordsLngLat[0]);
           }
@@ -862,7 +861,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
         });
         if (
           boundaryLngLat[0][0] !==
-            boundaryLngLat[boundaryLngLat.length - 1][0] ||
+          boundaryLngLat[boundaryLngLat.length - 1][0] ||
           boundaryLngLat[0][1] !== boundaryLngLat[boundaryLngLat.length - 1][1]
         ) {
           boundaryLngLat.push(boundaryLngLat[0]);
@@ -1292,9 +1291,9 @@ export default function DefineTransects({ projectId, organizationId }: { project
                         ]);
                         if (
                           polyLngLat[0][0] !==
-                            polyLngLat[polyLngLat.length - 1][0] ||
+                          polyLngLat[polyLngLat.length - 1][0] ||
                           polyLngLat[0][1] !==
-                            polyLngLat[polyLngLat.length - 1][1]
+                          polyLngLat[polyLngLat.length - 1][1]
                         ) {
                           polyLngLat.push(polyLngLat[0]);
                         }
@@ -1329,7 +1328,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
                           // No points found, remove the polygon immediately
                           try {
                             e.layer.remove();
-                          } catch {}
+                          } catch { }
                         }
                       }
                     }}
@@ -1438,12 +1437,12 @@ export default function DefineTransects({ projectId, organizationId }: { project
                           color: isSelected
                             ? 'black'
                             : transectColors[
-                                img.transectId % transectColors.length
-                              ],
+                            img.transectId % transectColors.length
+                            ],
                           weight: isSelected ? 2 : 1,
                           fillColor:
                             transectColors[
-                              img.transectId % transectColors.length
+                            img.transectId % transectColors.length
                             ],
                           fillOpacity: 1,
                         }}
@@ -1582,7 +1581,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
                         if (drawnPolygonLayer) {
                           try {
                             drawnPolygonLayer.remove();
-                          } catch {}
+                          } catch { }
                           setDrawnPolygonLayer(null);
                         }
                       }}

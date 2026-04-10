@@ -137,7 +137,7 @@ export default function HomographyLaunch({
           const result = await client.models.Category.list({
             filter: { projectId: { eq: project.id } },
             nextToken,
-            limit: 1000,
+            limit: 10000,
           });
           allCategories.push(...(result.data ?? []));
           nextToken = result.nextToken;
@@ -155,7 +155,7 @@ export default function HomographyLaunch({
           (client.models.Annotation as any).annotationsByAnnotationSetId,
           {
             setId: annotationSet.id,
-            limit: 1000,
+            limit: 10000,
             selectionSet: ['id', 'imageId', 'categoryId'] as const,
           }
         );
@@ -183,11 +183,11 @@ export default function HomographyLaunch({
                 const [n1, n2] = await Promise.all([
                   fetchAllPaginatedResults<NeighbourItem>(
                     (client.models.ImageNeighbour as any).imageNeighboursByImage1key,
-                    { image1Id: imageId, limit: 1000, selectionSet: NEIGHBOUR_SELECTION }
+                    { image1Id: imageId, limit: 10000, selectionSet: NEIGHBOUR_SELECTION }
                   ),
                   fetchAllPaginatedResults<NeighbourItem>(
                     (client.models.ImageNeighbour as any).imageNeighboursByImage2key,
-                    { image2Id: imageId, limit: 1000, selectionSet: NEIGHBOUR_SELECTION }
+                    { image2Id: imageId, limit: 10000, selectionSet: NEIGHBOUR_SELECTION }
                   ),
                 ]);
                 neighbourCache.set(imageId, [...n1, ...n2]);

@@ -71,8 +71,8 @@ function vincentyDistanceKm(
       cosλ = Math.cos(λ);
     sinSigma = Math.sqrt(
       cosU2 * sinλ * (cosU2 * sinλ) +
-        (cosU1 * sinU2 - sinU1 * cosU2 * cosλ) *
-          (cosU1 * sinU2 - sinU1 * cosU2 * cosλ)
+      (cosU1 * sinU2 - sinU1 * cosU2 * cosλ) *
+      (cosU1 * sinU2 - sinU1 * cosU2 * cosλ)
     );
 
     if (sinSigma === 0) return 0;
@@ -90,12 +90,12 @@ function vincentyDistanceKm(
     λ =
       L +
       (1 - C) *
-        f *
-        sinAlpha *
-        (sigma +
-          C *
-            sinSigma *
-            (cos2SigmaM + C * cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM)));
+      f *
+      sinAlpha *
+      (sigma +
+        C *
+        sinSigma *
+        (cos2SigmaM + C * cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM)));
   } while (Math.abs(λ - λP) > 1e-12 && --iterLimit > 0);
 
   if (iterLimit === 0) return NaN;
@@ -110,11 +110,11 @@ function vincentyDistanceKm(
     sinSigma *
     (cos2SigmaM +
       (B / 4) *
-        (cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM) -
-          (B / 6) *
-            cos2SigmaM *
-            (-3 + 4 * sinSigma * sinSigma) *
-            (-3 + 4 * cos2SigmaM * cos2SigmaM)));
+      (cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM) -
+        (B / 6) *
+        cos2SigmaM *
+        (-3 + 4 * sinSigma * sinSigma) *
+        (-3 + 4 * cos2SigmaM * cos2SigmaM)));
 
   const s = b * A * (sigma - deltaSigma);
 
@@ -473,7 +473,7 @@ export default function TileConfiguration({
             'latitude',
             'longitude',
           ],
-          limit: 1000,
+          limit: 10000,
         } as any,
         (count) => setImagesLoaded(count)
       );
@@ -686,9 +686,9 @@ export default function TileConfiguration({
           : undefined,
       dev: hasDevGeoTransect
         ? {
-            transectSubsetSteps,
-            transectSubsetOffsets,
-          }
+          transectSubsetSteps,
+          transectSubsetOffsets,
+        }
         : undefined,
     });
 

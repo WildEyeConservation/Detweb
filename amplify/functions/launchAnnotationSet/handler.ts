@@ -912,7 +912,7 @@ async function clearLocationSetLocations(locationSetId: string): Promise<void> {
         {
           setId: locationSetId,
           confidence: { between: [0, 2] }, // Get all confidence levels
-          limit: 1000,
+          limit: 10000,
           nextToken,
         }
       );
@@ -1389,7 +1389,7 @@ async function deleteFalseNegativeObservations(
         filter: {
           source: { contains: 'false-negative' },
         },
-        limit: 1000,
+        limit: 10000,
         nextToken,
       },
     } as any)) as GraphQLResult<{
@@ -1472,7 +1472,7 @@ async function deleteFalseNegativeAnnotations(
         filter: {
           source: { contains: 'false-negative' },
         },
-        limit: 1000,
+        limit: 10000,
         nextToken,
       },
     } as any)) as GraphQLResult<{

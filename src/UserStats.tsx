@@ -131,7 +131,7 @@ export default function UserStats() {
 
         const fetched = await fetchAllPaginatedResults<UserStatsType>(
           client.models.UserStats.list,
-          { filter, limit: 1000 }
+          { filter, limit: 10000 }
         );
         if (!cancelled) {
           setUserStats(fetched);
@@ -345,7 +345,7 @@ export default function UserStats() {
       {
         annotationSetId,
         createdAt: { between: [lower, upper] },
-        limit: 1000,
+        limit: 10000,
         selectionSet: [
           'createdAt', 'annotationCount', 'timeTaken', 'waitingTime', 'owner', 'locationId',
           'location.id', 'location.confidence',

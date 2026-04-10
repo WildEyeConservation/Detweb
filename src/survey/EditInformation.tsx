@@ -126,7 +126,7 @@ export default function EditInformation({ projectId }: { projectId: string }) {
         {
           projectId,
           selectionSet: ['id', 'cameraId', 'originalPath'],
-          limit: 1000,
+          limit: 10000,
         }
       );
 
