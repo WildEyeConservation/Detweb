@@ -5,6 +5,7 @@ import { addUserToGroup } from './functions/add-user-to-group/resource';
 import { Stack, Fn } from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { outputBucket, inputBucket } from './storage/resource';
+import { generateTile } from './storage/generateTile/resource';
 import { handleS3Upload } from './storage/handleS3Upload/resource';
 //import * as sts from '@aws-sdk/client-sts';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
@@ -54,6 +55,7 @@ const backend = defineBackend({
   addUserToGroup,
   outputBucket,
   inputBucket,
+  generateTile,
   handleS3Upload,
   processImages,
   postDeploy,
@@ -276,11 +278,10 @@ Object.values(backend.auth.resources.groups).forEach(({ role }) => {
 backend.auth.resources.groups['sysadmin'].role.addToPrincipalPolicy(sqsSysadminStatement);
 backend.auth.resources.groups['sysadmin'].role.addToPrincipalPolicy(groupEcsListPolicy);
 
-// Add the Sharp layer and throttle concurrency on the image upload Lambda.
-const lambdaFunction = backend.handleS3Upload.resources
-  .lambda as lambda.Function;
-const layerVersion = new lambda.LayerVersion(
-  Stack.of(lambdaFunction),
+// Add the Sharp layer to the on-demand tile generation Lambda.
+const generateTileLambda = backend.generateTile.resources.lambda as lambda.Function;
+const sharpLayer = new lambda.LayerVersion(
+  Stack.of(generateTileLambda),
   'sharpLayer',
   {
     code: lambda.Code.fromAsset('./amplify/layers/sharp-ph200-x64'),
@@ -288,7 +289,12 @@ const layerVersion = new lambda.LayerVersion(
     compatibleArchitectures: [lambda.Architecture.X86_64],
   }
 );
-lambdaFunction.addLayers(layerVersion);
+generateTileLambda.addLayers(sharpLayer);
+
+// Also attach the Sharp layer to the eager on-upload tiler, and throttle
+// its concurrency so a bulk upload doesn't spawn thousands of parallel invocations.
+const handleS3UploadLambda = backend.handleS3Upload.resources.lambda as lambda.Function;
+handleS3UploadLambda.addLayers(sharpLayer);
 backend.handleS3Upload.resources.cfnResources.cfnFunction.addPropertyOverride(
   'ReservedConcurrentExecutions',
   50
