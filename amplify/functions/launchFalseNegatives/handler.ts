@@ -486,17 +486,17 @@ async function handleLaunch(payload: LaunchFalseNegativesPayload, organizationId
       };
       const updatedHistory: FnHistory = existingHistory
         ? {
-            ...existingHistory,
-            totalLaunched:
-              existingHistory.totalLaunched + selectedTiles.length,
-            launches: [...existingHistory.launches, newEntry],
-          }
+          ...existingHistory,
+          totalLaunched:
+            existingHistory.totalLaunched + selectedTiles.length,
+          launches: [...existingHistory.launches, newEntry],
+        }
         : {
-            annotationSetId,
-            poolSize: existingPool.poolSize,
-            totalLaunched: selectedTiles.length,
-            launches: [newEntry],
-          };
+          annotationSetId,
+          poolSize: existingPool.poolSize,
+          totalLaunched: selectedTiles.length,
+          launches: [newEntry],
+        };
       await withTiming('saveFnHistory', () =>
         saveFnHistory(annotationSetId, updatedHistory)
       );
@@ -1041,13 +1041,13 @@ function generateTiledLocations(
       for (let yStep = 0; yStep < verticalTilesForImage; yStep++) {
         const x = Math.round(
           roiMinXForImage +
-            (horizontalTilesForImage > 1 ? xStep * xStepSize : 0) +
-            tileWidthForImage / 2
+          (horizontalTilesForImage > 1 ? xStep * xStepSize : 0) +
+          tileWidthForImage / 2
         );
         const y = Math.round(
           roiMinYForImage +
-            (verticalTilesForImage > 1 ? yStep * yStepSize : 0) +
-            tileHeightForImage / 2
+          (verticalTilesForImage > 1 ? yStep * yStepSize : 0) +
+          tileHeightForImage / 2
         );
 
         locations.push({
@@ -1336,7 +1336,7 @@ async function fetchObservationPoints(annotationSetId: string) {
             { source: { attributeExists: false } },
           ],
         },
-        limit: 1000,
+        limit: 10000,
         nextToken,
       },
     } as any)) as GraphQLResult<{
@@ -1368,7 +1368,7 @@ async function fetchObservationPoints(annotationSetId: string) {
     for (const item of page?.items || []) {
       const location = item?.location;
       if (!location?.imageId) continue;
-      
+
       const list = map.get(location.imageId) || [];
       list.push({
         x: Number(location.x ?? 0),
@@ -1400,7 +1400,7 @@ async function fetchAnnotationPoints(annotationSetId: string) {
             { source: { attributeExists: false } },
           ],
         },
-        limit: 1000,
+        limit: 10000,
         nextToken,
       },
     } as any)) as GraphQLResult<{
@@ -1448,7 +1448,7 @@ async function fetchImageTimestamps(projectId: string) {
       query: imagesByProjectId,
       variables: {
         projectId,
-        limit: 1000,
+        limit: 10000,
         nextToken,
       },
     } as any)) as GraphQLResult<{
@@ -1759,13 +1759,13 @@ async function createTiledLocationSetSync(
       for (let yStep = 0; yStep < verticalTilesForImage; yStep++) {
         const x = Math.round(
           roiMinXForImage +
-            (horizontalTilesForImage > 1 ? xStep * xStepSize : 0) +
-            tileWidthForImage / 2
+          (horizontalTilesForImage > 1 ? xStep * xStepSize : 0) +
+          tileWidthForImage / 2
         );
         const y = Math.round(
           roiMinYForImage +
-            (verticalTilesForImage > 1 ? yStep * yStepSize : 0) +
-            tileHeightForImage / 2
+          (verticalTilesForImage > 1 ? yStep * yStepSize : 0) +
+          tileHeightForImage / 2
         );
 
         creationTasks.push(
@@ -1878,17 +1878,17 @@ function tilesOverlap(
   const halfH1 = tile1.height / 2;
   const halfW2 = tile2.width / 2;
   const halfH2 = tile2.height / 2;
-  
+
   const minX1 = tile1.x - halfW1;
   const maxX1 = tile1.x + halfW1;
   const minY1 = tile1.y - halfH1;
   const maxY1 = tile1.y + halfH1;
-  
+
   const minX2 = tile2.x - halfW2;
   const maxX2 = tile2.x + halfW2;
   const minY2 = tile2.y - halfH2;
   const maxY2 = tile2.y + halfH2;
-  
+
   // Check if rectangles overlap
   return minX1 < maxX2 && maxX1 > minX2 && minY1 < maxY2 && maxY1 > minY2;
 }

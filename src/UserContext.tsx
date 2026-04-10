@@ -44,7 +44,7 @@ export function Project({
       client.models.Category.list({
         filter: { projectId: { eq: currentPM?.projectId } },
         nextToken,
-        limit: 1000,
+        limit: 10000,
       }),
     subscriptionFilter
   );

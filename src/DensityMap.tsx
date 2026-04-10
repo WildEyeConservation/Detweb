@@ -117,7 +117,7 @@ export default function DensityMap({
           client.models.Annotation.annotationsByAnnotationSetId,
           {
             setId: annotationSetId,
-            limit: 1000,
+            limit: 10000,
             selectionSet: [
               'id',
               'imageId',
@@ -131,7 +131,7 @@ export default function DensityMap({
         ),
         fetchAllPaginatedResults(client.models.Image.imagesByProjectId, {
           projectId: surveyId,
-          limit: 1000,
+          limit: 10000,
           selectionSet: [
             'id',
             'latitude',
@@ -142,14 +142,14 @@ export default function DensityMap({
         }),
         fetchAllPaginatedResults(client.models.Stratum.strataByProjectId, {
           projectId: surveyId,
-          limit: 1000,
+          limit: 10000,
           selectionSet: ['id', 'name', 'coordinates'],
         }),
         fetchAllPaginatedResults(
           client.models.ShapefileExclusions.shapefileExclusionsByProjectId,
           {
             projectId: surveyId,
-            limit: 1000,
+            limit: 10000,
             selectionSet: ['id', 'coordinates'],
           }
         ),
@@ -181,10 +181,10 @@ export default function DensityMap({
   useEffect(() => {
     let filteredAnnotations = primaryOnly
       ? rawAnnotations.filter(
-          (a) =>
-            a.id === a.objectId &&
-            (!dropFalseNegatives || !a.source.includes('false-negative'))
-        )
+        (a) =>
+          a.id === a.objectId &&
+          (!dropFalseNegatives || !a.source.includes('false-negative'))
+      )
       : rawAnnotations;
 
     // Filter by user if users are selected
@@ -433,11 +433,10 @@ export default function DensityMap({
           <div>
             <strong>Transect:</strong> ${transectNumber}<br/>
             <strong>Coordinates:</strong> ${pos.latitude.toFixed(
-              4
-            )}, ${pos.longitude.toFixed(4)}
-            <div style="margin-top:6px;"><button class="btn btn-sm btn-primary view-image-btn" data-imageid="${
-              img.id
-            }">View Image</button></div>
+          4
+        )}, ${pos.longitude.toFixed(4)}
+            <div style="margin-top:6px;"><button class="btn btn-sm btn-primary view-image-btn" data-imageid="${img.id
+          }">View Image</button></div>
           </div>`;
         marker.bindPopup(popupHtml);
         marker.on('popupopen', () => {
@@ -591,85 +590,85 @@ export default function DensityMap({
     showStrata,
     setShowStrata,
   }) => {
-    const map = useMap();
-    useEffect(() => {
-      const control = (L as any).control({ position: 'topleft' });
-      control.onAdd = () => {
-        const container = L.DomUtil.create(
-          'div',
-          'leaflet-control-layers leaflet-control'
-        );
-        container.style.backgroundColor = 'white';
-        container.style.padding = '10px';
-        container.style.borderRadius = '5px';
-        container.style.boxShadow = '0 1px 5px rgba(0,0,0,0.4)';
-        container.style.maxWidth = '200px';
+      const map = useMap();
+      useEffect(() => {
+        const control = (L as any).control({ position: 'topleft' });
+        control.onAdd = () => {
+          const container = L.DomUtil.create(
+            'div',
+            'leaflet-control-layers leaflet-control'
+          );
+          container.style.backgroundColor = 'white';
+          container.style.padding = '10px';
+          container.style.borderRadius = '5px';
+          container.style.boxShadow = '0 1px 5px rgba(0,0,0,0.4)';
+          container.style.maxWidth = '200px';
 
-        const title = L.DomUtil.create('div', '', container);
-        title.innerHTML = '<strong>Layers</strong>';
-        title.style.marginBottom = '8px';
-        title.style.fontSize = '12px';
-        title.style.color = 'black';
+          const title = L.DomUtil.create('div', '', container);
+          title.innerHTML = '<strong>Layers</strong>';
+          title.style.marginBottom = '8px';
+          title.style.fontSize = '12px';
+          title.style.color = 'black';
 
-        const createCheckbox = (
-          label: string,
-          checked: boolean,
-          onChange: (checked: boolean) => void
-        ) => {
-          const div = L.DomUtil.create('div', '', container);
-          div.style.marginBottom = '5px';
-          div.style.display = 'flex';
-          div.style.alignItems = 'center';
+          const createCheckbox = (
+            label: string,
+            checked: boolean,
+            onChange: (checked: boolean) => void
+          ) => {
+            const div = L.DomUtil.create('div', '', container);
+            div.style.marginBottom = '5px';
+            div.style.display = 'flex';
+            div.style.alignItems = 'center';
 
-          const checkbox = L.DomUtil.create(
-            'input',
-            '',
-            div
-          ) as HTMLInputElement;
-          checkbox.type = 'checkbox';
-          checkbox.checked = checked;
-          checkbox.id = `layer-${label.toLowerCase()}`;
-          checkbox.style.marginRight = '5px';
+            const checkbox = L.DomUtil.create(
+              'input',
+              '',
+              div
+            ) as HTMLInputElement;
+            checkbox.type = 'checkbox';
+            checkbox.checked = checked;
+            checkbox.id = `layer-${label.toLowerCase()}`;
+            checkbox.style.marginRight = '5px';
 
-          const labelEl = L.DomUtil.create(
-            'label',
-            '',
-            div
-          ) as HTMLLabelElement;
-          labelEl.htmlFor = checkbox.id;
-          labelEl.innerHTML = label;
-          labelEl.style.fontSize = '12px';
-          labelEl.style.cursor = 'pointer';
-          labelEl.style.color = 'black';
-          labelEl.style.marginBottom = '0';
+            const labelEl = L.DomUtil.create(
+              'label',
+              '',
+              div
+            ) as HTMLLabelElement;
+            labelEl.htmlFor = checkbox.id;
+            labelEl.innerHTML = label;
+            labelEl.style.fontSize = '12px';
+            labelEl.style.cursor = 'pointer';
+            labelEl.style.color = 'black';
+            labelEl.style.marginBottom = '0';
 
-          L.DomEvent.on(checkbox, 'change', () => onChange(checkbox.checked));
+            L.DomEvent.on(checkbox, 'change', () => onChange(checkbox.checked));
+          };
+
+          createCheckbox('Clusters', showClusters, setShowClusters);
+          createCheckbox('Heatmap', showHeatmap, setShowHeatmap);
+          createCheckbox('Images', showImages, setShowImages);
+          createCheckbox('Strata', showStrata, setShowStrata);
+
+          return container;
         };
-
-        createCheckbox('Clusters', showClusters, setShowClusters);
-        createCheckbox('Heatmap', showHeatmap, setShowHeatmap);
-        createCheckbox('Images', showImages, setShowImages);
-        createCheckbox('Strata', showStrata, setShowStrata);
-
-        return container;
-      };
-      control.addTo(map);
-      return () => {
-        control.remove();
-      };
-    }, [
-      map,
-      showClusters,
-      showHeatmap,
-      showImages,
-      showStrata,
-      setShowClusters,
-      setShowHeatmap,
-      setShowImages,
-      setShowStrata,
-    ]);
-    return null;
-  };
+        control.addTo(map);
+        return () => {
+          control.remove();
+        };
+      }, [
+        map,
+        showClusters,
+        showHeatmap,
+        showImages,
+        showStrata,
+        setShowClusters,
+        setShowHeatmap,
+        setShowImages,
+        setShowStrata,
+      ]);
+      return null;
+    };
 
   // Add FullscreenControl to toggle map fullscreen
   const FullscreenControl: React.FC = () => {

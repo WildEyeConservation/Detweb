@@ -258,7 +258,7 @@ async function processTask(task: TilingTaskRecord) {
     if (isTilingOnly) {
       // Tiling-only mode: just clean up and mark complete, no queue creation
       console.log('Tiling-only operation complete, skipping queue creation', { taskId: task.id });
-      
+
       // Update project status
       await setProjectStatus(task.projectId, 'active');
 
@@ -470,7 +470,7 @@ async function fetchBatchesForTask(taskId: string): Promise<TilingBatchRecord[]>
       query: tilingBatchesByTaskId,
       variables: {
         tilingTaskId: taskId,
-        limit: 1000,
+        limit: 10000,
         nextToken,
       },
     } as any)) as GraphQLResult<{

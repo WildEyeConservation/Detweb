@@ -441,7 +441,7 @@ async function fetchAnnotatedLocationIds(locations: Location[], annotationSetId:
             variables: {
               imageId,
               setId: { eq: annotationSetId },
-              limit: 1000,
+              limit: 10000,
               nextToken,
             },
           } as any)) as GraphQLResult<{
@@ -523,7 +523,7 @@ async function fetchObservedLocationIds(annotationSetId: string): Promise<Set<st
       query: observationsByAnnotationSetId,
       variables: {
         annotationSetId,
-        limit: 1000,
+        limit: 10000,
         nextToken,
       },
     } as any)) as GraphQLResult<{
@@ -794,7 +794,7 @@ async function fetchUnreviewedQCAnnotations(
             variables: {
               imageId,
               setId: { eq: annotationSetId },
-              limit: 1000,
+              limit: 10000,
               nextToken,
             },
           } as any)) as GraphQLResult<{

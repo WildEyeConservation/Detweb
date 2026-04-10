@@ -176,7 +176,7 @@ export default function AnnotationImage(props: any) {
     async (nextToken: string | null | undefined) =>
       client.models.Annotation.annotationsByImageIdAndSetId(
         { imageId: location.image.id, setId: { eq: location.annotationSetId } },
-        { limit: 1000, nextToken }
+        { limit: 10000, nextToken }
       ) as any,
     subscriptionFilter
   ) as ReturnType<typeof useOptimisticUpdates<Schema['Annotation']['type'], never>>;

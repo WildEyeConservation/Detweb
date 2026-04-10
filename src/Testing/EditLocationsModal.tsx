@@ -84,7 +84,7 @@ export default function EditLocationsModal({ show, preset, surveyId }: Props) {
           'locationId',
           'annotationSetId',
         ] as const,
-        limit: 1000,
+        limit: 10000,
       } as any
     )) as any[];
 

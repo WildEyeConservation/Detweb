@@ -190,7 +190,7 @@ export default function JollyResults() {
         {
           categoryId,
           selectionSet: ['source'],
-          limit: 1000,
+          limit: 10000,
         }
       );
 

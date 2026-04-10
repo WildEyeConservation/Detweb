@@ -77,7 +77,7 @@ export default function LightImageView({
             'category.id',
             'category.name',
           ] as const,
-          limit: 1000,
+          limit: 10000,
         }
       )) as AnnotationItem[];
       if (cancelled) return;

@@ -36,7 +36,7 @@ const AnnotationCountModal: React.FC<Props> = ({
         {
           setId: setId,
           selectionSet: ['id', 'category.name', 'objectId', 'source'] as const,
-          limit: 1000,
+          limit: 10000,
         }
       );
       setAnnotations(result);

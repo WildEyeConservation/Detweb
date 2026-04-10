@@ -101,7 +101,7 @@ export default function AnnotationSetResults({
               'image.latitude',
               'image.longitude',
             ] as const,
-            limit: 1000,
+            limit: 10000,
           },
           (stepsCompleted) => {
             setExportStatus(`Fetching annotations... (${stepsCompleted} fetched)`);

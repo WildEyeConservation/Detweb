@@ -87,7 +87,7 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
         {
           testPresetId: preset.id,
           selectionSet: ['locationId', 'annotationSetId'] as const,
-          limit: 1000,
+          limit: 10000,
         }
       );
       const presetKeys = new Set(
@@ -132,7 +132,7 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
               'location.x',
               'location.y',
             ] as const,
-            limit: 1000,
+            limit: 10000,
           },
           updateObservationCount
         )) as any[];
@@ -163,7 +163,7 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
               imageId,
               setId: { eq: annotationSetId },
               selectionSet: ['x', 'y', 'categoryId'] as const,
-              limit: 1000,
+              limit: 10000,
             }
           )) as any[];
 
@@ -356,7 +356,7 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
         imageId: location.imageId,
         setId: { eq: cand.annotationSetId },
         selectionSet: ['categoryId', 'x', 'y'] as const,
-        limit: 1000,
+        limit: 10000,
       }
     )) as any[];
     if (location.width == null || location.height == null) return;
@@ -681,9 +681,8 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
                       <a
                         className='btn btn-outline-info'
                         target='_blank'
-                        href={`/surveys/${surveyId}/location/${
-                          currentCandidate!.locationId
-                        }/${currentCandidate!.annotationSetId}`}
+                        href={`/surveys/${surveyId}/location/${currentCandidate!.locationId
+                          }/${currentCandidate!.annotationSetId}`}
                       >
                         Edit Location
                       </a>
@@ -697,21 +696,19 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
                         (changeSize &&
                           (customWidth === '' || customHeight === '')) ||
                         addedLocations[
-                          `${currentCandidate!.annotationSetId}_${
-                            currentCandidate!.locationId
-                          }`
+                        `${currentCandidate!.annotationSetId}_${currentCandidate!.locationId
+                        }`
                         ]
                       }
                     >
                       {adding
                         ? 'Adding...'
                         : addedLocations[
-                            `${currentCandidate!.annotationSetId}_${
-                              currentCandidate!.locationId
-                            }`
-                          ]
-                        ? 'Added'
-                        : 'Add to pool'}
+                          `${currentCandidate!.annotationSetId}_${currentCandidate!.locationId
+                          }`
+                        ]
+                          ? 'Added'
+                          : 'Add to pool'}
                     </Button>
                   </div>
                 </div>

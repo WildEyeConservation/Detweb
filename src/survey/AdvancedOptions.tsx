@@ -99,7 +99,7 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
             'rightNeighbours.image1Id',
             'rightNeighbours.homography',
           ],
-          limit: 1000,
+          limit: 10000,
         },
         (stepsCompleted) => {
           setLoadingStatus(`Fetching images... (${stepsCompleted} fetched)`);
@@ -234,7 +234,7 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
             'observations.createdAt',
             'observations.owner',
           ],
-          limit: 1000,
+          limit: 10000,
         },
         (stepsCompleted) => {
           setLoadingStatus(
@@ -247,7 +247,7 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
         client.models.AnnotationSet.annotationSetsByProjectId, {
         projectId: projectId,
         selectionSet: ['id', 'name'] as const,
-        limit: 1000,
+        limit: 10000,
       }
       );
 
@@ -259,7 +259,7 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
           client.models.Annotation.annotationsByAnnotationSetId, {
           setId: annotationSet.id,
           selectionSet: ['id', 'owner', 'imageId', 'x', 'y'] as const,
-          limit: 1000,
+          limit: 10000,
         },
           (stepsCompleted) => {
             setLoadingStatus(

@@ -80,7 +80,7 @@ export function useLaunchTask(
         setId: locationSetId,
         confidence: { between: [options.lowerLimit, options.upperLimit] },
         sortDirection: 'DESC',
-        limit: 1000,
+        limit: 10000,
         selectionSet: ['id', 'x', 'y', 'width', 'height', 'confidence', 'imageId'] as const,
       }
     );
@@ -106,7 +106,7 @@ export function useLaunchTask(
       client.models.Observation.observationsByAnnotationSetId,
       {
         annotationSetId,
-        limit: 1000,
+        limit: 10000,
         selectionSet: ['locationId'] as const,
       }
     );
@@ -129,7 +129,7 @@ export function useLaunchTask(
             { source: { notContains: 'false-negative' } },
           ],
         },
-        limit: 1000,
+        limit: 10000,
         selectionSet: ['x', 'y', 'imageId'] as const,
       }
     );

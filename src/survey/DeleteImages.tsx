@@ -95,7 +95,7 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
         {
           projectId,
           selectionSet: ['id', 'latitude', 'longitude', 'originalPath'],
-          limit: 1000,
+          limit: 10000,
         },
         (count) => {
           if (isActiveRef.current) {
@@ -131,15 +131,13 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
       setImages(gpsImages);
       setSelectedIds(new Set());
       setLoadingStatus(
-        `Loaded ${gpsImages.length} images with GPS coordinates (${
-          allImages.length - gpsImages.length
+        `Loaded ${gpsImages.length} images with GPS coordinates (${allImages.length - gpsImages.length
         } without GPS)`
       );
     } catch (err) {
       console.error('Failed to fetch images:', err);
       setError(
-        `Failed to fetch images: ${
-          err instanceof Error ? err.message : String(err)
+        `Failed to fetch images: ${err instanceof Error ? err.message : String(err)
         }`
       );
     } finally {
@@ -251,7 +249,7 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
         {
           projectId,
           selectionSet: ['id'],
-          limit: 1000,
+          limit: 10000,
         }
       )) as Array<{ id?: string | null }>;
 
@@ -267,7 +265,7 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
           {
             imageSetId: imageSet.id,
             selectionSet: ['id', 'imageId', 'imageSetId'],
-            limit: 1000,
+            limit: 10000,
           }
         )) as Array<{
           id?: string | null;
@@ -307,7 +305,7 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
                 {
                   imageId,
                   selectionSet: ['id', 'setId'],
-                  limit: 1000,
+                  limit: 10000,
                 }
               ),
               fetchAllPaginatedResults(
@@ -315,7 +313,7 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
                 {
                   imageId,
                   selectionSet: ['id'],
-                  limit: 1000,
+                  limit: 10000,
                 }
               ),
               fetchAllPaginatedResults(
@@ -323,7 +321,7 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
                 {
                   imageId,
                   selectionSet: ['id'],
-                  limit: 1000,
+                  limit: 10000,
                 }
               ),
               fetchAllPaginatedResults(
@@ -331,7 +329,7 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
                 {
                   image1Id: imageId,
                   selectionSet: ['image1Id', 'image2Id'],
-                  limit: 1000,
+                  limit: 10000,
                 }
               ),
               fetchAllPaginatedResults(
@@ -339,7 +337,7 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
                 {
                   image2Id: imageId,
                   selectionSet: ['image1Id', 'image2Id'],
-                  limit: 1000,
+                  limit: 10000,
                 }
               ),
             ]);
@@ -600,7 +598,7 @@ This action cannot be undone.`;
               {
                 imageSetId,
                 selectionSet: ['id'],
-                limit: 1000,
+                limit: 10000,
               }
             )) as Array<{ id: string }>;
 
@@ -638,8 +636,7 @@ This action cannot be undone.`;
     } catch (err) {
       console.error('Delete operation failed:', err);
       setError(
-        `Delete operation failed: ${
-          err instanceof Error ? err.message : String(err)
+        `Delete operation failed: ${err instanceof Error ? err.message : String(err)
         }`
       );
     } finally {

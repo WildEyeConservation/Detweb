@@ -160,7 +160,7 @@ async function fetchAllPages<T, K extends string>(
     const items = response.data?.[queryName]?.items ?? [];
     allItems.push(...(items as T[]));
     nextToken = response.data?.[queryName]?.nextToken ?? undefined;
-    
+
     // Log progress at 1000 intervals if callback provided
     if (onProgress && allItems.length % 1000 === 0) {
       onProgress(allItems.length);
@@ -181,7 +181,7 @@ async function updateProgress(
   // Optimized approach: Fetch images with nested locations and processedBy in selection set
   // This avoids fetching all locations separately and just checks if at least one exists per image
   console.log(`Fetching images with processing status for project ${project.id} (source: ${source})`);
-  
+
   const imagesWithDetails = await fetchAllPages<ImageWithDetails, 'imagesByProjectId'>(
     (nextToken) =>
       client.graphql({
@@ -189,7 +189,7 @@ async function updateProgress(
         variables: {
           projectId: project.id,
           source: source,
-          limit: 1000,
+          limit: 10000,
           nextToken,
         },
       }) as Promise<GraphQLResult<{ imagesByProjectId: PagedList<ImageWithDetails> }>>,
@@ -200,7 +200,7 @@ async function updateProgress(
   );
 
   console.log(`Found ${imagesWithDetails.length} total images for project ${project.id}`);
-  
+
   const processedImageIds = new Set<string>();
   const imagesToUpdateProcessedBy: ImageWithDetails[] = [];
 
@@ -211,7 +211,7 @@ async function updateProgress(
 
     if (hasLocation || hasProcessedByRecord) {
       processedImageIds.add(image.id);
-      
+
       // If it has a location but no processedBy record, we need to create one
       if (hasLocation && !hasProcessedByRecord) {
         imagesToUpdateProcessedBy.push(image);
@@ -227,7 +227,7 @@ async function updateProgress(
     const BATCH_SIZE = 50;
     for (let i = 0; i < imagesToUpdateProcessedBy.length; i += BATCH_SIZE) {
       const batch = imagesToUpdateProcessedBy.slice(i, i + BATCH_SIZE);
-      
+
       const createPromises = batch.map(async (image) => {
         try {
           await client.graphql({
@@ -253,7 +253,7 @@ async function updateProgress(
   }
 
   // Check if all images are processed
-  const allImagesProcessed = imagesWithDetails.length > 0 && 
+  const allImagesProcessed = imagesWithDetails.length > 0 &&
     imagesWithDetails.every((image) => processedImageIds.has(image.id));
 
   // Update project status if all images are processed
@@ -281,7 +281,7 @@ async function updateProgress(
           query: userProjectMembershipsByProjectId,
           variables: {
             projectId: project.id,
-            limit: 1000,
+            limit: 10000,
             nextToken,
           },
         }) as Promise<
@@ -308,8 +308,7 @@ async function updateProgress(
     );
   } else {
     console.log(
-      `Project ${project.id} still has ${
-        imagesWithDetails.length - processedImageIds.size
+      `Project ${project.id} still has ${imagesWithDetails.length - processedImageIds.size
       } images to process`
     );
   }
@@ -330,7 +329,7 @@ export const handler: Handler = async (event, context) => {
                 contains: 'processing',
               },
             },
-            limit: 1000,
+            limit: 10000,
             nextToken,
           },
         }) as Promise<GraphQLResult<{ listProjects: PagedList<Project> }>>,
@@ -359,7 +358,7 @@ export const handler: Handler = async (event, context) => {
             query: imagesByProjectId,
             variables: {
               projectId: project.id,
-              limit: 1000,
+              limit: 10000,
               nextToken,
             },
           }) as Promise<GraphQLResult<{ imagesByProjectId: PagedList<Image> }>>,

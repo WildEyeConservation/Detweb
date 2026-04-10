@@ -91,7 +91,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
         { setId: selectedAnnotationSet },
         {
           nextToken,
-          limit: 1000,
+          limit: 10000,
           filter: annotationFilter?.filter,
         }
       );
@@ -525,9 +525,9 @@ export function Registration({ showAnnotationSetDropdown = true }) {
                 activeBackwardNeighbour!.tf,
               ]}
               next={nextPair}
-              prev={() => {}}
+              prev={() => { }}
               visible={true}
-              ack={() => {}}
+              ack={() => { }}
               onSkip={handleSkip}
             />
           ) : (

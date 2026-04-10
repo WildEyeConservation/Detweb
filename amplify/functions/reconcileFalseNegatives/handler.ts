@@ -346,7 +346,7 @@ async function fetchNormalAnnotations(
             { source: { attributeExists: false } },
           ],
         },
-        limit: 1000,
+        limit: 10000,
         nextToken,
       },
     } as any)) as GraphQLResult<{
@@ -403,7 +403,7 @@ async function fetchNormalObservations(
             { source: { attributeExists: false } },
           ],
         },
-        limit: 1000,
+        limit: 10000,
         nextToken,
       },
     } as any)) as GraphQLResult<{
@@ -487,7 +487,7 @@ async function deleteFnDataForTiles(
       variables: {
         setId: annotationSetId,
         filter: { source: { contains: 'false-negative' } },
-        limit: 1000,
+        limit: 10000,
         nextToken,
       },
     } as any)) as GraphQLResult<{
@@ -554,7 +554,7 @@ async function deleteFnDataForTiles(
       variables: {
         annotationSetId,
         filter: { source: { contains: 'false-negative' } },
-        limit: 1000,
+        limit: 10000,
         nextToken: nextTokenObs,
       },
     } as any)) as GraphQLResult<{

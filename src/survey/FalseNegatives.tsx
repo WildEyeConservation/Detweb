@@ -285,7 +285,7 @@ export default function FalseNegatives({
         client.models.Location.locationsBySetIdAndConfidence,
         {
           setId: locationSetId,
-          limit: 1000,
+          limit: 10000,
           selectionSet: ['id', 'imageId', 'x', 'y', 'width', 'height'] as const,
         }
       );
@@ -1108,7 +1108,7 @@ async function fetchObservationPointsDetailed(
             'location.x',
             'location.y',
           ] as const,
-          limit: 1000,
+          limit: 10000,
           nextToken,
         }
       );
@@ -1146,7 +1146,7 @@ async function fetchObservedLocationIds(
         { annotationSetId },
         {
           selectionSet: ['locationId'] as const,
-          limit: 1000,
+          limit: 10000,
           nextToken,
         }
       );
@@ -1173,7 +1173,7 @@ async function fetchAnnotationPointsDetailed(
         { setId: annotationSetId },
         {
           selectionSet: ['imageId', 'x', 'y'] as const,
-          limit: 1000,
+          limit: 10000,
           nextToken,
         }
       );

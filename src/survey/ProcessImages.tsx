@@ -42,7 +42,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
           },
           {
             selectionSet: ['id', 'name'],
-            limit: 1000,
+            limit: 10000,
           }
         );
         const match =
@@ -71,7 +71,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
       }
       const res = await client.models.Image.imagesByProjectId(
         { projectId },
-        { selectionSet: ['id', 'originalPath', 'processedBy.source'], nextToken, limit: 1000 }
+        { selectionSet: ['id', 'originalPath', 'processedBy.source'], nextToken, limit: 10000 }
       );
       const page = (res.data ?? []).flatMap((img) =>
         img?.id && img?.originalPath && !img.processedBy?.some((p: { source: string }) => p.source === model.value)
