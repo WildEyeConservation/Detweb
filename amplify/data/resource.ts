@@ -35,6 +35,7 @@ import { updateActiveOrganizations } from '../functions/updateActiveOrganization
 import { launchQCReview } from '../functions/launchQCReview/resource';
 import { launchHomography } from '../functions/launchHomography/resource';
 import { reconcileHomographies } from '../functions/reconcileHomographies/resource';
+import { generateTile } from '../storage/generateTile/resource';
 // import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
@@ -1172,6 +1173,17 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(updateActiveOrganizations)),
+    generateTile: a
+      .query()
+      .arguments({
+        imageKey: a.string().required(),
+        zs: a.integer().required().array().required(),
+        rows: a.integer().required().array().required(),
+        cols: a.integer().required().array().required(),
+      })
+      .returns(a.string().array())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(generateTile)),
     // Dummy table used to force full deployment instead of hotswapping resources
     fixDeploymentTable: a
       .model({

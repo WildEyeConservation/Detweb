@@ -1,4 +1,5 @@
 import { defineStorage } from "@aws-amplify/backend"
+import { generateTile } from "./generateTile/resource"
 import { handleS3Upload } from "./handleS3Upload/resource"
 import { processImages } from "../functions/processImages/resource"
 import { runPointFinder } from "../functions/runPointFinder/resource"
@@ -20,6 +21,7 @@ export const outputBucket = defineStorage({
   isDefault: true,
   access: allow => ({
     'slippymaps/*': [
+      allow.resource(generateTile).to(['write', 'list', 'get']),
       allow.resource(handleS3Upload).to(['write', 'list', 'get', 'delete']),
       allow.authenticated.to(['read']),
       allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
@@ -102,6 +104,7 @@ export const inputBucket = defineStorage({
   name: "inputs",
   access: allow => ({
     'images/*': [
+      allow.resource(generateTile).to(['get']),
       allow.resource(handleS3Upload).to(['get']),
       allow.resource(processImages).to(['read']),
       allow.resource(runHeatmapper).to(['read']),
