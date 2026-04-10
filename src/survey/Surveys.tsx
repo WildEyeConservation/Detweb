@@ -552,7 +552,9 @@ export default function Surveys() {
                 setSelectedProject(project);
                 showModal('addFiles');
               }}
-              disabled={disabled || hasJobs}
+              disabled={
+                process.env.NODE_ENV !== 'development' && (disabled || hasJobs)
+              }
             >
               Add files
             </Button>

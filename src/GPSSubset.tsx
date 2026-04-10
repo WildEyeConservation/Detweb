@@ -12,6 +12,7 @@ import {
   FeatureGroup,
   CircleMarker,
   Popup,
+  Pane,
   useMap,
 } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
@@ -47,6 +48,7 @@ export interface GPSSubsetProps {
   onFilter: (filteredData: GPSData[]) => void;
   imageFiles?: File[];
   onShapefileParsed?: (latLngs: [number, number][]) => void;
+  existingImages?: { lat: number; lng: number }[];
 }
 
 // A helper component to fit the map view to the given GPS points
@@ -72,12 +74,22 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
   onFilter,
   imageFiles,
   onShapefileParsed,
+  existingImages,
 }) => {
   const [polygons, setPolygons] = useState<PolygonSubset[]>([]);
   const featureGroupRef = useRef<L.FeatureGroup>(null);
   const [shapefileBuffer, setShapefileBuffer] = useState<
     ArrayBuffer | undefined
   >(undefined);
+  const [showExistingImages, setShowExistingImages] = useState(true);
+
+  const validExistingImages = useMemo(
+    () =>
+      (existingImages || []).filter(
+        (p) => Number.isFinite(p.lat) && Number.isFinite(p.lng)
+      ),
+    [existingImages]
+  );
 
   // Image modal state
   const [showImageModal, setShowImageModal] = useState(false);
@@ -652,6 +664,22 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
             </ul>
           </Form.Text>
         </div>
+        {validExistingImages.length > 0 && (
+          <Form.Check
+            type='switch'
+            id='toggle-existing-images'
+            label={
+              <span>
+                Show existing survey images (
+                <span style={{ color: 'cyan' }}>cyan</span>):{' '}
+                {validExistingImages.length}
+              </span>
+            }
+            checked={showExistingImages}
+            onChange={(e) => setShowExistingImages(e.target.checked)}
+            className='mb-1'
+          />
+        )}
         <div style={{ height: '600px', width: '100%', position: 'relative' }}>
           <MapContainer
             style={{ height: '100%', width: '100%' }}
@@ -678,6 +706,23 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
                 edit={editOptions}
               />
             </FeatureGroup>
+            <Pane name='existing-images-pane' style={{ zIndex: 390 }}>
+              {showExistingImages &&
+                validExistingImages.map((point, index) => (
+                  <CircleMarker
+                    key={`existing-${index}`}
+                    center={[point.lat, point.lng]}
+                    radius={4}
+                    pane='existing-images-pane'
+                    color='cyan'
+                    fillColor='cyan'
+                    fillOpacity={0.15}
+                    opacity={0.3}
+                    weight={1}
+                    interactive={false}
+                  />
+                ))}
+            </Pane>
             {currentFilteredPoints.map((point, index) => {
               const pointKey = createPointKey(point);
               const pos = adjustedPositions[pointKey] || {

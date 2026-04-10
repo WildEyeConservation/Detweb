@@ -5,7 +5,6 @@ import Modal from 'react-bootstrap/Modal';
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import Alert from 'react-bootstrap/Alert';
-import { list } from 'aws-amplify/storage';
 import { GlobalContext, UploadContext, UserContext } from './Context.tsx';
 import exifr from 'exifr';
 import { DateTime } from 'luxon';
@@ -160,7 +159,6 @@ export function FileUploadCore({
   const [fullCsvData, setFullCsvData] = useState<CsvFile | undefined>(
     undefined
   );
-  const [listingS3Images, setListingS3Images] = useState(false);
   const [timeRanges, setTimeRanges] = useState<{
     [day: number]: { start: string; end: string };
   }>({});
@@ -170,6 +168,31 @@ export function FileUploadCore({
   const [masks, setMasks] = useState<number[][][]>([]);
   const [toUploadFiles, setToUploadFiles] = useState<File[]>([]);
   const [toUploadSize, setToUploadSize] = useState(0);
+  const [existingSurveyImages, setExistingSurveyImages] = useState<
+    { originalPath: string; latitude: number; longitude: number }[]
+  >([]);
+  const [loadingExistingImages, setLoadingExistingImages] = useState(
+    !newProject
+  );
+  const existingImagePoints = useMemo(
+    () =>
+      existingSurveyImages
+        .filter(
+          (img) =>
+            Number.isFinite(img.latitude) && Number.isFinite(img.longitude)
+        )
+        .map((img) => ({ lat: img.latitude, lng: img.longitude })),
+    [existingSurveyImages]
+  );
+  const existingImagePathSet = useMemo(
+    () =>
+      new Set(
+        existingSurveyImages
+          .map((img) => img.originalPath)
+          .filter((p): p is string => Boolean(p))
+      ),
+    [existingSurveyImages]
+  );
   const [model, setModel] = useState<{
     label: string;
     value: string;
@@ -339,93 +362,25 @@ export function FileUploadCore({
 
   useEffect(() => {
     async function getExistingFiles() {
-      // Always fetch existing files on S3 to determine upload count
-      setListingS3Images(true);
-      // Only consider S3 keys that match the currently scanned local files for this upload
-      const localPaths = new Set(imageFiles.map((f) => f.webkitRelativePath));
-      const prefixes = Array.from(
-        new Set(
-          Array.from(localPaths)
-            .map((p) => (p.split(/[/\\]/)[0] || '').trim())
-            .filter((p) => p.length > 0)
-        )
-      );
+      // Wait for the existing Image records fetch (driven by a separate effect)
+      // to complete before deciding which files still need uploading.
+      if (loadingExistingImages) return;
 
-      const allItems: { path: string }[] = [];
-      // Try to use new key structure: images/{organizationId}/{projectId}/{originalPath}
-      let usedNewPrefix = false;
-      let projOrgId: string | undefined = undefined;
-      let projIsLegacy = true;
-      try {
-        if (!newProject && project?.id) {
-          const { data: proj } = await client.models.Project.get(
-            { id: project.id },
-            { selectionSet: ['id', 'organizationId', 'tags'] as const }
+      // Files to actually upload: anything without a matching Image record
+      // (matched by originalPath == webkitRelativePath). We deliberately use
+      // Image records rather than S3 listings so that files which were
+      // uploaded to S3 but never had a record created are re-uploaded.
+      const uploadFiles = newProject
+        ? imageFiles
+        : imageFiles.filter(
+            (file) => !existingImagePathSet.has(file.webkitRelativePath)
           );
-          const orgId =
-            typeof proj?.organizationId === 'string'
-              ? proj.organizationId
-              : undefined;
-          const tagsVal = proj?.tags;
-          const isLegacy = Array.isArray(tagsVal)
-            ? tagsVal.some((t) => t === 'legacy')
-            : false;
-          projOrgId = orgId;
-          projIsLegacy = isLegacy;
-          if (orgId && !isLegacy) {
-            const listPrefix = `images/${orgId}/${project.id}/`;
-            const { items } = await list({
-              path: listPrefix,
-              options: { bucket: 'inputs', listAll: true },
-            });
-            allItems.push(...items);
-            usedNewPrefix = true;
-          }
-        }
-      } catch {
-        // Fallback to legacy listing below
-      }
-      // Legacy structure or fallback: list by top-level folder prefixes
-      if (!usedNewPrefix) {
-        for (const prefix of prefixes) {
-          const { items } = await list({
-            path: `images/${prefix}/`,
-            options: { bucket: 'inputs', listAll: true },
-          });
-          allItems.push(...items);
-        }
-      }
-
-      const existingFiles = allItems.reduce<Set<string>>((set, x) => {
-        const keyWithoutImages = x.path.substring('images/'.length);
-        if (!projIsLegacy && projOrgId && project?.id) {
-          const newPrefix = `${projOrgId}/${project.id}/`;
-          if (!keyWithoutImages.startsWith(newPrefix)) return set;
-          const candidateOriginalPath = keyWithoutImages.substring(
-            newPrefix.length
-          );
-          if (localPaths.has(candidateOriginalPath)) {
-            set.add(candidateOriginalPath);
-          }
-        } else {
-          if (localPaths.has(keyWithoutImages)) {
-            set.add(keyWithoutImages);
-          }
-        }
-        return set;
-      }, new Set());
-
-      // Files to actually upload
-      const uploadFiles = imageFiles.filter(
-        (file) => !existingFiles.has(file.webkitRelativePath)
-      );
       setToUploadFiles(uploadFiles);
       setToUploadSize(uploadFiles.reduce((acc, f) => acc + f.size, 0));
 
       // Files to show on map/exif: all for new project, only new for existing
       const mapFiles = newProject ? imageFiles : uploadFiles;
       setFilteredImageFiles(mapFiles);
-      setListingS3Images(false);
 
       const gpsToCSVData: CsvFile = [];
       let missing = false;
@@ -676,7 +631,7 @@ export function FileUploadCore({
     if (imageFiles.length > 0) {
       getExistingFiles();
     }
-  }, [imageFiles, name, newProject]);
+  }, [imageFiles, name, newProject, loadingExistingImages, existingImagePathSet]);
 
   const handleSkipGps = () => {
     const dummyGpsData: CsvFile = imageFiles.map((f) => ({
@@ -727,6 +682,46 @@ export function FileUploadCore({
       cancelled = true;
     };
   }, [client, project?.id]);
+
+  useEffect(() => {
+    if (newProject || !project?.id) {
+      setExistingSurveyImages([]);
+      setLoadingExistingImages(false);
+      return;
+    }
+    const projectId = project.id;
+    let cancelled = false;
+    async function fetchExistingImages() {
+      setLoadingExistingImages(true);
+      try {
+        const imgs = await fetchAllPaginatedResults(
+          client.models.Image.imagesByProjectId,
+          {
+            projectId,
+            limit: 10000,
+            selectionSet: ['originalPath', 'latitude', 'longitude'] as const,
+          } as any
+        );
+        if (!cancelled) {
+          setExistingSurveyImages(
+            imgs as {
+              originalPath: string;
+              latitude: number;
+              longitude: number;
+            }[]
+          );
+        }
+      } catch {
+        if (!cancelled) setExistingSurveyImages([]);
+      } finally {
+        if (!cancelled) setLoadingExistingImages(false);
+      }
+    }
+    fetchExistingImages();
+    return () => {
+      cancelled = true;
+    };
+  }, [client, project?.id, newProject]);
 
   const handleFileInputChange = (files: File[]) => {
     if (files) {
@@ -1342,17 +1337,26 @@ export function FileUploadCore({
     if (setGpsDataReady) {
       setGpsDataReady(
         !scanningEXIF &&
+        !loadingExistingImages &&
         hasValidGpsForAllImages &&
         Boolean(csvData && csvData.data.length > 0)
       );
     }
-  }, [setGpsDataReady, scanningEXIF, hasValidGpsForAllImages, csvData]);
+  }, [
+    setGpsDataReady,
+    scanningEXIF,
+    loadingExistingImages,
+    hasValidGpsForAllImages,
+    csvData,
+  ]);
 
   useEffect(() => {
     const hasData =
-      hasValidGpsForAllImages && Boolean(csvData && csvData.data.length > 0);
+      !loadingExistingImages &&
+      hasValidGpsForAllImages &&
+      Boolean(csvData && csvData.data.length > 0);
     setReadyToSubmit(hasData);
-  }, [hasValidGpsForAllImages, csvData, setReadyToSubmit]);
+  }, [loadingExistingImages, hasValidGpsForAllImages, csvData, setReadyToSubmit]);
 
   // Simple concurrency limiter for mapping large arrays without blocking UI
   // Now handles errors gracefully - failed items will be null in results
@@ -2217,8 +2221,8 @@ export function FileUploadCore({
               <br />
               Image files size: {formatFileSize(totalImageSize)}
               <br />
-              {listingS3Images ? (
-                'Searching for images in S3...'
+              {loadingExistingImages ? (
+                'Loading existing survey images...'
               ) : (
                 <>
                   To upload: {toUploadFiles.length}
@@ -2583,7 +2587,17 @@ export function FileUploadCore({
               setCsvData((prevData) => ({ ...prevData, data: filteredData }));
             }}
             onShapefileParsed={onShapefileParsed}
+            existingImages={existingImagePoints}
           />
+          <div className='mt-2 mb-2'>
+            <strong>Images to upload:</strong>{' '}
+            {
+              csvData.data.filter(
+                (point) =>
+                  Number.isFinite(point.lat) && Number.isFinite(point.lng)
+              ).length
+            }
+          </div>
           {(associateByTimestamp ||
             (csvData &&
               fullCsvData &&
