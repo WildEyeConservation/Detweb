@@ -64,6 +64,18 @@ async function streamToBuffer(stream) {
   return Buffer.concat(chunks);
 }
 
+function describeError(err) {
+  if (!err || typeof err !== 'object') return { raw: String(err) };
+  return {
+    name: err.name,
+    message: typeof err.message === 'string' ? err.message : JSON.stringify(err.message),
+    code: err.Code ?? err.code,
+    httpStatus: err.$metadata?.httpStatusCode,
+    requestId: err.$metadata?.requestId,
+    extendedRequestId: err.$metadata?.extendedRequestId,
+  };
+}
+
 async function s3PutWithRetry(params, maxRetries = 5) {
   for (let attempt = 0; ; attempt++) {
     try {
@@ -74,7 +86,15 @@ async function s3PutWithRetry(params, maxRetries = 5) {
         err.name === 'ThrottlingException' ||
         err.$metadata?.httpStatusCode === 503 ||
         err.$metadata?.httpStatusCode === 429;
-      if (!retryable || attempt >= maxRetries) throw err;
+      if (!retryable || attempt >= maxRetries) {
+        const wrapped = new Error(
+          `s3PutWithRetry failed for key="${params.Key}" after ${attempt + 1} attempt(s): ${
+            JSON.stringify(describeError(err))
+          }`
+        );
+        wrapped.cause = err;
+        throw wrapped;
+      }
       const baseMs = Math.min(1000 * Math.pow(2, attempt), 16000);
       const jitter = Math.random() * baseMs;
       await new Promise((r) => setTimeout(r, baseMs + jitter));
