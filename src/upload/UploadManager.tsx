@@ -260,11 +260,21 @@ export default function UploadManager() {
       });
       const knownCameraNames = Object.keys(cameraNameToId);
 
+      // Optional folder-name -> camera-name mapping persisted by the upload
+      // form when uploaded folder names don't match existing cameras.
+      const uploadMetadata = (await metadataStore.getItem(projectId)) as
+        | { folderCameraMapping?: Record<string, string> }
+        | null;
+      const folderCameraMapping: Record<string, string> =
+        uploadMetadata?.folderCameraMapping ?? {};
+
       const extractCameraNameFromPath = (path: string): string | null => {
         const parts = path.split('/');
         if (parts.length > 1) parts.pop(); // remove filename
         for (let i = parts.length - 1; i >= 0; i--) {
           const seg = parts[i];
+          const mapped = folderCameraMapping[seg];
+          if (mapped && knownCameraNames.includes(mapped)) return mapped;
           if (knownCameraNames.includes(seg)) return seg;
         }
         return null;
@@ -277,6 +287,7 @@ export default function UploadManager() {
         {
           projectId,
           selectionSet: ['id', 'originalPath', 'timestamp', 'cameraId'],
+          limit: 10000,
         }
       )) as {
         id: string;
@@ -770,6 +781,7 @@ export default function UploadManager() {
             'memberships.id',
             'files.id',
           ],
+          limit: 10000,
         }
       )) as {
         id: string;

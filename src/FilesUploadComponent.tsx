@@ -204,6 +204,12 @@ export function FileUploadCore({
     { cameraA: string; cameraB: string }[]
   >([]);
   const [multipleCameras, setMultipleCameras] = useState(false);
+  // Optional mapping from folder name -> existing camera name, used when
+  // uploaded folder names differ from the cameras already on the project.
+  const [useFolderCameraMapping, setUseFolderCameraMapping] = useState(false);
+  const [folderCameraMapping, setFolderCameraMapping] = useState<
+    Record<string, string>
+  >({});
   const [altitudeInMeters, setAltitudeInMeters] = useState(true);
   const [altitudeType, setAltitudeType] = useState({
     label: 'EGM96',
@@ -652,8 +658,16 @@ export function FileUploadCore({
     if (!multipleCameras) {
       setCameraSelection(['Survey Level', ['Survey Camera']]);
       setOverlaps([]);
+      setUseFolderCameraMapping(false);
+      setFolderCameraMapping({});
     }
   }, [multipleCameras]);
+
+  // Reset the folder -> camera mapping whenever the detected folder names change
+  const folderNamesKey = cameraSelection?.[1].join('|') ?? '';
+  useEffect(() => {
+    setFolderCameraMapping({});
+  }, [folderNamesKey]);
 
   useEffect(() => {
     if (!project || !project.id) {
@@ -1455,15 +1469,34 @@ export function FileUploadCore({
         allCameras.push(camera);
       }
 
-      // Get all camera names from cameraSelection, defaulting to single camera if null
-      const cameraNames = cameraSelection
+      // Get all folder-level camera names from cameraSelection, defaulting to
+      // single camera if null. When folder->camera mapping is active these are
+      // folder names that must be resolved through `folderCameraMapping` to
+      // match the existing cameras in the database.
+      const folderCameraNames = cameraSelection
         ? cameraSelection[1]
         : ['Survey Camera'];
+      const resolveCameraName = (folderName: string): string =>
+        (useFolderCameraMapping && folderCameraMapping[folderName]) ||
+        folderName;
 
       // Create or update all cameras, even if they don't have specs
-      for (const cameraName of cameraNames) {
-        const existingCamera = existingCameras.find((c) => c.name === cameraName);
-        const spec = cameraSpecs[cameraName] || {
+      for (const folderName of folderCameraNames) {
+        const isMapped =
+          useFolderCameraMapping && !!folderCameraMapping[folderName];
+        const effectiveName = resolveCameraName(folderName);
+        const existingCamera = existingCameras.find(
+          (c) => c.name === effectiveName
+        );
+
+        // Mapped folders point at a camera that already exists — use it as-is
+        // so we don't clobber its saved specs with zeros.
+        if (isMapped) {
+          if (existingCamera) allCameras.push(existingCamera);
+          continue;
+        }
+
+        const spec = cameraSpecs[folderName] || {
           focalLengthMm: 0,
           sensorWidthMm: 0,
           tiltDegrees: 0,
@@ -1473,7 +1506,7 @@ export function FileUploadCore({
           // Update existing camera with specs (even if 0 values)
           await client.models.Camera.update({
             id: existingCamera.id,
-            name: cameraName,
+            name: effectiveName,
             focalLengthMm: spec.focalLengthMm || 0,
             sensorWidthMm: spec.sensorWidthMm || 0,
             tiltDegrees: spec.tiltDegrees || 0,
@@ -1481,7 +1514,7 @@ export function FileUploadCore({
         } else {
           // Create new camera with specs (even if 0 values)
           const { data: newCamera } = await client.models.Camera.create({
-            name: cameraName,
+            name: effectiveName,
             projectId: projectId,
             focalLengthMm: spec.focalLengthMm || 0,
             sensorWidthMm: spec.sensorWidthMm || 0,
@@ -1495,9 +1528,11 @@ export function FileUploadCore({
       }
 
       for (const overlap of overlaps) {
-        const cameraA = allCameras.find((c) => c.name === overlap.cameraA);
+        const overlapA = resolveCameraName(overlap.cameraA);
+        const overlapB = resolveCameraName(overlap.cameraB);
+        const cameraA = allCameras.find((c) => c.name === overlapA);
 
-        const cameraB = allCameras.find((c) => c.name === overlap.cameraB);
+        const cameraB = allCameras.find((c) => c.name === overlapB);
 
         if (cameraA && cameraB) {
           const existingOverlap = (
@@ -1693,6 +1728,7 @@ export function FileUploadCore({
       await metadataStore.setItem(projectId, {
         model: model.value,
         masks: masks,
+        folderCameraMapping: useFolderCameraMapping ? folderCameraMapping : {},
       });
 
       // push new task to upload manager
@@ -1719,6 +1755,8 @@ export function FileUploadCore({
       masks,
       setTask,
       newProject,
+      useFolderCameraMapping,
+      folderCameraMapping,
     ]
   );
 
@@ -2818,13 +2856,85 @@ export function FileUploadCore({
                 )}
               </>
             )}
+            {/* Folder -> existing camera mapping (only when existing cameras
+                are available and folder names don't already match them) */}
+            {multipleCameras &&
+              cameraSelection &&
+              cameraSelection[1].length > 0 &&
+              existingCameraNames.length > 0 &&
+              !loadingExistingCameras && (
+                <Form.Group className='mt-3'>
+                  <Form.Check
+                    type='checkbox'
+                    id='use-folder-camera-mapping'
+                    label='Map folder names to existing cameras'
+                    checked={useFolderCameraMapping}
+                    onChange={(e) => {
+                      setUseFolderCameraMapping(e.target.checked);
+                      if (!e.target.checked) setFolderCameraMapping({});
+                    }}
+                  />
+                  <span
+                    className='text-muted d-block mb-2'
+                    style={{ fontSize: '12px' }}
+                  >
+                    Enable when the uploaded folder names differ from the
+                    camera names already on this survey.
+                  </span>
+                  {useFolderCameraMapping && (
+                    <div className='mt-1'>
+                      {cameraSelection[1].map((folderName) => (
+                        <div
+                          className='d-flex align-items-center mb-2'
+                          key={folderName}
+                        >
+                          <div
+                            className='text-truncate'
+                            style={{ minWidth: 180 }}
+                            title={folderName}
+                          >
+                            {folderName}
+                          </div>
+                          <span className='mx-2'>→</span>
+                          <Form.Select
+                            aria-label={`Camera for folder ${folderName}`}
+                            value={folderCameraMapping[folderName] || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setFolderCameraMapping((m) => {
+                                const next = { ...m };
+                                if (val) next[folderName] = val;
+                                else delete next[folderName];
+                                return next;
+                              });
+                            }}
+                          >
+                            <option value=''>Select camera…</option>
+                            {existingCameraNames.map((n) => (
+                              <option key={n} value={n}>
+                                {n}
+                              </option>
+                            ))}
+                          </Form.Select>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Form.Group>
+              )}
             {/* Existing vs New camera notice */}
             {(() => {
               if (!cameraSelection) return null;
               const currentNames = cameraSelection[1];
+              const resolve = (n: string) =>
+                (useFolderCameraMapping && folderCameraMapping[n]) || n;
               const existingSet = new Set(existingCameraNames);
-              const matched = currentNames.filter((n) => existingSet.has(n));
-              const newOnes = currentNames.filter((n) => !existingSet.has(n));
+              const matched = currentNames
+                .map(resolve)
+                .filter((n) => existingSet.has(n));
+              const newOnes = currentNames
+                .filter((n) => !folderCameraMapping[n])
+                .filter((n) => !existingSet.has(n));
               const hasAny = currentNames.length > 0;
               if (!hasAny || loadingExistingCameras) return null;
               return (
@@ -2832,7 +2942,7 @@ export function FileUploadCore({
                   {matched.length > 0 && (
                     <div className='alert alert-info mb-2'>
                       These cameras already exist and will be linked by name:{' '}
-                      {matched.join(', ')}
+                      {Array.from(new Set(matched)).join(', ')}
                     </div>
                   )}
                   {matched.length === 0 && newOnes.length === 0 && (
@@ -2850,7 +2960,12 @@ export function FileUploadCore({
                 ['Survey Camera'],
               ])[1];
               const existingSet = new Set(existingCameraNames);
-              const onlyNew = names.filter((n) => !existingSet.has(n));
+              // Folders mapped to existing cameras don't need spec input.
+              const onlyNew = names.filter(
+                (n) =>
+                  !(useFolderCameraMapping && folderCameraMapping[n]) &&
+                  !existingSet.has(n)
+              );
               if (onlyNew.length === 0) return null;
               return (
                 <CameraSpecification
