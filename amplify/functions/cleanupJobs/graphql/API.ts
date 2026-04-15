@@ -496,6 +496,7 @@ export type Queue = {
   locationManifestS3Key?: string | null,
   emptyQueueTimestamp?: string | null,
   requeuesCompleted?: number | null,
+  lastObservationAt?: string | null,
 };
 
 export type ModelObjectConnection = {

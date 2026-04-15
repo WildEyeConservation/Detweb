@@ -47,6 +47,7 @@ import { reconcileHomographies } from './functions/reconcileHomographies/resourc
 import { pretileImage } from './functions/pretileImage/resource';
 import { refreshTiles } from './functions/refreshTiles/resource';
 import { reconcilePretileLaunches } from './functions/reconcilePretileLaunches/resource';
+import { extendTileLifecycles } from './functions/extendTileLifecycles/resource';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -94,6 +95,7 @@ const backend = defineBackend({
   pretileImage,
   refreshTiles,
   reconcilePretileLaunches,
+  extendTileLifecycles,
 });
 
 const observationTable = backend.data.resources.tables['Observation'];
@@ -909,7 +911,7 @@ pretileImageLambda.addLayers(sharpLayer);
 //
 // The refreshTiles worker consumes messages from a sibling SQS queue. Its job
 // is to "touch" existing slippy-map tiles via CopyObject-in-place so the S3
-// lifecycle (90-day deletion) clock resets without re-running sharp. If it
+// lifecycle (60-day deletion) clock resets without re-running sharp. If it
 // finds no tiles under the prefix (lifecycle already ran, or a partial
 // previous write), it falls back by re-enqueuing the message onto
 // pretileQueue so the image gets regenerated properly.
@@ -948,6 +950,15 @@ refreshTilesLambda.addToRolePolicy(
 );
 refreshTilesLambda.addEnvironment('PRETILE_QUEUE_URL', pretileQueue.queueUrl);
 
+
+// The tile lifecycle watchdog sends refresh messages to keep tiles alive.
+backend.extendTileLifecycles.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['sqs:SendMessage', 'sqs:SendMessageBatch'],
+    resources: [refreshTilesQueue.queueArn],
+  })
+);
+backend.extendTileLifecycles.addEnvironment('REFRESH_TILES_QUEUE_URL', refreshTilesQueue.queueUrl);
 
 // Launch lambdas send pretile and refresh messages and write launch manifests.
 const launchLambdasUsingPretile = [

@@ -36,6 +36,7 @@ import { launchQCReview } from '../functions/launchQCReview/resource';
 import { launchHomography } from '../functions/launchHomography/resource';
 import { reconcileHomographies } from '../functions/reconcileHomographies/resource';
 import { reconcilePretileLaunches } from '../functions/reconcilePretileLaunches/resource';
+import { extendTileLifecycles } from '../functions/extendTileLifecycles/resource';
 import { pretileImage } from '../functions/pretileImage/resource';
 import { refreshTiles } from '../functions/refreshTiles/resource';
 import { generateTile } from '../storage/generateTile/resource';
@@ -481,6 +482,7 @@ const schema = a
         // Empty detection and requeue tracking
         emptyQueueTimestamp: a.string(),
         requeuesCompleted: a.integer().default(0),
+        lastObservationAt: a.string(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
@@ -1185,6 +1187,7 @@ const schema = a
       .query()
       .arguments({
         imageKey: a.string().required(),
+        imageId: a.id(),
         zs: a.integer().required().array().required(),
         rows: a.integer().required().array().required(),
         cols: a.integer().required().array().required(),
@@ -1217,6 +1220,7 @@ const schema = a
     allow.resource(launchHomography),
     allow.resource(reconcileHomographies),
     allow.resource(reconcilePretileLaunches),
+    allow.resource(extendTileLifecycles),
     allow.resource(pretileImage),
     allow.resource(refreshTiles),
     allow.resource(requeueProjectQueues),

@@ -530,6 +530,7 @@ const BaseImage: React.FC<BaseImageProps> = memo(
                             error: (error: unknown) => console.error('StorageLayer error:', error),
                           },
                           source: sourceKey!,
+                          imageId: image.id,
                           bounds: imageBounds as unknown as L.LatLngBoundsExpression,
                           maxNativeZoom: 5,
                           noWrap: true,

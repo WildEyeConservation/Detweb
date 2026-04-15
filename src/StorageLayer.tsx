@@ -39,6 +39,7 @@ type PendingTile = {
 
 const pendingByImage = new Map<string, PendingTile[]>();
 const timersByImage = new Map<string, ReturnType<typeof setTimeout>>();
+const imageIdByKey = new Map<string, string>();
 
 function base64ToBlob(b64: string): Blob {
   const binaryString = atob(b64);
@@ -53,6 +54,7 @@ async function flushBatch(imageKey: string, batch: PendingTile[]) {
   try {
     const { data, errors } = await (limitedClient as any).queries.generateTile({
       imageKey,
+      imageId: imageIdByKey.get(imageKey),
       zs: batch.map((t) => t.z),
       rows: batch.map((t) => t.row),
       cols: batch.map((t) => t.col),
@@ -300,9 +302,12 @@ L.GridLayer.Storage = L.GridLayer.extend({
 });
 
 function createStorageLayer(
-  props: L.GridLayerOptions & { source: string },
+  props: L.GridLayerOptions & { source: string; imageId?: string },
   context: any
 ) {
+  if (props.imageId && props.source) {
+    imageIdByKey.set(`images/${props.source}`, props.imageId);
+  }
   const layer = new L.GridLayer.Storage(props);
   return createElementObject(
     layer,

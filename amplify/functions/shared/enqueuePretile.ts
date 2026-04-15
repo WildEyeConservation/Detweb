@@ -5,11 +5,14 @@ import pLimit from 'p-limit';
 
 const MANIFEST_PREFIX = 'pretile-launch-manifests';
 
-// Images tiled more recently than this are considered "fresh" and only need
-// their S3 tiles touched (CopyObject in place) to reset the lifecycle clock.
-// Must be comfortably below the S3 lifecycle expiration (90 days) so there's
-// no race between the freshness check and lifecycle deletion.
-const REFRESH_MAX_AGE_DAYS = 75;
+// Images tiled more recently than this are skipped entirely — tiles are fresh
+// enough that neither re-tiling nor refreshing is needed. The watchdog will
+// catch them before they expire if the project is still active.
+const SKIP_MAX_AGE_DAYS = 30;
+
+// Images tiled between SKIP and REFRESH age need their S3 tiles touched
+// (CopyObject in place) to reset the lifecycle clock.
+const REFRESH_MAX_AGE_DAYS = 55;
 
 export type PretileWorkflow =
   | 'species-labelling'
@@ -45,6 +48,7 @@ export type EnqueuePretileResult = {
   totalImages: number;
   enqueuedCount: number;
   refreshedCount: number;
+  skippedFreshCount: number;
   skippedNoSourceCount: number;
 };
 
@@ -147,27 +151,28 @@ export async function enqueuePretile(
     )
   );
 
-  // Partition images by what we need to do with them:
-  //   - needsTiling:    no tiledAt (or tiledAt is stale) AND we have a source
-  //                     → queue to pretileImage, which generates tiles from scratch
-  //   - needsRefresh:   tiledAt is recent → tiles still exist on S3
-  //                     → queue to refreshTiles, which CopyObject-in-place to
-  //                       reset the 90-day lifecycle clock
-  //   - skippedNoSource: no tiledAt AND no source path → can't do anything
-  const refreshCutoff = Date.now() - REFRESH_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+  // Partition images into four buckets:
+  //   - skippedFresh:    tiledAt < 30 days old → tiles are fresh, no work needed
+  //   - needsRefresh:    tiledAt 30–55 days old → CopyObject-in-place to reset lifecycle
+  //   - needsTiling:     tiledAt > 55 days or missing → full re-tile from source
+  //   - skippedNoSource: no originalPath → can't do anything
+  const nowMs = Date.now();
+  const skipCutoff = nowMs - SKIP_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+  const refreshCutoff = nowMs - REFRESH_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
   const validRows = imageRows.filter((r): r is ImageRow => r !== null);
   const needsTiling: ImageRow[] = [];
   const needsRefresh: ImageRow[] = [];
+  const skippedFresh: ImageRow[] = [];
   const skippedNoSource: ImageRow[] = [];
   for (const row of validRows) {
     if (!row.originalPath) {
-      // Without originalPath we can't build the S3 key for either worker.
       skippedNoSource.push(row);
       continue;
     }
     const tiledAtMs = row.tiledAt ? Date.parse(row.tiledAt) : NaN;
-    const isFresh = Number.isFinite(tiledAtMs) && tiledAtMs >= refreshCutoff;
-    if (isFresh) {
+    if (Number.isFinite(tiledAtMs) && tiledAtMs >= skipCutoff) {
+      skippedFresh.push(row);
+    } else if (Number.isFinite(tiledAtMs) && tiledAtMs >= refreshCutoff) {
       needsRefresh.push(row);
     } else {
       needsTiling.push(row);
@@ -184,13 +189,30 @@ export async function enqueuePretile(
     );
   }
 
+  if (skippedFresh.length > 0) {
+    console.log(
+      JSON.stringify({
+        msg: 'enqueue_pretile_skipped_fresh',
+        count: skippedFresh.length,
+        sample: skippedFresh.slice(0, 5).map((r) => r.id),
+      })
+    );
+  }
+
+  // Manifest only includes images that will actually be worked on. Skipped-fresh
+  // images are excluded so the reconciler doesn't wait for a tiledAt that will
+  // never advance past manifestCreatedAt.
+  const manifestImageIds = [
+    ...needsTiling.map((r) => r.id),
+    ...needsRefresh.map((r) => r.id),
+  ];
   const manifestCreatedAt = new Date().toISOString();
   const manifest: PretileManifest = {
     launchId,
     projectId,
     annotationSetId,
     workflow,
-    imageIds: dedupedIds,
+    imageIds: manifestImageIds,
     createdAt: manifestCreatedAt,
   };
 
@@ -261,6 +283,7 @@ export async function enqueuePretile(
     totalImages: dedupedIds.length,
     enqueuedCount: needsTiling.length,
     refreshedCount: needsRefresh.length,
+    skippedFreshCount: skippedFresh.length,
     skippedNoSourceCount: skippedNoSource.length,
   };
 
