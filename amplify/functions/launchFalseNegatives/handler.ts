@@ -4,6 +4,7 @@ import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 import type { GraphQLResult } from '@aws-amplify/api-graphql';
 import { authorizeRequest } from '../shared/authorizeRequest';
+import { enqueuePretile } from '../shared/enqueuePretile';
 import {
   CreateQueueCommand,
   GetQueueAttributesCommand,
@@ -697,7 +698,35 @@ async function handleLaunch(payload: LaunchFalseNegativesPayload, organizationId
     )
   );
 
-  await setProjectStatus(projectId, 'active');
+  const pretileImageIds = Array.from(
+    new Set(selectedTiles.map((t) => t.imageId))
+  );
+  if (!(env as any).PRETILE_QUEUE_URL) {
+    throw new Error('PRETILE_QUEUE_URL not set');
+  }
+  if (!(env as any).REFRESH_TILES_QUEUE_URL) {
+    throw new Error('REFRESH_TILES_QUEUE_URL not set');
+  }
+  const pretileBucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!pretileBucketName) {
+    throw new Error('OUTPUTS_BUCKET_NAME not set');
+  }
+  await enqueuePretile({
+    projectId,
+    annotationSetId,
+    workflow: 'false-negatives',
+    imageIds: pretileImageIds,
+    executeGraphql,
+    outputsBucket: pretileBucketName,
+    queueUrl: (env as any).PRETILE_QUEUE_URL,
+    refreshQueueUrl: (env as any).REFRESH_TILES_QUEUE_URL,
+    sqsClient,
+    s3Client,
+  });
+
+  // Project stays in `launching` until reconcilePretileLaunches confirms
+  // every image in the pretile manifest has `Image.tiledAt` stamped.
+
   await withTiming('refreshProjectMemberships', () =>
     executeGraphql<{ updateProjectMemberships?: string | null }>(
       updateProjectMembershipsMutation,
@@ -967,6 +996,34 @@ async function handleDistributedFalseNegativesLaunch(payload: LaunchFalseNegativ
   if (firstBatch) {
     await invokeTilingBatchLambda(firstBatch.batchId);
     console.log('Invoked first batch to start sequential chain', { batchId: firstBatch.batchId });
+  }
+
+  const pretileImageIds = Array.from(
+    new Set(filteredLocations.map((loc) => loc.imageId))
+  );
+  if (pretileImageIds.length > 0) {
+    if (!(env as any).PRETILE_QUEUE_URL) {
+      throw new Error('PRETILE_QUEUE_URL not set');
+    }
+    if (!(env as any).REFRESH_TILES_QUEUE_URL) {
+      throw new Error('REFRESH_TILES_QUEUE_URL not set');
+    }
+    const pretileBucketName = env.OUTPUTS_BUCKET_NAME;
+    if (!pretileBucketName) {
+      throw new Error('OUTPUTS_BUCKET_NAME not set');
+    }
+    await enqueuePretile({
+      projectId: payload.projectId,
+      annotationSetId: payload.annotationSetId,
+      workflow: 'false-negatives',
+      imageIds: pretileImageIds,
+      executeGraphql,
+      outputsBucket: pretileBucketName,
+      queueUrl: (env as any).PRETILE_QUEUE_URL,
+      refreshQueueUrl: (env as any).REFRESH_TILES_QUEUE_URL,
+      sqsClient,
+      s3Client,
+    });
   }
 
   console.log('Distributed tiling initiated for false negatives', {

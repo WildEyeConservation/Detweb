@@ -4,6 +4,7 @@ import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 import type { GraphQLResult } from '@aws-amplify/api-graphql';
 import { authorizeRequest } from '../shared/authorizeRequest';
+import { enqueuePretile } from '../shared/enqueuePretile';
 import {
   CreateQueueCommand,
   GetQueueAttributesCommand,
@@ -439,9 +440,40 @@ export const handler: LaunchAnnotationSetHandler = async (event) => {
 };
 
 // Orchestrate queue creation, task enqueuing, and bookkeeping.
+const getLocationImageIdQuery = /* GraphQL */ `
+  query GetLocationImageId($id: ID!) {
+    getLocation(id: $id) { id imageId }
+  }
+`;
+
+async function resolveImageIdsFromLocations(
+  locationIds: string[]
+): Promise<string[]> {
+  if (locationIds.length === 0) return [];
+  const limit = pLimit(15);
+  const results = await Promise.all(
+    locationIds.map((id) =>
+      limit(async () => {
+        try {
+          const data = await executeGraphql<{
+            getLocation?: { id: string; imageId: string } | null;
+          }>(getLocationImageIdQuery, { id });
+          return data.getLocation?.imageId ?? null;
+        } catch (err) {
+          console.warn('Failed to fetch location for pretile', { id, err });
+          return null;
+        }
+      })
+    )
+  );
+  return Array.from(
+    new Set(results.filter((v): v is string => !!v))
+  );
+}
+
 async function handleLaunch(payload: LaunchLambdaPayload, organizationId: string) {
   const locationSetIds = new Set(payload.locationSetIds ?? []);
-  let locationIds = payload.locationIds ?? [];
+  const locationIds = payload.locationIds ?? [];
 
   if (payload.tiledRequest) {
     console.log(
@@ -528,14 +560,45 @@ async function handleLaunch(payload: LaunchLambdaPayload, organizationId: string
     )
   );
 
-  await setProjectStatus(payload.projectId, 'active');
+  const pretileImageIds =
+    payload.launchImageIds && payload.launchImageIds.length > 0
+      ? Array.from(new Set(payload.launchImageIds))
+      : await resolveImageIdsFromLocations(locationIds);
+
+  if (pretileImageIds.length > 0) {
+    if (!(env as any).PRETILE_QUEUE_URL) {
+      throw new Error('PRETILE_QUEUE_URL not set');
+    }
+    if (!(env as any).REFRESH_TILES_QUEUE_URL) {
+      throw new Error('REFRESH_TILES_QUEUE_URL not set');
+    }
+    const pretileBucketName = env.OUTPUTS_BUCKET_NAME;
+    if (!pretileBucketName) {
+      throw new Error('OUTPUTS_BUCKET_NAME not set');
+    }
+    await enqueuePretile({
+      projectId: payload.projectId,
+      annotationSetId: payload.annotationSetId,
+      workflow: 'species-labelling',
+      imageIds: pretileImageIds,
+      executeGraphql,
+      outputsBucket: pretileBucketName,
+      queueUrl: (env as any).PRETILE_QUEUE_URL,
+      refreshQueueUrl: (env as any).REFRESH_TILES_QUEUE_URL,
+      sqsClient,
+      s3Client,
+    });
+  }
+
+  // Project stays in `launching` until reconcilePretileLaunches confirms
+  // every image in the pretile manifest has `Image.tiledAt` stamped.
 
   await executeGraphql<{ updateProjectMemberships?: string | null }>(
     updateProjectMembershipsMutation,
     { projectId: payload.projectId }
   );
 
-  console.log('Launch complete; project status reset', {
+  console.log('Launch complete', {
     projectId: payload.projectId,
     locationsLaunched: locationIds.length,
   });
@@ -739,6 +802,41 @@ async function handleDistributedTiling(payload: LaunchLambdaPayload, organizatio
   if (firstBatch) {
     await invokeTilingBatchLambda(firstBatch.batchId);
     console.log('Invoked first batch to start sequential chain', { batchId: firstBatch.batchId });
+  }
+
+  // Only pre-tile when this is a workflow launch (annotationSetId present).
+  // For tiling-only operations, monitorTilingTasks owns the status transition.
+  if (payload.annotationSetId) {
+    const baseIds = tiledRequest.images.map((i) => i.id);
+    const pretileImageIds =
+      payload.launchImageIds && payload.launchImageIds.length > 0
+        ? baseIds.filter((id) => payload.launchImageIds!.includes(id))
+        : baseIds;
+
+    if (pretileImageIds.length > 0) {
+      if (!(env as any).PRETILE_QUEUE_URL) {
+        throw new Error('PRETILE_QUEUE_URL not set');
+      }
+      if (!(env as any).REFRESH_TILES_QUEUE_URL) {
+        throw new Error('REFRESH_TILES_QUEUE_URL not set');
+      }
+      const pretileBucketName = env.OUTPUTS_BUCKET_NAME;
+      if (!pretileBucketName) {
+        throw new Error('OUTPUTS_BUCKET_NAME not set');
+      }
+      await enqueuePretile({
+        projectId: payload.projectId,
+        annotationSetId: payload.annotationSetId,
+        workflow: 'species-labelling',
+        imageIds: Array.from(new Set(pretileImageIds)),
+        executeGraphql,
+        outputsBucket: pretileBucketName,
+        queueUrl: (env as any).PRETILE_QUEUE_URL,
+        refreshQueueUrl: (env as any).REFRESH_TILES_QUEUE_URL,
+        sqsClient,
+        s3Client,
+      });
+    }
   }
 
   console.log('Distributed tiling initiated', {

@@ -16,6 +16,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
 import pLimit from 'p-limit';
+import { enqueuePretile } from '../shared/enqueuePretile';
 
 // Inline minimal mutations – return key fields + `group` to avoid nested-resolver
 // auth failures while still enabling subscription delivery via groupDefinedIn('group').
@@ -218,7 +219,8 @@ export const handler: LaunchQCReviewHandler = async (event) => {
 
     const result = await handleLaunch(payload, organizationId);
 
-    await setProjectStatus(payload.projectId, 'active');
+    // Project stays in `launching` until reconcilePretileLaunches confirms
+    // every image in the pretile manifest has `Image.tiledAt` stamped.
 
     // Trigger membership refresh so the frontend subscription picks up the status change.
     executeGraphql<{ updateProjectMemberships?: string | null }>(
@@ -358,6 +360,28 @@ async function handleLaunch(payload: LaunchQCReviewPayload, organizationId: stri
 
   // 7. Enqueue SQS messages.
   await enqueueAnnotations(queue.url, queue.id, sampled);
+
+  // 8. Pre-tile every image in this launch. Project stays `launching` until
+  // the reconciler clears the manifest.
+  const imageIds = Array.from(new Set(sampled.map((a) => a.imageId)));
+  if (!(env as any).PRETILE_QUEUE_URL) {
+    throw new Error('PRETILE_QUEUE_URL not set');
+  }
+  if (!(env as any).REFRESH_TILES_QUEUE_URL) {
+    throw new Error('REFRESH_TILES_QUEUE_URL not set');
+  }
+  await enqueuePretile({
+    projectId,
+    annotationSetId,
+    workflow: 'qc-review',
+    imageIds,
+    executeGraphql,
+    outputsBucket: bucketName,
+    queueUrl: (env as any).PRETILE_QUEUE_URL,
+    refreshQueueUrl: (env as any).REFRESH_TILES_QUEUE_URL,
+    sqsClient,
+    s3Client,
+  });
 
   console.log('QC review job launched', {
     queueId: queue.id,

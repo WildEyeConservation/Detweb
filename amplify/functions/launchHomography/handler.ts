@@ -12,6 +12,7 @@ import {
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
 import pLimit from 'p-limit';
+import { enqueuePretile } from '../shared/enqueuePretile';
 
 // ── GraphQL queries & mutations ──
 
@@ -157,7 +158,8 @@ export const handler: LaunchHomographyHandler = async (event) => {
 
     const result = await handleLaunch(payload, organizationId);
 
-    await setProjectStatus(payload.projectId, 'active');
+    // Project stays in `launching` until reconcilePretileLaunches confirms
+    // every image in the pretile manifest has `Image.tiledAt` stamped.
 
     executeGraphql<{ updateProjectMemberships?: string | null }>(
       updateProjectMembershipsMutation,
@@ -197,6 +199,7 @@ async function handleLaunch(payload: LaunchHomographyPayload, organizationId: st
   const manifestItems = manifest.items;
 
   if (manifestItems.length === 0) {
+    // Nothing to pre-tile or enqueue — reset project so the UI is not stuck.
     await setProjectStatus(projectId, 'active');
     return { queueId: null, pairCount: 0, message: 'Manifest contained no pairs' };
   }
@@ -250,6 +253,33 @@ async function handleLaunch(payload: LaunchHomographyPayload, organizationId: st
   }));
 
   await enqueuePairs(queueUrl, pairs);
+
+  // Pre-tile all images this launch will touch. Project stays in `launching`
+  // until reconcilePretileLaunches flips it back once every image has
+  // `Image.tiledAt` set.
+  const imageIds = Array.from(
+    new Set(
+      manifestItems.flatMap((item) => [item.primaryImage.id, item.secondaryImage.id])
+    )
+  );
+  if (!(env as any).PRETILE_QUEUE_URL) {
+    throw new Error('PRETILE_QUEUE_URL not set');
+  }
+  if (!(env as any).REFRESH_TILES_QUEUE_URL) {
+    throw new Error('REFRESH_TILES_QUEUE_URL not set');
+  }
+  await enqueuePretile({
+    projectId,
+    annotationSetId,
+    workflow: 'homography',
+    imageIds,
+    executeGraphql,
+    outputsBucket: bucketName,
+    queueUrl: (env as any).PRETILE_QUEUE_URL,
+    refreshQueueUrl: (env as any).REFRESH_TILES_QUEUE_URL,
+    sqsClient,
+    s3Client,
+  });
 
   console.log('Homography job launched', { queueId, pairCount: pairs.length });
   return { queueId, pairCount: pairs.length };

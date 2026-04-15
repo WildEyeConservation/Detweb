@@ -8,8 +8,9 @@ export const handleS3Upload =
         runtime: 20,
         timeoutSeconds: 720,
     memoryMB: 4096,
-    // environment: {
-    //     IMAGETABLE: imageTable,
-    //     OUTPUTBUCKET: outputBucketName,
-    //     }
+    environment: {
+        // Eager tiling is disabled by default — workflow launches now pre-tile
+        // only the images they actually need via the pretileImage worker.
+        EAGER_TILING_ENABLED: 'false',
+    },
     });

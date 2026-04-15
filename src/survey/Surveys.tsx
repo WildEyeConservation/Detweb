@@ -636,8 +636,9 @@ export default function Surveys() {
       project.status === 'deleting';
 
     const hasJobs =
-      project.queues.length > 0 ||
-      project.annotationSets.some((set: { register?: boolean | null }) => set.register);
+      project.status !== 'launching' &&
+      (project.queues.length > 0 ||
+        project.annotationSets.some((set: { register?: boolean | null }) => set.register));
 
     const showResumeButton =
       !task.projectId &&
@@ -761,8 +762,9 @@ export default function Surveys() {
       project.status === 'deleting';
 
     const hasJobs =
-      project.queues.length > 0 ||
-      project.annotationSets.some((set: { register?: boolean | null }) => set.register);
+      project.status !== 'launching' &&
+      (project.queues.length > 0 ||
+        project.annotationSets.some((set: { register?: boolean | null }) => set.register));
 
     const showResumeButton =
       !task.projectId &&
