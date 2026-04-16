@@ -25,11 +25,19 @@ import HomographyTask from './homography/HomographyTask';
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import Admin from './Admin';
-import { DevActions } from './DevActions';
 import JollyResults from './JollyResults';
 import SharedResults from './SharedResults.tsx';
 import ImageNeighbourViewer from './ImageNeighbourViewer';
 import QCReviewTask from './QCReviewTask';
+import { lazy, Suspense } from 'react';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const devModules = (import.meta as any).glob('./DevActions.tsx') as Record<string, () => Promise<{ DevActions: React.FC }>>;
+const DevActions = devModules['./DevActions.tsx']
+  ? lazy(() =>
+      devModules['./DevActions.tsx']().then((m) => ({ default: m.DevActions }))
+    )
+  : null;
 
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
@@ -164,10 +172,18 @@ const router = createBrowserRouter([
         path: 'testing',
         element: <Testing />,
       },
-      {
-        path: 'dev-actions',
-        element: <DevActions />,
-      },
+      ...(DevActions
+        ? [
+            {
+              path: 'dev-actions',
+              element: (
+                <Suspense fallback={null}>
+                  <DevActions />
+                </Suspense>
+              ),
+            },
+          ]
+        : []),
     ],
   },
 ]);
