@@ -81,10 +81,18 @@ async function executeWithRetry<T>(
 }
 
 // Options that can be passed as the last argument to any wrapped client method.
-type ClientCallOptions = {
+export type ClientCallOptions = {
   /** Set to false to skip retry logic (e.g. for long-running launch mutations). Defaults to true. */
   retry?: boolean;
 };
+
+// Augment the generated OperationOptions so callers can pass { retry: false }
+// without casting. The limitedClient wrapper consumes this at runtime.
+declare module '../amplify/shared/data-schema.generated' {
+  interface OperationOptions {
+    retry?: boolean;
+  }
+}
 
 // Recursive function to wrap client methods with retry logic
 function wrapClientMethods(obj: any): any {
