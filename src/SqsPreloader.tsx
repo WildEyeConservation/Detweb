@@ -52,6 +52,7 @@ export default function SqsPreloader({
         imageId: location.imageId,
         setId: { eq: message.location.annotationSetId },
         selectionSet: ['x', 'y', 'source'] as const,
+        limit: 10000,
       }
     );
 

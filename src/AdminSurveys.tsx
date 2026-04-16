@@ -46,9 +46,11 @@ export default function AdminSurveys() {
             'imageSets.name',
             'imageSets.imageCount',
           ],
+          limit: 10000,
         }),
         fetchAllPaginatedResults<Schema['Organization']['type']>(client.models.Organization.list, {
           selectionSet: ['id', 'name'],
+          limit: 10000,
         }),
       ]);
 

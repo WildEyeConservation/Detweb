@@ -106,6 +106,7 @@ export default function ClientLogs() {
             'rtt',
             'createdAt',
           ],
+          limit: 10000,
         } as any
       );
       setLogs(data as any);

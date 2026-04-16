@@ -275,6 +275,12 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
         group: project.organizationId,
       });
 
+      if (queueId) {
+        (client as any).mutations.incrementQueueCount({ id: queueId }).catch(
+          (err: unknown) => console.error('Failed to increment observedCount', err)
+        );
+      }
+
       setAcked(true);
     }
 

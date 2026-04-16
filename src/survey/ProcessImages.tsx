@@ -158,7 +158,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
             (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
 
-          (client as any).mutations.runScoutbot({
+          client.mutations.runScoutbot({
             projectId: projectId,
             images: batchStrings,
             setId: locationSet.id,
@@ -179,7 +179,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
             makeKey(image.originalPath)
           );
 
-          (client as any).mutations.runHeatmapper({
+          client.mutations.runHeatmapper({
             projectId,
             images: batchStrings,
           }, { retry: false });
@@ -197,7 +197,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
             (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
 
-          (client as any).mutations.runMadDetector({
+          client.mutations.runMadDetector({
             projectId: projectId,
             images: batchStrings,
             setId: locationSet.id,

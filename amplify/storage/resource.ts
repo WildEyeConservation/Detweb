@@ -15,6 +15,9 @@ import { reconcileFalseNegatives } from "../functions/reconcileFalseNegatives/re
 import { launchQCReview } from "../functions/launchQCReview/resource"
 import { launchHomography } from "../functions/launchHomography/resource"
 import { reconcileHomographies } from "../functions/reconcileHomographies/resource"
+import { reconcilePretileLaunches } from "../functions/reconcilePretileLaunches/resource"
+import { pretileImage } from "../functions/pretileImage/resource"
+import { refreshTiles } from "../functions/refreshTiles/resource"
 
 export const outputBucket = defineStorage({
   name: "outputs",
@@ -23,6 +26,8 @@ export const outputBucket = defineStorage({
     'slippymaps/*': [
       allow.resource(generateTile).to(['write', 'list', 'get']),
       allow.resource(handleS3Upload).to(['write', 'list', 'get', 'delete']),
+      allow.resource(pretileImage).to(['write']),
+      allow.resource(refreshTiles).to(['list', 'get', 'write']),
       allow.authenticated.to(['read']),
       allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ],
@@ -63,6 +68,15 @@ export const outputBucket = defineStorage({
       allow.resource(findAndRequeueMissingLocations).to(['read']),
       allow.resource(cleanupJobs).to(['delete']),
       allow.resource(reconcileHomographies).to(['read', 'delete']),
+      allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
+    ],
+    // Pretile launch manifests for tiling workflow tracking
+    'pretile-launch-manifests/*': [
+      allow.resource(launchAnnotationSet).to(['write']),
+      allow.resource(launchFalseNegatives).to(['write']),
+      allow.resource(launchQCReview).to(['write']),
+      allow.resource(launchHomography).to(['write']),
+      allow.resource(reconcilePretileLaunches).to(['read', 'delete']),
       allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ],
     // QC review manifests for tracking sampled annotations
@@ -108,6 +122,7 @@ export const inputBucket = defineStorage({
       allow.resource(handleS3Upload).to(['get']),
       allow.resource(processImages).to(['read']),
       allow.resource(runHeatmapper).to(['read']),
+      allow.resource(pretileImage).to(['get']),
       allow.authenticated.to(['read', 'write', 'delete']),
       allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ]

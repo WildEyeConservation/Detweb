@@ -19,6 +19,7 @@ const STORAGE_KEYS = {
 type Project = {
   id: string;
   name: string;
+  status: string | null;
   organization: {
     id: string;
     name: string;
@@ -156,6 +157,7 @@ export default function Jobs() {
             selectionSet: [
               'id',
               'name',
+              'status',
               'organization.id',
               'organization.name',
               'annotationSets.id',
@@ -173,6 +175,7 @@ export default function Jobs() {
         .filter(
           (project): project is Project =>
             project !== null &&
+            project.status !== 'launching' &&
             (project.queues.length > 0 ||
               project.annotationSets.some((set) => set.register))
         )

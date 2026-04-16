@@ -35,6 +35,10 @@ import { updateActiveOrganizations } from '../functions/updateActiveOrganization
 import { launchQCReview } from '../functions/launchQCReview/resource';
 import { launchHomography } from '../functions/launchHomography/resource';
 import { reconcileHomographies } from '../functions/reconcileHomographies/resource';
+import { reconcilePretileLaunches } from '../functions/reconcilePretileLaunches/resource';
+import { extendTileLifecycles } from '../functions/extendTileLifecycles/resource';
+import { pretileImage } from '../functions/pretileImage/resource';
+import { refreshTiles } from '../functions/refreshTiles/resource';
 import { generateTile } from '../storage/generateTile/resource';
 // import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
@@ -82,6 +86,9 @@ const schema = a
         adminActionLogs: a.hasMany('AdminActionLog', 'projectId'),
         // Global tiled location set ID for the project (no belongsTo to avoid bidirectional requirement)
         tiledLocationSetId: a.id(),
+        // Points at an in-flight pretile launch manifest in the outputs bucket.
+        // Reconciler clears this once every image in the manifest has Image.tiledAt set.
+        pretileManifestS3Key: a.string(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')]),
@@ -141,6 +148,8 @@ const schema = a
         transect: a.belongsTo('Transect', 'transectId'),
         processedBy: a.hasMany('ImageProcessedBy', 'imageId'),
         group: a.string(),
+        // Stamped by pretileImage worker when the slippy-map pyramid is fully generated.
+        tiledAt: a.datetime(),
         // sets: [ImageSet] @manyToMany(relationName: "ImageSetMembership")
         //   leftNeighbours: [ImageNeighbour] @hasMany(indexName:"bySecondNeighbour",fields:["key"])
         //   rightNeighbours: [ImageNeighbour] @hasMany(indexName:"byFirstNeighbour",fields:["key"])
@@ -473,6 +482,7 @@ const schema = a
         // Empty detection and requeue tracking
         emptyQueueTimestamp: a.string(),
         requeuesCompleted: a.integer().default(0),
+        lastObservationAt: a.string(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
@@ -1177,6 +1187,7 @@ const schema = a
       .query()
       .arguments({
         imageKey: a.string().required(),
+        imageId: a.id(),
         zs: a.integer().required().array().required(),
         rows: a.integer().required().array().required(),
         cols: a.integer().required().array().required(),
@@ -1208,6 +1219,10 @@ const schema = a
     allow.resource(launchQCReview),
     allow.resource(launchHomography),
     allow.resource(reconcileHomographies),
+    allow.resource(reconcilePretileLaunches),
+    allow.resource(extendTileLifecycles),
+    allow.resource(pretileImage),
+    allow.resource(refreshTiles),
     allow.resource(requeueProjectQueues),
     allow.resource(deleteProject),
     allow.resource(generateSurveyResults),

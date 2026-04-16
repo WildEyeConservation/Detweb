@@ -277,6 +277,20 @@ export async function handler(event) {
       
 
 
+      // Eager tiling is gated behind EAGER_TILING_ENABLED. Workflow launches
+      // now enqueue pretileImage SQS messages for the specific images they
+      // need, and the on-demand generateTile lambda handles any misses. When
+      // the flag is off, skip the sharp pyramid + upload + delete block
+      // entirely — but keep the Image ImageRecord creation side effects
+      // (which live elsewhere in the pipeline) untouched.
+      const eagerTilingEnabled =
+        (env.EAGER_TILING_ENABLED ?? 'false').toLowerCase() === 'true';
+
+      if (!eagerTilingEnabled) {
+        console.log('Eager tiling disabled — skipping sharp pyramid generation and upload for', Key);
+        continue;
+      }
+
       /* Sharp is causing me a little bit of pain in my local testing environment. I know that this part of the
       code works, so for now I am simply excluding it from local testing. */
       if (typeof process.env.AWS_SAM_LOCAL === 'undefined') {
@@ -287,7 +301,7 @@ export async function handler(event) {
           .rotate() // Called without arguments, this will auto-detect the orientation specified in exif data and rotate the image accordingly.
           .png()
           .tile({ layout: "google" })
-          .toFile(localTmpPath);  
+          .toFile(localTmpPath);
       } else {
         console.log('Running in local testing mode, sharp module not loaded');
         // Create a fake output directory for testing purposes

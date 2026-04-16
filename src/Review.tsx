@@ -53,6 +53,7 @@ export function Review({ showAnnotationSetDropdown = true }) {
         {
           projectId: project.id,
           selectionSet: ['userId'],
+          limit: 1000,
         }
       );
       if (!cancelled) {

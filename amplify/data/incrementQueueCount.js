@@ -5,8 +5,8 @@ export function request(ctx) {
     operation: 'UpdateItem',
     key: util.dynamodb.toMapValues({ id: ctx.args.id }),
     update: {
-      expression: 'ADD observedCount :inc',
-      expressionValues: util.dynamodb.toMapValues({ ':inc': 1 }),
+      expression: 'ADD observedCount :inc SET lastObservationAt = :now',
+      expressionValues: util.dynamodb.toMapValues({ ':inc': 1, ':now': util.time.nowISO8601() }),
     },
     condition: {
       expression: 'attribute_exists(id)',

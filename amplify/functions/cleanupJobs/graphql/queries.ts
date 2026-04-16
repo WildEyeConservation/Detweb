@@ -3209,6 +3209,7 @@ export const listQueues = /* GraphQL */ `query ListQueues(
       locationManifestS3Key
       emptyQueueTimestamp
       requeuesCompleted
+      lastObservationAt
       __typename
     }
     nextToken

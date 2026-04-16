@@ -37,6 +37,22 @@ const hasValidLatLng = (lat: unknown, lng: unknown): boolean =>
   lng >= -180 &&
   lng <= 180;
 
+async function retryCreate<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3
+): Promise<T> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt === maxAttempts) throw err;
+      const delay = 1000 * Math.pow(2, attempt - 1) + Math.random() * 500;
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw new Error('retryCreate: unreachable');
+}
+
 export default function UploadManager() {
   const {
     task: { projectId, files, retryDelay, resumeId, deleteId, pauseId },
@@ -260,11 +276,21 @@ export default function UploadManager() {
       });
       const knownCameraNames = Object.keys(cameraNameToId);
 
+      // Optional folder-name -> camera-name mapping persisted by the upload
+      // form when uploaded folder names don't match existing cameras.
+      const uploadMetadata = (await metadataStore.getItem(projectId)) as
+        | { folderCameraMapping?: Record<string, string> }
+        | null;
+      const folderCameraMapping: Record<string, string> =
+        uploadMetadata?.folderCameraMapping ?? {};
+
       const extractCameraNameFromPath = (path: string): string | null => {
         const parts = path.split('/');
         if (parts.length > 1) parts.pop(); // remove filename
         for (let i = parts.length - 1; i >= 0; i--) {
           const seg = parts[i];
+          const mapped = folderCameraMapping[seg];
+          if (mapped && knownCameraNames.includes(mapped)) return mapped;
           if (knownCameraNames.includes(seg)) return seg;
         }
         return null;
@@ -277,6 +303,7 @@ export default function UploadManager() {
         {
           projectId,
           selectionSet: ['id', 'originalPath', 'timestamp', 'cameraId'],
+          limit: 10000,
         }
       )) as {
         id: string;
@@ -369,23 +396,27 @@ export default function UploadManager() {
               ? cameraNameToId[cameraName]
               : undefined;
 
-            const { data: img } = await client.models.Image.create({
-              projectId,
-              width: imageData.width,
-              height: imageData.height,
-              timestamp: imageData.timestamp,
-              cameraSerial: imageData.cameraSerial,
-              originalPath: imageData.originalPath,
-              latitude: imageData.latitude,
-              longitude: imageData.longitude,
-              altitude_egm96: imageData.altitude_egm96,
-              altitude_wgs84: imageData.altitude_wgs84,
-              altitude_agl:
-                imageData.altitude_agl ??
-                (elevation > 0 && altitude ? altitude - elevation : undefined),
-              cameraId,
-              group: organizationId,
-            });
+            const { data: img } = await retryCreate(() =>
+              client.models.Image.create({
+                projectId,
+                width: imageData.width,
+                height: imageData.height,
+                timestamp: imageData.timestamp,
+                cameraSerial: imageData.cameraSerial,
+                originalPath: imageData.originalPath,
+                latitude: imageData.latitude,
+                longitude: imageData.longitude,
+                altitude_egm96: imageData.altitude_egm96,
+                altitude_wgs84: imageData.altitude_wgs84,
+                altitude_agl:
+                  imageData.altitude_agl ??
+                  (elevation > 0 && altitude
+                    ? altitude - elevation
+                    : undefined),
+                cameraId,
+                group: organizationId,
+              })
+            );
             if (img) {
               createdImages.push({
                 id: img.id,
@@ -394,20 +425,24 @@ export default function UploadManager() {
                 cameraId: img.cameraId ?? undefined,
               });
               await createdImagesStore.setItem(projectId, createdImages);
-              await client.models.ImageSetMembership.create({
-                imageId: img.id,
-                imageSetId: imageSet.id,
-                group: organizationId,
-              });
+              await retryCreate(() =>
+                client.models.ImageSetMembership.create({
+                  imageId: img.id,
+                  imageSetId: imageSet.id,
+                  group: organizationId,
+                })
+              );
               const finalKey = makeKey(img.originalPath!);
-              await client.models.ImageFile.create({
-                projectId,
-                imageId: img.id,
-                key: finalKey,
-                path: finalKey,
-                type: fileType,
-                group: organizationId,
-              });
+              await retryCreate(() =>
+                client.models.ImageFile.create({
+                  projectId,
+                  imageId: img.id,
+                  key: finalKey,
+                  path: finalKey,
+                  type: fileType,
+                  group: organizationId,
+                })
+              );
             }
           }
           // increment progress after each seed
@@ -470,25 +505,27 @@ export default function UploadManager() {
                 ? cameraNameToId[cameraName]
                 : undefined;
 
-              const { data: img } = await client.models.Image.create({
-                projectId,
-                width: image.width,
-                height: image.height,
-                timestamp: image.timestamp,
-                cameraSerial: image.cameraSerial,
-                originalPath: image.originalPath,
-                latitude: image.latitude,
-                longitude: image.longitude,
-                altitude_egm96: image.altitude_egm96,
-                altitude_wgs84: image.altitude_wgs84,
-                altitude_agl:
-                  image.altitude_agl ??
-                  (elevation > 0 && altitude
-                    ? altitude - elevation
-                    : undefined),
-                cameraId,
-                group: organizationId,
-              });
+              const { data: img } = await retryCreate(() =>
+                client.models.Image.create({
+                  projectId,
+                  width: image.width,
+                  height: image.height,
+                  timestamp: image.timestamp,
+                  cameraSerial: image.cameraSerial,
+                  originalPath: image.originalPath,
+                  latitude: image.latitude,
+                  longitude: image.longitude,
+                  altitude_egm96: image.altitude_egm96,
+                  altitude_wgs84: image.altitude_wgs84,
+                  altitude_agl:
+                    image.altitude_agl ??
+                    (elevation > 0 && altitude
+                      ? altitude - elevation
+                      : undefined),
+                  cameraId,
+                  group: organizationId,
+                })
+              );
               if (img) {
                 createdImages.push({
                   id: img.id,
@@ -497,20 +534,24 @@ export default function UploadManager() {
                   cameraId: img.cameraId ?? undefined,
                 });
                 await createdImagesStore.setItem(projectId, createdImages);
-                await client.models.ImageSetMembership.create({
-                  imageId: img.id,
-                  imageSetId: imageSet.id,
-                  group: organizationId,
-                });
+                await retryCreate(() =>
+                  client.models.ImageSetMembership.create({
+                    imageId: img.id,
+                    imageSetId: imageSet.id,
+                    group: organizationId,
+                  })
+                );
                 const finalKey = makeKey(img.originalPath!);
-                await client.models.ImageFile.create({
-                  projectId,
-                  imageId: img.id,
-                  key: finalKey,
-                  path: finalKey,
-                  type: file.type,
-                  group: organizationId,
-                });
+                await retryCreate(() =>
+                  client.models.ImageFile.create({
+                    projectId,
+                    imageId: img.id,
+                    key: finalKey,
+                    path: finalKey,
+                    type: file.type,
+                    group: organizationId,
+                  })
+                );
               }
             }
           } catch (error) {
@@ -769,7 +810,9 @@ export default function UploadManager() {
             'createdAt',
             'memberships.id',
             'files.id',
+            'files.type',
           ],
+          limit: 10000,
         }
       )) as {
         id: string;
@@ -778,7 +821,7 @@ export default function UploadManager() {
         cameraId?: string | null;
         createdAt?: string;
         memberships: { id: string }[];
-        files: { id: string }[];
+        files: { id: string; type?: string | null }[];
       }[];
 
       const imagesByPath = new Map<string, typeof allDbImages>();
@@ -841,6 +884,94 @@ export default function UploadManager() {
       const dedupedDbImages = Array.from(imagesByPath.values()).map(
         (images) => images[0]
       );
+
+      // Reconcile orphaned records: Images missing their Membership or ImageFile
+      // This can happen when Image.create succeeded but a subsequent create failed
+      // even after retryCreate exhausted its attempts.
+      const { data: project } = await client.models.Project.get(
+        { id: projectId },
+        { selectionSet: ['id', 'organizationId', 'tags'] as const }
+      );
+      const projRecord = (project ?? {}) as Record<string, unknown>;
+      const organizationId: string | undefined =
+        typeof projRecord['organizationId'] === 'string'
+          ? (projRecord['organizationId'] as string)
+          : undefined;
+      const tagsVal = projRecord['tags'];
+      const isLegacyProject: boolean = Array.isArray(tagsVal)
+        ? (tagsVal as unknown[]).some((t) => t === 'legacy')
+        : false;
+      const makeKey = (orig: string): string =>
+        !isLegacyProject && organizationId
+          ? `${organizationId}/${projectId}/${orig}`
+          : orig;
+
+      const orphanedImages = dedupedDbImages.filter(
+        (img) =>
+          (img.memberships ?? []).length === 0 ||
+          (img.files ?? []).length === 0
+      );
+
+      if (orphanedImages.length > 0) {
+        console.warn(
+          `Reconciling ${orphanedImages.length} image(s) with missing membership/file records`
+        );
+        const RECONCILE_CONCURRENCY = 5;
+        const reconcileIterator = orphanedImages[Symbol.iterator]();
+        const reconcileWorker = async () => {
+          for (
+            let next = reconcileIterator.next();
+            !next.done;
+            next = reconcileIterator.next()
+          ) {
+            const img = next.value as (typeof dedupedDbImages)[number];
+            try {
+              if ((img.memberships ?? []).length === 0) {
+                await retryCreate(() =>
+                  client.models.ImageSetMembership.create({
+                    imageId: img.id,
+                    imageSetId: imageSet.id,
+                    group: organizationId,
+                  })
+                );
+              }
+              if ((img.files ?? []).length === 0) {
+                const finalKey = makeKey(img.originalPath);
+                const fileType =
+                  img.originalPath.toLowerCase().endsWith('.jpg') ||
+                  img.originalPath.toLowerCase().endsWith('.jpeg')
+                    ? 'image/jpeg'
+                    : img.originalPath.toLowerCase().endsWith('.png')
+                      ? 'image/png'
+                      : img.originalPath.toLowerCase().endsWith('.tif') ||
+                          img.originalPath.toLowerCase().endsWith('.tiff')
+                        ? 'image/tiff'
+                        : 'application/octet-stream';
+                await retryCreate(() =>
+                  client.models.ImageFile.create({
+                    projectId,
+                    imageId: img.id,
+                    key: finalKey,
+                    path: finalKey,
+                    type: fileType,
+                    group: organizationId,
+                  })
+                );
+              }
+            } catch (err) {
+              console.error(
+                `Failed to reconcile image ${img.id}:`,
+                err
+              );
+            }
+          }
+        };
+        const reconcileWorkers: Promise<void>[] = [];
+        for (let i = 0; i < RECONCILE_CONCURRENCY; i++) {
+          reconcileWorkers.push(reconcileWorker());
+        }
+        await Promise.all(reconcileWorkers);
+      }
 
       // All project images — used by models that have their own processedBy
       // guards (scoutbot, MAD) so they can catch previously-missed images.
@@ -906,25 +1037,6 @@ export default function UploadManager() {
         imageCount: dedupedDbImages.length,
       });
 
-      // Determine legacy vs new key structure
-      const { data: project } = await client.models.Project.get(
-        { id: projectId },
-        { selectionSet: ['id', 'organizationId', 'tags'] as const }
-      );
-      const projRecord = (project ?? {}) as Record<string, unknown>;
-      const organizationId: string | undefined =
-        typeof projRecord['organizationId'] === 'string'
-          ? (projRecord['organizationId'] as string)
-          : undefined;
-      const tagsVal = projRecord['tags'];
-      const isLegacyProject: boolean = Array.isArray(tagsVal)
-        ? (tagsVal as unknown[]).some((t) => t === 'legacy')
-        : false;
-      const makeKey = (orig: string): string =>
-        !isLegacyProject && organizationId
-          ? `${organizationId}/${projectId}/${orig}`
-          : orig;
-
       const metadata = (await metadataStore.getItem(projectId)) as {
         model: string;
         masks: number[][][];
@@ -952,7 +1064,7 @@ export default function UploadManager() {
           .filter((img) => sessionIdsForReg.has(img.id))
           .map((img) => img.id);
 
-        (client as any).mutations.runImageRegistration({
+        client.mutations.runImageRegistration({
           projectId: projectId,
           metadata: JSON.stringify({
             masks: masks,
@@ -993,8 +1105,7 @@ export default function UploadManager() {
         // Fetch images already processed by scoutbot to avoid reprocessing
         // Note: ImageProcessedBy model types will be available after schema deployment
         const processedRecords = await fetchAllPaginatedResults(
-          client.models.ImageProcessedBy.processedByProjectIdAndSource ??
-          (async () => ({ data: [] })),
+          client.models.ImageProcessedBy.processedByProjectIdAndSource,
           {
             projectId,
             source: { eq: 'scoutbotv3' },
@@ -1017,7 +1128,7 @@ export default function UploadManager() {
             (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
 
-          (client as any).mutations.runScoutbot({
+          client.mutations.runScoutbot({
             projectId: projectId,
             images: batchStrings,
             setId: locationSet,
@@ -1039,7 +1150,7 @@ export default function UploadManager() {
             makeKey(image.originalPath)
           );
 
-          (client as any).mutations.runHeatmapper({
+          client.mutations.runHeatmapper({
             projectId,
             images: batchStrings,
           }, { retry: false });
@@ -1073,8 +1184,8 @@ export default function UploadManager() {
         // Fetch images already processed by MAD to avoid reprocessing
         // Note: ImageProcessedBy model types will be available after schema deployment
         const processedRecords = await fetchAllPaginatedResults(
-          (client.models as any).ImageProcessedBy
-            ?.processedByProjectIdAndSource ?? (async () => ({ data: [] })),
+          client.models.ImageProcessedBy
+            .processedByProjectIdAndSource,
           {
             projectId,
             source: { eq: 'mad-v2' },
@@ -1097,7 +1208,7 @@ export default function UploadManager() {
             (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
 
-          (client as any).mutations.runMadDetector({
+          client.mutations.runMadDetector({
             projectId: projectId,
             images: batchStrings,
             setId: locationSet,

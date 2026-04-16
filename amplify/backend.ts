@@ -44,9 +44,16 @@ import { updateActiveOrganizations } from './functions/updateActiveOrganizations
 import { launchQCReview } from './functions/launchQCReview/resource';
 import { launchHomography } from './functions/launchHomography/resource';
 import { reconcileHomographies } from './functions/reconcileHomographies/resource';
+import { pretileImage } from './functions/pretileImage/resource';
+import { refreshTiles } from './functions/refreshTiles/resource';
+import { reconcilePretileLaunches } from './functions/reconcilePretileLaunches/resource';
+import { extendTileLifecycles } from './functions/extendTileLifecycles/resource';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import { Duration } from 'aws-cdk-lib';
+import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 
 // Register all Amplify-managed resources in a single backend definition.
 const backend = defineBackend({
@@ -85,6 +92,10 @@ const backend = defineBackend({
   launchQCReview,
   launchHomography,
   reconcileHomographies,
+  pretileImage,
+  refreshTiles,
+  reconcilePretileLaunches,
+  extendTileLifecycles,
 });
 
 const observationTable = backend.data.resources.tables['Observation'];
@@ -854,6 +865,120 @@ backend.findAndRequeueMissingLocations.resources.lambda.addToRolePolicy(
     resources: ['*'],
   })
 );
+
+// ── Workflow-targeted slippy map pre-tiler ──
+//
+// The pretileImage worker consumes SQS messages enqueued by the launch
+// lambdas via the shared `enqueuePretile` helper. Each message produces a
+// full Google-layout slippy-map pyramid for a single image. The
+// reconcilePretileLaunches scheduled lambda watches for in-flight launches
+// (Project.pretileManifestS3Key) and flips project status back to `active`
+// once every image in the launch manifest has Image.tiledAt stamped.
+
+const pretileStack = backend.createStack('DetwebPretile');
+
+const pretileDlq = new sqs.Queue(pretileStack, 'PretileDlq', {
+  retentionPeriod: Duration.days(14),
+});
+
+const pretileQueue = new sqs.Queue(pretileStack, 'PretileQueue', {
+  // Visibility must comfortably exceed pretileImage timeout (600s).
+  visibilityTimeout: Duration.seconds(700),
+  retentionPeriod: Duration.days(14),
+  deadLetterQueue: {
+    queue: pretileDlq,
+    maxReceiveCount: 3,
+  },
+});
+
+// SQS → pretileImage lambda. Batch size 1 to keep visibility-timeout math
+// per-image and to isolate failures so a single poison pill cannot block the
+// rest of a batch.
+const pretileImageLambda = backend.pretileImage.resources.lambda as lambda.Function;
+pretileImageLambda.addEventSource(
+  new SqsEventSource(pretileQueue, {
+    batchSize: 1,
+    reportBatchItemFailures: true,
+    maxConcurrency: 20,
+  })
+);
+
+// The pretile worker needs the same sharp layer used by handleS3Upload and
+// generateTile.
+pretileImageLambda.addLayers(sharpLayer);
+
+// ── Tile refresh worker ──
+//
+// The refreshTiles worker consumes messages from a sibling SQS queue. Its job
+// is to "touch" existing slippy-map tiles via CopyObject-in-place so the S3
+// lifecycle (60-day deletion) clock resets without re-running sharp. If it
+// finds no tiles under the prefix (lifecycle already ran, or a partial
+// previous write), it falls back by re-enqueuing the message onto
+// pretileQueue so the image gets regenerated properly.
+
+const refreshTilesDlq = new sqs.Queue(pretileStack, 'RefreshTilesDlq', {
+  retentionPeriod: Duration.days(14),
+});
+
+const refreshTilesQueue = new sqs.Queue(pretileStack, 'RefreshTilesQueue', {
+  // Visibility must comfortably exceed refreshTiles timeout (120s).
+  visibilityTimeout: Duration.seconds(180),
+  retentionPeriod: Duration.days(14),
+  deadLetterQueue: {
+    queue: refreshTilesDlq,
+    maxReceiveCount: 3,
+  },
+});
+
+const refreshTilesLambda = backend.refreshTiles.resources.lambda as lambda.Function;
+refreshTilesLambda.addEventSource(
+  new SqsEventSource(refreshTilesQueue, {
+    batchSize: 1,
+    reportBatchItemFailures: true,
+    // Refresh is pure S3 I/O — can safely run more in parallel than pretile.
+    maxConcurrency: 50,
+  })
+);
+
+// The refresh worker needs to be able to re-enqueue to pretileQueue when it
+// finds the tile prefix empty (lifecycle fallback path).
+refreshTilesLambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['sqs:SendMessage'],
+    resources: [pretileQueue.queueArn],
+  })
+);
+refreshTilesLambda.addEnvironment('PRETILE_QUEUE_URL', pretileQueue.queueUrl);
+
+
+// The tile lifecycle watchdog sends refresh messages to keep tiles alive.
+backend.extendTileLifecycles.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['sqs:SendMessage', 'sqs:SendMessageBatch'],
+    resources: [refreshTilesQueue.queueArn],
+  })
+);
+backend.extendTileLifecycles.addEnvironment('REFRESH_TILES_QUEUE_URL', refreshTilesQueue.queueUrl);
+
+// Launch lambdas send pretile and refresh messages and write launch manifests.
+const launchLambdasUsingPretile = [
+  backend.launchAnnotationSet,
+  backend.launchFalseNegatives,
+  backend.launchQCReview,
+  backend.launchHomography,
+];
+
+for (const fn of launchLambdasUsingPretile) {
+  fn.resources.lambda.addToRolePolicy(
+    new iam.PolicyStatement({
+      actions: ['sqs:SendMessage', 'sqs:SendMessageBatch'],
+      resources: [pretileQueue.queueArn, refreshTilesQueue.queueArn],
+    })
+  );
+  fn.addEnvironment('PRETILE_QUEUE_URL', pretileQueue.queueUrl);
+  fn.addEnvironment('REFRESH_TILES_QUEUE_URL', refreshTilesQueue.queueUrl);
+}
+
 
 const generalBucketName = 'surveyscope';
 
