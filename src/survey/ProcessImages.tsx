@@ -108,14 +108,17 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
     setDisabled(true);
     setLoading(true);
 
-    const scoutbotSetName = `${projectId}_scoutbot`;
+    const locationSetName =
+      model.value === 'heatmap'
+        ? `${projectId}_elephant-detection-nadir`
+        : `${projectId}_scoutbot`;
     let locationSet =
-      (await findLocationSetByName(scoutbotSetName)) ??
+      (await findLocationSetByName(locationSetName)) ??
       null;
     if (!locationSet) {
       const { data: createdLocationSet } =
         await client.models.LocationSet.create({
-          name: scoutbotSetName,
+          name: locationSetName,
           projectId: projectId,
           group: organizationId,
         });
