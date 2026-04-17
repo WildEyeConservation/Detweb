@@ -899,7 +899,7 @@ pretileImageLambda.addEventSource(
   new SqsEventSource(pretileQueue, {
     batchSize: 1,
     reportBatchItemFailures: true,
-    maxConcurrency: 20,
+    maxConcurrency: 200,
   })
 );
 
