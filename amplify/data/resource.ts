@@ -441,6 +441,11 @@ const schema = a
         // When true, this pair is intentionally skipped for registration
         // (images are neighbours but don't need homography computed)
         skipped: a.boolean().default(false),
+        // Candidate correspondences written by the lightglue container when
+        // its automatic homography attempt fails.
+        suggestedPoints1: a.float().array(),
+        suggestedPoints2: a.float().array(),
+        suggestedPointsKept: a.integer(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])

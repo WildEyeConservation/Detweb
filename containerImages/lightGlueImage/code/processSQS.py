@@ -35,6 +35,20 @@ mutation MyMutation($homography: [Float], $image1Id: ID!, $image2Id: ID!) {
 }
 """)
 
+# Used when automatic homography fails: we persist a small set of the best
+# candidate matches so the manual workbench can show the user a starting point.
+updateSuggestions = gql("""
+mutation SaveSuggestions($image1Id: ID!, $image2Id: ID!, $suggestedPoints1: [Float], $suggestedPoints2: [Float]) {
+  updateImageNeighbour(input: {image1Id: $image1Id, image2Id: $image2Id, suggestedPoints1: $suggestedPoints1, suggestedPoints2: $suggestedPoints2}) {
+    image1Id
+    image2Id
+  }
+}
+""")
+
+# The manual workbench is designed for up to 12 paired points
+MAX_SUGGESTED_POINTS = 12
+
 # Create SQS client
 sqs = boto3.client('sqs',os.environ['REGION'])
 queue_url = os.environ['QUEUE_URL']
@@ -79,15 +93,26 @@ def alignImages( body, img0, img1):
     # Convert to origin coordinate system, bearing in mind that align_corners=False . See https://kornia.readthedocs.io/en/latest/geometry.html
     mkpts0 = (correspondences["keypoints0"].cpu().numpy()+0.5)*img0_ratio-0.5
     mkpts1 = (correspondences["keypoints1"].cpu().numpy()+0.5)*img1_ratio-0.5
+    # LoFTR returns a per-match confidence; keep it aligned with mkpts0/mkpts1
+    # so we can rank the candidates we surface to the user on failure.
+    confidence = correspondences.get("confidence")
+    if confidence is not None:
+        confidence = confidence.cpu().numpy()
     if 'masks' in body:
         masks=[Polygon(mask) for mask in body['masks']]
         points = [[Point(x,y) for x,y in points] for points in [mkpts0,mkpts1]]
         masked=np.array([mask.contains(points) for mask in masks]).any(axis=(0,1))
         mkpts0=mkpts0[~masked]
         mkpts1=mkpts1[~masked]
+        if confidence is not None:
+            confidence = confidence[~masked]
     _, inliers = cv2.findFundamentalMat(mkpts0, mkpts1, cv2.USAC_MAGSAC, max(img0_ratio,img1_ratio), 0.999, 100000)
-    inliers = inliers > 0    
-    M, mask = cv2.findHomography(mkpts0[inliers.squeeze(),:], mkpts1[inliers.squeeze(),:], cv2.RHO,max(img0_ratio,img1_ratio)*2)
+    inliers = inliers > 0
+    inlier_mask = inliers.squeeze()
+    inlier_pts0 = mkpts0[inlier_mask,:]
+    inlier_pts1 = mkpts1[inlier_mask,:]
+    inlier_conf = confidence[inlier_mask] if confidence is not None else None
+    M, mask = cv2.findHomography(inlier_pts0, inlier_pts1, cv2.RHO,max(img0_ratio,img1_ratio)*2)
     if sum(mask)>10:
         params = {'image1Id':body['image1Id'], 'image2Id':body['image2Id'], 'homography': M.reshape(-1).tolist()}
         resp = client.execute(updateN, variable_values=params)
@@ -96,7 +121,36 @@ def alignImages( body, img0, img1):
     else:
         print(f'Failed to link {body["image1Id"]}/{body["image2Id"]}')
         print(sum(mask))
-        return False
+        # Persist up to MAX_SUGGESTED_POINTS candidate correspondences so the
+        # manual workbench can pre-populate the user with a starting set.
+        try:
+            n_candidates = min(len(inlier_pts0), len(inlier_pts1))
+            if n_candidates > 0:
+                if n_candidates > MAX_SUGGESTED_POINTS:
+                    if inlier_conf is not None and len(inlier_conf) == n_candidates:
+                        # Take the highest-confidence matches so the user gets
+                        # the model's best guesses, not an arbitrary subset.
+                        idx = np.argsort(-inlier_conf)[:MAX_SUGGESTED_POINTS]
+                    else:
+                        idx = np.linspace(0, n_candidates - 1, MAX_SUGGESTED_POINTS).astype(int)
+                    pts0 = inlier_pts0[idx]
+                    pts1 = inlier_pts1[idx]
+                else:
+                    pts0 = inlier_pts0
+                    pts1 = inlier_pts1
+                params = {
+                    'image1Id': body['image1Id'],
+                    'image2Id': body['image2Id'],
+                    'suggestedPoints1': pts0.reshape(-1).astype(float).tolist(),
+                    'suggestedPoints2': pts1.reshape(-1).astype(float).tolist(),
+                }
+                client.execute(updateSuggestions, variable_values=params)
+                print(f'Saved {len(pts0)} suggested points for {body["image1Id"]}/{body["image2Id"]}')
+        except Exception as e:
+            print(f'Failed to persist suggested points for {body["image1Id"]}/{body["image2Id"]}: {e}')
+        # Return True so the message is removed from SQS — we've recorded
+        # what we could and the pair will be picked up by the manual queue.
+        return True
 
 def process(body):
     s3_client = boto3.client('s3',os.environ['REGION'])
