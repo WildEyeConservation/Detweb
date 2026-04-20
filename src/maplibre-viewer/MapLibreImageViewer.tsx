@@ -87,7 +87,6 @@ type Props = {
   onHoverPoint: (index: number | null) => void;
   onContextMenu?: (pointIndex: number, screenPos: { x: number; y: number }) => void;
   onAction?: () => void;
-  maxPoints?: number;
   previewTransform?: (c: [number, number]) => [number, number];
   otherImage?: ImageType;
   onMapInstance?: (map: maplibregl.Map | null, px2lngLat: (x: number, y: number) => [number, number], lngLat2px: (lng: number, lat: number) => { x: number; y: number }) => void;
@@ -107,7 +106,6 @@ export function MapLibreImageViewer({
   onHoverPoint,
   onContextMenu,
   onAction,
-  maxPoints = 12,
   previewTransform,
   otherImage,
   onMapInstance,
@@ -430,7 +428,6 @@ export function MapLibreImageViewer({
 
       const { x, y } = lngLat2px(e.lngLat.lng, e.lngLat.lat);
       if (x < 0 || x > image.width || y < 0 || y > image.height) return;
-      if (points.length >= maxPoints) return;
 
       const tooClose = points.some((p) => {
         const dx = p.x - x;
@@ -445,7 +442,7 @@ export function MapLibreImageViewer({
 
     map.on('click', handleClick);
     return () => { map.off('click', handleClick); };
-  }, [map, points, maxPoints, lngLat2px, setPoints, image.width, image.height]);
+  }, [map, points, lngLat2px, setPoints, image.width, image.height]);
 
   // Hover highlights
   useEffect(() => {

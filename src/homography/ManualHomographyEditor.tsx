@@ -217,7 +217,7 @@ export function ManualHomographyEditor({
               <span className='fw-bold small'>Instructions</span>
             </div>
             <ul className='small ps-3' style={{ opacity: 0.9, lineHeight: '1.6' }}>
-              <li>Select up to 12 corresponding points on both images (min {MIN_HOMOGRAPHY_POINTS}).</li>
+              <li>Select at least {MIN_HOMOGRAPHY_POINTS} corresponding points on both images. More points typically yield a better fit.</li>
               <li>Aim to cover as much area as possible.</li>
               <li>Avoid placing points in straight lines.</li>
               <li>Right-click a marker to remove/swap it or press <b>Esc</b> to close the popup.</li>
