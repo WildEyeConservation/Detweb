@@ -1,8 +1,4 @@
-import {
-  useContext,
-  useState,
-  useCallback,
-} from 'react';
+import { useContext, useState, useCallback } from 'react';
 import { UserContext, ImageContext } from './Context';
 import './index.css';
 import { isHotkeyPressed, useHotkeys } from 'react-hotkeys-hook';
@@ -41,7 +37,7 @@ export function ShowMarkers(props: ShowMarkersProps) {
   } = useContext(ProjectContext)!;
   const effectiveCategories = props.categoriesOverride ?? categories;
   const [enabled, setEnabled] = useState(true);
-  const { annotationsHook, latLng2xy, xy2latLng, prevImages } =
+  const { annotationsHook, latLng2xy, xy2latLng } =
     useContext(ImageContext)!;
   const {
     data: annotations,
@@ -49,18 +45,6 @@ export function ShowMarkers(props: ShowMarkersProps) {
     update: updateAnnotation,
   } = annotationsHook;
   const activeAnnotation = props.activeAnnotation;
-  const isInsidePrevImage = useCallback(
-    (x: number, y: number): boolean => {
-      return (prevImages || []).some((im) => {
-        if (!im?.transform?.fwd) return false;
-        const [tx, ty] = im.transform.fwd([x, y]);
-        return (
-          tx >= 0 && ty >= 0 && tx <= im.image.width && ty <= im.image.height
-        );
-      });
-    },
-    [prevImages]
-  );
 
   useHotkeys(
     'Tab',
@@ -102,7 +86,7 @@ export function ShowMarkers(props: ShowMarkersProps) {
               xy2latLng={xy2latLng}
               getType={getType}
               onShadowDrag={props.onShadowDrag}
-              hideIdenticon={isInsidePrevImage(annotation.x, annotation.y)}
+              hideIdenticon={(annotation as any).objectId !== annotation.id}
               onClick={props.onSelectAnnotation}
               locationBounds={props.locationBounds}
             />
