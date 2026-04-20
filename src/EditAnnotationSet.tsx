@@ -5,6 +5,7 @@ import { GlobalContext } from './Context';
 import { Tab, Tabs } from './Tabs';
 import { Schema } from './amplify/client-schema';
 import LabelEditor from './survey/LabelEditor';
+import { useQuery } from '@tanstack/react-query';
 
 interface EditAnnotationSetModalProps {
   show: boolean;
@@ -27,8 +28,9 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
 }) => {
   const { client } = useContext(GlobalContext)!;
   const [newName, setNewName] = useState<string>('');
-  const [busy, setBusy] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const [tab, setTab] = useState<number>(0);
   const [handleMove, _setHandleMove] = useState<() => Promise<void>>(() =>
     Promise.resolve()
@@ -41,34 +43,48 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
     ) => Promise<void>) | null
   >(null);
 
-  const handleSave = async () => {
-    if (annotationSet && newName.trim() !== '') {
-      setBusy(true);
+  const { data: fetchedCategories, isFetching: categoriesLoading } = useQuery({
+    queryKey: ['annotation-set-categories', annotationSet.id],
+    enabled: show,
+    staleTime: 0,
+    queryFn: async () => {
+      const { data } = await client.models.Category.categoriesByAnnotationSetId(
+        { annotationSetId: annotationSet.id }
+      );
+      return data ?? [];
+    },
+  });
 
+  const handleSave = async () => {
+    if (!annotationSet || newName.trim() === '') return;
+
+    setErrorMessage('');
+    setIsSaving(true);
+    try {
       const { data: result } = await client.models.AnnotationSet.update({
         id: annotationSet.id,
         name: newName,
       });
-
       if (setAnnotationSet && result) {
         setAnnotationSet({ id: result.id, name: result.name });
-        if (saveLabels) {
-          await saveLabels(
-            annotationSet.id,
-            project.id,
-            project.group || project.organizationId
-          );
-        }
       }
-
-      handleClose();
+      if (saveLabels) {
+        await saveLabels(
+          annotationSet.id,
+          project.id,
+          project.group || project.organizationId
+        );
+      }
       setStatusMessage('');
-
-      if (setSelectedSets) {
-        setSelectedSets([]);
-      }
-
-      setBusy(false);
+      setSelectedSets?.([]);
+      handleClose();
+    } catch (err) {
+      console.error('Failed to save annotation set edits', err);
+      setErrorMessage(
+        err instanceof Error ? err.message : 'Failed to save changes'
+      );
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -77,7 +93,7 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
   }, [annotationSet.name]);
 
   return (
-    <Modal show={show} onHide={handleClose} disabled={busy} strict={true}>
+    <Modal show={show} onHide={handleClose} strict={true}>
       <Header>
         <Title>Edit Annotation Set</Title>
       </Header>
@@ -98,32 +114,42 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
                   placeholder='Enter new name'
                 />
               </Form.Group>
-              <LabelEditor
-                defaultLabels={project.annotationSets
-                  .find((set: any) => set.id === annotationSet.id)
-                  ?.categories.map((category: any) => ({
+              {categoriesLoading || !fetchedCategories ? (
+                <div className='d-flex align-items-center gap-2 py-3'>
+                  <Spinner size='sm' />
+                  <span>Loading labels...</span>
+                </div>
+              ) : (
+                <LabelEditor
+                  key={annotationSet.id}
+                  defaultLabels={fetchedCategories.map((category) => ({
                     id: category.id,
                     name: category.name,
-                    shortcutKey: category.shortcutKey,
-                    color: category.color,
+                    shortcutKey: category.shortcutKey ?? '',
+                    color: category.color ?? '',
                   }))}
-                isEditing
-                setHandleSave={setSaveLabels}
-                onStatusChange={setStatusMessage}
-              />
+                  isEditing
+                  setHandleSave={setSaveLabels}
+                  onStatusChange={setStatusMessage}
+                />
+              )}
             </Form>
           </Tab>
         </Tabs>
         <Footer>
-          {statusMessage && (
+          {errorMessage ? (
+            <span className='text-danger me-auto' style={{ fontSize: 12 }}>
+              {errorMessage}
+            </span>
+          ) : statusMessage ? (
             <span className='text-muted me-auto d-flex align-items-center gap-2' style={{ fontSize: 12 }}>
               <Spinner size='sm' />
               {statusMessage}
             </span>
-          )}
+          ) : null}
           <Button
             variant='primary'
-            disabled={busy}
+            disabled={isSaving}
             onClick={() => {
               switch (tab) {
                 case 0:
@@ -135,15 +161,20 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
               }
             }}
           >
-            {busy
-              ? 'Saving...'
-              : tab === 1
-              ? 'Move Observations'
-              : 'Save Changes'}
+            {isSaving ? (
+              <span className='d-flex align-items-center gap-2'>
+                <Spinner size='sm' />
+                Saving...
+              </span>
+            ) : tab === 1 ? (
+              'Move Observations'
+            ) : (
+              'Save Changes'
+            )}
           </Button>
           <Button
             variant='dark'
-            disabled={busy}
+            disabled={isSaving}
             onClick={() => {
               handleClose();
               if (setSelectedSets) {

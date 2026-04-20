@@ -69,17 +69,22 @@ export default function AddAnnotationSetModal({
     setBusy(false);
   }
 
-  function handleAnnotationSetChange(e: React.ChangeEvent<HTMLSelectElement>) {
+  async function handleAnnotationSetChange(
+    e: React.ChangeEvent<HTMLSelectElement>
+  ) {
     const annotationSetId = e.target.value;
     setSelectedAnnotationSet(annotationSetId);
 
-    const annotationSet = allProjects
-      .find((p) => p.id === selectedProject)
-      ?.annotationSets.find((s: any) => s.id === annotationSetId);
-
-    if (annotationSet) {
-      setImportedLabels(annotationSet.categories);
+    if (!annotationSetId) {
+      setImportedLabels([]);
+      return;
     }
+
+    const { data: categories } =
+      await client.models.Category.categoriesByAnnotationSetId({
+        annotationSetId,
+      });
+    setImportedLabels((categories ?? []) as Schema['Category']['type'][]);
   }
 
   return (

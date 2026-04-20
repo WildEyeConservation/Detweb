@@ -103,9 +103,14 @@ export default function LabelEditor({
       ]);
 
       // Ensure any persisted/react-query caches for categories are refreshed
-      await queryClient.invalidateQueries({ queryKey: ['Category'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['Category'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['annotation-set-categories', annotationSetId],
+        }),
+      ]);
     },
-    [client, labels, isEditing]
+    [client, labels, isEditing, queryClient]
   );
 
   useEffect(() => {
