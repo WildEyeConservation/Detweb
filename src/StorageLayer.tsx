@@ -135,8 +135,6 @@ export async function getTileBlob(path: string): Promise<Blob> {
     return cached;
   }
 
-  const prefersTestBucket = path.toLowerCase().includes('12_06_25');
-
   const attemptFetch = async (getUrlArgs: any): Promise<Blob> => {
     const signedUrl = await getUrl(getUrlArgs);
     const response = await fetch(signedUrl.url.toString(), {
@@ -152,26 +150,9 @@ export async function getTileBlob(path: string): Promise<Blob> {
     return blob;
   };
 
-  if (prefersTestBucket) {
-    try {
-      return await attemptFetch({
-        path,
-        options: {
-          bucket: {
-            bucketName: 'surveyscope-testbucket',
-            region: 'af-south-1',
-          },
-        },
-      });
-    } catch (_) {
-      // Fall back to default bucket
-      return await attemptFetch({ path });
-    }
-  }
-
-  // Default path: try S3 direct first — for already-tiled images this is the
-  // fast path (one network hop, progressive reveal). On 404, fall through to
-  // the batched Lambda call, which handles generation + write-back.
+  // Try S3 direct first — for already-tiled images this is the fast path
+  // (one network hop, progressive reveal). On 404, fall through to the
+  // batched Lambda call, which handles generation + write-back.
   try {
     return await attemptFetch({ path });
   } catch (_) {
