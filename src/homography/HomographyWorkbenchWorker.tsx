@@ -1,4 +1,4 @@
-import { useState, useContext, useCallback, useRef } from 'react';
+import { useState, useContext, useCallback, useRef, useEffect } from 'react';
 import { GlobalContext } from '../Context';
 import { HomographyWorkbench } from './HomographyWorkbench';
 import type { Matrix } from 'mathjs';
@@ -8,6 +8,37 @@ import {
   MIN_HOMOGRAPHY_POINTS,
   solveHomography,
 } from './ManualHomographyEditor';
+
+const SUGGESTED_POINT_ID_PREFIX = 'suggested-';
+
+function flatToPoints(flat: (number | null | undefined)[] | null | undefined): Point[] {
+  if (!flat || flat.length < 2) return [];
+  const out: Point[] = [];
+  for (let i = 0; i + 1 < flat.length; i += 2) {
+    const x = flat[i];
+    const y = flat[i + 1];
+    if (typeof x !== 'number' || typeof y !== 'number') continue;
+    out.push({ id: `${SUGGESTED_POINT_ID_PREFIX}${i / 2}`, x, y });
+  }
+  return out;
+}
+
+function countSuggestedPointsKept(points: { p1: Point[]; p2: Point[] }): number {
+  const n = Math.min(points.p1.length, points.p2.length);
+  let kept = 0;
+  for (let i = 0; i < n; i++) {
+    const a = points.p1[i];
+    const b = points.p2[i];
+    if (
+      a.id.startsWith(SUGGESTED_POINT_ID_PREFIX) &&
+      b.id.startsWith(SUGGESTED_POINT_ID_PREFIX) &&
+      a.id === b.id
+    ) {
+      kept += 1;
+    }
+  }
+  return kept;
+}
 
 export type HomographyImageMeta = {
   id: string;
@@ -45,24 +76,44 @@ type Props = {
   isSaved?: boolean;
 };
 
+type NeighbourRecord = {
+  image1Id: string;
+  image2Id: string;
+  isForward: boolean;
+  suggestedPoints1: (number | null | undefined)[] | null | undefined;
+  suggestedPoints2: (number | null | undefined)[] | null | undefined;
+};
+
 async function resolveNeighbourDirection(
   client: any,
   primaryId: string,
   secondaryId: string
-): Promise<{ image1Id: string; image2Id: string; isForward: boolean }> {
+): Promise<NeighbourRecord> {
   const fwdResp = await client.models.ImageNeighbour.get({
     image1Id: primaryId,
     image2Id: secondaryId,
   });
   if (fwdResp?.data) {
-    return { image1Id: primaryId, image2Id: secondaryId, isForward: true };
+    return {
+      image1Id: primaryId,
+      image2Id: secondaryId,
+      isForward: true,
+      suggestedPoints1: fwdResp.data.suggestedPoints1,
+      suggestedPoints2: fwdResp.data.suggestedPoints2,
+    };
   }
   const revResp = await client.models.ImageNeighbour.get({
     image1Id: secondaryId,
     image2Id: primaryId,
   });
   if (revResp?.data) {
-    return { image1Id: secondaryId, image2Id: primaryId, isForward: false };
+    return {
+      image1Id: secondaryId,
+      image2Id: primaryId,
+      isForward: false,
+      suggestedPoints1: revResp.data.suggestedPoints1,
+      suggestedPoints2: revResp.data.suggestedPoints2,
+    };
   }
   throw new Error(
     `ImageNeighbour record not found in either direction for ${primaryId} / ${secondaryId}`
@@ -85,6 +136,53 @@ export function HomographyWorkbenchWorker({
   const [isSaving, setIsSaving] = useState(false);
   const [isSkipping, setIsSkipping] = useState(false);
   const currentPointsRef = useRef<{ p1: Point[]; p2: Point[] }>({ p1: [], p2: [] });
+  // Points suggested by the lightglue container when its automatic attempt failed.
+  // Used as the initial state when the user hasn't already edited this pair in-session.
+  const [suggestedInitialPoints, setSuggestedInitialPoints] = useState<
+    { p1: Point[]; p2: Point[] } | undefined
+  >(undefined);
+  const suggestedTotalRef = useRef(0);
+  const [suggestionsLoaded, setSuggestionsLoaded] = useState(!!savedPoints);
+
+  useEffect(() => { 
+    setSuggestedInitialPoints(undefined);
+    suggestedTotalRef.current = 0;
+
+    const hasSavedPoints = !!savedPoints;
+    setSuggestionsLoaded(hasSavedPoints);
+    let cancelled = false;
+    (async () => {
+      try {
+        const dir = await resolveNeighbourDirection(
+          client,
+          pair.primaryImage.id,
+          pair.secondaryImage.id
+        );
+        if (cancelled) return;
+        const forPrimary = dir.isForward ? dir.suggestedPoints1 : dir.suggestedPoints2;
+        const forSecondary = dir.isForward ? dir.suggestedPoints2 : dir.suggestedPoints1;
+        const p1 = flatToPoints(forPrimary);
+        const p2 = flatToPoints(forSecondary);
+        // Only surface complete pairs — anything unmatched gets discarded.
+        const n = Math.min(p1.length, p2.length);
+        if (n > 0) {
+          suggestedTotalRef.current = n;
+          if (!hasSavedPoints) {
+            const trimmed = { p1: p1.slice(0, n), p2: p2.slice(0, n) };
+            setSuggestedInitialPoints(trimmed);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load suggested homography points', err);
+      } finally {
+        if (!cancelled && !hasSavedPoints) setSuggestionsLoaded(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, pair.primaryImage.id, pair.secondaryImage.id, pair.pairKey, savedPoints]);
 
   const handlePointsChange = useCallback(
     (points: { p1: Point[]; p2: Point[] }) => {
@@ -106,11 +204,16 @@ export function HomographyWorkbenchWorker({
           pair.secondaryImage.id
         );
 
+        const kept = suggestedTotalRef.current > 0
+          ? countSuggestedPointsKept(currentPointsRef.current)
+          : undefined;
+
         await (client.models.ImageNeighbour.update as any)({
           image1Id: dir.image1Id,
           image2Id: dir.image2Id,
           homography: dir.isForward ? flat : flatInverse,
           homographySource: 'manual',
+          ...(kept !== undefined ? { suggestedPointsKept: kept } : {}),
         });
 
         await (client as any).mutations.incrementQueueCount({ id: queueId });
@@ -189,6 +292,14 @@ export function HomographyWorkbenchWorker({
     onForward?.();
   }, [pair.pairKey, onSavePoints, onForward]);
 
+  if (!suggestionsLoaded) {
+    return (
+      <div className='d-flex justify-content-center align-items-center h-100'>
+        <div className='text-muted'>Loading suggested points...</div>
+      </div>
+    );
+  }
+
   return (
     <HomographyWorkbench
       images={[pair.primaryImage as any, pair.secondaryImage as any]}
@@ -197,7 +308,7 @@ export function HomographyWorkbenchWorker({
       isSaving={isSaving}
       isSkipping={isSkipping}
       annotationSetId={pair.annotationSetId}
-      initialPoints={savedPoints}
+      initialPoints={savedPoints ?? suggestedInitialPoints}
       onPointsChange={handlePointsChange}
       isSaved={isSaved}
       headerLeft={
