@@ -21,6 +21,8 @@ const TILE_SIZE = 256;
 const SOURCE_MARKER = 'qc-marker';
 const LAYER_MARKER_CROSSHAIR = 'qc-marker-crosshair';
 const LAYER_MARKER_LABEL = 'qc-marker-label';
+const SOURCE_OTHER_ANNOTATIONS = 'qc-other-annotations';
+const LAYER_OTHER_ANNOTATIONS = 'qc-other-annotations-circles';
 
 type CategoryOption = {
   id: string;
@@ -93,6 +95,19 @@ export default function QCAnnotationReview({
   const loadedTilesRef = useRef<Set<string>>(new Set());
   const blobUrlsRef = useRef<string[]>([]);
   const cancelledRef = useRef(false);
+  const mainMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const hoverPopupRef = useRef<maplibregl.Popup | null>(null);
+
+  // ── Marker position (draggable) ──
+  const [markerPosition, setMarkerPosition] = useState<{ x: number; y: number }>({
+    x: annotation.x,
+    y: annotation.y,
+  });
+
+  // ── Other annotations on this image ──
+  const [otherAnnotations, setOtherAnnotations] = useState<
+    Array<{ id: string; x: number; y: number; categoryId: string; reviewed: boolean }>
+  >([]);
 
   // ── Zoom state ──
   const baseZoomRef = useRef<number | null>(null);
@@ -144,7 +159,7 @@ export default function QCAnnotationReview({
 
   // ── False Positive logic ──
   const existingFpCategory = useMemo(
-    () => categories.find((c) => c.name.toLowerCase() === 'false positive'),
+    () => categories.find((c) => c.name.trim().toLowerCase() === 'false positive'),
     [categories]
   );
   const fpHotkey = existingFpCategory ? existingFpCategory.shortcutKey : '+';
@@ -160,25 +175,39 @@ export default function QCAnnotationReview({
     [categories, existingFpCategory]
   );
 
-  // ── Update marker label when reviewedCatId changes or on undo (visible + reviewed) ──
+  // ── Reset marker position when the annotation changes ──
   useEffect(() => {
-    if (!map || !visible) return;
-    const source = map.getSource(SOURCE_MARKER) as maplibregl.GeoJSONSource | undefined;
-    if (!source) return;
-    source.setData({
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: { label: displayCategory?.name ?? 'Unknown' },
-          geometry: {
-            type: 'Point',
-            coordinates: px2lngLat(annotation.x, annotation.y),
-          },
-        },
-      ],
+    setMarkerPosition({ x: annotation.x, y: annotation.y });
+  }, [annotation.id, annotation.x, annotation.y]);
+
+  // ── Fetch other annotations on the same image ──
+  useEffect(() => {
+    if (!annotation.imageId || !annotation.annotationSetId) return;
+    let mounted = true;
+    client.models.Annotation.annotationsByImageIdAndSetId(
+      { imageId: annotation.imageId, setId: { eq: annotation.annotationSetId } },
+      {
+        limit: 10000,
+        selectionSet: ['id', 'x', 'y', 'categoryId', 'reviewedBy'],
+      }
+    ).then(({ data }) => {
+      if (!mounted || !data) return;
+      setOtherAnnotations(
+        data
+          .filter((a) => a.id !== annotation.id)
+          .map((a) => ({
+            id: a.id,
+            x: a.x,
+            y: a.y,
+            categoryId: a.categoryId,
+            reviewed: !!a.reviewedBy,
+          }))
+      );
     });
-  }, [map, visible, displayCategoryId]);
+    return () => {
+      mounted = false;
+    };
+  }, [annotation.id, annotation.imageId, annotation.annotationSetId, client]);
 
   // ── Fetch image + sourceKey ──
   useEffect(() => {
@@ -187,19 +216,17 @@ export default function QCAnnotationReview({
 
     client.models.Image.get(
       { id: annotation.imageId },
-      { selectionSet: ['id', 'width', 'height'] as const }
+      { selectionSet: ['id', 'width', 'height'] }
     ).then(({ data }) => {
       if (!mounted || !data) return;
-      setImage(data as any);
+      setImage(data);
     });
 
     client.models.ImageFile.imagesByimageId({ imageId: annotation.imageId }).then(
       ({ data }) => {
         if (!mounted) return;
-        const jpeg = data?.find(
-          (f: any) => f.type === 'image/jpeg'
-        );
-        if (jpeg) setSourceKey((jpeg as any).key);
+        const jpeg = data?.find((f) => f.type === 'image/jpeg');
+        if (jpeg) setSourceKey(jpeg.key);
       }
     );
 
@@ -220,6 +247,52 @@ export default function QCAnnotationReview({
       scale ? [x * scale, -y * scale] : [0, 0],
     [scale]
   );
+
+  // ── Update main marker position + label on state changes ──
+  useEffect(() => {
+    if (!map || !scale) return;
+    const source = map.getSource(SOURCE_MARKER) as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+    source.setData({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { label: displayCategory?.name ?? 'Unknown' },
+          geometry: {
+            type: 'Point',
+            coordinates: px2lngLat(markerPosition.x, markerPosition.y),
+          },
+        },
+      ],
+    });
+    if (mainMarkerRef.current) {
+      mainMarkerRef.current.setLngLat(px2lngLat(markerPosition.x, markerPosition.y));
+    }
+  }, [map, scale, displayCategoryId, markerPosition, px2lngLat, displayCategory?.name]);
+
+  // ── Sync other-annotations source data ──
+  useEffect(() => {
+    if (!map || !scale) return;
+    const source = map.getSource(SOURCE_OTHER_ANNOTATIONS) as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    if (!source) return;
+    source.setData({
+      type: 'FeatureCollection',
+      features: otherAnnotations.map((a) => ({
+        type: 'Feature',
+        properties: {
+          label: categories.find((c) => c.id === a.categoryId)?.name ?? 'Unknown',
+          reviewed: a.reviewed,
+        },
+        geometry: {
+          type: 'Point',
+          coordinates: px2lngLat(a.x, a.y),
+        },
+      })),
+    });
+  }, [map, otherAnnotations, categories, px2lngLat, scale]);
 
   // ── Tile loading ──
   const updateVisibleTiles = useCallback(
@@ -377,23 +450,32 @@ export default function QCAnnotationReview({
         },
       });
 
-      // Generate a + crosshair image on a canvas
-      const size = 32;
+      // Generate a circle + inner crosshair image on a canvas
+      const size = 24;
       const canvas = document.createElement('canvas');
       canvas.width = size;
       canvas.height = size;
       const ctx = canvas.getContext('2d')!;
-      ctx.strokeStyle = '#ff0000ff';
-      ctx.lineWidth = 3;
-      // Vertical line
+      ctx.strokeStyle = '#00e5ff';
+      ctx.lineWidth = 2;
+      const center = size / 2;
+      const radius = size / 2 - 2;
+      const gap = 2;
+      const innerLen = radius - gap - 1;
+      // Circle outline
       ctx.beginPath();
-      ctx.moveTo(size / 2, 2);
-      ctx.lineTo(size / 2, size - 2);
+      ctx.arc(center, center, radius, 0, Math.PI * 2);
       ctx.stroke();
-      // Horizontal line
+      // Inner crosshair (short lines that don't touch the circle)
       ctx.beginPath();
-      ctx.moveTo(2, size / 2);
-      ctx.lineTo(size - 2, size / 2);
+      ctx.moveTo(center, center - innerLen);
+      ctx.lineTo(center, center - gap);
+      ctx.moveTo(center, center + gap);
+      ctx.lineTo(center, center + innerLen);
+      ctx.moveTo(center - innerLen, center);
+      ctx.lineTo(center - gap, center);
+      ctx.moveTo(center + gap, center);
+      ctx.lineTo(center + innerLen, center);
       ctx.stroke();
 
       m.addImage('crosshair', { width: size, height: size, data: ctx.getImageData(0, 0, size, size).data });
@@ -429,6 +511,97 @@ export default function QCAnnotationReview({
         },
       });
 
+      // Other annotations source + layer (read-only, hover tooltip).
+      m.addSource(SOURCE_OTHER_ANNOTATIONS, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      m.addLayer({
+        id: LAYER_OTHER_ANNOTATIONS,
+        type: 'circle',
+        source: SOURCE_OTHER_ANNOTATIONS,
+        paint: {
+          'circle-radius': 6,
+          'circle-color': [
+            'case',
+            ['get', 'reviewed'], '#00c853',
+            '#ff1744',
+          ],
+          'circle-stroke-color': '#000000',
+          'circle-stroke-width': 1,
+        },
+      });
+
+      const hoverPopup = new maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 8,
+      });
+      hoverPopupRef.current = hoverPopup;
+
+      m.on('mouseenter', LAYER_OTHER_ANNOTATIONS, (e) => {
+        m.getCanvas().style.cursor = 'pointer';
+        const feat = e.features?.[0];
+        if (!feat) return;
+        if (feat.geometry.type !== 'Point') return;
+        const coords = feat.geometry.coordinates.slice() as [number, number];
+        const label = String(feat.properties?.label ?? '');
+        const escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const reviewed = !!feat.properties?.reviewed;
+        const statusColor = reviewed ? '#00c853' : '#ff1744';
+        const statusText = reviewed ? 'Reviewed' : 'Unreviewed';
+        hoverPopup
+          .setLngLat(coords)
+          .setHTML(
+            `<div style="color:#000"><div>${escaped}</div>` +
+            `<div style="color:${statusColor};font-weight:600;font-size:11px">${statusText}</div></div>`
+          )
+          .addTo(m);
+      });
+      m.on('mouseleave', LAYER_OTHER_ANNOTATIONS, () => {
+        m.getCanvas().style.cursor = '';
+        hoverPopup.remove();
+      });
+
+      // Transparent draggable handle for moving the main crosshair.
+      const handleEl = document.createElement('div');
+      handleEl.style.cssText =
+        'width: 36px; height: 36px; background: transparent; cursor: move;';
+      const mainMarker = new maplibregl.Marker({
+        element: handleEl,
+        draggable: true,
+        anchor: 'center',
+      })
+        .setLngLat(px2lngLat(annotation.x, annotation.y))
+        .addTo(m);
+      mainMarkerRef.current = mainMarker;
+
+      mainMarker.on('drag', () => {
+        const ll = mainMarker.getLngLat();
+        const src = m.getSource(SOURCE_MARKER) as
+          | maplibregl.GeoJSONSource
+          | undefined;
+        if (!src) return;
+        src.setData({
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              properties: { label: displayCategory?.name ?? 'Unknown' },
+              geometry: { type: 'Point', coordinates: [ll.lng, ll.lat] },
+            },
+          ],
+        });
+      });
+      mainMarker.on('dragend', () => {
+        if (!scale) return;
+        const ll = mainMarker.getLngLat();
+        setMarkerPosition({
+          x: Math.round(ll.lng / scale),
+          y: Math.round(-ll.lat / scale),
+        });
+      });
+
       // Compute the zoom level that fits the whole image, then add the offset.
       const imageBounds = new maplibregl.LngLatBounds(
         px2lngLat(0, image.height),
@@ -454,6 +627,14 @@ export default function QCAnnotationReview({
 
     return () => {
       cancelledRef.current = true;
+      if (mainMarkerRef.current) {
+        mainMarkerRef.current.remove();
+        mainMarkerRef.current = null;
+      }
+      if (hoverPopupRef.current) {
+        hoverPopupRef.current.remove();
+        hoverPopupRef.current = null;
+      }
       m.remove();
       setMap(null);
       blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
@@ -508,9 +689,9 @@ export default function QCAnnotationReview({
     try {
       const { data } = await client.models.Annotation.get(
         { id: annotation.id },
-        { selectionSet: ['id', 'reviewedBy'] as const }
+        { selectionSet: ['id', 'reviewedBy'] }
       );
-      const reviewer = (data as any)?.reviewedBy;
+      const reviewer = data?.reviewedBy;
       // Allow re-review by same user (undo case), block if different user reviewed
       return !!reviewer && reviewer !== user.userId;
     } catch {
@@ -533,7 +714,9 @@ export default function QCAnnotationReview({
           id: annotation.id,
           reviewCatId: annotation.categoryId,
           reviewedBy: user.userId,
-        } as any),
+          x: markerPosition.x,
+          y: markerPosition.y,
+        }),
         incrementObservedCount(),
         ack?.(),
       ]).catch((err) => console.error('Failed to approve annotation', err));
@@ -544,7 +727,7 @@ export default function QCAnnotationReview({
     } else {
       startWaiting();
     }
-  }, [annotation, client, ack, next, user.userId, incrementObservedCount, isReviewedByOther]);
+  }, [annotation, client, ack, next, user.userId, incrementObservedCount, isReviewedByOther, markerPosition]);
 
   const handleRelabel = useCallback(
     (newCategoryId: string) => {
@@ -562,7 +745,9 @@ export default function QCAnnotationReview({
             id: annotation.id,
             reviewCatId: newCategoryId,
             reviewedBy: user.userId,
-          } as any),
+            x: markerPosition.x,
+            y: markerPosition.y,
+          }),
           incrementObservedCount(),
           ack?.(),
         ]).catch((err) => console.error('Failed to relabel annotation', err));
@@ -574,7 +759,7 @@ export default function QCAnnotationReview({
         startWaiting();
       }
     },
-    [annotation, client, ack, next, user.userId, incrementObservedCount, isReviewedByOther]
+    [annotation, client, ack, next, user.userId, incrementObservedCount, isReviewedByOther, markerPosition]
   );
 
   const startWaiting = useCallback(() => {
@@ -696,7 +881,9 @@ export default function QCAnnotationReview({
           id: annotation.id,
           reviewCatId: fpCatId,
           reviewedBy: user.userId,
-        } as any),
+          x: markerPosition.x,
+          y: markerPosition.y,
+        }),
         incrementObservedCount(),
         ack?.(),
       ]).catch((err) => console.error('Failed to mark as false positive', err));
@@ -710,7 +897,7 @@ export default function QCAnnotationReview({
   }, [
     existingFpCategory, projectId, annotationSetId, creatingFp,
     client, annotation, ack, next, user.userId, incrementObservedCount,
-    isReviewedByOther, setCategories, startWaiting,
+    isReviewedByOther, setCategories, startWaiting, markerPosition,
   ]);
 
   // ── Hotkey handling ──
@@ -799,7 +986,7 @@ export default function QCAnnotationReview({
         }}
       >
         <div className='d-flex align-items-center gap-3'>
-          <Badge bg='danger'>
+          <Badge bg='info'>
             {displayCategory?.name ?? 'Unknown'}
           </Badge>
           {reviewedCatId && (
@@ -930,7 +1117,7 @@ export default function QCAnnotationReview({
                   .sort((a, b) => a.name.localeCompare(b.name))
                   .map((cat) => (
                     <Button
-                      variant={cat.id === displayCategoryId ? 'danger' : 'primary'}
+                      variant={cat.id === displayCategoryId ? 'info' : 'primary'}
                       key={cat.id}
                       className='d-flex flex-row align-items-center justify-content-between gap-2'
                       onClick={() => {
