@@ -100,6 +100,7 @@ export default function ExceptionsModal({
         leftLabel='No'
         rightLabel='Yes'
         checked={permission.annotationAccess}
+        disabled={isSaving}
         onChange={(checked) => {
           if (permission.isAdmin) {
             alert('Admins have unrestricted access');
@@ -119,6 +120,7 @@ export default function ExceptionsModal({
         leftLabel='No'
         rightLabel='Yes'
         checked={permission.isAdmin}
+        disabled={isSaving}
         onChange={(checked) => {
           setPermissions(
             permissions.map((p) =>
@@ -158,12 +160,30 @@ export default function ExceptionsModal({
           });
         }
       } else {
-        await client.models.UserProjectMembership.create({
-          userId: user.id,
-          projectId: permission.projectId,
-          isAdmin: permission.isAdmin,
-          group: organization.id,
-        });
+        const { data: existingRows } =
+          await client.models.UserProjectMembership.userProjectMembershipsByUserId(
+            { userId: user.id },
+            { filter: { projectId: { eq: permission.projectId } } }
+          );
+
+        if (existingRows && existingRows.length > 0) {
+          if (existingRows.length > 1) {
+            console.warn(
+              `Found ${existingRows.length} memberships for user ${user.id} in project ${permission.projectId}`
+            );
+          }
+          await client.models.UserProjectMembership.update({
+            id: existingRows[0].id,
+            isAdmin: permission.isAdmin,
+          });
+        } else {
+          await client.models.UserProjectMembership.create({
+            userId: user.id,
+            projectId: permission.projectId,
+            isAdmin: permission.isAdmin,
+            group: organization.id,
+          });
+        }
       }
     }
 

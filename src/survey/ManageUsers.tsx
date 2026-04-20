@@ -133,12 +133,30 @@ export default function ManageUsers({
             });
           }
         } else if (permission.annotationAccess || permission.isAdmin) {
-          await client.models.UserProjectMembership.create({
-            userId: permission.userId,
-            projectId,
-            isAdmin: permission.isAdmin,
-            group: organizationId,
-          });
+          const { data: existingRows } =
+            await client.models.UserProjectMembership.userProjectMembershipsByUserId(
+              { userId: permission.userId },
+              { filter: { projectId: { eq: projectId } } }
+            );
+
+          if (existingRows && existingRows.length > 0) {
+            if (existingRows.length > 1) {
+              console.warn(
+                `Found ${existingRows.length} memberships for user ${permission.userId} in project ${projectId}`
+              );
+            }
+            await client.models.UserProjectMembership.update({
+              id: existingRows[0].id,
+              isAdmin: permission.isAdmin,
+            });
+          } else {
+            await client.models.UserProjectMembership.create({
+              userId: permission.userId,
+              projectId,
+              isAdmin: permission.isAdmin,
+              group: organizationId,
+            });
+          }
         }
       }
 

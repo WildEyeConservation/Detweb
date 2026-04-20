@@ -79,7 +79,7 @@ export default function Users({
         alert(errors[0].message);
         return;
       }
-      refetch();
+      await refetch();
     } catch (err: any) {
       alert(err.message ?? 'Failed to update admin status');
     } finally {

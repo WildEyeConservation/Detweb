@@ -36,7 +36,6 @@ export default function Jobs() {
   const {
     myMembershipHook: userProjectMembershipHook,
     myOrganizationHook,
-    user,
     getSqsClient,
   } = useContext(UserContext)!;
   const { client } = useContext(GlobalContext)!;
@@ -320,18 +319,18 @@ export default function Jobs() {
       return;
     }
 
-    const currentMembership = userProjectMembershipHook.data.filter(
+    const currentMembership = userProjectMembershipHook.data.find(
       (membership) => membership.projectId === job.projectId
-    )[0];
+    );
 
-    if (currentMembership) {
-      userProjectMembershipHook.update({ id: currentMembership.id, queueId: job.queueId });
-      navigate(`/surveys/${job.projectId}/annotate`);
-    } else {
-      const jobProject = displayProjects.find(p => p.id === job.projectId);
-      userProjectMembershipHook.create({ userId: user.userId, projectId: job.projectId, queueId: job.queueId, group: jobProject?.organization.id });
-      navigate(`/surveys/${job.projectId}/annotate`);
+    if (!currentMembership) {
+      console.warn(`handleTakeJob: no membership found for project ${job.projectId}`);
+      setTakingJob(false);
+      return;
     }
+
+    userProjectMembershipHook.update({ id: currentMembership.id, queueId: job.queueId });
+    navigate(`/surveys/${job.projectId}/annotate`);
 
     setTakingJob(false);
   }

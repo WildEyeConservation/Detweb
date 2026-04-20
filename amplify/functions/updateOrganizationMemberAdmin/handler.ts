@@ -31,6 +31,18 @@ const listUserProjectMembershipsQuery = /* GraphQL */ `
   }
 `;
 
+const findMembershipForProjectQuery = /* GraphQL */ `
+  query FindMembershipForProject($userId: String!, $projectId: ID!) {
+    userProjectMembershipsByUserId(
+      userId: $userId
+      filter: { projectId: { eq: $projectId } }
+      limit: 10
+    ) {
+      items { id isAdmin }
+    }
+  }
+`;
+
 const updateUserProjectMembershipMutation = /* GraphQL */ `
   mutation UpdateUserProjectMembership($input: UpdateUserProjectMembershipInput!) {
     updateUserProjectMembership(input: $input) {
@@ -159,36 +171,69 @@ export const handler: UpdateOrganizationMemberAdminHandler = async (event) => {
     const userOrgMemberships = userMemberships.filter((m) => orgProjectIds.has(m.projectId));
 
     if (isAdmin) {
-      // Promoting: ensure admin membership exists for all org projects
-      const memberProjectIds = new Set(userOrgMemberships.map((m) => m.projectId));
-      for (const project of orgProjects) {
-        const existing = userOrgMemberships.find((m) => m.projectId === project.id);
-        if (existing) {
-          if (!existing.isAdmin) {
-            await executeGraphql(updateUserProjectMembershipMutation, {
-              input: { id: existing.id, isAdmin: true },
+      // Promoting: ensure admin membership exists for all org projects.
+      // Fan out per-project. Only pay for a fresh read when the upfront snapshot
+      // says "missing" — that's the only path that can produce a duplicate.
+      await Promise.all(
+        orgProjects.map(async (project) => {
+          const snapshot = userOrgMemberships.find(
+            (m) => m.projectId === project.id
+          );
+
+          if (snapshot) {
+            if (!snapshot.isAdmin) {
+              await executeGraphql(updateUserProjectMembershipMutation, {
+                input: { id: snapshot.id, isAdmin: true },
+              });
+            }
+            return;
+          }
+
+          // Snapshot says missing — re-read just before create to catch a
+          // concurrent insert from another flow and update it instead.
+          const freshResult = await executeGraphql<{
+            userProjectMembershipsByUserId: {
+              items: { id: string; isAdmin: boolean | null }[];
+            };
+          }>(findMembershipForProjectQuery, { userId, projectId: project.id });
+          const freshItems = freshResult.userProjectMembershipsByUserId.items;
+
+          if (freshItems.length > 1) {
+            console.warn(
+              `Found ${freshItems.length} memberships for user ${userId} in project ${project.id}; updating the first and leaving duplicates for manual cleanup.`
+            );
+          }
+
+          const existing = freshItems[0];
+          if (existing) {
+            if (!existing.isAdmin) {
+              await executeGraphql(updateUserProjectMembershipMutation, {
+                input: { id: existing.id, isAdmin: true },
+              });
+            }
+          } else {
+            await executeGraphql(createUserProjectMembershipMutation, {
+              input: {
+                userId,
+                projectId: project.id,
+                isAdmin: true,
+                group: project.group,
+              },
             });
           }
-        } else {
-          await executeGraphql(createUserProjectMembershipMutation, {
-            input: {
-              userId,
-              projectId: project.id,
-              isAdmin: true,
-              group: project.group,
-            },
-          });
-        }
-      }
+        })
+      );
     } else {
-      // Demoting: set isAdmin=false on all user's org project memberships
-      for (const membership of userOrgMemberships) {
-        if (membership.isAdmin) {
-          await executeGraphql(updateUserProjectMembershipMutation, {
-            input: { id: membership.id, isAdmin: false },
-          });
-        }
-      }
+      // Demoting: set isAdmin=false on all the user's org project memberships.
+      await Promise.all(
+        userOrgMemberships
+          .filter((m) => m.isAdmin)
+          .map((membership) =>
+            executeGraphql(updateUserProjectMembershipMutation, {
+              input: { id: membership.id, isAdmin: false },
+            })
+          )
+      );
     }
 
     console.log(`User ${userId} admin status updated to ${isAdmin} in org ${organizationId}`);
