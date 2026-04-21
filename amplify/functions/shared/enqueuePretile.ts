@@ -44,12 +44,13 @@ export type EnqueuePretileInput = {
 
 export type EnqueuePretileResult = {
   launchId: string;
-  manifestKey: string;
+  manifestKey: string | null;
   totalImages: number;
   enqueuedCount: number;
   refreshedCount: number;
   skippedFreshCount: number;
   skippedNoSourceCount: number;
+  noWorkNeeded: boolean;
 };
 
 const getProjectQuery = /* GraphQL */ `
@@ -206,6 +207,23 @@ export async function enqueuePretile(
     ...needsTiling.map((r) => r.id),
     ...needsRefresh.map((r) => r.id),
   ];
+
+  // Short-circuit if every image is already fresh
+  if (manifestImageIds.length === 0) {
+    const result: EnqueuePretileResult = {
+      launchId,
+      manifestKey: null,
+      totalImages: dedupedIds.length,
+      enqueuedCount: 0,
+      refreshedCount: 0,
+      skippedFreshCount: skippedFresh.length,
+      skippedNoSourceCount: skippedNoSource.length,
+      noWorkNeeded: true,
+    };
+    console.log(JSON.stringify({ msg: 'enqueue_pretile_no_work', ...result }));
+    return result;
+  }
+
   const manifestCreatedAt = new Date().toISOString();
   const manifest: PretileManifest = {
     launchId,
@@ -285,6 +303,7 @@ export async function enqueuePretile(
     refreshedCount: needsRefresh.length,
     skippedFreshCount: skippedFresh.length,
     skippedNoSourceCount: skippedNoSource.length,
+    noWorkNeeded: false,
   };
 
   console.log(JSON.stringify({ msg: 'enqueue_pretile_complete', ...result }));

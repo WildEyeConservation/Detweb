@@ -262,24 +262,31 @@ async function handleLaunch(payload: LaunchHomographyPayload, organizationId: st
       manifestItems.flatMap((item) => [item.primaryImage.id, item.secondaryImage.id])
     )
   );
-  if (!(env as any).PRETILE_QUEUE_URL) {
+  if (!env.PRETILE_QUEUE_URL) {
     throw new Error('PRETILE_QUEUE_URL not set');
   }
-  if (!(env as any).REFRESH_TILES_QUEUE_URL) {
+  if (!env.REFRESH_TILES_QUEUE_URL) {
     throw new Error('REFRESH_TILES_QUEUE_URL not set');
   }
-  await enqueuePretile({
+  const pretileResult = await enqueuePretile({
     projectId,
     annotationSetId,
     workflow: 'homography',
     imageIds,
     executeGraphql,
     outputsBucket: bucketName,
-    queueUrl: (env as any).PRETILE_QUEUE_URL,
-    refreshQueueUrl: (env as any).REFRESH_TILES_QUEUE_URL,
+    queueUrl: env.PRETILE_QUEUE_URL,
+    refreshQueueUrl: env.REFRESH_TILES_QUEUE_URL,
     sqsClient,
     s3Client,
   });
+
+  // When every image was already fresh, no manifest was written and the
+  // reconciler will never flip this project back to 'active'. Flip it here so
+  // the UI isn't stuck in 'launching' for a project that had no tiling work.
+  if (pretileResult.noWorkNeeded) {
+    await setProjectStatus(projectId, 'active');
+  }
 
   console.log('Homography job launched', { queueId, pairCount: pairs.length });
   return { queueId, pairCount: pairs.length };
