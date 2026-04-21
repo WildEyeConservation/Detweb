@@ -284,7 +284,9 @@ export default function Surveys() {
       project?.organizationId || ''
     );
 
-    (client as any).mutations.deleteProjectInFull({ projectId: projectId }, { retry: false });
+    client.mutations
+      .deleteProjectInFull({ projectId: projectId }, { retry: false })
+      .catch(() => {});
   }
 
   async function deleteAnnotationSet(
@@ -321,6 +323,7 @@ export default function Surveys() {
   }
 
   async function handleCancelJob() {
+    const previousStatus = selectedProject!.status;
     updateProjectInCache(selectedProject!.id, (prev) =>
       prev ? { ...prev, status: 'updating' } : prev
     );
@@ -362,6 +365,9 @@ export default function Surveys() {
         selectedProject!.organizationId
       );
     } catch (error) {
+      updateProjectInCache(selectedProject!.id, (prev) =>
+        prev ? { ...prev, status: previousStatus } : prev
+      );
       alert('An unknown error occurred. Please try again later.');
       console.error(error);
     } finally {

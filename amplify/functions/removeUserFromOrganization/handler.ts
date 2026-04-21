@@ -29,7 +29,17 @@ const listUserProjectMembershipsQuery = /* GraphQL */ `
 
 const deleteUserProjectMembershipMutation = /* GraphQL */ `
   mutation DeleteUserProjectMembership($input: DeleteUserProjectMembershipInput!) {
-    deleteUserProjectMembership(input: $input) { id group }
+    deleteUserProjectMembership(input: $input) {
+      id
+      userId
+      projectId
+      isAdmin
+      queueId
+      backupQueueId
+      group
+      createdAt
+      updatedAt
+    }
   }
 `;
 
