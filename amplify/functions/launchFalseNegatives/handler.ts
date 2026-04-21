@@ -701,31 +701,36 @@ async function handleLaunch(payload: LaunchFalseNegativesPayload, organizationId
   const pretileImageIds = Array.from(
     new Set(selectedTiles.map((t) => t.imageId))
   );
-  if (!(env as any).PRETILE_QUEUE_URL) {
+  if (!env.PRETILE_QUEUE_URL) {
     throw new Error('PRETILE_QUEUE_URL not set');
   }
-  if (!(env as any).REFRESH_TILES_QUEUE_URL) {
+  if (!env.REFRESH_TILES_QUEUE_URL) {
     throw new Error('REFRESH_TILES_QUEUE_URL not set');
   }
   const pretileBucketName = env.OUTPUTS_BUCKET_NAME;
   if (!pretileBucketName) {
     throw new Error('OUTPUTS_BUCKET_NAME not set');
   }
-  await enqueuePretile({
+  const pretileResult = await enqueuePretile({
     projectId,
     annotationSetId,
     workflow: 'false-negatives',
     imageIds: pretileImageIds,
     executeGraphql,
     outputsBucket: pretileBucketName,
-    queueUrl: (env as any).PRETILE_QUEUE_URL,
-    refreshQueueUrl: (env as any).REFRESH_TILES_QUEUE_URL,
+    queueUrl: env.PRETILE_QUEUE_URL,
+    refreshQueueUrl: env.REFRESH_TILES_QUEUE_URL,
     sqsClient,
     s3Client,
   });
 
   // Project stays in `launching` until reconcilePretileLaunches confirms
-  // every image in the pretile manifest has `Image.tiledAt` stamped.
+  // every image in the pretile manifest has `Image.tiledAt` stamped. When
+  // every image was already fresh, enqueuePretile wrote no manifest — flip
+  // status here so the UI isn't stuck in 'launching'.
+  if (pretileResult.noWorkNeeded) {
+    await setProjectStatus(projectId, 'active');
+  }
 
   await withTiming('refreshProjectMemberships', () =>
     executeGraphql<{ updateProjectMemberships?: string | null }>(
@@ -1002,10 +1007,10 @@ async function handleDistributedFalseNegativesLaunch(payload: LaunchFalseNegativ
     new Set(filteredLocations.map((loc) => loc.imageId))
   );
   if (pretileImageIds.length > 0) {
-    if (!(env as any).PRETILE_QUEUE_URL) {
+    if (!env.PRETILE_QUEUE_URL) {
       throw new Error('PRETILE_QUEUE_URL not set');
     }
-    if (!(env as any).REFRESH_TILES_QUEUE_URL) {
+    if (!env.REFRESH_TILES_QUEUE_URL) {
       throw new Error('REFRESH_TILES_QUEUE_URL not set');
     }
     const pretileBucketName = env.OUTPUTS_BUCKET_NAME;
@@ -1019,8 +1024,8 @@ async function handleDistributedFalseNegativesLaunch(payload: LaunchFalseNegativ
       imageIds: pretileImageIds,
       executeGraphql,
       outputsBucket: pretileBucketName,
-      queueUrl: (env as any).PRETILE_QUEUE_URL,
-      refreshQueueUrl: (env as any).REFRESH_TILES_QUEUE_URL,
+      queueUrl: env.PRETILE_QUEUE_URL,
+      refreshQueueUrl: env.REFRESH_TILES_QUEUE_URL,
       sqsClient,
       s3Client,
     });
@@ -1460,7 +1465,7 @@ async function fetchAnnotationPoints(annotationSetId: string) {
         limit: 10000,
         nextToken,
       },
-    } as any)) as GraphQLResult<{
+    })) as GraphQLResult<{
       annotationsByAnnotationSetId?: {
         items?: Array<{
           imageId?: string | null;
@@ -1508,7 +1513,7 @@ async function fetchImageTimestamps(projectId: string) {
         limit: 10000,
         nextToken,
       },
-    } as any)) as GraphQLResult<{
+    })) as GraphQLResult<{
       imagesByProjectId?: {
         items?: Array<{ id?: string | null; timestamp?: number | null }>;
         nextToken?: string | null;

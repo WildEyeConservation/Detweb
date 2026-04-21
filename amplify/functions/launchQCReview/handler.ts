@@ -364,24 +364,30 @@ async function handleLaunch(payload: LaunchQCReviewPayload, organizationId: stri
   // 8. Pre-tile every image in this launch. Project stays `launching` until
   // the reconciler clears the manifest.
   const imageIds = Array.from(new Set(sampled.map((a) => a.imageId)));
-  if (!(env as any).PRETILE_QUEUE_URL) {
+  if (!env.PRETILE_QUEUE_URL) {
     throw new Error('PRETILE_QUEUE_URL not set');
   }
-  if (!(env as any).REFRESH_TILES_QUEUE_URL) {
+  if (!env.REFRESH_TILES_QUEUE_URL) {
     throw new Error('REFRESH_TILES_QUEUE_URL not set');
   }
-  await enqueuePretile({
+  const pretileResult = await enqueuePretile({
     projectId,
     annotationSetId,
     workflow: 'qc-review',
     imageIds,
     executeGraphql,
     outputsBucket: bucketName,
-    queueUrl: (env as any).PRETILE_QUEUE_URL,
-    refreshQueueUrl: (env as any).REFRESH_TILES_QUEUE_URL,
+    queueUrl: env.PRETILE_QUEUE_URL,
+    refreshQueueUrl: env.REFRESH_TILES_QUEUE_URL,
     sqsClient,
     s3Client,
   });
+
+  // When every image was already fresh, enqueuePretile wrote no manifest, so
+  // the reconciler will never flip this project to 'active'. Do it here.
+  if (pretileResult.noWorkNeeded) {
+    await setProjectStatus(projectId, 'active');
+  }
 
   console.log('QC review job launched', {
     queueId: queue.id,
