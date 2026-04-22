@@ -73,6 +73,35 @@ function App({ signOut = () => { }, user }: AppProps) {
     e.preventDefault();
     e.returnValue = '';
   };
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      fetchAuthSession({ forceRefresh: true }).catch((err) => {
+        console.error('Token refresh on tab focus failed', err);
+      });
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
+  useEffect(() => {
+    const refreshWithRetry = async (attempt = 0): Promise<void> => {
+      try {
+        await fetchAuthSession({ forceRefresh: true });
+      } catch (err) {
+        if (attempt < 3) {
+          const backoffMs = 2000 * 2 ** attempt;
+          await new Promise((r) => setTimeout(r, backoffMs));
+          return refreshWithRetry(attempt + 1);
+        }
+        console.error('Periodic token refresh failed after retries', err);
+      }
+    };
+    const intervalMs = 45 * 60 * 1000;
+    const id = setInterval(refreshWithRetry, intervalMs);
+    return () => clearInterval(id);
+  }, []);
   useEffect(() => {
     fetchAuthSession().then((sess) => {
       setSession(sess);

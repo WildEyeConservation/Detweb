@@ -98,6 +98,15 @@ const backend = defineBackend({
   extendTileLifecycles,
 });
 
+const userPoolClient = backend.auth.resources.cfnResources.cfnUserPoolClient;
+userPoolClient.accessTokenValidity = 24 * 60;
+userPoolClient.idTokenValidity = 24 * 60;
+userPoolClient.tokenValidityUnits = {
+  accessToken: 'minutes',
+  idToken: 'minutes',
+  refreshToken: 'days',
+};
+
 const observationTable = backend.data.resources.tables['Observation'];
 const annotationTable = backend.data.resources.tables['Annotation'];
 // Allow the updateUserStats Lambda to read Observation DynamoDB streams.

@@ -1464,19 +1464,24 @@ export default function UploadManager() {
     let pingInterval: NodeJS.Timeout | null = null;
 
     if (projectId && !isComplete) {
-      // Function to perform an empty update
       const pingProject = async () => {
         try {
-          await client.models.Project.update({
+          const { data, errors } = await client.models.Project.update({
             id: projectId,
+            status: 'uploading',
           });
-          console.log(`Pinged project ${projectId}`);
+          if (errors?.length) {
+            console.error(`Ping failed for project ${projectId}:`, errors);
+          } else if (!data) {
+            console.error(`Ping returned no data for project ${projectId}`);
+          } else {
+            console.log(`Pinged project ${projectId}`);
+          }
         } catch (error) {
           console.error('Error pinging project:', error);
         }
       };
 
-      // Set interval to ping every minute
       pingInterval = setInterval(pingProject, 60000);
     }
 
@@ -1484,6 +1489,46 @@ export default function UploadManager() {
     return () => {
       if (pingInterval) {
         clearInterval(pingInterval);
+      }
+    };
+  }, [projectId, isComplete]);
+
+  // Hold a screen wake lock while an upload is in flight so the OS doesn't sleep the machine and the browser doesn't freeze/throttle the tab
+  useEffect(() => {
+    if (!projectId || isComplete) return;
+    if (!('wakeLock' in navigator)) return;
+
+    let sentinel: WakeLockSentinel | null = null;
+    let cancelled = false;
+
+    const acquire = async () => {
+      try {
+        const lock = await navigator.wakeLock.request('screen');
+        if (cancelled) {
+          lock.release().catch(() => {});
+          return;
+        }
+        sentinel = lock;
+      } catch (err) {
+        console.warn('Wake lock request failed', err);
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !sentinel) {
+        acquire();
+      }
+    };
+
+    acquire();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      if (sentinel) {
+        sentinel.release().catch(() => {});
+        sentinel = null;
       }
     };
   }, [projectId, isComplete]);

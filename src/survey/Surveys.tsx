@@ -209,6 +209,9 @@ export default function Surveys() {
         );
         return data;
       },
+      // Poll every 60s while a project is uploading so other viewers see the uploader's heartbeat
+      refetchInterval: (query: { state: { data?: Schema['Project']['type'] | null } }) =>
+        query.state.data?.status === 'uploading' ? 60000 : false,
     })),
   });
 
