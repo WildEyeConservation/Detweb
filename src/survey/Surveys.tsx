@@ -1,4 +1,5 @@
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { UserContext, GlobalContext, UploadContext } from '../Context.tsx';
 import { Schema } from '../amplify/client-schema.ts';
 import { Card, Button, Form } from 'react-bootstrap';
@@ -18,6 +19,27 @@ import { Badge } from 'react-bootstrap';
 import localforage from 'localforage';
 import ProjectProgress from '../user/ProjectProgress.tsx';
 import { logAdminAction } from '../utils/adminActionLogger.ts';
+
+const PROJECT_SELECTION_SET = [
+  'id',
+  'name',
+  'organizationId',
+  'organization.name',
+  'status',
+  'updatedAt',
+  'createdAt',
+  'tiledLocationSetId',
+  'annotationSets.id',
+  'annotationSets.name',
+  'annotationSets.register',
+  'queues.id',
+  'queues.url',
+  'queues.name',
+  'queues.tag',
+  'imageSets.imageCount',
+] as const;
+
+const projectQueryKey = (id: string) => ['surveys-project-details', id] as const;
 
 const fileStoreUploaded = localforage.createInstance({
   name: 'fileStoreUploaded',
@@ -40,8 +62,8 @@ export default function Surveys() {
   } = useContext(UserContext)!;
   const { task, setTask } = useContext(UploadContext)!;
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState(0);
-  const [projects, setProjects] = useState<Schema['Project']['type'][]>([]);
   const [selectedProject, setSelectedProject] = useState<
     Schema['Project']['type'] | null
   >(null);
@@ -109,15 +131,6 @@ export default function Surveys() {
 
   const [isMobile, setIsMobile] = useState(getIsMobile);
 
-  const organizationOptions = Array.from(
-    new Map(
-      projects.map((project) => [
-        project.organizationId,
-        project.organization.name,
-      ])
-    ).entries()
-  ).map(([id, name]) => ({ id, name }));
-
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -161,81 +174,101 @@ export default function Surveys() {
     }
   }, [search]);
 
+  const adminProjectIds = useMemo(
+    () =>
+      myProjectsHook.data
+        ?.filter((project) => project.isAdmin)
+        .map((project) => project.projectId) ?? [],
+    [myProjectsHook.data]
+  );
+
+  // Membership records are updated by backend Lambdas (updateProjectMemberships)
+  // whenever server-side project state changes (status, queues, etc.). When those
+  // change, invalidate cached project details so the UI picks up the fresh state —
+  // matching the original "refetch on every membership tick" behaviour.
+  const membershipSignature = useMemo(
+    () =>
+      myProjectsHook.data
+        ?.map((m) => `${m.projectId}:${m.updatedAt}`)
+        .sort()
+        .join('|') ?? '',
+    [myProjectsHook.data]
+  );
   useEffect(() => {
-    async function getProjects() {
-      const myAdminProjects = myProjectsHook.data?.filter(
-        (project) => project.isAdmin
+    if (!membershipSignature) return;
+    queryClient.invalidateQueries({ queryKey: ['surveys-project-details'] });
+  }, [membershipSignature, queryClient]);
+
+  const projectQueries = useQueries({
+    queries: adminProjectIds.map((id) => ({
+      queryKey: projectQueryKey(id),
+      queryFn: async () => {
+        const { data } = await client.models.Project.get(
+          { id },
+          { selectionSet: PROJECT_SELECTION_SET as unknown as string[] }
+        );
+        return data;
+      },
+    })),
+  });
+
+  const projects = useMemo(
+    () =>
+      projectQueries
+        .map((q) => q.data)
+        .filter((p): p is Schema['Project']['type'] => p != null),
+    [projectQueries]
+  );
+
+  const organizationOptions = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          projects.map((project) => [
+            project.organizationId,
+            project.organization.name,
+          ])
+        ).entries()
+      ).map(([id, name]) => ({ id, name })),
+    [projects]
+  );
+
+  // Helper to optimistically update a single project in the React Query cache.
+  const updateProjectInCache = (
+    projectId: string,
+    updater: (
+      prev: Schema['Project']['type'] | undefined
+    ) => Schema['Project']['type'] | undefined
+  ) => {
+    queryClient.setQueryData(projectQueryKey(projectId), updater);
+  };
+
+  const projectIdsKey = projects.map((p) => p.id).sort().join(',');
+  useEffect(() => {
+    if (!projectIdsKey) return;
+    let cancelled = false;
+    (async () => {
+      const ids = projectIdsKey.split(',');
+      const entries = await Promise.all(
+        ids.map(async (id) => {
+          const uploaded = Boolean(await fileStoreUploaded.getItem(id));
+          return [id, uploaded] as const;
+        })
       );
-
-      Promise.all(
-        myAdminProjects?.map(
-          async (project) =>
-            (
-              await client.models.Project.get(
-                { id: project.projectId },
-                {
-                  selectionSet: [
-                    'name',
-                    'id',
-                    'organizationId',
-                    'organization.name',
-                    'annotationSets.id',
-                    'annotationSets.name',
-                    'annotationSets.register',
-                    'locationSets.id',
-                    'locationSets.name',
-                    'annotationSets.categories.id',
-                    'annotationSets.categories.name',
-                    'annotationSets.categories.shortcutKey',
-                    'annotationSets.categories.color',
-                    'imageSets.id',
-                    'imageSets.name',
-                    'queues.id',
-                    'queues.url',
-                    'queues.name',
-                    'queues.tag',
-                    'status',
-                    'updatedAt',
-                    'createdAt',
-                    'imageSets.imageCount',
-                    'tiledLocationSetId',
-                  ],
-                }
-              )
-            ).data
-        )
-      ).then(async (projects) => {
-        const validProjects = projects.filter((project) => project !== null);
-        setProjects(validProjects);
-
-        const hasUploadedFiles = await Promise.all(
-          validProjects.map(async (project) => {
-            const hasUploadedFiles = Boolean(
-              await fileStoreUploaded.getItem(project.id)
-            );
-            return { [project.id]: hasUploadedFiles };
-          })
-        );
-        setHasUploadedFiles(
-          hasUploadedFiles.reduce((acc, curr) => ({ ...acc, ...curr }), {})
-        );
-      });
-    }
-
-    getProjects();
-  }, [myProjectsHook.data]);
+      if (cancelled) return;
+      setHasUploadedFiles(Object.fromEntries(entries));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectIdsKey]);
 
   async function deleteProject(projectId: string) {
     const project = projects.find((p) => p.id === projectId);
     const projectName = project?.name || 'Unknown';
 
-    setProjects((projects) =>
-      projects.map((project) => {
-        if (project.id === projectId) {
-          return { ...project, status: 'deleting' };
-        }
-        return project;
-      })
+    updateProjectInCache(projectId, (prev) =>
+      prev ? { ...prev, status: 'deleting' } : prev
     );
 
     await client.models.Project.update({
@@ -251,7 +284,9 @@ export default function Surveys() {
       project?.organizationId || ''
     );
 
-    (client as any).mutations.deleteProjectInFull({ projectId: projectId }, { retry: false });
+    client.mutations
+      .deleteProjectInFull({ projectId: projectId }, { retry: false })
+      .catch(() => {});
   }
 
   async function deleteAnnotationSet(
@@ -275,29 +310,22 @@ export default function Surveys() {
       project?.organizationId || ''
     );
 
-    setProjects(
-      projects.map((project) => {
-        if (project.id === projectId) {
-          return {
-            ...project,
-            annotationSets: project.annotationSets.filter(
+    updateProjectInCache(projectId, (prev) =>
+      prev
+        ? {
+            ...prev,
+            annotationSets: prev.annotationSets.filter(
               (set: { id: string }) => set.id !== annotationSetId
             ),
-          };
-        }
-        return project;
-      })
+          }
+        : prev
     );
   }
 
   async function handleCancelJob() {
-    setProjects(
-      projects.map((project) => {
-        if (project.id === selectedProject!.id) {
-          return { ...project, status: 'updating' };
-        }
-        return project;
-      })
+    const previousStatus = selectedProject!.status;
+    updateProjectInCache(selectedProject!.id, (prev) =>
+      prev ? { ...prev, status: 'updating' } : prev
     );
 
     try {
@@ -337,6 +365,9 @@ export default function Surveys() {
         selectedProject!.organizationId
       );
     } catch (error) {
+      updateProjectInCache(selectedProject!.id, (prev) =>
+        prev ? { ...prev, status: previousStatus } : prev
+      );
       alert('An unknown error occurred. Please try again later.');
       console.error(error);
     } finally {
@@ -1115,18 +1146,16 @@ export default function Surveys() {
           categories={selectedProject.categories}
           annotationSet={selectedAnnotationSet}
           setAnnotationSet={(annotationSet) => {
-            setProjects(
-              projects.map((project) => {
-                if (project.id === selectedProject?.id) {
-                  return {
-                    ...project,
-                    annotationSets: project.annotationSets.map((set: { id: string }) =>
+            if (!selectedProject) return;
+            updateProjectInCache(selectedProject.id, (prev) =>
+              prev
+                ? {
+                    ...prev,
+                    annotationSets: prev.annotationSets.map((set: { id: string }) =>
                       set.id === annotationSet.id ? annotationSet : set
                     ),
-                  };
-                }
-                return project;
-              })
+                  }
+                : prev
             );
           }}
           setEditSurveyTab={setTab}
@@ -1142,21 +1171,20 @@ export default function Surveys() {
           project={selectedProject}
           allProjects={projects}
           addAnnotationSet={(annotationSet) => {
-            setProjects(
-              projects.map((project) =>
-                project.id === selectedProject?.id
-                  ? {
-                    ...project,
+            if (!selectedProject) return;
+            updateProjectInCache(selectedProject.id, (prev) =>
+              prev
+                ? {
+                    ...prev,
                     annotationSets: [
-                      ...project.annotationSets,
+                      ...prev.annotationSets,
                       {
                         id: annotationSet.id,
                         name: annotationSet.name,
-                      },
+                      } as (typeof prev.annotationSets)[number],
                     ],
                   }
-                  : project
-              )
+                : prev
             );
             // Log asynchronously without blocking
             logAdminAction(
@@ -1175,10 +1203,8 @@ export default function Surveys() {
           annotationSet={selectedAnnotationSet}
           project={selectedProject}
           onOptimisticStatus={(projectId, status) => {
-            setProjects((prevProjects) =>
-              prevProjects.map((project) =>
-                project.id === projectId ? { ...project, status } : project
-              )
+            updateProjectInCache(projectId, (prev) =>
+              prev ? { ...prev, status } : prev
             );
             setSelectedProject((prev) =>
               prev && prev.id === projectId ? { ...prev, status } : prev

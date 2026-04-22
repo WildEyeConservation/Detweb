@@ -191,7 +191,11 @@ export function User({
         filter: { userId: { eq: user!.username } },
         nextToken,
       }),
-    subscriptionFilter
+    subscriptionFilter,
+    {
+      compositeKey: (m) =>
+        m.userId && m.projectId ? `${m.userId}:${m.projectId}` : m.id,
+    }
   );
 
   const allOrganizationHook = useOptimisticUpdates<

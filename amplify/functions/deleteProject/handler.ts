@@ -41,9 +41,20 @@ const deleteProject = /* GraphQL */ `
     deleteProject(input: $input) { id group }
   }
 `;
+
 const deleteUserProjectMembership = /* GraphQL */ `
   mutation DeleteUserProjectMembership($input: DeleteUserProjectMembershipInput!) {
-    deleteUserProjectMembership(input: $input) { id group }
+    deleteUserProjectMembership(input: $input) {
+      id
+      userId
+      projectId
+      isAdmin
+      queueId
+      backupQueueId
+      group
+      createdAt
+      updatedAt
+    }
   }
 `;
 const deleteCategory = /* GraphQL */ `
@@ -162,10 +173,7 @@ async function fetchAllPages<T, K extends string>(
   return allItems;
 }
 
-export const handler: DeleteProjectInFullHandler = async (
-  event,
-  context
-) => {
+export const handler: DeleteProjectInFullHandler = async (event) => {
   try {
     const projectId = event.arguments.projectId;
 
@@ -195,6 +203,34 @@ export const handler: DeleteProjectInFullHandler = async (
         },
       },
     });
+
+    // Delete user memberships immediately after the project record so other
+    // clients' project lists update right away, instead of waiting for the
+    // rest of the cascading cleanup (which can take minutes).
+    const userMemberships = await fetchAllPages<
+      UserProjectMembership,
+      'listUserProjectMemberships'
+    >(
+      (nextToken) =>
+        client.graphql({
+          query: listUserProjectMemberships,
+          variables: { filter: { projectId: { eq: projectId } }, nextToken },
+        }) as Promise<
+          GraphQLResult<{
+            listUserProjectMemberships: PagedList<UserProjectMembership>;
+          }>
+        >,
+      'listUserProjectMemberships'
+    );
+
+    await Promise.all(
+      userMemberships.map(async (membership) => {
+        await client.graphql({
+          query: deleteUserProjectMembership,
+          variables: { input: { id: membership.id } },
+        });
+      })
+    );
 
     // get all projects for the same organization
     const allProjectsInOrganization = await fetchAllPages<
@@ -270,32 +306,6 @@ export const handler: DeleteProjectInFullHandler = async (
         `Not deleting S3 data for project ${projectId} since it's shared with other projects`
       );
     }
-
-    const userMemberships = await fetchAllPages<
-      UserProjectMembership,
-      'listUserProjectMemberships'
-    >(
-      (nextToken) =>
-        client.graphql({
-          query: listUserProjectMemberships,
-          variables: { filter: { projectId: { eq: projectId } }, nextToken },
-        }) as Promise<
-          GraphQLResult<{
-            listUserProjectMemberships: PagedList<UserProjectMembership>;
-          }>
-        >,
-      'listUserProjectMemberships'
-    );
-
-    // delete all user memberships for the project
-    await Promise.all(
-      userMemberships.map(async (membership) => {
-        await client.graphql({
-          query: deleteUserProjectMembership,
-          variables: { input: { id: membership.id } },
-        });
-      })
-    );
 
     // delete all categories for the project
     const categories = await fetchAllPages<Category, 'categoriesByProjectId'>(

@@ -31,6 +31,7 @@ export default function AddAnnotationSetModal({
   const [importedLabels, setImportedLabels] = useState<
     Schema['Category']['type'][]
   >([]);
+  const [loadingLabels, setLoadingLabels] = useState(false);
 
   async function handleSave() {
     if (!name) {
@@ -69,16 +70,26 @@ export default function AddAnnotationSetModal({
     setBusy(false);
   }
 
-  function handleAnnotationSetChange(e: React.ChangeEvent<HTMLSelectElement>) {
+  async function handleAnnotationSetChange(
+    e: React.ChangeEvent<HTMLSelectElement>
+  ) {
     const annotationSetId = e.target.value;
     setSelectedAnnotationSet(annotationSetId);
 
-    const annotationSet = allProjects
-      .find((p) => p.id === selectedProject)
-      ?.annotationSets.find((s: any) => s.id === annotationSetId);
+    if (!annotationSetId) {
+      setImportedLabels([]);
+      return;
+    }
 
-    if (annotationSet) {
-      setImportedLabels(annotationSet.categories);
+    setLoadingLabels(true);
+    try {
+      const { data: categories } =
+        await client.models.Category.categoriesByAnnotationSetId({
+          annotationSetId,
+        });
+      setImportedLabels((categories ?? []) as Schema['Category']['type'][]);
+    } finally {
+      setLoadingLabels(false);
     }
   }
 
@@ -115,6 +126,7 @@ export default function AddAnnotationSetModal({
             </span>
             <Form.Select
               value={selectedProject}
+              disabled={loadingLabels}
               onChange={(e) => setSelectedProject(e.target.value)}
             >
               <option value=''>Select a survey</option>
@@ -126,7 +138,7 @@ export default function AddAnnotationSetModal({
             </Form.Select>
             <Form.Select
               className='mt-1'
-              disabled={!selectedProject}
+              disabled={!selectedProject || loadingLabels}
               value={selectedAnnotationSet}
               onChange={handleAnnotationSetChange}
             >
