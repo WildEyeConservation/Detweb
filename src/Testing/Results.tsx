@@ -1,16 +1,19 @@
-import { Button, Form } from 'react-bootstrap';
-import { useContext, useState, useEffect } from 'react';
+import { Button, Card, Form } from 'react-bootstrap';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { GlobalContext, TestingContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
-import MyTable from '../Table';
 import { BarChart } from '@mui/x-charts/BarChart';
-import { Tab, Tabs } from '../Tabs';
 import exportFromJSON from 'export-from-json';
 import { useUpdateProgress } from '../useUpdateProgress';
 import { Schema } from '../amplify/client-schema';
 import { useUsers } from '../apiInterface';
 import Select from 'react-select';
-// removed modal; pass/fail rules are now inline
+
+const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
+const ROWS_PER_PAGE_STORAGE_KEY = 'testingResultsRowsPerPage';
+
+type SortColumn = 'date' | 'pool' | 'testAnimals' | 'missed' | 'overcounted' | 'pass';
+type SortDir = 'asc' | 'desc';
 
 export default function Results() {
   const { client } = useContext(GlobalContext)!;
@@ -33,6 +36,27 @@ export default function Results() {
     value: string;
   } | null>(null);
 
+  const [sortCol, setSortCol] = useState<SortColumn>('date');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const getInitialRowsPerPage = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(ROWS_PER_PAGE_STORAGE_KEY);
+      const parsed = stored ? parseInt(stored, 10) : NaN;
+      if (ROWS_PER_PAGE_OPTIONS.includes(parsed)) return parsed;
+    }
+    return 10;
+  };
+
+  const [itemsPerPage, setItemsPerPage] = useState(getInitialRowsPerPage);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(ROWS_PER_PAGE_STORAGE_KEY, String(itemsPerPage));
+    }
+  }, [itemsPerPage]);
+
   const [setCompilingFiles, setTotalFilesCompiled] = useUpdateProgress({
     taskId: `Compiling files`,
     indeterminateTaskName: `Compiling files`,
@@ -44,7 +68,7 @@ export default function Results() {
     async function setup() {
       setIsLoading(true);
 
-      const results = await fetchAllPaginatedResults(
+      const fetched = await fetchAllPaginatedResults(
         client.models.TestResult.testResultsByUserId,
         {
           userId: selectedUser!.value,
@@ -65,7 +89,7 @@ export default function Results() {
       );
 
       setResults(
-        results
+        fetched
           .filter((result) => result.projectId === selectedProject?.value)
           .sort(
             (a, b) =>
@@ -79,16 +103,6 @@ export default function Results() {
     if (!isPurging && selectedUser) setup();
   }, [isPurging, selectedUser, selectedProject?.value, client]);
 
-  const headings = [
-    { content: 'Date', sort: true },
-    { content: 'Pool', sort: true },
-    { content: 'Test Animals', sort: true },
-    { content: 'Missed Animals', sort: true },
-    { content: 'Overcounted Animals', sort: true },
-    { content: 'Pass (current rules)', sort: true },
-    { content: 'Permalink', sort: false },
-  ];
-
   function passedForResult(result: Schema['TestResult']['type']) {
     const total = result.testAnimals;
     const missed = result.totalMissedAnimals;
@@ -100,45 +114,82 @@ export default function Results() {
     return userCount >= total * accuracy && userCount <= total * (2 - accuracy);
   }
 
-  const tableData = results.map((result) => {
-    const createdAt = result.createdAt ?? new Date().toISOString();
-    const date = new Date(createdAt);
-    const pool = result.testPreset.name;
-    let surveyId = selectedProject?.value;
+  const tableRows = useMemo(() => {
+    return results.map((result) => {
+      const createdAt = result.createdAt ?? new Date().toISOString();
+      const date = new Date(createdAt);
+      const pool = result.testPreset.name;
+      let surveyId = selectedProject?.value;
 
-    if (pool !== selectedProject?.label) {
-      const project = organizationProjects.find((p) => p.name === pool);
-      if (project) {
-        surveyId = project.id;
+      if (pool !== selectedProject?.label) {
+        const project = organizationProjects.find((p) => p.name === pool);
+        if (project) surveyId = project.id;
       }
-    }
 
-    const missedAnimals =
-      result.totalMissedAnimals > 0 ? result.totalMissedAnimals : 0;
-    const overcountedAnimalsForRow =
-      result.totalMissedAnimals < 0 ? Math.abs(result.totalMissedAnimals) : 0;
+      const missedAnimals =
+        result.totalMissedAnimals > 0 ? result.totalMissedAnimals : 0;
+      const overcountedAnimals =
+        result.totalMissedAnimals < 0
+          ? Math.abs(result.totalMissedAnimals)
+          : 0;
 
-    return {
-      id: result.id,
-      rowData: [
-        `${date
+      return {
+        id: result.id,
+        date,
+        dateLabel: `${date
           .toISOString()
           .split('T')[0]
           .replace(/-/g, '/')} - ${date.toLocaleTimeString()}`,
         pool,
-        result.testAnimals,
+        testAnimals: result.testAnimals,
         missedAnimals,
-        overcountedAnimalsForRow,
-        passedForResult(result) ? 'Yes' : 'No',
-        <a
-          href={`/surveys/${surveyId}/location/${result.locationId}/${result.annotationSetId}`}
-          target='_blank'
-        >
-          Link
-        </a>,
-      ],
-    };
-  });
+        overcountedAnimals,
+        passed: passedForResult(result),
+        linkHref: `/surveys/${surveyId}/location/${result.locationId}/${result.annotationSetId}`,
+      };
+    });
+  }, [results, selectedProject, organizationProjects, rules]);
+
+  const sortedRows = useMemo(() => {
+    const copy = [...tableRows];
+    const mult = sortDir === 'asc' ? 1 : -1;
+    copy.sort((a, b) => {
+      switch (sortCol) {
+        case 'date':
+          return (a.date.getTime() - b.date.getTime()) * mult;
+        case 'pool':
+          return a.pool.localeCompare(b.pool) * mult;
+        case 'testAnimals':
+          return (a.testAnimals - b.testAnimals) * mult;
+        case 'missed':
+          return (a.missedAnimals - b.missedAnimals) * mult;
+        case 'overcounted':
+          return (a.overcountedAnimals - b.overcountedAnimals) * mult;
+        case 'pass':
+          return ((a.passed ? 1 : 0) - (b.passed ? 1 : 0)) * mult;
+        default:
+          return 0;
+      }
+    });
+    return copy;
+  }, [tableRows, sortCol, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / itemsPerPage));
+  const pageClamped = Math.min(Math.max(1, currentPage), totalPages);
+  const pagedRows = sortedRows.slice(
+    (pageClamped - 1) * itemsPerPage,
+    pageClamped * itemsPerPage
+  );
+
+  function toggleSort(col: SortColumn) {
+    if (sortCol === col) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortCol(col);
+      setSortDir(col === 'date' ? 'desc' : 'asc');
+    }
+    setCurrentPage(1);
+  }
 
   const passed = results.filter((result) => passedForResult(result)).length;
   const failed = results.length - passed;
@@ -146,8 +197,6 @@ export default function Results() {
     (acc, result) => acc + result.testAnimals,
     0
   );
-
-  // Calculate Undercounted and Overcounted Animals
   const undercountedAnimals = results.reduce(
     (acc, result) =>
       acc + (result.totalMissedAnimals > 0 ? result.totalMissedAnimals : 0),
@@ -172,11 +221,7 @@ export default function Results() {
       ) => {
         const key = category.categoryName.toLowerCase();
         if (!acc[key]) {
-          acc[key] = {
-            userCount: 0,
-            testCount: 0,
-            name: key,
-          };
+          acc[key] = { userCount: 0, testCount: 0, name: key };
         }
         acc[key].userCount += category.userCount;
         acc[key].testCount += category.testCount;
@@ -190,20 +235,13 @@ export default function Results() {
 
   const accuracyByCategory = Object.entries(countsByCategory)
     .map(([categoryId, counts]) => {
-      if (counts.testCount === 0) {
-        return null;
-      }
-
+      if (counts.testCount === 0) return null;
       const accuracy = counts.userCount / counts.testCount;
       let countPercentage =
         accuracy > 1
           ? parseFloat(((accuracy - 1) * 100).toFixed(2))
           : parseFloat(((1 - accuracy) * 100).toFixed(2)) * -1;
-
-      if (Object.is(countPercentage, -0)) {
-        countPercentage = 0;
-      }
-
+      if (Object.is(countPercentage, -0)) countPercentage = 0;
       return {
         categoryId,
         name: counts.name,
@@ -211,42 +249,10 @@ export default function Results() {
       };
     })
     .filter(
-      (
-        entry
-      ): entry is {
-        categoryId: string;
-        name: string;
-        countPercentage: number;
-      } => entry !== null
+      (entry): entry is { categoryId: string; name: string; countPercentage: number } =>
+        entry !== null
     )
     .sort((a, b) => a.name.localeCompare(b.name));
-
-  const summaryCards = [
-    {
-      content: [
-        `Undercounted animals: ${undercountedAnimals}`,
-        `Overcounted animals: ${overcountedAnimals}`,
-      ],
-    },
-    {
-      content: [
-        `Undercounted rate: ${(
-          (undercountedAnimals / totalAnimals) *
-          100
-        ).toFixed(2)}%`,
-        `Overcounted rate: ${(
-          (overcountedAnimals / totalAnimals) *
-          100
-        ).toFixed(2)}%`,
-      ],
-    },
-    {
-      content: [
-        `Test success rate: ${((passed / results.length) * 100).toFixed(2)}%`,
-        `Tests passed and failed: ${passed} - ${failed}`,
-      ],
-    },
-  ];
 
   function exportResults() {
     setCompilingFiles(0);
@@ -285,7 +291,7 @@ export default function Results() {
 
     setIsPurging(true);
 
-    const results = await fetchAllPaginatedResults(
+    const fetched = await fetchAllPaginatedResults(
       client.models.TestResult.testResultsByUserId,
       {
         userId: selectedUser!.value,
@@ -293,7 +299,7 @@ export default function Results() {
       }
     );
 
-    const filteredResults = results.filter(
+    const filteredResults = fetched.filter(
       (result) => result.projectId === selectedProject?.value
     );
 
@@ -313,174 +319,308 @@ export default function Results() {
     setIsPurging(false);
   }
 
+  const hasData = results.length > 0;
+  const canShowResults = selectedProject && selectedUser;
+
   return (
-    <div className='d-flex flex-column gap-2 mt-3 w-100'>
-      <div>
-        <label className='mb-2'>Select Survey</label>
-        <Select
-          className='text-black'
-          value={selectedProject}
-          options={organizationProjects
-            .filter((p) => !p.hidden)
-            .map((p) => ({
-              label: `${p.name}`,
-              value: p.id,
-            }))}
-          onChange={(e) => {
-            setSelectedProject(e);
-            setSelectedUser(null);
-            setResults([]);
-          }}
-          styles={{
-            valueContainer: (base) => ({
-              ...base,
-              overflowY: 'auto',
-            }),
-          }}
-        />
-      </div>
-      <div>
-        <label className='mb-2'>Select user</label>
-        <Select
-          className='mb-3 text-black'
-          value={selectedUser}
-          options={organizationMembershipsHook.data?.map((m) => ({
-            label: allUsers.find((user) => user.id === m.userId)?.name || '',
-            value: m.userId,
-          }))}
-          onChange={(e) => {
-            setSelectedUser(e);
-          }}
-          styles={{
-            valueContainer: (base) => ({
-              ...base,
-              overflowY: 'auto',
-            }),
-          }}
-        />
-      </div>
-      {selectedProject && selectedUser && (
-        <>
-          <div className='overflow-x-auto overflow-y-visible'>
-            {results.length === 0 ? (
-              <p className='mt-2'>
-                {isLoading ? 'Loading...' : 'No test results'}
-              </p>
-            ) : (
-              <Tabs defaultTab={0}>
-                <Tab label='All Results'>
-                  <div className='d-flex flex-column mb-1'>
-                    <p className='mt-2 mb-1'>Rules</p>
-                    <div>
-                      <label className='mb-1'>Pass rate (%)</label>
-                      <Form.Control
-                        type='number'
-                        min={1}
-                        max={100}
-                        className='text-black'
-                        value={rules.accuracyPercent}
-                        onChange={(e) =>
-                          setRules({
-                            ...rules,
-                            accuracyPercent: parseInt(e.target.value || '0'),
-                          })
-                        }
-                        style={{ width: 160 }}
-                      />
-                    </div>
-                    <Form.Check
-                      type='checkbox'
-                      id='ignore-overcounts'
-                      label='Ignore overcounts'
-                      className='mt-2'
-                      checked={rules.ignoreOvercounts}
-                      onChange={(e) =>
-                        setRules({
-                          ...rules,
-                          ignoreOvercounts: e.target.checked,
-                        })
-                      }
-                    />
-                  </div>
-                  <p className='my-2'>Summary</p>
-                  <div className='d-flex gap-3 mb-3'>
-                    {summaryCards.map((card, index) => (
-                      <SummaryCard key={index} content={card.content} />
-                    ))}
-                  </div>
-                  <p className='mb-2'>All Results</p>
-                  <MyTable
-                    tableHeadings={headings}
-                    tableData={tableData}
-                    pagination={true}
-                    itemsPerPage={5}
-                  />
-                </Tab>
-                <Tab label='Label Accuracy'>
-                  <p
-                    className='text-center mb-0 mt-3'
-                    style={{ fontSize: '1.5rem' }}
-                  >
-                    Over/Under Count Percentage By Label
-                  </p>
-                  <BarChart
-                    dataset={accuracyByCategory}
-                    margin={{ bottom: 80 }}
-                    sx={{
-                      '& .MuiChartsAxis-bottom .MuiChartsAxis-line': {
-                        stroke: '#FFFFFF',
-                        strokeWidth: 1,
-                      },
-                      '& .MuiChartsAxis-left .MuiChartsAxis-line': {
-                        stroke: '#FFFFFF',
-                        strokeWidth: 1,
-                      },
-                      '& .MuiChartsAxis-tickContainer .MuiChartsAxis-tickLabel':
-                        {
-                          fill: '#FFFFFF',
-                          fontSize: 12,
-                        },
-                      '& .MuiChartsAxis-tick': {
-                        stroke: '#FFFFFF',
-                        strokeWidth: 1,
-                      },
-                    }}
-                    xAxis={[
-                      {
-                        scaleType: 'band',
-                        dataKey: 'name',
-                      },
-                    ]}
-                    yAxis={[
-                      {
-                        colorMap: {
-                          type: 'piecewise',
-                          thresholds: [0],
-                          colors: ['#DF691A', '#5bc0de'],
-                        },
-                      },
-                    ]}
-                    bottomAxis={{
-                      tickLabelStyle: {
-                        angle: 45,
-                        textAnchor: 'start',
-                        fontSize: 12,
-                      },
-                    }}
-                    series={[
-                      {
-                        dataKey: 'countPercentage',
-                      },
-                    ]}
-                    height={400}
-                    borderRadius={4}
-                  />
-                </Tab>
-              </Tabs>
-            )}
+    <div className='d-flex flex-column gap-3'>
+      <Card>
+        <Card.Header>
+          <h5 className='mb-0'>Filters</h5>
+        </Card.Header>
+        <Card.Body className='d-flex flex-column gap-3'>
+          <div>
+            <Form.Label className='mb-2'>Select Survey</Form.Label>
+            <Select
+              className='text-black'
+              value={selectedProject}
+              options={organizationProjects
+                .filter((p) => !p.hidden)
+                .map((p) => ({ label: p.name, value: p.id }))}
+              onChange={(e) => {
+                setSelectedProject(e);
+                setSelectedUser(null);
+                setResults([]);
+                setCurrentPage(1);
+              }}
+              menuPortalTarget={
+                typeof document !== 'undefined' ? document.body : undefined
+              }
+              menuPosition='fixed'
+              styles={{
+                valueContainer: (base) => ({ ...base, overflowY: 'auto' }),
+                menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+              }}
+            />
           </div>
-          {results.length > 0 && (
-            <div className='d-flex gap-2 justify-content-end mt-2'>
+          <div>
+            <Form.Label className='mb-2'>Select User</Form.Label>
+            <Select
+              className='text-black'
+              value={selectedUser}
+              isDisabled={!selectedProject}
+              options={organizationMembershipsHook.data?.map((m) => ({
+                label: allUsers.find((user) => user.id === m.userId)?.name || '',
+                value: m.userId,
+              }))}
+              onChange={(e) => {
+                setSelectedUser(e);
+                setCurrentPage(1);
+              }}
+              menuPortalTarget={
+                typeof document !== 'undefined' ? document.body : undefined
+              }
+              menuPosition='fixed'
+              styles={{
+                valueContainer: (base) => ({ ...base, overflowY: 'auto' }),
+                menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+              }}
+            />
+          </div>
+        </Card.Body>
+      </Card>
+
+      {canShowResults && (
+        <Card>
+          <Card.Header>
+            <h5 className='mb-0'>Pass Rules</h5>
+          </Card.Header>
+          <Card.Body className='d-flex flex-column gap-2'>
+            <div>
+              <Form.Label className='mb-1'>Pass rate (%)</Form.Label>
+              <Form.Control
+                type='number'
+                min={1}
+                max={100}
+                className='text-black'
+                value={rules.accuracyPercent}
+                onChange={(e) =>
+                  setRules({
+                    ...rules,
+                    accuracyPercent: parseInt(e.target.value || '0'),
+                  })
+                }
+                style={{ width: 160 }}
+              />
+            </div>
+            <Form.Check
+              type='checkbox'
+              id='ignore-overcounts'
+              label='Ignore overcounts'
+              checked={rules.ignoreOvercounts}
+              onChange={(e) =>
+                setRules({ ...rules, ignoreOvercounts: e.target.checked })
+              }
+            />
+          </Card.Body>
+        </Card>
+      )}
+
+      {canShowResults && hasData && (
+        <Card>
+          <Card.Header>
+            <h5 className='mb-0'>Summary</h5>
+          </Card.Header>
+          <Card.Body>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: 12,
+              }}
+            >
+              <StatTile
+                label='Counts'
+                rows={[
+                  `Undercounted animals: ${undercountedAnimals}`,
+                  `Overcounted animals: ${overcountedAnimals}`,
+                ]}
+              />
+              <StatTile
+                label='Rates'
+                rows={[
+                  `Undercounted rate: ${(
+                    (undercountedAnimals / totalAnimals) *
+                    100
+                  ).toFixed(2)}%`,
+                  `Overcounted rate: ${(
+                    (overcountedAnimals / totalAnimals) *
+                    100
+                  ).toFixed(2)}%`,
+                ]}
+              />
+              <StatTile
+                label='Tests'
+                rows={[
+                  `Test success rate: ${(
+                    (passed / results.length) *
+                    100
+                  ).toFixed(2)}%`,
+                  `Passed / Failed: ${passed} - ${failed}`,
+                ]}
+              />
+            </div>
+          </Card.Body>
+        </Card>
+      )}
+
+      {canShowResults && (
+        <Card>
+          <Card.Header className='d-flex justify-content-between align-items-center'>
+            <h5 className='mb-0'>All Results</h5>
+          </Card.Header>
+          <Card.Body className='p-0'>
+            {!hasData ? (
+              <div
+                style={{
+                  padding: '24px',
+                  textAlign: 'center',
+                  color: 'var(--ss-text-dim)',
+                }}
+              >
+                {isLoading ? 'Loading…' : 'No test results'}
+              </div>
+            ) : (
+              <>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                    alignItems: 'center',
+                    padding: '12px 16px',
+                    borderBottom: '1px solid var(--ss-border-soft)',
+                  }}
+                >
+                  <div style={{ flex: 1 }} />
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      fontSize: 13,
+                      color: 'var(--ss-text-dim)',
+                    }}
+                  >
+                    <span>Rows</span>
+                    <Form.Select
+                      size='sm'
+                      value={itemsPerPage}
+                      onChange={(e) => {
+                        setItemsPerPage(parseInt(e.target.value, 10));
+                        setCurrentPage(1);
+                      }}
+                      style={{ width: 'auto', padding: '2px 24px 2px 8px' }}
+                    >
+                      {ROWS_PER_PAGE_OPTIONS.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </Form.Select>
+                    <span>
+                      Page {pageClamped} of {totalPages}
+                    </span>
+                    <Button
+                      size='sm'
+                      variant='secondary'
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={pageClamped === 1}
+                      style={{ padding: '2px 10px' }}
+                    >
+                      ‹
+                    </Button>
+                    <Button
+                      size='sm'
+                      variant='secondary'
+                      onClick={() =>
+                        setCurrentPage((p) => Math.min(totalPages, p + 1))
+                      }
+                      disabled={pageClamped === totalPages}
+                      style={{ padding: '2px 10px' }}
+                    >
+                      ›
+                    </Button>
+                  </div>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className='ss-data-table'>
+                    <thead>
+                      <tr>
+                        <SortableTh
+                          label='Date'
+                          col='date'
+                          sortCol={sortCol}
+                          sortDir={sortDir}
+                          onClick={toggleSort}
+                        />
+                        <SortableTh
+                          label='Pool'
+                          col='pool'
+                          sortCol={sortCol}
+                          sortDir={sortDir}
+                          onClick={toggleSort}
+                        />
+                        <SortableTh
+                          label='Test Animals'
+                          col='testAnimals'
+                          sortCol={sortCol}
+                          sortDir={sortDir}
+                          onClick={toggleSort}
+                        />
+                        <SortableTh
+                          label='Missed Animals'
+                          col='missed'
+                          sortCol={sortCol}
+                          sortDir={sortDir}
+                          onClick={toggleSort}
+                        />
+                        <SortableTh
+                          label='Overcounted Animals'
+                          col='overcounted'
+                          sortCol={sortCol}
+                          sortDir={sortDir}
+                          onClick={toggleSort}
+                        />
+                        <SortableTh
+                          label='Pass (current rules)'
+                          col='pass'
+                          sortCol={sortCol}
+                          sortDir={sortDir}
+                          onClick={toggleSort}
+                        />
+                        <th>Permalink</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagedRows.map((row) => (
+                        <tr key={row.id}>
+                          <td>{row.dateLabel}</td>
+                          <td>{row.pool}</td>
+                          <td>{row.testAnimals}</td>
+                          <td>{row.missedAnimals}</td>
+                          <td>{row.overcountedAnimals}</td>
+                          <td>{row.passed ? 'Yes' : 'No'}</td>
+                          <td>
+                            <a
+                              className='ss-row-link'
+                              href={row.linkHref}
+                              target='_blank'
+                              rel='noreferrer'
+                            >
+                              Link
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </Card.Body>
+          {hasData && (
+            <Card.Footer className='d-flex gap-2 justify-content-end'>
               <Button
                 variant='danger'
                 onClick={purgeResults}
@@ -491,24 +631,128 @@ export default function Results() {
               <Button variant='primary' onClick={exportResults}>
                 Export Results
               </Button>
-            </div>
+            </Card.Footer>
           )}
-        </>
+        </Card>
+      )}
+
+      {canShowResults && hasData && accuracyByCategory.length > 0 && (
+        <Card>
+          <Card.Header>
+            <h5 className='mb-0'>Label Accuracy</h5>
+          </Card.Header>
+          <Card.Body>
+            <p
+              className='text-center mb-2'
+              style={{ fontSize: '1rem', color: 'var(--ss-text-muted)' }}
+            >
+              Over/Under Count Percentage By Label
+            </p>
+            <BarChart
+              dataset={accuracyByCategory}
+              margin={{ bottom: 80 }}
+              sx={{
+                '& .MuiChartsAxis-bottom .MuiChartsAxis-line': {
+                  stroke: '#FFFFFF',
+                  strokeWidth: 1,
+                },
+                '& .MuiChartsAxis-left .MuiChartsAxis-line': {
+                  stroke: '#FFFFFF',
+                  strokeWidth: 1,
+                },
+                '& .MuiChartsAxis-tickContainer .MuiChartsAxis-tickLabel': {
+                  fill: '#FFFFFF',
+                  fontSize: 12,
+                },
+                '& .MuiChartsAxis-tick': {
+                  stroke: '#FFFFFF',
+                  strokeWidth: 1,
+                },
+              }}
+              xAxis={[{ scaleType: 'band', dataKey: 'name' }]}
+              yAxis={[
+                {
+                  colorMap: {
+                    type: 'piecewise',
+                    thresholds: [0],
+                    colors: ['#DF691A', '#5bc0de'],
+                  },
+                },
+              ]}
+              bottomAxis={{
+                tickLabelStyle: {
+                  angle: 45,
+                  textAnchor: 'start',
+                  fontSize: 12,
+                },
+              }}
+              series={[{ dataKey: 'countPercentage' }]}
+              height={400}
+              borderRadius={4}
+            />
+          </Card.Body>
+        </Card>
       )}
     </div>
   );
 }
 
-function SummaryCard({ content }: { content: (string | JSX.Element)[] }) {
+function StatTile({ label, rows }: { label: string; rows: string[] }) {
   return (
-    <div className='rounded-3 p-3 bg-dark text-white d-flex flex-column gap-1'>
-      {content.map((item, index) => (
-        <p key={index} className='mb-0'>
-          {item}
-        </p>
+    <div
+      style={{
+        background: 'var(--ss-surface-alt)',
+        border: '1px solid var(--ss-border-soft)',
+        borderRadius: 8,
+        padding: '12px 14px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 4,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          color: 'var(--ss-text-dim)',
+        }}
+      >
+        {label}
+      </div>
+      {rows.map((row, i) => (
+        <div key={i} style={{ fontSize: 13 }}>
+          {row}
+        </div>
       ))}
     </div>
   );
 }
 
-// Rules modal removed in favor of inline controls
+function SortableTh({
+  label,
+  col,
+  sortCol,
+  sortDir,
+  onClick,
+}: {
+  label: string;
+  col: SortColumn;
+  sortCol: SortColumn;
+  sortDir: SortDir;
+  onClick: (col: SortColumn) => void;
+}) {
+  const active = sortCol === col;
+  return (
+    <th
+      onClick={() => onClick(col)}
+      style={{ cursor: 'pointer', userSelect: 'none' }}
+    >
+      {label}
+      {active && (
+        <span style={{ marginLeft: 4 }}>{sortDir === 'asc' ? '▲' : '▼'}</span>
+      )}
+    </th>
+  );
+}

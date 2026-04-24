@@ -7,7 +7,6 @@ import {
   useCallback,
 } from 'react';
 import { Button, Form, Spinner } from 'react-bootstrap';
-import { Modal, Header, Title, Body, Footer } from '../Modal';
 import { GlobalContext, TestingContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
 import { FetcherType, PreloaderFactory } from '../Preloader';
@@ -15,13 +14,12 @@ import LightLocationView from './LightLocationView';
 import ProjectContext from './ProjectContext';
 
 type Props = {
-  show: boolean;
   preset: { id: string; name: string };
   surveyId: string;
 };
 
-export default function AddLocationsModal({ show, preset, surveyId }: Props) {
-  const { client, showModal } = useContext(GlobalContext)!;
+export default function AddLocationsPanel({ preset, surveyId }: Props) {
+  const { client } = useContext(GlobalContext)!;
   const { organizationId } = useContext(TestingContext)!;
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -81,7 +79,6 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
       setLoading(true);
       setLoadedCount(0);
 
-      // Get existing preset locations to exclude
       const existingRaw: any[] = await (fetchAllPaginatedResults as any)(
         (client as any).models.TestPresetLocation.locationsByTestPresetId,
         {
@@ -96,7 +93,6 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
         )
       );
 
-      // Get all annotation sets for the project
       const annotationSets = (await fetchAllPaginatedResults(
         (client as any).models.AnnotationSet.annotationSetsByProjectId,
         {
@@ -109,13 +105,10 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
         [];
       const uniqueLocationIds = new Set<string>();
 
-      // Callback to update observation count as they're loaded
       const updateObservationCount = (count: number) => {
         setLoadedCount((prev) => prev + count);
       };
 
-      // OPTIMIZATION 1: Batch fetch observations for all annotation sets
-      // Instead of nested loops, collect all observations with their location data
       const observationPromises = annotationSets.map(async (as) => {
         const observations = (await fetchAllPaginatedResults(
           (client as any).models.Observation.observationsByAnnotationSetId,
@@ -139,11 +132,9 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
         return observations;
       });
 
-      // Wait for all observation queries to complete
       const observationResults = await Promise.all(observationPromises);
       const allObservations = observationResults.flat();
 
-      // OPTIMIZATION 2: Group observations by image to batch annotation queries
       const imageGroups = new Map<string, any[]>();
       for (const obs of allObservations) {
         const key = `${obs.annotationSetId}_${obs.location.imageId}`;
@@ -153,7 +144,6 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
         imageGroups.get(key)!.push(obs);
       }
 
-      // OPTIMIZATION 3: Batch annotation queries by image
       const annotationPromises = Array.from(imageGroups.entries()).map(
         async ([key, observations]) => {
           const [annotationSetId, imageId] = key.split('_');
@@ -171,16 +161,13 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
         }
       );
 
-      // Wait for all annotation queries to complete
       const annotationResults = await Promise.all(annotationPromises);
 
-      // Process results
       for (const { annotations, observations } of annotationResults) {
         for (const obs of observations) {
           const presetKey = `${obs.annotationSetId}_${obs.locationId}`;
           if (presetKeys.has(presetKey)) continue;
 
-          // Check location bounds
           if (
             !obs.location ||
             obs.location.width == null ||
@@ -195,13 +182,11 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
           const maxX = location.x + location.width / 2;
           const maxY = location.y + location.height / 2;
 
-          // Filter annotations inside location bounds
           const inside = annotations.filter(
             (ann: any) =>
               ann.x >= minX && ann.y >= minY && ann.x <= maxX && ann.y <= maxY
           );
 
-          // Apply category filter
           if (
             categoryId &&
             !inside.some((a: any) => a.categoryId === categoryId)
@@ -209,7 +194,6 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
             continue;
           }
 
-          // Apply max annotations limit
           const limit = maxAnn === '' ? null : Number(maxAnn);
           if (limit != null && inside.length > limit) {
             continue;
@@ -242,9 +226,7 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
     [client, preset.id, surveyId]
   );
 
-  // Fetch project location sets for tiled sizes / testing set
   useEffect(() => {
-    if (!show) return;
     let cancelled = false;
     (async () => {
       try {
@@ -263,7 +245,7 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [show, client, surveyId]);
+  }, [client, surveyId]);
 
   const tiledSizeOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -300,21 +282,13 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
     advancedOpen && (changeSize || offsetX !== 0 || offsetY !== 0);
 
   useEffect(() => {
-    if (show) {
-      refreshCandidates(selectedCategoryId, maxAnnotations);
-    } else {
-      candidatesRef.current = [];
-      setCandidates([]);
-      setIndex(0);
-    }
-  }, [show, preset.id, surveyId]);
+    refreshCandidates(selectedCategoryId, maxAnnotations);
+  }, [preset.id, surveyId]);
 
   useEffect(() => {
-    if (show) {
-      setPendingCategoryId(selectedCategoryId);
-      setPendingMaxAnnotations(maxAnnotations);
-    }
-  }, [show]);
+    setPendingCategoryId(selectedCategoryId);
+    setPendingMaxAnnotations(maxAnnotations);
+  }, []);
 
   const applyFilters = useCallback(() => {
     setSelectedCategoryId(pendingCategoryId);
@@ -322,7 +296,6 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
     refreshCandidates(pendingCategoryId, pendingMaxAnnotations);
   }, [pendingCategoryId, pendingMaxAnnotations, refreshCandidates]);
 
-  // Ensure a dedicated testing location set exists
   const getOrCreateTestingLocationSetId = useCallback(async () => {
     const TESTING_SET_NAME = 'Testing Locations';
     const existing = (locationSets || []).find(
@@ -342,7 +315,6 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
     annotationSetId: string;
     locationId: string;
   }) {
-    // mirror EditLocationsModal saveAnnotations logic
     // @ts-ignore
     const { data: location } = await client.models.Location.get({
       id: cand.locationId,
@@ -417,7 +389,6 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
     if (!cand) return;
     setAdding(true);
     try {
-      // Load original location
       // @ts-ignore
       const { data: orig } = await client.models.Location.get({
         id: cand.locationId,
@@ -431,7 +402,6 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
       const finalX = Math.round((orig.x as number) + (advancedOpen ? (offsetX || 0) : 0));
       const finalY = Math.round((orig.y as number) + (advancedOpen ? (offsetY || 0) : 0));
 
-      // Create a new testing location
       // @ts-ignore
       const { data: newLoc } = await client.models.Location.create({
         projectId: surveyId,
@@ -447,7 +417,6 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
 
       if (!newLoc?.id) throw new Error('Failed to create testing location');
 
-      // Add the new location to the preset
       // @ts-ignore
       await client.models.TestPresetLocation.create({
         testPresetId: preset.id,
@@ -456,7 +425,6 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
         group: organizationId,
       });
 
-      // mark for effect using the new location
       lastAddedRef.current = {
         annotationSetId: cand.annotationSetId,
         locationId: newLoc.id,
@@ -479,249 +447,224 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
 
   return (
     <ProjectContext surveyId={surveyId}>
-      <Modal show={show} strict={true}>
-        <Header>
-          <Title>Add Locations to {preset.name}</Title>
-        </Header>
-        <Body>
-          <div
-            className='d-flex flex-column gap-3 px-3 pb-3 pt-0'
-            style={{ height: '75vh' }}
-          >
-            {loading ? (
-              <p className='d-flex align-items-center gap-2 p-2'>
-                <Spinner animation='border' size='sm' /> {loadedCount}{' '}
-                observations loaded
-              </p>
-            ) : candidates.length === 0 ? (
-              <p>No available locations to add.</p>
-            ) : (
-              <div className='d-flex flex-row gap-3 h-100'>
-                {/* Left controls column */}
-                <div
-                  className='d-flex flex-column gap-3 border-end border-dark mt-3 pe-3'
-                  style={{ width: '360px', maxWidth: '40%', overflowY: 'auto' }}
+      <div
+        className='d-flex flex-column gap-3'
+        style={{ height: 'calc(100vh - 260px)', minHeight: 520 }}
+      >
+        {loading ? (
+          <p className='d-flex align-items-center gap-2 p-2'>
+            <Spinner animation='border' size='sm' /> {loadedCount}{' '}
+            observations loaded
+          </p>
+        ) : candidates.length === 0 ? (
+          <p>No available locations to add.</p>
+        ) : (
+          <div className='d-flex flex-row gap-3 h-100'>
+            <div
+              className='d-flex flex-column gap-3 border-end border-dark pe-3'
+              style={{ width: '360px', maxWidth: '40%', overflowY: 'auto' }}
+            >
+              <Form.Group className='d-flex flex-column gap-2'>
+                <Form.Group>
+                  <Form.Label className='mb-0'>Label filter</Form.Label>
+                  <Form.Select
+                    value={pendingCategoryId}
+                    onChange={(e) => setPendingCategoryId(e.target.value)}
+                  >
+                    <option value=''>All labels</option>
+                    {currentCandidate && (
+                      // @ts-ignore: will be re-evaluated as index changes
+                      <CategoryOptions
+                        annotationSetId={currentCandidate.annotationSetId}
+                      />
+                    )}
+                  </Form.Select>
+                </Form.Group>
+                <Form.Group>
+                  <Form.Label className='mb-0'>Max annotations</Form.Label>
+                  <Form.Control
+                    type='number'
+                    min={0}
+                    placeholder='No limit'
+                    value={pendingMaxAnnotations}
+                    onChange={(e) =>
+                      setPendingMaxAnnotations(
+                        e.target.value === ''
+                          ? ''
+                          : Number(e.target.value) || ''
+                      )
+                    }
+                  />
+                </Form.Group>
+                <Button
+                  variant='primary'
+                  onClick={applyFilters}
+                  disabled={loading}
                 >
-                  <Form.Group className='d-flex flex-column gap-2'>
+                  Filter
+                </Button>
+              </Form.Group>
+              <Form.Group className='d-flex flex-column gap-2 pb-3'>
+                <Form.Check
+                  type='checkbox'
+                  label='Advanced options'
+                  checked={advancedOpen}
+                  onChange={(e) => setAdvancedOpen(e.target.checked)}
+                />
+                {advancedOpen && (
+                  <div className='d-flex flex-row align-items-end gap-2 flex-wrap'>
+                    <Form.Check
+                      type='checkbox'
+                      label='Change location size when adding'
+                      checked={changeSize}
+                      onChange={(e) => setChangeSize(e.target.checked)}
+                    />
                     <Form.Group>
-                      <Form.Label className='mb-0'>Label filter</Form.Label>
+                      <Form.Label className='mb-0'>From tiled sizes</Form.Label>
                       <Form.Select
-                        value={pendingCategoryId}
-                        onChange={(e) => setPendingCategoryId(e.target.value)}
+                        disabled={
+                          loadingLocationSets ||
+                          tiledSizeOptions.length === 0 ||
+                          !changeSize
+                        }
+                        value={selectedSize}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedSize(val);
+                          const found = tiledSizeOptions.find(
+                            (o) => o.value === val
+                          );
+                          if (found) {
+                            setCustomWidth(found.w);
+                            setCustomHeight(found.h);
+                          }
+                        }}
                       >
-                        <option value=''>All labels</option>
-                        {/* options loaded lazily below via current candidate's annotationSetId */}
-                        {currentCandidate && (
-                          // @ts-ignore: will be re-evaluated as index changes
-                          <CategoryOptions
-                            annotationSetId={currentCandidate.annotationSetId}
-                          />
-                        )}
+                        <option value=''>Select size</option>
+                        {tiledSizeOptions.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
                       </Form.Select>
                     </Form.Group>
                     <Form.Group>
-                      <Form.Label className='mb-0'>Max annotations</Form.Label>
+                      <Form.Label className='mb-0'>Width (px)</Form.Label>
                       <Form.Control
                         type='number'
-                        min={0}
-                        placeholder='No limit'
-                        value={pendingMaxAnnotations}
+                        min={1}
+                        placeholder='e.g. 1024'
+                        disabled={!changeSize}
+                        value={customWidth}
                         onChange={(e) =>
-                          setPendingMaxAnnotations(
+                          setCustomWidth(
                             e.target.value === ''
                               ? ''
-                              : Number(e.target.value) || ''
+                              : Math.max(1, Number(e.target.value) || 1)
                           )
                         }
                       />
                     </Form.Group>
-                    <Button
-                      variant='primary'
-                      onClick={applyFilters}
-                      disabled={loading}
-                    >
-                      Filter
-                    </Button>
-                  </Form.Group>
-                  <Form.Group className='d-flex flex-column gap-2 pb-3'>
-                    <Form.Check
-                      type='checkbox'
-                      label='Advanced options'
-                      checked={advancedOpen}
-                      onChange={(e) => setAdvancedOpen(e.target.checked)}
-                    />
-                    {advancedOpen && (
-                      <div className='d-flex flex-row align-items-end gap-2 flex-wrap'>
-                        <Form.Check
-                          type='checkbox'
-                          label='Change location size when adding'
-                          checked={changeSize}
-                          onChange={(e) => setChangeSize(e.target.checked)}
-                        />
-                        <Form.Group>
-                          <Form.Label className='mb-0'>
-                            From tiled sizes
-                          </Form.Label>
-                          <Form.Select
-                            disabled={
-                              loadingLocationSets ||
-                              tiledSizeOptions.length === 0 ||
-                              !changeSize
-                            }
-                            value={selectedSize}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setSelectedSize(val);
-                              const found = tiledSizeOptions.find(
-                                (o) => o.value === val
-                              );
-                              if (found) {
-                                setCustomWidth(found.w);
-                                setCustomHeight(found.h);
-                              }
-                            }}
-                          >
-                            <option value=''>Select size</option>
-                            {tiledSizeOptions.map((o) => (
-                              <option key={o.value} value={o.value}>
-                                {o.label}
-                              </option>
-                            ))}
-                          </Form.Select>
-                        </Form.Group>
-                        <Form.Group>
-                          <Form.Label className='mb-0'>Width (px)</Form.Label>
-                          <Form.Control
-                            type='number'
-                            min={1}
-                            placeholder='e.g. 1024'
-                            disabled={!changeSize}
-                            value={customWidth}
-                            onChange={(e) =>
-                              setCustomWidth(
-                                e.target.value === ''
-                                  ? ''
-                                  : Math.max(1, Number(e.target.value) || 1)
-                              )
-                            }
-                          />
-                        </Form.Group>
-                        <Form.Group>
-                          <Form.Label className='mb-0'>Height (px)</Form.Label>
-                          <Form.Control
-                            type='number'
-                            min={1}
-                            placeholder='e.g. 1024'
-                            disabled={!changeSize}
-                            value={customHeight}
-                            onChange={(e) =>
-                              setCustomHeight(
-                                e.target.value === ''
-                                  ? ''
-                                  : Math.max(1, Number(e.target.value) || 1)
-                              )
-                            }
-                          />
-                        </Form.Group>
-                        <Form.Group>
-                          <Form.Label className='mb-0'>
-                            Offset X (px)
-                          </Form.Label>
-                          <Form.Control
-                            type='number'
-                            step={1}
-                            value={offsetX}
-                            onChange={(e) =>
-                              setOffsetX(Number(e.target.value) || 0)
-                            }
-                          />
-                        </Form.Group>
-                        <Form.Group>
-                          <Form.Label className='mb-0'>
-                            Offset Y (px)
-                          </Form.Label>
-                          <Form.Control
-                            type='number'
-                            step={1}
-                            value={offsetY}
-                            onChange={(e) =>
-                              setOffsetY(Number(e.target.value) || 0)
-                            }
-                          />
-                        </Form.Group>
-                      </div>
-                    )}
-                  </Form.Group>
-                </div>
-
-                {/* Right image column */}
-                <div className='d-flex flex-column flex-grow-1 h-100 w-100'>
-                  <Form.Group className='mt-3 h-100 w-100'>
-                    <Preloader
-                      index={index}
-                      setIndex={setIndex}
-                      fetcher={fetcher}
-                      preloadN={5}
-                      historyN={5}
-                      overlay={{
-                        enabled: overlayEnabled,
-                        width: changeSize
-                          ? customWidth || undefined
-                          : undefined,
-                        height: changeSize
-                          ? customHeight || undefined
-                          : undefined,
-                        offsetX,
-                        offsetY,
-                      }}
-                    />
-                  </Form.Group>
-                  <div className='d-flex flex-column w-100 gap-2 pt-3'>
-                    {currentCandidate && (
-                      <a
-                        className='btn btn-outline-info'
-                        target='_blank'
-                        href={`/surveys/${surveyId}/location/${currentCandidate!.locationId
-                          }/${currentCandidate!.annotationSetId}`}
-                      >
-                        Edit Location
-                      </a>
-                    )}
-                    <Button
-                      variant='success'
-                      onClick={handleAdd}
-                      disabled={
-                        adding ||
-                        !currentCandidate ||
-                        (changeSize &&
-                          (customWidth === '' || customHeight === '')) ||
-                        addedLocations[
-                        `${currentCandidate!.annotationSetId}_${currentCandidate!.locationId
-                        }`
-                        ]
-                      }
-                    >
-                      {adding
-                        ? 'Adding...'
-                        : addedLocations[
-                          `${currentCandidate!.annotationSetId}_${currentCandidate!.locationId
-                          }`
-                        ]
-                          ? 'Added'
-                          : 'Add to pool'}
-                    </Button>
+                    <Form.Group>
+                      <Form.Label className='mb-0'>Height (px)</Form.Label>
+                      <Form.Control
+                        type='number'
+                        min={1}
+                        placeholder='e.g. 1024'
+                        disabled={!changeSize}
+                        value={customHeight}
+                        onChange={(e) =>
+                          setCustomHeight(
+                            e.target.value === ''
+                              ? ''
+                              : Math.max(1, Number(e.target.value) || 1)
+                          )
+                        }
+                      />
+                    </Form.Group>
+                    <Form.Group>
+                      <Form.Label className='mb-0'>Offset X (px)</Form.Label>
+                      <Form.Control
+                        type='number'
+                        step={1}
+                        value={offsetX}
+                        onChange={(e) =>
+                          setOffsetX(Number(e.target.value) || 0)
+                        }
+                      />
+                    </Form.Group>
+                    <Form.Group>
+                      <Form.Label className='mb-0'>Offset Y (px)</Form.Label>
+                      <Form.Control
+                        type='number'
+                        step={1}
+                        value={offsetY}
+                        onChange={(e) =>
+                          setOffsetY(Number(e.target.value) || 0)
+                        }
+                      />
+                    </Form.Group>
                   </div>
-                </div>
+                )}
+              </Form.Group>
+            </div>
+
+            <div className='d-flex flex-column flex-grow-1 h-100 w-100'>
+              <Form.Group className='h-100 w-100'>
+                <Preloader
+                  index={index}
+                  setIndex={setIndex}
+                  fetcher={fetcher}
+                  preloadN={5}
+                  historyN={5}
+                  overlay={{
+                    enabled: overlayEnabled,
+                    width: changeSize ? customWidth || undefined : undefined,
+                    height: changeSize ? customHeight || undefined : undefined,
+                    offsetX,
+                    offsetY,
+                  }}
+                />
+              </Form.Group>
+              <div className='d-flex flex-column w-100 gap-2 pt-3'>
+                {currentCandidate && (
+                  <a
+                    className='btn btn-outline-info'
+                    target='_blank'
+                    href={`/surveys/${surveyId}/location/${currentCandidate!.locationId
+                      }/${currentCandidate!.annotationSetId}`}
+                  >
+                    Edit Location
+                  </a>
+                )}
+                <Button
+                  variant='success'
+                  onClick={handleAdd}
+                  disabled={
+                    adding ||
+                    !currentCandidate ||
+                    (changeSize &&
+                      (customWidth === '' || customHeight === '')) ||
+                    addedLocations[
+                    `${currentCandidate!.annotationSetId}_${currentCandidate!.locationId
+                    }`
+                    ]
+                  }
+                >
+                  {adding
+                    ? 'Adding...'
+                    : addedLocations[
+                      `${currentCandidate!.annotationSetId}_${currentCandidate!.locationId
+                      }`
+                    ]
+                      ? 'Added'
+                      : 'Add to pool'}
+                </Button>
               </div>
-            )}
+            </div>
           </div>
-        </Body>
-        <Footer>
-          <Button variant='secondary' onClick={() => showModal(null)}>
-            Close
-          </Button>
-        </Footer>
-      </Modal>
+        )}
+      </div>
     </ProjectContext>
   );
 }

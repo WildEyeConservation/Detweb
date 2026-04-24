@@ -26,6 +26,7 @@ import AddAnnotationSet from './survey/AddAnnotationSet.tsx';
 import NewSurvey from './survey/NewSurvey.tsx';
 import Permissions from './Permissions.tsx';
 import Testing from './Testing/Testing';
+import TestingSurveyDetail from './Testing/SurveyDetailPage';
 import { Registration } from './Registration';
 import HomographyTask from './homography/HomographyTask';
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
@@ -206,6 +207,10 @@ const router = createBrowserRouter([
       {
         path: 'testing',
         element: <Testing />,
+      },
+      {
+        path: 'testing/surveys/:surveyId',
+        element: <TestingSurveyDetail />,
       },
       ...(DevActions
         ? [

@@ -39,7 +39,6 @@ export default function Notifications() {
         onClick={() => setShow(!show)}
       >
         <div
-          className='d-none d-lg-block'
           style={{ position: 'relative', height: '100%' }}
         >
           <div
@@ -59,9 +58,8 @@ export default function Notifications() {
           >
             {totalNotifications}
           </div>
-          <Bell className='d-none d-lg-block' />
+          <Bell />
         </div>
-        <span className='d-block d-lg-none'>Notifications</span>
       </button>
       {show && (
         <div

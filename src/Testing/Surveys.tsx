@@ -1,223 +1,263 @@
-import MyTable from '../Table';
-import { useState, useContext, useEffect, useRef } from 'react';
-import Select from 'react-select';
+import { useState, useContext, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Button, Card, Form } from 'react-bootstrap';
+import { ChevronRight } from 'lucide-react';
 import { TestingContext, GlobalContext } from '../Context';
-import { Button } from 'react-bootstrap';
-import { Plus, Settings2, Eye } from 'lucide-react';
-import ConfigModal from './ConfigModal';
-import EditLocationsModal from './EditLocationsModal';
-import AddLocationsModal from './AddLocationsModal';
 
-interface Option {
-  label: string;
-  value: string;
-}
+const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
+const ROWS_PER_PAGE_STORAGE_KEY = 'testingSurveysRowsPerPage';
+
+type SortOption = 'name' | 'name-reverse';
 
 export default function Surveys() {
   const {
-    organizationId,
     organizationProjects: surveys,
     organizationTestPresets: locationPools,
   } = useContext(TestingContext)!;
-  const { client, modalToShow, showModal } = useContext(GlobalContext)!;
+  const { client } = useContext(GlobalContext)!;
+  const navigate = useNavigate();
 
-  const [selectedSurvey, setSelectedSurvey] = useState<Option | null>(null);
-  const [selectedLocationPools, setSelectedLocationPools] = useState<{
-    [surveyId: string]: Option[];
-  }>({});
-  const originalSelectedLocationPools = useRef<{
-    [surveyId: string]: Option[];
-  }>({});
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('name');
+  const [currentPage, setCurrentPage] = useState(1);
 
-  async function handlePoolsChange(surveyId: string, pools: Option[]) {
-    setSelectedLocationPools((prev) => ({
-      ...prev,
-      [surveyId]: pools,
-    }));
+  const [sharedPoolCounts, setSharedPoolCounts] = useState<
+    Record<string, number>
+  >({});
 
-    await Promise.all([
-      ...originalSelectedLocationPools.current[surveyId]
-        .filter((pool) => !pools.some((p) => p.value === pool.value))
-        .map((pool) =>
-          client.models.TestPresetProject.delete({
-            testPresetId: pool.value,
-            projectId: surveyId,
+  const getInitialRowsPerPage = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(ROWS_PER_PAGE_STORAGE_KEY);
+      const parsed = stored ? parseInt(stored, 10) : NaN;
+      if (ROWS_PER_PAGE_OPTIONS.includes(parsed)) return parsed;
+    }
+    return 10;
+  };
+
+  const [itemsPerPage, setItemsPerPage] = useState(getInitialRowsPerPage);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(ROWS_PER_PAGE_STORAGE_KEY, String(itemsPerPage));
+    }
+  }, [itemsPerPage]);
+
+  // Count how many pools are currently in play for each survey (its own + incoming shared)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (surveys.length === 0) return;
+      const entries = await Promise.all(
+        surveys
+          .filter((s) => !s.hidden)
+          .map(async (survey) => {
+            const { data } =
+              await client.models.TestPresetProject.testPresetsByProjectId({
+                projectId: survey.id,
+              });
+            return [survey.id, (data ?? []).length] as const;
           })
-        ),
-      ...pools
-        .filter(
-          (pool) =>
-            !originalSelectedLocationPools.current[surveyId].some(
-              (p) => p.value === pool.value
-            )
-        )
-        .map((pool) =>
-          client.models.TestPresetProject.create({
-            testPresetId: pool.value,
-            projectId: surveyId,
-            group: organizationId,
-          })
-        ),
-    ]);
+      );
+      if (!cancelled) {
+        setSharedPoolCounts(Object.fromEntries(entries));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [surveys, client]);
 
-    originalSelectedLocationPools.current[surveyId] = pools;
+  const visibleSurveys = useMemo(
+    () => surveys.filter((s) => !s.hidden),
+    [surveys]
+  );
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    if (!q) return visibleSurveys;
+    return visibleSurveys.filter((s) => s.name.toLowerCase().includes(q));
+  }, [visibleSurveys, search]);
+
+  const sorted = useMemo(() => {
+    const copy = [...filtered];
+    switch (sortBy) {
+      case 'name':
+        return copy.sort((a, b) => a.name.localeCompare(b.name));
+      case 'name-reverse':
+        return copy.sort((a, b) => b.name.localeCompare(a.name));
+      default:
+        return copy;
+    }
+  }, [filtered, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / itemsPerPage));
+  const pageClamped = Math.min(Math.max(1, currentPage), totalPages);
+  const paged = sorted.slice(
+    (pageClamped - 1) * itemsPerPage,
+    pageClamped * itemsPerPage
+  );
+
+  function poolNameForSurvey(surveyName: string): string | undefined {
+    return locationPools.find((p) => p.name === surveyName)?.name;
   }
 
-  useEffect(() => {
-    async function getSelectedLocationPools() {
-      if (locationPools.length === 0) return;
-
-      await Promise.all(
-        surveys.map(async (survey) => {
-          if (survey.hidden) return;
-          const { data: selectedLocationPools } =
-            await client.models.TestPresetProject.testPresetsByProjectId({
-              projectId: survey.id,
-            });
-
-          setSelectedLocationPools((prev) => {
-            originalSelectedLocationPools.current = {
-              ...prev,
-              [survey.id]: selectedLocationPools.map((pool) => ({
-                label: locationPools.find((p) => p.id === pool.testPresetId)!
-                  .name,
-                value: pool.testPresetId,
-              })),
-            };
-            return originalSelectedLocationPools.current;
-          });
-        })
-      );
-    }
-
-    getSelectedLocationPools();
-  }, [surveys, locationPools]);
-
-  const tableData = surveys
-    .filter((survey) => !survey.hidden)
-    .map((survey) => {
-      const isDisabled = [
-        'addLocationsToPoolModal',
-        'editLocationPoolModal',
-        'configModal',
-      ].includes(modalToShow || '');
-
-      return {
-        id: survey.id,
-        rowData: [
-          survey.name,
-          <Select
-            className='text-black'
-            isMulti
-            value={selectedLocationPools[survey.id]}
-            options={locationPools.map((pool) => ({
-              label: pool.name,
-              value: pool.id,
-            }))}
-            onChange={(e) => handlePoolsChange(survey.id, e as Option[])}
-          />,
-          <Button
-            variant='success'
-            className='w-100'
-            onClick={() => {
-              setSelectedSurvey({
-                label: survey.name,
-                value: survey.id,
-              });
-              showModal('addLocationsToPoolModal');
-            }}
-            disabled={isDisabled}
-          >
-            <Plus />
-          </Button>,
-          <Button
-            variant='info'
-            className='w-100'
-            onClick={() => {
-              setSelectedSurvey({
-                label: survey.name,
-                value: survey.id,
-              });
-              showModal('editLocationPoolModal');
-            }}
-            disabled={isDisabled}
-          >
-            <Eye />
-          </Button>,
-          <Button
-            variant='primary'
-            className='w-100'
-            onClick={() => {
-              setSelectedSurvey({
-                label: survey.name,
-                value: survey.id,
-              });
-              showModal('configModal');
-            }}
-            disabled={isDisabled}
-          >
-            <Settings2 />
-          </Button>,
-        ],
-      };
-    });
-
-  useEffect(() => {
-    if (!modalToShow && selectedSurvey) {
-      setSelectedSurvey(null);
-    }
-  }, [modalToShow]);
-
   return (
-    <div className='d-flex flex-column gap-2 mt-3 w-100'>
-      <h5 className='mb-0'>Surveys</h5>
-      <MyTable
-        tableHeadings={[
-          { content: 'Name', style: { width: '40%' }, sort: true },
-          { content: 'Assigned Location Pools' },
-          { content: 'Add Locations', style: { width: '120px' } },
-          { content: 'Edit Locations', style: { width: '120px' } },
-          {
-            content: 'Configuration',
-            style: { width: '120px' },
-          },
-        ]}
-        tableData={tableData}
-        pagination={true}
-        itemsPerPage={5}
-        emptyMessage='No surveys found'
-      />
-      {selectedSurvey && (
-        <ConfigModal
-          show={modalToShow === 'configModal'}
-          survey={{ id: selectedSurvey.value, name: selectedSurvey.label }}
-        />
-      )}
-      {selectedSurvey && (
-        <EditLocationsModal
-          key={selectedSurvey.value}
-          show={modalToShow === 'editLocationPoolModal'}
-          preset={{
-            id: locationPools.find(
-              (pool) => pool.name === selectedSurvey.label
-            )!.id,
-            name: selectedSurvey.label,
+    <Card>
+      <Card.Header>
+        <h5 className='mb-0'>Surveys</h5>
+      </Card.Header>
+      <Card.Body className='p-0'>
+        <div
+          style={{
+            color: 'var(--ss-text-muted)',
+            fontSize: 12,
+            lineHeight: 1.4,
+            padding: '12px 16px',
+            borderBottom: '1px solid var(--ss-border-soft)',
           }}
-          surveyId={selectedSurvey.value}
-        />
-      )}
-      {selectedSurvey && (
-        <AddLocationsModal
-          show={modalToShow === 'addLocationsToPoolModal'}
-          preset={{
-            id: locationPools.find(
-              (pool) => pool.name === selectedSurvey.label
-            )!.id,
-            name: selectedSurvey.label,
+        >
+          Open a survey to manage its location pool, add or remove testing
+          locations, configure test rules, and share its pool with other
+          surveys.
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 8,
+            alignItems: 'center',
+            padding: '12px 16px',
+            borderBottom: '1px solid var(--ss-border-soft)',
           }}
-          surveyId={selectedSurvey.value}
-        />
-      )}
-    </div>
+        >
+          <Form.Control
+            type='text'
+            placeholder='Search surveys…'
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
+            style={{ minWidth: 0, maxWidth: '260px', flex: '0 1 auto' }}
+          />
+          <Form.Select
+            value={sortBy}
+            onChange={(e) => {
+              setSortBy(e.target.value as SortOption);
+              setCurrentPage(1);
+            }}
+            style={{ minWidth: 0, maxWidth: '200px', flex: '0 1 auto' }}
+          >
+            <option value='name'>Name (A-Z)</option>
+            <option value='name-reverse'>Name (Z-A)</option>
+          </Form.Select>
+          <div style={{ flex: 1 }} />
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              fontSize: 13,
+              color: 'var(--ss-text-dim)',
+            }}
+          >
+            <span>Rows</span>
+            <Form.Select
+              size='sm'
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(parseInt(e.target.value, 10));
+                setCurrentPage(1);
+              }}
+              style={{ width: 'auto', padding: '2px 24px 2px 8px' }}
+            >
+              {ROWS_PER_PAGE_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </Form.Select>
+            <span>
+              Page {pageClamped} of {totalPages}
+            </span>
+            <Button
+              size='sm'
+              variant='secondary'
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={pageClamped === 1}
+              style={{ padding: '2px 10px' }}
+            >
+              ‹
+            </Button>
+            <Button
+              size='sm'
+              variant='secondary'
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={pageClamped === totalPages}
+              style={{ padding: '2px 10px' }}
+            >
+              ›
+            </Button>
+          </div>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table className='ss-data-table'>
+            <thead>
+              <tr>
+                <th style={{ width: '40%' }}>Name</th>
+                <th>Pool</th>
+                <th style={{ width: 140, textAlign: 'right' }}>
+                  Pools in use
+                </th>
+                <th style={{ width: 140 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {paged.map((survey) => {
+                const poolName = poolNameForSurvey(survey.name);
+                const count = sharedPoolCounts[survey.id];
+                return (
+                  <tr key={survey.id}>
+                    <td>{survey.name}</td>
+                    <td style={{ color: 'var(--ss-text-muted)' }}>
+                      {poolName ?? '—'}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      {count == null ? '…' : count}
+                    </td>
+                    <td>
+                      <Button
+                        variant='primary'
+                        size='sm'
+                        className='d-flex align-items-center gap-1'
+                        onClick={() =>
+                          navigate(`/testing/surveys/${survey.id}`)
+                        }
+                      >
+                        Manage <ChevronRight size={14} />
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {paged.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    style={{
+                      textAlign: 'center',
+                      color: 'var(--ss-text-dim)',
+                      padding: '24px',
+                    }}
+                  >
+                    No surveys found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card.Body>
+    </Card>
   );
 }

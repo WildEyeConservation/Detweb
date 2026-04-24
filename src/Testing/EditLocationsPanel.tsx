@@ -7,7 +7,6 @@ import {
   useMemo,
 } from 'react';
 import { Button, Form, Spinner } from 'react-bootstrap';
-import { Modal, Header, Title, Body, Footer } from '../Modal';
 import { GlobalContext, UserContext, TestingContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
 import { FetcherType, PreloaderFactory } from '../Preloader';
@@ -15,13 +14,12 @@ import LightLocationView from './LightLocationView';
 import ProjectContext from './ProjectContext';
 
 type Props = {
-  show: boolean;
   preset: { id: string; name: string };
   surveyId: string;
 };
 
-export default function EditLocationsModal({ show, preset, surveyId }: Props) {
-  const { client, showModal } = useContext(GlobalContext)!;
+export default function EditLocationsPanel({ preset, surveyId }: Props) {
+  const { client } = useContext(GlobalContext)!;
   const { currentAnnoCount, setCurrentAnnoCount } = useContext(UserContext)!;
   const { organizationId } = useContext(TestingContext)!;
   const locationsRef = useRef<
@@ -88,7 +86,6 @@ export default function EditLocationsModal({ show, preset, surveyId }: Props) {
       } as any
     )) as any[];
 
-    // If no filters, keep as-is
     if (
       !selectedCategoryId &&
       (maxAnnotations === '' || maxAnnotations == null)
@@ -101,7 +98,6 @@ export default function EditLocationsModal({ show, preset, surveyId }: Props) {
       return;
     }
 
-    // Apply filters similar to AddLocationsModal
     const filtered: {
       testPresetId: string;
       locationId: string;
@@ -164,19 +160,13 @@ export default function EditLocationsModal({ show, preset, surveyId }: Props) {
   }, [client, preset.id, selectedCategoryId, maxAnnotations]);
 
   useEffect(() => {
-    if (show) refreshLocations();
-    else {
-      setLocations([]);
-      setIndex(0);
-    }
-  }, [show, preset.id, refreshLocations]);
+    refreshLocations();
+  }, [preset.id, refreshLocations]);
 
   useEffect(() => {
-    if (show) {
-      setPendingCategoryId(selectedCategoryId);
-      setPendingMaxAnnotations(maxAnnotations);
-    }
-  }, [show]);
+    setPendingCategoryId(selectedCategoryId);
+    setPendingMaxAnnotations(maxAnnotations);
+  }, []);
 
   useEffect(() => {
     if (locations.length > 0) {
@@ -283,110 +273,96 @@ export default function EditLocationsModal({ show, preset, surveyId }: Props) {
 
   return (
     <ProjectContext surveyId={surveyId}>
-      <Modal show={show} strict={true}>
-        <Header>
-          <Title>Edit Locations for {preset.name}</Title>
-        </Header>
-        <Body>
-          <div
-            className='d-flex flex-column gap-3 px-3 pb-3 pt-0'
-            style={{ height: '75vh' }}
-          >
-            {loading ? (
-              <p className='d-flex align-items-center gap-2 p-2'>
-                <Spinner animation='border' size='sm' /> {loadedCount} locations
-                checked
-              </p>
-            ) : locations.length === 0 ? (
-              <p>No locations in this preset.</p>
-            ) : (
-              <div className='d-flex flex-row gap-3 h-100'>
-                {/* Left controls column */}
-                <div
-                  className='d-flex flex-column gap-3 border-end border-dark mt-3 pe-3'
-                  style={{ width: '360px', maxWidth: '40%', overflowY: 'auto' }}
-                >
-                  <Form.Group className='d-flex flex-column gap-2'>
-                    <Form.Group>
-                      <Form.Label className='mb-0'>Label filter</Form.Label>
-                      <Form.Select
-                        value={pendingCategoryId}
-                        onChange={(e) => setPendingCategoryId(e.target.value)}
-                      >
-                        <option value=''>All labels</option>
-                        {locations[index] && (
-                          <CategoryOptions
-                            annotationSetId={locations[index].annotationSetId}
-                          />
-                        )}
-                      </Form.Select>
-                    </Form.Group>
-                    <Form.Group>
-                      <Form.Label className='mb-0'>Max annotations</Form.Label>
-                      <Form.Control
-                        type='number'
-                        min={0}
-                        placeholder='No limit'
-                        value={pendingMaxAnnotations}
-                        onChange={(e) =>
-                          setPendingMaxAnnotations(
-                            e.target.value === ''
-                              ? ''
-                              : Number(e.target.value) || ''
-                          )
-                        }
-                      />
-                    </Form.Group>
-                    <Button
-                      variant='primary'
-                      onClick={applyFilters}
-                      disabled={loading}
-                    >
-                      Filter
-                    </Button>
-                  </Form.Group>
-                </div>
-
-                {/* Right image column */}
-                <div className='d-flex flex-column flex-grow-1 h-100 w-100'>
-                  <Form.Group className='mt-3 h-100 w-100'>
-                    <Preloader
-                      index={index}
-                      setIndex={setIndex}
-                      fetcher={fetcher}
-                      preloadN={5}
-                      historyN={5}
-                    />
-                  </Form.Group>
-                  <div className='d-flex flex-column w-100 gap-2 pt-3'>
+      <div
+        className='d-flex flex-column gap-3'
+        style={{ height: 'calc(100vh - 260px)', minHeight: 520 }}
+      >
+        {loading ? (
+          <p className='d-flex align-items-center gap-2 p-2'>
+            <Spinner animation='border' size='sm' /> {loadedCount} locations
+            checked
+          </p>
+        ) : locations.length === 0 ? (
+          <p>No locations in this pool.</p>
+        ) : (
+          <div className='d-flex flex-row gap-3 h-100'>
+            <div
+              className='d-flex flex-column gap-3 border-end border-dark pe-3'
+              style={{ width: '360px', maxWidth: '40%', overflowY: 'auto' }}
+            >
+              <Form.Group className='d-flex flex-column gap-2'>
+                <Form.Group>
+                  <Form.Label className='mb-0'>Label filter</Form.Label>
+                  <Form.Select
+                    value={pendingCategoryId}
+                    onChange={(e) => setPendingCategoryId(e.target.value)}
+                  >
+                    <option value=''>All labels</option>
                     {locations[index] && (
-                      <a
-                        className='btn btn-outline-info'
-                        target='_blank'
-                        href={`/surveys/${surveyId}/location/${locations[index].locationId}/${locations[index].annotationSetId}`}
-                      >
-                        Edit Location
-                      </a>
+                      <CategoryOptions
+                        annotationSetId={locations[index].annotationSetId}
+                      />
                     )}
-                    <Button
-                      variant='danger'
-                      onClick={handleRemove}
-                      disabled={removing}
-                    >
-                      {removing ? 'Removing...' : 'Remove from pool'}
-                    </Button>
-                  </div>
-                </div>
+                  </Form.Select>
+                </Form.Group>
+                <Form.Group>
+                  <Form.Label className='mb-0'>Max annotations</Form.Label>
+                  <Form.Control
+                    type='number'
+                    min={0}
+                    placeholder='No limit'
+                    value={pendingMaxAnnotations}
+                    onChange={(e) =>
+                      setPendingMaxAnnotations(
+                        e.target.value === ''
+                          ? ''
+                          : Number(e.target.value) || ''
+                      )
+                    }
+                  />
+                </Form.Group>
+                <Button
+                  variant='primary'
+                  onClick={applyFilters}
+                  disabled={loading}
+                >
+                  Filter
+                </Button>
+              </Form.Group>
+            </div>
+
+            <div className='d-flex flex-column flex-grow-1 h-100 w-100'>
+              <Form.Group className='h-100 w-100'>
+                <Preloader
+                  index={index}
+                  setIndex={setIndex}
+                  fetcher={fetcher}
+                  preloadN={5}
+                  historyN={5}
+                />
+              </Form.Group>
+              <div className='d-flex flex-column w-100 gap-2 pt-3'>
+                {locations[index] && (
+                  <a
+                    className='btn btn-outline-info'
+                    target='_blank'
+                    href={`/surveys/${surveyId}/location/${locations[index].locationId}/${locations[index].annotationSetId}`}
+                  >
+                    Edit Location
+                  </a>
+                )}
+                <Button
+                  variant='danger'
+                  onClick={handleRemove}
+                  disabled={removing}
+                >
+                  {removing ? 'Removing...' : 'Remove from pool'}
+                </Button>
               </div>
-            )}
+            </div>
           </div>
-        </Body>
-        <Footer>
-          <Button variant='secondary' onClick={() => showModal(null)}>
-            Close
-          </Button>
-        </Footer>
-      </Modal>
+        )}
+      </div>
     </ProjectContext>
   );
 }

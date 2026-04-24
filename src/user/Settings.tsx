@@ -180,8 +180,7 @@ export default function Settings({ signOut }: { signOut: () => void }) {
         }}
         onClick={() => setShow(true)}
       >
-        <UserIcon className='d-none d-lg-block' />
-        <span className='d-block d-lg-none'>User</span>
+        <UserIcon />
       </button>
 
       <Modal

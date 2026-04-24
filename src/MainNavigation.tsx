@@ -15,6 +15,7 @@ import {
   Briefcase,
   BarChart3,
   Users,
+  FlaskConical,
   Settings2,
   LogOut,
   type LucideIcon,
@@ -63,6 +64,13 @@ const NAV: NavSection[] = [
         label: 'Permissions',
         to: '/permissions',
         icon: Users,
+        requires: 'orgadmin',
+      },
+      {
+        id: 'testing',
+        label: 'User Testing',
+        to: '/testing',
+        icon: FlaskConical,
         requires: 'orgadmin',
       },
     ],
@@ -285,6 +293,7 @@ function resolveActiveNavId(pathname: string): string {
   if (pathname.startsWith('/activity') || pathname.startsWith('/annotation-statistics'))
     return 'activity';
   if (pathname.startsWith('/permissions')) return 'permissions';
+  if (pathname.startsWith('/testing')) return 'testing';
   if (pathname.startsWith('/SSAdmin')) return 'admin';
   return 'surveys';
 }

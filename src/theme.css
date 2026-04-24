@@ -311,6 +311,9 @@ a:hover { color: var(--ss-accent-hover); }
   background-color: var(--ss-accent);
   border-color: var(--ss-accent);
 }
+.rounded-checkbox .form-check-input[type='checkbox'] {
+  border-radius: 0.35em;
+}
 
 /* Tables */
 .table {
