@@ -1,11 +1,18 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
-import { Button, Modal } from 'react-bootstrap';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Button, Card, Form } from 'react-bootstrap';
 import { GlobalContext } from '../Context';
 import { useUsers } from '../apiInterface';
 import { fetchAllPaginatedResults } from '../utils';
-import MyTable from '../Table';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
-import { Footer } from '../Modal';
+
+const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
+const ROWS_PER_PAGE_STORAGE_KEY = 'manageUsersRowsPerPage';
+
+type SortOption =
+  | 'userName'
+  | 'userName-reverse'
+  | 'userEmail'
+  | 'userEmail-reverse';
 
 type UserPermission = {
   userId: string;
@@ -24,7 +31,7 @@ export default function ManageUsers({
   projectId: string;
   organizationId: string;
 }) {
-  const { client, showModal } = useContext(GlobalContext)!;
+  const { client } = useContext(GlobalContext)!;
   const { users } = useUsers();
 
   const [permissions, setPermissions] = useState<UserPermission[]>([]);
@@ -33,7 +40,28 @@ export default function ManageUsers({
   >([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [showUnsavedPrompt, setShowUnsavedPrompt] = useState(false);
+  const [sortBy, setSortBy] = useState<SortOption>('userName');
+  const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const getInitialRowsPerPage = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(ROWS_PER_PAGE_STORAGE_KEY);
+      const parsed = stored ? parseInt(stored, 10) : NaN;
+      if (ROWS_PER_PAGE_OPTIONS.includes(parsed)) {
+        return parsed;
+      }
+    }
+    return 10;
+  };
+
+  const [itemsPerPage, setItemsPerPage] = useState(getInitialRowsPerPage);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(ROWS_PER_PAGE_STORAGE_KEY, String(itemsPerPage));
+    }
+  }, [itemsPerPage]);
 
   const fetchData = useCallback(async function fetchData() {
     if (!users) return;
@@ -169,102 +197,235 @@ export default function ManageUsers({
     }
   };
 
-  const handleClose = () => {
-    if (hasChanges) {
-      setShowUnsavedPrompt(true);
-    } else {
-      showModal(null);
+  const filteredPermissions = useMemo(() => {
+    const searchLower = search.toLowerCase();
+    if (searchLower === '') return permissions;
+    return permissions.filter(
+      (p) =>
+        p.userName.toLowerCase().includes(searchLower) ||
+        p.userEmail.toLowerCase().includes(searchLower)
+    );
+  }, [permissions, search]);
+
+  const sortedPermissions = useMemo(() => {
+    const sorted = [...filteredPermissions];
+    switch (sortBy) {
+      case 'userName':
+        return sorted.sort((a, b) => a.userName.localeCompare(b.userName));
+      case 'userName-reverse':
+        return sorted.sort((a, b) => b.userName.localeCompare(a.userName));
+      case 'userEmail':
+        return sorted.sort((a, b) => a.userEmail.localeCompare(b.userEmail));
+      case 'userEmail-reverse':
+        return sorted.sort((a, b) => b.userEmail.localeCompare(a.userEmail));
+      default:
+        return sorted;
     }
-  };
+  }, [filteredPermissions, sortBy]);
 
-  const handleSaveAndClose = async () => {
-    setShowUnsavedPrompt(false);
-    await handleSave();
-    showModal(null);
-  };
-
-  const handleDiscardAndClose = () => {
-    setShowUnsavedPrompt(false);
-    showModal(null);
-  };
-
-  const tableData = permissions.map((permission) => ({
-    id: permission.userId,
-    rowData: [
-      permission.userName,
-      permission.userEmail,
-      <LabeledToggleSwitch
-        className='mb-0'
-        leftLabel='No'
-        rightLabel='Yes'
-        checked={permission.annotationAccess}
-        disabled={permission.isOrgAdmin || isSaving}
-        onChange={(checked) => {
-          if (permission.isAdmin && !checked) {
-            // Can't remove annotation access while admin
-            return;
-          }
-          setPermissions(
-            permissions.map((p) =>
-              p.userId === permission.userId
-                ? { ...p, annotationAccess: checked }
-                : p
-            )
-          );
-        }}
-      />,
-      <LabeledToggleSwitch
-        className='mb-0'
-        leftLabel='No'
-        rightLabel='Yes'
-        checked={permission.isAdmin}
-        disabled={permission.isOrgAdmin || isSaving}
-        onChange={(checked) => {
-          setPermissions(
-            permissions.map((p) =>
-              p.userId === permission.userId
-                ? {
-                    ...p,
-                    isAdmin: checked,
-                    annotationAccess: checked ? true : p.annotationAccess,
-                  }
-                : p
-            )
-          );
-        }}
-      />,
-    ],
-  }));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(sortedPermissions.length / itemsPerPage)
+  );
+  const pageClamped = Math.min(Math.max(1, currentPage), totalPages);
+  const pagedPermissions = sortedPermissions.slice(
+    (pageClamped - 1) * itemsPerPage,
+    pageClamped * itemsPerPage
+  );
 
   return (
-    <>
-      <div className='p-3'>
-        <div className='text-muted mb-3' style={{ lineHeight: 1.2 }}>
-          <span style={{ fontSize: 16 }}>Manage User Access</span>
-          <br />
-          <span style={{ fontSize: 12 }}>
+    <div className='d-flex flex-column gap-3'>
+      <Card>
+        <Card.Header>
+          <h5 className='mb-0'>Manage User Access</h5>
+        </Card.Header>
+        <Card.Body className='p-0'>
+          <div
+            style={{
+              color: 'var(--ss-text-muted)',
+              fontSize: 12,
+              lineHeight: 1.4,
+              padding: '12px 16px',
+              borderBottom: '1px solid var(--ss-border-soft)',
+            }}
+          >
             Grant or revoke annotation and admin access for each organisation
-            member on this survey.
-            <br />
-            Organisation admins automatically have full access and cannot be
-            modified here.
-            <br />
-            Enabling admin access automatically grants annotation access.
-          </span>
+            member on this survey. Organisation admins automatically have full
+            access and cannot be modified here. Enabling admin access
+            automatically grants annotation access.
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 8,
+              alignItems: 'center',
+              padding: '12px 16px',
+              borderBottom: '1px solid var(--ss-border-soft)',
+            }}
+          >
+            <Form.Control
+              type='text'
+              placeholder='Search users…'
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{
+                minWidth: 0,
+                maxWidth: '260px',
+                flex: '0 1 auto',
+              }}
+            />
+            <Form.Select
+              value={sortBy}
+              onChange={(e) => {
+                setSortBy(e.target.value as SortOption);
+                setCurrentPage(1);
+              }}
+              style={{
+                minWidth: 0,
+                maxWidth: '200px',
+                flex: '0 1 auto',
+              }}
+            >
+              <option value='userName'>Name (A-Z)</option>
+              <option value='userName-reverse'>Name (Z-A)</option>
+              <option value='userEmail'>Email (A-Z)</option>
+              <option value='userEmail-reverse'>Email (Z-A)</option>
+            </Form.Select>
+            <div style={{ flex: 1 }} />
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 13,
+                color: 'var(--ss-text-dim)',
+              }}
+            >
+              <span>Rows</span>
+              <Form.Select
+                size='sm'
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(parseInt(e.target.value, 10));
+                  setCurrentPage(1);
+                }}
+                style={{ width: 'auto', padding: '2px 24px 2px 8px' }}
+              >
+                {ROWS_PER_PAGE_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </Form.Select>
+              <span>
+                Page {pageClamped} of {totalPages}
+              </span>
+              <Button
+                size='sm'
+                variant='secondary'
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={pageClamped === 1}
+                style={{ padding: '2px 10px' }}
+              >
+                ‹
+              </Button>
+              <Button
+                size='sm'
+                variant='secondary'
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={pageClamped === totalPages}
+                style={{ padding: '2px 10px' }}
+              >
+                ›
+              </Button>
+            </div>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table className='ss-data-table'>
+              <thead>
+              <tr>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Annotation Access</th>
+                <th>Admin</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pagedPermissions.map((permission) => (
+                <tr key={permission.userId}>
+                  <td>{permission.userName}</td>
+                  <td>{permission.userEmail}</td>
+                  <td>
+                    <LabeledToggleSwitch
+                      className='mb-0'
+                      leftLabel='No'
+                      rightLabel='Yes'
+                      checked={permission.annotationAccess}
+                      disabled={permission.isOrgAdmin || isSaving}
+                      onChange={(checked) => {
+                        if (permission.isAdmin && !checked) {
+                          return;
+                        }
+                        setPermissions(
+                          permissions.map((p) =>
+                            p.userId === permission.userId
+                              ? { ...p, annotationAccess: checked }
+                              : p
+                          )
+                        );
+                      }}
+                    />
+                  </td>
+                  <td>
+                    <LabeledToggleSwitch
+                      className='mb-0'
+                      leftLabel='No'
+                      rightLabel='Yes'
+                      checked={permission.isAdmin}
+                      disabled={permission.isOrgAdmin || isSaving}
+                      onChange={(checked) => {
+                        setPermissions(
+                          permissions.map((p) =>
+                            p.userId === permission.userId
+                              ? {
+                                  ...p,
+                                  isAdmin: checked,
+                                  annotationAccess: checked
+                                    ? true
+                                    : p.annotationAccess,
+                                }
+                              : p
+                          )
+                        );
+                      }}
+                    />
+                  </td>
+                </tr>
+              ))}
+              {pagedPermissions.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    style={{
+                      textAlign: 'center',
+                      color: 'var(--ss-text-dim)',
+                      padding: '24px',
+                    }}
+                  >
+                    {isLoading ? 'Loading...' : 'No users found'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-        <MyTable
-          tableHeadings={[
-            { content: 'Username', sort: true },
-            { content: 'Email', sort: true },
-            { content: 'Annotation Access' },
-            { content: 'Admin' },
-          ]}
-          tableData={tableData}
-          pagination={true}
-          emptyMessage={isLoading ? 'Loading...' : 'No users found'}
-        />
-      </div>
-      <Footer>
+        </Card.Body>
+      </Card>
+      <div style={{ display: 'flex', gap: 8 }}>
         <Button
           variant='primary'
           onClick={handleSave}
@@ -272,43 +433,7 @@ export default function ManageUsers({
         >
           {isSaving ? 'Saving...' : 'Save'}
         </Button>
-        <Button
-          variant='dark'
-          onClick={handleClose}
-          disabled={isSaving}
-        >
-          Close
-        </Button>
-      </Footer>
-      {showUnsavedPrompt && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
-            zIndex: 1055,
-          }}
-        />
-      )}
-      <Modal show={showUnsavedPrompt} onHide={() => setShowUnsavedPrompt(false)} style={{ zIndex: 1056 }}>
-        <Modal.Header>
-          <Modal.Title>Unsaved Changes</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          You have unsaved changes. Would you like to save before closing?
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant='primary' onClick={handleSaveAndClose}>
-            Save & Close
-          </Button>
-          <Button variant='danger' onClick={handleDiscardAndClose}>
-            Discard
-          </Button>
-          <Button variant='dark' onClick={() => setShowUnsavedPrompt(false)}>
-            Cancel
-          </Button>
-        </Modal.Footer>
-      </Modal>
-    </>
+      </div>
+    </div>
   );
 }

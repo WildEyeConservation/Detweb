@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Form } from 'react-bootstrap';
+import { Alert, Card, Form } from 'react-bootstrap';
 import { Schema } from '../amplify/client-schema';
 import { GlobalContext, UserContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
@@ -266,219 +266,243 @@ export default function QCReview({
 
   const selectedCategory = availableCategories.find((c) => c.id === selectedCategoryId);
 
+  if (loading) {
+    return (
+      <Card>
+        <Card.Body className='text-center text-muted'>
+          Loading annotations
+          {loadingProgress > 0
+            ? ` (${loadingProgress.toLocaleString()} fetched)`
+            : ''}
+          ...
+        </Card.Body>
+      </Card>
+    );
+  }
+
+  if (availableCategories.length === 0) {
+    return (
+      <Alert variant='warning' className='mb-0'>
+        No labels with annotations found for this annotation set.
+      </Alert>
+    );
+  }
+
+  const showSampleConfig =
+    !!selectedCategoryId &&
+    filteredUnreviewedCount !== null &&
+    filteredUnreviewedCount > 0;
+
   return (
-    <div className='px-3 pb-3 pt-1'>
-      <div className='d-flex flex-column gap-3 mt-2'>
-        {loading ? (
-          <p
-            className='text-muted mb-0 text-center'
-            style={{ fontSize: '12px' }}
-          >
-            Loading annotations{loadingProgress > 0 ? ` (${loadingProgress.toLocaleString()} fetched)` : ''}...
-          </p>
-        ) : availableCategories.length === 0 ? (
-          <Alert variant='warning' className='mb-0'>
-            No labels with annotations found for this annotation set.
-          </Alert>
-        ) : (
-          <>
-            {/* Category selector */}
-            <Form.Group>
-              <Form.Label className='mb-0'>Label to review</Form.Label>
-              <span
-                className='text-muted d-block mb-1'
-                style={{ fontSize: '12px' }}
-              >
-                Select the label whose annotations should be reviewed.
-              </span>
-              <Form.Select
-                value={selectedCategoryId}
-                onChange={(e) => setSelectedCategoryId(e.target.value)}
-                disabled={launching}
-              >
-                <option value=''>Select a label...</option>
-                {availableCategories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}{cat.complete ? ' (complete)' : ''}
-                  </option>
-                ))}
-              </Form.Select>
-            </Form.Group>
+    <div className='d-flex flex-column gap-3'>
+      <Card>
+        <Card.Header>
+          <h5 className='mb-0'>Select Label</h5>
+        </Card.Header>
+        <Card.Body>
+          <Form.Group>
+            <Form.Label className='mb-0'>Label to review</Form.Label>
+            <span
+              className='text-muted d-block mb-1'
+              style={{ fontSize: '12px' }}
+            >
+              Select the label whose annotations should be reviewed.
+            </span>
+            <Form.Select
+              value={selectedCategoryId}
+              onChange={(e) => setSelectedCategoryId(e.target.value)}
+              disabled={launching}
+            >
+              <option value=''>Select a label...</option>
+              {availableCategories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                  {cat.complete ? ' (complete)' : ''}
+                </option>
+              ))}
+            </Form.Select>
+          </Form.Group>
+        </Card.Body>
+      </Card>
 
-            {/* Annotation count stats */}
-            {selectedCategoryId && (
-              <div
-                className='border border-dark shadow-sm p-2'
-                style={{ backgroundColor: '#697582' }}
-              >
-                <div className='text-white' style={{ fontSize: '12px' }}>
-                  <div>
-                    Total annotations for{' '}
-                    <strong>{selectedCategory?.name}</strong>:{' '}
-                    <strong>{totalCount}</strong>
-                  </div>
-                  <div>
-                    Not yet reviewed:{' '}
-                    <strong>{unreviewedCount}</strong>
-                    {selectedAnnotatorIds.length > 0 &&
-                      filteredUnreviewedCount !== unreviewedCount && (
-                        <span>
-                          {' '}
-                          (filtered: <strong>{filteredUnreviewedCount}</strong>)
-                        </span>
-                      )}
-                  </div>
-                  {sampleCount !== null && filteredUnreviewedCount !== null && filteredUnreviewedCount > 0 && (
-                    <div>
-                      Sample size ({samplePercent}%):{' '}
-                      <strong>{sampleCount}</strong>
-                    </div>
-                  )}
-                  {filteredUnreviewedCount === 0 && (
-                    <div className='mt-1 text-warning'>
-                      {selectedAnnotatorIds.length > 0
-                        ? 'No unreviewed annotations for the selected annotators.'
-                        : 'All annotations for this label have already been reviewed.'}
-                    </div>
-                  )}
-                </div>
+      {selectedCategoryId && (
+        <Card>
+          <Card.Header>
+            <h5 className='mb-0'>Annotation Stats</h5>
+          </Card.Header>
+          <Card.Body>
+            <div style={{ fontSize: '13px', lineHeight: 1.7 }}>
+              <div>
+                Total annotations for{' '}
+                <strong>{selectedCategory?.name}</strong>:{' '}
+                <strong>{totalCount}</strong>
               </div>
+              <div>
+                Not yet reviewed: <strong>{unreviewedCount}</strong>
+                {selectedAnnotatorIds.length > 0 &&
+                  filteredUnreviewedCount !== unreviewedCount && (
+                    <span>
+                      {' '}
+                      (filtered:{' '}
+                      <strong>{filteredUnreviewedCount}</strong>)
+                    </span>
+                  )}
+              </div>
+              {sampleCount !== null &&
+                filteredUnreviewedCount !== null &&
+                filteredUnreviewedCount > 0 && (
+                  <div>
+                    Sample size ({samplePercent}%):{' '}
+                    <strong>{sampleCount}</strong>
+                  </div>
+                )}
+            </div>
+            {filteredUnreviewedCount === 0 && (
+              <Alert variant='warning' className='mb-0 mt-2'>
+                {selectedAnnotatorIds.length > 0
+                  ? 'No unreviewed annotations for the selected annotators.'
+                  : 'All annotations for this label have already been reviewed.'}
+              </Alert>
             )}
+          </Card.Body>
+        </Card>
+      )}
 
-            {/* Sample percentage */}
-            {selectedCategoryId &&
-              filteredUnreviewedCount !== null &&
-              filteredUnreviewedCount > 0 && (
-                <>
+      {showSampleConfig && (
+        <>
+          <Card>
+            <Card.Header>
+              <h5 className='mb-0'>Sample Configuration</h5>
+            </Card.Header>
+            <Card.Body>
+              <Form.Group className='mb-3'>
+                <Form.Label className='mb-0'>Sample size (%)</Form.Label>
+                <span
+                  className='text-muted d-block mb-1'
+                  style={{ fontSize: '12px' }}
+                >
+                  Percentage of unreviewed annotations to sample for review.
+                </span>
+                <Form.Control
+                  type='number'
+                  min={1}
+                  max={100}
+                  step={1}
+                  value={samplePercent}
+                  onChange={(e) =>
+                    setSamplePercent(
+                      Number((e.target as HTMLInputElement).value)
+                    )
+                  }
+                  disabled={launching}
+                />
+              </Form.Group>
+              <Form.Group>
+                <Form.Switch
+                  label='Show Advanced Options'
+                  checked={showAdvancedOptions}
+                  onChange={() =>
+                    setShowAdvancedOptions(!showAdvancedOptions)
+                  }
+                  disabled={launching}
+                />
+              </Form.Group>
+            </Card.Body>
+          </Card>
+
+          {showAdvancedOptions && (
+            <Card>
+              <Card.Header>
+                <h5 className='mb-0'>Advanced Options</h5>
+              </Card.Header>
+              <Card.Body className='d-flex flex-column gap-3'>
+                <Form.Group>
+                  <Form.Label className='mb-0'>Batch Size</Form.Label>
+                  <span
+                    className='text-muted d-block mb-1'
+                    style={{ fontSize: '12px' }}
+                  >
+                    The number of reviews a user can pick up at a time.
+                  </span>
+                  <Form.Control
+                    type='number'
+                    value={batchSize}
+                    onChange={(e) =>
+                      setBatchSize(
+                        Number((e.target as HTMLInputElement).value)
+                      )
+                    }
+                    disabled={launching}
+                  />
+                </Form.Group>
+
+                <Form.Group>
+                  <Form.Switch
+                    label='Hide Job From Non-Admin Workers'
+                    checked={hidden}
+                    onChange={() => setHidden(!hidden)}
+                    disabled={launching}
+                  />
+                  <span
+                    className='text-muted d-block'
+                    style={{ fontSize: '12px' }}
+                  >
+                    When enabled, only admin users will see this job on the
+                    Jobs page.
+                  </span>
+                </Form.Group>
+
+                {annotatorOptions.length > 1 && (
                   <Form.Group>
-                    <Form.Label className='mb-0'>Sample size (%)</Form.Label>
+                    <Form.Label className='mb-0'>
+                      Filter by Annotator
+                    </Form.Label>
                     <span
                       className='text-muted d-block mb-1'
                       style={{ fontSize: '12px' }}
                     >
-                      Percentage of unreviewed annotations to sample for review.
+                      Only review annotations made by the selected annotators.
+                      Leave all unchecked to include everyone.
                     </span>
-                    <Form.Control
-                      type='number'
-                      min={1}
-                      max={100}
-                      step={1}
-                      value={samplePercent}
-                      onChange={(e) =>
-                        setSamplePercent(
-                          Number((e.target as HTMLInputElement).value)
-                        )
-                      }
-                      disabled={launching}
-                    />
-                  </Form.Group>
-
-                  {/* Advanced options toggle */}
-                  <Form.Group>
-                    <Form.Switch
-                      label='Show Advanced Options'
-                      checked={showAdvancedOptions}
-                      onChange={() =>
-                        setShowAdvancedOptions(!showAdvancedOptions)
-                      }
-                      disabled={launching}
-                    />
-                  </Form.Group>
-
-                  {showAdvancedOptions && (
                     <div
-                      className='d-flex flex-column gap-3 border border-dark shadow-sm p-2'
-                      style={{ backgroundColor: '#697582' }}
+                      style={{
+                        maxHeight: '150px',
+                        overflowY: 'auto',
+                        border: '1px solid var(--bs-border-color)',
+                        borderRadius: '4px',
+                        padding: '6px 8px',
+                      }}
                     >
-                      <Form.Group>
-                        <Form.Label className='mb-0'>Batch Size</Form.Label>
-                        <span
-                          className='text-muted d-block mb-1'
-                          style={{ fontSize: '12px' }}
-                        >
-                          The number of reviews a user can pick up at a time.
-                        </span>
-                        <Form.Control
-                          type='number'
-                          value={batchSize}
-                          onChange={(e) =>
-                            setBatchSize(
-                              Number((e.target as HTMLInputElement).value)
-                            )
-                          }
+                      {annotatorOptions.map((ownerId) => (
+                        <Form.Check
+                          key={ownerId}
+                          type='checkbox'
+                          label={userMap[ownerId] ?? ownerId}
+                          checked={selectedAnnotatorIds.includes(ownerId)}
                           disabled={launching}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedAnnotatorIds((prev) => [
+                                ...prev,
+                                ownerId,
+                              ]);
+                            } else {
+                              setSelectedAnnotatorIds((prev) =>
+                                prev.filter((id) => id !== ownerId)
+                              );
+                            }
+                          }}
+                          style={{ fontSize: '13px' }}
                         />
-                      </Form.Group>
-
-                      <Form.Group>
-                        <Form.Switch
-                          label='Hide Job From Non-Admin Workers'
-                          checked={hidden}
-                          onChange={() => setHidden(!hidden)}
-                          disabled={launching}
-                        />
-                        <span
-                          className='text-muted d-block'
-                          style={{ fontSize: '12px' }}
-                        >
-                          When enabled, only admin users will see this job on
-                          the Jobs page.
-                        </span>
-                      </Form.Group>
-
-                      {annotatorOptions.length > 1 && (
-                        <Form.Group>
-                          <Form.Label className='mb-0'>
-                            Filter by Annotator
-                          </Form.Label>
-                          <span
-                            className='text-muted d-block mb-1'
-                            style={{ fontSize: '12px' }}
-                          >
-                            Only review annotations made by the selected
-                            annotators. Leave all unchecked to include everyone.
-                          </span>
-                          <div
-                            style={{
-                              maxHeight: '150px',
-                              overflowY: 'auto',
-                              backgroundColor: 'rgba(0,0,0,0.15)',
-                              borderRadius: '4px',
-                              padding: '6px 8px',
-                            }}
-                          >
-                            {annotatorOptions.map((ownerId) => (
-                              <Form.Check
-                                key={ownerId}
-                                type='checkbox'
-                                label={userMap[ownerId] ?? ownerId}
-                                checked={selectedAnnotatorIds.includes(ownerId)}
-                                disabled={launching}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedAnnotatorIds((prev) => [
-                                      ...prev,
-                                      ownerId,
-                                    ]);
-                                  } else {
-                                    setSelectedAnnotatorIds((prev) =>
-                                      prev.filter((id) => id !== ownerId)
-                                    );
-                                  }
-                                }}
-                                style={{ fontSize: '13px' }}
-                              />
-                            ))}
-                          </div>
-                        </Form.Group>
-                      )}
+                      ))}
                     </div>
-                  )}
-                </>
-              )}
-          </>
-        )}
-      </div>
+                  </Form.Group>
+                )}
+              </Card.Body>
+            </Card>
+          )}
+        </>
+      )}
     </div>
   );
 }

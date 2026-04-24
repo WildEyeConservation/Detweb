@@ -217,7 +217,7 @@ export default function LaunchAnnotationSetModal({
           >
             Launch
           </Button>
-          <Button variant='dark' disabled={launching} onClick={onClose}>
+          <Button variant='secondary' disabled={launching} onClick={onClose}>
             Close
           </Button>
         </Footer>

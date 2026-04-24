@@ -31,7 +31,7 @@ export default function ConfirmationModal({
         >
           Confirm
         </Button>
-        <Button variant='dark' onClick={onClose}>
+        <Button variant='secondary' onClick={onClose}>
           Cancel
         </Button>
       </Modal.Footer>

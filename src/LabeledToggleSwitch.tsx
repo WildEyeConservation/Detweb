@@ -1,5 +1,5 @@
 import React from 'react';
-import { Form, Row, Col } from 'react-bootstrap';
+import { Form, Row, Col, Button } from 'react-bootstrap';
 
 interface LabeledToggleSwitchProps {
   leftLabel: string;
@@ -8,6 +8,7 @@ interface LabeledToggleSwitchProps {
   onChange: (checked: boolean) => void;
   className?: string;
   disabled?: boolean;
+  variant?: 'toggle' | 'segmented';
 }
 
 const LabeledToggleSwitch: React.FC<LabeledToggleSwitchProps> = ({
@@ -17,7 +18,33 @@ const LabeledToggleSwitch: React.FC<LabeledToggleSwitchProps> = ({
   onChange,
   className,
   disabled,
+  variant = 'toggle',
 }) => {
+  if (variant === 'segmented') {
+    return (
+      <div className={`d-flex gap-2 ${className ?? ''}`}>
+        <Button
+          type='button'
+          variant={!checked ? 'primary' : 'outline-primary'}
+          disabled={disabled}
+          onClick={() => onChange(false)}
+          className='flex-fill'
+        >
+          {leftLabel}
+        </Button>
+        <Button
+          type='button'
+          variant={checked ? 'primary' : 'outline-primary'}
+          disabled={disabled}
+          onClick={() => onChange(true)}
+          className='flex-fill'
+        >
+          {rightLabel}
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <Form.Group
       as={Row}

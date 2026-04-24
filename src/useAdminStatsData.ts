@@ -72,6 +72,43 @@ export interface AdminStatsData {
   primaryAnnotations: SummaryMetric; // Annotations where id === objectId (first observation)
   breakdown: OrganizationBreakdownMetric[];
   refresh: () => void;
+  fetchedAt: string | null;
+  hasData: boolean;
+}
+
+const CACHE_KEY = 'adminStatsCache:v1';
+
+interface CachedSnapshot {
+  fetchedAt: string;
+  monthCount: number;
+  months: MonthKey[];
+  users: UsersMetric;
+  organizations: SummaryMetric;
+  surveys: SummaryMetric;
+  images: SummaryMetric;
+  annotations: SummaryMetric;
+  primaryAnnotations: SummaryMetric;
+  breakdown: OrganizationBreakdownMetric[];
+}
+
+function readCache(): CachedSnapshot | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as CachedSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(snapshot: CachedSnapshot) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(CACHE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // ignore quota errors
+  }
 }
 
 function buildMonthKeys(monthCount: number, now: DateTime): MonthKey[] {
@@ -97,7 +134,12 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
   const { users: cognitoUsers } = useUsers();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
-  const [version, setVersion] = useState(0);
+  // fetchToken is null until refresh() is called. Only fetchToken changes
+  // trigger the fetch effect — changing monthCount must NOT auto-refetch.
+  const [fetchToken, setFetchToken] = useState<string | null>(null);
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
+  const [hasData, setHasData] = useState(false);
+  const cacheHydratedRef = useRef(false);
 
   const nowRef = useRef(DateTime.utc());
   const months = useMemo(
@@ -151,8 +193,27 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
     });
   const [breakdown, setBreakdown] = useState<OrganizationBreakdownMetric[]>([]);
 
-  // Remap months when the prop changes
+  // Remap months when the prop changes. If the cache matches the new
+  // timeframe, re-hydrate from it; otherwise clear so the user is prompted
+  // to fetch again.
   useEffect(() => {
+    if (cacheHydratedRef.current) {
+      const cached = readCache();
+      if (cached && cached.monthCount === monthCount) {
+        setFetchedAt(cached.fetchedAt);
+        setHasData(true);
+        setUsersMetric(cached.users);
+        setOrgMetric(cached.organizations);
+        setSurveyMetric(cached.surveys);
+        setImageMetric(cached.images);
+        setAnnotationMetric(cached.annotations);
+        setPrimaryAnnotationMetric(cached.primaryAnnotations);
+        setBreakdown(cached.breakdown);
+        return;
+      }
+      setHasData(false);
+      setFetchedAt(cached ? cached.fetchedAt : null);
+    }
     setUsersMetric((prev) => ({
       total: prev.total,
       thisMonth: prev.thisMonth,
@@ -186,7 +247,31 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
     }));
   }, [months]);
 
+  // Hydrate from cache once on mount when the cached timeframe matches.
   useEffect(() => {
+    if (cacheHydratedRef.current) return;
+    cacheHydratedRef.current = true;
+    const cached = readCache();
+    if (!cached) return;
+    if (cached.monthCount !== monthCount) {
+      // Surface the timestamp so the user sees there is older data available,
+      // but do not hydrate series tied to a different window.
+      setFetchedAt(cached.fetchedAt);
+      return;
+    }
+    setFetchedAt(cached.fetchedAt);
+    setHasData(true);
+    setUsersMetric(cached.users);
+    setOrgMetric(cached.organizations);
+    setSurveyMetric(cached.surveys);
+    setImageMetric(cached.images);
+    setAnnotationMetric(cached.annotations);
+    setPrimaryAnnotationMetric(cached.primaryAnnotations);
+    setBreakdown(cached.breakdown);
+  }, []);
+
+  useEffect(() => {
+    if (!fetchToken) return; // gated: only fetch when refresh() sets a token
     let cancelled = false;
     async function run() {
       setLoading(true);
@@ -552,7 +637,49 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
           });
         }
 
-        if (!cancelled) setBreakdown(breakdownRows);
+        if (!cancelled) {
+          setBreakdown(breakdownRows);
+          const snapshot: CachedSnapshot = {
+            fetchedAt: DateTime.utc().toISO()!,
+            monthCount,
+            months,
+            users: {
+              total: usersTotal,
+              thisMonth: usersThisMonth,
+              series: { months, values: newUsersSeriesArr },
+              uniqueLoginSeries: { months, values: uniqueLoginSeriesArr },
+            },
+            organizations: {
+              total: orgTotals,
+              thisMonth: orgThisMonth,
+              series: { months, values: orgSeriesArr },
+            },
+            surveys: {
+              total: projTotals,
+              thisMonth: projThisMonth,
+              series: { months, values: projSeriesArr },
+            },
+            images: {
+              total: imageTotal,
+              thisMonth: imageThisMonth,
+              series: { months, values: imageSeriesArr },
+            },
+            annotations: {
+              total: annTotal,
+              thisMonth: annThisMonth,
+              series: { months, values: annSeriesArr },
+            },
+            primaryAnnotations: {
+              total: primaryAnnTotal,
+              thisMonth: primaryAnnThisMonth,
+              series: { months, values: primaryAnnSeriesArr },
+            },
+            breakdown: breakdownRows,
+          };
+          writeCache(snapshot);
+          setFetchedAt(snapshot.fetchedAt);
+          setHasData(true);
+        }
       } catch (e: any) {
         if (!cancelled) setError(e?.message || 'Failed to load stats');
       } finally {
@@ -563,16 +690,14 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
     return () => {
       cancelled = true;
     };
-  }, [
-    client,
-    windowStartISO,
-    months,
-    thisMonthKey,
-    version,
-    cognitoUsers.length,
-  ]);
+    // Deliberately only re-run on fetchToken — monthCount changes must
+    // NOT auto-trigger a refetch. The token closure captures current
+    // months/windowStartISO/thisMonthKey at the moment refresh() was called.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchToken]);
 
-  const refresh = () => setVersion((v) => v + 1);
+  const refresh = () =>
+    setFetchToken(`${monthCount}:${Date.now()}:${Math.random()}`);
 
   // Ensure series values always match current months length to prevent chart errors during timeframe transitions
   const normalizeSeries = (series: MetricSeries): MetricSeries => {
@@ -616,6 +741,8 @@ export function useAdminStatsData(monthCount: number): AdminStatsData {
     },
     breakdown,
     refresh,
+    fetchedAt,
+    hasData,
   };
 }
 

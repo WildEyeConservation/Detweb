@@ -71,22 +71,24 @@ export default function Notifications() {
             left: 0,
             width: '100%',
             height: '100%',
-            zIndex: 1,
+            zIndex: 1049,
           }}
           onClick={() => setShow(false)}
         />
       )}
       {username && (
         <Card
-          className='position-fixed w-100 mt-lg-3'
+          className='position-fixed'
           style={{
-            maxWidth: '400px',
-            right: 0,
+            width: 'min(400px, calc(100vw - 32px))',
+            left: 230,
+            bottom: 16,
+            maxHeight: 'calc(100vh - 32px)',
             opacity: show ? 1 : 0,
             pointerEvents: show ? 'auto' : 'none',
             transition: 'opacity 0.15s ease-in-out',
             overflow: 'auto',
-            zIndex: 2,
+            zIndex: 1050,
           }}
         >
           <Card.Header className='d-flex justify-content-between align-items-center'>

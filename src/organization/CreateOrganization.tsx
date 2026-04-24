@@ -142,7 +142,7 @@ export default function CreateOrganization({
               >
                 {request ? 'Approve' : 'Create'}
               </Button>
-              <Button variant='dark' type='button' onClick={onHide}>
+              <Button variant='secondary' type='button' onClick={onHide}>
                 Cancel
               </Button>
             </div>

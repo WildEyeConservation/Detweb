@@ -55,6 +55,11 @@ interface FilesUploadBaseProps {
   setGpsDataReady?: React.Dispatch<React.SetStateAction<boolean>>;
   newProject?: boolean;
   onShapefileParsed?: (latLngs: [number, number][]) => void;
+  existingImages?: {
+    originalPath: string;
+    latitude: number;
+    longitude: number;
+  }[];
 }
 
 // Props for form-compatible version
@@ -133,6 +138,7 @@ export function FileUploadCore({
   newProject = true,
   onShapefileParsed,
   project,
+  existingImages,
 }: FilesUploadBaseProps) {
   const [name, setName] = useState('');
   const { client } = useContext(GlobalContext)!;
@@ -703,6 +709,11 @@ export function FileUploadCore({
       setLoadingExistingImages(false);
       return;
     }
+    if (existingImages) {
+      setExistingSurveyImages(existingImages);
+      setLoadingExistingImages(false);
+      return;
+    }
     const projectId = project.id;
     let cancelled = false;
     async function fetchExistingImages() {
@@ -735,7 +746,7 @@ export function FileUploadCore({
     return () => {
       cancelled = true;
     };
-  }, [client, project?.id, newProject]);
+  }, [client, project?.id, newProject, existingImages]);
 
   const handleFileInputChange = (files: File[]) => {
     if (files) {
@@ -3091,7 +3102,7 @@ export default function FilesUploadComponent({
           Submit
         </Button>
         <Button
-          variant='dark'
+          variant='secondary'
           disabled={isSubmitting || isClosing}
           onClick={() => {
             setIsClosing(true);

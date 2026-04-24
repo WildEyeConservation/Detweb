@@ -242,7 +242,7 @@ export default function SnapshotStatsModal({
         >
           {snapshotLoading ? 'Loading...' : 'Run Snapshot'}
         </Button>
-        <Button variant='dark' onClick={onHide}>
+        <Button variant='secondary' onClick={onHide}>
           Close
         </Button>
       </Modal.Footer>

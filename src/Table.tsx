@@ -142,14 +142,13 @@ export default function MyTable(input: TableObject) {
 
   return (
     <div>
-      <Table striped bordered hover className='border border-dark'>
+      <Table striped hover>
         {tableHeadings && (
           <thead>
             <tr>
               {tableHeadings.map(({ content, style, sort }, index) => (
                 <th
                   key={`heading${index}`}
-                  className='bg-dark'
                   onClick={sort ? () => handleSort(index) : undefined}
                   style={{ cursor: sort ? 'pointer' : 'default', ...style }}
                 >
@@ -166,12 +165,7 @@ export default function MyTable(input: TableObject) {
           {paginatedData?.map((row) => (
             <tr key={row.id} className='align-middle'>
               {row.rowData.map((content, index) => (
-                <td
-                  key={`column${index}`}
-                  style={{ backgroundColor: '#6F7B89' }}
-                >
-                  {content}
-                </td>
+                <td key={`column${index}`}>{content}</td>
               ))}
             </tr>
           ))}

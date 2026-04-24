@@ -1,4 +1,3 @@
-import MyTable from './Table';
 import { useContext, useState } from 'react';
 import { GlobalContext } from './Context';
 import { useOptimisticUpdates } from './useOptimisticUpdates';
@@ -6,6 +5,7 @@ import type { Schema } from './amplify/client-schema';
 import { useUsers } from './apiInterface';
 import { Button } from 'react-bootstrap';
 import CreateOrganization from './organization/CreateOrganization';
+import { Page, PageHeader, ContentArea } from './ss/PageShell';
 
 export default function PendingOrganizations() {
   const { client, showModal, modalToShow } = useContext(GlobalContext);
@@ -24,62 +24,101 @@ export default function PendingOrganizations() {
     })
   );
 
-  const tableData = requests
-    .filter((request) => request.status === 'pending')
-    .map((request) => {
-      const requestedBy = users.find((user) => user.id === request.requestedBy);
-
-      return {
-        id: request.id,
-        rowData: [
-          <div>{request.organizationName.slice(0, 50)}</div>,
-          <div>{request.briefDescription.slice(0, 50)}</div>,
-          <div>
-            {requestedBy?.name} ({requestedBy?.email})
-          </div>,
-          <div>{new Date(request.createdAt ?? '').toLocaleDateString()}</div>,
-          <Button
-            variant='primary'
-            onClick={() => {
-              setSelectedRequest({
-                ...request,
-                requestedByEmail: requestedBy?.email || '',
-              });
-              showModal('createOrganization');
-            }}
-          >
-            Review
-          </Button>,
-        ],
-      };
-    });
-
-  const tableHeadings = [
-    { content: 'Organisation Name', style: { width: '20%' }, sort: true },
-    { content: 'Brief Description', style: { width: '20%' }, sort: true },
-    { content: 'Requested By', style: { width: '20%' }, sort: true },
-    { content: 'Date', style: { width: '20%' }, sort: true },
-    { content: 'Review Request', style: { width: '20%' } },
-  ];
+  const pendingRequests = requests.filter((r) => r.status === 'pending');
 
   return (
-    <div className='m-2'>
-      <h5>Pending Organisations</h5>
-      <MyTable
-        tableData={tableData}
-        tableHeadings={tableHeadings}
-        pagination={true}
-        itemsPerPage={10}
-        emptyMessage='No pending organisations'
-      />
-      <div className='d-flex justify-content-center align-items-center border-top pt-3 border-dark mt-3'>
-        <Button
-          variant='primary'
-          onClick={() => showModal('createOrganization')}
-        >
-          Create Organisation
-        </Button>
-      </div>
+    <>
+      <Page>
+        <PageHeader
+          title='New Organisations'
+          actions={
+            <Button
+              variant='primary'
+              onClick={() => showModal('createOrganization')}
+            >
+              + Create Organisation
+            </Button>
+          }
+        />
+        <ContentArea style={{ paddingTop: 12 }}>
+          <div className='ss-card' style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table className='ss-data-table'>
+                <thead>
+                  <tr>
+                    <th style={{ width: '22%' }}>Organisation Name</th>
+                    <th style={{ width: '30%' }}>Brief Description</th>
+                    <th style={{ width: '25%' }}>Requested By</th>
+                    <th style={{ width: '13%' }}>Date</th>
+                    <th style={{ width: '10%', textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingRequests.map((request) => {
+                    const requestedBy = users.find(
+                      (u) => u.id === request.requestedBy
+                    );
+                    return (
+                      <tr key={request.id}>
+                        <td>{request.organizationName.slice(0, 80)}</td>
+                        <td style={{ color: 'var(--ss-text-dim)' }}>
+                          {request.briefDescription.slice(0, 120)}
+                        </td>
+                        <td>
+                          <div>{requestedBy?.name ?? '—'}</div>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: 'var(--ss-text-dim)',
+                            }}
+                          >
+                            {requestedBy?.email ?? ''}
+                          </div>
+                        </td>
+                        <td>
+                          {new Date(request.createdAt ?? '').toLocaleDateString()}
+                        </td>
+                        <td>
+                          <div className='ss-row-actions'>
+                            <Button
+                              size='sm'
+                              variant='primary'
+                              style={{ width: 90 }}
+                              onClick={() => {
+                                setSelectedRequest({
+                                  ...request,
+                                  requestedByEmail: requestedBy?.email || '',
+                                });
+                                showModal('createOrganization');
+                              }}
+                            >
+                              Review
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {pendingRequests.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        style={{
+                          textAlign: 'center',
+                          color: 'var(--ss-text-dim)',
+                          padding: '24px',
+                        }}
+                      >
+                        No pending organisations
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </ContentArea>
+      </Page>
       <CreateOrganization
         show={modalToShow === 'createOrganization'}
         onHide={() => {
@@ -88,6 +127,6 @@ export default function PendingOrganizations() {
         }}
         request={selectedRequest ?? undefined}
       />
-    </div>
+    </>
   );
 }

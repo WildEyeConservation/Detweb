@@ -1,6 +1,5 @@
-import { Form, Alert, Button } from 'react-bootstrap';
+import { Form, Alert, Button, Card } from 'react-bootstrap';
 import { useState, useEffect, useContext } from 'react';
-import { Footer } from '../Modal';
 import { GlobalContext } from '../Context';
 import { Schema } from '../amplify/client-schema';
 
@@ -15,7 +14,7 @@ interface CameraFormDataMap {
 }
 
 export default function EditCameras({ projectId, organizationId }: { projectId: string; organizationId: string }) {
-  const { client, showModal } = useContext(GlobalContext);
+  const { client } = useContext(GlobalContext);
   const [cameras, setCameras] = useState<Schema['Camera']['type'][]>([]);
   const [cameraFormDataMap, setCameraFormDataMap] = useState<CameraFormDataMap>(
     {}
@@ -157,27 +156,24 @@ export default function EditCameras({ projectId, organizationId }: { projectId: 
   const hasCameras = cameras.length > 0;
 
   return (
-    <>
-      <Form className='d-flex flex-column gap-3 p-3'>
-        {hasCameras ? (
-          <>
-            <Alert variant='warning' className='mb-0'>
-              <strong>Warning:</strong> Updating camera details will require you
-              to recalculate your Jolly II results.
-            </Alert>
+    <div className='d-flex flex-column gap-3'>
+      {hasCameras ? (
+        <>
+          <Alert variant='warning' className='mb-0'>
+            <strong>Warning:</strong> Updating camera details will require you
+            to recalculate your Jolly II results.
+          </Alert>
 
-            {cameras.map((camera, index) => {
-              const formData = cameraFormDataMap[camera.id];
-              return (
-                <div
-                  key={camera.id}
-                  className='border rounded p-3 shadow-sm'
-                  style={{ backgroundColor: '#697582' }}
-                >
-                  <h5 className='mb-3'>
+          {cameras.map((camera, index) => {
+            const formData = cameraFormDataMap[camera.id];
+            return (
+              <Card key={camera.id}>
+                <Card.Header>
+                  <h5 className='mb-0'>
                     Camera {index + 1}: {camera.name}
                   </h5>
-
+                </Card.Header>
+                <Card.Body>
                   <div className='row g-3'>
                     <div className='col-md-4'>
                       <Form.Group>
@@ -252,19 +248,22 @@ export default function EditCameras({ projectId, organizationId }: { projectId: 
                       </Form.Group>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </>
-        ) : (
-          <>
-            <Alert variant='info' className='mb-0'>
-              No cameras found. Adding a new camera named "Survey Camera".
-            </Alert>
+                </Card.Body>
+              </Card>
+            );
+          })}
+        </>
+      ) : (
+        <>
+          <Alert variant='info' className='mb-0'>
+            No cameras found. Adding a new camera named "Survey Camera".
+          </Alert>
 
-            <div className='border rounded p-3'>
-              <h5 className='mb-3'>New Camera: Survey Camera</h5>
-
+          <Card>
+            <Card.Header>
+              <h5 className='mb-0'>New Camera: Survey Camera</h5>
+            </Card.Header>
+            <Card.Body>
               <div className='row g-3'>
                 <div className='col-md-4'>
                   <Form.Group>
@@ -341,22 +340,15 @@ export default function EditCameras({ projectId, organizationId }: { projectId: 
                   </Form.Group>
                 </div>
               </div>
-            </div>
-          </>
-        )}
-      </Form>
-      <Footer>
+            </Card.Body>
+          </Card>
+        </>
+      )}
+      <div style={{ display: 'flex', gap: 8 }}>
         <Button variant='primary' onClick={handleSubmit} disabled={disabled}>
           Save Cameras
         </Button>
-        <Button
-          variant='dark'
-          onClick={() => showModal(null)}
-          disabled={disabled}
-        >
-          Close
-        </Button>
-      </Footer>
-    </>
+      </div>
+    </div>
   );
 }

@@ -1,36 +1,24 @@
-import { useContext, useEffect, useRef, useState } from 'react';
-import { UserContext, GlobalContext } from '../Context';
-import { GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
-import { Spinner, ProgressBar } from 'react-bootstrap';
+import { useContext, useEffect, useState } from 'react';
+import { GlobalContext } from '../Context';
+import { Spinner } from 'react-bootstrap';
+import QueueProgress, { QueueProgressQueue } from './QueueProgress';
 
 type ProjectProgressProps = {
   projectId: string;
+  prefix?: string;
   onScanningChange?: (isScanning: boolean) => void;
 };
 
-export default function ProjectProgress({ projectId, onScanningChange }: ProjectProgressProps) {
+export default function ProjectProgress({ projectId, prefix, onScanningChange }: ProjectProgressProps) {
   const { client } = useContext(GlobalContext)!;
-  const { getSqsClient } = useContext(UserContext)!;
   const [isLoading, setIsLoading] = useState(true);
-  const [queueInfo, setQueueInfo] = useState<{
-    url: string;
-    batchSize: number;
-    totalBatches: number;
-    launchedCount: number | null;
-    observedCount: number | null;
-    requeuesCompleted: number | null;
-    emptyQueueTimestamp: string | null;
-  } | null>(null);
-  const [jobsRemaining, setJobsRemaining] = useState<number>(0);
+  const [queue, setQueue] = useState<QueueProgressQueue | null>(null);
   const [registering, setRegistering] = useState<boolean>(false);
 
-  const prevScanningRef = useRef<boolean>(false);
-
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
     let cancelled = false;
 
-    async function fetchQueueAndStartPolling() {
+    async function fetchQueue() {
       setIsLoading(true);
       const projectData = (
         await client.models.Project.get(
@@ -50,140 +38,54 @@ export default function ProjectProgress({ projectId, onScanningChange }: Project
         )
       ).data;
 
+      if (cancelled) return;
+
       const register = projectData?.annotationSets.some((set: { register?: boolean | null }) => set.register) ?? false;
       setRegistering(register);
       if (register) {
+        setIsLoading(false);
         return;
       }
 
-      if (cancelled || !projectData?.queues?.length) {
+      if (!projectData?.queues?.length) {
+        setQueue(null);
         setIsLoading(false);
         return;
       }
 
       const q = projectData.queues[0];
-      const url = q.url || '';
-      const batchSize = q.batchSize || 0;
-      const totalBatches = q.totalBatches || 0;
-      const launchedCount = q.launchedCount ?? null;
-      const observedCount = q.observedCount ?? null;
-      const requeuesCompleted = q.requeuesCompleted ?? null;
-      const emptyQueueTimestamp = q.emptyQueueTimestamp ?? null;
-      setQueueInfo({ url, batchSize, totalBatches, launchedCount, observedCount, requeuesCompleted, emptyQueueTimestamp });
+      setQueue({
+        url: q.url,
+        batchSize: q.batchSize,
+        totalBatches: q.totalBatches,
+        launchedCount: q.launchedCount,
+        observedCount: q.observedCount,
+        requeuesCompleted: q.requeuesCompleted,
+        emptyQueueTimestamp: q.emptyQueueTimestamp,
+      });
       setIsLoading(false);
-
-      async function updateJobsRemaining() {
-        const sqsClient = await getSqsClient();
-        const params = {
-          QueueUrl: url,
-          AttributeNames: ['ApproximateNumberOfMessages'] as any[],
-        };
-        const attrs = await sqsClient.send(
-          new GetQueueAttributesCommand(params)
-        );
-        if (cancelled) return;
-        const num = attrs.Attributes?.ApproximateNumberOfMessages;
-        setJobsRemaining(num ? Number(num) : 0);
-      }
-
-      updateJobsRemaining();
-      interval = setInterval(updateJobsRemaining, 10000);
     }
 
-    fetchQueueAndStartPolling();
+    fetchQueue();
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
     };
-  }, [projectId, client, getSqsClient]);
-
-  const isScanning = jobsRemaining === 0
-    && queueInfo?.launchedCount != null
-    && queueInfo?.emptyQueueTimestamp != null
-    && (queueInfo.observedCount || 0) < queueInfo.launchedCount
-    && (queueInfo.requeuesCompleted || 0) < 1;
-
-  const isPolling = jobsRemaining === 0 && !isScanning;
-
-  const shouldDisable = isScanning || isPolling;
-
-  useEffect(() => {
-    if (shouldDisable !== prevScanningRef.current) {
-      prevScanningRef.current = shouldDisable;
-      onScanningChange?.(shouldDisable);
-    }
-  }, [shouldDisable, onScanningChange]);
+  }, [projectId, client]);
 
   if (registering) {
-    return <p className='mb-0 w-100'>Registering</p>;
+    return <p className='ss-job-card__meta mb-0 w-100'>{prefix}Registering</p>;
   }
 
-  if (isLoading || !queueInfo) {
+  if (isLoading || !queue) {
     return <Spinner />;
   }
 
-  const { batchSize, totalBatches } = queueInfo;
-  if (batchSize > 0) {
-    const batchesRemaining = Math.ceil(jobsRemaining / batchSize);
-    if (isScanning) {
-      return (
-        <div className='d-flex flex-column w-100'>
-          <div className='d-flex align-items-center gap-2 mb-0'>
-            <Spinner animation='border' size='sm' />
-            <span>Scanning for missed locations...</span>
-          </div>
-          <ProgressBar
-            now={totalBatches - batchesRemaining}
-            max={totalBatches}
-            className='w-100'
-          />
-        </div>
-      );
-    }
-    if (isPolling) {
-      return (
-        <div className='d-flex flex-column w-100'>
-          <div className='d-flex align-items-center gap-2 mb-0'>
-            <Spinner animation='border' size='sm' />
-            <span>Polling for work...</span>
-          </div>
-          <ProgressBar
-            now={totalBatches}
-            max={totalBatches}
-            className='w-100'
-          />
-        </div>
-      );
-    }
-    return (
-      <div className='d-flex flex-column w-100'>
-        <p className='mb-0'>{batchesRemaining} batches remaining</p>
-        <ProgressBar
-          now={totalBatches - batchesRemaining}
-          max={totalBatches}
-          animated
-          className='w-100'
-        />
-      </div>
-    );
-  } else {
-    if (isScanning) {
-      return (
-        <div className='d-flex align-items-center gap-2 mb-0'>
-          <Spinner animation='border' size='sm' />
-          <span>Scanning for missed locations...</span>
-        </div>
-      );
-    }
-    if (isPolling) {
-      return (
-        <div className='d-flex align-items-center gap-2 mb-0'>
-          <Spinner animation='border' size='sm' />
-          <span>Polling for work...</span>
-        </div>
-      );
-    }
-    return <p className='mb-0'>Jobs remaining: {jobsRemaining}</p>;
-  }
+  return (
+    <QueueProgress
+      queue={queue}
+      prefix={prefix}
+      onScanningChange={onScanningChange}
+    />
+  );
 }

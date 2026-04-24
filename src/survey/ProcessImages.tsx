@@ -1,11 +1,10 @@
-import { Form, Spinner, Button } from 'react-bootstrap';
-import { Footer } from '../Modal';
+import { Form, Spinner, Button, Card } from 'react-bootstrap';
 import { useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { GlobalContext } from '../Context';
 import Select from 'react-select';
 
 export default function ProcessImages({ projectId, organizationId }: { projectId: string; organizationId: string }) {
-  const { client, backend, showModal } = useContext(GlobalContext)!;
+  const { client, backend } = useContext(GlobalContext)!;
   const [model, setModel] = useState<{ label: string; value: string } | null>(
     null
   );
@@ -222,15 +221,16 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
 
     setLoading(false);
     setDisabled(false);
-
-    showModal(null);
   };
 
   return (
-    <>
-      <Form className='p-3'>
-        <Form.Group>
-          <Form.Label className='mb-0'>Model</Form.Label>
+    <div className='d-flex flex-column gap-3'>
+      <Card>
+        <Card.Header>
+          <h5 className='mb-0'>Model</h5>
+        </Card.Header>
+        <Card.Body>
+          <Form.Label>Select a model</Form.Label>
           <Select
             value={model}
             onChange={(m) => setModel(m)}
@@ -240,10 +240,9 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
               { label: 'MAD', value: 'mad' },
             ]}
             placeholder='Select a model'
-            className='text-black'
           />
           <Button
-            variant='primary'
+            variant='secondary'
             onClick={scanImages}
             disabled={!model || loading}
             className='mt-2'
@@ -251,7 +250,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
             Scan
           </Button>
           {loading ? (
-            <div className='d-flex flex-column align-items-center'>
+            <div className='d-flex flex-column align-items-center mt-2'>
               <Spinner animation='border' role='status' />
               <p className='mb-0'>Determining images to process...</p>
               <p className='mb-1'>Found {imagesLoaded ?? 0} images</p>
@@ -265,20 +264,13 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
               <p className='mb-0 mt-2'>All images have been processed</p>
             )
           ) : null}
-        </Form.Group>
-      </Form>
-      <Footer>
+        </Card.Body>
+      </Card>
+      <div style={{ display: 'flex', gap: 8 }}>
         <Button variant='primary' onClick={processImages} disabled={disabled}>
           Process Images
         </Button>
-        <Button
-          variant='dark'
-          onClick={() => showModal(null)}
-          disabled={disabled}
-        >
-          Close
-        </Button>
-      </Footer>
-    </>
+      </div>
+    </div>
   );
 }

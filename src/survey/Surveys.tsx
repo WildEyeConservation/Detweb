@@ -1,24 +1,19 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
-import { UserContext, GlobalContext, UploadContext } from '../Context.tsx';
+import { UserContext, GlobalContext } from '../Context.tsx';
 import { Schema } from '../amplify/client-schema.ts';
-import { Card, Button, Form } from 'react-bootstrap';
-import MyTable from '../Table.tsx';
-import NewSurveyModal from './NewSurveyModal.tsx';
+import { Button, Form, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
-import FilesUploadComponent from '../FilesUploadComponent.tsx';
 import ConfirmationModal from '../ConfirmationModal.tsx';
 import AnnotationSetResults from '../AnnotationSetResults.tsx';
 import AnnotationCountModal from '../AnnotationCountModal.tsx';
 import EditAnnotationSetModal from '../EditAnnotationSet.tsx';
 import AddAnnotationSetModal from './AddAnnotationSetModal.tsx';
 import LaunchAnnotationSetModal from './LaunchAnnotationSetModal.tsx';
-import EditSurveyModal from './editSurveyModal.tsx';
-import { SquareArrowOutUpRight, X, Play, Trash, Minimize2, Maximize2 } from 'lucide-react';
-import { Badge } from 'react-bootstrap';
-import localforage from 'localforage';
-import ProjectProgress from '../user/ProjectProgress.tsx';
 import { logAdminAction } from '../utils/adminActionLogger.ts';
+import { useOrg } from '../OrgContext.tsx';
+import { Page, PageHeader, Toolbar, ContentArea, Spacer } from '../ss/PageShell.tsx';
+import QueueProgress from '../user/QueueProgress.tsx';
 
 const PROJECT_SELECTION_SET = [
   'id',
@@ -36,22 +31,24 @@ const PROJECT_SELECTION_SET = [
   'queues.url',
   'queues.name',
   'queues.tag',
+  'queues.launchedCount',
+  'queues.observedCount',
+  'queues.totalBatches',
+  'queues.batchSize',
+  'queues.requeuesCompleted',
+  'queues.emptyQueueTimestamp',
   'imageSets.imageCount',
 ] as const;
 
 const projectQueryKey = (id: string) => ['surveys-project-details', id] as const;
 
-const fileStoreUploaded = localforage.createInstance({
-  name: 'fileStoreUploaded',
-  storeName: 'filesUploaded',
-});
-
 const STORAGE_KEYS = {
-  ORGANIZATION_FILTER: 'surveysOrganizationFilter',
   SORT_BY: 'surveysSortBy',
-  COMPACT_MODE: 'surveysCompactMode',
   SEARCH: 'surveysSearch',
+  ROWS_PER_PAGE: 'surveysRowsPerPage',
 };
+
+const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
 
 export default function Surveys() {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
@@ -60,14 +57,12 @@ export default function Surveys() {
     isOrganizationAdmin,
     user,
   } = useContext(UserContext)!;
-  const { task, setTask } = useContext(UploadContext)!;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState(0);
+  const { currentOrg } = useOrg();
   const [selectedProject, setSelectedProject] = useState<
     Schema['Project']['type'] | null
   >(null);
-  const [fromStaleUpload, setFromStaleUpload] = useState(false);
   const [selectedAnnotationSet, setSelectedAnnotationSet] = useState<
     Schema['AnnotationSet']['type'] | null
   >(null);
@@ -84,10 +79,7 @@ export default function Surveys() {
   };
 
   const [search, setSearch] = useState(getInitialSearch);
-  const [hasUploadedFiles, setHasUploadedFiles] = useState<{
-    [projectId: string]: boolean;
-  }>({});
-  const [scanningProjects, setScanningProjects] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
 
   // Initialize sortBy from localStorage or use default
   const getInitialSortBy = () => {
@@ -100,32 +92,21 @@ export default function Surveys() {
     return 'createdAt';
   };
 
-  // Initialize organizationFilter from localStorage or use default
-  const getInitialOrganizationFilter = () => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(STORAGE_KEYS.ORGANIZATION_FILTER);
-      if (stored !== null) {
-        return stored;
-      }
-    }
-    return '';
-  };
-
   const [sortBy, setSortBy] = useState(getInitialSortBy);
-  const [organizationFilter, setOrganizationFilter] = useState(getInitialOrganizationFilter);
 
-  // Initialize compactMode from localStorage or use default
-  const getInitialCompactMode = () => {
+  const getInitialRowsPerPage = () => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(STORAGE_KEYS.COMPACT_MODE);
-      if (stored !== null) {
-        return stored === 'true';
+      const stored = localStorage.getItem(STORAGE_KEYS.ROWS_PER_PAGE);
+      const parsed = stored ? parseInt(stored, 10) : NaN;
+      if (ROWS_PER_PAGE_OPTIONS.includes(parsed)) {
+        return parsed;
       }
     }
-    return false;
+    return 10;
   };
 
-  const [compactMode, setCompactMode] = useState(getInitialCompactMode);
+  const [itemsPerPage, setItemsPerPage] = useState(getInitialRowsPerPage);
+
   const getIsMobile = () =>
     typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
 
@@ -153,26 +134,19 @@ export default function Surveys() {
     }
   }, [sortBy]);
 
-  // Persist organizationFilter to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEYS.ORGANIZATION_FILTER, organizationFilter);
-    }
-  }, [organizationFilter]);
-
-  // Persist compactMode to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEYS.COMPACT_MODE, String(compactMode));
-    }
-  }, [compactMode]);
-
   // Persist search to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEYS.SEARCH, search);
     }
   }, [search]);
+
+  // Persist rows per page to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.ROWS_PER_PAGE, String(itemsPerPage));
+    }
+  }, [itemsPerPage]);
 
   const adminProjectIds = useMemo(
     () =>
@@ -223,19 +197,6 @@ export default function Surveys() {
     [projectQueries]
   );
 
-  const organizationOptions = useMemo(
-    () =>
-      Array.from(
-        new Map(
-          projects.map((project) => [
-            project.organizationId,
-            project.organization.name,
-          ])
-        ).entries()
-      ).map(([id, name]) => ({ id, name })),
-    [projects]
-  );
-
   // Helper to optimistically update a single project in the React Query cache.
   const updateProjectInCache = (
     projectId: string,
@@ -245,52 +206,6 @@ export default function Surveys() {
   ) => {
     queryClient.setQueryData(projectQueryKey(projectId), updater);
   };
-
-  const projectIdsKey = projects.map((p) => p.id).sort().join(',');
-  useEffect(() => {
-    if (!projectIdsKey) return;
-    let cancelled = false;
-    (async () => {
-      const ids = projectIdsKey.split(',');
-      const entries = await Promise.all(
-        ids.map(async (id) => {
-          const uploaded = Boolean(await fileStoreUploaded.getItem(id));
-          return [id, uploaded] as const;
-        })
-      );
-      if (cancelled) return;
-      setHasUploadedFiles(Object.fromEntries(entries));
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [projectIdsKey]);
-
-  async function deleteProject(projectId: string) {
-    const project = projects.find((p) => p.id === projectId);
-    const projectName = project?.name || 'Unknown';
-
-    updateProjectInCache(projectId, (prev) =>
-      prev ? { ...prev, status: 'deleting' } : prev
-    );
-
-    await client.models.Project.update({
-      id: projectId,
-      status: 'deleting',
-    });
-
-    await logAdminAction(
-      client,
-      user.userId,
-      `Deleted project "${projectName}" (ID: ${projectId})`,
-      projectId,
-      project?.organizationId || ''
-    );
-
-    client.mutations
-      .deleteProjectInFull({ projectId: projectId }, { retry: false })
-      .catch(() => {});
-  }
 
   async function deleteAnnotationSet(
     projectId: string,
@@ -385,7 +300,7 @@ export default function Surveys() {
     const matchesStatus =
       project.status !== 'deleted' && project.status !== 'hidden';
     const matchesOrganization =
-      !organizationFilter || project.organizationId === organizationFilter;
+      !currentOrg?.id || project.organizationId === currentOrg.id;
     const matchesAnnotationSet = project.annotationSets.some((set: { name: string }) =>
       set.name.toLowerCase().includes(searchLower)
     );
@@ -420,653 +335,323 @@ export default function Surveys() {
     return 0;
   });
 
-  function renderAnnotationSetActions(
-    project: Schema['Project']['type'],
-    annotationSet: Schema['AnnotationSet']['type'],
-    disabled: boolean,
-    hasJobs: boolean,
-    options: { wrap?: boolean; size?: 'sm' } = {}
-  ) {
-    // Mobile view should never be compact, so ignore compactMode when isMobile is true
-    const effectiveCompactMode = isMobile ? false : compactMode;
-    const { wrap = false, size = effectiveCompactMode ? 'sm' : undefined } = options;
-    const gapClass = effectiveCompactMode ? 'gap-1' : 'gap-2';
-
-    return (
-      <div className={`d-flex ${wrap ? 'flex-wrap w-100' : 'flex-wrap'} ${gapClass}`}>
-        <Button
-          size={size}
-          variant='primary'
-          onClick={() => {
-            setSelectedAnnotationSet(annotationSet);
-            showModal('annotationCount');
-          }}
-          disabled={disabled || hasJobs}
-        >
-          Details
-        </Button>
-        <Button
-          size={size}
-          variant='primary'
-          onClick={() => {
-            setSelectedProject(project);
-            setSelectedAnnotationSet(annotationSet);
-            showModal('launchAnnotationSet');
-          }}
-          disabled={disabled || hasJobs}
-        >
-          Launch
-        </Button>
-        <Button
-          size={size}
-          variant='primary'
-          onClick={() => {
-            setSelectedProject(project);
-            setSelectedAnnotationSet(annotationSet);
-            showModal('editAnnotationSet');
-          }}
-          disabled={disabled || hasJobs}
-        >
-          Edit
-        </Button>
-        <Button
-          size={size}
-          variant='primary'
-          onClick={() => {
-            setSelectedProject(project);
-            setSelectedAnnotationSet({ id: annotationSet.id, name: annotationSet.name } as Schema['AnnotationSet']['type']);
-            showModal('annotationSetResults');
-          }}
-          disabled={disabled || hasJobs}
-        >
-          Results
-        </Button>
-        <Button
-          size={size}
-          variant='danger'
-          onClick={() => {
-            setSelectedProject(project);
-            setSelectedAnnotationSet(annotationSet);
-            showModal('deleteAnnotationSet');
-          }}
-          disabled={disabled || hasJobs}
-        >
-          <Trash />
-        </Button>
-      </div>
-    );
-  }
-
-  function renderAnnotationSets(
-    project: Schema['Project']['type'],
-    disabled: boolean,
-    hasJobs: boolean,
-    options: { wrap?: boolean; size?: 'sm' } = {}
-  ) {
-    // Mobile view should never be compact, so ignore compactMode when isMobile is true
-    const effectiveCompactMode = isMobile ? false : compactMode;
-    const { wrap = false, size = effectiveCompactMode ? 'sm' : undefined } = options;
-    const sortedAnnotationSets = [...project.annotationSets].sort((a, b) =>
-      a.name.localeCompare(b.name)
-    );
-    const gapClass = effectiveCompactMode ? 'gap-1' : 'gap-2';
-    const borderClass = effectiveCompactMode ? 'pt-1' : 'pt-2';
-
-    return (
-      <div className={`d-flex flex-column ${gapClass} flex-grow-1`}>
-        {isMobile && sortedAnnotationSets.length === 0 && (
-          <Badge
-            bg='secondary'
-            style={{ width: 'fit-content', fontSize: '12px' }}
-          >
-            None
-          </Badge>
-        )}
-        {sortedAnnotationSets.map((annotationSet, i) => (
-          <div
-            className={`d-flex flex-column ${gapClass} ${i === 0 ? '' : `border-top border-light ${borderClass}`
-              }`}
-            key={annotationSet.id}
-          >
-            <div className={`d-flex justify-content-between align-items-center ${gapClass} flex-wrap`}>
-              <div style={{ fontSize: '16px' }}>{annotationSet.name}</div>
-              {!hasJobs &&
-                renderAnnotationSetActions(
-                  project,
-                  annotationSet,
-                  disabled,
-                  hasJobs,
-                  { wrap, size }
-                )}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  function renderProjectActions(
-    project: Schema['Project']['type'],
-    disabled: boolean,
-    hasJobs: boolean,
-    showResumeButton: boolean,
-    showPauseButton: boolean,
-    isStale: boolean,
-    options: { wrap?: boolean; size?: 'sm' } = {}
-  ) {
-    // Mobile view should never be compact, so ignore compactMode when isMobile is true
-    const effectiveCompactMode = isMobile ? false : compactMode;
-    const { wrap = false, size = effectiveCompactMode ? 'sm' : undefined } = options;
-    const gapClass = effectiveCompactMode ? 'gap-1' : 'gap-2';
-    const containerClass = wrap
-      ? `d-flex flex-wrap ${gapClass} w-100`
-      : `d-flex ${gapClass} flex-wrap`;
-
-    return (
-      <div className={containerClass}>
-        {project.status !== 'uploading' ? (
-          <>
-            <Button
-              size={size}
-              variant='primary'
-              onClick={() => {
-                setSelectedProject(project);
-                showModal('editSurvey');
-              }}
-              disabled={
-                process.env.NODE_ENV !== 'development' && (disabled || hasJobs)
-              }
-            >
-              Edit
-            </Button>
-            <Button
-              size={size}
-              variant='primary'
-              onClick={() => {
-                setSelectedProject(project);
-                showModal('addFiles');
-              }}
-              disabled={
-                process.env.NODE_ENV !== 'development' && (disabled || hasJobs)
-              }
-            >
-              Add files
-            </Button>
-            <Button
-              size={size}
-              variant='primary'
-              onClick={() => {
-                setSelectedProject(project);
-                showModal('addAnnotationSet');
-              }}
-              disabled={disabled || hasJobs}
-            >
-              Add Annotation Set
-            </Button>
-            <Button
-              size={size}
-              variant='danger'
-              onClick={() => {
-                setSelectedProject(project);
-                showModal('deleteSurvey');
-              }}
-              disabled={disabled || hasJobs}
-            >
-              <Trash />
-            </Button>
-          </>
-        ) : (
-          <>
-            {!showPauseButton && (showResumeButton || isStale) && (
-              <Button
-                size={size}
-                variant='info'
-                onClick={() => {
-                  if (showResumeButton) {
-                    setTask((task) => ({
-                      ...task,
-                      resumeId: project.id,
-                    }));
-                    return;
-                  }
-
-                  setFromStaleUpload(true);
-                  setSelectedProject(project);
-                  showModal('addFiles');
-                }}
-              >
-                <Play />
-              </Button>
-            )}
-            {isStale && (
-              <Button
-                size={size}
-                variant='danger'
-                disabled={
-                  task.pauseId === project.id || task.deleteId === project.id
-                }
-                onClick={() => {
-                  setTask((task) => ({
-                    ...task,
-                    deleteId: project.id,
-                  }));
-                }}
-              >
-                <Trash />
-              </Button>
-            )}
-          </>
-        )}
-      </div>
-    );
-  }
-
-  const tableData = sortedProjects.map((project) => {
-    const disabled =
-      project.status === 'uploading' ||
-      project.status?.includes('processing') ||
-      project.status === 'launching' ||
-      project.status === 'updating' ||
-      project.status === 'deleting';
-
-    const hasJobs =
-      project.status !== 'launching' &&
-      (project.queues.length > 0 ||
-        project.annotationSets.some((set: { register?: boolean | null }) => set.register));
-
-    const showResumeButton =
-      !task.projectId &&
-      project.status === 'uploading' &&
-      hasUploadedFiles[project.id];
-
-    const showPauseButton =
-      task.projectId === project.id && project.status === 'uploading';
-
-    const isStale =
-      project.status === 'uploading' &&
-      new Date(project.updatedAt ?? '').getTime() < Date.now() - 1000 * 60 * 5;
-
-    const gapClass = compactMode ? 'gap-1' : 'gap-2';
-    const columnGapClass = compactMode ? 'gap-1' : 'gap-3';
-    const badgeFontSize = compactMode ? '11px' : '14px';
-
-    return {
-      id: project.id,
-      rowData: [
-        <div className={`d-flex justify-content-between align-items-start align-items-lg-center ${gapClass} flex-wrap`}>
-          <div className={`d-flex flex-column ${compactMode ? 'gap-0' : 'gap-1'}`}>
-            {compactMode ? (
-              <h6 className={`mb-0 ${isMobile ? 'fw-semibold' : ''}`}>
-                {project.name}
-              </h6>
-            ) : (
-              <h5 className={`mb-0 ${isMobile ? 'fw-semibold' : ''}`}>
-                {project.name}
-              </h5>
-            )}
-            {!compactMode && (
-              <div className='d-flex flex-column'>
-                <i style={{ fontSize: '14px' }}>{project.organization.name}</i>
-                {project.status !== 'uploading' && (
-                  <i style={{ fontSize: '14px' }}>
-                    Images: {project.imageSets?.[0]?.imageCount || 0}
-                  </i>
-                )}
-              </div>
-            )}
-            {project.status !== 'active' && (
-              <Badge
-                style={{ fontSize: badgeFontSize, width: 'fit-content' }}
-                bg={'info'}
-              >
-                {project.status === 'launching'
-                  ? 'Launching - please wait'
-                  : project.status?.includes('processing')
-                    ? 'Processing'
-                    : project.status?.replace(/\b\w/g, (char) =>
-                      char.toUpperCase()
-                    )}
-              </Badge>
-            )}
-          </div>
-          {renderProjectActions(
-            project,
-            disabled,
-            hasJobs,
-            showResumeButton,
-            showPauseButton,
-            isStale
-          )}
-        </div>,
-        <div className={`d-flex flex-column flex-md-row ${columnGapClass}`}>
-          {renderAnnotationSets(project, disabled, hasJobs)}
-          {hasJobs && (
-            <div
-              className={`d-flex flex-row align-items-center ${gapClass} w-100`}
-              style={{ maxWidth: '500px' }}
-            >
-              <div className='flex-grow-1'>
-                <ProjectProgress
-                  projectId={project.id}
-                  onScanningChange={(isScanning) => {
-                    setScanningProjects(prev => {
-                      const next = new Set(prev);
-                      isScanning ? next.add(project.id) : next.delete(project.id);
-                      return next;
-                    });
-                  }}
-                />
-              </div>
-              <div className={`d-flex ${gapClass} flex-wrap justify-content-end`}>
-                <Button
-                  size={compactMode ? 'sm' : undefined}
-                  className='flex align-items-center justify-content-center'
-                  disabled={!project.annotationSets.some((set: { register?: boolean | null }) => set.register) && (disabled || scanningProjects.has(project.id))}
-                  variant='primary'
-                  onClick={() => navigate(`/jobs`)}
-                >
-                  <SquareArrowOutUpRight />
-                </Button>
-                <Button
-                  size={compactMode ? 'sm' : undefined}
-                  className='flex align-items-center justify-content-center'
-                  disabled={!project.annotationSets.some((set: { register?: boolean | null }) => set.register) && (disabled || scanningProjects.has(project.id))}
-                  variant='danger'
-                  onClick={() => {
-                    setSelectedProject(project);
-                    showModal('deleteJob');
-                  }}
-                >
-                  <X />
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>,
-      ],
-    };
-  });
-
-  const renderProjectCard = (project: Schema['Project']['type']) => {
-    const disabled =
-      project.status === 'uploading' ||
-      project.status?.includes('processing') ||
-      project.status === 'launching' ||
-      project.status === 'updating' ||
-      project.status === 'deleting';
-
-    const hasJobs =
-      project.status !== 'launching' &&
-      (project.queues.length > 0 ||
-        project.annotationSets.some((set: { register?: boolean | null }) => set.register));
-
-    const showResumeButton =
-      !task.projectId &&
-      project.status === 'uploading' &&
-      hasUploadedFiles[project.id];
-
-    const showPauseButton =
-      task.projectId === project.id && project.status === 'uploading';
-
-    const isStale =
-      project.status === 'uploading' &&
-      new Date(project.updatedAt ?? '').getTime() < Date.now() - 1000 * 60 * 5;
-
-    return (
-      <Card
-        key={project.id}
-        className='shadow-sm'
-        style={{ backgroundColor: '#6F7B89', color: '#fff', border: 'none' }}
-      >
-        <Card.Body className='d-flex flex-column gap-3'>
-          <div className='d-flex flex-column gap-2'>
-            <div className='d-flex justify-content-between align-items-start align-items-lg-center gap-2 flex-wrap'>
-              <div className='d-flex flex-column gap-1'>
-                <h5 className={`mb-0 ${isMobile ? 'fw-semibold' : ''}`}>
-                  {project.name}
-                </h5>
-                <div className='text-muted' style={{ fontSize: '14px' }}>
-                  {project.organization.name}
-                </div>
-                {project.status !== 'uploading' && (
-                  <div className='text-muted' style={{ fontSize: '14px' }}>
-                    Images: {project.imageSets?.[0]?.imageCount || 0}
-                  </div>
-                )}
-                {project.status !== 'active' && (
-                  <Badge
-                    style={{ fontSize: '14px', width: 'fit-content' }}
-                    bg={'info'}
-                  >
-                    {project.status === 'launching'
-                      ? 'Launching - please wait'
-                      : project.status?.includes('processing')
-                        ? 'Processing'
-                        : project.status?.replace(/\b\w/g, (char) =>
-                          char.toUpperCase()
-                        )}
-                  </Badge>
-                )}
-              </div>
-              {renderProjectActions(
-                project,
-                disabled,
-                hasJobs,
-                showResumeButton,
-                showPauseButton,
-                isStale,
-                { wrap: true, size: 'sm' }
-              )}
-            </div>
-            {hasJobs && (
-              <div
-                className={`d-flex flex-row align-items-center gap-2 ${isMobile ? 'pt-3 border-top border-light' : ''
-                  }`}
-              >
-                <div className='flex-grow-1'>
-                  <ProjectProgress
-                    projectId={project.id}
-                    onScanningChange={(isScanning) => {
-                      setScanningProjects(prev => {
-                        const next = new Set(prev);
-                        isScanning ? next.add(project.id) : next.delete(project.id);
-                        return next;
-                      });
-                    }}
-                  />
-                </div>
-                <div className='d-flex gap-2 flex-wrap justify-content-end'>
-                  <Button
-                    size='sm'
-                    className='flex align-items-center justify-content-center'
-                    disabled={!project.annotationSets.some((set: { register?: boolean | null }) => set.register) && (disabled || scanningProjects.has(project.id))}
-                    variant='primary'
-                    onClick={() => navigate(`/jobs`)}
-                  >
-                    <SquareArrowOutUpRight />
-                  </Button>
-                  <Button
-                    size='sm'
-                    className='flex align-items-center justify-content-center'
-                    disabled={!project.annotationSets.some((set: { register?: boolean | null }) => set.register) && (disabled || scanningProjects.has(project.id))}
-                    variant='danger'
-                    onClick={() => {
-                      setSelectedProject(project);
-                      showModal('deleteJob');
-                    }}
-                  >
-                    <X />
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-          <div
-            className={`d-flex flex-column gap-2 ${isMobile ? 'pt-3 border-top border-light' : ''
-              }`}
-          >
-            <div className='fw-semibold'>Annotation Sets</div>
-            {renderAnnotationSets(project, disabled, hasJobs, {
-              wrap: true,
-              size: 'sm',
-            })}
-          </div>
-        </Card.Body>
-      </Card>
-    );
-  };
-
   const emptyMessage = 'You are not an admin of any surveys.';
 
   if (projects.length === 0 && !isOrganizationAdmin) {
-    return <div>You are not authorized to access this page.</div>;
+    return (
+      <Page>
+        <PageHeader title='Your Surveys' />
+        <ContentArea>
+          <div>You are not authorized to access this page.</div>
+        </ContentArea>
+      </Page>
+    );
   }
+
+  const totalPages = Math.max(1, Math.ceil(sortedProjects.length / itemsPerPage));
+  const pageClamped = Math.min(Math.max(1, page), totalPages);
+  const pagedProjects = sortedProjects.slice(
+    (pageClamped - 1) * itemsPerPage,
+    pageClamped * itemsPerPage
+  );
+
+  const statusDisplay = (status: string | null | undefined) => {
+    const s = (status || 'active').toLowerCase();
+    if (s === 'active')
+      return <span className='ss-status ss-status--active'>Active</span>;
+    if (s === 'launched')
+      return <span className='ss-status ss-status--launched'>Launched</span>;
+    if (s === 'complete' || s === 'completed')
+      return <span className='ss-status ss-status--complete'>Complete</span>;
+    if (s === 'draft')
+      return <span className='ss-status ss-status--draft'>Draft</span>;
+    if (s === 'launching')
+      return <span className='ss-status ss-status--launching'>Launching</span>;
+    if (s === 'uploading')
+      return <span className='ss-status ss-status--uploading'>Uploading</span>;
+    if (s.includes('processing'))
+      return <span className='ss-status ss-status--processing'>Processing</span>;
+    if (s === 'updating')
+      return <span className='ss-status ss-status--updating'>Updating</span>;
+    if (s === 'deleting')
+      return <span className='ss-status ss-status--danger'>Deleting</span>;
+    return <span className='ss-status ss-status--draft'>{status}</span>;
+  };
+
+  const progressCell = (project: Schema['Project']['type']) => {
+    const s = (project.status || '').toLowerCase();
+    const busyMessage =
+      s === 'launching'
+        ? 'Launching — preparing images…'
+        : s.includes('processing')
+        ? 'Processing images…'
+        : s === 'updating'
+        ? 'Updating…'
+        : s === 'uploading'
+        ? 'Uploading…'
+        : s === 'deleting'
+        ? 'Deleting…'
+        : null;
+    if (busyMessage) {
+      return (
+        <div
+          className='d-flex align-items-center gap-2'
+          style={{
+            minWidth: 180,
+            fontSize: 12,
+            color: 'var(--ss-text-dim)',
+          }}
+        >
+          <Spinner animation='border' size='sm' />
+          <span>{busyMessage}</span>
+        </div>
+      );
+    }
+    const queue = project.queues?.[0];
+    if (!queue?.url) {
+      return <span style={{ color: 'var(--ss-text-dim)' }}>—</span>;
+    }
+    return (
+      <div className='ss-job-progress' style={{ minWidth: 180 }}>
+        <QueueProgress queue={queue} />
+      </div>
+    );
+  };
 
   return (
     <>
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '1555px',
-          marginTop: '16px',
-          marginBottom: '16px',
-        }}
-      >
-        <Card>
-          <Card.Header className='d-flex flex-column flex-lg-row align-items-lg-center gap-3'>
-            <Card.Title
-              className='mb-0 flex-shrink-0'
-              style={{ whiteSpace: 'nowrap' }}
-            >
-              <h4 className='mb-0'>Your Surveys</h4>
-            </Card.Title>
-            <div className='d-flex flex-column flex-lg-row gap-2 w-100 w-lg-auto ms-lg-auto justify-content-lg-end align-items-lg-center'>
-              <Form.Control
-                className='w-100'
-                type='text'
-                style={{
-                  minWidth: 0,
-                  width: '100%',
-                  maxWidth: isMobile ? '100%' : '250px',
-                }}
-                placeholder='Search'
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              <Form.Select
-                className='w-100 w-lg-auto'
-                value={organizationFilter}
-                onChange={(e) => setOrganizationFilter(e.target.value)}
-                style={{
-                  minWidth: 0,
-                  width: '100%',
-                  maxWidth: isMobile ? '100%' : '250px',
-                }}
-              >
-                <option value=''>All organisations</option>
-                {organizationOptions.map((org) => (
-                  <option key={org.id} value={org.id}>
-                    {org.name}
-                  </option>
-                ))}
-              </Form.Select>
-              <Form.Select
-                className='w-100 w-lg-auto'
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                style={{
-                  minWidth: 0,
-                  width: '100%',
-                  maxWidth: isMobile ? '100%' : '250px',
-                }}
-              >
-                <option value='createdAt'>Created (newest first)</option>
-                <option value='createdAt-reverse'>
-                  Created (oldest first)
-                </option>
-                <option value='name'>Name (A-Z)</option>
-                <option value='name-reverse'>Name (Z-A)</option>
-                <option value='activeJobs'>Active jobs first</option>
-              </Form.Select>
-              {!isMobile && (
-                <Button
-                  variant='info'
-                  // size='sm'
-                  onClick={() => setCompactMode(!compactMode)}
-                  title={compactMode ? 'Expand view' : 'Compact view'}
-                  style={{
-                    minWidth: 'fit-content',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {compactMode ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
-                </Button>
-              )}
-            </div>
-          </Card.Header>
-          <Card.Body
-            className={
-              isMobile
-                ? 'd-flex flex-column gap-3 p-3'
-                : 'overflow-x-auto overflow-y-visible'
-            }
+      <Page>
+        <PageHeader
+          title='Surveys'
+          actions={
+            isOrganizationAdmin && (
+              <Button variant='primary' onClick={() => navigate('/surveys/new')}>
+                + New Survey
+              </Button>
+            )
+          }
+        />
+        <Toolbar>
+          <Form.Control
+            type='text'
+            style={{
+              minWidth: 0,
+              maxWidth: isMobile ? '100%' : '260px',
+              flex: isMobile ? '1 1 100%' : '0 1 auto',
+            }}
+            placeholder='Search surveys…'
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+          />
+          <Form.Select
+            value={sortBy}
+            onChange={(e) => {
+              setSortBy(e.target.value);
+              setPage(1);
+            }}
+            style={{
+              minWidth: 0,
+              maxWidth: isMobile ? '100%' : '200px',
+              flex: isMobile ? '1 1 100%' : '0 1 auto',
+            }}
           >
-            {isMobile ? (
-              sortedProjects.length > 0 ? (
-                <div className='d-flex flex-column gap-3'>
-                  {sortedProjects.map((project) => renderProjectCard(project))}
-                </div>
-              ) : (
-                <div className='text-center py-3'>
-                  <h5 className='mb-0'>{emptyMessage}</h5>
-                </div>
-              )
-            ) : (
-              <MyTable
-                tableHeadings={[
-                  { content: 'Survey', style: { width: '50%' } },
-                  { content: 'Annotation Sets', style: { width: '50%' } },
-                ]}
-                tableData={tableData}
-                pagination={true}
-                itemsPerPage={5}
-                emptyMessage={emptyMessage}
-              />
-            )}
-          </Card.Body>
-          {isOrganizationAdmin && (
-            <Card.Footer className='d-flex justify-content-center'>
-              <div className='d-inline-block'>
-                <Button variant='primary' onClick={() => showModal('newSurvey')}
-                >
-                  New Survey
-                </Button>
-              </div>
-            </Card.Footer>
-          )}
-        </Card>
-        {/* {process.env.NODE_ENV === 'development' && <UploadIntegrityChecker />} */}
-      </div>
-      <NewSurveyModal
-        show={modalToShow === 'newSurvey'}
-        projects={projects.map((project) => project.name.toLowerCase())}
-      />
-      <ConfirmationModal
-        show={modalToShow === 'deleteSurvey'}
-        onClose={() => {
-          showModal(null);
-          setSelectedProject(null);
-        }}
-        onConfirm={() => deleteProject(selectedProject!.id)}
-        title='Delete Survey'
-        body={
-          <p className='mb-0'>
-            Are you sure you want to delete {selectedProject?.name}?
-            <br />
-            This action cannot be undone.
-          </p>
-        }
-      />
+            <option value='createdAt'>Newest first</option>
+            <option value='createdAt-reverse'>Oldest first</option>
+            <option value='name'>Name (A-Z)</option>
+            <option value='name-reverse'>Name (Z-A)</option>
+            <option value='activeJobs'>Active jobs first</option>
+          </Form.Select>
+          <Spacer />
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              fontSize: 13,
+              color: 'var(--ss-text-dim)',
+            }}
+          >
+            <span>Rows</span>
+            <Form.Select
+              size='sm'
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(parseInt(e.target.value, 10));
+                setPage(1);
+              }}
+              style={{ width: 'auto', padding: '2px 24px 2px 8px' }}
+            >
+              {ROWS_PER_PAGE_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </Form.Select>
+            <span>
+              Page {pageClamped} of {totalPages}
+            </span>
+            <Button
+              size='sm'
+              variant='secondary'
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={pageClamped === 1}
+              style={{ padding: '2px 10px' }}
+            >
+              ‹
+            </Button>
+            <Button
+              size='sm'
+              variant='secondary'
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={pageClamped === totalPages}
+              style={{ padding: '2px 10px' }}
+            >
+              ›
+            </Button>
+          </div>
+        </Toolbar>
+        <ContentArea style={{ paddingTop: 12 }}>
+          <div className='ss-card' style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table className='ss-data-table'>
+                <thead>
+                  <tr>
+                    <th>Survey</th>
+                    <th>Images</th>
+                    <th>Ann. Sets</th>
+                    <th>Status</th>
+                    <th>Progress</th>
+                    <th style={{ textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedProjects.map((project) => {
+                    const disabled =
+                      project.status === 'uploading' ||
+                      project.status?.includes('processing') ||
+                      project.status === 'launching' ||
+                      project.status === 'updating' ||
+                      project.status === 'deleting';
+                    const hasActiveJob =
+                      (project.queues?.length ?? 0) > 0 ||
+                      project.annotationSets.some(
+                        (set: { register?: boolean | null }) => set.register
+                      );
+                    const imageCount =
+                      project.imageSets?.[0]?.imageCount ?? 0;
+                    const setCount = project.annotationSets.length;
+                    return (
+                      <tr key={project.id}>
+                        <td>
+                          <a
+                            className='ss-row-link'
+                            onClick={() =>
+                              navigate(`/surveys/${project.id}/detail`)
+                            }
+                          >
+                            {project.name}
+                          </a>
+                        </td>
+                        <td>
+                          <span className='ss-pill'>{imageCount}</span>
+                        </td>
+                        <td>
+                          <span className='ss-pill'>{setCount}</span>
+                        </td>
+                        <td>
+                          {(() => {
+                            const s = (project.status || '').toLowerCase();
+                            const isTransient =
+                              s === 'launching' ||
+                              s.includes('processing') ||
+                              s === 'updating' ||
+                              s === 'uploading' ||
+                              s === 'deleting';
+                            if (isTransient) return statusDisplay(project.status);
+                            if (hasActiveJob) return statusDisplay('launched');
+                            return statusDisplay(project.status);
+                          })()}
+                        </td>
+                        <td>{progressCell(project)}</td>
+                        <td>
+                          <div className='ss-row-actions'>
+                            {hasActiveJob ? (
+                              <>
+                                <Button
+                                  size='sm'
+                                  variant='primary'
+                                  style={{ width: 90 }}
+                                  onClick={() =>
+                                    navigate(`/surveys/${project.id}/detail`)
+                                  }
+                                >
+                                  Open
+                                </Button>
+                                <Button
+                                  size='sm'
+                                  variant='warning'
+                                  style={{ width: 90 }}
+                                  onClick={() => navigate('/jobs')}
+                                >
+                                  Take to Jobs
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <Button
+                                  size='sm'
+                                  variant='primary'
+                                  style={{ width: 90 }}
+                                  onClick={() =>
+                                    navigate(`/surveys/${project.id}/detail`)
+                                  }
+                                >
+                                  Open
+                                </Button>
+                                <Button
+                                  size='sm'
+                                  variant='secondary'
+                                  style={{ width: 90 }}
+                                  onClick={() =>
+                                    navigate(`/surveys/${project.id}/settings`)
+                                  }
+                                  disabled={
+                                    process.env.NODE_ENV !== 'development' &&
+                                    disabled
+                                  }
+                                >
+                                  Settings
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {pagedProjects.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        style={{
+                          textAlign: 'center',
+                          color: 'var(--ss-text-dim)',
+                          padding: '24px',
+                        }}
+                      >
+                        {emptyMessage}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </ContentArea>
+      </Page>
       <ConfirmationModal
         show={modalToShow === 'deleteAnnotationSet'}
         onClose={() => {
@@ -1103,18 +688,6 @@ export default function Surveys() {
           setSelectedProject(null);
         }}
       />
-      {selectedProject && (
-        <FilesUploadComponent
-          show={modalToShow === 'addFiles'}
-          fromStaleUpload={fromStaleUpload}
-          handleClose={() => {
-            showModal(null);
-            setSelectedProject(null);
-            setFromStaleUpload(false);
-          }}
-          project={{ id: selectedProject.id, name: selectedProject.name }}
-        />
-      )}
       {selectedProject && selectedAnnotationSet && (
         <AnnotationSetResults
           show={modalToShow === 'annotationSetResults'}
@@ -1161,7 +734,7 @@ export default function Surveys() {
                 : prev
             );
           }}
-          setEditSurveyTab={setTab}
+          setEditSurveyTab={() => {}}
         />
       )}
       {selectedProject && (
@@ -1213,17 +786,6 @@ export default function Surveys() {
               prev && prev.id === projectId ? { ...prev, status } : prev
             );
           }}
-        />
-      )}
-      {selectedProject && (
-        <EditSurveyModal
-          show={modalToShow === 'editSurvey'}
-          onClose={() => {
-            showModal(null);
-            // setSelectedProject(null);
-          }}
-          project={selectedProject}
-          openTab={tab}
         />
       )}
     </>

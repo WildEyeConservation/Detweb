@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { Alert, Form } from 'react-bootstrap';
+import { Alert, Card, Form } from 'react-bootstrap';
 import Select from 'react-select';
 import { Schema } from '../amplify/client-schema';
 import { GlobalContext, UserContext } from '../Context';
@@ -363,292 +363,307 @@ export default function SpeciesLabelling({
   }, [setSpeciesLaunchHandler, client, user.userId, annotationSet.name, project.name, project.id, modelOptions]);
 
   return (
-    <div className='px-3 pb-3 pt-1'>
-      <div className='d-flex flex-column gap-3 mt-2'>
-        <Form.Group>
-          <Form.Label className='mb-0'>Batch Size</Form.Label>
-          <span
-            className='text-muted d-block mb-1'
-            style={{ fontSize: '12px' }}
-          >
-            The number of annotation jobs a user can pick up at a time.
-          </span>
-          <Form.Control
-            type='number'
-            value={batchSize}
-            onChange={(e) => setBatchSize(Number(e.target.value))}
-          />
-        </Form.Group>
-      </div>
-
-      <div className='d-flex flex-column mt-2'>
-        <Form.Group>
-          <Form.Switch
-            label='Show Advanced Options'
-            checked={showAdvancedOptions}
-            onChange={() => setShowAdvancedOptions(!showAdvancedOptions)}
-          />
-        </Form.Group>
-      </div>
-
-      {showAdvancedOptions && (
-        <div
-          className='d-flex flex-column gap-3 border border-dark shadow-sm p-2'
-          style={{ backgroundColor: '#697582' }}
-        >
-          <Form.Group>
-            <Form.Label className='mb-0'>Job Name</Form.Label>
+    <div className='d-flex flex-column gap-3'>
+      <Card>
+        <Card.Header>
+          <h5 className='mb-0'>Batch Configuration</h5>
+        </Card.Header>
+        <Card.Body>
+          <Form.Group className='mb-3'>
+            <Form.Label className='mb-0'>Batch Size</Form.Label>
             <span
               className='text-muted d-block mb-1'
               style={{ fontSize: '12px' }}
             >
-              Modify this to display a different name for the job in the jobs
-              page.
+              The number of annotation jobs a user can pick up at a time.
             </span>
             <Form.Control
-              type='text'
-              value={taskTag}
-              onChange={(e) => setTaskTag(e.target.value)}
+              type='number'
+              value={batchSize}
+              onChange={(e) => setBatchSize(Number(e.target.value))}
             />
           </Form.Group>
           <Form.Group>
-            <Form.Label className='mb-0'>Zoom Level</Form.Label>
-            <span
-              className='text-muted d-block mb-1'
-              style={{ fontSize: '12px' }}
-            >
-              Select the default zoom level for images.
-            </span>
-            <Form.Select
-              value={zoom as any}
-              onChange={(e) =>
-                setZoom(
-                  e.target.value == 'auto' ? undefined : (e.target.value as any)
-                )
-              }
-            >
-              <option value='auto'>Auto</option>
-              {[...Array(13)].map((_, i) => (
-                <option key={i} value={i}>
-                  Level {i}
-                </option>
-              ))}
-            </Form.Select>
+            <Form.Switch
+              label='Show Advanced Options'
+              checked={showAdvancedOptions}
+              onChange={() => setShowAdvancedOptions(!showAdvancedOptions)}
+            />
           </Form.Group>
-          {modelGuided &&
+        </Card.Body>
+      </Card>
+
+      {showAdvancedOptions && (
+        <Card>
+          <Card.Header>
+            <h5 className='mb-0'>Advanced Options</h5>
+          </Card.Header>
+          <Card.Body className='d-flex flex-column gap-3'>
             <Form.Group>
-              <Form.Label className='mb-0'>
-                Filter by confidence value:
-              </Form.Label>
+              <Form.Label className='mb-0'>Job Name</Form.Label>
               <span
                 className='text-muted d-block mb-1'
                 style={{ fontSize: '12px' }}
               >
-                Filter images by confidence value.
+                Modify this to display a different name for the job in the jobs
+                page.
               </span>
-              <div className='d-flex align-items-center gap-2'>
-                <Form.Control
-                  type='number'
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={lowerLimit}
-                  onChange={(e) => setLowerLimit(Number(e.target.value))}
-                  style={{ width: '80px' }}
-                />
-                <span>to</span>
-                <Form.Control
-                  type='number'
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={upperLimit}
-                  onChange={(e) => setUpperLimit(Number(e.target.value))}
-                  style={{ width: '80px' }}
-                />
-              </div>
+              <Form.Control
+                type='text'
+                value={taskTag}
+                onChange={(e) => setTaskTag(e.target.value)}
+              />
             </Form.Group>
-          }
-          <Form.Group>
-            <Form.Switch
-              label='Skip Locations With Annotations'
-              checked={skipLocationsWithAnnotations}
-              onChange={() =>
-                setSkipLocationsWithAnnotations(!skipLocationsWithAnnotations)
-              }
-            />
-          </Form.Group>
-          <Form.Group>
-            <Form.Switch
-              label='Allow Annotations Outside Location Boundaries'
-              checked={allowAnnotationsOutsideLocationBoundaries}
-              onChange={() =>
-                setAllowAnnotationsOutsideLocationBoundaries(
-                  !allowAnnotationsOutsideLocationBoundaries
-                )
-              }
-            />
-          </Form.Group>
-          <Form.Group>
-            <Form.Switch
-              label='View Unobserved Locations Only'
-              checked={viewUnobservedLocationsOnly}
-              onChange={() =>
-                setViewUnobservedLocationsOnly(!viewUnobservedLocationsOnly)
-              }
-            />
-          </Form.Group>
-          <Form.Group>
-            <Form.Switch
-              label='Hide Job From Non-Admin Workers'
-              checked={hidden}
-              onChange={() => setHidden(!hidden)}
-            />
-          </Form.Group>
-        </div>
+            <Form.Group>
+              <Form.Label className='mb-0'>Zoom Level</Form.Label>
+              <span
+                className='text-muted d-block mb-1'
+                style={{ fontSize: '12px' }}
+              >
+                Select the default zoom level for images.
+              </span>
+              <Form.Select
+                value={zoom as any}
+                onChange={(e) =>
+                  setZoom(
+                    e.target.value == 'auto'
+                      ? undefined
+                      : (e.target.value as any)
+                  )
+                }
+              >
+                <option value='auto'>Auto</option>
+                {[...Array(13)].map((_, i) => (
+                  <option key={i} value={i}>
+                    Level {i}
+                  </option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+            {modelGuided && (
+              <Form.Group>
+                <Form.Label className='mb-0'>
+                  Filter by confidence value:
+                </Form.Label>
+                <span
+                  className='text-muted d-block mb-1'
+                  style={{ fontSize: '12px' }}
+                >
+                  Filter images by confidence value.
+                </span>
+                <div className='d-flex align-items-center gap-2'>
+                  <Form.Control
+                    type='number'
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={lowerLimit}
+                    onChange={(e) => setLowerLimit(Number(e.target.value))}
+                    style={{ width: '80px' }}
+                  />
+                  <span>to</span>
+                  <Form.Control
+                    type='number'
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={upperLimit}
+                    onChange={(e) => setUpperLimit(Number(e.target.value))}
+                    style={{ width: '80px' }}
+                  />
+                </div>
+              </Form.Group>
+            )}
+            <Form.Group>
+              <Form.Switch
+                label='Skip Locations With Annotations'
+                checked={skipLocationsWithAnnotations}
+                onChange={() =>
+                  setSkipLocationsWithAnnotations(!skipLocationsWithAnnotations)
+                }
+              />
+            </Form.Group>
+            <Form.Group>
+              <Form.Switch
+                label='Allow Annotations Outside Location Boundaries'
+                checked={allowAnnotationsOutsideLocationBoundaries}
+                onChange={() =>
+                  setAllowAnnotationsOutsideLocationBoundaries(
+                    !allowAnnotationsOutsideLocationBoundaries
+                  )
+                }
+              />
+            </Form.Group>
+            <Form.Group>
+              <Form.Switch
+                label='View Unobserved Locations Only'
+                checked={viewUnobservedLocationsOnly}
+                onChange={() =>
+                  setViewUnobservedLocationsOnly(!viewUnobservedLocationsOnly)
+                }
+              />
+            </Form.Group>
+            <Form.Group>
+              <Form.Switch
+                label='Hide Job From Non-Admin Workers'
+                checked={hidden}
+                onChange={() => setHidden(!hidden)}
+              />
+            </Form.Group>
+          </Card.Body>
+        </Card>
       )}
 
-      <LabeledToggleSwitch
-        className='m-0 border-top pt-2 mt-2 border-dark'
-        leftLabel='Model Guided'
-        rightLabel='Tiled Annotation'
-        checked={!modelGuided}
-        onChange={(checked) => {
-          setModelGuided(!checked);
-        }}
-      />
+      <Card>
+        <Card.Header>
+          <h5 className='mb-0'>Annotation Mode</h5>
+        </Card.Header>
+        <Card.Body>
+          <LabeledToggleSwitch
+            variant='segmented'
+            leftLabel='Model Guided'
+            rightLabel='Tiled Annotation'
+            checked={!modelGuided}
+            onChange={(checked) => {
+              setModelGuided(!checked);
+            }}
+          />
 
-      {modelGuided ? (
-        loadingLocationSets ? (
-          <p
-            className='text-muted mb-0 mt-2 text-center'
-            style={{ fontSize: '12px' }}
-          >
-            Loading models...
-          </p>
-        ) : modelOptions.length > 1 ? (
-          <Form.Group>
-            <Form.Label className='mb-0'>Model</Form.Label>
-            <Select
-              value={model as any}
-              onChange={(m) => setModel(m as any)}
-              options={modelOptions}
-              placeholder='Select a model'
-              className='text-black'
-              isDisabled={launching}
-            />
-          </Form.Group>
-        ) : (
-          modelOptions.length === 0 && (
-            <p
-              className='text-muted mb-0 mt-2 text-center'
-              style={{ fontSize: '12px' }}
-            >
-              You must first process your images before launching a model guided
-              task.
-            </p>
-          )
-        )
-      ) : (
-        <div className='mt-2'>
-          {loadingTileCount ? (
-            <p
-              className='text-muted mb-0 text-center'
-              style={{ fontSize: '12px' }}
-            >
-              Loading tile information...
-            </p>
-          ) : !tiledLocationSetId || globalTileCount === 0 ? (
-            <Alert variant='warning' className='mb-0'>
-              <strong>No tiles configured.</strong>
-              <p className='mb-0 mt-1' style={{ fontSize: '14px' }}>
-                Please go to <strong>Edit Survey &gt; Manage Tiles</strong> to
-                create tiles for this survey before launching a tiled annotation
-                task.
+          {modelGuided ? (
+            loadingLocationSets ? (
+              <p
+                className='text-muted mb-0 mt-3 text-center'
+                style={{ fontSize: '12px' }}
+              >
+                Loading models...
               </p>
-            </Alert>
+            ) : modelOptions.length > 1 ? (
+              <Form.Group className='mt-3'>
+                <Form.Label className='mb-0'>Model</Form.Label>
+                <Select
+                  value={model as any}
+                  onChange={(m) => setModel(m as any)}
+                  options={modelOptions}
+                  placeholder='Select a model'
+                  className='text-black'
+                  isDisabled={launching}
+                />
+              </Form.Group>
+            ) : (
+              modelOptions.length === 0 && (
+                <p
+                  className='text-muted mb-0 mt-3 text-center'
+                  style={{ fontSize: '12px' }}
+                >
+                  You must first process your images before launching a model
+                  guided task.
+                </p>
+              )
+            )
           ) : (
-            <div
-              className='border border-dark shadow-sm p-2'
-              style={{ backgroundColor: '#697582' }}
-            >
-              <p className='mb-0 text-white'>
-                <strong>{globalTileCount}</strong> tiles available for
-                annotation.
-              </p>
-              <p className='mb-0 mt-1 text-muted' style={{ fontSize: '12px' }}>
-                To modify tiles, go to Edit Survey &gt; Manage Tiles.
-              </p>
-              {process.env.NODE_ENV === 'development' && (
-                <Form.Group className='mt-2'>
-                  <Form.Label className='mb-0 text-white' style={{ fontSize: '13px' }}>
-                    Filter by Image IDs (optional)
-                  </Form.Label>
-                  <span
-                    className='text-muted d-block mb-1'
+            <div className='mt-3'>
+              {loadingTileCount ? (
+                <p
+                  className='text-muted mb-0 text-center'
+                  style={{ fontSize: '12px' }}
+                >
+                  Loading tile information...
+                </p>
+              ) : !tiledLocationSetId || globalTileCount === 0 ? (
+                <Alert variant='warning' className='mb-0'>
+                  <strong>No tiles configured.</strong>
+                  <p className='mb-0 mt-1' style={{ fontSize: '14px' }}>
+                    Please go to <strong>Edit Survey &gt; Manage Tiles</strong>{' '}
+                    to create tiles for this survey before launching a tiled
+                    annotation task.
+                  </p>
+                </Alert>
+              ) : (
+                <>
+                  <p className='mb-0'>
+                    <strong>{globalTileCount}</strong> tiles available for
+                    annotation.
+                  </p>
+                  <p
+                    className='text-muted mb-0 mt-1'
                     style={{ fontSize: '12px' }}
                   >
-                    Upload a JSON file containing an array of image IDs to only
-                    launch tiles from those images.
-                  </span>
-                  <div className='d-flex align-items-center gap-2'>
-                    <Form.Control
-                      type='file'
-                      accept='.json'
-                      size='sm'
-                      disabled={launching}
-                      onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-                        const file = event.target.files?.[0];
-                        if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                          try {
-                            const content = e.target?.result as string;
-                            const parsed = JSON.parse(content);
-                            if (
-                              Array.isArray(parsed) &&
-                              parsed.every((id) => typeof id === 'string')
-                            ) {
-                              setLaunchImageIds(parsed);
-                            } else {
-                              alert(
-                                'Invalid JSON format. Expected an array of image ID strings.'
-                              );
-                            }
-                          } catch {
-                            alert('Failed to parse JSON file.');
-                          }
-                        };
-                        reader.readAsText(file);
-                        event.target.value = '';
-                      }}
-                    />
-                    {launchImageIds && (
-                      <button
-                        type='button'
-                        className='btn btn-sm btn-outline-light'
-                        onClick={() => setLaunchImageIds(null)}
+                    To modify tiles, go to Edit Survey &gt; Manage Tiles.
+                  </p>
+                  {process.env.NODE_ENV === 'development' && (
+                    <Form.Group className='mt-3'>
+                      <Form.Label className='mb-0' style={{ fontSize: '13px' }}>
+                        Filter by Image IDs (optional)
+                      </Form.Label>
+                      <span
+                        className='text-muted d-block mb-1'
+                        style={{ fontSize: '12px' }}
                       >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                  {launchImageIds && (
-                    <p
-                      className='mb-0 mt-1 text-white'
-                      style={{ fontSize: '12px' }}
-                    >
-                      <strong>{launchImageIds.length}</strong> image IDs loaded
-                      — only tiles from these images will be launched.
-                    </p>
+                        Upload a JSON file containing an array of image IDs to
+                        only launch tiles from those images.
+                      </span>
+                      <div className='d-flex align-items-center gap-2'>
+                        <Form.Control
+                          type='file'
+                          accept='.json'
+                          size='sm'
+                          disabled={launching}
+                          onChange={(
+                            event: React.ChangeEvent<HTMLInputElement>
+                          ) => {
+                            const file = event.target.files?.[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = (e) => {
+                              try {
+                                const content = e.target?.result as string;
+                                const parsed = JSON.parse(content);
+                                if (
+                                  Array.isArray(parsed) &&
+                                  parsed.every((id) => typeof id === 'string')
+                                ) {
+                                  setLaunchImageIds(parsed);
+                                } else {
+                                  alert(
+                                    'Invalid JSON format. Expected an array of image ID strings.'
+                                  );
+                                }
+                              } catch {
+                                alert('Failed to parse JSON file.');
+                              }
+                            };
+                            reader.readAsText(file);
+                            event.target.value = '';
+                          }}
+                        />
+                        {launchImageIds && (
+                          <button
+                            type='button'
+                            className='btn btn-sm btn-outline-secondary'
+                            onClick={() => setLaunchImageIds(null)}
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      {launchImageIds && (
+                        <p
+                          className='mb-0 mt-1'
+                          style={{ fontSize: '12px' }}
+                        >
+                          <strong>{launchImageIds.length}</strong> image IDs
+                          loaded — only tiles from these images will be
+                          launched.
+                        </p>
+                      )}
+                    </Form.Group>
                   )}
-                </Form.Group>
+                </>
               )}
             </div>
           )}
-        </div>
-      )}
-
+        </Card.Body>
+      </Card>
     </div>
   );
 }

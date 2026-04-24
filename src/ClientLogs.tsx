@@ -2,13 +2,15 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import Select from 'react-select';
 import Form from 'react-bootstrap/Form';
 import Button from 'react-bootstrap/Button';
-import MyTable from './Table';
 import { GlobalContext } from './Context';
 import { useUsers } from './apiInterface';
 import { fetchAllPaginatedResults } from './utils';
 import type { Schema } from './amplify/client-schema';
+import { Page, PageHeader, Toolbar, ContentArea, Spacer } from './ss/PageShell';
 
 type Option = { label: string; value: string };
+
+const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
 
 export default function ClientLogs() {
   const { client } = useContext(GlobalContext)!;
@@ -28,6 +30,8 @@ export default function ClientLogs() {
   const [end, setEnd] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState<Schema['ClientLog']['type'][]>([]);
+  const [page, setPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   function escapeCsvValue(value: unknown): string {
     const stringValue =
@@ -138,7 +142,6 @@ export default function ClientLogs() {
         (l) => new Date(l.createdAt as any).getTime() <= e
       );
     }
-    // newest first
     return [...result].sort(
       (a, b) =>
         new Date(b.createdAt as any).getTime() -
@@ -146,107 +149,208 @@ export default function ClientLogs() {
     );
   }, [logs, start, end]);
 
-  const tableHeadings = [
-    { content: 'Timestamp', sort: true },
-    { content: 'User', sort: true },
-    { content: 'IP', sort: true },
-    { content: 'Device', sort: true },
-    { content: 'OS', sort: true },
-    { content: 'Conn', sort: true },
-    { content: 'Downlink (Mb/s)', sort: true },
-    { content: 'RTT (ms)', sort: true },
-    { content: 'User Agent' },
-  ];
+  useEffect(() => {
+    setPage(1);
+  }, [selectedUser?.value, start, end, itemsPerPage]);
 
-  const tableData = filteredLogs.map((log) => {
-    const user = users.find((u) => u.id === log.userId);
-    return {
-      id: log.id,
-      rowData: [
-        new Date(log.createdAt as any).toLocaleString(),
-        user?.name || log.userId,
-        log.ipAddress || '',
-        log.deviceType || '',
-        log.os || '',
-        log.connectionType || '',
-        (log.downlink ?? '').toString(),
-        (log.rtt ?? '').toString(),
-        log.userAgent || '',
-      ],
-    };
-  });
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredLogs.length / itemsPerPage)
+  );
+  const pageClamped = Math.min(Math.max(1, page), totalPages);
+  const pagedLogs = filteredLogs.slice(
+    (pageClamped - 1) * itemsPerPage,
+    pageClamped * itemsPerPage
+  );
+
+  const selectStyles = {
+    control: (base: any) => ({
+      ...base,
+      background: 'var(--ss-surface)',
+      borderColor: 'var(--ss-border)',
+      minHeight: 38,
+    }),
+    menu: (base: any) => ({ ...base, zIndex: 20 }),
+  };
 
   return (
-    <div className='mt-2'>
-      <h5>Client Logs</h5>
-      <div className='d-flex gap-2 align-items-end flex-wrap mb-3'>
-        <div style={{ minWidth: 300 }}>
-          <Form.Label className='mb-1'>User</Form.Label>
+    <Page>
+      <PageHeader
+        title='Client Logs'
+        actions={
+          <>
+            <Button
+              variant='secondary'
+              onClick={() => selectedUser && loadLogs(selectedUser.value)}
+              disabled={!selectedUser || loading}
+            >
+              {loading ? 'Loading…' : 'Refresh'}
+            </Button>
+            <Button
+              variant='primary'
+              onClick={exportFilteredLogsToCsv}
+              disabled={!filteredLogs.length}
+            >
+              Export CSV
+            </Button>
+          </>
+        }
+      />
+      <Toolbar>
+        <div style={{ minWidth: 280, flex: '1 1 280px', maxWidth: 360 }}>
           <Select
             options={userOptions}
             value={selectedUser}
             onChange={(opt) => setSelectedUser(opt as Option)}
-            placeholder='Select a user...'
+            placeholder='Select a user…'
             isClearable
             className='text-black'
+            styles={selectStyles}
           />
         </div>
-        <div>
-          <Form.Label className='mb-1'>Start</Form.Label>
-          <Form.Control
-            type='datetime-local'
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-          />
-        </div>
-        <div>
-          <Form.Label className='mb-1'>End</Form.Label>
-          <Form.Control
-            type='datetime-local'
-            value={end}
-            onChange={(e) => setEnd(e.target.value)}
-          />
-        </div>
-        <div className='d-flex gap-2'>
+        <Form.Control
+          type='datetime-local'
+          value={start}
+          onChange={(e) => setStart(e.target.value)}
+          style={{ maxWidth: 210 }}
+          placeholder='Start'
+        />
+        <Form.Control
+          type='datetime-local'
+          value={end}
+          onChange={(e) => setEnd(e.target.value)}
+          style={{ maxWidth: 210 }}
+          placeholder='End'
+        />
+        {(start || end) && (
           <Button
             variant='secondary'
+            size='sm'
             onClick={() => {
               setStart('');
               setEnd('');
             }}
           >
-            Clear Filters
+            Clear
+          </Button>
+        )}
+        <Spacer />
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 13,
+            color: 'var(--ss-text-dim)',
+          }}
+        >
+          <span>Rows</span>
+          <Form.Select
+            size='sm'
+            value={itemsPerPage}
+            onChange={(e) => setItemsPerPage(parseInt(e.target.value, 10))}
+            style={{ width: 'auto', padding: '2px 24px 2px 8px' }}
+          >
+            {ROWS_PER_PAGE_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </Form.Select>
+          <span>
+            Page {pageClamped} of {totalPages}
+          </span>
+          <Button
+            size='sm'
+            variant='secondary'
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={pageClamped === 1}
+            style={{ padding: '2px 10px' }}
+          >
+            ‹
           </Button>
           <Button
-            variant='primary'
-            onClick={() => selectedUser && loadLogs(selectedUser.value)}
-            disabled={!selectedUser || loading}
+            size='sm'
+            variant='secondary'
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={pageClamped === totalPages}
+            style={{ padding: '2px 10px' }}
           >
-            {loading ? 'Loading…' : 'Refresh'}
-          </Button>
-          <Button
-            variant='success'
-            onClick={exportFilteredLogsToCsv}
-            disabled={!filteredLogs.length}
-          >
-            Export CSV
+            ›
           </Button>
         </div>
-      </div>
-
-      <MyTable
-        tableHeadings={tableHeadings as any}
-        tableData={tableData}
-        pagination={true}
-        itemsPerPage={10}
-        emptyMessage={
-          selectedUser
-            ? loading
-              ? 'Loading…'
-              : 'No logs found for selection'
-            : 'Select a user to view logs'
-        }
-      />
-    </div>
+      </Toolbar>
+      <ContentArea style={{ paddingTop: 12 }}>
+        <div className='ss-card' style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table className='ss-data-table'>
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>User</th>
+                  <th>IP</th>
+                  <th>Device</th>
+                  <th>OS</th>
+                  <th>Conn</th>
+                  <th>Downlink (Mb/s)</th>
+                  <th>RTT (ms)</th>
+                  <th>User Agent</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pagedLogs.map((log) => {
+                  const user = users.find((u) => u.id === log.userId);
+                  return (
+                    <tr key={log.id}>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        {new Date(log.createdAt as any).toLocaleString()}
+                      </td>
+                      <td>{user?.name || log.userId}</td>
+                      <td>{log.ipAddress || '—'}</td>
+                      <td>{log.deviceType || '—'}</td>
+                      <td>{log.os || '—'}</td>
+                      <td>{log.connectionType || '—'}</td>
+                      <td>{log.downlink ?? '—'}</td>
+                      <td>{log.rtt ?? '—'}</td>
+                      <td
+                        style={{
+                          maxWidth: 320,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          color: 'var(--ss-text-dim)',
+                          fontSize: 12,
+                        }}
+                        title={log.userAgent || ''}
+                      >
+                        {log.userAgent || '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {pagedLogs.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      style={{
+                        textAlign: 'center',
+                        color: 'var(--ss-text-dim)',
+                        padding: '24px',
+                      }}
+                    >
+                      {selectedUser
+                        ? loading
+                          ? 'Loading…'
+                          : 'No logs found for selection'
+                        : 'Select a user to view logs'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </ContentArea>
+    </Page>
   );
 }

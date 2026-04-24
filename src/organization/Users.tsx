@@ -1,5 +1,4 @@
-import { Button } from 'react-bootstrap';
-import MyTable from '../Table';
+import { Button, Form, Spinner } from 'react-bootstrap';
 import { Schema } from '../amplify/client-schema';
 import { useContext, useState, useEffect } from 'react';
 import { GlobalContext, UserContext } from '../Context';
@@ -8,10 +7,16 @@ import InviteUserModal from './InviteUserModal';
 import ExceptionsModal from './ExceptionsModal';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
 import ConfirmationModal from '../ConfirmationModal';
-import { Minimize2, Maximize2, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
-const STORAGE_KEY_COMPACT_MODE = 'usersCompactMode';
+const STORAGE_KEYS = {
+  SEARCH: 'orgUsersSearch',
+  SORT_BY: 'orgUsersSortBy',
+  ROWS_PER_PAGE: 'orgUsersRowsPerPage',
+};
+
+const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
 
 export default function Users({
   organization,
@@ -24,16 +29,22 @@ export default function Users({
   const { user: authUser } = useContext(UserContext)!;
   const { users } = useUsers();
 
-  const { data: memberships, isLoading: membershipsLoading, refetch, isFetching } = useQuery<Schema['OrganizationMembership']['type'][]>({
+  const {
+    data: memberships,
+    isLoading: membershipsLoading,
+    refetch,
+    isFetching,
+  } = useQuery<Schema['OrganizationMembership']['type'][]>({
     queryKey: ['OrganizationMembership', organization.id],
     queryFn: async () => {
       const allItems: Schema['OrganizationMembership']['type'][] = [];
       let nextToken: string | undefined;
       do {
-        const result = await client.models.OrganizationMembership.membershipsByOrganizationId(
-          { organizationId: organization.id },
-          { nextToken }
-        );
+        const result =
+          await client.models.OrganizationMembership.membershipsByOrganizationId(
+            { organizationId: organization.id },
+            { nextToken }
+          );
         allItems.push(...result.data);
         nextToken = result.nextToken ?? undefined;
       } while (nextToken);
@@ -47,24 +58,61 @@ export default function Users({
     name: string;
     organizationName: string;
   } | null>(null);
+  const [isMutating, setIsMutating] = useState(false);
+  const [page, setPage] = useState(1);
 
-  // Initialize compactMode from localStorage or use default
-  const getInitialCompactMode = () => {
+  const getInitialSearch = () => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(STORAGE_KEY_COMPACT_MODE);
-      if (stored !== null) {
-        return stored === 'true';
-      }
+      const stored = localStorage.getItem(STORAGE_KEYS.SEARCH);
+      if (stored !== null) return stored;
     }
-    return false;
+    return '';
+  };
+  const getInitialSortBy = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEYS.SORT_BY);
+      if (stored) return stored;
+    }
+    return 'name';
+  };
+  const getInitialRowsPerPage = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEYS.ROWS_PER_PAGE);
+      const parsed = stored ? parseInt(stored, 10) : NaN;
+      if (ROWS_PER_PAGE_OPTIONS.includes(parsed)) return parsed;
+    }
+    return 10;
   };
 
-  const [compactMode, setCompactMode] = useState(getInitialCompactMode);
+  const [search, setSearch] = useState(getInitialSearch);
+  const [sortBy, setSortBy] = useState(getInitialSortBy);
+  const [itemsPerPage, setItemsPerPage] = useState(getInitialRowsPerPage);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.SEARCH, search);
+    }
+  }, [search]);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.SORT_BY, sortBy);
+    }
+  }, [sortBy]);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.ROWS_PER_PAGE, String(itemsPerPage));
+    }
+  }, [itemsPerPage]);
+
   const getIsMobile = () =>
     typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
-
   const [isMobile, setIsMobile] = useState(getIsMobile);
-  const [isMutating, setIsMutating] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleResize = () => setIsMobile(getIsMobile());
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   async function updateUser(userId: string, isAdmin: boolean) {
     setIsMutating(true);
@@ -87,108 +135,6 @@ export default function Users({
     }
   }
 
-  const tableHeadings = [
-    { content: 'Username' },
-    { content: 'Email' },
-    { content: 'Organisation Admin' },
-    { content: 'Permission Exceptions' },
-    { content: 'Remove' },
-  ];
-
-  const tableData = isLoading
-    ? []
-    : (memberships ?? []).map((membership) => {
-      const user = users.find((user) => user.id === membership.userId);
-      return {
-        id: membership.organizationId + membership.userId,
-        rowData: [
-          user?.name,
-          user?.email,
-          <LabeledToggleSwitch
-            className='mb-0'
-            leftLabel='No'
-            rightLabel='Yes'
-            checked={membership.isAdmin ?? false}
-            disabled={isMutating || membership.userId === authUser.userId}
-            onChange={(checked) => {
-              updateUser(membership.userId, checked);
-            }}
-          />,
-          <div className='d-flex justify-content-center'>
-            <Button
-              size={compactMode ? 'sm' : undefined}
-              className='fixed-width-button'
-              disabled={
-                process.env.NODE_ENV === 'development'
-                  ? false
-                  : membership.isAdmin
-                    ? true
-                    : false
-              }
-              variant={'info'}
-              onClick={() => {
-                setUserToEdit({
-                  id: user?.id || '',
-                  name: user?.name || '',
-                  organizationName: organization.name,
-                });
-                showModal('exceptions');
-              }}
-            >
-              Edit
-            </Button>
-          </div>,
-          <div className='d-flex justify-content-center'>
-            <Button
-              size={compactMode ? 'sm' : undefined}
-              className='fixed-width-button'
-              variant='danger'
-              disabled={isMutating || membership.userId === authUser.userId}
-              onClick={() => {
-                setUserToEdit({
-                  id: user?.id || '',
-                  name: user?.name || '',
-                  organizationName: organization.name,
-                });
-                showModal('removeUser');
-              }}
-            >
-              Remove user
-            </Button>
-          </div>,
-        ],
-      };
-    });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const handleResize = () => {
-      setIsMobile(getIsMobile());
-    };
-
-    handleResize();
-
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
-
-  // Persist compactMode to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_COMPACT_MODE, String(compactMode));
-    }
-  }, [compactMode]);
-
-  useEffect(() => {
-    setOnClick({
-      name: 'Invite User',
-      function: () => showModal('inviteUser'),
-    });
-  }, []);
-
   async function handleRemoveUser() {
     setIsMutating(true);
     try {
@@ -209,48 +155,295 @@ export default function Users({
     }
   }
 
+  useEffect(() => {
+    setOnClick({
+      name: '+ Invite User',
+      function: () => showModal('inviteUser'),
+    });
+  }, []);
+
+  const allRows = (memberships ?? []).map((membership) => {
+    const user = users?.find((u) => u.id === membership.userId);
+    return { membership, user };
+  });
+
+  const searchLower = search.toLowerCase();
+  const filteredRows = allRows.filter(({ user }) => {
+    if (searchLower === '') return true;
+    return (
+      (user?.name ?? '').toLowerCase().includes(searchLower) ||
+      (user?.email ?? '').toLowerCase().includes(searchLower)
+    );
+  });
+
+  const sortedRows = [...filteredRows].sort((a, b) => {
+    if (sortBy === 'name') {
+      return (a.user?.name ?? '').localeCompare(b.user?.name ?? '');
+    }
+    if (sortBy === 'name-reverse') {
+      return (b.user?.name ?? '').localeCompare(a.user?.name ?? '');
+    }
+    if (sortBy === 'email') {
+      return (a.user?.email ?? '').localeCompare(b.user?.email ?? '');
+    }
+    if (sortBy === 'email-reverse') {
+      return (b.user?.email ?? '').localeCompare(a.user?.email ?? '');
+    }
+    if (sortBy === 'admin') {
+      const aAdmin = a.membership.isAdmin ? 1 : 0;
+      const bAdmin = b.membership.isAdmin ? 1 : 0;
+      if (aAdmin !== bAdmin) return bAdmin - aAdmin;
+      return (a.user?.name ?? '').localeCompare(b.user?.name ?? '');
+    }
+    return 0;
+  });
+
+  const rows = sortedRows;
+  const totalPages = Math.max(1, Math.ceil(rows.length / itemsPerPage));
+  const pageClamped = Math.min(Math.max(1, page), totalPages);
+  const pagedRows = rows.slice(
+    (pageClamped - 1) * itemsPerPage,
+    pageClamped * itemsPerPage
+  );
+
   return (
     <>
-      <div className={`d-flex flex-column ${compactMode ? 'gap-1' : 'gap-2'} mt-3 w-100 overflow-x-auto overflow-y-visible`}>
-        <div className='d-flex justify-content-between align-items-center'>
-          <div className='d-flex align-items-center gap-2'>
-            {compactMode ? (
-              <h6 className='mb-0'>Organisation Users</h6>
-            ) : (
-              <h5 className='mb-0'>Organisation Users</h5>
-            )}
-            <Button
-              variant='link'
-              size='sm'
-              className='p-0 text-muted'
-              onClick={() => refetch()}
-              disabled={isFetching}
-              title='Refresh'
-            >
-              <RefreshCw size={16} className={isFetching ? 'spinning' : undefined} />
-            </Button>
-          </div>
-          {!isMobile && (
-            <Button
-              variant='info'
-              onClick={() => setCompactMode(!compactMode)}
-              title={compactMode ? 'Expand view' : 'Compact view'}
-              style={{
-                minWidth: 'fit-content',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {compactMode ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
-            </Button>
-          )}
-        </div>
-        <MyTable
-          tableData={tableData}
-          tableHeadings={tableHeadings}
-          pagination={true}
-          itemsPerPage={5}
-          emptyMessage={isLoading ? 'Loading users...' : 'No users found'}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          marginBottom: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <h2
+          style={{
+            margin: 0,
+            fontSize: 15,
+            fontWeight: 600,
+            color: 'var(--ss-text)',
+          }}
+        >
+          Organisation Users
+        </h2>
+        <Button
+          variant='link'
+          size='sm'
+          style={{
+            padding: 0,
+            color: 'var(--ss-text-muted)',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+          onClick={() => refetch()}
+          disabled={isFetching}
+          title='Refresh'
+        >
+          <RefreshCw
+            size={14}
+            className={isFetching ? 'spinning' : undefined}
+          />
+        </Button>
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          marginBottom: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Form.Control
+          type='text'
+          style={{
+            minWidth: 0,
+            maxWidth: isMobile ? '100%' : '260px',
+            flex: isMobile ? '1 1 100%' : '0 1 auto',
+          }}
+          placeholder='Search users…'
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
         />
+        <Form.Select
+          value={sortBy}
+          onChange={(e) => {
+            setSortBy(e.target.value);
+            setPage(1);
+          }}
+          style={{
+            minWidth: 0,
+            maxWidth: isMobile ? '100%' : '200px',
+            flex: isMobile ? '1 1 100%' : '0 1 auto',
+          }}
+        >
+          <option value='name'>Name (A-Z)</option>
+          <option value='name-reverse'>Name (Z-A)</option>
+          <option value='email'>Email (A-Z)</option>
+          <option value='email-reverse'>Email (Z-A)</option>
+          <option value='admin'>Admins first</option>
+        </Form.Select>
+        <div style={{ flex: 1 }} />
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 13,
+            color: 'var(--ss-text-dim)',
+          }}
+        >
+          <span>Rows</span>
+          <Form.Select
+            size='sm'
+            value={itemsPerPage}
+            onChange={(e) => {
+              setItemsPerPage(parseInt(e.target.value, 10));
+              setPage(1);
+            }}
+            style={{ width: 'auto', padding: '2px 24px 2px 8px' }}
+          >
+            {ROWS_PER_PAGE_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </Form.Select>
+          <span>
+            Page {pageClamped} of {totalPages}
+          </span>
+          <Button
+            size='sm'
+            variant='secondary'
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={pageClamped === 1}
+            style={{ padding: '2px 10px' }}
+          >
+            ‹
+          </Button>
+          <Button
+            size='sm'
+            variant='secondary'
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={pageClamped === totalPages}
+            style={{ padding: '2px 10px' }}
+          >
+            ›
+          </Button>
+        </div>
+      </div>
+      <div className='ss-card' style={{ padding: 0, overflow: 'hidden' }}>
+        {isLoading ? (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: 48,
+              gap: 12,
+            }}
+          >
+            <Spinner animation='border' size='sm' />
+            <span style={{ fontSize: 13, color: 'var(--ss-text-dim)' }}>
+              Loading users...
+            </span>
+          </div>
+        ) : rows.length === 0 ? (
+          <div
+            style={{
+              padding: 48,
+              textAlign: 'center',
+              color: 'var(--ss-text-dim)',
+              fontSize: 13,
+            }}
+          >
+            No users found
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className='ss-data-table'>
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Email</th>
+                  <th>Organisation Admin</th>
+                  <th>Permission Exceptions</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pagedRows.map(({ membership, user }) => {
+                  const isSelf = membership.userId === authUser.userId;
+                  return (
+                    <tr
+                      key={membership.organizationId + membership.userId}
+                    >
+                      <td style={{ fontWeight: 500 }}>{user?.name}</td>
+                      <td style={{ color: 'var(--ss-text-muted)' }}>
+                        {user?.email}
+                      </td>
+                      <td>
+                        <LabeledToggleSwitch
+                          className='mb-0'
+                          leftLabel='No'
+                          rightLabel='Yes'
+                          checked={membership.isAdmin ?? false}
+                          disabled={isMutating || isSelf}
+                          onChange={(checked) => {
+                            updateUser(membership.userId, checked);
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <Button
+                          size='sm'
+                          variant='secondary'
+                          disabled={
+                            process.env.NODE_ENV !== 'development' &&
+                            !!membership.isAdmin
+                          }
+                          onClick={() => {
+                            setUserToEdit({
+                              id: user?.id || '',
+                              name: user?.name || '',
+                              organizationName: organization.name,
+                            });
+                            showModal('exceptions');
+                          }}
+                        >
+                          Edit
+                        </Button>
+                      </td>
+                      <td>
+                        <div className='ss-row-actions'>
+                          <Button
+                            size='sm'
+                            variant='danger'
+                            disabled={isMutating || isSelf}
+                            onClick={() => {
+                              setUserToEdit({
+                                id: user?.id || '',
+                                name: user?.name || '',
+                                organizationName: organization.name,
+                              });
+                              showModal('removeUser');
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
       <InviteUserModal
         organization={organization}

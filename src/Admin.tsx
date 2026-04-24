@@ -1,62 +1,67 @@
-import { useContext } from 'react';
+import { useContext, useState } from 'react';
 import { UserContext } from './Context';
-import { Tabs, Tab } from './Tabs';
-import { Card } from 'react-bootstrap';
 import PendingOrganizations from './PendingOrganizations';
 import ClientLogs from './ClientLogs';
 import AdminStats from './AdminStats';
 import AwsServiceHealth from './AwsServiceHealth';
 import AdminSurveys from './AdminSurveys';
+import { Page, PageHeader, TabBar, ContentArea } from './ss/PageShell';
+// ContentArea is retained for the unauthorized fallback below.
+
+const TABS = [
+  { id: 'pending', label: 'New Organisations' },
+  { id: 'logs', label: 'Client Logs' },
+  { id: 'stats', label: 'Statistics' },
+  { id: 'surveys', label: 'Surveys' },
+  { id: 'aws', label: 'AWS Health' },
+];
 
 export default function Admin() {
   const { cognitoGroups } = useContext(UserContext)!;
+  const [activeTab, setActiveTab] = useState<string>('pending');
 
   if (!cognitoGroups.includes('sysadmin')) {
-    return <div>You are not authorized to access this page.</div>;
+    return (
+      <Page>
+        <PageHeader title='Admin' />
+        <ContentArea>
+          <div>You are not authorized to access this page.</div>
+        </ContentArea>
+      </Page>
+    );
   }
+
+  const renderTab = () => {
+    switch (activeTab) {
+      case 'pending':
+        return <PendingOrganizations />;
+      case 'logs':
+        return <ClientLogs />;
+      case 'stats':
+        return <AdminStats />;
+      case 'surveys':
+        return <AdminSurveys />;
+      case 'aws':
+        return <AwsServiceHealth />;
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div
-      style={{
-        width: '100%',
-        maxWidth: '1555px',
-        marginTop: '16px',
-        marginBottom: '16px',
-      }}
-    >
-      <Card>
-        <Card.Header>
-          <Card.Title className='mb-0'>
-            <h4 className='mb-0'>Admin</h4>
-          </Card.Title>
-        </Card.Header>
-        <Card.Body>
-          <Tabs>
-            <Tab label='Pending Organisations'>
-              <PendingOrganizations />
-            </Tab>
-            <Tab label='Client Logs'>
-              <div className='m-2'>
-                <ClientLogs />
-              </div>
-            </Tab>
-            <Tab label='Statistics'>
-              <div className='m-2'>
-                <AdminStats />
-              </div>
-            </Tab>
-            <Tab label='Surveys'>
-              <div className='m-2'>
-                <AdminSurveys />
-              </div>
-            </Tab>
-            <Tab label='AWS Health'>
-              <div className='m-2'>
-                <AwsServiceHealth />
-              </div>
-            </Tab>
-          </Tabs>
-        </Card.Body>
-      </Card>
-    </div>
+    <Page>
+      <PageHeader title='Admin' />
+      <TabBar tabs={TABS} active={activeTab} onChange={setActiveTab} />
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {renderTab()}
+      </div>
+    </Page>
   );
 }

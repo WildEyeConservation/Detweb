@@ -226,7 +226,7 @@ export default function ExceptionsModal({
         <Button variant='primary' onClick={handleSave} disabled={isSaving}>
           {isSaving ? 'Saving...' : 'Save'}
         </Button>
-        <Button variant='dark' onClick={onClose} disabled={isSaving}>
+        <Button variant='secondary' onClick={onClose} disabled={isSaving}>
           Cancel
         </Button>
       </Footer>

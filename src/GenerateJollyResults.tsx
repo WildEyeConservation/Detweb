@@ -113,7 +113,7 @@ export default function GenerateJollyResults({
           {loading ? 'Generating...' : 'Generate'}
         </Button>
         <Button
-          variant='dark'
+          variant='secondary'
           disabled={loading}
           onClick={() => showModal(null)}
         >

@@ -6,11 +6,18 @@ import { fetchAllPaginatedResults } from '../utils';
 import { Download } from 'lucide-react';
 import exportFromJSON from 'export-from-json';
 import { useUsers } from '../apiInterface';
-import MyTable from '../Table';
-import { Footer } from '../Modal';
+
+const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
+const ROWS_PER_PAGE_STORAGE_KEY = 'logsRowsPerPage';
+
+type SortOption =
+  | 'createdAt'
+  | 'createdAt-reverse'
+  | 'userName'
+  | 'userName-reverse';
 
 export default function Logs({ projectId }: { projectId: string }) {
-  const { client, showModal } = useContext(GlobalContext)!;
+  const { client } = useContext(GlobalContext)!;
   const { users } = useUsers();
   const [logs, setLogs] = useState<Schema['AdminActionLog']['type'][]>([]);
   const [loading, setLoading] = useState(false);
@@ -28,6 +35,29 @@ export default function Logs({ projectId }: { projectId: string }) {
   const [endDate, setEndDate] = useState<string>('');
   const [startTime, setStartTime] = useState<string>('00:00');
   const [endTime, setEndTime] = useState<string>('23:59');
+
+  const [sortBy, setSortBy] = useState<SortOption>('createdAt');
+  const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const getInitialRowsPerPage = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(ROWS_PER_PAGE_STORAGE_KEY);
+      const parsed = stored ? parseInt(stored, 10) : NaN;
+      if (ROWS_PER_PAGE_OPTIONS.includes(parsed)) {
+        return parsed;
+      }
+    }
+    return 25;
+  };
+
+  const [itemsPerPage, setItemsPerPage] = useState(getInitialRowsPerPage);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(ROWS_PER_PAGE_STORAGE_KEY, String(itemsPerPage));
+    }
+  }, [itemsPerPage]);
 
   // Set default date range to today
   useEffect(() => {
@@ -132,23 +162,47 @@ export default function Logs({ projectId }: { projectId: string }) {
     return new Date(timestamp ?? '').toLocaleString();
   };
 
-  // Convert logs to tableData format
-  const tableData = useMemo(() => {
-    return logs.map((log) => ({
-      id: log.id,
-      rowData: [
-        formatTimestamp(log.createdAt),
-        userMap[log.userId] || log.userId,
-        <span style={{ whiteSpace: 'pre-wrap' }}>{log.message}</span>,
-      ],
-    }));
-  }, [logs, userMap]);
+  const filteredLogs = useMemo(() => {
+    const searchLower = search.toLowerCase();
+    if (searchLower === '') return logs;
+    return logs.filter((log) => {
+      const name = userMap[log.userId] || log.userId;
+      return (
+        name.toLowerCase().includes(searchLower) ||
+        (log.message ?? '').toLowerCase().includes(searchLower)
+      );
+    });
+  }, [logs, search, userMap]);
 
-  const tableHeadings = [
-    { content: 'Timestamp', sort: true },
-    { content: 'User', sort: true },
-    { content: 'Message', sort: false },
-  ];
+  const sortedLogs = useMemo(() => {
+    const sorted = [...filteredLogs];
+    const dateOf = (log: Schema['AdminActionLog']['type']) =>
+      new Date(log.createdAt ?? '').getTime();
+    const nameOf = (log: Schema['AdminActionLog']['type']) =>
+      userMap[log.userId] || log.userId;
+    switch (sortBy) {
+      case 'createdAt':
+        return sorted.sort((a, b) => dateOf(b) - dateOf(a));
+      case 'createdAt-reverse':
+        return sorted.sort((a, b) => dateOf(a) - dateOf(b));
+      case 'userName':
+        return sorted.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+      case 'userName-reverse':
+        return sorted.sort((a, b) => nameOf(b).localeCompare(nameOf(a)));
+      default:
+        return sorted;
+    }
+  }, [filteredLogs, sortBy, userMap]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(sortedLogs.length / itemsPerPage)
+  );
+  const pageClamped = Math.min(Math.max(1, currentPage), totalPages);
+  const pagedLogs = sortedLogs.slice(
+    (pageClamped - 1) * itemsPerPage,
+    pageClamped * itemsPerPage
+  );
 
   return (
     <div className="d-flex flex-column gap-3">
@@ -225,27 +279,147 @@ export default function Logs({ projectId }: { projectId: string }) {
             Download CSV
           </Button>
         </Card.Header>
-        <Card.Body>
+        <Card.Body className='p-0'>
           {loading ? (
-            <div className="text-center py-4">
+            <div className='text-center py-4'>
               <Spinner />
             </div>
           ) : (
-            <MyTable
-              tableHeadings={tableHeadings}
-              tableData={tableData}
-              pagination={true}
-              itemsPerPage={25}
-              emptyMessage="No logs found for the selected date range."
-            />
+            <>
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                  alignItems: 'center',
+                  padding: '12px 16px',
+                  borderBottom: '1px solid var(--ss-border-soft)',
+                }}
+              >
+                <Form.Control
+                  type='text'
+                  placeholder='Search logs…'
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    minWidth: 0,
+                    maxWidth: '260px',
+                    flex: '0 1 auto',
+                  }}
+                />
+                <Form.Select
+                  value={sortBy}
+                  onChange={(e) => {
+                    setSortBy(e.target.value as SortOption);
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    minWidth: 0,
+                    maxWidth: '200px',
+                    flex: '0 1 auto',
+                  }}
+                >
+                  <option value='createdAt'>Newest first</option>
+                  <option value='createdAt-reverse'>Oldest first</option>
+                  <option value='userName'>User (A-Z)</option>
+                  <option value='userName-reverse'>User (Z-A)</option>
+                </Form.Select>
+                <div style={{ flex: 1 }} />
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontSize: 13,
+                    color: 'var(--ss-text-dim)',
+                  }}
+                >
+                  <span>Rows</span>
+                  <Form.Select
+                    size='sm'
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      setItemsPerPage(parseInt(e.target.value, 10));
+                      setCurrentPage(1);
+                    }}
+                    style={{ width: 'auto', padding: '2px 24px 2px 8px' }}
+                  >
+                    {ROWS_PER_PAGE_OPTIONS.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </Form.Select>
+                  <span>
+                    Page {pageClamped} of {totalPages}
+                  </span>
+                  <Button
+                    size='sm'
+                    variant='secondary'
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={pageClamped === 1}
+                    style={{ padding: '2px 10px' }}
+                  >
+                    ‹
+                  </Button>
+                  <Button
+                    size='sm'
+                    variant='secondary'
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(totalPages, p + 1))
+                    }
+                    disabled={pageClamped === totalPages}
+                    style={{ padding: '2px 10px' }}
+                  >
+                    ›
+                  </Button>
+                </div>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table className='ss-data-table'>
+                  <thead>
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>User</th>
+                      <th>Message</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pagedLogs.map((log) => (
+                      <tr key={log.id}>
+                        <td>{formatTimestamp(log.createdAt)}</td>
+                        <td>{userMap[log.userId] || log.userId}</td>
+                        <td>
+                          <span style={{ whiteSpace: 'pre-wrap' }}>
+                            {log.message}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {pagedLogs.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={3}
+                          style={{
+                            textAlign: 'center',
+                            color: 'var(--ss-text-dim)',
+                            padding: '24px',
+                          }}
+                        >
+                          No logs found for the selected date range.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </Card.Body>
       </Card>
-      <Footer>
-        <Button variant='dark' onClick={() => showModal(null)}>
-          Close
-        </Button>
-      </Footer>
     </div>
   );
 }

@@ -65,27 +65,81 @@ ${errorDetails.stack}
     }
   };
 
+  const errorMessage =
+    errorObj?.message || errorObj?.statusText || 'Unknown error';
+
   return (
     <div
       id='error-page'
-      className='d-flex flex-column align-items-center justify-content-center min-vh-100 text-center'
+      style={{
+        minHeight: '100dvh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
+        background: 'var(--ss-content-bg)',
+      }}
     >
-      <h1>Oops!</h1>
-      <p>Sorry, an unexpected error has occurred.</p>
-      <div className='d-flex gap-2'>
-        <Button variant='primary' onClick={handleGoHome}>
-          Back to Surveys
-        </Button>
-        <Button variant='outline-info' onClick={handleCopyStackTrace}>
-          {copySuccess ? 'Copied!' : 'Copy Error Details'}
-        </Button>
-      </div>
-      {copySuccess && (
-        <p className='text-success mt-2 small'>
-          Error details copied to clipboard! Please send this information to our
-          support team.
+      <div
+        className='ss-card'
+        style={{
+          maxWidth: 480,
+          width: '100%',
+          textAlign: 'center',
+          padding: '32px 28px',
+        }}
+      >
+        <h1
+          style={{
+            fontSize: 28,
+            marginBottom: 8,
+            color: 'var(--ss-text)',
+          }}
+        >
+          Oops!
+        </h1>
+        <p style={{ color: 'var(--ss-text-muted)', marginBottom: 6 }}>
+          Sorry, an unexpected error has occurred.
         </p>
-      )}
+        {errorMessage && (
+          <p
+            style={{
+              color: 'var(--ss-text-dim)',
+              fontSize: 13,
+              marginBottom: 24,
+              fontFamily:
+                'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+              wordBreak: 'break-word',
+            }}
+          >
+            {errorMessage}
+          </p>
+        )}
+        <div
+          className='d-flex justify-content-center gap-2'
+          style={{ marginTop: 8 }}
+        >
+          <Button variant='primary' onClick={handleGoHome}>
+            Back to Surveys
+          </Button>
+          <Button variant='secondary' onClick={handleCopyStackTrace}>
+            {copySuccess ? 'Copied!' : 'Copy Error Details'}
+          </Button>
+        </div>
+        {copySuccess && (
+          <p
+            style={{
+              color: 'var(--ss-green)',
+              fontSize: 12,
+              marginTop: 14,
+              marginBottom: 0,
+            }}
+          >
+            Error details copied to clipboard — please send this to our support
+            team.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

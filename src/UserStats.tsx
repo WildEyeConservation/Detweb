@@ -1,4 +1,3 @@
-import MyTable from './Table';
 import { useContext, useEffect, useState } from 'react';
 import { GlobalContext, UserContext } from './Context';
 import DatePicker from 'react-datepicker';
@@ -7,7 +6,8 @@ import type { UserStatsType } from './schemaTypes';
 import exportFromJSON from 'export-from-json';
 import { useUsers } from './apiInterface';
 import Select from 'react-select';
-import { Card, Button, Spinner } from 'react-bootstrap';
+import { Button, Spinner } from 'react-bootstrap';
+import { Page, PageHeader, ContentArea, StatCard } from './ss/PageShell';
 import SnapshotStatsModal from './SnapshotStatsModal';
 import { fetchAllPaginatedResults } from './utils';
 
@@ -300,38 +300,23 @@ export default function UserStats() {
     return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   };
 
-  const tableData = Object.keys(stats).map((userId) => ({
+  const tableRows = Object.keys(stats).map((userId) => ({
     id: userId,
-    rowData: [
-      allUsers.find((u) => u.id == userId)?.name,
-      formatDuration(stats[userId].activeTime),
-      stats[userId].observationCount,
-      (
-        stats[userId].searchTime / 1000 / stats[userId].observationCount || 0
-      ).toFixed(1),
-      Math.max(0, stats[userId].annotationCount),
-      stats[userId].sightingCount,
-      formatDuration(stats[userId].searchTime),
-      formatDuration(stats[userId].annotationTime),
-      (
-        stats[userId].observationCount / stats[userId].sightingCount || 0
-      ).toFixed(1),
-      formatDuration(stats[userId].waitingTime),
-    ],
+    username: allUsers.find((u) => u.id == userId)?.name || userId,
+    timeSpent: formatDuration(stats[userId].activeTime),
+    jobsCompleted: stats[userId].observationCount,
+    avgSearch: (
+      stats[userId].searchTime / 1000 / stats[userId].observationCount || 0
+    ).toFixed(1),
+    totalAnnotations: Math.max(0, stats[userId].annotationCount),
+    totalSightings: stats[userId].sightingCount,
+    totalSearchTime: formatDuration(stats[userId].searchTime),
+    totalAnnotationTime: formatDuration(stats[userId].annotationTime),
+    locsPerSighting: (
+      stats[userId].observationCount / stats[userId].sightingCount || 0
+    ).toFixed(1),
+    waitingTime: formatDuration(stats[userId].waitingTime),
   }));
-
-  const tableHeadings = [
-    { content: 'Username', style: undefined },
-    { content: 'Time spent', style: undefined },
-    { content: `Jobs completed`, style: undefined },
-    { content: 'Average search time (s/job)', style: undefined },
-    { content: 'Total Annotations', style: undefined },
-    { content: 'Total Sightings', style: undefined },
-    { content: 'Total Search Time', style: undefined },
-    { content: 'Total Annotation Time', style: undefined },
-    { content: 'Locations/Sighting', style: undefined },
-    { content: 'Waiting time', style: undefined },
-  ];
 
   async function queryObservations(
     annotationSetId: string,
@@ -452,26 +437,43 @@ export default function UserStats() {
     }
   };
 
+  const statsTotals = Object.values(stats).reduce(
+    (acc, s) => {
+      acc.observationCount += s.observationCount;
+      acc.annotationCount += Math.max(0, s.annotationCount);
+      acc.sightingCount += s.sightingCount;
+      return acc;
+    },
+    { observationCount: 0, annotationCount: 0, sightingCount: 0 }
+  );
+
+  const hasStats = !loadingStats && Object.keys(stats).length > 0;
+
   return (
-    <div
-      style={{
-        width: '100%',
-        maxWidth: '1555px',
-        marginTop: '16px',
-        marginBottom: '16px',
-      }}
-    >
-      <Card>
-        <Card.Header>
-          <Card.Title className='mb-0'>
-            <h4 className='mb-0'>Annotation Statistics</h4>
-          </Card.Title>
-        </Card.Header>
-        <Card.Body>
-          <div className='d-flex justify-content-between align-items-center flex-wrap gap-2'>
-            <div className='d-flex align-items-center gap-2'>
-              <label htmlFor='start-date' className='mb-0'>
-                From:
+    <Page>
+      <PageHeader title='Activity' />
+      <ContentArea style={{ paddingTop: 12 }}>
+        <div className='ss-card' style={{ padding: 16, marginBottom: 16 }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: 12,
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label
+                htmlFor='start-date'
+                style={{
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  color: 'var(--ss-text-dim)',
+                  fontWeight: 600,
+                  margin: 0,
+                }}
+              >
+                From
               </label>
               <DatePicker
                 id='start-date'
@@ -486,9 +488,19 @@ export default function UserStats() {
                 placeholderText='No start date'
               />
             </div>
-            <div className='d-flex align-items-center gap-2'>
-              <label htmlFor='end-date' className='mb-0'>
-                To:
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label
+                htmlFor='end-date'
+                style={{
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  color: 'var(--ss-text-dim)',
+                  fontWeight: 600,
+                  margin: 0,
+                }}
+              >
+                To
               </label>
               <DatePicker
                 id='end-date'
@@ -503,110 +515,217 @@ export default function UserStats() {
                 placeholderText='No end date'
               />
             </div>
-          </div>
-
-          <div className='mt-3'>
-            <label className='mb-2'>Select Survey</label>
-            <Select
-              className='text-black'
-              value={project}
-              options={projects.map((p) => ({
-                label: `${p.name} (${p.organization.name})`,
-                value: p.id,
-              }))}
-              onChange={(e) => {
-                setProject(e);
-                const sets = projects
-                  .find((p) => p.id === e?.value)
-                  ?.annotationSets?.map((s) => ({ label: s.name, value: s.id })) || [];
-                setSelectedSets(sets);
-              }}
-              styles={{
-                valueContainer: (base) => ({
-                  ...base,
-                  overflowY: 'auto',
-                }),
-              }}
-            />
-          </div>
-
-          <div className='mt-3'>
-            <label className=''>Select Annotation Sets</label>
-            <Select
-              className='text-black basic-multi-select'
-              value={selectedSets}
-              onChange={(e) => setSelectedSets([...e])}
-              isMulti
-              name='Annotation sets'
-              options={
-                projects
-                  .find((p) => p.id == project?.value)
-                  ?.annotationSets?.map((s) => ({
-                    label: s.name,
-                    value: s.id,
-                  })) || []
-              }
-              classNamePrefix='select'
-              closeMenuOnSelect={false}
-              styles={{
-                valueContainer: (base) => ({
-                  ...base,
-                  overflowY: 'auto',
-                }),
-              }}
-            />
-          </div>
-
-          <div className='mt-3 overflow-x-auto'>
-            {loadingStats ? (
-              <div className='d-flex justify-content-center align-items-center py-5'>
-                <Spinner animation='border' role='status'>
-                  <span className='visually-hidden'>Loading stats...</span>
-                </Spinner>
-                <span className='ms-3'>Loading stats...</span>
-              </div>
-            ) : (
-              <MyTable
-                tableHeadings={tableHeadings}
-                tableData={tableData}
-                emptyMessage={
-                  project && selectedSets && selectedSets.length > 0
-                    ? 'No stats found'
-                    : 'Select a survey and annotation sets to view stats'
-                }
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label
+                style={{
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  color: 'var(--ss-text-dim)',
+                  fontWeight: 600,
+                  margin: 0,
+                }}
+              >
+                Survey
+              </label>
+              <Select
+                className='text-black'
+                value={project}
+                options={projects.map((p) => ({
+                  label: `${p.name} (${p.organization.name})`,
+                  value: p.id,
+                }))}
+                onChange={(e) => {
+                  setProject(e);
+                  const sets = projects
+                    .find((p) => p.id === e?.value)
+                    ?.annotationSets?.map((s) => ({ label: s.name, value: s.id })) || [];
+                  setSelectedSets(sets);
+                }}
+                menuPortalTarget={document.body}
+                menuPosition='fixed'
+                styles={{
+                  valueContainer: (base) => ({
+                    ...base,
+                    overflowY: 'auto',
+                  }),
+                  menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                }}
               />
-            )}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label
+                style={{
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  color: 'var(--ss-text-dim)',
+                  fontWeight: 600,
+                  margin: 0,
+                }}
+              >
+                Annotation Sets
+              </label>
+              <Select
+                className='text-black basic-multi-select'
+                value={selectedSets}
+                onChange={(e) => setSelectedSets([...e])}
+                isMulti
+                name='Annotation sets'
+                options={
+                  projects
+                    .find((p) => p.id == project?.value)
+                    ?.annotationSets?.map((s) => ({
+                      label: s.name,
+                      value: s.id,
+                    })) || []
+                }
+                classNamePrefix='select'
+                closeMenuOnSelect={false}
+                menuPortalTarget={document.body}
+                menuPosition='fixed'
+                styles={{
+                  valueContainer: (base) => ({
+                    ...base,
+                    overflowY: 'auto',
+                  }),
+                  menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                }}
+              />
+            </div>
           </div>
-        </Card.Body>
+        </div>
+
+        {hasStats && (
+          <div
+            style={{
+              display: 'flex',
+              gap: 12,
+              marginBottom: 16,
+              flexWrap: 'wrap',
+            }}
+          >
+            <StatCard
+              num={statsTotals.observationCount.toLocaleString()}
+              label='Jobs Completed'
+            />
+            <StatCard
+              num={statsTotals.annotationCount.toLocaleString()}
+              label='Total Annotations'
+            />
+            <StatCard
+              num={statsTotals.sightingCount.toLocaleString()}
+              label='Total Sightings'
+            />
+          </div>
+        )}
+
+        <div className='ss-card' style={{ padding: 0, overflow: 'hidden' }}>
+          {loadingStats ? (
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                padding: 48,
+                gap: 12,
+              }}
+            >
+              <Spinner animation='border' role='status' size='sm'>
+                <span className='visually-hidden'>Loading stats...</span>
+              </Spinner>
+              <span style={{ fontSize: 13, color: 'var(--ss-text-dim)' }}>
+                Loading stats...
+              </span>
+            </div>
+          ) : tableRows.length === 0 ? (
+            <div
+              style={{
+                padding: 48,
+                textAlign: 'center',
+                color: 'var(--ss-text-dim)',
+                fontSize: 13,
+              }}
+            >
+              {project && selectedSets && selectedSets.length > 0
+                ? 'No stats found'
+                : 'Select a survey and annotation sets to view stats'}
+            </div>
+          ) : (
+            <div className='overflow-x-auto'>
+              <table className='ss-data-table'>
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>Time Spent</th>
+                    <th>Jobs Completed</th>
+                    <th>Avg Search (s/job)</th>
+                    <th>Total Annotations</th>
+                    <th>Total Sightings</th>
+                    <th>Total Search Time</th>
+                    <th>Total Annotation Time</th>
+                    <th>Locs / Sighting</th>
+                    <th>Waiting Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableRows.map((r) => (
+                    <tr key={r.id}>
+                      <td style={{ fontWeight: 500 }}>{r.username}</td>
+                      <td>{r.timeSpent}</td>
+                      <td>{r.jobsCompleted}</td>
+                      <td>{r.avgSearch}</td>
+                      <td>{r.totalAnnotations}</td>
+                      <td>{r.totalSightings}</td>
+                      <td>{r.totalSearchTime}</td>
+                      <td>{r.totalAnnotationTime}</td>
+                      <td>{r.locsPerSighting}</td>
+                      <td>{r.waitingTime}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
         {isProjectAdmin && selectedSets && selectedSets.length > 0 && !loadingStats && (
-          <Card.Footer className='d-flex justify-content-center gap-2'>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-start',
+              gap: 8,
+              marginTop: 16,
+              flexWrap: 'wrap',
+            }}
+          >
             <Button
+              size='sm'
               variant='primary'
-              style={{ flex: 1 }}
               onClick={() => showModal('snapshotStats')}
               disabled={!project || !selectedSets?.length}
             >
               Snapshot
             </Button>
             <Button
-              variant='primary'
-              style={{ flex: 1 }}
+              size='sm'
+              variant='secondary'
               onClick={handleExportDetailedStats}
               disabled={!project || !selectedSets?.length || loadingStats}
             >
               Export Daily Stats
             </Button>
             <Button
-              variant='primary'
-              style={{ flex: 1 }}
+              size='sm'
+              variant='secondary'
               onClick={handleExportData}
               disabled={exporting}
             >
-              {exporting ? 'Loading...' : 'Export Raw Observation Data'}
+              {exporting ? 'Loading…' : 'Export Raw Observation Data'}
             </Button>
-          </Card.Footer>
+          </div>
         )}
-      </Card>
+      </ContentArea>
       <SnapshotStatsModal
         show={modalToShow === 'snapshotStats'}
         onHide={() => showModal(null)}
@@ -619,6 +738,6 @@ export default function UserStats() {
         allUsers={allUsers.map((u) => ({ id: u.id, name: u.name || u.id }))}
         queryObservations={queryObservations}
       />
-    </div>
+    </Page>
   );
 }

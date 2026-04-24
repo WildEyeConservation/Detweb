@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Alert, Form, Spinner } from 'react-bootstrap';
+import { Alert, Button, Card, Form, Spinner } from 'react-bootstrap';
 import { uploadData, downloadData, remove } from 'aws-amplify/storage';
 import { Schema } from '../amplify/client-schema';
 import { GlobalContext, UserContext } from '../Context';
@@ -719,92 +719,125 @@ export default function FalseNegatives({
     return Math.min(count, remainingInPool);
   })();
 
-  return (
-    <div className='px-3 pb-3 pt-1'>
-      <div className='d-flex flex-column gap-3 mt-2'>
-        {mode === 'loading' ? (
-          <p
-            className='text-muted mb-0 text-center'
+  const advancedOptionsCard = (
+    <Card>
+      <Card.Header>
+        <h5 className='mb-0'>Advanced Options</h5>
+      </Card.Header>
+      <Card.Body className='d-flex flex-column gap-3'>
+        <Form.Group>
+          <Form.Label className='mb-0'>Batch Size</Form.Label>
+          <span
+            className='text-muted d-block mb-1'
             style={{ fontSize: '12px' }}
           >
-            Loading...
-          </p>
-        ) : showNoTilesWarning ? (
-          <Alert variant='warning' className='mb-0'>
-            <strong>No tiles configured.</strong>
-            <p className='mb-0 mt-1' style={{ fontSize: '14px' }}>
-              Please go to <strong>Edit Survey &gt; Manage Tiles</strong> to
-              create tiles for this survey before launching a false negatives
-              task.
-            </p>
-          </Alert>
-        ) : mode === 'continue' ? (
-          // ── Continue mode UI ──
-          <div
-            className='border border-dark shadow-sm p-2'
-            style={{ backgroundColor: '#697582' }}
+            The number of annotation jobs a user can pick up at a time.
+          </span>
+          <Form.Control
+            type='number'
+            value={batchSize}
+            onChange={(e) =>
+              setBatchSize(Number((e.target as HTMLInputElement).value))
+            }
+            disabled={launching}
+          />
+        </Form.Group>
+        <Form.Group>
+          <Form.Label className='mb-0'>Job Name</Form.Label>
+          <span
+            className='text-muted d-block mb-1'
+            style={{ fontSize: '12px' }}
           >
-            <p className='mb-0 text-white'>
-              <strong>Continuing False Negatives Task</strong>
-            </p>
-            <p className='mb-0 mt-2 text-white' style={{ fontSize: '14px' }}>
-              {coveragePercent}% of candidate pool has been covered
-              ({totalLaunched} of {poolSize} candidates launched across{' '}
+            Modify this to display a different name for the job in the jobs
+            page.
+          </span>
+          <Form.Control
+            type='text'
+            value={queueTag}
+            onChange={(e) =>
+              setQueueTag((e.target as HTMLInputElement).value)
+            }
+            disabled={launching}
+          />
+        </Form.Group>
+      </Card.Body>
+    </Card>
+  );
+
+  const resetButton = (
+    <Button
+      variant='outline-danger'
+      size='sm'
+      onClick={handleReset}
+      disabled={launching || resetting}
+    >
+      {resetting ? (
+        <span className='d-inline-flex align-items-center'>
+          <Spinner animation='border' size='sm' className='me-2' />
+          {resetProgress || 'Resetting...'}
+        </span>
+      ) : (
+        'Reset FN Data'
+      )}
+    </Button>
+  );
+
+  return (
+    <div className='d-flex flex-column gap-3'>
+      {mode === 'loading' ? (
+        <Card>
+          <Card.Body className='text-center text-muted'>Loading...</Card.Body>
+        </Card>
+      ) : showNoTilesWarning ? (
+        <Alert variant='warning' className='mb-0'>
+          <strong>No tiles configured.</strong>
+          <p className='mb-0 mt-1' style={{ fontSize: '14px' }}>
+            Please go to <strong>Edit Survey &gt; Manage Tiles</strong> to
+            create tiles for this survey before launching a false negatives
+            task.
+          </p>
+        </Alert>
+      ) : mode === 'continue' ? (
+        <Card>
+          <Card.Header>
+            <h5 className='mb-0'>Continue False Negatives Task</h5>
+          </Card.Header>
+          <Card.Body>
+            <p className='mb-0'>
+              {coveragePercent}% of the candidate pool has been covered (
+              {totalLaunched} of {poolSize} candidates launched across{' '}
               {fnHistory?.launches.length ?? 0} session
-              {(fnHistory?.launches.length ?? 0) !== 1 ? 's' : ''})
+              {(fnHistory?.launches.length ?? 0) !== 1 ? 's' : ''}).
             </p>
             {loadingRemaining ? (
-              <div className='mt-2 d-flex align-items-center gap-2 text-white'>
+              <div className='mt-2 d-flex align-items-center gap-2 text-muted'>
                 <Spinner animation='border' size='sm' />
                 <span style={{ fontSize: '12px' }}>
                   Calculating remaining tiles...
                 </span>
               </div>
             ) : remainingTiles !== null ? (
-              <div className='mt-2'>
-                <p className='mb-0 text-white' style={{ fontSize: '14px' }}>
-                  <strong>{remainingTiles.length}</strong> tiles remaining from
-                  previous launches
-                </p>
-              </div>
-            ) : null}
-            <div className='mt-3'>
-              <button
-                type='button'
-                className='btn btn-outline-light btn-sm'
-                onClick={handleReset}
-                disabled={launching || resetting}
-              >
-                {resetting ? (
-                  <span className='d-inline-flex align-items-center'>
-                    <Spinner animation='border' size='sm' className='me-2' />
-                    {resetProgress || 'Resetting...'}
-                  </span>
-                ) : (
-                  'Reset FN Data'
-                )}
-              </button>
-            </div>
-          </div>
-        ) : mode === 'additional' ? (
-          // ── Additional sample mode UI ──
-          <>
-            <div
-              className='border border-dark shadow-sm p-2'
-              style={{ backgroundColor: '#697582' }}
-            >
-              <p className='mb-0 text-white'>
-                <strong>False Negatives Progress</strong>
+              <p className='mb-0 mt-2'>
+                <strong>{remainingTiles.length}</strong> tiles remaining from
+                previous launches.
               </p>
-              <p
-                className='mb-0 mt-2 text-white'
-                style={{ fontSize: '14px' }}
-              >
-                {coveragePercent}% of candidate pool has been covered
+            ) : null}
+            <div className='mt-3'>{resetButton}</div>
+          </Card.Body>
+        </Card>
+      ) : mode === 'additional' ? (
+        <>
+          <Card>
+            <Card.Header>
+              <h5 className='mb-0'>False Negatives Progress</h5>
+            </Card.Header>
+            <Card.Body>
+              <p className='mb-2'>
+                {coveragePercent}% of the candidate pool has been covered.
               </p>
               <div
-                className='mt-1 text-white'
-                style={{ fontSize: '12px' }}
+                className='text-muted'
+                style={{ fontSize: '13px', lineHeight: 1.7 }}
               >
                 <div>
                   Pool size: <strong>{poolSize}</strong>
@@ -818,262 +851,193 @@ export default function FalseNegatives({
                   Remaining candidates: <strong>{remainingInPool}</strong>
                 </div>
               </div>
-            </div>
+            </Card.Body>
+          </Card>
 
-            {poolExhausted ? (
-              <Alert variant='success' className='mb-0'>
-                All candidates from the original pool have been launched.
-              </Alert>
-            ) : (
-              <>
-                <Form.Group>
-                  <Form.Label className='mb-0'>
-                    Additional sample size (%)
-                  </Form.Label>
-                  <span
-                    className='text-muted d-block mb-1'
-                    style={{ fontSize: '12px' }}
-                  >
-                    Percentage of the candidate pool ({poolSize}{' '}
-                    tiles). Up to {remainingInPool} tiles can still be launched.
-                  </span>
-                  <Form.Control
-                    type='number'
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={samplePercent}
-                    onChange={(e) =>
-                      setSamplePercent(
-                        Number((e.target as HTMLInputElement).value)
-                      )
-                    }
-                    disabled={launching}
-                  />
-                </Form.Group>
+          {poolExhausted ? (
+            <Alert variant='success' className='mb-0'>
+              All candidates from the original pool have been launched.
+            </Alert>
+          ) : (
+            <>
+              <Card>
+                <Card.Header>
+                  <h5 className='mb-0'>Sample Configuration</h5>
+                </Card.Header>
+                <Card.Body>
+                  <Form.Group className='mb-3'>
+                    <Form.Label className='mb-0'>
+                      Additional sample size (%)
+                    </Form.Label>
+                    <span
+                      className='text-muted d-block mb-1'
+                      style={{ fontSize: '12px' }}
+                    >
+                      Percentage of the candidate pool ({poolSize} tiles). Up
+                      to {remainingInPool} tiles can still be launched.
+                    </span>
+                    <Form.Control
+                      type='number'
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={samplePercent}
+                      onChange={(e) =>
+                        setSamplePercent(
+                          Number((e.target as HTMLInputElement).value)
+                        )
+                      }
+                      disabled={launching}
+                    />
+                  </Form.Group>
+                  <Form.Group>
+                    <Form.Switch
+                      label='Show Advanced Options'
+                      checked={showAdvancedOptions}
+                      onChange={() =>
+                        setShowAdvancedOptions(!showAdvancedOptions)
+                      }
+                      disabled={launching}
+                    />
+                  </Form.Group>
+                </Card.Body>
+              </Card>
 
-                <Form.Group>
-                  <Form.Switch
-                    label='Show Advanced Options'
-                    checked={showAdvancedOptions}
-                    onChange={() => setShowAdvancedOptions(!showAdvancedOptions)}
-                    disabled={launching}
-                  />
-                </Form.Group>
+              {showAdvancedOptions && advancedOptionsCard}
 
-                {showAdvancedOptions && (
-                  <div
-                    className='d-flex flex-column gap-3 border border-dark shadow-sm p-2'
-                    style={{ backgroundColor: '#697582' }}
-                  >
-                    <Form.Group>
-                      <Form.Label className='mb-0'>Batch Size</Form.Label>
-                      <span
-                        className='text-muted d-block mb-1'
-                        style={{ fontSize: '12px' }}
-                      >
-                        The number of annotation jobs a user can pick up at a
-                        time.
-                      </span>
-                      <Form.Control
-                        type='number'
-                        value={batchSize}
-                        onChange={(e) =>
-                          setBatchSize(
-                            Number((e.target as HTMLInputElement).value)
-                          )
-                        }
-                        disabled={launching}
-                      />
-                    </Form.Group>
-                    <Form.Group>
-                      <Form.Label className='mb-0'>Job Name</Form.Label>
-                      <span
-                        className='text-muted d-block mb-1'
-                        style={{ fontSize: '12px' }}
-                      >
-                        Modify this to display a different name for the job in
-                        the jobs page.
-                      </span>
-                      <Form.Control
-                        type='text'
-                        value={queueTag}
-                        onChange={(e) =>
-                          setQueueTag((e.target as HTMLInputElement).value)
-                        }
-                        disabled={launching}
-                      />
-                    </Form.Group>
-                  </div>
-                )}
-
-                <div
-                  className='border border-dark shadow-sm p-2'
-                  style={{ backgroundColor: '#697582' }}
-                >
-                  <div className='text-white' style={{ fontSize: '12px' }}>
+              <Card>
+                <Card.Header>
+                  <h5 className='mb-0'>Launch Preview</h5>
+                </Card.Header>
+                <Card.Body>
+                  <div style={{ fontSize: '13px', lineHeight: 1.7 }}>
                     <div>
                       New sample ({samplePercent}% of pool):{' '}
                       <strong>{additionalSampleCount}</strong> tiles
                     </div>
                     <div>
-                      After launch: {totalLaunched + additionalSampleCount} of{' '}
-                      {poolSize} launched (
+                      After launch:{' '}
+                      <strong>
+                        {totalLaunched + additionalSampleCount}
+                      </strong>{' '}
+                      of {poolSize} launched (
                       {poolSize > 0
                         ? (
-                          ((totalLaunched + additionalSampleCount) /
-                            poolSize) *
-                          100
-                        ).toFixed(1)
+                            ((totalLaunched + additionalSampleCount) /
+                              poolSize) *
+                            100
+                          ).toFixed(1)
                         : '0.0'}
                       %)
                     </div>
                   </div>
-                </div>
-              </>
-            )}
+                </Card.Body>
+              </Card>
+            </>
+          )}
 
-            <div>
-              <button
-                type='button'
-                className='btn btn-outline-danger btn-sm'
-                onClick={handleReset}
-                disabled={launching || resetting}
-              >
-                {resetting ? (
-                  <span className='d-inline-flex align-items-center'>
-                    <Spinner animation='border' size='sm' className='me-2' />
-                    {resetProgress || 'Resetting...'}
-                  </span>
-                ) : (
-                  'Reset FN Data'
-                )}
-              </button>
-            </div>
-          </>
-        ) : (
-          // ── First launch mode UI ──
-          <>
-            <div
-              className='border border-dark shadow-sm p-2'
-              style={{ backgroundColor: '#697582' }}
-            >
-              <p className='mb-0 text-white'>
+          <div>{resetButton}</div>
+        </>
+      ) : (
+        <>
+          <Card>
+            <Card.Header>
+              <h5 className='mb-0'>Tile Pool</h5>
+            </Card.Header>
+            <Card.Body>
+              <p className='mb-0'>
                 <strong>{globalTileCount}</strong> tiles available for false
                 negative sampling.
               </p>
-              <p className='mb-0 mt-1 text-muted' style={{ fontSize: '12px' }}>
+              <p
+                className='text-muted mb-0 mt-1'
+                style={{ fontSize: '12px' }}
+              >
                 To modify tiles, go to Edit Survey &gt; Manage Tiles.
               </p>
-            </div>
+            </Card.Body>
+          </Card>
 
-            <Form.Group>
-              <Form.Label className='mb-0'>Sample size (%)</Form.Label>
-              <Form.Control
-                type='number'
-                min={0}
-                max={100}
-                step={1}
-                value={samplePercent}
-                onChange={(e) =>
-                  setSamplePercent(Number((e.target as HTMLInputElement).value))
-                }
-                disabled={launching}
-              />
-            </Form.Group>
+          <Card>
+            <Card.Header>
+              <h5 className='mb-0'>Sample Configuration</h5>
+            </Card.Header>
+            <Card.Body>
+              <Form.Group className='mb-3'>
+                <Form.Label className='mb-0'>Sample size (%)</Form.Label>
+                <Form.Control
+                  type='number'
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={samplePercent}
+                  onChange={(e) =>
+                    setSamplePercent(
+                      Number((e.target as HTMLInputElement).value)
+                    )
+                  }
+                  disabled={launching}
+                />
+              </Form.Group>
+              <Form.Group>
+                <Form.Switch
+                  label='Show Advanced Options'
+                  checked={showAdvancedOptions}
+                  onChange={() =>
+                    setShowAdvancedOptions(!showAdvancedOptions)
+                  }
+                  disabled={launching}
+                />
+              </Form.Group>
+            </Card.Body>
+          </Card>
 
-            <Form.Group>
-              <Form.Switch
-                label='Show Advanced Options'
-                checked={showAdvancedOptions}
-                onChange={() => setShowAdvancedOptions(!showAdvancedOptions)}
-                disabled={launching}
-              />
-            </Form.Group>
+          {showAdvancedOptions && advancedOptionsCard}
 
-            {showAdvancedOptions && (
-              <div
-                className='d-flex flex-column gap-3 border border-dark shadow-sm p-2'
-                style={{ backgroundColor: '#697582' }}
-              >
-                <Form.Group>
-                  <Form.Label className='mb-0'>Batch Size</Form.Label>
-                  <span
-                    className='text-muted d-block mb-1'
-                    style={{ fontSize: '12px' }}
-                  >
-                    The number of annotation jobs a user can pick up at a time.
-                  </span>
-                  <Form.Control
-                    type='number'
-                    value={batchSize}
-                    onChange={(e) =>
-                      setBatchSize(
-                        Number((e.target as HTMLInputElement).value)
-                      )
-                    }
-                    disabled={launching}
-                  />
-                </Form.Group>
-                <Form.Group>
-                  <Form.Label className='mb-0'>Job Name</Form.Label>
-                  <span
-                    className='text-muted d-block mb-1'
-                    style={{ fontSize: '12px' }}
-                  >
-                    Modify this to display a different name for the job in the
-                    jobs page.
-                  </span>
-                  <Form.Control
-                    type='text'
-                    value={queueTag}
-                    onChange={(e) =>
-                      setQueueTag((e.target as HTMLInputElement).value)
-                    }
-                    disabled={launching}
-                  />
-                </Form.Group>
-              </div>
-            )}
-
-            <div
-              className='border border-dark shadow-sm p-2'
-              style={{ backgroundColor: '#697582' }}
-            >
-              <div className='d-flex align-items-center justify-content-between'>
-                <div className='text-white' style={{ fontSize: '12px' }}>
+          <Card>
+            <Card.Header>
+              <h5 className='mb-0'>Summary</h5>
+            </Card.Header>
+            <Card.Body>
+              <div className='d-flex align-items-center justify-content-between gap-3'>
+                <div style={{ fontSize: '13px', lineHeight: 1.7 }}>
                   <div>Expected tiles: {expectedTiles ?? '—'}</div>
-                  <div>Estimated candidate tiles: {candidateTiles ?? '—'}</div>
+                  <div>
+                    Estimated candidate tiles: {candidateTiles ?? '—'}
+                  </div>
                   <div>
                     Estimated launch ({samplePercent}%):{' '}
                     {estimatedSampleTiles ?? '—'}
                   </div>
                 </div>
-                <button
-                  type='button'
-                  className='btn btn-primary'
+                <Button
+                  variant='primary'
                   disabled={launching || summaryLoading}
                   onClick={computeSummary}
                 >
                   {summaryLoading ? (
                     <span className='d-inline-flex align-items-center'>
-                      <Spinner animation='border' size='sm' className='me-2' />{' '}
-                      Computing summary...
+                      <Spinner
+                        animation='border'
+                        size='sm'
+                        className='me-2'
+                      />{' '}
+                      Computing...
                     </span>
                   ) : (
                     'Compute Summary'
                   )}
-                </button>
+                </Button>
               </div>
               {summaryMessage && (
                 <div className='mt-2 text-muted' style={{ fontSize: '12px' }}>
                   {summaryMessage}
                 </div>
               )}
-            </div>
-          </>
-        )}
-      </div>
+            </Card.Body>
+          </Card>
+        </>
+      )}
     </div>
   );
 }

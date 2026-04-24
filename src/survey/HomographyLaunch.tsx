@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Form, Spinner } from 'react-bootstrap';
+import { Alert, Card, Form, Spinner } from 'react-bootstrap';
 import Select from 'react-select';
 import { uploadData } from 'aws-amplify/storage';
 import { Schema } from '../amplify/client-schema';
@@ -378,91 +378,108 @@ export default function HomographyLaunch({
 
   if (loadError) {
     return (
-      <div className='px-3 pb-3 pt-1'>
-        <span className='text-danger'>Failed to load: {loadError}</span>
-      </div>
+      <Alert variant='danger' className='mb-0'>
+        Failed to load: {loadError}
+      </Alert>
     );
   }
 
   return (
-    <div className='px-3 pb-3'>
-      <div className='d-flex flex-column gap-3 pt-2'>
-        {/* Progress / pair count */}
-        <div className='d-flex align-items-center gap-2'>
+    <div className='d-flex flex-column gap-3'>
+      <Card>
+        <Card.Header>
+          <h5 className='mb-0'>Pairs to Launch</h5>
+        </Card.Header>
+        <Card.Body>
           {loading ? (
-            <>
+            <div className='d-flex align-items-center gap-2 text-muted'>
               <Spinner animation='border' size='sm' />
-              <span className='text-muted' style={{ fontSize: '13px' }}>
+              <span style={{ fontSize: '13px' }}>
                 {loadingStatus || 'Loading...'}
               </span>
-            </>
+            </div>
           ) : pairCount !== null ? (
-            <span style={{ fontSize: '14px' }}>
-              {pairCount === 0 ? (
-                <span className='text-warning'>No pairs requiring homography found.</span>
-              ) : (
-                <>
-                  <strong>{pairCount.toLocaleString()}</strong>{' '}
-                  pair{pairCount !== 1 ? 's' : ''} to launch
-                  {selectedCategories.length > 0 && (
-                    <span className='text-muted'>
-                      {' '}(filtered to {selectedCategories.length} label{selectedCategories.length !== 1 ? 's' : ''})
-                    </span>
-                  )}
-                </>
-              )}
-            </span>
+            pairCount === 0 ? (
+              <Alert variant='warning' className='mb-0'>
+                No pairs requiring homography found.
+              </Alert>
+            ) : (
+              <div style={{ fontSize: '14px' }}>
+                <strong>{pairCount.toLocaleString()}</strong> pair
+                {pairCount !== 1 ? 's' : ''} to launch
+                {selectedCategories.length > 0 && (
+                  <span className='text-muted'>
+                    {' '}
+                    (filtered to {selectedCategories.length} label
+                    {selectedCategories.length !== 1 ? 's' : ''})
+                  </span>
+                )}
+              </div>
+            )
           ) : null}
-        </div>
+        </Card.Body>
+      </Card>
 
-        {/* Label filter (only after loading) */}
-        {!loading && (
-          <>
-            <Form.Group>
-              <Form.Label className='mb-0'>Filter by Labels</Form.Label>
-              <span
-                className='text-muted d-block mb-1'
-                style={{ fontSize: '12px' }}
-              >
-                By default all labels are included. Select specific labels to
-                narrow which annotations define image pairs.
-              </span>
-              <Select
-                value={selectedCategories}
-                onChange={(v) => setSelectedCategories(v as CategoryOption[])}
-                isMulti
-                name='Labels for homography'
-                options={enrichedCategoryOptions}
-                className='text-black w-100'
-                closeMenuOnSelect={false}
-                isDisabled={launching}
-                placeholder='All labels (default)'
-              />
-              {selectedCategories.length > 0 && (
+      {!loading && (
+        <>
+          <Card>
+            <Card.Header>
+              <h5 className='mb-0'>Label Filter</h5>
+            </Card.Header>
+            <Card.Body>
+              <Form.Group className='mb-3'>
+                <Form.Label className='mb-0'>Filter by Labels</Form.Label>
                 <span
-                  className='text-warning d-block mt-1'
+                  className='text-muted d-block mb-1'
                   style={{ fontSize: '12px' }}
                 >
-                  Note: After homographies are created, all labels affected by the
-                  new homographies will be updated, not just the ones in this filter.
+                  By default all labels are included. Select specific labels to
+                  narrow which annotations define image pairs.
                 </span>
-              )}
-            </Form.Group>
+                <Select
+                  value={selectedCategories}
+                  onChange={(v) =>
+                    setSelectedCategories(v as CategoryOption[])
+                  }
+                  isMulti
+                  name='Labels for homography'
+                  options={enrichedCategoryOptions}
+                  className='text-black w-100'
+                  closeMenuOnSelect={false}
+                  isDisabled={launching}
+                  placeholder='All labels (default)'
+                />
+                {selectedCategories.length > 0 && (
+                  <span
+                    className='text-warning d-block mt-1'
+                    style={{ fontSize: '12px' }}
+                  >
+                    Note: After homographies are created, all labels affected
+                    by the new homographies will be updated, not just the ones
+                    in this filter.
+                  </span>
+                )}
+              </Form.Group>
 
-            <Form.Group>
-              <Form.Switch
-                label='Show Advanced Options'
-                checked={showAdvancedOptions}
-                onChange={() => setShowAdvancedOptions(!showAdvancedOptions)}
-                disabled={launching}
-              />
-            </Form.Group>
+              <Form.Group>
+                <Form.Switch
+                  label='Show Advanced Options'
+                  checked={showAdvancedOptions}
+                  onChange={() =>
+                    setShowAdvancedOptions(!showAdvancedOptions)
+                  }
+                  disabled={launching}
+                />
+              </Form.Group>
+            </Card.Body>
+          </Card>
 
-            {showAdvancedOptions && (
-              <div
-                className='d-flex flex-column gap-3 border border-dark shadow-sm p-2'
-                style={{ backgroundColor: '#697582' }}
-              >
+          {showAdvancedOptions && (
+            <Card>
+              <Card.Header>
+                <h5 className='mb-0'>Advanced Options</h5>
+              </Card.Header>
+              <Card.Body className='d-flex flex-column gap-3'>
                 <Form.Group>
                   <Form.Label className='mb-0'>Job Name</Form.Label>
                   <span
@@ -510,8 +527,8 @@ export default function HomographyLaunch({
                     className='text-muted d-block'
                     style={{ fontSize: '12px' }}
                   >
-                    When enabled, only admin users will see this job on the Jobs
-                    page.
+                    When enabled, only admin users will see this job on the
+                    Jobs page.
                   </span>
                 </Form.Group>
 
@@ -530,11 +547,11 @@ export default function HomographyLaunch({
                     included for review.
                   </span>
                 </Form.Group>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+              </Card.Body>
+            </Card>
+          )}
+        </>
+      )}
     </div>
   );
 }

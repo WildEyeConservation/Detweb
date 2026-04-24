@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Alert, Badge, Button, Card, Spinner, Table } from 'react-bootstrap';
+import { Alert, Badge, Button, Spinner } from 'react-bootstrap';
+import { Check, Copy, RefreshCw } from 'lucide-react';
 import {
   DeleteMessageBatchCommand,
   GetQueueAttributesCommand,
@@ -11,11 +12,11 @@ import {
 import {
   DescribeClustersCommand,
   DescribeServicesCommand,
+  DescribeTaskDefinitionCommand,
   ECSClient,
   ListClustersCommand,
   ListServicesCommand,
   type Cluster,
-  type Service,
 } from '@aws-sdk/client-ecs';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { GlobalContext, UserContext } from './Context';
@@ -54,6 +55,7 @@ type QueueDescriptor = {
   label: string;
   url?: string | null;
   scope: 'project' | 'system';
+  projectId?: string | null;
   projectName?: string | null;
 };
 
@@ -68,6 +70,7 @@ type QueueHealthRow = {
   dlq?: DlqSummary;
   error?: string | null;
   scope: QueueDescriptor['scope'];
+  projectId?: string | null;
   projectName?: string | null;
 };
 
@@ -84,6 +87,25 @@ const parseNumberAttr = (value?: string): number => {
 
 const formatCount = (value: MaybeNumber): string =>
   value === null || value === undefined ? '—' : value.toLocaleString();
+
+const SHORT_NAME_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/lightglue/i, 'Lightglue'],
+  [/point[-_ ]?finder/i, 'Point Finder'],
+  [/scoutbot/i, 'Scoutbot'],
+  [/mad/i, 'MAD'],
+  [/gpu/i, 'Lightglue'],
+  [/cpu/i, 'Point Finder'],
+  [/process(?!or)/i, 'Process'],
+];
+
+const shortName = (full?: string | null): string => {
+  if (!full) return '—';
+  for (const [pattern, label] of SHORT_NAME_PATTERNS) {
+    if (pattern.test(full)) return label;
+  }
+  return full;
+};
+
 
 const formatSystemQueueLabel = (key: string): string => {
   const withoutSuffix = key.replace(/QueueUrl$/i, '');
@@ -133,11 +155,22 @@ export default function AwsServiceHealth() {
         credentials,
       });
 
+      const ourQueueUrls = new Set(
+        Object.entries(global?.backend?.custom ?? {})
+          .filter(
+            ([key, value]) =>
+              /queueurl$/i.test(key) &&
+              typeof value === 'string' &&
+              value.length > 0
+          )
+          .map(([, value]) => value as string)
+      );
+
       const listClustersResp = await ecsClient.send(
         new ListClustersCommand({})
       );
       const clusterArns = (listClustersResp.clusterArns ?? []).filter(
-        (arn) => !arn?.toLowerCase().includes('sand')
+        (arn): arn is string => Boolean(arn)
       );
       if (!clusterArns.length) {
         setEcsState({ clusters: [], isLoading: false, error: null });
@@ -149,21 +182,29 @@ export default function AwsServiceHealth() {
       );
       const clusters = describeClustersResp.clusters ?? [];
 
-      const summaries: EcsClusterSummary[] = [];
-
-      for (const cluster of clusters) {
-        if (!cluster.clusterArn) continue;
-        const services = await fetchClusterServices(ecsClient, cluster);
-        summaries.push({
-          clusterArn: cluster.clusterArn,
-          name: extractName(cluster.clusterArn),
-          status: cluster.status,
-          runningTasksCount: cluster.runningTasksCount,
-          pendingTasksCount: cluster.pendingTasksCount,
-          activeServicesCount: cluster.activeServicesCount,
-          services,
-        });
-      }
+      const summaryResults = await Promise.all(
+        clusters.map(async (cluster): Promise<EcsClusterSummary | null> => {
+          if (!cluster.clusterArn) return null;
+          const services = await fetchClusterServices(
+            ecsClient,
+            cluster,
+            ourQueueUrls
+          );
+          if (!services.length) return null;
+          return {
+            clusterArn: cluster.clusterArn,
+            name: extractName(cluster.clusterArn),
+            status: cluster.status,
+            runningTasksCount: cluster.runningTasksCount,
+            pendingTasksCount: cluster.pendingTasksCount,
+            activeServicesCount: services.length,
+            services,
+          };
+        })
+      );
+      const summaries = summaryResults.filter(
+        (s): s is EcsClusterSummary => s !== null
+      );
 
       setEcsState({ clusters: summaries, isLoading: false, error: null });
     } catch (err) {
@@ -174,7 +215,7 @@ export default function AwsServiceHealth() {
         error: err instanceof Error ? err.message : 'Unable to load ECS data.',
       });
     }
-  }, [global?.region]);
+  }, [global?.region, global?.backend?.custom]);
 
   const systemQueues = useMemo<QueueDescriptor[]>(() => {
     const custom = global?.backend?.custom;
@@ -304,6 +345,7 @@ export default function AwsServiceHealth() {
           label: queue.tag || queue.name,
           url: queue.url,
           scope: 'project' as const,
+          projectId: queue.projectId ?? null,
           projectName: queue.project?.name || queue.projectId || null,
         })),
         ...systemQueues,
@@ -327,6 +369,7 @@ export default function AwsServiceHealth() {
               label: descriptor.label,
               url: descriptor.url,
               scope: descriptor.scope,
+              projectId: descriptor.projectId,
               projectName: descriptor.projectName,
               available: null,
               inflight: null,
@@ -383,6 +426,7 @@ export default function AwsServiceHealth() {
               ),
               dlq: dlqSummary,
               scope: descriptor.scope,
+              projectId: descriptor.projectId,
               projectName: descriptor.projectName,
             };
           } catch (error) {
@@ -401,6 +445,7 @@ export default function AwsServiceHealth() {
               delayed: null,
               error: message,
               scope: descriptor.scope,
+              projectId: descriptor.projectId,
               projectName: descriptor.projectName,
             };
           }
@@ -537,185 +582,272 @@ export default function AwsServiceHealth() {
 
   if (!contextsReady) {
     return (
-      <Card className='mt-3'>
-        <Card.Body>
-          <Alert variant='warning' className='mb-0'>
-            Unable to load AWS service health because admin data has not beenI
-            initialised.
-          </Alert>
-        </Card.Body>
-      </Card>
+      <Alert variant='warning' className='mb-0'>
+        Unable to load AWS service health because admin data has not been
+        initialised.
+      </Alert>
     );
   }
 
   return (
-    <div className='d-flex flex-column gap-4 mt-3'>
-      <Card>
-        <Card.Header className='d-flex justify-content-between align-items-center'>
-          <div>
-            <Card.Title className='mb-0'>Queue Health</Card.Title>
-            <div className='text-muted small'>
-              Monitor message backlog and dead-letter queues.
-            </div>
-          </div>
-          <Button
-            variant='outline-primary'
-            onClick={fetchQueueHealth}
-            disabled={isRefreshing}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <section>
+        <SectionHeader
+          title='Queue Health'
+          subtitle='Monitor message backlog and dead-letter queues.'
+          onRefresh={fetchQueueHealth}
+          refreshing={isRefreshing}
+        />
+        {fetchError && (
+          <Alert variant='danger'>
+            Failed to refresh queue metrics: {fetchError}
+          </Alert>
+        )}
+        {feedback && (
+          <Alert
+            variant={feedback.variant === 'success' ? 'success' : 'danger'}
+            onClose={() => setFeedback(null)}
+            dismissible
           >
-            {isRefreshing ? (
-              <>
-                <Spinner animation='border' size='sm' className='me-2' />
-                Refreshing
-              </>
-            ) : (
-              'Refresh'
+            {feedback.message}
+          </Alert>
+        )}
+        {!rows.length ? (
+          <Alert variant='info'>No queues are currently configured.</Alert>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {groupedRows.system.length > 0 && (
+              <QueueTable
+                title='System Queues'
+                rows={groupedRows.system}
+                actionState={actionState}
+                onDrain={handleDrainToDlq}
+                onReplay={handleReplayFromDlq}
+              />
             )}
-          </Button>
-        </Card.Header>
-        <Card.Body>
-          {fetchError && (
-            <Alert variant='danger'>
-              Failed to refresh queue metrics: {fetchError}
-            </Alert>
-          )}
-          {feedback && (
-            <Alert
-              variant={feedback.variant === 'success' ? 'success' : 'danger'}
-              onClose={() => setFeedback(null)}
-              dismissible
-            >
-              {feedback.message}
-            </Alert>
-          )}
-          {!rows.length && (
-            <Alert variant='info'>No queues are currently configured.</Alert>
-          )}
-          {rows.length > 0 && (
-            <div className='d-flex flex-column gap-4'>
-              {groupedRows.system.length > 0 && (
-                <QueueTable
-                  title='System Queues'
-                  rows={groupedRows.system}
-                  actionState={actionState}
-                  onDrain={handleDrainToDlq}
-                  onReplay={handleReplayFromDlq}
-                />
-              )}
-              {groupedRows.project.length > 0 && (
-                <QueueTable
-                  title='Project Queues'
-                  rows={groupedRows.project}
-                  actionState={actionState}
-                  onDrain={handleDrainToDlq}
-                  onReplay={handleReplayFromDlq}
-                />
-              )}
-            </div>
-          )}
-        </Card.Body>
-      </Card>
-
-      <Card>
-        <Card.Header className='d-flex justify-content-between align-items-center'>
-          <div>
-            <Card.Title className='mb-0'>ECS Services</Card.Title>
-            <div className='text-muted small'>
-              Clusters and services currently running in ECS.
-            </div>
+            {groupedRows.project.length > 0 && (
+              <QueueTable
+                title='Project Queues'
+                rows={groupedRows.project}
+                actionState={actionState}
+                onDrain={handleDrainToDlq}
+                onReplay={handleReplayFromDlq}
+                showProject
+              />
+            )}
           </div>
-          <Button
-            variant='outline-primary'
-            onClick={fetchEcsStatus}
-            disabled={ecsState.isLoading}
-          >
-            {ecsState.isLoading ? (
-              <>
-                <Spinner animation='border' size='sm' className='me-2' />
-                Refreshing
-              </>
-            ) : (
-              'Refresh'
-            )}
-          </Button>
-        </Card.Header>
-        <Card.Body>
-          {ecsState.error && (
-            <Alert variant='danger' className='mb-3'>
-              {ecsState.error}
-            </Alert>
-          )}
+        )}
+      </section>
 
-          {ecsState.isLoading && !ecsState.clusters.length ? (
-            <div className='d-flex justify-content-center py-4'>
-              <Spinner animation='border' />
-            </div>
-          ) : ecsState.clusters.length === 0 ? (
-            <Alert variant='info'>No ECS clusters found.</Alert>
-          ) : (
-            <div className='d-flex flex-column gap-3'>
-              {ecsState.clusters.map((cluster) => (
-                <Card key={cluster.clusterArn} className='border'>
-                  <Card.Header className='d-flex justify-content-between align-items-center'>
-                    <div>
-                      <strong>{cluster.name}</strong>
-                      <div className='text-muted small'>{cluster.clusterArn}</div>
-                    </div>
-                    <div className='d-flex align-items-center gap-3'>
-                      <Badge bg='success'>
-                        Running Tasks: {cluster.runningTasksCount ?? 0}
-                      </Badge>
-                      <Badge bg='warning' text='dark'>
-                        Pending Tasks: {cluster.pendingTasksCount ?? 0}
-                      </Badge>
-                      <Badge bg='secondary'>
-                        Services: {cluster.activeServicesCount ?? 0}
-                      </Badge>
-                    </div>
-                  </Card.Header>
-                  <Card.Body>
-                    {cluster.services.length === 0 ? (
-                      <div className='text-muted'>No services in this cluster.</div>
-                    ) : (
-                      <div className='table-responsive'>
-                        <Table hover size='sm' className='align-middle mb-0'>
-                          <thead>
-                            <tr>
-                              <th>Name</th>
-                              <th>Status</th>
-                              <th className='text-end'>Desired</th>
-                              <th className='text-end'>Running</th>
-                              <th className='text-end'>Pending</th>
+      <section>
+        <SectionHeader
+          title='ECS Services'
+          subtitle='Clusters and services currently running in ECS.'
+          onRefresh={fetchEcsStatus}
+          refreshing={ecsState.isLoading}
+        />
+        {ecsState.error && (
+          <Alert variant='danger' className='mb-3'>
+            {ecsState.error}
+          </Alert>
+        )}
+
+        {ecsState.isLoading && !ecsState.clusters.length ? (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              padding: 32,
+            }}
+          >
+            <Spinner animation='border' />
+          </div>
+        ) : ecsState.clusters.length === 0 ? (
+          <Alert variant='info'>No ECS clusters found.</Alert>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {ecsState.clusters.map((cluster) => (
+              <div
+                key={cluster.clusterArn}
+                className='ss-card'
+                style={{ padding: 0, overflow: 'hidden' }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '12px 16px',
+                    borderBottom: '1px solid var(--ss-border)',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      minWidth: 0,
+                    }}
+                  >
+                    <strong>{shortName(cluster.name)}</strong>
+                    <CopyButton
+                      value={cluster.name}
+                      title='Copy full cluster name'
+                    />
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <Badge bg='warning'>
+                      Running {cluster.runningTasksCount ?? 0}
+                    </Badge>
+                    <Badge bg='warning' text='dark'>
+                      Pending {cluster.pendingTasksCount ?? 0}
+                    </Badge>
+                    <Badge bg='warning'>
+                      Services {cluster.activeServicesCount ?? 0}
+                    </Badge>
+                  </div>
+                </div>
+                {cluster.services.length === 0 ? (
+                  <div
+                    style={{
+                      padding: '16px',
+                      color: 'var(--ss-text-dim)',
+                      fontSize: 13,
+                    }}
+                  >
+                    No services in this cluster.
+                  </div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className='ss-data-table'>
+                      <thead>
+                        <tr>
+                          <th>Status</th>
+                          <th style={{ textAlign: 'right' }}>Desired</th>
+                          <th style={{ textAlign: 'right' }}>Running</th>
+                          <th style={{ textAlign: 'right' }}>Pending</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cluster.services.map((service) => {
+                          return (
+                            <tr key={service.serviceArn}>
+                              <td>{service.status || '—'}</td>
+                              <td style={{ textAlign: 'right' }}>
+                                {service.desiredCount ?? '—'}
+                              </td>
+                              <td style={{ textAlign: 'right' }}>
+                                {service.runningCount ?? '—'}
+                              </td>
+                              <td style={{ textAlign: 'right' }}>
+                                {service.pendingCount ?? '—'}
+                              </td>
                             </tr>
-                          </thead>
-                          <tbody>
-                            {cluster.services.map((service) => (
-                              <tr key={service.serviceArn}>
-                                <td>{service.name || extractName(service.serviceArn || '')}</td>
-                                <td>{service.status || '—'}</td>
-                                <td className='text-end'>
-                                  {service.desiredCount ?? '—'}
-                                </td>
-                                <td className='text-end'>
-                                  {service.runningCount ?? '—'}
-                                </td>
-                                <td className='text-end'>
-                                  {service.pendingCount ?? '—'}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </Table>
-                      </div>
-                    )}
-                  </Card.Body>
-                </Card>
-              ))}
-            </div>
-          )}
-        </Card.Body>
-      </Card>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
+  );
+}
+
+function SectionHeader({
+  title,
+  subtitle,
+  onRefresh,
+  refreshing,
+}: {
+  title: string;
+  subtitle: string;
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+        gap: 12,
+        marginBottom: 12,
+        flexWrap: 'wrap',
+      }}
+    >
+      <div>
+        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{title}</h3>
+        <div style={{ fontSize: 12, color: 'var(--ss-text-dim)' }}>
+          {subtitle}
+        </div>
+      </div>
+      <Button
+        variant='link'
+        size='sm'
+        style={{
+          padding: 0,
+          color: 'var(--ss-text-muted)',
+          display: 'flex',
+          alignItems: 'center',
+        }}
+        onClick={onRefresh}
+        disabled={refreshing}
+        title='Refresh'
+      >
+        <RefreshCw size={14} className={refreshing ? 'spinning' : undefined} />
+      </Button>
+    </div>
+  );
+}
+
+function CopyButton({
+  value,
+  title = 'Copy',
+}: {
+  value?: string | null;
+  title?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  if (!value) return null;
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      console.error('Copy failed', err);
+    }
+  };
+  return (
+    <Button
+      variant='link'
+      size='sm'
+      onClick={handleCopy}
+      title={title}
+      style={{
+        padding: '0 4px',
+        color: copied ? 'var(--ss-accent)' : 'var(--ss-text-muted)',
+        display: 'inline-flex',
+        alignItems: 'center',
+      }}
+    >
+      {copied ? <Check size={14} /> : <Copy size={14} />}
+    </Button>
   );
 }
 
@@ -725,110 +857,185 @@ function QueueTable({
   actionState,
   onDrain,
   onReplay,
+  showProject,
 }: {
   title: string;
   rows: QueueHealthRow[];
   actionState: Record<string, 'drain' | 'replay' | undefined>;
   onDrain: (id: string) => void;
   onReplay: (id: string) => void;
+  showProject?: boolean;
 }) {
   return (
     <div>
-      <h5 className='mb-3'>{title}</h5>
-      <div className='table-responsive'>
-        <Table hover responsive className='align-middle'>
-          <thead>
-            <tr>
-              <th>Queue</th>
-              <th className='text-end'>Messages</th>
-              <th className='text-end'>In Flight</th>
-              <th className='text-end'>Delayed</th>
-              <th>Dead Letter Queue</th>
-              <th className='text-end'>DLQ Messages</th>
-              <th className='text-end'>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const currentAction = actionState[row.id];
-              const canDrain = !!row.dlq && !!row.arn;
-              const canReplay =
-                !!row.dlq && !!row.arn && (row.dlq.available ?? 0) > 0;
+      <h4
+        style={{
+          margin: 0,
+          marginBottom: 8,
+          fontSize: 14,
+          fontWeight: 600,
+          color: 'var(--ss-text)',
+        }}
+      >
+        {title}
+      </h4>
+      <div className='ss-card' style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table className='ss-data-table'>
+            <thead>
+              <tr>
+                <th>Queue</th>
+                {showProject && <th>Project</th>}
+                <th style={{ textAlign: 'right' }}>Messages</th>
+                <th style={{ textAlign: 'right' }}>In Flight</th>
+                <th style={{ textAlign: 'right' }}>Delayed</th>
+                <th>DLQ</th>
+                <th style={{ textAlign: 'right' }}>DLQ Msgs</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const currentAction = actionState[row.id];
+                const canDrain = !!row.dlq && !!row.arn;
+                const canReplay =
+                  !!row.dlq && !!row.arn && (row.dlq.available ?? 0) > 0;
 
-              return (
-                <tr key={row.id}>
-                  <td>
-                    <div className='fw-semibold'>{row.label}</div>
-                    <div>
-                      <Badge bg={row.scope === 'system' ? 'info' : 'primary'}>
-                        {row.scope === 'system'
-                          ? 'System queue'
-                          : 'Project queue'}
-                      </Badge>
-                    </div>
-                    <div className='text-muted small'>
-                      {row.url || 'No queue URL configured.'}
-                    </div>
-                    {row.scope === 'project' && row.projectName && (
-                      <div className='text-muted small'>
-                        Project: {row.projectName}
+                return (
+                  <tr key={row.id}>
+                    <td>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        <span style={{ fontWeight: 500 }}>{row.label}</span>
+                        <CopyButton value={row.url} title='Copy queue URL' />
                       </div>
-                    )}
-                    {row.error && (
-                      <div className='text-danger small mt-1'>{row.error}</div>
-                    )}
-                  </td>
-                  <td className='text-end'>{formatCount(row.available)}</td>
-                  <td className='text-end'>{formatCount(row.inflight)}</td>
-                  <td className='text-end'>{formatCount(row.delayed)}</td>
-                  <td>
-                    {row.dlq ? (
-                      <>
-                        <div className='fw-semibold'>{row.dlq.name}</div>
-                        <div className='text-muted small'>
-                          {row.dlq.url || 'URL unavailable'}
+                      {row.error && (
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: 'var(--ss-danger, #dc3545)',
+                            marginTop: 2,
+                          }}
+                        >
+                          {row.error}
                         </div>
-                      </>
-                    ) : (
-                      <Badge bg='secondary'>No DLQ configured</Badge>
+                      )}
+                    </td>
+                    {showProject && (
+                      <td>
+                        {row.projectName ? (
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <span style={{ fontSize: 13 }}>
+                              {row.projectName}
+                            </span>
+                            <CopyButton
+                              value={row.projectId}
+                              title='Copy project ID'
+                            />
+                          </div>
+                        ) : (
+                          <span
+                            style={{
+                              fontSize: 12,
+                              color: 'var(--ss-text-dim)',
+                            }}
+                          >
+                            —
+                          </span>
+                        )}
+                      </td>
                     )}
-                  </td>
-                  <td className='text-end'>
-                    {row.dlq ? formatCount(row.dlq.available) : '—'}
-                  </td>
-                  <td>
-                    <div className='d-flex justify-content-end gap-2'>
-                      <Button
-                        size='sm'
-                        variant='outline-warning'
-                        disabled={!canDrain || currentAction === 'replay'}
-                        onClick={() => onDrain(row.id)}
+                    <td style={{ textAlign: 'right' }}>
+                      {formatCount(row.available)}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      {formatCount(row.inflight)}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      {formatCount(row.delayed)}
+                    </td>
+                    <td>
+                      {row.dlq ? (
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          <span style={{ fontSize: 13 }}>
+                            {shortName(row.dlq.name)}
+                          </span>
+                          <CopyButton
+                            value={row.dlq.name}
+                            title='Copy full DLQ name'
+                          />
+                        </div>
+                      ) : (
+                        <span
+                          style={{
+                            fontSize: 12,
+                            color: 'var(--ss-text-dim)',
+                          }}
+                        >
+                          None
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      {row.dlq ? formatCount(row.dlq.available) : '—'}
+                    </td>
+                    <td>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'flex-end',
+                          gap: 8,
+                        }}
                       >
-                        {currentAction === 'drain' ? (
-                          <Spinner animation='border' size='sm' />
-                        ) : (
-                          'Drain to DLQ'
-                        )}
-                      </Button>
-                      <Button
-                        size='sm'
-                        variant='outline-success'
-                        disabled={!canReplay || currentAction === 'drain'}
-                        onClick={() => onReplay(row.id)}
-                      >
-                        {currentAction === 'replay' ? (
-                          <Spinner animation='border' size='sm' />
-                        ) : (
-                          'Replay DLQ'
-                        )}
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </Table>
+                        <Button
+                          size='sm'
+                          variant='outline-warning'
+                          disabled={!canDrain || currentAction === 'replay'}
+                          onClick={() => onDrain(row.id)}
+                        >
+                          {currentAction === 'drain' ? (
+                            <Spinner animation='border' size='sm' />
+                          ) : (
+                            'Drain'
+                          )}
+                        </Button>
+                        <Button
+                          size='sm'
+                          variant='outline-success'
+                          disabled={!canReplay || currentAction === 'drain'}
+                          onClick={() => onReplay(row.id)}
+                        >
+                          {currentAction === 'replay' ? (
+                            <Spinner animation='border' size='sm' />
+                          ) : (
+                            'Replay'
+                          )}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -923,7 +1130,8 @@ async function moveMessages({
 
 async function fetchClusterServices(
   ecsClient: ECSClient,
-  cluster: Cluster
+  cluster: Cluster,
+  ourQueueUrls: Set<string>
 ): Promise<EcsClusterSummary['services']> {
   if (!cluster.clusterArn) {
     return [];
@@ -944,20 +1152,44 @@ async function fetchClusterServices(
     })
   );
   const services = describeServicesResp.services ?? [];
-  return services
-    .filter(
-      (service) =>
-        !service.serviceArn?.toLowerCase().includes('sand') &&
-        !service.serviceName?.toLowerCase().includes('sand')
-    )
-    .map((service: Service) => ({
-      serviceArn: service.serviceArn,
-      name: service.serviceName,
-      status: service.status,
-      desiredCount: service.desiredCount,
-      runningCount: service.runningCount,
-      pendingCount: service.pendingCount,
-    }));
+
+  const matches = await Promise.all(
+    services.map(async (service) => {
+      if (!service.taskDefinition) return null;
+      try {
+        const td = await ecsClient.send(
+          new DescribeTaskDefinitionCommand({
+            taskDefinition: service.taskDefinition,
+          })
+        );
+        const containers = td.taskDefinition?.containerDefinitions ?? [];
+        const usesOurQueue = containers.some((container) =>
+          (container.environment ?? []).some(
+            (envVar) => envVar.value && ourQueueUrls.has(envVar.value)
+          )
+        );
+        if (!usesOurQueue) return null;
+      } catch (err) {
+        console.error('Failed to describe task definition', {
+          taskDefinition: service.taskDefinition,
+          err,
+        });
+        return null;
+      }
+      return {
+        serviceArn: service.serviceArn,
+        name: service.serviceName,
+        status: service.status,
+        desiredCount: service.desiredCount,
+        runningCount: service.runningCount,
+        pendingCount: service.pendingCount,
+      };
+    })
+  );
+
+  return matches.filter(
+    (s): s is NonNullable<(typeof matches)[number]> => s !== null
+  );
 }
 
 function extractName(arn: string): string {

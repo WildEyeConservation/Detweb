@@ -273,7 +273,7 @@ export default function ChangeCategoryModal({
           borderTop: '1px solid rgba(255,255,255,0.1)',
         }}
       >
-        <Button variant='dark' onClick={onClose}>
+        <Button variant='secondary' onClick={onClose}>
           Cancel
         </Button>
       </Modal.Footer>

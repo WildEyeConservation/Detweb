@@ -3,7 +3,7 @@ import { useContext, useState, useEffect, useCallback } from 'react';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { UserContext, GlobalContext } from '../Context';
 import { useUsers } from '../apiInterface';
-import { Button, Form, Badge, Spinner, Alert } from 'react-bootstrap';
+import { Button, Form, Badge, Spinner, Alert, Card } from 'react-bootstrap';
 import { Modal, Header, Title, Body, Footer } from '../Modal';
 import { Tabs, Tab } from '../Tabs';
 
@@ -196,82 +196,108 @@ export default function Settings({ signOut }: { signOut: () => void }) {
         <Body className='p-0'>
           <Tabs>
             <Tab label='Account'>
-              <div className='p-3'>
-                <div className='d-flex flex-column gap-2'>
-                  <p className='mb-0'>Username: {username}</p>
-                  <p className='mb-0'>Email: {email}</p>
-                </div>
-                <Button
-                  className='w-100 mt-3'
-                  variant='outline-danger'
-                  onClick={signOut}
-                >
-                  Sign Out
-                </Button>
-                <Button
-                  className='w-100 mt-2'
-                  variant='outline-warning'
-                  onClick={clearSiteData}
-                >
-                  Clear Cache
-                </Button>
+              <div className='p-3 d-flex flex-column gap-3'>
+                <Card>
+                  <Card.Header>
+                    <h5 className='mb-0'>Profile</h5>
+                  </Card.Header>
+                  <Card.Body className='d-flex flex-column gap-2'>
+                    <p className='mb-0'>
+                      <strong>Username:</strong> {username}
+                    </p>
+                    <p className='mb-0'>
+                      <strong>Email:</strong> {email}
+                    </p>
+                  </Card.Body>
+                </Card>
+
+                <Card>
+                  <Card.Header>
+                    <h5 className='mb-0'>Account Actions</h5>
+                  </Card.Header>
+                  <Card.Body className='d-flex flex-column gap-2'>
+                    <Button variant='danger' onClick={signOut}>
+                      Sign Out
+                    </Button>
+                    <Button variant='warning' onClick={clearSiteData}>
+                      Clear Cache
+                    </Button>
+                  </Card.Body>
+                </Card>
               </div>
             </Tab>
             <Tab label='Active Organisations'>
-              <div className='p-3'>
+              <div className='p-3 d-flex flex-column gap-3'>
                 {loading ? (
                   <div className='d-flex justify-content-center py-4'>
                     <Spinner animation='border' />
                   </div>
                 ) : error ? (
-                  <Alert variant='danger'>{error}</Alert>
+                  <Alert variant='danger' className='mb-0'>
+                    {error}
+                  </Alert>
                 ) : (
                   <>
-                    <div className='d-flex justify-content-between align-items-center mb-3'>
-                      <span className='text-muted'>
-                        {selectedOrgIds.size} / {maxActive} active
-                      </span>
-                      {allAutoActivated && (
-                        <Badge bg='info'>
-                          All organisations active ({memberships.length} or fewer)
-                        </Badge>
-                      )}
-                    </div>
-                    {memberships.length === 0 ? (
-                      <p className='text-muted'>No organisation memberships found.</p>
-                    ) : (
-                      <div className='d-flex flex-column gap-2'>
-                        {memberships.map((m) => (
-                          <div
-                            key={m.organizationId}
-                            className='d-flex align-items-center justify-content-between p-2 rounded'
-                            style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
-                          >
-                            <div className='d-flex align-items-center gap-2'>
-                              <Form.Check
-                                type='switch'
-                                checked={
-                                  allAutoActivated || selectedOrgIds.has(m.organizationId)
-                                }
-                                disabled={
-                                  allAutoActivated ||
-                                  saving ||
-                                  (!selectedOrgIds.has(m.organizationId) &&
-                                    selectedOrgIds.size >= maxActive)
-                                }
-                                onChange={() => handleToggle(m.organizationId)}
-                              />
-                              <span>{m.organizationName}</span>
-                              {m.isAdmin && (
-                                <Badge bg='warning' text='dark'>
-                                  Admin
-                                </Badge>
-                              )}
-                            </div>
+                    <Card>
+                      <Card.Header>
+                        <h5 className='mb-0'>Active Status</h5>
+                      </Card.Header>
+                      <Card.Body>
+                        <span>
+                          <strong>
+                            {allAutoActivated
+                              ? memberships.length
+                              : selectedOrgIds.size}
+                          </strong>{' '}
+                          / {maxActive} active
+                        </span>
+                      </Card.Body>
+                    </Card>
+
+                    <Card>
+                      <Card.Header>
+                        <h5 className='mb-0'>Organisations</h5>
+                      </Card.Header>
+                      <Card.Body>
+                        {memberships.length === 0 ? (
+                          <p className='mb-0 text-muted'>
+                            No organisation memberships found.
+                          </p>
+                        ) : (
+                          <div className='d-flex flex-column gap-2'>
+                            {memberships.map((m) => (
+                              <div
+                                key={m.organizationId}
+                                className='d-flex align-items-center justify-content-between'
+                              >
+                                <div className='d-flex align-items-center gap-2'>
+                                  <Form.Check
+                                    type='switch'
+                                    checked={
+                                      allAutoActivated ||
+                                      selectedOrgIds.has(m.organizationId)
+                                    }
+                                    disabled={
+                                      allAutoActivated ||
+                                      saving ||
+                                      (!selectedOrgIds.has(m.organizationId) &&
+                                        selectedOrgIds.size >= maxActive)
+                                    }
+                                    onChange={() => handleToggle(m.organizationId)}
+                                  />
+                                  <span>{m.organizationName}</span>
+                                  {m.isAdmin && (
+                                    <Badge bg='warning' text='dark'>
+                                      Admin
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        )}
+                      </Card.Body>
+                    </Card>
                   </>
                 )}
               </div>
@@ -279,7 +305,7 @@ export default function Settings({ signOut }: { signOut: () => void }) {
           </Tabs>
         </Body>
         <Footer>
-          <Button variant='dark' onClick={() => setShow(false)}>
+          <Button variant='secondary' onClick={() => setShow(false)}>
             Close
           </Button>
           {hasChanges && !allAutoActivated && (

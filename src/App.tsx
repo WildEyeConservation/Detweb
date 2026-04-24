@@ -9,7 +9,9 @@ import { configure } from 'react-hotkeys';
 // import { withAuthenticator } from "@aws-amplify/ui-react";
 import '@aws-amplify/ui-react/styles.css';
 import { User } from './UserContext.js';
-import 'bootswatch/dist/superhero/bootstrap.min.css';
+import { OrgProvider } from './OrgContext.tsx';
+import 'bootswatch/dist/cosmo/bootstrap.min.css';
+import './theme.css';
 import { fetchAuthSession, AuthUser } from 'aws-amplify/auth';
 import { BrowserView, MobileView } from 'react-device-detect';
 import MainNavigation from './MainNavigation.tsx';
@@ -117,20 +119,24 @@ function App({ signOut = () => { }, user }: AppProps) {
     continueOnMobile ? (
       <User user={user! as any} cognitoGroups={cognitoGroups}>
         {user?.userId && <ClientLogger userId={user.userId} />}
-        <Upload>
-          <UploadManager />
-          <MainNavigation signOut={signOut} />
-        </Upload>
+        <OrgProvider>
+          <Upload>
+            <UploadManager />
+            <MainNavigation signOut={signOut} />
+          </Upload>
+        </OrgProvider>
       </User>
     ) : (
       <>
         <BrowserView>
           <User user={user! as any} cognitoGroups={cognitoGroups}>
             {user?.userId && <ClientLogger userId={user.userId} />}
-            <Upload>
-              <UploadManager />
-              <MainNavigation signOut={signOut} />
-            </Upload>
+            <OrgProvider>
+              <Upload>
+                <UploadManager />
+                <MainNavigation signOut={signOut} />
+              </Upload>
+            </OrgProvider>
           </User>
         </BrowserView>
         <MobileView>

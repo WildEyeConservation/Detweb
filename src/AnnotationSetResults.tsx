@@ -285,7 +285,7 @@ export default function AnnotationSetResults({
           </div>
         </Body>
         <Footer>
-          <Button variant='dark' onClick={onClose} disabled={loading}>
+          <Button variant='secondary' onClick={onClose} disabled={loading}>
             Close
           </Button>
         </Footer>

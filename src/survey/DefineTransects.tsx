@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { GlobalContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
-import { Form, Spinner, Button } from 'react-bootstrap';
-import { Footer } from '../Modal';
+import { Spinner, Button, Card } from 'react-bootstrap';
 import {
   MapContainer,
   TileLayer,
@@ -22,6 +21,7 @@ import 'leaflet/dist/leaflet.css';
 import { EditControl } from 'react-leaflet-draw';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import proj4 from 'proj4';
+import '../DefineTransect.css';
 
 // tolerance in degrees for simplifying the transect line
 const SIMPLIFY_TOLERANCE = 0.002;
@@ -289,14 +289,12 @@ function mergeSmallSegmentsByBoundary(
 
 // define transects and strata
 export default function DefineTransects({ projectId, organizationId }: { projectId: string; organizationId: string }) {
-  const { client, showModal } = useContext(GlobalContext)!;
+  const { client } = useContext(GlobalContext)!;
   const [images, setImages] = useState<any[]>([]);
   const [partsLoading, setPartsLoading] = useState<null | number>(0);
   const [saving, setSaving] = useState(false);
   const [savingImageCount, setSavingImageCount] = useState(0);
   const [savingProgress, setSavingProgress] = useState(0);
-  // disabledClose: only disables Close during active save; saveDisabled: governs Save button enablement
-  const [disabledClose, setDisabledClose] = useState(false);
   const [saveDisabled, setSaveDisabled] = useState(false);
   const [polygonCoords, setPolygonCoords] = useState<
     L.LatLngExpression[] | null
@@ -445,7 +443,6 @@ export default function DefineTransects({ projectId, organizationId }: { project
   // submit handler: creates strata, transects, and assigns images
   const handleSubmit = async () => {
     if (!polygonCoords) return;
-    setDisabledClose(true);
     setSaving(true);
 
     // Calculate how many images will be linked to transects
@@ -653,7 +650,6 @@ export default function DefineTransects({ projectId, organizationId }: { project
       )
     );
 
-    setDisabledClose(false);
     setSaving(false);
     setSavingImageCount(0);
     setSavingProgress(0);
@@ -1189,11 +1185,22 @@ export default function DefineTransects({ projectId, organizationId }: { project
   // right-click popup shows transect info only
 
   return (
-    <>
-      <Form className='p-3'>
-        <Form.Group className='d-flex flex-column'>
-          <Form.Label className='mb-0'>Define Transects and Strata</Form.Label>
-          <span className='text-muted mb-2' style={{ fontSize: '14px' }}>
+    <div className='d-flex flex-column gap-3'>
+      <Card>
+        <Card.Header className='d-flex justify-content-between align-items-center'>
+          <h5 className='mb-0'>Define Transects and Strata</h5>
+          {existingData && (
+            <Button
+              variant='outline-primary'
+              size='sm'
+              onClick={clearStrata}
+            >
+              Clear Strata
+            </Button>
+          )}
+        </Card.Header>
+        <Card.Body>
+          <div className='text-muted mb-2' style={{ fontSize: '14px' }}>
             <ul className='mb-0'>
               <li>
                 Single-click a point to select its transect (Ctrl-click for
@@ -1226,17 +1233,8 @@ export default function DefineTransects({ projectId, organizationId }: { project
                 </li>
               )}
             </ul>
-          </span>
-          {existingData && (
-            <Button
-              variant='outline-primary'
-              className='mb-2'
-              onClick={clearStrata}
-            >
-              Clear Strata
-            </Button>
-          )}
-          <div style={{ height: '600px', width: '100%', position: 'relative' }}>
+          </div>
+          <div className='define-transects-map'>
             {partsLoading !== null ? (
               <div className='d-flex justify-content-center align-items-center mt-3'>
                 <Spinner animation='border' />
@@ -1605,9 +1603,9 @@ export default function DefineTransects({ projectId, organizationId }: { project
               </span>
             </div>
           )}
-        </Form.Group>
-      </Form>
-      <Footer>
+        </Card.Body>
+      </Card>
+      <div style={{ display: 'flex', gap: 8 }}>
         <Button
           variant='primary'
           onClick={handleSubmit}
@@ -1615,14 +1613,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
         >
           Save Transects and Strata
         </Button>
-        <Button
-          variant='dark'
-          onClick={() => showModal(null)}
-          disabled={disabledClose}
-        >
-          Close
-        </Button>
-      </Footer>
-    </>
+      </div>
+    </div>
   );
 }

@@ -246,7 +246,7 @@ export default function TestPresetsModal({
           >
             {isNewPreset ? 'Create' : 'Save'}
           </Button>
-          <Button variant='dark' onClick={onClose}>
+          <Button variant='secondary' onClick={onClose}>
             Cancel
           </Button>
         </span>

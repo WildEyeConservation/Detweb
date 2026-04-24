@@ -8,6 +8,7 @@ import {
 } from 'react';
 import Form from 'react-bootstrap/Form';
 import Spinner from 'react-bootstrap/Spinner';
+import Card from 'react-bootstrap/Card';
 import { GlobalContext } from './Context';
 import { fetchAllPaginatedResults } from './utils';
 import LabeledToggleSwitch from './LabeledToggleSwitch';
@@ -746,12 +747,12 @@ export default function TileConfiguration({
 
   return (
     <>
-      <Form.Group className='d-flex flex-column gap-3 mt-2'>
-        {process.env.NODE_ENV === 'development' && (
-          <Form.Group
-            className='p-2 border border-dark mb-2 shadow-sm'
-            style={{ backgroundColor: '#697582' }}
-          >
+      {process.env.NODE_ENV === 'development' && (
+        <Card>
+          <Card.Header>
+            <h5 className='mb-0'>Development Options</h5>
+          </Card.Header>
+          <Card.Body>
             {hasDevGeoTransect ? (
               <>
                 <div className='d-flex align-items-center justify-content-between mb-2'>
@@ -763,7 +764,6 @@ export default function TileConfiguration({
                     label='Show Transect ID'
                     checked={showTransectId}
                     onChange={(e) => setShowTransectId(e.target.checked)}
-                    className='text-white'
                     style={{ fontSize: '12px' }}
                   />
                 </div>
@@ -779,20 +779,14 @@ export default function TileConfiguration({
                     key={g.transectId}
                     className='d-flex align-items-center justify-content-between mb-2'
                   >
-                    <div
-                      className='me-3 text-white'
-                      style={{ fontSize: '14px' }}
-                    >
+                    <div className='me-3' style={{ fontSize: '14px' }}>
                       Transect{showTransectId ? ` ${g.transectId}` : ''}:{' '}
                       {g.imageCount} images - {g.distanceKm.toFixed(2)} km -{' '}
                       {g.speedKmh.toFixed(2)} km/h
                     </div>
                     <div className='d-flex align-items-center gap-2'>
                       <div className='d-flex align-items-center'>
-                        <span
-                          className='me-2 text-white'
-                          style={{ fontSize: '12px' }}
-                        >
+                        <span className='me-2' style={{ fontSize: '12px' }}>
                           Step
                         </span>
                         <Form.Control
@@ -810,10 +804,7 @@ export default function TileConfiguration({
                         />
                       </div>
                       <div className='d-flex align-items-center'>
-                        <span
-                          className='me-2 text-white'
-                          style={{ fontSize: '12px' }}
-                        >
+                        <span className='me-2' style={{ fontSize: '12px' }}>
                           Offset
                         </span>
                         <Form.Control
@@ -834,8 +825,11 @@ export default function TileConfiguration({
                   </div>
                 ))}
                 <div
-                  className='mt-2 text-white border-top border-dark pt-2'
-                  style={{ fontSize: '12px' }}
+                  className='mt-2 pt-2'
+                  style={{
+                    fontSize: '12px',
+                    borderTop: '1px solid var(--ss-border)',
+                  }}
                 >
                   {transectGroupStats.map((g: any) => (
                     <div key={`exp-${g.transectId}`}>
@@ -867,8 +861,11 @@ export default function TileConfiguration({
                 />
               </>
             )}
-            <div className='mt-3 p-2 border-top border-dark text-white'>
-              <Form.Label className='mb-1 text-white'>
+            <div
+              className='mt-3 p-2'
+              style={{ borderTop: '1px solid var(--ss-border)' }}
+            >
+              <Form.Label className='mb-1'>
                 Limit tiling to CSV image IDs (dev only)
               </Form.Label>
               <span
@@ -904,31 +901,35 @@ export default function TileConfiguration({
                 </button>
               )}
             </div>
-          </Form.Group>
-        )}
-      </Form.Group>
-      <Form.Group
-        className='border border-dark shadow-sm p-2'
-        style={{ backgroundColor: '#697582' }}
-      >
-        {loadingImages ? (
-          <div className='d-flex justify-content-center align-items-center text-white'>
-            <Spinner animation='border' size='sm' className='me-2' /> Scanning
-            images... ({imagesLoaded} images scanned)
-          </div>
-        ) : (
-          <Form.Label className='text-center' style={{ fontSize: 'smaller' }}>
-            Detected image dimensions : {imageWidth}x{imageHeight}
-          </Form.Label>
-        )}
-        {!loadingImages && (
-          <div
-            className='text-center text-white'
-            style={{ fontSize: 'smaller' }}
-          >
-            Expected tiles: {expectedTiles}
-          </div>
-        )}
+          </Card.Body>
+        </Card>
+      )}
+      <Card>
+        <Card.Header>
+          <h5 className='mb-0'>Tile Configuration</h5>
+        </Card.Header>
+        <Card.Body>
+          {loadingImages ? (
+            <div className='d-flex justify-content-center align-items-center mb-3'>
+              <Spinner animation='border' size='sm' className='me-2' /> Scanning
+              images... ({imagesLoaded} images scanned)
+            </div>
+          ) : (
+            <div
+              className='text-center mb-1'
+              style={{ fontSize: 'smaller', color: 'var(--ss-text-muted)' }}
+            >
+              Detected image dimensions : {imageWidth}x{imageHeight}
+            </div>
+          )}
+          {!loadingImages && (
+            <div
+              className='text-center mb-3'
+              style={{ fontSize: 'smaller', color: 'var(--ss-text-muted)' }}
+            >
+              Expected tiles: {expectedTiles}
+            </div>
+          )}
         <Form.Group className='mb-3 mt-3'>
           <LabeledToggleSwitch
             leftLabel='Specify number of tiles'
@@ -1146,7 +1147,8 @@ export default function TileConfiguration({
             </>
           )}
         </Form.Group>
-      </Form.Group>
+        </Card.Body>
+      </Card>
     </>
   );
 }

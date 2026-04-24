@@ -167,7 +167,7 @@ export default function ConfigModal({
         <Button variant='primary' onClick={handleSave} disabled={saving}>
           Save
         </Button>
-        <Button variant='dark' onClick={() => showModal(null)}>
+        <Button variant='secondary' onClick={() => showModal(null)}>
           Cancel
         </Button>
       </Footer>

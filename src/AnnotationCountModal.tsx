@@ -4,7 +4,6 @@ import { Modal, Body, Header, Footer, Title } from './Modal';
 
 import { GlobalContext } from './Context';
 import { fetchAllPaginatedResults } from './utils';
-import MyTable from './Table';
 import LabeledToggleSwitch from './LabeledToggleSwitch';
 import { Schema } from './amplify/client-schema';
 
@@ -78,17 +77,15 @@ const AnnotationCountModal: React.FC<Props> = ({
     return acc;
   }, {} as { [category: string]: number });
 
-  const tableData = Object.entries(annotationByCategory).map(
+  const rows = Object.entries(annotationByCategory).map(
     ([category, annotations]) => ({
-      id: category,
-      rowData: [
-        category,
-        primaryOnly
-          ? annotations.filter(
+      category,
+      count: primaryOnly
+        ? annotations.filter(
             (annotation) => annotation.objectId === annotation.id
           ).length
-          : annotations.length,
-      ].concat(hasFalseNegatives ? [falseNegativesByCategory[category]] : []),
+        : annotations.length,
+      falseNegatives: falseNegativesByCategory[category] ?? 0,
     })
   );
 
@@ -117,9 +114,9 @@ const AnnotationCountModal: React.FC<Props> = ({
               Fetching annotations...
             </div>
           ) : (
-            <div className='d-flex flex-column gap-2 w-100'>
+            <div className='d-flex flex-column gap-3 w-100'>
               <LabeledToggleSwitch
-                className='mb-2'
+                variant='segmented'
                 leftLabel='All annotations'
                 rightLabel='Primary only'
                 checked={primaryOnly}
@@ -127,27 +124,59 @@ const AnnotationCountModal: React.FC<Props> = ({
                   setPrimaryOnly(checked);
                 }}
               />
-              <MyTable
-                tableHeadings={[
-                  { content: 'Label', style: { width: '33%' } },
-                  {
-                    content: primaryOnly ? 'Primary only' : 'All annotations',
-                    style: { width: '33%' },
-                  },
-                ].concat(
-                  hasFalseNegatives
-                    ? [{ content: 'False Negatives', style: { width: '34%' } }]
-                    : []
-                )}
-                tableData={tableData}
-                emptyMessage='No annotations found'
-              />
+              <div className='ss-card' style={{ padding: 0, overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className='ss-data-table' style={{ tableLayout: 'fixed', width: '100%' }}>
+                    <colgroup>
+                      <col style={{ width: hasFalseNegatives ? '33.33%' : '50%' }} />
+                      <col style={{ width: hasFalseNegatives ? '33.33%' : '50%' }} />
+                      {hasFalseNegatives && <col style={{ width: '33.34%' }} />}
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>Label</th>
+                        <th>{primaryOnly ? 'Primary only' : 'All annotations'}</th>
+                        {hasFalseNegatives && <th>False Negatives</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row) => (
+                        <tr key={row.category}>
+                          <td>{row.category}</td>
+                          <td>
+                            <span className='ss-pill'>{row.count}</span>
+                          </td>
+                          {hasFalseNegatives && (
+                            <td>
+                              <span className='ss-pill'>{row.falseNegatives}</span>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                      {rows.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={hasFalseNegatives ? 3 : 2}
+                            style={{
+                              textAlign: 'center',
+                              color: 'var(--ss-text-dim)',
+                              padding: '24px',
+                            }}
+                          >
+                            No annotations found
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
         </div>
       </Body>
       <Footer>
-        <Button variant='dark' onClick={handleClose}>
+        <Button variant='secondary' onClick={handleClose}>
           Close
         </Button>
       </Footer>

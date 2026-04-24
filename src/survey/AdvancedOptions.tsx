@@ -1,6 +1,5 @@
 import { useContext, useState, useCallback, useMemo } from 'react';
-import { Button } from 'react-bootstrap';
-import { Footer } from '../Modal';
+import { Button, Card } from 'react-bootstrap';
 import { GlobalContext } from '../Context';
 import type {
   Feature as GeoJSONFeature,
@@ -23,7 +22,7 @@ type NeighbourGeoJSON = {
 };
 
 export default function AdvancedOptions({ projectId }: { projectId: string }) {
-  const { client, showModal } = useContext(GlobalContext)!;
+  const { client } = useContext(GlobalContext)!;
   const [loading, setLoading] = useState(false);
   const [, setError] = useState<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState<string>('');
@@ -338,26 +337,12 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
   }
 
   return (
-    <>
-      <div className='d-flex flex-column gap-2 p-3'>
-        {/* Export image neighbours */}
-        {/* <div>
-          <h5 className='mb-0'>Export image neighbours</h5>
-          <span className='text-muted' style={{ fontSize: '14px' }}>
-            Export the image neighbours of all images in GeoJSON format.
-          </span>
-          <Button
-            className='d-block mt-2'
-            onClick={onFetchNeighbours}
-            disabled={loading}
-          >
-            {loading ? loadingStatus || 'Exporting...' : 'Export'}
-          </Button>
-          {error && <span className='text-danger'>{error}</span>}
-        </div> */}
-        {/* Export scoutbot results */}
-        <div>
+    <div className='d-flex flex-column gap-3'>
+      <Card>
+        <Card.Header>
           <h5 className='mb-0'>Export scoutbot detections</h5>
+        </Card.Header>
+        <Card.Body>
           <span className='text-muted' style={{ fontSize: '14px' }}>
             Export the scoutbot detections for all images in the survey.
           </span>
@@ -371,13 +356,8 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
           <span className='text-muted' style={{ fontSize: '14px' }}>
             {loadingStatus}
           </span>
-        </div>
-      </div>
-      <Footer>
-        <Button variant='dark' onClick={() => showModal(null)}>
-          Close
-        </Button>
-      </Footer>
-    </>
+        </Card.Body>
+      </Card>
+    </div>
   );
 }

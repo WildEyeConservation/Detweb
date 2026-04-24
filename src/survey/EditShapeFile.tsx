@@ -14,14 +14,13 @@ import {
   parseShapefileToLatLngs,
   saveShapefileForProject,
 } from '../utils/shapefileUtils';
-import { Form, Spinner, Button } from 'react-bootstrap';
-import { Footer } from '../Modal';
+import { Form, Spinner, Button, Card } from 'react-bootstrap';
 import FileInput from '../FileInput';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 
 export default function EditShapeFile({ projectId, organizationId }: { projectId: string; organizationId: string }) {
-  const { client, showModal } = useContext(GlobalContext)!;
+  const { client } = useContext(GlobalContext)!;
   const [polygonCoords, setPolygonCoords] = useState<
     L.LatLngExpression[] | null
   >(null);
@@ -36,8 +35,6 @@ export default function EditShapeFile({ projectId, organizationId }: { projectId
   const [drawMode, setDrawMode] = useState<'shapefile' | 'exclusions'>(
     'shapefile'
   );
-  // disabledClose: only disables Close during active save; saveDisabled: governs Save button enablement
-  const [disabledClose, setDisabledClose] = useState(false);
   const [saveDisabled, setSaveDisabled] = useState(false);
 
   // Adaptive simplification shared utility is imported as simplifyPolygonToRange
@@ -182,7 +179,6 @@ export default function EditShapeFile({ projectId, organizationId }: { projectId
   }, [polygonCoords]);
 
   const saveShapefile = async () => {
-    setDisabledClose(true);
     setSaving(true);
 
     if (!polygonCoords) return;
@@ -256,16 +252,17 @@ export default function EditShapeFile({ projectId, organizationId }: { projectId
       'You have successfully updated the shapefile. Please review your strata and transects on the next tab and save your work whether you made any changes or not.'
     );
 
-    setDisabledClose(false);
     setSaving(false);
   };
 
   return (
-    <>
-      <Form className='p-3'>
-        <Form.Group className='d-flex flex-column'>
-          <Form.Label className='mb-0'>Upload or Draw Shapefile</Form.Label>
-          <span className='text-muted mb-2' style={{ fontSize: '14px' }}>
+    <div className='d-flex flex-column gap-3'>
+      <Card>
+        <Card.Header>
+          <h5 className='mb-0'>Upload or Draw Shapefile</h5>
+        </Card.Header>
+        <Card.Body>
+          <span className='text-muted d-block mb-2' style={{ fontSize: '14px' }}>
             Select a shapefile to overlay on the map or draw a new one. Press
             "Save Shapefile" at the bottom of the page to save.
           </span>
@@ -279,14 +276,19 @@ export default function EditShapeFile({ projectId, organizationId }: { projectId
           >
             <p className='mb-0'>Select Shapefile (optional)</p>
           </FileInput>
-        </Form.Group>
-        {loadingShapefile && (
-          <div className='d-flex justify-content-center align-items-center mt-3'>
-            <Spinner animation='border' />
-            <span className='ms-2'>Loading shapefile</span>
-          </div>
-        )}
-        <Form.Group className='mt-3'>
+          {loadingShapefile && (
+            <div className='d-flex justify-content-center align-items-center mt-3'>
+              <Spinner animation='border' />
+              <span className='ms-2'>Loading shapefile</span>
+            </div>
+          )}
+        </Card.Body>
+      </Card>
+      <Card>
+        <Card.Header>
+          <h5 className='mb-0'>Shapefile Map</h5>
+        </Card.Header>
+        <Card.Body>
           <Form.Group className='d-flex flex-column mb-2'>
             <Form.Label className='mb-0'>Drawing Mode</Form.Label>
             <div className='d-flex gap-3'>
@@ -313,7 +315,16 @@ export default function EditShapeFile({ projectId, organizationId }: { projectId
               computing results.
             </span>
           </Form.Group>
-          <div style={{ height: '600px', width: '100%', position: 'relative' }}>
+          <div
+            style={{
+              height: '600px',
+              width: '100%',
+              position: 'relative',
+              border: '1px solid var(--ss-border, #d0d5dd)',
+              borderRadius: 4,
+              overflow: 'hidden',
+            }}
+          >
             <MapContainer
               style={{ height: '100%', width: '100%' }}
               center={[0, 0]}
@@ -441,9 +452,9 @@ export default function EditShapeFile({ projectId, organizationId }: { projectId
               </span>
             </div>
           )}
-        </Form.Group>
-      </Form>
-      <Footer>
+        </Card.Body>
+      </Card>
+      <div style={{ display: 'flex', gap: 8 }}>
         <Button
           variant='primary'
           onClick={saveShapefile}
@@ -451,14 +462,7 @@ export default function EditShapeFile({ projectId, organizationId }: { projectId
         >
           Save Shapefile
         </Button>
-        <Button
-          variant='dark'
-          onClick={() => showModal(null)}
-          disabled={disabledClose}
-        >
-          Close
-        </Button>
-      </Footer>
-    </>
+      </div>
+    </div>
   );
 }

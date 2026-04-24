@@ -98,44 +98,36 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
         <Title>Edit Annotation Set</Title>
       </Header>
       <Body>
-        <Tabs
-          onTabChange={(tab) => {
-            setTab(tab);
-          }}
-        >
-          <Tab label='Basic'>
-            <Form className='d-flex flex-column gap-2 p-3'>
-              <Form.Group controlId='annotationSetName'>
-                <Form.Label>Name</Form.Label>
-                <Form.Control
-                  type='text'
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder='Enter new name'
-                />
-              </Form.Group>
-              {categoriesLoading || !fetchedCategories ? (
-                <div className='d-flex align-items-center gap-2 py-3'>
-                  <Spinner size='sm' />
-                  <span>Loading labels...</span>
-                </div>
-              ) : (
-                <LabelEditor
-                  key={annotationSet.id}
-                  defaultLabels={fetchedCategories.map((category) => ({
-                    id: category.id,
-                    name: category.name,
-                    shortcutKey: category.shortcutKey ?? '',
-                    color: category.color ?? '',
-                  }))}
-                  isEditing
-                  setHandleSave={setSaveLabels}
-                  onStatusChange={setStatusMessage}
-                />
-              )}
-            </Form>
-          </Tab>
-        </Tabs>
+        <Form className='d-flex flex-column gap-2 p-3'>
+          <Form.Group controlId='annotationSetName'>
+            <Form.Label>Name</Form.Label>
+            <Form.Control
+              type='text'
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder='Enter new name'
+            />
+          </Form.Group>
+          {categoriesLoading || !fetchedCategories ? (
+            <div className='d-flex align-items-center gap-2 py-3'>
+              <Spinner size='sm' />
+              <span>Loading labels...</span>
+            </div>
+          ) : (
+            <LabelEditor
+              key={annotationSet.id}
+              defaultLabels={fetchedCategories.map((category) => ({
+                id: category.id,
+                name: category.name,
+                shortcutKey: category.shortcutKey ?? '',
+                color: category.color ?? '',
+              }))}
+              isEditing
+              setHandleSave={setSaveLabels}
+              onStatusChange={setStatusMessage}
+            />
+          )}
+        </Form>
         <Footer>
           {errorMessage ? (
             <span className='text-danger me-auto' style={{ fontSize: 12 }}>
@@ -173,7 +165,7 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
             )}
           </Button>
           <Button
-            variant='dark'
+            variant='secondary'
             disabled={isSaving}
             onClick={() => {
               handleClose();

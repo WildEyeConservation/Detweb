@@ -1,19 +1,16 @@
-import { Card } from 'react-bootstrap';
 import { useContext, useEffect, useState } from 'react';
 import { UserContext, GlobalContext } from '../Context';
 import { Schema } from '../amplify/client-schema';
 import { Spinner, Button, Form } from 'react-bootstrap';
-import MyTable from '../Table';
 import { useNavigate } from 'react-router-dom';
 import { type GetQueueAttributesCommandInput } from '@aws-sdk/client-sqs';
 import { GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
 import ProjectProgress from './ProjectProgress';
-import { Minimize2, Maximize2 } from 'lucide-react';
+import { useOrg } from '../OrgContext';
+import { Page, PageHeader, Toolbar, ContentArea, Spacer } from '../ss/PageShell';
 
 const STORAGE_KEYS = {
-  COMPACT_MODE: 'jobsCompactMode',
   SORT_BY: 'jobsSortBy',
-  ORGANIZATION_FILTER: 'jobsOrganizationFilter',
 };
 
 type Project = {
@@ -32,6 +29,24 @@ type Project = {
   queues: Schema['Queue']['type'][];
 };
 
+type JobRow =
+  | {
+      kind: 'queue';
+      id: string;
+      project: Project;
+      queue: Schema['Queue']['type'];
+      jobsRemaining: number;
+      typeLabel: string;
+      displayName: string;
+      isAdmin: boolean;
+    }
+  | {
+      kind: 'registration';
+      id: string;
+      project: Project;
+      setId: string;
+    };
+
 export default function Jobs() {
   const {
     myMembershipHook: userProjectMembershipHook,
@@ -40,6 +55,7 @@ export default function Jobs() {
   } = useContext(UserContext)!;
   const { client } = useContext(GlobalContext)!;
   const navigate = useNavigate();
+  const { currentOrg } = useOrg();
 
   const [displayProjects, setDisplayProjects] = useState<Project[]>([]);
   const [jobsRemaining, setJobsRemaining] = useState<Record<string, string>>(
@@ -57,93 +73,28 @@ export default function Jobs() {
   const [deletingJob] = useState(false);
   const [scanningProjects, setScanningProjects] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 10;
 
-  // Initialize sortBy from localStorage or use default
   const getInitialSortBy = () => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem(STORAGE_KEYS.SORT_BY);
-      if (stored) {
-        return stored;
-      }
+      if (stored) return stored;
     }
     return 'createdAt';
   };
 
-  // Initialize organizationFilter from localStorage or use default
-  const getInitialOrganizationFilter = () => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(STORAGE_KEYS.ORGANIZATION_FILTER);
-      if (stored !== null) {
-        return stored;
-      }
-    }
-    return '';
-  };
-
   const [sortBy, setSortBy] = useState(getInitialSortBy);
-  const [organizationFilter, setOrganizationFilter] = useState(
-    getInitialOrganizationFilter
-  );
 
-  // Initialize compactMode from localStorage or use default
-  const getInitialCompactMode = () => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(STORAGE_KEYS.COMPACT_MODE);
-      if (stored !== null) {
-        return stored === 'true';
-      }
-    }
-    return false;
-  };
-
-  const [compactMode, setCompactMode] = useState(getInitialCompactMode);
-  const getIsMobile = () =>
-    typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
-
-  const [isMobile, setIsMobile] = useState(getIsMobile);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const handleResize = () => {
-      setIsMobile(getIsMobile());
-    };
-
-    handleResize();
-
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
-
-  // Persist compactMode to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEYS.COMPACT_MODE, String(compactMode));
-    }
-  }, [compactMode]);
-
-  // Persist sortBy to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEYS.SORT_BY, sortBy);
     }
   }, [sortBy]);
 
-  // Persist organizationFilter to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(
-        STORAGE_KEYS.ORGANIZATION_FILTER,
-        organizationFilter
-      );
-    }
-  }, [organizationFilter]);
-
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
-    let cancelled = false; // cancellation flag
+    let cancelled = false;
 
     async function fetchProjectsAndJobs() {
       if (!userProjectMembershipHook.data) return;
@@ -189,7 +140,7 @@ export default function Jobs() {
           ),
         }));
 
-      if (cancelled) return; // stop if unmounted
+      if (cancelled) return;
 
       setDisplayProjects(validProjects);
       setIsLoading(false);
@@ -224,15 +175,12 @@ export default function Jobs() {
 
         setJobsRemaining(jobsRemaining);
 
-        // check if registration jobs are available
         const registrationJobs = validProjects.flatMap((project) =>
-          project.annotationSets.map((set) => {
-            return {
-              id: set.id,
-              projectId: project.id,
-              register: set.register || false,
-            };
-          })
+          project.annotationSets.map((set) => ({
+            id: set.id,
+            projectId: project.id,
+            register: set.register || false,
+          }))
         );
 
         setRegistrationJobs(registrationJobs.filter((job) => job.register));
@@ -245,10 +193,8 @@ export default function Jobs() {
         setDisplayProjects(filteredProjects);
       }
 
-      // Kick off the first polling call immediately
       getJobsRemaining();
 
-      // Immediately set up the interval (if still mounted)
       if (!cancelled) {
         interval = setInterval(getJobsRemaining, 10000);
       }
@@ -262,19 +208,10 @@ export default function Jobs() {
     };
   }, [userProjectMembershipHook.data]);
 
-  const organizationOptions = Array.from(
-    new Map(
-      displayProjects.map((project) => [
-        project.organization.id,
-        project.organization.name,
-      ])
-    ).entries()
-  ).map(([id, name]) => ({ id, name }));
-
   const filteredProjects = displayProjects.filter((project) => {
     const searchLower = search.toLowerCase();
     const matchesOrganization =
-      !organizationFilter || project.organization.id === organizationFilter;
+      !!currentOrg?.id && project.organization.id === currentOrg.id;
     const matchesQueue = project.queues.some((queue) =>
       (queue.tag || '').toLowerCase().includes(searchLower)
     );
@@ -306,7 +243,6 @@ export default function Jobs() {
   async function handleTakeJob(job: { queueId: string; projectId: string; tag?: string | null }) {
     setTakingJob(true);
 
-    // QC review and homography jobs navigate directly to their routes (no membership update needed).
     if (job.tag === 'qc-review') {
       navigate(`/surveys/${job.projectId}/qc-review/${job.queueId}`);
       setTakingJob(false);
@@ -335,111 +271,40 @@ export default function Jobs() {
     setTakingJob(false);
   }
 
-  const tableData = [
+  const typeLabelFor = (queue: Schema['Queue']['type']): string => {
+    if (queue.tag === 'qc-review') return 'Review';
+    if (queue.tag === 'homography') return 'Homography';
+    return queue.name || 'Annotation';
+  };
+
+  const rows: JobRow[] = [
     ...sortedProjects.flatMap((project) =>
       project.queues
-        .map((queue) => {
+        .map((queue): JobRow | null => {
           const numJobsRemaining = Number(jobsRemaining[queue.url || ''] || 0);
+          const isAdmin = !!myOrganizationHook.data?.find(
+            (membership) => membership.organizationId === project.organization.id
+          )?.isAdmin;
 
-          if (
-            numJobsRemaining === 0 &&
-            !userProjectMembershipHook.data?.find(
-              (membership) => membership.projectId === project.id
-            )?.isAdmin
-          ) {
-            return null;
-          }
+          if (numJobsRemaining === 0 && !isAdmin) return null;
 
-          const paddingClass = compactMode ? 'p-1' : 'p-2';
-          const gapClass = compactMode ? 'gap-1' : 'gap-2';
-          const rowGapClass = compactMode ? 'gap-1' : 'gap-3';
-          const badgeFontSize = compactMode ? '11px' : '14px';
-          const typeFontSize = compactMode ? '12px' : '14px';
+          const displayName =
+            queue.tag === 'qc-review' || queue.tag === 'homography'
+              ? queue.name
+              : queue.tag || project.name;
 
           return {
+            kind: 'queue',
             id: queue.id,
-            rowData: [
-              <div
-                className={`d-flex justify-content-between align-items-center ${paddingClass}`}
-                key={queue.id}
-              >
-                <div className={`d-flex flex-row ${rowGapClass} align-items-center`}>
-                  <div>
-                    {compactMode ? (
-                      <h6 className='mb-0'>
-                        {queue.tag === 'qc-review' || queue.tag === 'homography' ? queue.name : (queue.tag || project.name)}
-                      </h6>
-                    ) : (
-                      <h5 className='mb-0'>
-                        {queue.tag === 'qc-review' || queue.tag === 'homography' ? queue.name : (queue.tag || project.name)}
-                      </h5>
-                    )}
-                    {!compactMode && (
-                      <i style={{ fontSize: '14px', display: 'block' }}>
-                        {project.organization.name}
-                      </i>
-                    )}
-                    <p
-                      style={{
-                        fontSize: typeFontSize,
-                        display: 'block',
-                        marginBottom: '0px',
-                      }}
-                    >
-                      Type: {queue.tag === 'qc-review' ? 'Review' : queue.tag === 'homography' ? 'Homography' : queue.name}
-                    </p>
-                  </div>
-                  {myOrganizationHook.data?.find(
-                    (membership) =>
-                      membership.organizationId === project.organization.id
-                  )?.isAdmin &&
-                    queue.hidden && (
-                      <span
-                        className='badge bg-secondary'
-                        style={{ fontSize: badgeFontSize }}
-                      >
-                        Hidden
-                      </span>
-                    )}
-                </div>
-                <div
-                  className={`d-flex flex-row ${gapClass} align-items-center`}
-                  style={{ maxWidth: '600px', width: '100%' }}
-                >
-                  <ProjectProgress
-                    projectId={project.id}
-                    onScanningChange={(isScanning) => {
-                      setScanningProjects(prev => {
-                        const next = new Set(prev);
-                        isScanning ? next.add(project.id) : next.delete(project.id);
-                        return next;
-                      });
-                    }}
-                  />
-                  <Button
-                    size={compactMode ? 'sm' : undefined}
-                    className='ms-1'
-                    variant='primary'
-                    disabled={
-                      takingJob || deletingJob || numJobsRemaining === 0 || scanningProjects.has(project.id)
-                    }
-                    onClick={() =>
-                      handleTakeJob({
-                        queueId: queue.id,
-                        projectId: project.id,
-                        tag: queue.tag,
-                      })
-                    }
-                    style={{ whiteSpace: 'nowrap' }}
-                  >
-                    Take Job
-                  </Button>
-                </div>
-              </div>,
-            ],
+            project,
+            queue,
+            jobsRemaining: numJobsRemaining,
+            typeLabel: typeLabelFor(queue),
+            displayName,
+            isAdmin,
           };
         })
-        .filter((item) => item !== null)
+        .filter((row): row is JobRow => row !== null)
     ),
     ...registrationJobs
       .filter((job) => {
@@ -448,7 +313,7 @@ export default function Jobs() {
 
         const searchLower = search.toLowerCase();
         const matchesOrganization =
-          !organizationFilter || project.organization.id === organizationFilter;
+          !!currentOrg?.id && project.organization.id === currentOrg.id;
         const matchesSearch =
           searchLower === '' ||
           project.name.toLowerCase().includes(searchLower) ||
@@ -457,152 +322,213 @@ export default function Jobs() {
 
         return matchesOrganization && matchesSearch;
       })
-      .map((job) => {
-        const project = displayProjects.find(
-          (project) => project.id === job.projectId
-        );
-
-        if (!project) {
-          return null;
-        }
-
-        const paddingClass = compactMode ? 'p-1' : 'p-2';
-        const rowGapClass = compactMode ? 'gap-1' : 'gap-3';
-        const typeFontSize = compactMode ? '12px' : '14px';
-
+      .map((job): JobRow | null => {
+        const project = displayProjects.find((p) => p.id === job.projectId);
+        if (!project) return null;
         return {
+          kind: 'registration',
           id: job.id,
-          rowData: [
-            <div
-              className={`d-flex justify-content-between align-items-center ${paddingClass}`}
-              key={job.id}
-            >
-              <div className={`d-flex flex-row ${rowGapClass} align-items-center`}>
-                <div>
-                  {compactMode ? (
-                    <h6 className='mb-0'>{project.name}</h6>
-                  ) : (
-                    <h5 className='mb-0'>{project.name}</h5>
-                  )}
-                  {!compactMode && (
-                    <i style={{ fontSize: '14px', display: 'block' }}>
-                      {project.organization.name}
-                    </i>
-                  )}
-                  <p
-                    style={{
-                      fontSize: typeFontSize,
-                      display: 'block',
-                      marginBottom: '0px',
-                    }}
-                  >
-                    Type: Registration
-                  </p>
-                </div>
-              </div>
-              <Button
-                size={compactMode ? 'sm' : undefined}
-                className='ms-1'
-                variant='primary'
-                onClick={() =>
-                  navigate(`/surveys/${project.id}/set/${job.id}/registration`)
-                }
-              >
-                Take Job
-              </Button>
-            </div>,
-          ],
+          project,
+          setId: job.id,
         };
-      }).filter((item): item is NonNullable<typeof item> => item !== null),
+      })
+      .filter((row): row is JobRow => row !== null),
   ];
 
+  const totalPages = Math.max(1, Math.ceil(rows.length / itemsPerPage));
+  const pageClamped = Math.min(Math.max(1, page), totalPages);
+  const pagedRows = rows.slice(
+    (pageClamped - 1) * itemsPerPage,
+    pageClamped * itemsPerPage
+  );
+
   return (
-    <div
-      style={{
-        width: '100%',
-        maxWidth: '1555px',
-        marginTop: '16px',
-        marginBottom: '16px',
-      }}
-    >
-      <Card>
-        <Card.Header className='d-flex flex-column flex-lg-row align-items-lg-center gap-3'>
-          <Card.Title className='mb-0 flex-shrink-0' style={{ whiteSpace: 'nowrap' }}>
-            <h4 className='mb-0'>Jobs Available</h4>
-          </Card.Title>
-          <div className='d-flex flex-column flex-lg-row gap-2 w-100 w-lg-auto ms-lg-auto justify-content-lg-end align-items-lg-center'>
-            <Form.Control
-              className='w-100'
-              type='text'
-              style={{
-                minWidth: 0,
-                width: '100%',
-                maxWidth: isMobile ? '100%' : '250px',
-              }}
-              placeholder='Search'
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <Form.Select
-              className='w-100 w-lg-auto'
-              value={organizationFilter}
-              onChange={(e) => setOrganizationFilter(e.target.value)}
-              style={{
-                minWidth: 0,
-                width: '100%',
-                maxWidth: isMobile ? '100%' : '250px',
-              }}
-            >
-              <option value=''>All organisations</option>
-              {organizationOptions.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.name}
-                </option>
-              ))}
-            </Form.Select>
-            <Form.Select
-              className='w-100 w-lg-auto'
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              style={{
-                minWidth: 0,
-                width: '100%',
-                maxWidth: isMobile ? '100%' : '250px',
-              }}
-            >
-              <option value='createdAt'>Created (newest first)</option>
-              <option value='createdAt-reverse'>Created (oldest first)</option>
-              <option value='name'>Name (A-Z)</option>
-              <option value='name-reverse'>Name (Z-A)</option>
-            </Form.Select>
-            {!isMobile && (
-              <Button
-                variant='info'
-                onClick={() => setCompactMode(!compactMode)}
-                title={compactMode ? 'Expand view' : 'Compact view'}
-                style={{
-                  minWidth: 'fit-content',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {compactMode ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
-              </Button>
-            )}
+    <Page>
+      <PageHeader title='Jobs Available' />
+      <Toolbar>
+        <Form.Control
+          type='text'
+          style={{ minWidth: 0, maxWidth: 260, flex: '0 1 auto' }}
+          placeholder='Search jobs…'
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+        />
+        <Form.Select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          style={{ minWidth: 0, maxWidth: 220, flex: '0 1 auto' }}
+        >
+          <option value='createdAt'>Newest first</option>
+          <option value='createdAt-reverse'>Oldest first</option>
+          <option value='name'>Name (A-Z)</option>
+          <option value='name-reverse'>Name (Z-A)</option>
+        </Form.Select>
+        <Spacer />
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 13,
+            color: 'var(--ss-text-dim)',
+          }}
+        >
+          <span>
+            Page {pageClamped} of {totalPages}
+          </span>
+          <Button
+            size='sm'
+            variant='secondary'
+            disabled={pageClamped <= 1}
+            onClick={() => setPage(pageClamped - 1)}
+          >
+            ‹
+          </Button>
+          <Button
+            size='sm'
+            variant='secondary'
+            disabled={pageClamped >= totalPages}
+            onClick={() => setPage(pageClamped + 1)}
+          >
+            ›
+          </Button>
+        </div>
+      </Toolbar>
+      <ContentArea style={{ paddingTop: 12 }}>
+        {isLoading ? (
+          <div
+            className='ss-card'
+            style={{
+              padding: 40,
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Spinner animation='border' />
           </div>
-        </Card.Header>
-        <Card.Body className='overflow-x-auto'>
-          {isLoading ? (
-            <Spinner />
-          ) : (
-            <MyTable
-              tableData={tableData}
-              pagination={true}
-              itemsPerPage={5}
-              emptyMessage='No jobs available'
-            />
-          )}
-        </Card.Body>
-      </Card>
-    </div>
+        ) : rows.length === 0 ? (
+          <div
+            className='ss-card'
+            style={{
+              padding: 48,
+              textAlign: 'center',
+              color: 'var(--ss-text-dim)',
+              fontSize: 13,
+            }}
+          >
+            No jobs available{currentOrg?.name ? <> for <em>{currentOrg.name}</em></> : ''}
+          </div>
+        ) : (
+          <div className='ss-job-card-list'>
+            {pagedRows.map((row) => {
+              if (row.kind === 'registration') {
+                const goToRegistration = () =>
+                  navigate(
+                    `/surveys/${row.project.id}/set/${row.setId}/registration`
+                  );
+                return (
+                  <div key={`reg-${row.id}`} className='ss-job-card'>
+                    <div className='ss-job-card__main'>
+                      <div className='ss-job-card__header'>
+                        <span
+                          className='ss-job-card__title'
+                          onClick={goToRegistration}
+                        >
+                          {row.project.name}
+                        </span>
+                        <span className='ss-status ss-status--info'>
+                          Registration
+                        </span>
+                      </div>
+                      <div className='ss-job-card__meta'>
+                        {row.project.organization.name} · Ready to register
+                      </div>
+                    </div>
+                    <div className='ss-job-card__action'>
+                      <Button
+                        size='sm'
+                        variant='primary'
+                        onClick={goToRegistration}
+                      >
+                        Take Job
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+
+              const {
+                project,
+                queue,
+                jobsRemaining: n,
+                typeLabel,
+                displayName,
+                isAdmin,
+              } = row;
+              const disabled =
+                takingJob ||
+                deletingJob ||
+                n === 0 ||
+                scanningProjects.has(project.id);
+              const takeJob = () =>
+                handleTakeJob({
+                  queueId: queue.id,
+                  projectId: project.id,
+                  tag: queue.tag,
+                });
+
+              return (
+                <div key={`q-${queue.id}`} className='ss-job-card'>
+                  <div className='ss-job-card__main'>
+                    <div className='ss-job-card__header'>
+                      <span className='ss-job-card__title' onClick={takeJob}>
+                        {displayName}
+                      </span>
+                      <span className='ss-status ss-status--info'>
+                        {typeLabel}
+                      </span>
+                      {isAdmin && queue.hidden && (
+                        <span className='ss-status ss-status--draft'>
+                          Hidden
+                        </span>
+                      )}
+                    </div>
+                    <div className='ss-job-progress'>
+                      <ProjectProgress
+                        projectId={project.id}
+                        prefix={`${project.organization.name} · `}
+                        onScanningChange={(isScanning) => {
+                          setScanningProjects((prev) => {
+                            const next = new Set(prev);
+                            isScanning
+                              ? next.add(project.id)
+                              : next.delete(project.id);
+                            return next;
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className='ss-job-card__action'>
+                    <Button
+                      size='sm'
+                      variant='primary'
+                      disabled={disabled}
+                      onClick={takeJob}
+                    >
+                      Take Job
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </ContentArea>
+    </Page>
   );
 }

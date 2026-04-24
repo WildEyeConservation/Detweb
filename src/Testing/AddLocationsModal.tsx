@@ -717,7 +717,7 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
           </div>
         </Body>
         <Footer>
-          <Button variant='dark' onClick={() => showModal(null)}>
+          <Button variant='secondary' onClick={() => showModal(null)}>
             Close
           </Button>
         </Footer>

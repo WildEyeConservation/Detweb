@@ -79,7 +79,7 @@ export default function ImageViewerModal({
             <ChevronRight />
           </Button>
         </div>
-        <Button variant='dark' onClick={onClose}>
+        <Button variant='secondary' onClick={onClose}>
           Close
         </Button>
       </Modal.Footer>

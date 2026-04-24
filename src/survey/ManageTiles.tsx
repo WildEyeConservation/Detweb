@@ -1,5 +1,4 @@
-import { Form, Button, Spinner, Alert, ProgressBar } from 'react-bootstrap';
-import { Footer } from '../Modal';
+import { Button, Spinner, Alert, ProgressBar, Card } from 'react-bootstrap';
 import { useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { GlobalContext } from '../Context';
 import { Schema } from '../amplify/client-schema';
@@ -17,7 +16,7 @@ export default function ManageTiles({
 }: {
   project: Schema['Project']['type'];
 }) {
-  const { client, showModal } = useContext(GlobalContext)!;
+  const { client } = useContext(GlobalContext)!;
 
   const [launchDisabled, setLaunchDisabled] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -450,93 +449,98 @@ export default function ManageTiles({
       : 0;
 
   return (
-    <>
-      <div className='p-3'>
-        {/* Current status */}
-        <div className='mb-3'>
-          <h6>Current Tile Status</h6>
+    <div className='d-flex flex-column gap-3'>
+      <Card>
+        <Card.Header>
+          <h5 className='mb-0'>Current Tile Status</h5>
+        </Card.Header>
+        <Card.Body>
           {loadingTileCount ? (
-            <div className='d-flex align-items-center gap-2'>
+            <div
+              className='d-flex align-items-center gap-2'
+              style={{ color: 'var(--ss-text-muted)' }}
+            >
               <Spinner animation='border' size='sm' />
               <span>Loading...</span>
             </div>
           ) : !tiledLocationSetId ? (
-            <Alert variant='warning'>
+            <Alert variant='warning' className='mb-0'>
               No tile location set configured for this survey. Tiles will be
               created when you click "Generate Tiles".
             </Alert>
           ) : (
-            <p className='mb-0'>
+            <p className='mb-0' style={{ color: 'var(--ss-text)' }}>
               <strong>{currentTileCount ?? 0}</strong> tiles currently in this
               survey
             </p>
           )}
-        </div>
+        </Card.Body>
+      </Card>
 
-        {/* FN data warning */}
-        {hasFnData && currentTileCount != null && currentTileCount > 0 && (
-          <Alert variant='warning'>
-            <strong>Warning:</strong> This project has existing false-negative
-            data (annotations, observations, and pool files). Regenerating tiles
-            will permanently delete all false-negative work.
-          </Alert>
-        )}
+      {hasFnData && currentTileCount != null && currentTileCount > 0 && (
+        <Alert variant='warning' className='mb-0'>
+          <strong>Warning:</strong> This project has existing false-negative
+          data (annotations, observations, and pool files). Regenerating tiles
+          will permanently delete all false-negative work.
+        </Alert>
+      )}
 
-        {/* Error display */}
-        {error && (
-          <Alert variant='danger' dismissible onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
+      {error && (
+        <Alert
+          variant='danger'
+          dismissible
+          onClose={() => setError(null)}
+          className='mb-0'
+        >
+          {error}
+        </Alert>
+      )}
 
-        {/* Progress display */}
-        {processing && tilingStatus === 'processing' && (
-          <div className='mb-3'>
-            <Alert variant='info'>
-              <div className='d-flex align-items-center gap-2 mb-2'>
-                <Spinner animation='border' size='sm' />
-                <span>{statusMessage || 'Processing...'}</span>
-              </div>
-              {tilingProgress && tilingProgress.totalBatches > 0 && (
-                <>
-                  <ProgressBar
-                    now={progressPercent}
-                    label={`${progressPercent}%`}
-                    className='mb-2'
-                  />
-                  <small>
-                    Batch {tilingProgress.completedBatches} of{' '}
-                    {tilingProgress.totalBatches} ({tilingProgress.totalLocations}{' '}
-                    total tiles)
-                  </small>
-                </>
-              )}
-            </Alert>
-          </div>
-        )}
+      {processing && tilingStatus === 'processing' && (
+        <Card>
+          <Card.Body>
+            <div className='d-flex align-items-center gap-2 mb-2'>
+              <Spinner animation='border' size='sm' />
+              <span>{statusMessage || 'Processing...'}</span>
+            </div>
+            {tilingProgress && tilingProgress.totalBatches > 0 && (
+              <>
+                <ProgressBar
+                  now={progressPercent}
+                  label={`${progressPercent}%`}
+                  className='mb-2'
+                />
+                <small style={{ color: 'var(--ss-text-muted)' }}>
+                  Batch {tilingProgress.completedBatches} of{' '}
+                  {tilingProgress.totalBatches} ({tilingProgress.totalLocations}{' '}
+                  total tiles)
+                </small>
+              </>
+            )}
+          </Card.Body>
+        </Card>
+      )}
 
-        {/* Success message */}
-        {tilingStatus === 'completed' && !processing && (
-          <Alert variant='success' dismissible onClose={() => setTilingStatus('idle')}>
-            {statusMessage || 'Tiles created successfully!'}
-          </Alert>
-        )}
+      {tilingStatus === 'completed' && !processing && (
+        <Alert
+          variant='success'
+          dismissible
+          onClose={() => setTilingStatus('idle')}
+          className='mb-0'
+        >
+          {statusMessage || 'Tiles created successfully!'}
+        </Alert>
+      )}
 
-        {/* Tile configuration */}
-        <Form.Group className='mb-3'>
-          <h6>Tile Configuration</h6>
-          <TileConfiguration
-            name={`${project.name} - Tiles`}
-            projectId={project.id}
-            existingLocationSetId={tiledLocationSetId ?? undefined}
-            setHandleCreateTask={setHandleCreateTask}
-            setLaunchDisabled={setLaunchDisabled}
-            disabled={processing}
-          />
-        </Form.Group>
-      </div>
-
-      <Footer>
+      <TileConfiguration
+        name={`${project.name} - Tiles`}
+        projectId={project.id}
+        existingLocationSetId={tiledLocationSetId ?? undefined}
+        setHandleCreateTask={setHandleCreateTask}
+        setLaunchDisabled={setLaunchDisabled}
+        disabled={processing}
+      />
+      <div style={{ display: 'flex', gap: 8 }}>
         <Button
           variant='primary'
           onClick={handleRegenerateTiles}
@@ -553,15 +557,8 @@ export default function ManageTiles({
             'Generate Tiles'
           )}
         </Button>
-        <Button
-          variant='dark'
-          onClick={() => showModal(null)}
-          disabled={processing}
-        >
-          Close
-        </Button>
-      </Footer>
-    </>
+      </div>
+    </div>
   );
 }
 

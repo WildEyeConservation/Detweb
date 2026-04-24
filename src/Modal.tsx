@@ -76,6 +76,7 @@ const CustomModal = forwardRef<HTMLDivElement, CustomModalProps>(
       size = 'xl',
       backdrop,
       keyboard,
+      dialogClassName,
       ...props
     },
     ref
@@ -152,6 +153,7 @@ const CustomModal = forwardRef<HTMLDivElement, CustomModalProps>(
         size={size}
         backdrop={modalBackdrop}
         keyboard={modalKeyboard}
+        dialogClassName={`ss-modal-themed ${dialogClassName ?? ''}`.trim()}
         {...props}
       >
         {customHeader}

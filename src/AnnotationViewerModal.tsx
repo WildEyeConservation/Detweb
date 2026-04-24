@@ -125,7 +125,7 @@ export default function AnnotationViewerModal({
             <ChevronRight />
           </Button>
         </div>
-        <Button variant='dark' onClick={onClose}>
+        <Button variant='secondary' onClick={onClose}>
           Close
         </Button>
       </Modal.Footer>

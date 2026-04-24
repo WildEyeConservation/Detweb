@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useContext } from 'react';
 import { GlobalContext } from '../Context';
-import { Footer } from '../Modal';
 import {
   MapContainer,
   TileLayer,
@@ -12,7 +11,7 @@ import {
 } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
 import L from 'leaflet';
-import { Button, Spinner, Alert, ProgressBar, Badge } from 'react-bootstrap';
+import { Button, Spinner, Alert, ProgressBar, Card } from 'react-bootstrap';
 import { fetchAllPaginatedResults } from '../utils';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
@@ -62,7 +61,7 @@ function FitBoundsToImages({ images }: { images: ImageData[] }) {
 }
 
 export default function DeleteImages({ projectId }: { projectId: string }) {
-  const { client, showModal } = useContext(GlobalContext)!;
+  const { client } = useContext(GlobalContext)!;
   const [images, setImages] = useState<ImageData[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -658,151 +657,170 @@ This action cannot be undone.`;
   const selectedCount = useMemo(() => selectedIds.size, [selectedIds]);
 
   return (
-    <>
-      <div className='p-3 d-flex flex-column gap-3'>
-        {/* Instructions */}
-        <Alert variant='info' className='mb-0'>
-          <strong>Instructions:</strong>
-          <ul className='mb-0 mt-2'>
-            <li>Click on an image marker to select it</li>
-            <li>
-              Hold <kbd>Ctrl</kbd> + click to select multiple images
-            </li>
-            <li>
-              Use the polygon tool (top-right) to draw around multiple images
-            </li>
-            <li>Right-click on a marker to view image details</li>
-            <li>Blue markers = unselected, Red markers = selected</li>
-          </ul>
-        </Alert>
+    <div className='d-flex flex-column gap-3'>
+      <Alert variant='info' className='mb-0'>
+        <strong>Instructions:</strong>
+        <ul className='mb-0 mt-2'>
+          <li>Click on an image marker to select it</li>
+          <li>
+            Hold <kbd>Ctrl</kbd> + click to select multiple images
+          </li>
+          <li>
+            Use the polygon tool (top-right) to draw around multiple images
+          </li>
+          <li>Right-click on a marker to view image details</li>
+          <li>Blue markers = unselected, Red markers = selected</li>
+        </ul>
+      </Alert>
 
-        {/* Status bar */}
-        <div className='d-flex justify-content-between align-items-center flex-wrap gap-2'>
-          <div className='d-flex gap-2 align-items-center'>
-            <Badge bg='primary'>{images.length} images loaded</Badge>
-            <Badge bg={selectedCount > 0 ? 'danger' : 'secondary'}>
-              {selectedCount} selected
-            </Badge>
+      <Card>
+        <Card.Header className='d-flex justify-content-between align-items-center flex-wrap gap-2'>
+          <div className='d-flex align-items-baseline gap-2'>
+            <h5 className='mb-0'>Selection</h5>
+            <span className='text-muted' style={{ fontSize: 13 }}>
+              {images.length} loaded
+              {' · '}
+              <span style={{ color: selectedCount > 0 ? 'var(--ss-red)' : undefined, fontWeight: selectedCount > 0 ? 600 : undefined }}>
+                {selectedCount} selected
+              </span>
+            </span>
           </div>
-          <div className='d-flex gap-2'>
-            <Button
-              size='sm'
-              variant='outline-secondary'
-              onClick={fetchImages}
-              disabled={loading || deleting}
-            >
-              {loading ? (
-                <>
-                  <Spinner animation='border' size='sm' className='me-1' />
-                  Loading...
-                </>
-              ) : (
-                'Refresh'
-              )}
-            </Button>
-            <Button
-              size='sm'
-              variant='outline-primary'
-              onClick={selectAll}
-              disabled={loading || deleting || images.length === 0}
-            >
-              Select All
-            </Button>
-            <Button
-              size='sm'
-              variant='outline-info'
-              onClick={clearSelection}
-              disabled={loading || deleting || selectedCount === 0}
-            >
-              Clear Selection
-            </Button>
-            <Button
-              size='sm'
-              variant='danger'
-              onClick={handleDelete}
-              disabled={loading || deleting || selectedCount === 0}
-            >
-              {deleting ? (
-                <>
-                  <Spinner animation='border' size='sm' className='me-1' />
-                  Deleting...
-                </>
-              ) : (
-                `Delete ${selectedCount > 0 ? `(${selectedCount})` : ''}`
-              )}
-            </Button>
-          </div>
-        </div>
+        </Card.Header>
+        <Card.Body>
+          {loadingStatus && !error && (
+            <div className='text-muted small mb-2'>{loadingStatus}</div>
+          )}
 
-        {/* Loading status */}
-        {loadingStatus && !error && (
-          <div className='text-muted small'>{loadingStatus}</div>
-        )}
+          {error && (
+            <Alert variant='danger' dismissible onClose={() => setError(null)} className='mb-2'>
+              {error}
+            </Alert>
+          )}
 
-        {/* Error display */}
-        {error && (
-          <Alert variant='danger' dismissible onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
+          {deleteProgress && (
+            <div className='mb-2'>
+              <div className='text-muted small mb-1'>{deleteProgress.phase}</div>
+              <ProgressBar
+                now={
+                  deleteProgress.total > 0
+                    ? (deleteProgress.current / deleteProgress.total) * 100
+                    : 100
+                }
+                label={
+                  deleteProgress.total > 0
+                    ? `${deleteProgress.current}/${deleteProgress.total}`
+                    : undefined
+                }
+                animated
+                striped
+              />
+            </div>
+          )}
 
-        {/* Delete progress */}
-        {deleteProgress && (
-          <div>
-            <div className='text-muted small mb-1'>{deleteProgress.phase}</div>
-            <ProgressBar
-              now={
-                deleteProgress.total > 0
-                  ? (deleteProgress.current / deleteProgress.total) * 100
-                  : 100
-              }
-              label={
-                deleteProgress.total > 0
-                  ? `${deleteProgress.current}/${deleteProgress.total}`
-                  : undefined
-              }
-              animated
-              striped
-            />
-          </div>
-        )}
+          {deleteResult && (
+            <Alert
+              variant={deleteResult.failures > 0 ? 'warning' : 'success'}
+              dismissible
+              onClose={() => setDeleteResult(null)}
+              className='mb-2'
+            >
+              <strong>Deletion complete:</strong>
+              <ul className='mb-0 mt-2'>
+                <li>Images deleted: {deleteResult.imagesDeleted}</li>
+                <li>Annotations deleted: {deleteResult.annotationsDeleted}</li>
+                <li>Locations deleted: {deleteResult.locationsDeleted}</li>
+                <li>File records deleted: {deleteResult.filesDeleted}</li>
+                <li>Memberships deleted: {deleteResult.membershipsDeleted}</li>
+                <li>Neighbour links deleted: {deleteResult.neighboursDeleted}</li>
+                <li>Image sets updated: {deleteResult.imageSetsUpdated}</li>
+                {deleteResult.failures > 0 && (
+                  <li className='text-danger'>
+                    Failures: {deleteResult.failures}
+                  </li>
+                )}
+              </ul>
+            </Alert>
+          )}
 
-        {/* Delete result */}
-        {deleteResult && (
-          <Alert
-            variant={deleteResult.failures > 0 ? 'warning' : 'success'}
-            dismissible
-            onClose={() => setDeleteResult(null)}
+          <div
+            style={{
+              height: '600px',
+              width: '100%',
+              position: 'relative',
+              border: '1px solid var(--ss-border, #dee2e6)',
+              borderRadius: '4px',
+              overflow: 'hidden',
+            }}
           >
-            <strong>Deletion complete:</strong>
-            <ul className='mb-0 mt-2'>
-              <li>Images deleted: {deleteResult.imagesDeleted}</li>
-              <li>Annotations deleted: {deleteResult.annotationsDeleted}</li>
-              <li>Locations deleted: {deleteResult.locationsDeleted}</li>
-              <li>File records deleted: {deleteResult.filesDeleted}</li>
-              <li>Memberships deleted: {deleteResult.membershipsDeleted}</li>
-              <li>Neighbour links deleted: {deleteResult.neighboursDeleted}</li>
-              <li>Image sets updated: {deleteResult.imageSetsUpdated}</li>
-              {deleteResult.failures > 0 && (
-                <li className='text-danger'>
-                  Failures: {deleteResult.failures}
-                </li>
+          {images.length > 0 && (
+            <div
+              className='d-flex'
+              style={{
+                position: 'absolute',
+                top: 10,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 1000,
+                background: 'rgba(255,255,255,0.95)',
+                border: '2px solid rgba(0,0,0,0.2)',
+                borderRadius: 4,
+                boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+                overflow: 'hidden',
+              }}
+            >
+              <Button
+                size='sm'
+                variant='light'
+                onClick={fetchImages}
+                disabled={loading || deleting}
+                title='Refresh'
+                style={{
+                  borderRadius: 0,
+                  borderRight: '1px solid #ccc',
+                  borderTop: 'none',
+                  borderLeft: 'none',
+                  borderBottom: 'none',
+                }}
+              >
+                {loading ? (
+                  <Spinner animation='border' size='sm' />
+                ) : (
+                  'Refresh'
+                )}
+              </Button>
+              <Button
+                size='sm'
+                variant='light'
+                onClick={selectAll}
+                disabled={loading || deleting || images.length === 0}
+                title='Select all images'
+                style={{
+                  borderRadius: 0,
+                  borderRight: selectedCount > 0 ? '1px solid #ccc' : 'none',
+                  borderTop: 'none',
+                  borderLeft: 'none',
+                  borderBottom: 'none',
+                }}
+              >
+                Select All
+              </Button>
+              {selectedCount > 0 && (
+                <Button
+                  size='sm'
+                  variant='light'
+                  onClick={clearSelection}
+                  disabled={loading || deleting}
+                  title='Clear selection'
+                  style={{
+                    borderRadius: 0,
+                    border: 'none',
+                  }}
+                >
+                  Clear ({selectedCount})
+                </Button>
               )}
-            </ul>
-          </Alert>
-        )}
-
-        {/* Map */}
-        <div
-          style={{
-            height: '600px',
-            width: '100%',
-            position: 'relative',
-            border: '1px solid #dee2e6',
-            borderRadius: '4px',
-            overflow: 'hidden',
-          }}
-        >
+            </div>
+          )}
           {images.length === 0 && !loading ? (
             <div className='d-flex justify-content-center align-items-center h-100 text-muted'>
               No images with GPS coordinates found
@@ -908,17 +926,30 @@ This action cannot be undone.`;
               </div>
             </div>
           )}
-        </div>
-      </div>
-      <Footer>
+          </div>
+        </Card.Body>
+      </Card>
+      <div style={{ display: 'flex', gap: 8 }}>
         <Button
-          variant='dark'
-          onClick={() => showModal(null)}
-          disabled={deleting}
+          variant='danger'
+          onClick={handleDelete}
+          disabled={loading || deleting || selectedCount === 0}
+          style={{
+            background: 'var(--ss-red)',
+            borderColor: 'var(--ss-red)',
+            color: '#fff',
+          }}
         >
-          Close
+          {deleting ? (
+            <>
+              <Spinner animation='border' size='sm' className='me-1' />
+              Deleting...
+            </>
+          ) : (
+            `Delete ${selectedCount > 0 ? `(${selectedCount})` : ''}`
+          )}
         </Button>
-      </Footer>
-    </>
+      </div>
+    </div>
   );
 }

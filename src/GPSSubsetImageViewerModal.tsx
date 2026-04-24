@@ -188,7 +188,7 @@ export default function GPSSubsetImageViewerModal({
                   Remove Image
                 </Button>
                 <Button
-                  variant='dark'
+                  variant='secondary'
                   onClick={handleCloseModal}
                   className='ms-2'
                 >

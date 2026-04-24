@@ -57,7 +57,8 @@ function FolderNode({ folder, isOpen, onToggle }: FolderNodeProps) {
         <Button
           variant='link'
           size='sm'
-          className='p-0 ms-auto text-decoration-none text-dark'
+          className='p-0 ms-auto text-decoration-none'
+          style={{ color: 'var(--ss-text-muted)' }}
         >
           <span className='fs-6'>{isOpen ? '▼' : '▶'}</span>
         </Button>
@@ -73,11 +74,15 @@ function FolderNode({ folder, isOpen, onToggle }: FolderNodeProps) {
                 .map((image) => (
                   <div
                     key={image.id}
-                    className='badge p-2 d-flex align-items-center bg-dark'
+                    className='d-flex align-items-center'
                     style={{
                       fontSize: '0.75rem',
                       borderRadius: '4px',
                       maxWidth: '200px',
+                      padding: '4px 8px',
+                      background: 'var(--ss-surface-alt)',
+                      border: '1px solid var(--ss-border-soft)',
+                      color: 'var(--ss-text-muted)',
                     }}
                     title={image.originalPath}
                   >
@@ -130,7 +135,8 @@ export function TreeNode({
         <Button
           variant='link'
           size='sm'
-          className='p-0 text-decoration-none text-dark'
+          className='p-0 text-decoration-none'
+          style={{ color: 'var(--ss-text-muted)' }}
         >
           <span className='fs-6'>{isOpen ? '▼' : '▶'}</span>
         </Button>

@@ -18,6 +18,12 @@ import ErrorPage from './error-page';
 import ProjectView from './ProjectView';
 import Jobs from './user/Jobs.tsx';
 import Surveys from './survey/Surveys.tsx';
+import SurveyDetail from './survey/SurveyDetail.tsx';
+import SurveySettings from './survey/SurveySettings.tsx';
+import LaunchAnnotationSet from './survey/LaunchAnnotationSet.tsx';
+import EditAnnotationSet from './survey/EditAnnotationSet.tsx';
+import AddAnnotationSet from './survey/AddAnnotationSet.tsx';
+import NewSurvey from './survey/NewSurvey.tsx';
 import Permissions from './Permissions.tsx';
 import Testing from './Testing/Testing';
 import { Registration } from './Registration';
@@ -30,6 +36,7 @@ import SharedResults from './SharedResults.tsx';
 import ImageNeighbourViewer from './ImageNeighbourViewer';
 import QCReviewTask from './QCReviewTask';
 import { lazy, Suspense } from 'react';
+import { Navigate } from 'react-router-dom';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const devModules = (import.meta as any).glob('./DevActions.tsx') as Record<string, () => Promise<{ DevActions: React.FC }>>;
@@ -153,6 +160,30 @@ const router = createBrowserRouter([
         element: <Surveys />,
       },
       {
+        path: 'surveys/new',
+        element: <NewSurvey />,
+      },
+      {
+        path: 'surveys/:surveyId/detail',
+        element: <SurveyDetail />,
+      },
+      {
+        path: 'surveys/:surveyId/settings',
+        element: <SurveySettings />,
+      },
+      {
+        path: 'surveys/:surveyId/set/:annotationSetId/launch',
+        element: <LaunchAnnotationSet />,
+      },
+      {
+        path: 'surveys/:surveyId/set/:annotationSetId/edit',
+        element: <EditAnnotationSet />,
+      },
+      {
+        path: 'surveys/:surveyId/add-annotation-set',
+        element: <AddAnnotationSet />,
+      },
+      {
         path: 'SSRegisterOrganization',
         element: <RegisterOrganization />,
       },
@@ -161,8 +192,12 @@ const router = createBrowserRouter([
         element: <Permissions />,
       },
       {
-        path: 'annotation-statistics',
+        path: 'activity',
         element: <UserStats />,
+      },
+      {
+        path: 'annotation-statistics',
+        element: <Navigate to='/activity' replace />,
       },
       {
         path: 'SSAdmin',
