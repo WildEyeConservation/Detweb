@@ -275,11 +275,8 @@ export default function useCreateObservation(props: UseCreateObservationProps) {
         group: project.organizationId,
       });
 
-      if (queueId) {
-        (client as any).mutations.incrementQueueCount({ id: queueId }).catch(
-          (err: unknown) => console.error('Failed to increment observedCount', err)
-        );
-      }
+      // observedCount is bumped by the updateUserStats DynamoDB stream handler
+      // when the Observation row lands — don't also increment from the client.
 
       setAcked(true);
     }
