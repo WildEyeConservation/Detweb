@@ -6,7 +6,6 @@ import Select from 'react-select';
 import { X, Check } from 'lucide-react';
 import { GlobalContext, UserContext } from '../Context';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
-import MyTable from '../Table';
 import { useUsers } from '../apiInterface';
 import { fetchAllPaginatedResults } from '../utils';
 import { FilesUploadForm } from '../FilesUploadComponent';
@@ -380,190 +379,243 @@ export default function NewSurvey() {
             <Card.Header>
               <h5 className='mb-0'>Permissions</h5>
             </Card.Header>
-            <Card.Body>
-              <span
-                className='text-muted d-block mb-2'
-                style={{ fontSize: 12, lineHeight: 1.2 }}
+            <Card.Body className='p-0'>
+              <div
+                style={{
+                  color: 'var(--ss-text-muted)',
+                  fontSize: 12,
+                  lineHeight: 1.4,
+                  padding: '12px 16px',
+                  borderBottom: '1px solid var(--ss-border-soft)',
+                }}
               >
-                Select the user permissions for all organisation members
-                excluding yourself and admins.
-              </span>
-              <div className='mb-2'>
-                <Form.Label style={{ fontSize: 14 }}>
-                  Annotation Access:
-                </Form.Label>
-                <Select
-                  className='text-black'
-                  value={globalAnnotationAccess}
-                  placeholder='Default (No)'
-                  options={[
-                    { value: 'Yes', label: 'Yes' },
-                    { value: 'No', label: 'No' },
-                  ]}
-                  onChange={(e) => setGlobalAnnotationAccess(e)}
-                  menuPortalTarget={
-                    typeof document !== 'undefined' ? document.body : undefined
-                  }
-                  styles={{
-                    valueContainer: (base) => ({
-                      ...base,
-                      overflowY: 'auto',
-                    }),
-                    menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                Set the default annotation access for all organisation members
+                (excluding yourself and admins). Add per-user exceptions below
+                to override the default.
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 16,
+                  alignItems: 'center',
+                  padding: '12px 16px',
+                  borderBottom: '1px solid var(--ss-border-soft)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    flex: '0 1 auto',
+                  }}
+                >
+                  <Form.Label className='mb-0' style={{ fontSize: 13 }}>
+                    Default Annotation Access
+                  </Form.Label>
+                  <div style={{ minWidth: 160 }}>
+                    <Select
+                      className='text-black'
+                      value={globalAnnotationAccess}
+                      placeholder='Default (No)'
+                      options={[
+                        { value: 'Yes', label: 'Yes' },
+                        { value: 'No', label: 'No' },
+                      ]}
+                      onChange={(e) => setGlobalAnnotationAccess(e)}
+                      menuPortalTarget={
+                        typeof document !== 'undefined'
+                          ? document.body
+                          : undefined
+                      }
+                      styles={{
+                        valueContainer: (base) => ({
+                          ...base,
+                          overflowY: 'auto',
+                        }),
+                        menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                      }}
+                    />
+                  </div>
+                </div>
+                <div style={{ flex: 1 }} />
+                <Form.Switch
+                  style={{ fontSize: 13 }}
+                  id='addPermissionExceptions'
+                  label='Add permission exceptions'
+                  checked={addPermissionExceptions}
+                  onChange={(e) => {
+                    if (!organization) {
+                      alert('Please select an organisation first');
+                      return;
+                    }
+                    setAddPermissionExceptions(e.target.checked);
+                    if (!e.target.checked) {
+                      setPermissionExceptions([]);
+                    }
                   }}
                 />
               </div>
-              <Form.Switch
-                style={{ fontSize: 14 }}
-                id='addPermissionExceptions'
-                label='Add Permission Exceptions'
-                checked={addPermissionExceptions}
-                onChange={(e) => {
-                  if (!organization) {
-                    alert('Please select an organisation first');
-                    return;
-                  }
-                  setAddPermissionExceptions(e.target.checked);
-                  if (!e.target.checked) {
-                    setPermissionExceptions([]);
-                  }
-                }}
-              />
               {addPermissionExceptions && (
                 <>
-                  <MyTable
-                    tableHeadings={[
-                      { content: 'Username', style: { width: '33%' } },
-                      {
-                        content: 'Annotation Access',
-                        style: { width: '33%' },
-                      },
-                      {
-                        content: 'Remove Exception',
-                        style: { width: '33%' },
-                      },
-                    ]}
-                    tableData={permissionExceptions.map((exception) => ({
-                      id: exception.user.id,
-                      rowData: [
-                        <Select
-                          className='text-black'
-                          value={{
-                            label: exception.user.name,
-                            value: exception.user.id,
-                          }}
-                          options={users[organization?.value || '']
-                            ?.filter(
-                              (u) =>
-                                !permissionExceptions.some(
-                                  (pe) => pe.user.id === u.id
-                                )
-                            )
-                            .map((u) => ({
-                              label: u.name,
-                              value: u.id,
-                            }))}
-                          menuPortalTarget={
-                            typeof document !== 'undefined'
-                              ? document.body
-                              : undefined
-                          }
-                          styles={{
-                            menuPortal: (base) => ({ ...base, zIndex: 9999 }),
-                          }}
-                          onChange={(selected) => {
-                            setPermissionExceptions(
-                              permissionExceptions.map((pe) =>
-                                pe.user.id === exception.user.id
-                                  ? {
-                                      ...pe,
-                                      user: {
-                                        ...pe.user,
-                                        id: selected?.value || pe.user.id,
-                                        name:
-                                          selected?.label || pe.user.name,
-                                      },
-                                      temp: false,
-                                    }
-                                  : pe
-                              )
-                            );
-                          }}
-                        />,
-                        <LabeledToggleSwitch
-                          className='mb-0'
-                          leftLabel='No'
-                          rightLabel='Yes'
-                          checked={exception.annotationAccess}
-                          onChange={(checked) => {
-                            setPermissionExceptions(
-                              permissionExceptions.map((pe) =>
-                                pe.user.id === exception.user.id
-                                  ? { ...pe, annotationAccess: checked }
-                                  : pe
-                              )
-                            );
-                          }}
-                        />,
-                        <Button
-                          variant='danger'
-                          size='sm'
-                          onClick={() => {
-                            setPermissionExceptions(
-                              permissionExceptions.filter(
-                                (e) => e.user.id !== exception.user.id
-                              )
-                            );
-                          }}
-                        >
-                          Remove
-                        </Button>,
-                      ],
-                    }))}
-                  />
-                  <Button
-                    variant='info'
-                    size='sm'
-                    onClick={() => {
-                      if (permissionExceptions.some((e) => e.temp)) {
-                        alert(
-                          'Please complete the current permission exception before adding another'
-                        );
-                        return;
-                      }
-                      setPermissionExceptions([
-                        ...permissionExceptions,
-                        {
-                          user: {
-                            id: crypto.randomUUID(),
-                            name: 'Select a user',
-                          },
-                          annotationAccess: false,
-                          temp: true,
-                        },
-                      ]);
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className='ss-data-table'>
+                      <thead>
+                        <tr>
+                          <th>Username</th>
+                          <th>Annotation Access</th>
+                          <th style={{ textAlign: 'right' }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {permissionExceptions.map((exception) => (
+                          <tr key={exception.user.id}>
+                            <td>
+                              <Select
+                                className='text-black'
+                                value={{
+                                  label: exception.user.name,
+                                  value: exception.user.id,
+                                }}
+                                options={users[organization?.value || '']
+                                  ?.filter(
+                                    (u) =>
+                                      !permissionExceptions.some(
+                                        (pe) => pe.user.id === u.id
+                                      )
+                                  )
+                                  .map((u) => ({
+                                    label: u.name,
+                                    value: u.id,
+                                  }))}
+                                menuPortalTarget={
+                                  typeof document !== 'undefined'
+                                    ? document.body
+                                    : undefined
+                                }
+                                styles={{
+                                  menuPortal: (base) => ({
+                                    ...base,
+                                    zIndex: 9999,
+                                  }),
+                                }}
+                                onChange={(selected) => {
+                                  setPermissionExceptions(
+                                    permissionExceptions.map((pe) =>
+                                      pe.user.id === exception.user.id
+                                        ? {
+                                            ...pe,
+                                            user: {
+                                              ...pe.user,
+                                              id:
+                                                selected?.value || pe.user.id,
+                                              name:
+                                                selected?.label ||
+                                                pe.user.name,
+                                            },
+                                            temp: false,
+                                          }
+                                        : pe
+                                    )
+                                  );
+                                }}
+                              />
+                            </td>
+                            <td>
+                              <LabeledToggleSwitch
+                                className='mb-0'
+                                leftLabel='No'
+                                rightLabel='Yes'
+                                checked={exception.annotationAccess}
+                                onChange={(checked) => {
+                                  setPermissionExceptions(
+                                    permissionExceptions.map((pe) =>
+                                      pe.user.id === exception.user.id
+                                        ? { ...pe, annotationAccess: checked }
+                                        : pe
+                                    )
+                                  );
+                                }}
+                              />
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              <Button
+                                variant='outline-danger'
+                                size='sm'
+                                onClick={() => {
+                                  setPermissionExceptions(
+                                    permissionExceptions.filter(
+                                      (e) => e.user.id !== exception.user.id
+                                    )
+                                  );
+                                }}
+                              >
+                                Remove
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                        {permissionExceptions.length === 0 && (
+                          <tr>
+                            <td
+                              colSpan={3}
+                              style={{
+                                textAlign: 'center',
+                                color: 'var(--ss-text-dim)',
+                                padding: '24px',
+                              }}
+                            >
+                              No exceptions added yet.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div
+                    style={{
+                      padding: '12px 16px',
+                      borderTop: '1px solid var(--ss-border-soft)',
                     }}
                   >
-                    +
-                  </Button>
+                    <Button
+                      variant='secondary'
+                      size='sm'
+                      onClick={() => {
+                        if (permissionExceptions.some((e) => e.temp)) {
+                          alert(
+                            'Please complete the current permission exception before adding another'
+                          );
+                          return;
+                        }
+                        setPermissionExceptions([
+                          ...permissionExceptions,
+                          {
+                            user: {
+                              id: crypto.randomUUID(),
+                              name: 'Select a user',
+                            },
+                            annotationAccess: false,
+                            temp: true,
+                          },
+                        ]);
+                      }}
+                    >
+                      + Add exception
+                    </Button>
+                  </div>
                 </>
               )}
             </Card.Body>
           </Card>
 
-          <Card>
-            <Card.Header>
-              <h5 className='mb-0'>Files</h5>
-            </Card.Header>
-            <Card.Body>
-              <FilesUploadForm
-                setOnSubmit={setUploadSubmitFn}
-                setReadyToSubmit={setFilesReady}
-                setGpsDataReady={setGpsReady}
-                onShapefileParsed={(latLngs) => setShapefileLatLngs(latLngs)}
-              />
-            </Card.Body>
-          </Card>
+          <FilesUploadForm
+            setOnSubmit={setUploadSubmitFn}
+            setReadyToSubmit={setFilesReady}
+            setGpsDataReady={setGpsReady}
+            onShapefileParsed={(latLngs) => setShapefileLatLngs(latLngs)}
+          />
 
           <Card>
             <Card.Header>

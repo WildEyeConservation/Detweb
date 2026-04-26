@@ -5,6 +5,7 @@ import Modal from 'react-bootstrap/Modal';
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import Alert from 'react-bootstrap/Alert';
+import Card from 'react-bootstrap/Card';
 import { GlobalContext, UploadContext, UserContext } from './Context.tsx';
 import exifr from 'exifr';
 import { DateTime } from 'luxon';
@@ -2217,83 +2218,57 @@ export function FileUploadCore({
 
   // Common UI elements shared between modal and form versions
   return (
-    <>
-      <Form.Group>
-        <Form.Label className='mb-0'>Model</Form.Label>
-        <Form.Text
-          className='d-block text-muted mt-0 mb-1'
-          style={{ fontSize: 12 }}
-        >
-          Select the model you wish to use to guide annotation.
-        </Form.Text>
-        <Select
-          className='text-black'
-          value={model}
-          options={[
-            { label: 'ScoutBot', value: 'scoutbot' },
-            {
-              label: 'Elephant Detection Nadir',
-              value: 'elephant-detection-nadir',
-            },
-            {
-              label: 'Marine Animal Detector (MAD AI)',
-              value: 'mad',
-            },
-            {
-              label: 'Manual (images may be processed later)',
-              value: 'manual',
-            },
-          ]}
-          onChange={(e) => {
-            if (e) setModel(e);
-          }}
-          placeholder='Select a model'
-        />
-      </Form.Group>
-      <Form.Group>
-        <Form.Label className='mb-0'>Files to Upload</Form.Label>
-        <p className='text-muted mb-1' style={{ fontSize: 12 }}>
-          Upload the survey files by selecting the entire folder you wish to
-          upload.
-        </p>
-        <div
-          className='p-2 mb-2 bg-white text-black'
-          style={{ minHeight: '136px', overflow: 'auto' }}
-        >
-          {scannedFiles.length > 0 && (
-            <code className='m-0 text-dark'>
-              Folder name: {name}
-              <br />
-              Total files: {scannedFiles.length}
-              <br />
-              Image files: {imageFiles.length}
-              <br />
-              Image files size: {formatFileSize(totalImageSize)}
-              <br />
-              {loadingExistingImages ? (
-                'Loading existing survey images...'
-              ) : (
-                <>
-                  To upload: {toUploadFiles.length}
-                  {toUploadFiles.length > 0 && (
-                    <>
-                      <br />
-                      To upload size: {formatFileSize(toUploadSize)}
-                    </>
-                  )}
-                </>
-              )}
-            </code>
-          )}
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <Form.Group>
+    <div className='d-flex flex-column gap-3'>
+      <Card>
+        <Card.Header>
+          <h5 className='mb-0'>Model</h5>
+        </Card.Header>
+        <Card.Body>
+          <Form.Text
+            className='d-block text-muted mt-0 mb-2'
+            style={{ fontSize: 12 }}
+          >
+            Select the model you wish to use to guide annotation.
+          </Form.Text>
+          <Select
+            className='text-black'
+            value={model}
+            options={[
+              { label: 'ScoutBot', value: 'scoutbot' },
+              {
+                label: 'Elephant Detection Nadir',
+                value: 'elephant-detection-nadir',
+              },
+              {
+                label: 'Marine Animal Detector (MAD AI)',
+                value: 'mad',
+              },
+              {
+                label: 'Manual (images may be processed later)',
+                value: 'manual',
+              },
+            ]}
+            onChange={(e) => {
+              if (e) setModel(e);
+            }}
+            placeholder='Select a model'
+          />
+        </Card.Body>
+      </Card>
+
+      <Card>
+        <Card.Header>
+          <h5 className='mb-0'>Files</h5>
+        </Card.Header>
+        <Card.Body>
+          <Form.Text
+            className='d-block text-muted mb-2'
+            style={{ fontSize: 12 }}
+          >
+            Upload the survey files by selecting the entire folder you wish to
+            upload.
+          </Form.Text>
+          <div className='d-flex flex-wrap gap-3 align-items-center'>
             <FileInput
               id='filepicker'
               webkitdirectory=''
@@ -2305,547 +2280,661 @@ export function FileUploadCore({
                   : 'Select Folder'}
               </p>
             </FileInput>
-          </Form.Group>
-          {/* <div>
-          <Form.Group>
-            <Form.Check
-              type="switch"
-              id="custom-switch"
-              label="Advanced Options"
-              checked={advancedImageOptions}
-              onChange={(x) => {
-                setAdvancedImageOptions(x.target.checked);
-                if (!x.target.checked) {
-                  setUpload(true);
-                  setIntegrityCheck(true);
-                }
-              }}
-            />
-          </Form.Group>
-          {advancedImageOptions && (
-              <Form.Group>
-                <Form.Check
-                  type="switch"
-                  id="custom-switch"
-                  label="Upload files to S3"
-                  checked={upload}
-                  onChange={(x) => {
-                    setUpload(x.target.checked);
-                  }}
-                />
-              </Form.Group>
-          )}
-        </div> */}
-        </div>
-      </Form.Group>
-      {scanningEXIF ? (
-        <div className='mt-3 mb-0'>
-          <p className='mb-0'>
-            Scanning images for GPS data: {`${scanCount}/${scanTotal}`}
-          </p>
-        </div>
-      ) : failedFiles.length > 0 ? (
-        <Alert variant='warning' className='mt-3 mb-3'>
-          <Alert.Heading>
-            {failedFiles.length} file{failedFiles.length === 1 ? '' : 's'} failed
-            to scan
-          </Alert.Heading>
-          <p className='mb-2' style={{ fontSize: '14px' }}>
-            The following file{failedFiles.length === 1 ? '' : 's'} could not be
-            processed (may be corrupt or unreadable). These files will be
-            excluded from the upload, but you can continue with the remaining
-            files.
-          </p>
-          <div
-            style={{
-              maxHeight: '200px',
-              overflowY: 'auto',
-              backgroundColor: '#f8f9fa',
-              padding: '8px',
-              borderRadius: '4px',
-              fontSize: '12px',
-            }}
-          >
-            <ul className='mb-0' style={{ paddingLeft: '20px' }}>
-              {failedFiles.map((failed, idx) => (
-                <li key={idx} className='mb-1'>
-                  <code style={{ fontSize: '11px' }}>{failed.path}</code>
-                  {failed.error && (
-                    <span className='ms-2' style={{ fontSize: '11px', color: '#dc3545' }}>
-                      ({failed.error})
-                    </span>
+            {scannedFiles.length > 0 && (
+              <span className='text-muted' style={{ fontSize: 13 }}>
+                <strong>{name}</strong> · {imageFiles.length} image
+                {imageFiles.length === 1 ? '' : 's'} ·{' '}
+                {formatFileSize(totalImageSize)}
+                {!loadingExistingImages &&
+                  toUploadFiles.length !== imageFiles.length && (
+                    <>
+                      {' '}
+                      · {toUploadFiles.length} to upload (
+                      {formatFileSize(toUploadSize)})
+                    </>
                   )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </Alert>
-      ) : null}
-      {!scanningEXIF && Object.keys(exifData).length > 0 && imageFiles.length > 0 ? (
-        <Form.Group className='mt-3 d-flex flex-column gap-2'>
-          <div>
-            <Form.Label className='mb-0'>
-              {missingGpsData ? 'Missing GPS data' : 'GPS data found'}
-            </Form.Label>
-            <Form.Text className='d-block mb-0' style={{ fontSize: '12px' }}>
-              {missingGpsData
-                ? 'Some images do not have GPS data. Please upload the gpx or csv file containing the GPS data for all images.'
-                : 'The selected images have GPS data. Would you like to upload a separate file containing the GPS data for all images?'}
-            </Form.Text>
-            <Form.Text className='d-block mb-0' style={{ fontSize: '12px' }}>
-              Your CSV file should have the following columns (their headings
-              may be different):
-              <ul className='mb-0'>
-                <li>timestamp and/or filepath</li>
-                <li>lat</li>
-                <li>lng</li>
-                <li>alt</li>
-              </ul>
-            </Form.Text>
-            <Form.Text className='d-block mb-0' style={{ fontSize: '12px' }}>
-              If your data contains file paths instead of timestamps, the format
-              should be:{' '}
-              <code className='text-primary' style={{ fontSize: '14px' }}>
-                {imageFiles[0].webkitRelativePath}
-              </code>
-            </Form.Text>
-          </div>
-          <div className='d-flex gap-2 align-items-center'>
-            <FileInput
-              id='gps-metadata-file'
-              fileType='.csv,.gpx'
-              onFileChange={(files) => setFile(files[0])}
-            >
-              <p className='mb-0'>Select GPS metadata file</p>
-            </FileInput>
-            {cognitoGroups.includes('sysadmin') && (
-              <Button
-                variant='outline-warning'
-                size='sm'
-                onClick={handleSkipGps}
-              >
-                Skip GPS selection (Admin)
-              </Button>
+              </span>
             )}
           </div>
-        </Form.Group>
-      ) : null}
-      {headerFields && !mappingConfirmed && (
-        <Form.Group className='mt-3'>
-          <Form.Label className='mb-0'>Confirm File Structure</Form.Label>
-          <p className='text-muted mb-1' style={{ fontSize: 12 }}>
-            Select which columns from your file correspond to the following
-            fields:
-          </p>
-          <div
-            className='d-flex flex-column gap-2 border border-dark p-2 shadow-sm'
-            style={{ backgroundColor: '#697582' }}
-          >
-            <div className='d-flex flex-row gap-2 align-items-center'>
-              <div style={{ flex: 0.5 }}>
-                <Form.Label className='mb-0'>FilePath</Form.Label>
-                <Select
-                  options={[
-                    { label: 'None', value: '' },
-                    ...headerFields.map((f) => ({ label: f, value: f })),
-                  ]}
-                  value={
-                    columnMapping.filepath
-                      ? {
-                        label: columnMapping.filepath,
-                        value: columnMapping.filepath,
-                      }
-                      : { label: 'None', value: '' }
-                  }
-                  onChange={(opt) =>
-                    setColumnMapping({
-                      ...columnMapping,
-                      filepath: opt ? opt.value : undefined,
-                    })
-                  }
-                  placeholder='Select FilePath column'
-                  className='text-black'
-                />
-              </div>
-              <p
-                className='mb-0'
-                style={{ width: '50px', textAlign: 'center' }}
+          {scannedFiles.length > 0 && (
+            <details className='mt-2' style={{ fontSize: 12 }}>
+              <summary
+                className='text-muted'
+                style={{ cursor: 'pointer', userSelect: 'none' }}
               >
-                or
+                View breakdown
+              </summary>
+              <div className='mt-1'>
+                <code className='text-body'>
+                  Folder name: {name}
+                  <br />
+                  Total files: {scannedFiles.length}
+                  <br />
+                  Image files: {imageFiles.length}
+                  <br />
+                  Image files size: {formatFileSize(totalImageSize)}
+                  <br />
+                  {loadingExistingImages ? (
+                    'Loading existing survey images...'
+                  ) : (
+                    <>
+                      To upload: {toUploadFiles.length}
+                      {toUploadFiles.length > 0 && (
+                        <>
+                          <br />
+                          To upload size: {formatFileSize(toUploadSize)}
+                        </>
+                      )}
+                    </>
+                  )}
+                </code>
+              </div>
+            </details>
+          )}
+          {scanningEXIF && (
+            <p className='mb-0 mt-3'>
+              Scanning images for GPS data: {`${scanCount}/${scanTotal}`}
+            </p>
+          )}
+          {!scanningEXIF && failedFiles.length > 0 && (
+            <Alert variant='warning' className='mt-3 mb-0'>
+              <Alert.Heading>
+                {failedFiles.length} file
+                {failedFiles.length === 1 ? '' : 's'} failed to scan
+              </Alert.Heading>
+              <p className='mb-2' style={{ fontSize: '14px' }}>
+                The following file
+                {failedFiles.length === 1 ? '' : 's'} could not be processed
+                (may be corrupt or unreadable). These files will be excluded
+                from the upload, but you can continue with the remaining
+                files.
               </p>
-              <div style={{ flex: 0.5 }}>
-                <Form.Label className='mb-0'>Timestamp</Form.Label>
-                <Select
-                  options={[
-                    { label: 'None', value: '' },
-                    ...headerFields.map((f) => ({ label: f, value: f })),
-                  ]}
-                  value={
-                    columnMapping.timestamp
-                      ? {
-                        label: columnMapping.timestamp,
-                        value: columnMapping.timestamp,
-                      }
-                      : { label: 'None', value: '' }
-                  }
-                  onChange={(opt) =>
-                    setColumnMapping({
-                      ...columnMapping,
-                      timestamp: opt ? opt.value : undefined,
-                    })
-                  }
-                  placeholder='Select Timestamp column'
-                  className='text-black'
-                />
-              </div>
-            </div>
-            <div className='d-flex flex-row gap-2 align-items-start mt-2'>
-              <div style={{ flex: 0.5 }}>
-                <Form.Label className='mb-0'>Latitude</Form.Label>
-                <Select
-                  options={headerFields.map((f) => ({ label: f, value: f }))}
-                  value={
-                    columnMapping.lat
-                      ? { label: columnMapping.lat, value: columnMapping.lat }
-                      : null
-                  }
-                  onChange={(opt) => {
-                    setUseUtm(false);
-                    setColumnMapping({
-                      ...columnMapping,
-                      lat: opt ? opt.value : undefined,
-                    });
+              <details>
+                <summary
+                  className='text-muted'
+                  style={{
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    fontSize: 12,
                   }}
-                  placeholder='Select Latitude column'
-                  className='text-black'
-                />
-                <div className='mt-2'>
-                  <Form.Label className='mb-0'>Longitude</Form.Label>
-                  <Select
-                    options={headerFields.map((f) => ({ label: f, value: f }))}
-                    value={
-                      columnMapping.lng
-                        ? { label: columnMapping.lng, value: columnMapping.lng }
-                        : null
-                    }
-                    onChange={(opt) => {
-                      setUseUtm(false);
-                      setColumnMapping({
-                        ...columnMapping,
-                        lng: opt ? opt.value : undefined,
-                      });
-                    }}
-                    placeholder='Select Longitude column'
-                    className='text-black'
-                  />
-                </div>
-              </div>
-              <p
-                className='mb-0'
-                style={{
-                  width: '50px',
-                  textAlign: 'center',
-                  alignSelf: 'center',
-                }}
-              >
-                or
-              </p>
-              <div style={{ flex: 0.5, alignSelf: 'center' }}>
-                <Form.Label className='mb-0'>UTM</Form.Label>
-                <Select
-                  options={[
-                    { label: 'None', value: '' },
-                    ...headerFields.map((f) => ({ label: f, value: f })),
-                  ]}
-                  value={
-                    utmColumn
-                      ? { label: utmColumn, value: utmColumn }
-                      : { label: 'None', value: '' }
-                  }
-                  onChange={(opt) => {
-                    const val = opt && opt.value ? opt.value : undefined;
-                    setUtmColumn(val);
-                    setUseUtm(Boolean(val));
+                >
+                  Show failed files
+                </summary>
+                <div
+                  style={{
+                    maxHeight: '200px',
+                    overflowY: 'auto',
+                    padding: '8px',
+                    border: '1px solid rgba(0,0,0,0.1)',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    marginTop: '4px',
                   }}
-                  placeholder='None'
-                  className='text-black'
-                />
-              </div>
-            </div>
-            <div>
-              <div className='d-flex flex-row gap-3 align-items-center'>
-                <Form.Label className='mb-0'>Altitude (optional)</Form.Label>
-                <div className='d-flex flex-row gap-1 align-items-center'>
-                  <label className='me-2'>ft</label>
-                  <Form.Check
-                    type='switch'
-                    id='altitude-in-meters'
-                    checked={altitudeInMeters}
-                    onChange={(e) => setAltitudeInMeters(e.target.checked)}
-                  />
-                  <label>m</label>
-                </div>
-              </div>
-              <div className='d-flex flex-row gap-2 align-items-center'>
-                <Select
-                  options={[
-                    { label: 'None', value: '' },
-                    ...headerFields.map((f) => ({ label: f, value: f })),
-                  ]}
-                  value={
-                    columnMapping.alt
-                      ? { label: columnMapping.alt, value: columnMapping.alt }
-                      : { label: 'None', value: '' }
-                  }
-                  onChange={(opt) =>
-                    setColumnMapping({
-                      ...columnMapping,
-                      alt: opt && opt.value ? opt.value : undefined,
-                    })
-                  }
-                  placeholder='Select Altitude column'
-                  className='text-black flex-grow-1'
-                />
-                <Select
-                  options={altitudeTypeOptions}
-                  value={altitudeType}
-                  onChange={(opt) =>
-                    setAltitudeType(opt ?? { label: 'EGM96', value: 'egm96' })
-                  }
-                  placeholder='Select Altitude Type'
-                  className='text-black'
-                />
-              </div>
-            </div>
-          </div>
-          <Button
-            variant='primary'
-            className='mt-2'
-            onClick={handleConfirmMapping}
-          >
-            Confirm File Structure
-          </Button>
-        </Form.Group>
-      )}
-      {csvData && (
-        <>
-          <GPSSubset
-            gpsData={csvData.data}
-            imageFiles={imageFiles}
-            onFilter={(filteredData) => {
-              setCsvData((prevData) => ({ ...prevData, data: filteredData }));
-            }}
-            onShapefileParsed={onShapefileParsed}
-            existingImages={existingImagePoints}
-          />
-          <div className='mt-2 mb-2'>
-            <strong>Images to upload:</strong>{' '}
-            {
-              csvData.data.filter(
-                (point) =>
-                  Number.isFinite(point.lat) && Number.isFinite(point.lng)
-              ).length
-            }
-          </div>
-          {(associateByTimestamp ||
-            (csvData &&
-              fullCsvData &&
-              fullCsvData.some((row) => row.timestamp))) && (
-              <Form.Group>
-                <Form.Label className='mb-0'>
-                  Filter Data by Time Range (Optional)
-                </Form.Label>
-                <Form.Text
-                  className='d-block mb-1 mt-0'
-                  style={{ fontSize: '12px' }}
                 >
-                  Select the effective time range for each day. The default range
-                  is the earliest and latest timestamp recorded for that day.
-                </Form.Text>
-                <Form.Text
-                  className='d-block mb-1'
-                  style={{ fontSize: '12px', fontStyle: 'italic' }}
-                >
-                  All times shown in UTC.
-                </Form.Text>
-                <div className='d-flex flex-column gap-2'>
-                  {Array.from(
-                    new Set(
-                      (fullCsvData || csvData.data).map((row) =>
-                        new Date(row.timestamp!).getUTCDate()
-                      )
-                    )
-                  )
-                    .sort((a: number, b: number) => a - b)
-                    .map((day: number) => {
-                      const data = fullCsvData || csvData.data;
-                      const dayRange = getDayTimeRange(day, data);
-                      const startMinutes = timeToMinutes(
-                        timeRanges[day]?.start || minutesToTime(dayRange.min)
-                      );
-                      const endMinutes = timeToMinutes(
-                        timeRanges[day]?.end || minutesToTime(dayRange.max)
-                      );
-
-                      const handleStartTimeChange = (timeStr: string) => {
-                        const newStartMinutes = timeToMinutes(timeStr);
-                        if (newStartMinutes <= endMinutes) {
-                          updateTimeRange(
-                            day,
-                            timeStr,
-                            timeRanges[day]?.end || minutesToTime(dayRange.max)
-                          );
-                        }
-                      };
-
-                      const handleEndTimeChange = (timeStr: string) => {
-                        const newEndMinutes = timeToMinutes(timeStr);
-                        if (newEndMinutes >= startMinutes) {
-                          updateTimeRange(
-                            day,
-                            timeRanges[day]?.start || minutesToTime(dayRange.min),
-                            timeStr
-                          );
-                        }
-                      };
-
-                      return (
-                        <div
-                          key={`day-${day}`}
-                          className='d-flex flex-column gap-2 mt-2'
-                        >
-                          <span className='fw-bold'>
-                            {new Date(data[0].timestamp!).toLocaleDateString()}
+                  <ul className='mb-0' style={{ paddingLeft: '20px' }}>
+                    {failedFiles.map((failed, idx) => (
+                      <li key={idx} className='mb-1'>
+                        <code style={{ fontSize: '11px' }}>{failed.path}</code>
+                        {failed.error && (
+                          <span
+                            className='ms-2'
+                            style={{ fontSize: '11px', color: '#dc3545' }}
+                          >
+                            ({failed.error})
                           </span>
-                          <div className='d-flex align-items-center gap-2'>
-                            <label className='mb-0'>Start:</label>
-                            <input
-                              type='time'
-                              className='form-control'
-                              style={{ width: '120px' }}
-                              value={minutesToTime(startMinutes)}
-                              onChange={(e) =>
-                                handleStartTimeChange(e.target.value)
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </details>
+            </Alert>
+          )}
+        </Card.Body>
+      </Card>
+      {!scanningEXIF &&
+        Object.keys(exifData).length > 0 &&
+        imageFiles.length > 0 && (
+          <Card>
+            <Card.Header>
+              <h5 className='mb-0'>
+                {missingGpsData ? 'GPS Data (Required)' : 'GPS Data'}
+              </h5>
+            </Card.Header>
+            <Card.Body>
+              <Form.Text
+                className='d-block text-muted mb-2'
+                style={{ fontSize: '12px' }}
+              >
+                {missingGpsData
+                  ? 'Some images do not have GPS data. Upload a GPX or CSV file containing GPS data for all images.'
+                  : 'Your images already contain GPS data. Optionally upload a separate file to override or supplement it.'}
+              </Form.Text>
+              <details className='mb-2' style={{ fontSize: '12px' }}>
+                <summary
+                  className='text-muted'
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                >
+                  CSV format
+                </summary>
+                <div className='mt-1'>
+                  <p className='mb-1'>
+                    Your CSV file should include the following columns
+                    (headings may differ):
+                  </p>
+                  <ul className='mb-1'>
+                    <li>timestamp and/or filepath</li>
+                    <li>lat</li>
+                    <li>lng</li>
+                    <li>alt</li>
+                  </ul>
+                  <p className='mb-0'>
+                    If your data uses file paths instead of timestamps, the
+                    format should be:{' '}
+                    <code
+                      className='text-primary'
+                      style={{ fontSize: '13px' }}
+                    >
+                      {imageFiles[0].webkitRelativePath}
+                    </code>
+                  </p>
+                </div>
+              </details>
+              <div className='d-flex gap-2 align-items-center'>
+                <FileInput
+                  id='gps-metadata-file'
+                  fileType='.csv,.gpx'
+                  onFileChange={(files) => setFile(files[0])}
+                >
+                  <p className='mb-0'>Select GPS metadata file</p>
+                </FileInput>
+                {cognitoGroups.includes('sysadmin') && (
+                  <Button
+                    variant='outline-warning'
+                    size='sm'
+                    onClick={handleSkipGps}
+                  >
+                    Skip GPS selection (Admin)
+                  </Button>
+                )}
+              </div>
+              {headerFields && !mappingConfirmed && (
+                <div className='mt-3'>
+                  <Form.Label className='mb-1'>
+                    Confirm File Structure
+                  </Form.Label>
+                  <p className='text-muted mb-2' style={{ fontSize: 12 }}>
+                    Select which columns from your file correspond to the
+                    following fields:
+                  </p>
+                  <div className='d-flex flex-column gap-2 border rounded p-3'>
+                    <div className='d-flex flex-row gap-2 align-items-center'>
+                      <div style={{ flex: 0.5 }}>
+                        <Form.Label className='mb-0'>FilePath</Form.Label>
+                        <Select
+                          options={[
+                            { label: 'None', value: '' },
+                            ...headerFields.map((f) => ({
+                              label: f,
+                              value: f,
+                            })),
+                          ]}
+                          value={
+                            columnMapping.filepath
+                              ? {
+                                label: columnMapping.filepath,
+                                value: columnMapping.filepath,
                               }
-                            />
-                            <label className='mb-0'>End:</label>
-                            <input
-                              type='time'
-                              className='form-control'
-                              style={{ width: '120px' }}
-                              value={minutesToTime(endMinutes)}
-                              onChange={(e) =>
-                                handleEndTimeChange(e.target.value)
+                              : { label: 'None', value: '' }
+                          }
+                          onChange={(opt) =>
+                            setColumnMapping({
+                              ...columnMapping,
+                              filepath: opt ? opt.value : undefined,
+                            })
+                          }
+                          placeholder='Select FilePath column'
+                          className='text-black'
+                        />
+                      </div>
+                      <p
+                        className='mb-0'
+                        style={{ width: '50px', textAlign: 'center' }}
+                      >
+                        or
+                      </p>
+                      <div style={{ flex: 0.5 }}>
+                        <Form.Label className='mb-0'>Timestamp</Form.Label>
+                        <Select
+                          options={[
+                            { label: 'None', value: '' },
+                            ...headerFields.map((f) => ({
+                              label: f,
+                              value: f,
+                            })),
+                          ]}
+                          value={
+                            columnMapping.timestamp
+                              ? {
+                                label: columnMapping.timestamp,
+                                value: columnMapping.timestamp,
                               }
-                            />
-                            <div className='flex-grow-1'>
-                              <Slider
-                                range
-                                min={dayRange.min}
-                                max={dayRange.max}
-                                value={[startMinutes, endMinutes]}
-                                onChange={(vals) => {
-                                  if (Array.isArray(vals)) {
-                                    const [s, e] = vals as [number, number];
-                                    updateTimeRange(
-                                      day,
-                                      minutesToTime(s),
-                                      minutesToTime(e)
-                                    );
-                                  }
-                                }}
-                              />
-                            </div>
-                          </div>
+                              : { label: 'None', value: '' }
+                          }
+                          onChange={(opt) =>
+                            setColumnMapping({
+                              ...columnMapping,
+                              timestamp: opt ? opt.value : undefined,
+                            })
+                          }
+                          placeholder='Select Timestamp column'
+                          className='text-black'
+                        />
+                      </div>
+                    </div>
+                    <div className='d-flex flex-row gap-2 align-items-start mt-2'>
+                      <div style={{ flex: 0.5 }}>
+                        <Form.Label className='mb-0'>Latitude</Form.Label>
+                        <Select
+                          options={headerFields.map((f) => ({
+                            label: f,
+                            value: f,
+                          }))}
+                          value={
+                            columnMapping.lat
+                              ? {
+                                label: columnMapping.lat,
+                                value: columnMapping.lat,
+                              }
+                              : null
+                          }
+                          onChange={(opt) => {
+                            setUseUtm(false);
+                            setColumnMapping({
+                              ...columnMapping,
+                              lat: opt ? opt.value : undefined,
+                            });
+                          }}
+                          placeholder='Select Latitude column'
+                          className='text-black'
+                        />
+                        <div className='mt-2'>
+                          <Form.Label className='mb-0'>Longitude</Form.Label>
+                          <Select
+                            options={headerFields.map((f) => ({
+                              label: f,
+                              value: f,
+                            }))}
+                            value={
+                              columnMapping.lng
+                                ? {
+                                  label: columnMapping.lng,
+                                  value: columnMapping.lng,
+                                }
+                                : null
+                            }
+                            onChange={(opt) => {
+                              setUseUtm(false);
+                              setColumnMapping({
+                                ...columnMapping,
+                                lng: opt ? opt.value : undefined,
+                              });
+                            }}
+                            placeholder='Select Longitude column'
+                            className='text-black'
+                          />
+                        </div>
+                      </div>
+                      <p
+                        className='mb-0'
+                        style={{
+                          width: '50px',
+                          textAlign: 'center',
+                          alignSelf: 'center',
+                        }}
+                      >
+                        or
+                      </p>
+                      <div style={{ flex: 0.5, alignSelf: 'center' }}>
+                        <Form.Label className='mb-0'>UTM</Form.Label>
+                        <Select
+                          options={[
+                            { label: 'None', value: '' },
+                            ...headerFields.map((f) => ({
+                              label: f,
+                              value: f,
+                            })),
+                          ]}
+                          value={
+                            utmColumn
+                              ? { label: utmColumn, value: utmColumn }
+                              : { label: 'None', value: '' }
+                          }
+                          onChange={(opt) => {
+                            const val =
+                              opt && opt.value ? opt.value : undefined;
+                            setUtmColumn(val);
+                            setUseUtm(Boolean(val));
+                          }}
+                          placeholder='None'
+                          className='text-black'
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <div className='d-flex flex-row gap-3 align-items-center'>
+                        <Form.Label className='mb-0'>
+                          Altitude (optional)
+                        </Form.Label>
+                        <div className='d-flex flex-row gap-1 align-items-center'>
+                          <label className='me-2'>ft</label>
+                          <Form.Check
+                            type='switch'
+                            id='altitude-in-meters'
+                            checked={altitudeInMeters}
+                            onChange={(e) =>
+                              setAltitudeInMeters(e.target.checked)
+                            }
+                          />
+                          <label>m</label>
+                        </div>
+                      </div>
+                      <div className='d-flex flex-row gap-2 align-items-center'>
+                        <Select
+                          options={[
+                            { label: 'None', value: '' },
+                            ...headerFields.map((f) => ({
+                              label: f,
+                              value: f,
+                            })),
+                          ]}
+                          value={
+                            columnMapping.alt
+                              ? {
+                                label: columnMapping.alt,
+                                value: columnMapping.alt,
+                              }
+                              : { label: 'None', value: '' }
+                          }
+                          onChange={(opt) =>
+                            setColumnMapping({
+                              ...columnMapping,
+                              alt: opt && opt.value ? opt.value : undefined,
+                            })
+                          }
+                          placeholder='Select Altitude column'
+                          className='text-black flex-grow-1'
+                        />
+                        <Select
+                          options={altitudeTypeOptions}
+                          value={altitudeType}
+                          onChange={(opt) =>
+                            setAltitudeType(
+                              opt ?? { label: 'EGM96', value: 'egm96' }
+                            )
+                          }
+                          placeholder='Select Altitude Type'
+                          className='text-black'
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    variant='primary'
+                    className='mt-2'
+                    onClick={handleConfirmMapping}
+                  >
+                    Confirm File Structure
+                  </Button>
+                </div>
+              )}
+              {csvData &&
+                (associateByTimestamp ||
+                  (fullCsvData &&
+                    fullCsvData.some((row) => row.timestamp))) && (
+                  <details className='mt-3' style={{ fontSize: '12px' }}>
+                    <summary
+                      className='text-muted'
+                      style={{ cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      Filter by time range (optional)
+                    </summary>
+                    <div className='mt-2'>
+                      <p className='mb-2' style={{ fontStyle: 'italic' }}>
+                        All times shown in UTC. Default range is the earliest
+                        and latest timestamp recorded for each day.
+                      </p>
+                      <div className='d-flex flex-column gap-2'>
+                        {Array.from(
+                          new Set(
+                            (fullCsvData || csvData.data).map((row) =>
+                              new Date(row.timestamp!).getUTCDate()
+                            )
+                          )
+                        )
+                          .sort((a: number, b: number) => a - b)
+                          .map((day: number) => {
+                            const data = fullCsvData || csvData.data;
+                            const dayRange = getDayTimeRange(day, data);
+                            const startMinutes = timeToMinutes(
+                              timeRanges[day]?.start ||
+                              minutesToTime(dayRange.min)
+                            );
+                            const endMinutes = timeToMinutes(
+                              timeRanges[day]?.end ||
+                              minutesToTime(dayRange.max)
+                            );
+
+                            const handleStartTimeChange = (
+                              timeStr: string
+                            ) => {
+                              const newStartMinutes = timeToMinutes(timeStr);
+                              if (newStartMinutes <= endMinutes) {
+                                updateTimeRange(
+                                  day,
+                                  timeStr,
+                                  timeRanges[day]?.end ||
+                                  minutesToTime(dayRange.max)
+                                );
+                              }
+                            };
+
+                            const handleEndTimeChange = (timeStr: string) => {
+                              const newEndMinutes = timeToMinutes(timeStr);
+                              if (newEndMinutes >= startMinutes) {
+                                updateTimeRange(
+                                  day,
+                                  timeRanges[day]?.start ||
+                                  minutesToTime(dayRange.min),
+                                  timeStr
+                                );
+                              }
+                            };
+
+                            return (
+                              <div
+                                key={`day-${day}`}
+                                className='d-flex flex-column gap-2 mt-2'
+                              >
+                                <span className='fw-bold'>
+                                  {new Date(
+                                    data[0].timestamp!
+                                  ).toLocaleDateString()}
+                                </span>
+                                <div className='d-flex align-items-center gap-2'>
+                                  <label className='mb-0'>Start:</label>
+                                  <input
+                                    type='time'
+                                    className='form-control'
+                                    style={{ width: '120px' }}
+                                    value={minutesToTime(startMinutes)}
+                                    onChange={(e) =>
+                                      handleStartTimeChange(e.target.value)
+                                    }
+                                  />
+                                  <label className='mb-0'>End:</label>
+                                  <input
+                                    type='time'
+                                    className='form-control'
+                                    style={{ width: '120px' }}
+                                    value={minutesToTime(endMinutes)}
+                                    onChange={(e) =>
+                                      handleEndTimeChange(e.target.value)
+                                    }
+                                  />
+                                  <div className='flex-grow-1'>
+                                    <Slider
+                                      range
+                                      min={dayRange.min}
+                                      max={dayRange.max}
+                                      value={[startMinutes, endMinutes]}
+                                      onChange={(vals) => {
+                                        if (Array.isArray(vals)) {
+                                          const [s, e] = vals as [
+                                            number,
+                                            number
+                                          ];
+                                          updateTimeRange(
+                                            day,
+                                            minutesToTime(s),
+                                            minutesToTime(e)
+                                          );
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  </details>
+                )}
+              {csvData && (
+                <div className='mt-3'>
+                  {(() => {
+                    if (invalidGpsFiles.length > 0) {
+                      const sample = invalidGpsFiles.slice(0, 5);
+                      return (
+                        <div className='alert alert-danger mb-0'>
+                          Missing GPS coordinates for {invalidGpsFiles.length}{' '}
+                          image{invalidGpsFiles.length === 1 ? '' : 's'}.
+                          Example{sample.length === 1 ? '' : 's'}:{' '}
+                          {sample.join(', ')}
                         </div>
                       );
-                    })}
+                    }
+                    let message = '';
+                    const hasTimestampData =
+                      csvData &&
+                      fullCsvData &&
+                      fullCsvData.some((row) => row.timestamp);
+                    if (associateByTimestamp || hasTimestampData) {
+                      const csvTimestamps = csvData.data.map(
+                        (row) => row.timestamp || 0
+                      );
+                      const csvMin = csvTimestamps.length
+                        ? Math.min(...csvTimestamps)
+                        : 0;
+                      const csvMax = csvTimestamps.length
+                        ? Math.max(...csvTimestamps)
+                        : 0;
+                      if (csvTimestamps.length) {
+                        const formatTimestamp = (timestamp: number) =>
+                          new Date(timestamp).toLocaleString(undefined, {
+                            timeZone: 'UTC',
+                          }) + ' UTC';
+                        if (csvMin < minTimestamp || csvMax > maxTimestamp) {
+                          message = `Timestamp mismatch: CSV timestamps (${formatTimestamp(
+                            csvMin
+                          )} - ${formatTimestamp(
+                            csvMax
+                          )}) are outside the image timestamps range.`;
+                        } else {
+                          message = `Timestamp range valid: CSV timestamps (${formatTimestamp(
+                            csvMin
+                          )} - ${formatTimestamp(
+                            csvMax
+                          )}) are within the image timestamps range.`;
+                        }
+                      }
+                    } else {
+                      const total = filteredImageFiles.length;
+                      if (total > 0) {
+                        const matched = filteredImageFiles.filter((file) =>
+                          csvData.data.some(
+                            (row) =>
+                              row.filepath &&
+                              row.filepath.toLowerCase() ===
+                              file.webkitRelativePath.toLowerCase()
+                          )
+                        ).length;
+                        const percent = Math.round((matched / total) * 100);
+                        message = `${percent}% of image files have corresponding CSV file paths.`;
+                      } else {
+                        message = `No image files available for CSV file path matching.`;
+                      }
+                    }
+                    const hasData = csvData.data.length > 0;
+                    const alertClass = hasData
+                      ? 'alert-info'
+                      : 'alert-danger';
+                    const displayMessage = hasData
+                      ? message
+                      : 'No matching GPS data for selected images.';
+                    return (
+                      <div className={`alert ${alertClass} mb-0`}>
+                        {displayMessage}
+                      </div>
+                    );
+                  })()}
                 </div>
-              </Form.Group>
-            )}
-          <div className='mt-3'>
-            {(() => {
-              if (invalidGpsFiles.length > 0) {
-                const sample = invalidGpsFiles.slice(0, 5);
-                return (
-                  <div className='alert alert-danger mb-0'>
-                    Missing GPS coordinates for {invalidGpsFiles.length} image
-                    {invalidGpsFiles.length === 1 ? '' : 's'}. Example
-                    {sample.length === 1 ? '' : 's'}: {sample.join(', ')}
-                  </div>
-                );
+              )}
+            </Card.Body>
+          </Card>
+        )}
+
+      {csvData && (
+        <Card>
+          <Card.Header>
+            <h5 className='mb-0'>Geographic Filter (Optional)</h5>
+          </Card.Header>
+          <Card.Body>
+            <GPSSubset
+              gpsData={csvData.data}
+              imageFiles={imageFiles}
+              onFilter={(filteredData) => {
+                setCsvData((prevData) => ({ ...prevData, data: filteredData }));
+              }}
+              onShapefileParsed={onShapefileParsed}
+              existingImages={existingImagePoints}
+            />
+            <div className='mt-2 text-muted' style={{ fontSize: 13 }}>
+              <strong>Images to upload:</strong>{' '}
+              {
+                csvData.data.filter(
+                  (point) =>
+                    Number.isFinite(point.lat) && Number.isFinite(point.lng)
+                ).length
               }
-              let message = '';
-              const hasTimestampData =
-                csvData &&
-                fullCsvData &&
-                fullCsvData.some((row) => row.timestamp);
-              if (associateByTimestamp || hasTimestampData) {
-                const csvTimestamps = csvData.data.map(
-                  (row) => row.timestamp || 0
-                );
-                const csvMin = csvTimestamps.length
-                  ? Math.min(...csvTimestamps)
-                  : 0;
-                const csvMax = csvTimestamps.length
-                  ? Math.max(...csvTimestamps)
-                  : 0;
-                if (csvTimestamps.length) {
-                  const formatTimestamp = (timestamp: number) =>
-                    new Date(timestamp).toLocaleString(undefined, {
-                      timeZone: 'UTC',
-                    }) + ' UTC';
-                  if (csvMin < minTimestamp || csvMax > maxTimestamp) {
-                    message = `Timestamp mismatch: CSV timestamps (${formatTimestamp(
-                      csvMin
-                    )} - ${formatTimestamp(
-                      csvMax
-                    )}) are outside the image timestamps range.`;
-                  } else {
-                    message = `Timestamp range valid: CSV timestamps (${formatTimestamp(
-                      csvMin
-                    )} - ${formatTimestamp(
-                      csvMax
-                    )}) are within the image timestamps range.`;
-                  }
-                }
-              } else {
-                const total = filteredImageFiles.length;
-                if (total > 0) {
-                  const matched = filteredImageFiles.filter((file) =>
-                    csvData.data.some(
-                      (row) =>
-                        row.filepath &&
-                        row.filepath.toLowerCase() ===
-                        file.webkitRelativePath.toLowerCase()
-                    )
-                  ).length;
-                  const percent = Math.round((matched / total) * 100);
-                  message = `${percent}% of image files have corresponding CSV file paths.`;
-                } else {
-                  message = `No image files available for CSV file path matching.`;
-                }
-              }
-              const hasData = csvData.data.length > 0;
-              const alertClass = hasData ? 'alert-info' : 'alert-danger';
-              const displayMessage = hasData
-                ? message
-                : 'No matching GPS data for selected images.';
-              return (
-                <div className={`alert ${alertClass} mb-0`}>
-                  {displayMessage}
-                </div>
-              );
-            })()}
-          </div>
-          <Form.Group className='mt-3'>
-            <Form.Label className='mb-0'>Camera Definition</Form.Label>
-            <span
-              className='text-muted d-block mb-1'
+            </div>
+          </Card.Body>
+        </Card>
+      )}
+
+      {csvData && (
+        <Card>
+          <Card.Header>
+            <h5 className='mb-0'>Cameras</h5>
+          </Card.Header>
+          <Card.Body>
+            <Form.Text
+              className='d-block text-muted mb-2'
               style={{ fontSize: '12px' }}
             >
               Does your survey have only one camera or multiple cameras?
-            </span>
+            </Form.Text>
             <LabeledToggleSwitch
               leftLabel='Single Camera'
               rightLabel='Multiple Cameras'
@@ -2867,8 +2956,6 @@ export function FileUploadCore({
                 )}
               </>
             )}
-            {/* Folder -> existing camera mapping (only when existing cameras
-                are available and folder names don't already match them) */}
             {multipleCameras &&
               cameraSelection &&
               cameraSelection[1].length > 0 &&
@@ -2933,7 +3020,6 @@ export function FileUploadCore({
                   )}
                 </Form.Group>
               )}
-            {/* Existing vs New camera notice */}
             {(() => {
               if (!cameraSelection) return null;
               const currentNames = cameraSelection[1];
@@ -2971,7 +3057,6 @@ export function FileUploadCore({
                 ['Survey Camera'],
               ])[1];
               const existingSet = new Set(existingCameraNames);
-              // Folders mapped to existing cameras don't need spec input.
               const onlyNew = names.filter(
                 (n) =>
                   !(useFolderCameraMapping && folderCameraMapping[n]) &&
@@ -2989,13 +3074,21 @@ export function FileUploadCore({
                 />
               );
             })()}
-          </Form.Group>
-        </>
+          </Card.Body>
+        </Card>
       )}
+
       {filteredImageFiles.length > 0 && csvData && (
-        <ImageMaskEditor setMasks={setMasks} />
+        <Card>
+          <Card.Header>
+            <h5 className='mb-0'>Image Masks (Optional)</h5>
+          </Card.Header>
+          <Card.Body>
+            <ImageMaskEditor setMasks={setMasks} />
+          </Card.Body>
+        </Card>
       )}
-    </>
+    </div>
   );
 }
 

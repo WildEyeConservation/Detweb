@@ -602,9 +602,11 @@ function OrgSwitcherDropdown({
                 >
                   {org.name}
                 </div>
-                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>
-                  {org.isAdmin ? 'Admin' : 'Annotator'}
-                </div>
+                {org.isAdmin && (
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>
+                    Admin
+                  </div>
+                )}
               </div>
               {org.id === currentOrg?.id && (
                 <Check size={13} color='var(--ss-accent)' />
@@ -619,7 +621,6 @@ function OrgSwitcherDropdown({
 
 function SidebarFooter({ signOut }: { signOut: () => void }) {
   const { user } = useContext(UserContext)!;
-  const { currentOrg, isCurrentOrgAdmin } = useOrg();
   const initials =
     (user.signInDetails?.loginId ?? user.username ?? 'U')
       .slice(0, 2)
@@ -666,13 +667,6 @@ function SidebarFooter({ signOut }: { signOut: () => void }) {
           }}
         >
           {email}
-        </div>
-        <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>
-          {currentOrg
-            ? isCurrentOrgAdmin
-              ? 'Org Admin'
-              : 'Annotator'
-            : 'No org selected'}
         </div>
       </div>
       <div

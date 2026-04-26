@@ -45,8 +45,7 @@ export default function CameraSpecification({
           {cameraList.map((camera) => (
             <Form.Group
               key={camera}
-              className='d-flex flex-column gap-1 border border-dark p-2 shadow-sm'
-              style={{ backgroundColor: '#697582' }}
+              className='d-flex flex-column gap-1 border rounded p-3'
             >
               <Form.Label className='mb-0'>
                 <b>{camera}</b>

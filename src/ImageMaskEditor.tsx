@@ -182,10 +182,7 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({ setMasks }) => {
   }, [imageDimensions, mapRef]);
 
   return (
-    <Form.Group className='mt-3'>
-      <Form.Label className='d-block mb-0'>
-        Create Image Masks (optional)
-      </Form.Label>
+    <Form.Group>
       <Form.Text
         className='d-block text-muted m-0 mb-2'
         style={{ fontSize: '12px' }}

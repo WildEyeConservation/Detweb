@@ -612,12 +612,11 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
 
   return (
     <>
-      <Form.Group className='mt-3'>
-        <Form.Label className='mb-0'>Upload Shapefile (Optional)</Form.Label>
-        <Form.Text className='d-block mb-1 mt-0' style={{ fontSize: '12px' }}>
-          If you have a zipped shapefile, you can upload it here. Uploading this
-          file will filter the GPS data to only include images within the
-          shapefile.
+      <div className='mb-3'>
+        <h6 className='mb-1'>Shapefile</h6>
+        <Form.Text className='d-block mb-2 mt-0' style={{ fontSize: '12px' }}>
+          Optional. Upload a zipped shapefile to limit the GPS data to images
+          inside it.
         </Form.Text>
         <FileInput
           id='shapefile-file'
@@ -629,18 +628,23 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
         >
           <p className='mb-0'>Select Shapefile</p>
         </FileInput>
-      </Form.Group>
-      <Form.Group className='mt-3 d-flex flex-column gap-2'>
+      </div>
+      <hr className='my-3' />
+      <Form.Group className='d-flex flex-column gap-2'>
         <div>
-          <Form.Label className='d-block mb-0'>
-            Filter Data by Polygon (Optional)
-          </Form.Label>
-          <Form.Text className='d-block' style={{ fontSize: '12px' }}>
-            <b>These points represent your georeferenced images.</b>
+          <h6 className='mb-1'>Polygon Filter</h6>
+          <Form.Text className='d-block mb-1' style={{ fontSize: '12px' }}>
+            Optional. Draw a polygon on the map to include or exclude images.
+            Orange points are included; red points are removed.
           </Form.Text>
-          <Form.Text style={{ fontSize: '12px' }}>
-            Use this tool to filter out images based on a polygon.
-            <ul>
+          <details className='mb-1' style={{ fontSize: '12px' }}>
+            <summary
+              className='text-muted'
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+            >
+              How to filter by polygon
+            </summary>
+            <ul className='mb-0 mt-1'>
               <li>
                 Select the polygon function in the top-right corner of the map.
               </li>
@@ -662,7 +666,7 @@ const GPSSubset: React.FC<GPSSubsetProps> = ({
                 images that are removed.
               </li>
             </ul>
-          </Form.Text>
+          </details>
         </div>
         {validExistingImages.length > 0 && (
           <Form.Check
