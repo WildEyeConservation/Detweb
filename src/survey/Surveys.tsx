@@ -2,7 +2,7 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { UserContext, GlobalContext } from '../Context.tsx';
 import { Schema } from '../amplify/client-schema.ts';
-import { Button, Form, Spinner } from 'react-bootstrap';
+import { Button, Form, OverlayTrigger, Popover, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import ConfirmationModal from '../ConfirmationModal.tsx';
 import AnnotationSetResults from '../AnnotationSetResults.tsx';
@@ -583,7 +583,6 @@ export default function Surveys() {
                                 <Button
                                   size='sm'
                                   variant='primary'
-                                  style={{ width: 90 }}
                                   onClick={() =>
                                     navigate(`/surveys/${project.id}/detail`)
                                   }
@@ -593,7 +592,6 @@ export default function Surveys() {
                                 <Button
                                   size='sm'
                                   variant='warning'
-                                  style={{ width: 90 }}
                                   onClick={() => navigate('/jobs')}
                                 >
                                   Take to Jobs
@@ -604,17 +602,107 @@ export default function Surveys() {
                                 <Button
                                   size='sm'
                                   variant='primary'
-                                  style={{ width: 90 }}
                                   onClick={() =>
                                     navigate(`/surveys/${project.id}/detail`)
                                   }
                                 >
                                   Open
                                 </Button>
+                                {(() => {
+                                  // One annotation set may be launched per survey, so
+                                  // hide Quick Launch once the survey is already launched.
+                                  if (
+                                    (project.status || '').toLowerCase() ===
+                                    'launched'
+                                  ) {
+                                    return null;
+                                  }
+                                  const launchSets = project.annotationSets ?? [];
+                                  const launchDisabled =
+                                    launchSets.length === 0 ||
+                                    (process.env.NODE_ENV !== 'development' &&
+                                      disabled);
+                                  if (launchSets.length <= 1) {
+                                    return (
+                                      <Button
+                                        size='sm'
+                                        variant='success'
+                                        disabled={launchDisabled}
+                                        title={
+                                          launchSets.length === 0
+                                            ? 'No annotation sets to launch.'
+                                            : undefined
+                                        }
+                                        onClick={() => {
+                                          if (launchSets.length === 1) {
+                                            navigate(
+                                              `/surveys/${project.id}/set/${launchSets[0].id}/launch`
+                                            );
+                                          }
+                                        }}
+                                      >
+                                        Quick Launch
+                                      </Button>
+                                    );
+                                  }
+                                  return (
+                                    <OverlayTrigger
+                                      trigger='click'
+                                      placement='bottom-end'
+                                      rootClose
+                                      overlay={
+                                        <Popover
+                                          id={`quick-launch-${project.id}`}
+                                          style={{
+                                            borderRadius: 12,
+                                            overflow: 'hidden',
+                                          }}
+                                        >
+                                          <Popover.Body
+                                            style={{
+                                              display: 'flex',
+                                              flexDirection: 'column',
+                                              gap: 6,
+                                              minWidth: 180,
+                                              padding: 10,
+                                            }}
+                                          >
+                                            {launchSets.map(
+                                              (set: {
+                                                id: string;
+                                                name: string;
+                                              }) => (
+                                                <Button
+                                                  key={set.id}
+                                                  size='sm'
+                                                  variant='primary'
+                                                  onClick={() =>
+                                                    navigate(
+                                                      `/surveys/${project.id}/set/${set.id}/launch`
+                                                    )
+                                                  }
+                                                >
+                                                  {set.name}
+                                                </Button>
+                                              )
+                                            )}
+                                          </Popover.Body>
+                                        </Popover>
+                                      }
+                                    >
+                                      <Button
+                                        size='sm'
+                                        variant='success'
+                                        disabled={launchDisabled}
+                                      >
+                                        Quick Launch
+                                      </Button>
+                                    </OverlayTrigger>
+                                  );
+                                })()}
                                 <Button
                                   size='sm'
                                   variant='secondary'
-                                  style={{ width: 90 }}
                                   onClick={() =>
                                     navigate(`/surveys/${project.id}/settings`)
                                   }
