@@ -21,6 +21,7 @@ import {
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { GlobalContext, UserContext } from './Context';
 import type { Schema } from './amplify/client-schema';
+import { ContentArea } from './ss/PageShell';
 
 type MaybeNumber = number | null;
 
@@ -590,7 +591,7 @@ export default function AwsServiceHealth() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <ContentArea style={{ paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 24 }}>
       <section>
         <SectionHeader
           title='Queue Health'
@@ -763,7 +764,7 @@ export default function AwsServiceHealth() {
           </div>
         )}
       </section>
-    </div>
+    </ContentArea>
   );
 }
 

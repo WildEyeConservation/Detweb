@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { GlobalContext } from './Context';
 import { fetchAllPaginatedResults } from './utils';
 import type { Schema } from './amplify/client-schema';
+import { ContentArea } from './ss/PageShell';
 
 type ProjectType = Schema['Project']['type'];
 
@@ -193,7 +194,7 @@ export default function AdminSurveys() {
   );
 
   return (
-    <div>
+    <ContentArea style={{ paddingTop: 12 }}>
       <div
         style={{
           display: 'flex',
@@ -387,7 +388,7 @@ export default function AdminSurveys() {
           })}
         </div>
       )}
-    </div>
+    </ContentArea>
   );
 }
 
