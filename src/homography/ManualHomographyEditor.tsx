@@ -198,12 +198,13 @@ export function ManualHomographyEditor({
       <Card.Header className='border-bottom border-secondary py-3'>
         <div className='d-flex align-items-center justify-content-between'>
           <Card.Title className='mb-0 d-flex align-items-center gap-2'>
-            <SquareDashed size={20} className='text-info' />
+            <SquareDashed size={20} style={{ color: 'var(--ss-accent)' }} />
             Homography Creation
           </Card.Title>
           <Button
             variant='link'
-            className='p-0 text-info text-decoration-none d-flex align-items-center gap-1 small'
+            className='p-0 text-decoration-none d-flex align-items-center gap-1 small'
+            style={{ color: 'var(--ss-accent)' }}
             onClick={() => setMoreInformation(!moreInformation)}
           >
             {moreInformation ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -212,22 +213,34 @@ export function ManualHomographyEditor({
         </div>
         {moreInformation && (
           <div className='mt-3 pt-3 border-top border-secondary'>
-            <div className='d-flex align-items-center gap-2 mb-2 text-info'>
+            <div
+              className='d-flex align-items-center gap-2 mb-2'
+              style={{ color: 'var(--ss-accent)' }}
+            >
               <Info size={16} />
-              <span className='fw-bold small'>Instructions</span>
+              <span className='small' style={{ fontWeight: 400 }}>Instructions</span>
             </div>
-            <ul className='small ps-3' style={{ opacity: 0.9, lineHeight: '1.6' }}>
+            <ul
+              className='small ps-3'
+              style={{ lineHeight: '1.6', fontWeight: 400 }}
+            >
               <li>Select at least {MIN_HOMOGRAPHY_POINTS} corresponding points on both images. More points typically yield a better fit.</li>
               <li>Aim to cover as much area as possible.</li>
               <li>Avoid placing points in straight lines.</li>
               <li>Right-click a marker to remove/swap it or press <b>Esc</b> to close the popup.</li>
               <li>Preview will be available after 4 pairs have been created.</li>
             </ul>
-            <div className='d-flex align-items-center gap-2 mb-2 mt-3 text-info'>
+            <div
+              className='d-flex align-items-center gap-2 mb-2 mt-3'
+              style={{ color: 'var(--ss-accent)' }}
+            >
               <Target size={14} />
-              <span className='fw-bold small'>Shortcuts</span>
+              <span className='small' style={{ fontWeight: 400 }}>Shortcuts</span>
             </div>
-            <ul className='small mb-0 ps-3 list-unstyled' style={{ lineHeight: '1.6' }}>
+            <ul
+              className='small mb-0 ps-3 list-unstyled'
+              style={{ lineHeight: '1.6', fontWeight: 400 }}
+            >
               <li><kbd style={{ padding: '2px 4px', borderRadius: '4px', fontSize: '10px' }}>Ctrl + Z</kbd> Undo</li>
               <li><kbd style={{ padding: '2px 4px', borderRadius: '4px', fontSize: '10px' }}>Ctrl + Y</kbd> / <kbd style={{ padding: '2px 4px', borderRadius: '4px', fontSize: '10px' }}>Ctrl+Shift+Z</kbd> Redo</li>
               <li><kbd style={{ padding: '2px 4px', borderRadius: '4px', fontSize: '10px' }}>Esc</kbd> Close context menu</li>
@@ -244,9 +257,9 @@ export function ManualHomographyEditor({
                 <div
                   key={`pair-${i}`}
                   style={{
-                    background: '#5B6977',
-                    border: '1px solid rgba(255,255,255,0.05)',
-                    borderRadius: '6px',
+                    background: 'var(--ss-surface)',
+                    border: '1px solid var(--ss-border)',
+                    borderRadius: 6,
                     overflow: 'hidden',
                     display: 'flex',
                   }}
@@ -269,7 +282,15 @@ export function ManualHomographyEditor({
                   </div>
                   <div className='d-flex align-items-center gap-2 flex-grow-1' style={{ padding: '8px' }}>
                     {/* Image 1 Point */}
-                    <div className='flex-grow-1 p-2' style={{ background: '#4E5D6C', borderRadius: '4px' }}>
+                    <div
+                      className='flex-grow-1 p-2'
+                      style={{
+                        background: 'var(--ss-surface-alt)',
+                        border: '1px solid var(--ss-border-soft)',
+                        borderRadius: 4,
+                        color: 'var(--ss-text)',
+                      }}
+                    >
                       {p1 ? (
                         <div className='d-flex align-items-center justify-content-between'>
                           <span className='small mono'>
@@ -285,12 +306,25 @@ export function ManualHomographyEditor({
                           </Button>
                         </div>
                       ) : (
-                        <span className='opacity-50 small fst-italic'>Pending...</span>
+                        <span
+                          className='small fst-italic'
+                          style={{ color: 'var(--ss-text-dim)' }}
+                        >
+                          Pending...
+                        </span>
                       )}
                     </div>
 
                     {/* Image 2 Point */}
-                    <div className='flex-grow-1 p-2' style={{ background: '#4E5D6C', borderRadius: '4px' }}>
+                    <div
+                      className='flex-grow-1 p-2'
+                      style={{
+                        background: 'var(--ss-surface-alt)',
+                        border: '1px solid var(--ss-border-soft)',
+                        borderRadius: 4,
+                        color: 'var(--ss-text)',
+                      }}
+                    >
                       {p2 ? (
                         <div className='d-flex align-items-center justify-content-between'>
                           <span className='small mono'>
@@ -306,7 +340,12 @@ export function ManualHomographyEditor({
                           </Button>
                         </div>
                       ) : (
-                        <span className='opacity-50 small fst-italic'>Pending...</span>
+                        <span
+                          className='small fst-italic'
+                          style={{ color: 'var(--ss-text-dim)' }}
+                        >
+                          Pending...
+                        </span>
                       )}
                     </div>
 

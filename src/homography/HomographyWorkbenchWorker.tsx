@@ -1,5 +1,9 @@
 import { useState, useContext, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { Button } from 'react-bootstrap';
+import { LogOut } from 'lucide-react';
 import { GlobalContext } from '../Context';
+import { AnnotateChromeContext } from '../ss/AnnotateChrome';
 import { HomographyWorkbench } from './HomographyWorkbench';
 import type { Matrix } from 'mathjs';
 import { inv } from 'mathjs';
@@ -133,6 +137,7 @@ export function HomographyWorkbenchWorker({
   isSaved = false,
 }: Props) {
   const { client } = useContext(GlobalContext)!;
+  const { rightEl } = useContext(AnnotateChromeContext);
   const [isSaving, setIsSaving] = useState(false);
   const [isSkipping, setIsSkipping] = useState(false);
   const currentPointsRef = useRef<{ p1: Point[]; p2: Point[] }>({ p1: [], p2: [] });
@@ -300,51 +305,67 @@ export function HomographyWorkbenchWorker({
     );
   }
 
-  return (
-    <HomographyWorkbench
-      images={[pair.primaryImage as any, pair.secondaryImage as any]}
-      onSave={handleSave}
-      onSkip={handleSkip}
-      isSaving={isSaving}
-      isSkipping={isSkipping}
-      annotationSetId={pair.annotationSetId}
-      initialPoints={savedPoints ?? suggestedInitialPoints}
-      onPointsChange={handlePointsChange}
-      isSaved={isSaved}
-      headerLeft={
-        <div className='d-flex align-items-center gap-2'>
-          {header}
-          {onBack && (
-            <button
-              className='btn btn-sm btn-outline-primary'
-              onClick={handleBack}
-              disabled={isSaving || isSkipping}
-            >
-              Previous Pair
-            </button>
-          )}
-          {onForward && (
-            <button
-              className='btn btn-sm btn-outline-primary'
-              onClick={handleForward}
-              disabled={isSaving || isSkipping}
-            >
-              Next Pair
-            </button>
-          )}
-        </div>
-      }
-      headerRight={
-        onExit ? (
-          <button
-            className='btn btn-sm btn-outline-success'
+  const chromeRight =
+    onExit && rightEl
+      ? createPortal(
+          <Button
             onClick={handleSaveAndExit}
             disabled={isSaving || isSkipping}
+            className='d-flex align-items-center gap-2'
+            style={{
+              background: 'transparent',
+              borderColor: 'rgba(255,255,255,0.4)',
+              color: '#fff',
+              fontWeight: 500,
+              fontSize: 13,
+              padding: '5px 12px',
+              borderRadius: 6,
+            }}
           >
-            Save &amp; Exit
-          </button>
-        ) : undefined
-      }
-    />
+            <LogOut size={14} />
+            <span className='d-none d-sm-inline'>Save &amp; Exit</span>
+          </Button>,
+          rightEl
+        )
+      : null;
+
+  return (
+    <>
+      {chromeRight}
+      <HomographyWorkbench
+        images={[pair.primaryImage as any, pair.secondaryImage as any]}
+        onSave={handleSave}
+        onSkip={handleSkip}
+        isSaving={isSaving}
+        isSkipping={isSkipping}
+        annotationSetId={pair.annotationSetId}
+        initialPoints={savedPoints ?? suggestedInitialPoints}
+        onPointsChange={handlePointsChange}
+        isSaved={isSaved}
+        headerLeft={
+          <div className='d-flex align-items-center gap-2'>
+            {header}
+            {onBack && (
+              <button
+                className='btn btn-sm btn-outline-primary'
+                onClick={handleBack}
+                disabled={isSaving || isSkipping}
+              >
+                Previous Pair
+              </button>
+            )}
+            {onForward && (
+              <button
+                className='btn btn-sm btn-outline-primary'
+                onClick={handleForward}
+                disabled={isSaving || isSkipping}
+              >
+                Next Pair
+              </button>
+            )}
+          </div>
+        }
+      />
+    </>
   );
 }

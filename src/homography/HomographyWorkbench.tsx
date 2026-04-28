@@ -23,8 +23,6 @@ type Props = {
   annotationSetId?: string;
   /** Navigation buttons rendered on the left of the toolbar (e.g. Back / Forward) */
   headerLeft?: React.ReactNode;
-  /** Action buttons rendered on the right of the toolbar (e.g. Save & Exit) */
-  headerRight?: React.ReactNode;
   /** Initial points to restore (e.g. when navigating back to a previously visited pair) */
   initialPoints?: { p1: Point[]; p2: Point[] };
   /** Called whenever the point state changes, so the parent can snapshot for back navigation */
@@ -41,7 +39,6 @@ export function HomographyWorkbench({
   isSkipping = false,
   annotationSetId,
   headerLeft,
-  headerRight,
   initialPoints,
   onPointsChange,
   isSaved = false,
@@ -211,14 +208,14 @@ export function HomographyWorkbench({
 
       {/* Main content */}
       <div className='d-flex flex-column align-items-center h-100 w-100'>
-        <div className='mb-2 d-flex align-items-center w-100'>
+        <div className='mb-2 d-flex align-items-center justify-content-between w-100'>
           {/* Left: navigation */}
           <div className='d-flex align-items-center gap-2'>
             {headerLeft}
           </div>
 
-          {/* Center: preview toggle + undo/redo */}
-          <div className='d-flex align-items-center gap-3 mx-auto'>
+          {/* Right: preview toggle + undo/redo */}
+          <div className='d-flex align-items-center gap-3'>
             <Form.Check
               type='switch'
               id='preview-homography'
@@ -249,11 +246,6 @@ export function HomographyWorkbench({
                 <Redo2 size={16} />
               </Button>
             </div>
-          </div>
-
-          {/* Right: save & exit */}
-          <div className='d-flex align-items-center gap-2'>
-            {headerRight}
           </div>
         </div>
         <MapLibrePairViewer
