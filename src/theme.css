@@ -501,11 +501,20 @@ a:hover { color: var(--ss-accent-hover); }
 }
 
 /* Layout shell */
+:root {
+  /* Total horizontal space taken by the sidebar (including the expand rail
+     when collapsed). Popovers anchored to the sidebar use this. */
+  --ss-shell-left: 220px;
+}
+body.ss-sidebar-collapsed {
+  --ss-shell-left: 90px; /* 64 sidebar + 26 rail */
+}
 .ss-app-shell {
   display: flex;
   height: 100dvh;
   overflow: hidden;
   background: var(--ss-content-bg);
+  position: relative;
 }
 .ss-sidebar {
   width: 220px;
@@ -515,13 +524,199 @@ a:hover { color: var(--ss-accent-hover); }
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: width 0.2s ease, transform 0.25s ease;
 }
+.ss-sidebar.collapsed {
+  width: 64px;
+}
+.ss-sidebar.collapsed .ss-sidebar-section-label,
+.ss-sidebar.collapsed .ss-nav-label {
+  display: none;
+}
+.ss-sidebar.collapsed .ss-nav-item {
+  margin: 2px 8px;
+  padding: 8px;
+  justify-content: center;
+  gap: 0;
+}
+.ss-sidebar.collapsed .ss-sidebar-system-group {
+  margin: 10px 8px 4px !important;
+}
+
+/* Expand rail — small dedicated column to the right of the collapsed sidebar.
+   Avoids overlap with content and stays clear of the sidebar's overflow clip.
+   Only the icon button at the top is interactive. */
+.ss-sidebar-rail {
+  width: 26px;
+  flex-shrink: 0;
+  background: var(--ss-content-bg);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 18px;
+}
+.ss-sidebar-rail-btn {
+  background: transparent;
+  border: none;
+  color: var(--ss-text-muted);
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.ss-sidebar-rail-btn:hover {
+  background: #e9e8e1;
+  color: var(--ss-text);
+}
+
+/* Sidebar icon-only buttons (collapse toggle, mobile close) */
+.ss-sidebar-icon-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.ss-sidebar-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+/* Mobile top bar — hidden on desktop */
+.ss-mobile-topbar {
+  display: none;
+}
+.ss-mobile-topbar-burger {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.ss-mobile-topbar-burger:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Mobile drawer backdrop — hidden on desktop */
+.ss-sidebar-backdrop {
+  display: none;
+}
+
+.ss-mobile-only { display: none; }
+.ss-desktop-only { display: flex; }
+
+/* Sidebar-anchored popover (uploads, notifications). Sits at the bottom-left
+   of the viewport, just to the right of the sidebar. On mobile it becomes a
+   full-width sheet, since the sidebar is a slide-out drawer. */
+.ss-sidebar-popover {
+  position: fixed;
+  left: calc(var(--ss-shell-left) + 10px);
+  bottom: 16px;
+  width: min(360px, calc(100vw - var(--ss-shell-left) - 26px));
+  max-height: calc(100vh - 32px);
+  background: #1b2820;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  z-index: 1050;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .ss-sidebar-rail { display: none !important; }
+  .ss-sidebar-popover {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+    max-height: calc(100vh - 24px);
+  }
+}
+
+@media (max-width: 768px) {
+  .ss-app-shell {
+    flex-direction: column;
+  }
+  .ss-mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--ss-sidebar-bg);
+    color: #fff;
+    flex-shrink: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    z-index: 10;
+  }
+  .ss-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 264px !important;
+    z-index: 1001;
+    transform: translateX(-100%);
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.35);
+  }
+  .ss-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+  /* Force expanded layout on mobile drawer regardless of collapsed state */
+  .ss-sidebar.collapsed .ss-sidebar-section-label,
+  .ss-sidebar.collapsed .ss-nav-label {
+    display: revert;
+  }
+  .ss-sidebar.collapsed .ss-nav-item {
+    margin: 1px 8px;
+    padding: 7px 10px;
+    justify-content: flex-start;
+    gap: 9px;
+  }
+  .ss-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .ss-sidebar-backdrop.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .ss-mobile-only { display: flex; }
+  .ss-desktop-only { display: none !important; }
+}
+
 .ss-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background: var(--ss-content-bg);
+  min-width: 0;
 }
 .ss-content-scroll {
   flex: 1;

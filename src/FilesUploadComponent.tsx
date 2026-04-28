@@ -2252,6 +2252,12 @@ export function FileUploadCore({
               if (e) setModel(e);
             }}
             placeholder='Select a model'
+            menuPortalTarget={
+              typeof document !== 'undefined' ? document.body : undefined
+            }
+            styles={{
+              menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+            }}
           />
         </Card.Body>
       </Card>

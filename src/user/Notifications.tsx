@@ -1,9 +1,7 @@
 import { useContext, useState } from 'react';
 import { GlobalContext, UserContext } from '../Context';
 import { Schema } from '../amplify/client-schema';
-import Button from 'react-bootstrap/Button';
 import { Bell, Check, X, RefreshCw } from 'lucide-react';
-import { Card } from 'react-bootstrap';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 export default function Notifications() {
@@ -25,120 +23,218 @@ export default function Notifications() {
 
   const pendingInvites = allInvites?.filter((inv) => inv.status === 'pending') ?? [];
   const totalNotifications = pendingInvites.length;
+  const hasActivity = totalNotifications > 0;
 
   return (
     <div className='position-relative'>
       <button
-        className='text-muted px-2 d-flex align-items-center justify-content-center'
+        onClick={() => setShow((s) => !s)}
+        title={hasActivity ? 'Pending notifications' : 'Notifications'}
         style={{
           position: 'relative',
-          backgroundColor: 'transparent',
+          background: 'transparent',
           border: 'none',
           cursor: 'pointer',
+          padding: 6,
+          color: hasActivity ? '#fff' : 'rgba(255,255,255,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
-        onClick={() => setShow(!show)}
       >
-        <div
-          style={{ position: 'relative', height: '100%' }}
-        >
-          <div
-            className='text-white bg-primary'
+        <Bell size={18} />
+        {totalNotifications > 0 && (
+          <span
+            className='bg-primary text-white'
             style={{
               position: 'absolute',
-              top: -5,
-              right: -5,
-              borderRadius: '50%',
-              minWidth: '16px',
-              height: '16px',
+              top: 0,
+              right: 0,
+              minWidth: 16,
+              height: 16,
+              padding: '0 4px',
+              borderRadius: 8,
+              fontSize: 10,
+              fontWeight: 700,
               display: 'flex',
-              justifyContent: 'center',
               alignItems: 'center',
-              fontSize: '14px',
+              justifyContent: 'center',
+              lineHeight: 1,
             }}
           >
             {totalNotifications}
-          </div>
-          <Bell />
-        </div>
+          </span>
+        )}
       </button>
+
       {show && (
         <div
           style={{
             position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
+            inset: 0,
             zIndex: 1049,
           }}
           onClick={() => setShow(false)}
         />
       )}
-      {username && (
-        <Card
-          className='position-fixed'
-          style={{
-            width: 'min(400px, calc(100vw - 32px))',
-            left: 230,
-            bottom: 16,
-            maxHeight: 'calc(100vh - 32px)',
-            opacity: show ? 1 : 0,
-            pointerEvents: show ? 'auto' : 'none',
-            transition: 'opacity 0.15s ease-in-out',
-            overflow: 'auto',
-            zIndex: 1050,
-          }}
-        >
-          <Card.Header className='d-flex justify-content-between align-items-center'>
-            <div className='d-flex align-items-center gap-2'>
-              <Card.Title className='mb-0'>Notifications</Card.Title>
-              <Button
-                variant='link'
-                size='sm'
-                className='p-0 text-muted'
-                onClick={() => refetch()}
-                disabled={isFetching}
-                title='Refresh'
-              >
-                <RefreshCw size={16} className={isFetching ? 'spinning' : undefined} />
-              </Button>
-            </div>
-            <X onClick={() => setShow(false)} style={{ cursor: 'pointer' }} />
-          </Card.Header>
-          <Card.Body>
-            <Inbox invites={pendingInvites} queryKey={['OrganizationInvite', username]} />
-          </Card.Body>
-        </Card>
+
+      {show && username && (
+        <NotificationsPopover
+          invites={pendingInvites}
+          totalNotifications={totalNotifications}
+          isFetching={isFetching}
+          onRefresh={() => refetch()}
+          onClose={() => setShow(false)}
+          queryKey={['OrganizationInvite', username]}
+        />
       )}
     </div>
   );
 }
 
-function Inbox({
+function NotificationsPopover({
   invites,
+  totalNotifications,
+  isFetching,
+  onRefresh,
+  onClose,
   queryKey,
 }: {
   invites: Schema['OrganizationInvite']['type'][];
+  totalNotifications: number;
+  isFetching: boolean;
+  onRefresh: () => void;
+  onClose: () => void;
   queryKey: unknown[];
 }) {
-  return invites.length === 0 ? (
-    <h5 className='text-center mb-0 p-2'>Empty</h5>
-  ) : (
-    <>
-      {invites.map((invite, i) => (
-        <Invite key={invite.id} invite={invite} index={i} queryKey={queryKey} />
-      ))}
-    </>
+  return (
+    <div className='ss-sidebar-popover'>
+      <div
+        style={{
+          padding: '14px 16px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Bell size={16} color='rgba(255,255,255,0.85)' />
+          <div
+            style={{
+              color: '#fff',
+              fontSize: 15,
+              fontWeight: 700,
+              letterSpacing: '-0.01em',
+            }}
+          >
+            Notifications
+          </div>
+          {totalNotifications > 0 && (
+            <div
+              style={{
+                background: 'rgba(77,143,110,0.25)',
+                color: '#a6e0c2',
+                border: '1px solid rgba(77,143,110,0.45)',
+                fontSize: 11,
+                fontWeight: 700,
+                padding: '1px 7px',
+                borderRadius: 999,
+                lineHeight: 1.4,
+              }}
+            >
+              {totalNotifications}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={onRefresh}
+            disabled={isFetching}
+            title='Refresh'
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: isFetching ? 'default' : 'pointer',
+              color: 'rgba(255,255,255,0.55)',
+              display: 'flex',
+              alignItems: 'center',
+              padding: 0,
+              opacity: isFetching ? 0.5 : 1,
+            }}
+          >
+            <RefreshCw size={14} className={isFetching ? 'spinning' : undefined} />
+          </button>
+          <X
+            size={16}
+            color='rgba(255,255,255,0.55)'
+            style={{ cursor: 'pointer' }}
+            onClick={onClose}
+          />
+        </div>
+      </div>
+
+      <div
+        style={{
+          padding: 14,
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+        }}
+      >
+        {invites.length === 0 ? (
+          <div
+            style={{
+              padding: '28px 12px',
+              textAlign: 'center',
+              color: 'rgba(255,255,255,0.45)',
+              fontSize: 13,
+            }}
+          >
+            <Bell
+              size={28}
+              color='rgba(255,255,255,0.2)'
+              style={{ marginBottom: 8 }}
+            />
+            <div>No notifications</div>
+            <div style={{ fontSize: 11, marginTop: 4, color: 'rgba(255,255,255,0.3)' }}>
+              Pending invites and other alerts will appear here.
+            </div>
+          </div>
+        ) : (
+          <>
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                color: 'rgba(255,255,255,0.35)',
+                padding: '0 2px',
+              }}
+            >
+              Pending
+            </div>
+            {invites.map((invite) => (
+              <Invite
+                key={invite.id}
+                invite={invite}
+                queryKey={queryKey}
+              />
+            ))}
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
 function Invite({
   invite,
-  index,
   queryKey,
 }: {
   invite: Schema['OrganizationInvite']['type'];
-  index: number;
   queryKey: unknown[];
 }) {
   const { client } = useContext(GlobalContext)!;
@@ -210,30 +306,119 @@ function Invite({
     }
   }
 
+  const organizationName =
+    (invite as { organizationName?: string }).organizationName ??
+    'Unknown organisation';
+
   return (
     <div
-      className={`d-flex flex-row gap-2 text-primary-subtle text-start p-2 ${index % 2 !== 0 ? 'bg-secondary text-dark' : ''
-        }`}
+      style={{
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        borderRadius: 10,
+        padding: '12px 14px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+      }}
     >
-      <div>
-        <p className='mb-2' style={{ fontSize: '1.25rem' }}>
-          Organization Invite
-        </p>
-        <p className='mb-0'>
-          <b>
-            {(invite as any).organizationName ?? 'Unknown Organization'}
-          </b>{' '}
-          invited you to their organisation.
-        </p>
+      <div style={{ minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: 'rgba(255,255,255,0.35)',
+            marginBottom: 4,
+          }}
+        >
+          Organisation invite
+        </div>
+        <div
+          style={{
+            color: '#fff',
+            fontSize: 14,
+            fontWeight: 600,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          title={organizationName}
+        >
+          {organizationName}
+        </div>
+        <div
+          style={{
+            color: 'rgba(255,255,255,0.55)',
+            fontSize: 12,
+            marginTop: 2,
+            lineHeight: 1.4,
+          }}
+        >
+          invited you to join their organisation.
+        </div>
       </div>
-      <div className='d-flex gap-1'>
-        <Button variant='success' onClick={acceptInvite} disabled={responding}>
-          <Check />
-        </Button>
-        <Button variant='danger' onClick={declineInvite} disabled={responding}>
-          <X />
-        </Button>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <ActionButton
+          onClick={declineInvite}
+          disabled={responding}
+          variant='decline'
+          icon={<X size={14} />}
+          label='Decline'
+        />
+        <ActionButton
+          onClick={acceptInvite}
+          disabled={responding}
+          variant='accept'
+          icon={<Check size={14} />}
+          label='Accept'
+        />
       </div>
     </div>
+  );
+}
+
+function ActionButton({
+  onClick,
+  disabled,
+  variant,
+  icon,
+  label,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  variant: 'accept' | 'decline';
+  icon: React.ReactNode;
+  label: string;
+}) {
+  const isAccept = variant === 'accept';
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        padding: '5px 11px',
+        borderRadius: 7,
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
+        background: isAccept
+          ? 'rgba(77,143,110,0.25)'
+          : 'rgba(224,122,106,0.18)',
+        border: `1px solid ${
+          isAccept ? 'rgba(77,143,110,0.5)' : 'rgba(224,122,106,0.45)'
+        }`,
+        color: isAccept ? '#a6e0c2' : '#f1b3a8',
+        transition: 'background 0.15s',
+      }}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }

@@ -9,7 +9,6 @@ import {
 import {
   ChevronDown,
   Check,
-  Plus,
   Search,
   ClipboardList,
   Briefcase,
@@ -17,13 +16,16 @@ import {
   Users,
   FlaskConical,
   Settings2,
-  LogOut,
+  Menu,
+  X,
+  PanelLeftClose,
+  PanelLeftOpen,
   type LucideIcon,
 } from 'lucide-react';
 import { ProgressIndicators } from './ProgressIndicators.jsx';
 import Notifications from './user/Notifications.tsx';
 import Settings from './user/Settings.tsx';
-import UploadProgress from './upload/UploadProgress.tsx';
+import UploadStatusButton from './upload/UploadsPanel.tsx';
 import { UserContext, GlobalContext } from './Context.tsx';
 import { useOrg, OrgSummary } from './OrgContext';
 import { verifyToken } from './utils/jwt.ts';
@@ -98,6 +100,30 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
 
   const location = useLocation();
   const navigate = useNavigate();
+
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem('ss-sidebar-collapsed') === 'true'
+  );
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('ss-sidebar-collapsed', String(collapsed));
+    document.body.classList.toggle('ss-sidebar-collapsed', collapsed);
+    return () => document.body.classList.remove('ss-sidebar-collapsed');
+  }, [collapsed]);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMobileOpen(false);
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [mobileOpen]);
 
   const myAdminProjects = myProjectsHook.data?.filter((p) => p.isAdmin) ?? [];
   const belongsToOrganization = myOrganizationHook.data.length > 0;
@@ -202,11 +228,45 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
 
   const activeId = resolveActiveNavId(location.pathname);
 
+  const sidebarClass = [
+    'ss-sidebar',
+    collapsed ? 'collapsed' : '',
+    mobileOpen ? 'mobile-open' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
     <div className='ss-app-shell'>
-      <aside className='ss-sidebar'>
-        <SidebarHeader />
-        <OrgSwitcher />
+      <header className='ss-mobile-topbar'>
+        <button
+          className='ss-mobile-topbar-burger'
+          onClick={() => setMobileOpen(true)}
+          aria-label='Open navigation'
+        >
+          <Menu size={18} />
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <img src='/Logo.png' alt='Logo' style={{ height: 24 }} />
+          <span style={{ fontWeight: 700, fontSize: 14 }}>SurveyScope</span>
+        </div>
+      </header>
+
+      <div
+        className={`ss-sidebar-backdrop${mobileOpen ? ' visible' : ''}`}
+        onClick={() => setMobileOpen(false)}
+      />
+
+      <aside className={sidebarClass}>
+        <SidebarHeader
+          collapsed={collapsed}
+          onToggleCollapse={() => setCollapsed((c) => !c)}
+          onCloseMobile={() => setMobileOpen(false)}
+        />
+        <OrgSwitcher
+          collapsed={collapsed}
+          onExpand={() => setCollapsed(false)}
+        />
 
         <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
           {NAV.map((section) => {
@@ -222,6 +282,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                     key={item.id}
                     item={item}
                     active={activeId === item.id}
+                    collapsed={collapsed}
                   />
                 ))}
               </div>
@@ -230,6 +291,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
 
           {cognitoGroups.includes('sysadmin') && (
             <div
+              className='ss-sidebar-system-group'
               style={{
                 margin: '10px 10px 4px',
                 borderTop: '1px solid rgba(255,255,255,0.07)',
@@ -237,16 +299,8 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
               }}
             >
               <div
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  padding: '0 4px 4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
+                className='ss-sidebar-section-label'
+                style={{ padding: '0 4px 4px' }}
               >
                 <span style={{ color: 'rgba(255,255,255,0.22)' }}>System</span>
               </div>
@@ -255,6 +309,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                   key={item.id}
                   item={item}
                   active={activeId === item.id}
+                  collapsed={collapsed}
                   muted
                 />
               ))}
@@ -262,14 +317,27 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
           )}
         </nav>
 
-        <SidebarFooter signOut={signOut} />
+        <SidebarFooter signOut={signOut} collapsed={collapsed} />
       </aside>
+
+      {collapsed && (
+        <div className='ss-sidebar-rail ss-desktop-only'>
+          <button
+            type='button'
+            onClick={() => setCollapsed(false)}
+            aria-label='Expand sidebar'
+            title='Expand sidebar'
+            className='ss-sidebar-rail-btn'
+          >
+            <PanelLeftOpen size={15} />
+          </button>
+        </div>
+      )}
 
       <section className='ss-content'>
         <div className='ss-content-scroll'>
           <Outlet />
         </div>
-        <UploadProgress />
         <ProgressIndicators />
       </section>
     </div>
@@ -298,37 +366,75 @@ function resolveActiveNavId(pathname: string): string {
   return 'surveys';
 }
 
-function SidebarHeader() {
+function SidebarHeader({
+  collapsed,
+  onToggleCollapse,
+  onCloseMobile,
+}: {
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+  onCloseMobile: () => void;
+}) {
   return (
     <div
       style={{
-        padding: '18px 16px 14px',
+        padding: collapsed ? '14px 8px' : '18px 12px 14px 16px',
         display: 'flex',
         alignItems: 'center',
         gap: 10,
         borderBottom: '1px solid rgba(255,255,255,0.06)',
+        justifyContent: collapsed ? 'center' : 'space-between',
+        position: 'relative',
       }}
     >
-      <img
-        src='/Logo.png'
-        alt='Logo'
-        style={{ height: '32px', marginRight: '4px' }}
-      />
-      <div>
-        <div
-          style={{
-            color: '#fff',
-            fontWeight: 700,
-            fontSize: 14,
-            letterSpacing: '-0.01em',
-          }}
-        >
-          SurveyScope
-        </div>
-        <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10 }}>
-          AI Aerial-Census Software
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+        <img
+          src='/Logo.png'
+          alt='Logo'
+          style={{ height: '32px', flexShrink: 0 }}
+        />
+        {!collapsed && (
+          <div className='ss-sidebar-collapse-hide' style={{ minWidth: 0 }}>
+            <div
+              style={{
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: 14,
+                letterSpacing: '-0.01em',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              SurveyScope
+            </div>
+            <div
+              style={{
+                color: 'rgba(255,255,255,0.35)',
+                fontSize: 10,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              AI Aerial-Census Software
+            </div>
+          </div>
+        )}
       </div>
+      {!collapsed && (
+        <button
+          onClick={onToggleCollapse}
+          aria-label='Collapse sidebar'
+          title='Collapse sidebar'
+          className='ss-sidebar-icon-btn ss-desktop-only'
+        >
+          <PanelLeftClose size={15} />
+        </button>
+      )}
+      <button
+        onClick={onCloseMobile}
+        aria-label='Close navigation'
+        className='ss-sidebar-icon-btn ss-mobile-only'
+      >
+        <X size={16} />
+      </button>
     </div>
   );
 }
@@ -361,10 +467,12 @@ function LogoMark() {
 function SidebarNavItem({
   item,
   active,
+  collapsed = false,
   muted = false,
 }: {
   item: NavDef;
   active: boolean;
+  collapsed?: boolean;
   muted?: boolean;
 }) {
   const Icon = item.icon;
@@ -372,6 +480,7 @@ function SidebarNavItem({
     <NavLink
       to={item.to}
       className={`ss-nav-item ${active ? 'active' : ''}`}
+      title={collapsed ? item.label : undefined}
       style={
         muted && !active
           ? { color: 'rgba(255,255,255,0.32)' }
@@ -381,8 +490,8 @@ function SidebarNavItem({
       <span className='ss-nav-icon'>
         <Icon size={15} />
       </span>
-      {item.label}
-      {active && (
+      <span className='ss-nav-label'>{item.label}</span>
+      {active && !collapsed && (
         <span
           style={{
             marginLeft: 'auto',
@@ -397,7 +506,13 @@ function SidebarNavItem({
   );
 }
 
-function OrgSwitcher() {
+function OrgSwitcher({
+  collapsed,
+  onExpand,
+}: {
+  collapsed: boolean;
+  onExpand: () => void;
+}) {
   const { orgs, currentOrg, setCurrentOrg } = useOrg();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -415,6 +530,39 @@ function OrgSwitcher() {
   const filtered = orgs.filter((o) =>
     o.name.toLowerCase().includes(query.toLowerCase())
   );
+
+  if (collapsed) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          padding: '10px 0 4px',
+        }}
+      >
+        <div
+          onClick={onExpand}
+          title={currentOrg?.name ?? 'Select organisation'}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            background: 'rgba(77,143,110,0.27)',
+            border: '1px solid rgba(77,143,110,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 12,
+            fontWeight: 700,
+            color: '#fff',
+            cursor: 'pointer',
+          }}
+        >
+          {currentOrg?.name?.[0]?.toUpperCase() ?? '?'}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -619,13 +767,66 @@ function OrgSwitcherDropdown({
   );
 }
 
-function SidebarFooter({ signOut }: { signOut: () => void }) {
+function SidebarFooter({
+  signOut,
+  collapsed,
+}: {
+  signOut: () => void;
+  collapsed: boolean;
+}) {
   const { user } = useContext(UserContext)!;
   const initials =
     (user.signInDetails?.loginId ?? user.username ?? 'U')
       .slice(0, 2)
       .toUpperCase();
   const email = user.signInDetails?.loginId ?? user.username ?? '';
+
+  if (collapsed) {
+    return (
+      <div
+        style={{
+          borderTop: '1px solid rgba(255,255,255,0.07)',
+          padding: '10px 0',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        <div
+          title={email}
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: '50%',
+            background: 'rgba(77,143,110,0.4)',
+            border: '1.5px solid var(--ss-accent)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 11,
+            fontWeight: 700,
+            color: '#fff',
+          }}
+        >
+          {initials}
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 4,
+            color: 'rgba(255,255,255,0.5)',
+          }}
+        >
+          <UploadStatusButton />
+          <Notifications />
+          <Settings signOut={signOut} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -678,6 +879,7 @@ function SidebarFooter({ signOut }: { signOut: () => void }) {
           color: 'rgba(255,255,255,0.5)',
         }}
       >
+        <UploadStatusButton />
         <Notifications />
         <Settings signOut={signOut} />
       </div>
