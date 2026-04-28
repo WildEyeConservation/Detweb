@@ -106,7 +106,9 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
     setIsAnnotatePath(
       /^\/surveys\/[^/]+\/annotate$/.test(location.pathname) ||
         /^\/surveys\/[^/]+\/qc-review\/[^/]+$/.test(location.pathname) ||
-        /^\/surveys\/[^/]+\/homography\/[^/]+$/.test(location.pathname)
+        /^\/surveys\/[^/]+\/homography\/[^/]+$/.test(location.pathname) ||
+        /^\/surveys\/[^/]+\/registration$/.test(location.pathname) ||
+        /^\/surveys\/[^/]+\/set\/[^/]+\/registration$/.test(location.pathname)
     );
   }, [location.pathname]);
 

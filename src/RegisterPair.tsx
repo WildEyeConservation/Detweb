@@ -342,8 +342,19 @@ export function RegisterPair(props: RegisterPairProps) {
           ))}
       </div>
       {effectiveTransforms && !isEditingHomography && (
-        <div className='w-100 d-flex flex-column gap-2 bg-secondary p-3'>
-          <span style={{ fontSize: '12px', color: '#f8f9fa' }}>
+        <div
+          className='w-100 d-flex flex-column gap-2'
+          style={{
+            background: 'var(--ss-surface)',
+            border: '1.5px solid var(--ss-border)',
+            borderRadius: 10,
+            padding: '14px 18px',
+            boxShadow: '0 1px 2px rgba(28, 28, 26, 0.03)',
+            color: 'var(--ss-text)',
+            fontSize: 13,
+          }}
+        >
+          <span style={{ fontSize: 12, color: 'var(--ss-text-muted)' }}>
             Tip: click a suggested marker or use Arrow keys to focus it, then
             press Space to confirm the match.
           </span>
@@ -351,8 +362,10 @@ export function RegisterPair(props: RegisterPairProps) {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
+              gap: 8,
               userSelect: 'none',
+              fontWeight: 500,
+              color: 'var(--ss-text)',
             }}
           >
             <input
@@ -367,23 +380,42 @@ export function RegisterPair(props: RegisterPairProps) {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
+              gap: 8,
               userSelect: 'none',
+              color: 'var(--ss-text)',
             }}
           >
-            <label htmlFor='leniency'>Pairing leniency (px)</label>
+            <label
+              htmlFor='leniency'
+              style={{ fontWeight: 500, marginBottom: 0 }}
+            >
+              Pairing leniency (px)
+            </label>
             <input
               type='range'
               id='leniency'
               min='0'
               max='1000'
               value={leniency}
-              style={{ width: '200px' }}
+              style={{ width: 200 }}
               onChange={(e) => setLeniency(parseInt(e.target.value))}
             />
+            <span
+              style={{
+                fontSize: 12,
+                color: 'var(--ss-text-muted)',
+                fontVariantNumeric: 'tabular-nums',
+                minWidth: 40,
+              }}
+            >
+              {leniency}
+            </span>
           </div>
           {onSkip && (
-            <div className='mt-2 pt-2 border-top border-dark'>
+            <div
+              className='mt-2 pt-2'
+              style={{ borderTop: '1px solid var(--ss-border-soft)' }}
+            >
               <button
                 className='btn btn-sm btn-outline-warning w-100'
                 onClick={onSkip}

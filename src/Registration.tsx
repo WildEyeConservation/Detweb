@@ -1,4 +1,5 @@
 import { useState, useMemo, useContext, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { AnnotationSetDropdown } from './AnnotationSetDropDown';
 import Select from 'react-select';
 import { ProjectContext } from './Context';
@@ -10,12 +11,15 @@ import { inv, matrix, type Matrix } from 'mathjs';
 import { GlobalContext, ManagementContext } from './Context';
 import { RegisterPair } from './RegisterPair';
 import { Card, Button, Form } from 'react-bootstrap';
-import { useParams } from 'react-router-dom';
-import { PanelBottom } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { PanelBottom, LogOut } from 'lucide-react';
+import { AnnotateChromeContext } from './ss/AnnotateChrome';
 
 export function Registration({ showAnnotationSetDropdown = true }) {
   const { client } = useContext(GlobalContext)!;
   const { annotationSetId } = useParams();
+  const navigate = useNavigate();
+  const { rightEl } = useContext(AnnotateChromeContext);
   const queryClient = useQueryClient();
   const [selectedCategories, setSelectedCategories] = useState<
     { label: string; value: string }[]
@@ -402,6 +406,28 @@ export function Registration({ showAnnotationSetDropdown = true }) {
       activeBackwardNeighbour
     );
 
+  const chromeRight = rightEl
+    ? createPortal(
+        <Button
+          onClick={() => navigate('/jobs')}
+          className='d-flex align-items-center gap-2'
+          style={{
+            background: 'transparent',
+            borderColor: 'rgba(255,255,255,0.4)',
+            color: '#fff',
+            fontWeight: 500,
+            fontSize: 13,
+            padding: '5px 12px',
+            borderRadius: 6,
+          }}
+        >
+          <LogOut size={14} />
+          <span className='d-none d-sm-inline'>Save &amp; Exit</span>
+        </Button>,
+        rightEl
+      )
+    : null;
+
   return (
     <div
       style={{
@@ -411,6 +437,7 @@ export function Registration({ showAnnotationSetDropdown = true }) {
         height: '100%',
       }}
     >
+      {chromeRight}
       <div className='w-100 h-100 d-flex flex-column flex-md-row gap-3'>
         <div
           className='d-flex flex-column gap-3 w-100'

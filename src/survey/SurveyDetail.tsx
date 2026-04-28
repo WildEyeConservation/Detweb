@@ -664,8 +664,14 @@ export default function SurveyDetail() {
               return sets.map((a) => {
                 const { batches, label } = statsFor(a.id);
                 const isCancelling = cancellingSetId === a.id;
+                // Edge case: registration jobs aren't queue-backed — they're
+                // driven by AnnotationSet.register. Treat any set with the
+                // flag set as active so the UI matches queue-backed jobs.
+                const isRegistrationActive = a.register === true;
                 const isActive =
-                  activeSetId === a.id || launchingSetId === a.id;
+                  activeSetId === a.id ||
+                  launchingSetId === a.id ||
+                  isRegistrationActive;
                 const inProgress = isActive || label === 'In Progress';
                 const displayLabel = isCancelling
                   ? 'Cancelling'
@@ -680,7 +686,8 @@ export default function SurveyDetail() {
                     (statsFor(s.id).label === 'In Progress' ||
                       cancellingSetId === s.id ||
                       (activeSetId && activeSetId === s.id) ||
-                      (launchingSetId && launchingSetId === s.id))
+                      (launchingSetId && launchingSetId === s.id) ||
+                      s.register === true)
                 );
                 const lockOthers =
                   (anotherInProgress || isProjectBusy) &&
@@ -729,6 +736,24 @@ export default function SurveyDetail() {
                           style={{ marginTop: 10, marginBottom: 6 }}
                         >
                           <QueueProgress queue={activeQueue} />
+                        </div>
+                      )}
+                    {isRegistrationActive &&
+                      !isProjectBusy &&
+                      !isCancelling && (
+                        <div
+                          style={{
+                            marginTop: 10,
+                            marginBottom: 6,
+                            padding: '8px 12px',
+                            background: 'var(--ss-amber-soft)',
+                            border: '1px solid #f2dfa0',
+                            borderRadius: 6,
+                            fontSize: 12,
+                            color: 'var(--ss-amber)',
+                          }}
+                        >
+                          Registration job active
                         </div>
                       )}
                     {!isActive && batches > 0 && !isCancelling && (
