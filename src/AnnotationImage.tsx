@@ -1,4 +1,5 @@
 import { useMemo, useContext, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import BaseImage from './BaseImage';
 import { withAckOnTimeout } from './useAckOnTimeout';
 import { MapLegend, SideLegend } from './Legend';
@@ -20,6 +21,8 @@ import useImageStats from './useImageStats';
 import { Badge, Button } from 'react-bootstrap';
 import { Share2, SearchCheck, RotateCcw, LogOut } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { AnnotateChromeContext } from './ss/AnnotateChrome';
+import { useLegendCollapse } from './LegendCollapseContext';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const Image = withCreateObservation(withAckOnTimeout(BaseImage as any) as any);
 
@@ -46,6 +49,7 @@ export default function AnnotationImage(props: any) {
   //testing
   const { currentTaskTag, isAnnotatePath, myMembershipHook } =
     useContext(UserContext)!;
+  const { centerEl, rightEl } = useContext(AnnotateChromeContext);
   const navigate = useNavigate();
   const { surveyId } = useParams();
   // Read localStorage synchronously during initialization to avoid loading tiles at wrong zoom
@@ -104,23 +108,38 @@ export default function AnnotationImage(props: any) {
   } = useContext(ProjectContext)!;
   const [, setExternalCategories] = useState<any[] | null>(null);
   const [legendCategories, setLegendCategories] = useState<any[] | null>(null);
-  const [legendCollapsed, setLegendCollapsed] = useState<boolean>(() => {
-    if (surveyId) {
-      const stored = localStorage.getItem(`legendCollapsed-${surveyId}`);
-      return stored === 'true';
-    }
-    return false;
-  });
 
-  const toggleLegendCollapsed = () => {
-    setLegendCollapsed((prev) => {
-      const newValue = !prev;
+  // Prefer shared collapse state from LegendCollapseProvider (so all
+  // AnnotationImage instances in the preloader buffer stay in sync).
+  // Fall back to local state when no provider is mounted (e.g., when
+  // AnnotationImage is rendered standalone via LocationLoader).
+  const sharedLegend = useLegendCollapse();
+  const [localLegendCollapsed, setLocalLegendCollapsed] = useState<boolean>(
+    () => {
       if (surveyId) {
-        localStorage.setItem(`legendCollapsed-${surveyId}`, String(newValue));
+        const stored = localStorage.getItem(`legendCollapsed-${surveyId}`);
+        return stored === 'true';
       }
-      return newValue;
-    });
-  };
+      return false;
+    }
+  );
+  const legendCollapsed = sharedLegend
+    ? sharedLegend.collapsed
+    : localLegendCollapsed;
+  const toggleLegendCollapsed = sharedLegend
+    ? sharedLegend.toggle
+    : () => {
+        setLocalLegendCollapsed((prev) => {
+          const newValue = !prev;
+          if (surveyId) {
+            localStorage.setItem(
+              `legendCollapsed-${surveyId}`,
+              String(newValue)
+            );
+          }
+          return newValue;
+        });
+      };
 
   // If the annotation set on the test belongs to a different project than the current one,
   // fetch its categories directly by annotation set id so legend, hotkeys and icons work.
@@ -279,6 +298,82 @@ export default function AnnotationImage(props: any) {
     }
   }
 
+  const workingOnLabel =
+    props.taskTag || currentTaskTag
+      ? `${props.taskTag || currentTaskTag}`
+      : 'Viewing image';
+
+  const chromeCenter =
+    visible && centerEl
+      ? createPortal(
+          <Badge bg='secondary'>Working on: {workingOnLabel}</Badge>,
+          centerEl
+        )
+      : null;
+
+  const chromeRight =
+    visible && rightEl
+      ? createPortal(
+          <>
+            <button
+              onClick={!isTest ? handleShare : undefined}
+              title='Share link to this location'
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'rgba(255,255,255,0.85)',
+                padding: 6,
+                cursor: !isTest ? 'pointer' : 'default',
+                display: 'flex',
+                alignItems: 'center',
+                borderRadius: 6,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                e.currentTarget.style.color = '#fff';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = 'rgba(255,255,255,0.85)';
+              }}
+            >
+              <Share2 size={18} />
+            </button>
+            {!hideZoomSetting && (
+              <SetDefaultZoom
+                setDefaultZoom={setDefaultZoom}
+                originalZoom={zoom}
+                adminMemberships={myMembershipHook.data
+                  ?.filter((membership) => membership.isAdmin)
+                  .map((membership) => ({
+                    projectId: membership.projectId,
+                    queueId: membership.queueId!,
+                  }))}
+              />
+            )}
+            {isAnnotatePath && (
+              <Button
+                onClick={() => navigate('/jobs')}
+                className='d-flex align-items-center gap-2'
+                style={{
+                  background: 'transparent',
+                  borderColor: 'rgba(255,255,255,0.4)',
+                  color: '#fff',
+                  fontWeight: 500,
+                  fontSize: 13,
+                  padding: '5px 12px',
+                  borderRadius: 6,
+                }}
+              >
+                <LogOut size={14} />
+                <span className='d-none d-sm-inline'>Save &amp; Exit</span>
+              </Button>
+            )}
+          </>,
+          rightEl
+        )
+      : null;
+
   return (
     <ImageContextFromHook
       hook={annotationsHook}
@@ -286,118 +381,59 @@ export default function AnnotationImage(props: any) {
       image={location.image}
       taskTag={props.taskTag}
     >
+      {chromeCenter}
+      {chromeRight}
       <div className={`d-flex flex-md-row flex-column w-100 h-100 gap-3 overflow-auto ${legendCollapsed ? 'legend-collapsed' : 'justify-content-center'}`}>
         <div
-          className={`d-flex flex-column ${legendCollapsed ? 'align-items-stretch' : 'align-items-center'} w-100 h-100 gap-3`}
+          className={`d-flex flex-column ${legendCollapsed ? 'align-items-stretch' : 'align-items-center'} w-100 h-100`}
           style={{
             maxWidth: legendCollapsed ? 'none' : '1024px',
             flex: legendCollapsed ? 1 : undefined,
           }}
         >
           <div
-            className='d-flex flex-row justify-content-center align-items-center w-100 gap-3 overflow-hidden'
-            style={{ position: 'relative', height: '26px' }}
+            className='w-100 h-100'
+            style={{
+              background: 'var(--ss-surface)',
+              border: '1.5px solid var(--ss-border)',
+              borderRadius: 10,
+              overflow: 'hidden',
+              boxShadow: '0 1px 2px rgba(28, 28, 26, 0.03)',
+              minHeight: 0,
+            }}
           >
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-              }}
+            <Image
+              stats={stats}
+              visible={visible}
+              location={location}
+              image={location.image}
+              taskTag={props.taskTag}
+              zoom={defaultZoom ?? undefined}
+              viewBoundsScale={props.viewBoundsScale}
+              id={id}
+              prev={prev}
+              next={next}
+              ack={ack}
+              annotationSet={annotationSetId}
+              hideNavButtons={hideNavButtons}
+              testPresetId={testPresetId}
+              isTest={isTest}
+              testSetId={testSetId}
+              config={config}
+              queueId={queueId}
+              observationSource={source}
             >
-              <Share2
-                size={24}
-                onClick={!isTest ? handleShare : undefined}
-                style={{ cursor: 'pointer' }}
-              />
-            </div>
-            {visible && (
-              <>
-                <Badge bg='secondary'>
-                  Working on:{' '}
-                  {props.taskTag || currentTaskTag
-                    ? `${props.taskTag || currentTaskTag}`
-                    : 'Viewing image'}
-                </Badge>
-                {!hideZoomSetting && (
-                  <SetDefaultZoom
-                    setDefaultZoom={setDefaultZoom}
-                    originalZoom={zoom}
-                    adminMemberships={myMembershipHook.data
-                      ?.filter((membership) => membership.isAdmin)
-                      .map((membership) => ({
-                        projectId: membership.projectId,
-                        queueId: membership.queueId!,
-                      }))}
-                  />
-                )}
-              </>
-            )}
+              {visible && memoizedChildren}
+            </Image>
           </div>
-          <Image
-            stats={stats}
-            visible={visible}
-            location={location}
-            image={location.image}
-            taskTag={props.taskTag}
-            zoom={defaultZoom ?? undefined}
-            viewBoundsScale={props.viewBoundsScale}
-            id={id}
-            prev={prev}
-            next={next}
-            ack={ack}
-            annotationSet={annotationSetId}
-            hideNavButtons={hideNavButtons}
-            testPresetId={testPresetId}
-            isTest={isTest}
-            testSetId={testSetId}
-            config={config}
-            queueId={queueId}
-            observationSource={source}
-          >
-            {visible && memoizedChildren}
-          </Image>
         </div>
-        <div className='d-flex flex-column align-items-center gap-3'>
+        <div className='d-flex flex-column align-items-center'>
           <SideLegend
             annotationSetId={annotationSetId}
             categoriesOverride={legendCategories ?? undefined}
             collapsed={legendCollapsed}
             onToggleCollapse={toggleLegendCollapsed}
           />
-          {isAnnotatePath && (
-            legendCollapsed ? (
-              <Button
-                variant='success'
-                onClick={() => navigate('/jobs')}
-                className='d-none d-md-flex align-items-center justify-content-center'
-                style={{ width: '40px', height: '40px', padding: 0 }}
-                title='Save & Exit'
-              >
-                <LogOut size={20} />
-              </Button>
-            ) : (
-              <div className='d-none d-md-block w-100 ps-2'>
-                <Button
-                  variant='success'
-                  onClick={() => navigate('/jobs')}
-                  className='d-none d-md-block w-100'
-                >
-                  Save & Exit
-                </Button>
-              </div>
-            )
-          )}
-          {/* Mobile Save & Exit button (always shown on mobile) */}
-          {isAnnotatePath && (
-            <Button
-              variant='success'
-              onClick={() => navigate('/jobs')}
-              className='w-100 d-md-none'
-            >
-              Save & Exit
-            </Button>
-          )}
         </div>
       </div>
     </ImageContextFromHook>
@@ -477,16 +513,31 @@ function SetDefaultZoom({
 
   return (
     <button
-      className='p-0 m-0 border-0 bg-transparent d-flex align-items-center text-white'
-      style={{
-        position: 'absolute',
-        top: 0,
-        right: 0,
-      }}
       onClick={saveDefaultZoom}
+      title={storedZoom ? 'Reset zoom' : 'Set as default zoom'}
+      style={{
+        background: 'transparent',
+        border: 'none',
+        color: 'rgba(255,255,255,0.85)',
+        padding: '6px 8px',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        borderRadius: 6,
+        fontSize: 13,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+        e.currentTarget.style.color = '#fff';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'transparent';
+        e.currentTarget.style.color = 'rgba(255,255,255,0.85)';
+      }}
     >
-      {storedZoom ? <RotateCcw size={24} /> : <SearchCheck size={24} />}
-      <span className='ms-2 mb-0 d-none d-md-block'>
+      {storedZoom ? <RotateCcw size={18} /> : <SearchCheck size={18} />}
+      <span className='d-none d-lg-inline'>
         {storedZoom ? 'Reset zoom' : 'Set as default zoom'}
       </span>
     </button>

@@ -53,28 +53,54 @@ export function SideLegend({
   const cats = categoriesOverride ?? categories;
 
   return (
-    <div className='d-none d-md-flex flex-column ms-2' style={{ position: 'relative', height: `calc(100% - 56px)` }}>
-      {/* Toggle button */}
-      <Button
-        variant='secondary'
-        size='sm'
+    <div
+      className='d-none d-md-flex flex-column ms-2'
+      style={{
+        position: 'relative',
+        height: '100%',
+        // Reserve space for the chevron toggle (which sits at left:-16, width:32)
+        // so it doesn't overflow the parent flex row when the legend is collapsed.
+        width: collapsed ? 32 : undefined,
+        flexShrink: 0,
+      }}
+    >
+      {/* Toggle button — small dark circle at the image/legend boundary when
+          expanded, full-height rounded rectangle filling the column when
+          collapsed (so the click target matches the legend's height). */}
+      <button
         onClick={onToggleCollapse}
+        title={collapsed ? 'Expand legend' : 'Collapse legend'}
         className='d-flex align-items-center justify-content-center'
         style={{
           position: 'absolute',
-          left: '-16px',
-          top: '50%',
-          transform: 'translateY(-50%)',
+          left: collapsed ? 0 : '-16px',
+          top: collapsed ? 0 : '50%',
+          transform: collapsed ? undefined : 'translateY(-50%)',
           zIndex: 10,
-          width: '32px',
-          height: collapsed ? '100%' : '32px',
-          borderRadius: collapsed ? '4px' : '50%',
+          width: 32,
+          height: collapsed ? '100%' : 32,
+          borderRadius: collapsed ? 10 : '50%',
           padding: 0,
+          background: 'var(--ss-accent)',
+          border: '1.5px solid var(--ss-accent)',
+          color: '#fff',
+          cursor: 'pointer',
+          boxShadow: collapsed
+            ? '0 1px 3px rgba(28, 28, 26, 0.12)'
+            : '0 2px 6px rgba(28, 28, 26, 0.18)',
+          transition: 'background 0.15s, border-color 0.15s',
         }}
-        title={collapsed ? 'Expand legend' : 'Collapse legend'}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'var(--ss-accent-hover)';
+          e.currentTarget.style.borderColor = 'var(--ss-accent-hover)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'var(--ss-accent)';
+          e.currentTarget.style.borderColor = 'var(--ss-accent)';
+        }}
       >
         {collapsed ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
-      </Button>
+      </button>
 
       {!collapsed && (
         <Card className='d-flex flex-column h-100 overflow-hidden'>
@@ -152,50 +178,90 @@ export function MapLegend({
       ref={divRef}
       className={positionClass + visibilityClass}
     >
-      <div className='leaflet-control leaflet-bar'>
-        <div
-          className='info legend'
-          onMouseEnter={() => setExpanded(true)}
-          onMouseLeave={() => setExpanded(false)}
-        >
-          <div className='d-flex flex-column'>
-            {expanded
-              ? cats
-                ?.filter((c) => c.annotationSetId === annotationSetId)
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((item, index) => {
-                  return (
+      <div
+        className='leaflet-control'
+        onMouseEnter={() => setExpanded(true)}
+        onMouseLeave={() => setExpanded(false)}
+        style={{
+          background: 'var(--ss-surface)',
+          border: '1.5px solid var(--ss-border)',
+          borderRadius: 8,
+          boxShadow: '0 2px 8px rgba(28, 28, 26, 0.12)',
+          color: 'var(--ss-text)',
+          minWidth: expanded ? 180 : 'auto',
+          overflow: 'hidden',
+          transition: 'min-width 0.15s',
+        }}
+      >
+        <div className='d-flex flex-column'>
+          {expanded ? (
+            cats
+              ?.filter((c) => c.annotationSetId === annotationSetId)
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((item, index) => {
+                const isActive = currentCategory?.id === item.id;
+                return (
+                  <div
+                    key={index}
+                    onClick={() => setCurrentCategory(item)}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 10,
+                      backgroundColor: isActive
+                        ? 'var(--ss-accent-soft)'
+                        : 'transparent',
+                      color: isActive ? 'var(--ss-green)' : 'var(--ss-text)',
+                      padding: '8px 12px',
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: isActive ? 600 : 500,
+                      transition: 'background 0.1s',
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        background: item.color || '#000',
+                        flexShrink: 0,
+                      }}
+                    />
                     <div
-                      key={index}
-                      onClick={() => setCurrentCategory(item)}
                       style={{
                         display: 'flex',
                         flexDirection: 'row',
-                        backgroundColor:
-                          currentCategory?.id === item.id
-                            ? '#bdbebf'
-                            : 'transparent',
-                        padding: '8px',
+                        flex: 1,
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
                       }}
                     >
-                      <i style={{ background: item.color || '#000' }}></i>
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'row',
-                          width: '100%',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                        }}
-                      >
-                        <div>{item.name}</div>
-                        <div>({item.shortcutKey})</div>
+                      <div>{item.name}</div>
+                      <div style={{ color: 'var(--ss-text-muted)', fontSize: 12 }}>
+                        ({item.shortcutKey})
                       </div>
                     </div>
-                  );
-                })
-              : 'Legend'}
-          </div>
+                  </div>
+                );
+              })
+          ) : (
+            <div
+              style={{
+                padding: '6px 14px',
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--ss-text-muted)',
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Legend
+            </div>
+          )}
         </div>
       </div>
     </div>

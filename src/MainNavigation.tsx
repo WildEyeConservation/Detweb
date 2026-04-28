@@ -28,6 +28,7 @@ import { UserContext, GlobalContext } from './Context.tsx';
 import { useOrg, OrgSummary } from './OrgContext';
 import { verifyToken } from './utils/jwt.ts';
 import { useQueryClient } from '@tanstack/react-query';
+import { AnnotateShell } from './ss/AnnotateChrome.tsx';
 
 type NavDef = {
   id: string;
@@ -192,12 +193,9 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
   }
 
   if (isAnnotatePath) {
-    // Annotate/QC/homography screens own the whole viewport — no sidebar.
-    return (
-      <div style={{ height: '100dvh', overflow: 'hidden' }}>
-        <Outlet />
-      </div>
-    );
+    // Annotate/QC/homography screens use a presentational top bar instead
+    // of the sidebar, with portal slots for per-page action items.
+    return <AnnotateShell />;
   }
 
   const activeId = resolveActiveNavId(location.pathname);

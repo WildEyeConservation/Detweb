@@ -90,30 +90,77 @@ export function JobsRemaining() {
     }
   }, [sessionJobsCompleted, batchSize, navigate, setSessionJobsCompleted]);
 
-  return jobsRemaining === '0' ||
+  const completedInBatch = sessionJobsCompleted % batchSize;
+
+  if (
+    jobsRemaining === '0' ||
     batchSize === 0 ||
-    parseInt(jobsRemaining) < batchSize ? (
-    <Badge className='d-flex flex-row align-items-center justify-content-center gap-3 p-2 w-100 bg-secondary flex-wrap'>
-      <p className='mb-0'>
-        {jobsRemaining} jobs remaining
-        {usingBackupQueue ? ' on backup queue ' : ' '}(globally)
-      </p>
-      <span className='d-none d-sm-block'>|</span>
-      <p className='mb-0'>
-        {sessionJobsCompleted} jobs completed in this session
-      </p>
-    </Badge>
-  ) : (
-    <div className='d-flex flex-column align-items-center gap-2 w-100'>
-      <ProgressBar
-        className='w-100'
-        variant='primary'
-        max={batchSize}
-        now={sessionJobsCompleted % batchSize}
-        label={`${
-          sessionJobsCompleted % batchSize
-        } of ${batchSize} jobs completed`}
-      />
+    parseInt(jobsRemaining) < batchSize
+  ) {
+    return (
+      <Badge className='d-flex flex-row align-items-center justify-content-center gap-3 p-2 w-100 bg-secondary flex-wrap'>
+        <p className='mb-0'>
+          {jobsRemaining} jobs remaining
+          {usingBackupQueue ? ' on backup queue ' : ' '}(globally)
+        </p>
+        <span className='d-none d-sm-block'>|</span>
+        <p className='mb-0'>
+          {sessionJobsCompleted} jobs completed in this session
+        </p>
+      </Badge>
+    );
+  }
+
+  const pct = Math.round((completedInBatch / batchSize) * 100);
+
+  return (
+    <div
+      className='w-100 d-flex flex-row align-items-center gap-3'
+      style={{
+        background: 'var(--ss-surface)',
+        border: '1.5px solid var(--ss-border)',
+        borderRadius: 10,
+        padding: '10px 16px',
+        boxShadow: '0 1px 2px rgba(28, 28, 26, 0.03)',
+      }}
+    >
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: 'var(--ss-text-muted)',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        Batch progress
+      </div>
+      <div className='flex-grow-1' style={{ minWidth: 0 }}>
+        <ProgressBar
+          className='ss-job-progress-bar w-100'
+          variant='primary'
+          max={batchSize}
+          now={completedInBatch}
+          style={{
+            height: 10,
+            borderRadius: 999,
+            background: 'var(--ss-border)',
+            overflow: 'hidden',
+          }}
+        />
+      </div>
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: 'var(--ss-text)',
+          whiteSpace: 'nowrap',
+          minWidth: 90,
+          textAlign: 'right',
+        }}
+      >
+        {completedInBatch} / {batchSize}{' '}
+        <span style={{ color: 'var(--ss-text-muted)' }}>({pct}%)</span>
+      </div>
     </div>
   );
 }

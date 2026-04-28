@@ -464,10 +464,12 @@ const BaseImage: React.FC<BaseImageProps> = memo(
 
     return useMemo(
       () => (
-        <div className='d-flex flex-column align-items-stretch w-100 h-100 gap-3'>
+        <div className='d-flex flex-column align-items-stretch w-100 h-100 gap-3 pb-3'>
           <div
-            className='d-flex flex-column align-items-stretch w-100 h-100'
+            className='d-flex flex-column align-items-stretch w-100'
             style={{
+              flex: 1,
+              minHeight: 0,
               visibility: visible && fullyLoaded ? 'visible' : 'hidden',
               position: 'relative',
             }}
