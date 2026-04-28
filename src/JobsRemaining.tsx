@@ -3,7 +3,6 @@ import { ProjectContext, UserContext, GlobalContext } from './Context';
 import { GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
 import { type GetQueueAttributesCommandInput } from '@aws-sdk/client-sqs';
 import ProgressBar from 'react-bootstrap/ProgressBar';
-import { Badge } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 
 export function JobsRemaining() {
@@ -98,16 +97,42 @@ export function JobsRemaining() {
     parseInt(jobsRemaining) < batchSize
   ) {
     return (
-      <Badge className='d-flex flex-row align-items-center justify-content-center gap-3 p-2 w-100 bg-secondary flex-wrap'>
-        <p className='mb-0'>
-          {jobsRemaining} jobs remaining
-          {usingBackupQueue ? ' on backup queue ' : ' '}(globally)
-        </p>
-        <span className='d-none d-sm-block'>|</span>
-        <p className='mb-0'>
-          {sessionJobsCompleted} jobs completed in this session
-        </p>
-      </Badge>
+      <div
+        className='d-flex flex-row align-items-center justify-content-center gap-3 w-100 flex-wrap'
+        style={{
+          background: 'var(--ss-surface)',
+          border: '1.5px solid var(--ss-border)',
+          borderRadius: 10,
+          padding: '10px 16px',
+          boxShadow: '0 1px 2px rgba(28, 28, 26, 0.03)',
+          fontSize: 13,
+          fontWeight: 500,
+        }}
+      >
+        <span>
+          <strong style={{ color: 'var(--ss-text)', fontWeight: 700 }}>
+            {jobsRemaining}
+          </strong>{' '}
+          <span style={{ color: 'var(--ss-text-muted)' }}>
+            jobs remaining
+            {usingBackupQueue ? ' on backup queue ' : ' '}(globally)
+          </span>
+        </span>
+        <span
+          className='d-none d-sm-inline'
+          style={{ color: 'var(--ss-border-strong)' }}
+        >
+          |
+        </span>
+        <span>
+          <strong style={{ color: 'var(--ss-text)', fontWeight: 700 }}>
+            {sessionJobsCompleted}
+          </strong>{' '}
+          <span style={{ color: 'var(--ss-text-muted)' }}>
+            jobs completed in this session
+          </span>
+        </span>
+      </div>
     );
   }
 

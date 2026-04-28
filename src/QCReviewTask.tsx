@@ -6,10 +6,10 @@ import {
   DeleteMessageCommand,
   GetQueueAttributesCommand,
 } from '@aws-sdk/client-sqs';
-import { Badge } from 'react-bootstrap';
 import { PreloaderFactory } from './Preloader';
 import QCAnnotationReview from './QCAnnotationReview';
 import { fetchAllPaginatedResults } from './utils';
+import { LegendCollapseProvider } from './LegendCollapseContext';
 
 /**
  * QC Review Task — SQS-driven preloader for annotation QC review.
@@ -23,7 +23,6 @@ export default function QCReviewTask() {
   const { getSqsClient, myMembershipHook } = useContext(UserContext)!;
   const { client } = useContext(GlobalContext)!;
   const [index, setIndex] = useState(0);
-  const [legendCollapsed, setLegendCollapsed] = useState(false);
   const [queueUrl, setQueueUrl] = useState<string | undefined>(undefined);
   const [annotationSetId, setAnnotationSetId] = useState<string | undefined>(
     undefined
@@ -172,51 +171,77 @@ export default function QCReviewTask() {
   const Preloader = useMemo(() => PreloaderFactory(QCAnnotationReview), []);
 
   return (
-    <div
-      className='d-flex flex-column align-items-center gap-3 w-100 h-100'
-      style={{ paddingTop: '12px', paddingBottom: '12px' }}
-    >
-      <div className='w-100 h-100'>
-        {queueUrl && categories.length > 0 ? (
-          <Preloader
-            index={index}
-            setIndex={setIndex}
-            fetcher={fetcher}
-            visible={true}
-            preloadN={3}
-            historyN={2}
-            categories={categories}
-            setCategories={setCategories}
-            projectId={projectId}
-            annotationSetId={annotationSetId}
-            group={group}
-            queueId={queueId}
-            queueZoom={queueZoom}
-            setQueueZoom={setQueueZoom}
-            adminMemberships={myMembershipHook.data
-              ?.filter((membership: any) => membership.isAdmin)
-              .map((membership: any) => ({
-                projectId: membership.projectId,
-                queueId: membership.queueId!,
-              }))}
-            legendCollapsed={legendCollapsed}
-            setLegendCollapsed={setLegendCollapsed}
-          />
-        ) : (
-          <div className='d-flex justify-content-center align-items-center h-100'>
-            <div className='text-muted'>Loading QC review queue...</div>
-          </div>
-        )}
+    <LegendCollapseProvider>
+      <div
+        className='d-flex flex-column align-items-center gap-3 w-100 h-100'
+        style={{ paddingTop: '12px', paddingBottom: '12px' }}
+      >
+        <div className='w-100 h-100'>
+          {queueUrl && categories.length > 0 ? (
+            <Preloader
+              index={index}
+              setIndex={setIndex}
+              fetcher={fetcher}
+              visible={true}
+              preloadN={3}
+              historyN={2}
+              categories={categories}
+              setCategories={setCategories}
+              projectId={projectId}
+              annotationSetId={annotationSetId}
+              group={group}
+              queueId={queueId}
+              queueZoom={queueZoom}
+              setQueueZoom={setQueueZoom}
+              adminMemberships={myMembershipHook.data
+                ?.filter((membership: any) => membership.isAdmin)
+                .map((membership: any) => ({
+                  projectId: membership.projectId,
+                  queueId: membership.queueId!,
+                }))}
+            />
+          ) : (
+            <div className='d-flex justify-content-center align-items-center h-100'>
+              <div className='text-muted'>Loading QC review queue...</div>
+            </div>
+          )}
+        </div>
+        <div
+          className='d-flex flex-row align-items-center justify-content-center gap-3 w-100 flex-wrap'
+          style={{
+            background: 'var(--ss-surface)',
+            border: '1.5px solid var(--ss-border)',
+            borderRadius: 10,
+            padding: '10px 16px',
+            boxShadow: '0 1px 2px rgba(28, 28, 26, 0.03)',
+            fontSize: 13,
+            fontWeight: 500,
+          }}
+        >
+          <span>
+            <strong style={{ color: 'var(--ss-text)', fontWeight: 700 }}>
+              {jobsRemaining}
+            </strong>{' '}
+            <span style={{ color: 'var(--ss-text-muted)' }}>
+              jobs remaining (globally)
+            </span>
+          </span>
+          <span
+            className='d-none d-sm-inline'
+            style={{ color: 'var(--ss-border-strong)' }}
+          >
+            |
+          </span>
+          <span>
+            <strong style={{ color: 'var(--ss-text)', fontWeight: 700 }}>
+              {index}
+            </strong>{' '}
+            <span style={{ color: 'var(--ss-text-muted)' }}>
+              jobs completed in this session
+            </span>
+          </span>
+        </div>
       </div>
-      <Badge className='d-flex flex-row align-items-center justify-content-center gap-3 p-2 w-100 bg-secondary flex-wrap'>
-        <p className='mb-0'>
-          {jobsRemaining} jobs remaining (globally)
-        </p>
-        <span className='d-none d-sm-block'>|</span>
-        <p className='mb-0'>
-          {index} jobs completed in this session
-        </p>
-      </Badge>
-    </div>
+    </LegendCollapseProvider>
   );
 }

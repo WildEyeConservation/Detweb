@@ -103,7 +103,10 @@ export function SideLegend({
       </button>
 
       {!collapsed && (
-        <Card className='d-flex flex-column h-100 overflow-hidden'>
+        <Card
+          className='d-flex flex-column h-100 overflow-hidden'
+          style={{ width: 280 }}
+        >
           <Card.Header>
             <Card.Title className='d-flex flex-row align-items-center gap-2 mb-2'>
               <span>Legend</span>

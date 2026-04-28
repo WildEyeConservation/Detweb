@@ -6,14 +6,24 @@ import {
   useRef,
   useMemo,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Badge, Button, Card } from 'react-bootstrap';
-import { ChevronLeft, ChevronRight, Undo2, SearchCheck, RotateCcw } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Undo2,
+  SearchCheck,
+  RotateCcw,
+  LogOut,
+} from 'lucide-react';
 import { GlobalContext, UserContext } from './Context';
 import { getTileBlob } from './StorageLayer';
 import type { Schema } from './amplify/client-schema';
+import { AnnotateChromeContext } from './ss/AnnotateChrome';
+import { useLegendCollapse } from './LegendCollapseContext';
 
 // ── Constants ──
 
@@ -57,8 +67,6 @@ type QCReviewProps = {
   queueZoom: number | null;
   setQueueZoom: (zoom: number | null) => void;
   adminMemberships?: { projectId: string; queueId: string }[];
-  legendCollapsed: boolean;
-  setLegendCollapsed: (collapsed: boolean) => void;
 };
 
 const DEFAULT_ZOOM_OFFSET = 6;
@@ -78,12 +86,21 @@ export default function QCAnnotationReview({
   queueZoom,
   setQueueZoom,
   adminMemberships,
-  legendCollapsed,
-  setLegendCollapsed,
 }: QCReviewProps) {
   const { client } = useContext(GlobalContext)!;
   const { user } = useContext(UserContext)!;
   const navigate = useNavigate();
+  const { centerEl, rightEl } = useContext(AnnotateChromeContext);
+
+  // Shared legend collapse state — falls back to local state if no provider.
+  const sharedLegend = useLegendCollapse();
+  const [localLegendCollapsed, setLocalLegendCollapsed] = useState(false);
+  const legendCollapsed = sharedLegend
+    ? sharedLegend.collapsed
+    : localLegendCollapsed;
+  const setLegendCollapsed = sharedLegend
+    ? () => sharedLegend.toggle()
+    : (v: boolean) => setLocalLegendCollapsed(v);
 
   // ── Image data ──
   const [image, setImage] = useState<Schema['Image']['type'] | null>(null);
@@ -975,217 +992,306 @@ export default function QCAnnotationReview({
     );
   }
 
-  return (
-    <div className='d-flex flex-column w-100 h-100'>
-      {/* Header bar */}
-      <div
-        className='d-flex align-items-center justify-content-between py-2'
-        style={{
-          backgroundColor: '#2b3e50',
-          flexShrink: 0,
-        }}
-      >
-        <div className='d-flex align-items-center gap-3'>
-          <Badge bg='info'>
-            {displayCategory?.name ?? 'Unknown'}
-          </Badge>
-          {reviewedCatId && (
-            <Badge bg='success' style={{ fontSize: '11px' }}>
-              Reviewed
+  // Chrome portals — only the visible buffered instance contributes.
+  const chromeCenter =
+    visible && centerEl
+      ? createPortal(
+          <>
+            <Badge bg='secondary'>
+              Working on: {displayCategory?.name ?? 'Unknown'}
             </Badge>
-          )}
-          <span className='text-muted' style={{ fontSize: '12px' }}>
-            Tip: Hold Tab to hide the marker
-          </span>
-        </div>
-        <button
-          className='p-0 m-0 border-0 bg-transparent d-flex align-items-center text-white'
-          onClick={saveDefaultZoom}
-        >
-          {hasLocalZoom ? <RotateCcw size={20} /> : <SearchCheck size={20} />}
-          <span className='ms-2 mb-0 d-none d-md-block' style={{ fontSize: '13px' }}>
-            {hasLocalZoom ? 'Reset zoom' : 'Set as default zoom'}
-          </span>
-        </button>
-      </div>
+            {reviewedCatId && <Badge bg='success'>Reviewed</Badge>}
+          </>,
+          centerEl
+        )
+      : null;
 
-      {/* Map + side legend */}
-      <div className='d-flex' style={{ flex: 1, overflow: 'hidden' }}>
-        {/* Map container */}
-        <div style={{ flex: 1, position: 'relative' }}>
+  const chromeRight =
+    visible && rightEl
+      ? createPortal(
+          <>
+            <button
+              onClick={saveDefaultZoom}
+              title={hasLocalZoom ? 'Reset zoom' : 'Set as default zoom'}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'rgba(255,255,255,0.85)',
+                padding: '6px 8px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                borderRadius: 6,
+                fontSize: 13,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                e.currentTarget.style.color = '#fff';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = 'rgba(255,255,255,0.85)';
+              }}
+            >
+              {hasLocalZoom ? <RotateCcw size={18} /> : <SearchCheck size={18} />}
+              <span className='d-none d-lg-inline'>
+                {hasLocalZoom ? 'Reset zoom' : 'Set as default zoom'}
+              </span>
+            </button>
+            <Button
+              onClick={() => navigate('/jobs')}
+              className='d-flex align-items-center gap-2'
+              style={{
+                background: 'transparent',
+                borderColor: 'rgba(255,255,255,0.4)',
+                color: '#fff',
+                fontWeight: 500,
+                fontSize: 13,
+                padding: '5px 12px',
+                borderRadius: 6,
+              }}
+            >
+              <LogOut size={14} />
+              <span className='d-none d-sm-inline'>Save &amp; Exit</span>
+            </Button>
+          </>,
+          rightEl
+        )
+      : null;
+
+  return (
+    <>
+      {chromeCenter}
+      {chromeRight}
+      <div
+        className={`d-flex flex-md-row flex-column w-100 h-100 gap-3 overflow-auto ${
+          legendCollapsed ? 'legend-collapsed' : 'justify-content-center'
+        }`}
+      >
+        <div
+          className={`d-flex flex-column ${
+            legendCollapsed ? 'align-items-stretch' : 'align-items-center'
+          } w-100 h-100`}
+          style={{
+            maxWidth: legendCollapsed ? 'none' : '1024px',
+            flex: legendCollapsed ? 1 : undefined,
+          }}
+        >
+          {/* Image card — white surface matching annotation interface */}
           <div
-            ref={containerRef}
+            className='w-100 h-100'
             style={{
-              width: '100%',
-              height: '100%',
-              background: '#ffffff',
+              background: 'var(--ss-surface)',
+              border: '1.5px solid var(--ss-border)',
               borderRadius: 10,
               overflow: 'hidden',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              boxShadow: '0 1px 2px rgba(28, 28, 26, 0.03)',
+              minHeight: 0,
             }}
-          />
-          {waiting && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                zIndex: 1000,
-                backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                borderRadius: '12px',
-                padding: '20px 32px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '12px',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
-              }}
-            >
+          >
+            <div className='d-flex flex-column w-100 h-100 gap-3 pb-3'>
+              {/* Map area */}
               <div
                 style={{
-                  width: '32px',
-                  height: '32px',
-                  border: '3px solid rgba(255, 255, 255, 0.2)',
-                  borderTopColor: '#fff',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite',
+                  flex: 1,
+                  minHeight: 0,
+                  position: 'relative',
                 }}
-              />
-              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-              <div style={{ color: '#fff', fontSize: '14px', textAlign: 'center' }}>
-                Waiting for new work... ({secondsRemaining}s remaining)
+              >
+                <div
+                  ref={containerRef}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    background: '#ffffff',
+                    borderRadius: 10,
+                    overflow: 'hidden',
+                  }}
+                />
+                {waiting && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      zIndex: 1000,
+                      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                      borderRadius: '12px',
+                      padding: '20px 32px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '12px',
+                      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        border: '3px solid rgba(255, 255, 255, 0.2)',
+                        borderTopColor: '#fff',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite',
+                      }}
+                    />
+                    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                    <div style={{ color: '#fff', fontSize: '14px', textAlign: 'center' }}>
+                      Waiting for new work... ({secondsRemaining}s remaining)
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Action row — Undo on left, Approve + False Positive centered */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr auto 1fr',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '0 16px',
+                  flexShrink: 0,
+                  width: '100%',
+                }}
+              >
+                <div>
+                  <Button
+                    className='d-flex align-items-center justify-content-center gap-2'
+                    variant='secondary'
+                    onClick={prev}
+                    disabled={!prev}
+                    style={{ minWidth: 140 }}
+                  >
+                    <Undo2 size={16} />
+                    <span>Undo</span>
+                  </Button>
+                </div>
+                <div className='d-flex flex-row align-items-center gap-2'>
+                  <Button
+                    variant='success'
+                    onClick={handleApprove}
+                    style={{ minWidth: 180 }}
+                  >
+                    Approve (Space)
+                  </Button>
+                  <Button
+                    variant='warning'
+                    onClick={handleFalsePositive}
+                    style={{ minWidth: 220 }}
+                  >
+                    {fpLabel}
+                  </Button>
+                </div>
+                <div />
               </div>
             </div>
-          )}
+          </div>
         </div>
 
-        {/* Collapsible side legend */}
-        {legendCollapsed ? (
-          <div className='d-flex align-items-center' style={{ padding: '0 4px', flexShrink: 0, height: '100%', marginLeft: '12px' }}>
-            <Button
-              variant='secondary'
-              size='sm'
-              onClick={() => setLegendCollapsed(false)}
-              className='d-flex align-items-center justify-content-center'
-              style={{
-                width: '28px',
-                height: '100%',
-                borderRadius: '4px',
-                padding: 0,
-              }}
-              title='Expand legend'
-            >
-              <ChevronLeft size={18} />
-            </Button>
-          </div>
-        ) : (
-          <div className='d-flex flex-column' style={{ position: 'relative', height: '100%', flexShrink: 0, marginLeft: '24px' }}>
-            <Button
-              variant='secondary'
-              size='sm'
-              onClick={() => setLegendCollapsed(true)}
+        {/* Side legend column — matches SideLegend pattern from AnnotationImage */}
+        <div className='d-flex flex-column align-items-center'>
+          <div
+            className='d-none d-md-flex flex-column ms-2'
+            style={{
+              position: 'relative',
+              height: '100%',
+              width: legendCollapsed ? 32 : undefined,
+              flexShrink: 0,
+            }}
+          >
+            <button
+              onClick={() => setLegendCollapsed(!legendCollapsed)}
+              title={legendCollapsed ? 'Expand legend' : 'Collapse legend'}
               className='d-flex align-items-center justify-content-center'
               style={{
                 position: 'absolute',
-                left: '-16px',
-                top: '50%',
-                transform: 'translateY(-50%)',
+                left: legendCollapsed ? 0 : '-16px',
+                top: legendCollapsed ? 0 : '50%',
+                transform: legendCollapsed ? undefined : 'translateY(-50%)',
                 zIndex: 10,
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
+                width: 32,
+                height: legendCollapsed ? '100%' : 32,
+                borderRadius: legendCollapsed ? 10 : '50%',
                 padding: 0,
+                background: 'var(--ss-accent)',
+                border: '1.5px solid var(--ss-accent)',
+                color: '#fff',
+                cursor: 'pointer',
+                boxShadow: legendCollapsed
+                  ? '0 1px 3px rgba(28, 28, 26, 0.12)'
+                  : '0 2px 6px rgba(28, 28, 26, 0.18)',
+                transition: 'background 0.15s, border-color 0.15s',
               }}
-              title='Collapse legend'
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--ss-accent-hover)';
+                e.currentTarget.style.borderColor = 'var(--ss-accent-hover)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'var(--ss-accent)';
+                e.currentTarget.style.borderColor = 'var(--ss-accent)';
+              }}
             >
-              <ChevronRight size={18} />
-            </Button>
+              {legendCollapsed ? (
+                <ChevronLeft size={18} />
+              ) : (
+                <ChevronRight size={18} />
+              )}
+            </button>
 
-            <Card className='d-flex flex-column h-100 overflow-hidden' style={{ width: '280px' }}>
-              <Card.Header>
-                <Card.Title className='d-flex flex-row align-items-center gap-2 mb-2'>
-                  <span>Legend</span>
-                </Card.Title>
-                <span className='text-muted' style={{ fontSize: '14px' }}>
-                  Press a shortcut key to approve or fix
-                </span>
-              </Card.Header>
-              <Card.Body className='d-flex flex-column gap-2 overflow-auto'>
-                {legendCategories
-                  .slice()
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((cat) => (
-                    <Button
-                      variant={cat.id === displayCategoryId ? 'info' : 'primary'}
-                      key={cat.id}
-                      className='d-flex flex-row align-items-center justify-content-between gap-2'
-                      onClick={() => {
-                        if (cat.id === annotation.categoryId) {
-                          handleApprove();
-                        } else {
-                          handleRelabel(cat.id);
-                        }
-                      }}
-
-                    >
-                      <div>{cat.name}</div>
-                      {cat.shortcutKey && <div>({cat.shortcutKey.toUpperCase()})</div>}
-                    </Button>
-                  ))}
-              </Card.Body>
-            </Card>
+            {!legendCollapsed && (
+              <Card
+                className='d-flex flex-column h-100 overflow-hidden'
+                style={{ width: 280 }}
+              >
+                <Card.Header>
+                  <Card.Title className='d-flex flex-row align-items-center gap-2 mb-2'>
+                    <span>Legend</span>
+                  </Card.Title>
+                  <span
+                    className='text-muted'
+                    style={{ fontSize: 13, display: 'block' }}
+                  >
+                    Press a shortcut key to approve or fix
+                  </span>
+                  <span
+                    className='text-muted'
+                    style={{ fontSize: 12, display: 'block', marginTop: 4 }}
+                  >
+                    Tip: Hold Tab to hide the marker
+                  </span>
+                </Card.Header>
+                <Card.Body className='d-flex flex-column gap-2 overflow-auto'>
+                  {legendCategories
+                    .slice()
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((cat) => (
+                      <Button
+                        variant={cat.id === displayCategoryId ? 'primary' : 'info'}
+                        key={cat.id}
+                        className='d-flex flex-row align-items-center justify-content-between gap-2'
+                        onClick={() => {
+                          if (cat.id === annotation.categoryId) {
+                            handleApprove();
+                          } else {
+                            handleRelabel(cat.id);
+                          }
+                        }}
+                      >
+                        <div>{cat.name}</div>
+                        {cat.shortcutKey && (
+                          <div>({cat.shortcutKey.toUpperCase()})</div>
+                        )}
+                      </Button>
+                    ))}
+                </Card.Body>
+              </Card>
+            )}
           </div>
-        )}
-      </div>
-
-      {/* Bottom action bar */}
-      <div
-        className='d-flex align-items-center justify-content-between py-2 mt-2'
-        style={{
-          backgroundColor: '#2b3e50',
-          flexShrink: 0,
-        }}
-      >
-        <div className='d-flex align-items-center gap-2'>
-          <Button
-            className='d-flex align-items-center justify-content-center gap-1'
-            variant='primary'
-            style={{ width: 160 }}
-            onClick={prev}
-            disabled={!prev}
-          >
-            <Undo2 size={16} />
-            <span>Undo</span>
-          </Button>
-        </div>
-        <div className='d-flex align-items-center gap-2'>
-          <Button
-            variant='success'
-            style={{ width: 160 }}
-            onClick={handleApprove}
-          >
-            Approve (Space)
-          </Button>
-          <Button
-            variant='warning'
-            style={{ width: 200 }}
-            onClick={handleFalsePositive}
-          >
-            {fpLabel}
-          </Button>
-        </div>
-        <div className='d-flex align-items-center gap-2'>
-          <Button
-            variant='primary'
-            style={{ width: 160 }}
-            onClick={() => navigate('/jobs')}
-
-          >
-            Save &amp; Exit
-          </Button>
         </div>
       </div>
-    </div>
+    </>
   );
 }
