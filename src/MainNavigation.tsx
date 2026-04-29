@@ -37,7 +37,7 @@ type NavDef = {
   label: string;
   to: string;
   icon: LucideIcon;
-  requires?: 'orgadmin' | 'sysadmin';
+  requires?: 'orgadmin' | 'sysadmin' | 'surveyAdmin';
 };
 
 type NavSection = {
@@ -49,7 +49,13 @@ const NAV: NavSection[] = [
   {
     section: 'Surveys',
     items: [
-      { id: 'surveys', label: 'Surveys', to: '/surveys', icon: ClipboardList },
+      {
+        id: 'surveys',
+        label: 'Surveys',
+        to: '/surveys',
+        icon: ClipboardList,
+        requires: 'surveyAdmin',
+      },
     ],
   },
   {
@@ -94,6 +100,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
     setIsAnnotatePath,
     user,
   } = useContext(UserContext)!;
+  const { isCurrentOrgAdmin, currentOrg } = useOrg();
   const queryClient = useQueryClient();
   const { client } = useContext(GlobalContext)!;
   const [, setCheckingToken] = useState(false);
@@ -126,6 +133,9 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
   }, [mobileOpen]);
 
   const myAdminProjects = myProjectsHook.data?.filter((p) => p.isAdmin) ?? [];
+  const hasAdminProjectsInCurrentOrg = myAdminProjects.some(
+    (p) => p.group === currentOrg?.id
+  );
   const belongsToOrganization = myOrganizationHook.data.length > 0;
 
   useEffect(() => {
@@ -138,6 +148,8 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
     );
   }, [location.pathname]);
 
+  const canAccessSurveys = isCurrentOrgAdmin || hasAdminProjectsInCurrentOrg;
+
   useEffect(() => {
     if (
       belongsToOrganization &&
@@ -145,11 +157,22 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
         location.pathname === '/' ||
         location.pathname === '/SSRegisterOrganization')
     ) {
-      navigate(
-        myAdminProjects.length > 0 || isOrganizationAdmin ? '/surveys' : '/jobs'
-      );
+      navigate(canAccessSurveys ? '/surveys' : '/jobs');
     }
-  }, [isOrganizationAdmin, myAdminProjects.length, belongsToOrganization]);
+  }, [canAccessSurveys, belongsToOrganization]);
+
+  useEffect(() => {
+    if (!belongsToOrganization || canAccessSurveys) return;
+    if (!location.pathname.startsWith('/surveys')) return;
+    const isAnnotateSubroute =
+      /^\/surveys\/[^/]+\/annotate$/.test(location.pathname) ||
+      /^\/surveys\/[^/]+\/qc-review\/[^/]+$/.test(location.pathname) ||
+      /^\/surveys\/[^/]+\/homography\/[^/]+$/.test(location.pathname) ||
+      /^\/surveys\/[^/]+\/registration$/.test(location.pathname) ||
+      /^\/surveys\/[^/]+\/set\/[^/]+\/registration$/.test(location.pathname);
+    if (isAnnotateSubroute) return;
+    navigate('/jobs');
+  }, [canAccessSurveys, belongsToOrganization, location.pathname]);
 
   // One-time JWT magic-link processing.
   useEffect(() => {
@@ -271,7 +294,12 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
         <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
           {NAV.map((section) => {
             const items = section.items.filter((item) =>
-              canShow(item, isOrganizationAdmin, cognitoGroups)
+              canShow(item, {
+                isOrgAdmin: isOrganizationAdmin,
+                isCurrentOrgAdmin,
+                hasAdminProjectsInCurrentOrg,
+                cognitoGroups,
+              })
             );
             if (items.length === 0) return null;
             return (
@@ -346,11 +374,21 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
 
 function canShow(
   item: NavDef,
-  isOrgAdmin: boolean,
-  cognitoGroups: string[]
+  ctx: {
+    isOrgAdmin: boolean;
+    isCurrentOrgAdmin: boolean;
+    hasAdminProjectsInCurrentOrg: boolean;
+    cognitoGroups: string[];
+  }
 ): boolean {
-  if (item.requires === 'orgadmin' && !isOrgAdmin) return false;
-  if (item.requires === 'sysadmin' && !cognitoGroups.includes('sysadmin'))
+  if (item.requires === 'orgadmin' && !ctx.isCurrentOrgAdmin) return false;
+  if (item.requires === 'sysadmin' && !ctx.cognitoGroups.includes('sysadmin'))
+    return false;
+  if (
+    item.requires === 'surveyAdmin' &&
+    !ctx.isCurrentOrgAdmin &&
+    !ctx.hasAdminProjectsInCurrentOrg
+  )
     return false;
   return true;
 }

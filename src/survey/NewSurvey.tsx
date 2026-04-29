@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useBlocker } from 'react-router-dom';
 import { Button, Form, Card } from 'react-bootstrap';
 import ConfirmationModal from '../ConfirmationModal';
@@ -7,6 +7,7 @@ import { X, Check } from 'lucide-react';
 import { GlobalContext, UserContext } from '../Context';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
 import { useUsers } from '../apiInterface';
+import { useOrg } from '../OrgContext';
 import { fetchAllPaginatedResults } from '../utils';
 import { FilesUploadForm } from '../FilesUploadComponent';
 import { saveShapefileForProject } from '../utils/shapefileUtils';
@@ -21,9 +22,75 @@ import {
 
 export default function NewSurvey() {
   const navigate = useNavigate();
-  const { myOrganizationHook, user } = useContext(UserContext)!;
+  const { myOrganizationHook, myMembershipHook, user } =
+    useContext(UserContext)!;
   const { client } = useContext(GlobalContext)!;
+  const { isCurrentOrgAdmin } = useOrg();
   const { users: allUsers } = useUsers();
+  const adminProjectIds = useMemo(
+    () =>
+      myMembershipHook.data
+        ?.filter((m) => m.isAdmin)
+        .map((m) => m.projectId) ?? [],
+    [myMembershipHook.data]
+  );
+
+  // Re-check the upload-in-progress state every time the membership/org
+  // selection changes — the button on /surveys is gated the same way, so the
+  // route guard must follow exactly. `null` means we don't yet know.
+  const [uploadCheck, setUploadCheck] = useState<
+    'loading' | 'blocked' | 'allowed'
+  >('loading');
+
+  useEffect(() => {
+    if (!isCurrentOrgAdmin) {
+      // Non-admin: render path will deny; no need to fetch.
+      setUploadCheck('allowed');
+      return;
+    }
+    if (adminProjectIds.length === 0) {
+      setUploadCheck('allowed');
+      return;
+    }
+    setUploadCheck('loading');
+    let cancelled = false;
+    (async () => {
+      const results = await Promise.all(
+        adminProjectIds.map((id) =>
+          client.models.Project.get(
+            { id },
+            { selectionSet: ['id', 'status', 'organizationId'] }
+          )
+        )
+      );
+      if (cancelled) return;
+      // Only one survey may be uploaded from a single client at a time,
+      // so check across every admin survey the user has — not just the
+      // currently-selected org.
+      const hasUploading = results.some(
+        (r) => r.data?.status === 'uploading'
+      );
+      setUploadCheck(hasUploading ? 'blocked' : 'allowed');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isCurrentOrgAdmin,
+    adminProjectIds.join('|'),
+    client,
+    myOrganizationHook.data,
+  ]);
+
+  const accessDenied: string | null = !isCurrentOrgAdmin
+    ? 'Only organisation admins can create new surveys.'
+    : uploadCheck === 'blocked'
+    ? 'Another survey is currently uploading. Please wait until it finishes before creating a new one.'
+    : null;
+  const accessChecked = isCurrentOrgAdmin
+    ? uploadCheck !== 'loading'
+    : myOrganizationHook.data.length > 0 ||
+      (myOrganizationHook.data.length === 0 && !isCurrentOrgAdmin);
 
   const [filesReady, setFilesReady] = useState(false);
   const [name, setName] = useState('');
@@ -66,11 +133,17 @@ export default function NewSurvey() {
   const [shapefileLatLngs, setShapefileLatLngs] =
     useState<[number, number][]>();
   const [submitted, setSubmitted] = useState(false);
+  const submittedRef = useRef(false);
+  const [selectedModel, setSelectedModel] = useState<{
+    label: string;
+    value: string;
+  } | null>(null);
 
   const canSubmit = !loading && filesReady && name && organization && gpsReady;
 
   const isDirty =
     !submitted &&
+    !submittedRef.current &&
     (!!name ||
       !!globalAnnotationAccess ||
       addPermissionExceptions ||
@@ -80,7 +153,9 @@ export default function NewSurvey() {
 
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
-      isDirty && currentLocation.pathname !== nextLocation.pathname
+      isDirty &&
+      !submittedRef.current &&
+      currentLocation.pathname !== nextLocation.pathname
   );
 
   useEffect(() => {
@@ -245,6 +320,7 @@ export default function NewSurvey() {
     }
 
     setLoading(false);
+    submittedRef.current = true;
     setSubmitted(true);
     navigate('/surveys');
   }
@@ -329,6 +405,43 @@ export default function NewSurvey() {
       Back
     </Button>
   );
+
+  if (accessDenied) {
+    return (
+      <Page>
+        <PageHeader
+          title='New Survey'
+          breadcrumb={breadcrumb}
+          actions={actions}
+        />
+        <ContentArea style={{ paddingTop: 16 }}>
+          <Card>
+            <Card.Body>
+              <div style={{ marginBottom: 12 }}>{accessDenied}</div>
+              <Button variant='primary' onClick={() => navigate('/surveys')}>
+                Back to Surveys
+              </Button>
+            </Card.Body>
+          </Card>
+        </ContentArea>
+      </Page>
+    );
+  }
+
+  if (!accessChecked) {
+    return (
+      <Page>
+        <PageHeader
+          title='New Survey'
+          breadcrumb={breadcrumb}
+          actions={actions}
+        />
+        <ContentArea style={{ paddingTop: 16 }}>
+          <div style={{ color: 'var(--ss-text-dim)' }}>Loading…</div>
+        </ContentArea>
+      </Page>
+    );
+  }
 
   return (
     <Page>
@@ -615,6 +728,7 @@ export default function NewSurvey() {
             setReadyToSubmit={setFilesReady}
             setGpsDataReady={setGpsReady}
             onShapefileParsed={(latLngs) => setShapefileLatLngs(latLngs)}
+            onModelChange={setSelectedModel}
           />
 
           <Card>
@@ -631,6 +745,16 @@ export default function NewSurvey() {
                 </li>
                 <li style={{ color: gpsReady ? 'lime' : 'red' }}>
                   GPS Data: {gpsReady ? <Check /> : <X />}
+                </li>
+                <li style={{ color: selectedModel ? 'lime' : 'red' }}>
+                  Processing Model:{' '}
+                  {selectedModel ? (
+                    <span style={{ color: 'var(--ss-text)' }}>
+                      {selectedModel.label}
+                    </span>
+                  ) : (
+                    <X />
+                  )}
                 </li>
               </ul>
             </Card.Body>

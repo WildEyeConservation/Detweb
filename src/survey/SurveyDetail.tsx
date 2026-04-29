@@ -415,6 +415,18 @@ export default function SurveyDetail() {
 
   const imageCount = project?.imageSets?.[0]?.imageCount ?? 0;
   const sets = project?.annotationSets ?? [];
+  // The survey is editable only when status is literally "active" AND there
+  // are no active jobs (queues or register flags). The Surveys page surfaces
+  // "Launched" as an augmented status when an active job exists; any such
+  // surface-level status counts as "not active" for editing.
+  const hasActiveJob =
+    (project?.queues?.length ?? 0) > 0 ||
+    (project?.annotationSets ?? []).some((s) => s.register === true);
+  const rawStatus = (project?.status || '').toLowerCase();
+  const isProjectActive = rawStatus === 'active' && !hasActiveJob;
+  const inactiveLabel = hasActiveJob && rawStatus === 'active'
+    ? 'launched'
+    : rawStatus || 'inactive';
 
   function statsFor(setId: string) {
     const qs = (project?.queues ?? []).filter(
@@ -638,6 +650,12 @@ export default function SurveyDetail() {
               <Button
                 variant='primary'
                 size='sm'
+                disabled={!isProjectActive}
+                title={
+                  !isProjectActive
+                    ? `Survey is ${inactiveLabel}. Annotation sets can only be added while the survey is active.`
+                    : undefined
+                }
                 onClick={() =>
                   navigate(`/surveys/${surveyId}/add-annotation-set`)
                 }
@@ -826,8 +844,12 @@ export default function SurveyDetail() {
                           <Button
                             size='sm'
                             variant='primary'
-                            disabled={lockOthers}
-                            title={lockTitle}
+                            disabled={lockOthers || !isProjectActive}
+                            title={
+                              !isProjectActive && !lockOthers
+                                ? `Survey is ${inactiveLabel}. Annotation sets can only be launched while the survey is active.`
+                                : lockTitle
+                            }
                             onClick={() =>
                               navigate(
                                 `/surveys/${surveyId}/set/${a.id}/launch`
@@ -839,8 +861,12 @@ export default function SurveyDetail() {
                           <Button
                             size='sm'
                             variant='secondary'
-                            disabled={lockOthers}
-                            title={lockTitle}
+                            disabled={lockOthers || !isProjectActive}
+                            title={
+                              !isProjectActive && !lockOthers
+                                ? `Survey is ${inactiveLabel}. Annotation sets can only be edited while the survey is active.`
+                                : lockTitle
+                            }
                             onClick={() =>
                               navigate(
                                 `/surveys/${surveyId}/set/${a.id}/edit`
@@ -1281,37 +1307,89 @@ export default function SurveyDetail() {
               </Card.Body>
             </Card>
 
-            <Card>
-              <Card.Header>
-                <h5 className='mb-0'>Add Files</h5>
-              </Card.Header>
-              <Card.Body>
-                {project && filesLoaded ? (
-                  <FilesUploadForm
-                    project={{ id: project.id, name: project.name }}
-                    setOnSubmit={setUploadSubmitFn}
-                    setReadyToSubmit={setReadyToSubmit}
-                    newProject={false}
-                    existingImages={existingImagesForUpload}
-                  />
-                ) : (
-                  <div style={{ color: 'var(--ss-text-muted)' }}>
-                    <Spinner animation='border' size='sm' /> Loading…
+            <div style={{ position: 'relative' }}>
+              <div
+                aria-hidden={!isProjectActive}
+                style={{
+                  pointerEvents: isProjectActive ? 'auto' : 'none',
+                  userSelect: isProjectActive ? 'auto' : 'none',
+                }}
+              >
+                <Card>
+                  <Card.Header>
+                    <h5 className='mb-0'>Add Files</h5>
+                  </Card.Header>
+                  <Card.Body>
+                    {project && filesLoaded ? (
+                      <FilesUploadForm
+                        project={{ id: project.id, name: project.name }}
+                        setOnSubmit={setUploadSubmitFn}
+                        setReadyToSubmit={setReadyToSubmit}
+                        newProject={false}
+                        existingImages={existingImagesForUpload}
+                      />
+                    ) : (
+                      <div style={{ color: 'var(--ss-text-muted)' }}>
+                        <Spinner animation='border' size='sm' /> Loading…
+                      </div>
+                    )}
+                  </Card.Body>
+                </Card>
+                {project && filesLoaded && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    <Button
+                      variant='primary'
+                      disabled={!readyToSubmit || isSubmitting}
+                      onClick={handleUploadSubmit}
+                    >
+                      {isSubmitting ? 'Submitting…' : 'Submit'}
+                    </Button>
                   </div>
                 )}
-              </Card.Body>
-            </Card>
-            {project && filesLoaded && (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <Button
-                  variant='primary'
-                  disabled={!readyToSubmit || isSubmitting}
-                  onClick={handleUploadSubmit}
-                >
-                  {isSubmitting ? 'Submitting…' : 'Submit'}
-                </Button>
               </div>
-            )}
+              {!isProjectActive && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'rgba(255, 255, 255, 0.35)',
+                    backdropFilter: 'blur(8px) saturate(120%)',
+                    WebkitBackdropFilter: 'blur(8px) saturate(120%)',
+                    borderRadius: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000,
+                  }}
+                >
+                  <div
+                    style={{
+                      maxWidth: 440,
+                      padding: '18px 22px',
+                      textAlign: 'center',
+                      background: 'rgba(255, 255, 255, 0.92)',
+                      border: '1px solid var(--ss-border)',
+                      borderRadius: 10,
+                      boxShadow: '0 6px 24px rgba(0,0,0,0.12)',
+                      color: 'var(--ss-text)',
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                      Survey is {inactiveLabel}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: 'var(--ss-text-muted)',
+                      }}
+                    >
+                      Adding files is only available while the survey is
+                      active.
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </ContentArea>

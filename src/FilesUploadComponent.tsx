@@ -61,6 +61,7 @@ interface FilesUploadBaseProps {
     latitude: number;
     longitude: number;
   }[];
+  onModelChange?: (model: { label: string; value: string }) => void;
 }
 
 // Props for form-compatible version
@@ -140,6 +141,7 @@ export function FileUploadCore({
   onShapefileParsed,
   project,
   existingImages,
+  onModelChange,
 }: FilesUploadBaseProps) {
   const [name, setName] = useState('');
   const { client } = useContext(GlobalContext)!;
@@ -207,6 +209,11 @@ export function FileUploadCore({
     label: 'ScoutBot',
     value: 'scoutbot',
   });
+  // Notify the parent whenever the selected model changes so summary UIs
+  // (e.g. NewSurvey's "Ready to Submit" card) stay in sync.
+  useEffect(() => {
+    onModelChange?.(model);
+  }, [model, onModelChange]);
   const [overlaps, setOverlaps] = useState<
     { cameraA: string; cameraB: string }[]
   >([]);

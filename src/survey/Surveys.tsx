@@ -1,6 +1,6 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
-import { UserContext, GlobalContext } from '../Context.tsx';
+import { UserContext, GlobalContext, UploadContext } from '../Context.tsx';
 import { Schema } from '../amplify/client-schema.ts';
 import { Button, Form, OverlayTrigger, Popover, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
@@ -54,12 +54,13 @@ export default function Surveys() {
   const { client, showModal, modalToShow } = useContext(GlobalContext)!;
   const {
     myMembershipHook: myProjectsHook,
-    isOrganizationAdmin,
     user,
   } = useContext(UserContext)!;
+  const { task: uploadTask, setTask: setUploadTask } =
+    useContext(UploadContext)!;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { currentOrg } = useOrg();
+  const { currentOrg, isCurrentOrgAdmin } = useOrg();
   const [selectedProject, setSelectedProject] = useState<
     Schema['Project']['type'] | null
   >(null);
@@ -337,7 +338,18 @@ export default function Surveys() {
 
   const emptyMessage = 'You are not an admin of any surveys.';
 
-  if (projects.length === 0 && !isOrganizationAdmin) {
+  // Only one survey can be uploaded from a given client at a time, so the
+  // "+ New Survey" button is disabled while ANY of this user's admin
+  // surveys (across all orgs) is still uploading.
+  const hasUploadingSurvey = projects.some((p) => p.status === 'uploading');
+
+  // Per-current-org check: a user only has access if they are admin of the
+  // currently-selected org OR admin of at least one survey within it. Being
+  // admin of an unrelated org doesn't grant access here.
+  const hasAdminProjectInCurrentOrg = projects.some(
+    (p) => !currentOrg?.id || p.organizationId === currentOrg.id
+  );
+  if (!isCurrentOrgAdmin && !hasAdminProjectInCurrentOrg) {
     return (
       <Page>
         <PageHeader title='Your Surveys' />
@@ -380,6 +392,27 @@ export default function Surveys() {
 
   const progressCell = (project: Schema['Project']['type']) => {
     const s = (project.status || '').toLowerCase();
+    // An "uploading" project that isn't the active session's upload is an
+    // interrupted upload from a previous session — surface that to the user
+    // so they know to hit "Continue Upload".
+    const isInterruptedUpload =
+      s === 'uploading' && uploadTask.projectId !== project.id;
+    if (isInterruptedUpload) {
+      return (
+        <div
+          className='d-flex align-items-center gap-2'
+          style={{
+            minWidth: 180,
+            fontSize: 12,
+            color: 'var(--ss-amber, #b8860b)',
+            fontWeight: 600,
+          }}
+        >
+          <span aria-hidden>⚠</span>
+          <span>Upload interrupted</span>
+        </div>
+      );
+    }
     const busyMessage =
       s === 'launching'
         ? 'Launching — preparing images…'
@@ -424,8 +457,17 @@ export default function Surveys() {
         <PageHeader
           title='Surveys'
           actions={
-            isOrganizationAdmin && (
-              <Button variant='primary' onClick={() => navigate('/surveys/new')}>
+            isCurrentOrgAdmin && (
+              <Button
+                variant='primary'
+                onClick={() => navigate('/surveys/new')}
+                disabled={hasUploadingSurvey}
+                title={
+                  hasUploadingSurvey
+                    ? 'Another survey is currently uploading. Wait for it to finish before creating a new one.'
+                    : undefined
+                }
+              >
                 + New Survey
               </Button>
             )
@@ -609,37 +651,37 @@ export default function Surveys() {
                                   Open
                                 </Button>
                                 {(() => {
-                                  // One annotation set may be launched per survey, so
-                                  // hide Quick Launch once the survey is already launched.
+                                  // Hide Quick Launch entirely when:
+                                  //  - the survey is already launched (one
+                                  //    annotation set may be launched per
+                                  //    survey at a time)
+                                  //  - the survey isn't in the "active" status
+                                  //  - there are no annotation sets to launch
+                                  const launchSets = project.annotationSets ?? [];
+                                  const statusLower = (
+                                    project.status || ''
+                                  ).toLowerCase();
                                   if (
-                                    (project.status || '').toLowerCase() ===
-                                    'launched'
+                                    statusLower === 'launched' ||
+                                    statusLower !== 'active' ||
+                                    launchSets.length === 0
                                   ) {
                                     return null;
                                   }
-                                  const launchSets = project.annotationSets ?? [];
                                   const launchDisabled =
-                                    launchSets.length === 0 ||
-                                    (process.env.NODE_ENV !== 'development' &&
-                                      disabled);
-                                  if (launchSets.length <= 1) {
+                                    process.env.NODE_ENV !== 'development' &&
+                                    disabled;
+                                  if (launchSets.length === 1) {
                                     return (
                                       <Button
                                         size='sm'
                                         variant='success'
                                         disabled={launchDisabled}
-                                        title={
-                                          launchSets.length === 0
-                                            ? 'No annotation sets to launch.'
-                                            : undefined
+                                        onClick={() =>
+                                          navigate(
+                                            `/surveys/${project.id}/set/${launchSets[0].id}/launch`
+                                          )
                                         }
-                                        onClick={() => {
-                                          if (launchSets.length === 1) {
-                                            navigate(
-                                              `/surveys/${project.id}/set/${launchSets[0].id}/launch`
-                                            );
-                                          }
-                                        }}
                                       >
                                         Quick Launch
                                       </Button>
@@ -700,6 +742,27 @@ export default function Surveys() {
                                     </OverlayTrigger>
                                   );
                                 })()}
+                                {project.status === 'uploading' &&
+                                  uploadTask.projectId !== project.id && (
+                                    <Button
+                                      size='sm'
+                                      variant='warning'
+                                      title='Re-select the survey files to resume the interrupted upload.'
+                                      onClick={() => {
+                                        // Setting resumeId triggers UploadManager's
+                                        // "Found interrupted uploads" modal, which
+                                        // then prompts the user to re-pick the files.
+                                        setUploadTask((prev) => ({
+                                          ...prev,
+                                          resumeId: project.id,
+                                          pauseId: undefined,
+                                          deleteId: undefined,
+                                        }));
+                                      }}
+                                    >
+                                      Continue Upload
+                                    </Button>
+                                  )}
                                 <Button
                                   size='sm'
                                   variant='secondary'

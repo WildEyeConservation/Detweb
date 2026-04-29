@@ -18,6 +18,9 @@ type Project = {
   name: string;
   group?: string | null;
   organizationId: string;
+  status?: string | null;
+  queues?: { id: string }[];
+  annotationSets?: { id: string; register?: boolean | null }[];
 };
 
 type Label = {
@@ -39,6 +42,10 @@ const PROJECT_SELECTION_SET = [
   'name',
   'group',
   'organizationId',
+  'status',
+  'queues.id',
+  'annotationSets.id',
+  'annotationSets.register',
 ] as const;
 
 const IMPORT_SELECTION_SET = [
@@ -339,6 +346,51 @@ export default function AddAnnotationSet() {
         <PageHeader title='Add Annotation Set' breadcrumb={breadcrumb} />
         <ContentArea>
           <div style={{ color: 'var(--ss-text-dim)' }}>Loading…</div>
+        </ContentArea>
+      </Page>
+    );
+  }
+
+  // "Active" requires status === 'active' AND no active jobs. The Surveys
+  // page shows "Launched" as a derived status when queues/register are
+  // present — that counts as not-active here.
+  const projectHasActiveJob =
+    (project.queues?.length ?? 0) > 0 ||
+    (project.annotationSets ?? []).some((s) => s.register === true);
+  const projectRawStatus = (project.status || '').toLowerCase();
+  const projectIsActive =
+    projectRawStatus === 'active' && !projectHasActiveJob;
+  if (!projectIsActive) {
+    const statusLabel =
+      projectHasActiveJob && projectRawStatus === 'active'
+        ? 'launched'
+        : projectRawStatus || 'inactive';
+    return (
+      <Page>
+        <PageHeader title='Add Annotation Set' breadcrumb={breadcrumb} />
+        <ContentArea style={{ paddingTop: 16 }}>
+          <Card>
+            <Card.Body>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                Survey is {statusLabel}
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  color: 'var(--ss-text-muted)',
+                  marginBottom: 16,
+                }}
+              >
+                Annotation sets can only be added while the survey is active.
+              </div>
+              <Button
+                variant='primary'
+                onClick={() => navigate(`/surveys/${surveyId}/detail`)}
+              >
+                Back to Survey
+              </Button>
+            </Card.Body>
+          </Card>
         </ContentArea>
       </Page>
     );

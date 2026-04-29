@@ -219,6 +219,24 @@ export default function SurveySettings() {
     }
   };
 
+  // "Active" means status === 'active' AND no active jobs. The Surveys page
+  // shows "Launched" as a derived status when queues/register are present,
+  // and that counts as not-active for editing here too.
+  const hasActiveJob =
+    ((project.queues as { id: string }[] | undefined)?.length ?? 0) > 0 ||
+    (
+      (project.annotationSets as { register?: boolean | null }[] | undefined) ??
+      []
+    ).some((s) => s.register === true);
+  const rawStatus = (project.status || '').toLowerCase();
+  const isActive = rawStatus === 'active' && !hasActiveJob;
+  const allowedWhenInactive = new Set(['users', 'logs']);
+  const lockTab = !isActive && !allowedWhenInactive.has(activeTab);
+  const inactiveStatusLabel =
+    hasActiveJob && rawStatus === 'active'
+      ? 'launched'
+      : rawStatus || 'inactive';
+
   return (
     <>
       <Page>
@@ -228,7 +246,61 @@ export default function SurveySettings() {
           active={activeTab}
           onChange={setActiveTab}
         />
-        <ContentArea style={{ paddingTop: 16 }}>{renderTab()}</ContentArea>
+        <ContentArea style={{ paddingTop: 16 }}>
+          <div style={{ position: 'relative' }}>
+            <div
+              aria-hidden={lockTab}
+              style={{
+                pointerEvents: lockTab ? 'none' : 'auto',
+                userSelect: lockTab ? 'none' : 'auto',
+              }}
+            >
+              {renderTab()}
+            </div>
+            {lockTab && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'rgba(255, 255, 255, 0.35)',
+                  backdropFilter: 'blur(8px) saturate(120%)',
+                  WebkitBackdropFilter: 'blur(8px) saturate(120%)',
+                  borderRadius: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 1000,
+                }}
+              >
+                <div
+                  style={{
+                    maxWidth: 440,
+                    padding: '18px 22px',
+                    textAlign: 'center',
+                    background: 'rgba(255, 255, 255, 0.92)',
+                    border: '1px solid var(--ss-border)',
+                    borderRadius: 10,
+                    boxShadow: '0 6px 24px rgba(0,0,0,0.12)',
+                    color: 'var(--ss-text)',
+                  }}
+                >
+                  <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                    Survey is {inactiveStatusLabel}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: 'var(--ss-text-muted)',
+                    }}
+                  >
+                    These settings are only available while the survey is
+                    active. You can still use the Manage Users and Logs tabs.
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </ContentArea>
       </Page>
       <ConfirmationModal
         show={showDeleteConfirm}
