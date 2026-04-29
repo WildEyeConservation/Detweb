@@ -167,10 +167,14 @@ export function FileUploadCore({
     {}
   );
   const [masks, setMasks] = useState<number[][][]>([]);
-  const [toUploadFiles, setToUploadFiles] = useState<File[]>([]);
-  const [toUploadSize, setToUploadSize] = useState(0);
+  // toUploadFiles / toUploadSize are derived later via useMemo so they
+  // automatically reflect the latest existing-image and map-filter state.
   const [existingSurveyImages, setExistingSurveyImages] = useState<
-    { originalPath: string; latitude: number; longitude: number }[]
+    {
+      originalPath: string;
+      latitude: number;
+      longitude: number;
+    }[]
   >([]);
   const [loadingExistingImages, setLoadingExistingImages] = useState(
     !newProject
@@ -256,6 +260,64 @@ export function FileUploadCore({
   const [failedFiles, setFailedFiles] = useState<
     Array<{ path: string; error: string }>
   >([]);
+
+  // webkitRelativePaths whose csvData row survived the current map/polygon
+  // subset. null when csvData isn't populated yet (no filtering applies).
+  // Mirrors the matching the submit pipeline uses: by filepath when present,
+  // otherwise by exact exif-timestamp match.
+  const csvFilteredPathSet = useMemo<Set<string> | null>(() => {
+    if (!csvData) return null;
+    const validFilepaths = new Set<string>();
+    const validTimestamps = new Set<number>();
+    for (const row of csvData.data) {
+      if (!Number.isFinite(row.lat) || !Number.isFinite(row.lng)) continue;
+      if (row.filepath) validFilepaths.add(row.filepath.toLowerCase());
+      if (typeof row.timestamp === 'number') {
+        validTimestamps.add(row.timestamp);
+      }
+    }
+    const result = new Set<string>();
+    for (const file of imageFiles) {
+      const path = file.webkitRelativePath;
+      if (validFilepaths.has(path.toLowerCase())) {
+        result.add(path);
+        continue;
+      }
+      const exifMeta = exifData[path];
+      if (exifMeta && validTimestamps.has(exifMeta.timestamp)) {
+        result.add(path);
+      }
+    }
+    return result;
+  }, [csvData, imageFiles, exifData]);
+
+  // Files actually destined for upload, post all filters. Drives the count
+  // shown in the UI. Phash dedup happens during upload, not here.
+  const toUploadFiles = useMemo(() => {
+    if (loadingExistingImages) return [] as File[];
+    let candidates = newProject
+      ? imageFiles
+      : imageFiles.filter(
+          (file) => !existingImagePathSet.has(file.webkitRelativePath)
+        );
+    if (csvFilteredPathSet) {
+      candidates = candidates.filter((file) =>
+        csvFilteredPathSet.has(file.webkitRelativePath)
+      );
+    }
+    return candidates;
+  }, [
+    imageFiles,
+    existingImagePathSet,
+    newProject,
+    loadingExistingImages,
+    csvFilteredPathSet,
+  ]);
+
+  const toUploadSize = useMemo(
+    () => toUploadFiles.reduce((acc, f) => acc + f.size, 0),
+    [toUploadFiles]
+  );
 
   // Handler to confirm column mapping before processing
   const handleConfirmMapping = () => {
@@ -382,8 +444,6 @@ export function FileUploadCore({
         : imageFiles.filter(
           (file) => !existingImagePathSet.has(file.webkitRelativePath)
         );
-      setToUploadFiles(uploadFiles);
-      setToUploadSize(uploadFiles.reduce((acc, f) => acc + f.size, 0));
 
       // Files to show on map/exif: all for new project, only new for existing
       const mapFiles = newProject ? imageFiles : uploadFiles;
@@ -634,6 +694,7 @@ export function FileUploadCore({
       const mostCommonTimezone =
         timezones.length > 0 ? timezones[0] : undefined;
       setCommonTimezone(mostCommonTimezone);
+
     }
     if (imageFiles.length > 0) {
       getExistingFiles();
@@ -714,7 +775,11 @@ export function FileUploadCore({
           {
             projectId,
             limit: 10000,
-            selectionSet: ['originalPath', 'latitude', 'longitude'] as const,
+            selectionSet: [
+              'originalPath',
+              'latitude',
+              'longitude',
+            ] as const,
           } as any
         );
         if (!cancelled) {
@@ -1668,6 +1733,8 @@ export function FileUploadCore({
         altitude_agl?: number;
       }[];
 
+      // Phash dedup runs during upload (see UploadManager) so we don't
+      // pre-filter here.
       for (const file of gpsFilteredImageFiles) {
         const exifmeta = exifData[file.webkitRelativePath];
         const gpsData = getGpsForFile(file);
@@ -2330,13 +2397,14 @@ export function FileUploadCore({
         </div> */}
         </div>
       </Form.Group>
-      {scanningEXIF ? (
+      {scanningEXIF && (
         <div className='mt-3 mb-0'>
           <p className='mb-0'>
             Scanning images for GPS data: {`${scanCount}/${scanTotal}`}
           </p>
         </div>
-      ) : failedFiles.length > 0 ? (
+      )}
+      {!scanningEXIF && failedFiles.length > 0 && (
         <Alert variant='warning' className='mt-3 mb-3'>
           <Alert.Heading>
             {failedFiles.length} file{failedFiles.length === 1 ? '' : 's'} failed
@@ -2372,7 +2440,7 @@ export function FileUploadCore({
             </ul>
           </div>
         </Alert>
-      ) : null}
+      )}
       {!scanningEXIF && Object.keys(exifData).length > 0 && imageFiles.length > 0 ? (
         <Form.Group className='mt-3 d-flex flex-column gap-2'>
           <div>

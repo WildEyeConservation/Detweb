@@ -43,6 +43,7 @@
     "@we-gold/gpxjs": "^1.1.0",
     "aws-amplify": "^6.16.2",
     "aws-sdk": "^2.1691.0",
+    "blockhash-core": "^0.1.0",
     "bootswatch": "^5.3.3",
     "exifr": "^7.1.3",
     "export-from-json": "^1.7.4",
