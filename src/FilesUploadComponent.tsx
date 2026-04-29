@@ -150,6 +150,7 @@ export function FileUploadCore({
     undefined
   );
   const [missingGpsData, setMissingGpsData] = useState(false);
+  const [skipImagesWithoutGps, setSkipImagesWithoutGps] = useState(false);
   const [associateByTimestamp, setAssociateByTimestamp] = useState(false);
   const [minTimestamp, setMinTimestamp] = useState(0);
   const [maxTimestamp, setMaxTimestamp] = useState(0);
@@ -1345,7 +1346,8 @@ export function FileUploadCore({
   }, [filteredImageFiles, exifData, fullCsvData, associateByTimestamp, failedFiles]);
 
   const hasValidGpsForAllImages =
-    filteredImageFiles.length > 0 && invalidGpsFiles.length === 0;
+    filteredImageFiles.length > 0 &&
+    (invalidGpsFiles.length === 0 || skipImagesWithoutGps);
 
   useEffect(() => {
     if (setGpsDataReady) {
@@ -1436,7 +1438,7 @@ export function FileUploadCore({
         return;
       }
 
-      if (invalidGpsFiles.length > 0) {
+      if (invalidGpsFiles.length > 0 && !skipImagesWithoutGps) {
         const sample = invalidGpsFiles.slice(0, 5);
         alert(
           `GPS coordinates are missing or invalid for ${invalidGpsFiles.length
@@ -1747,6 +1749,7 @@ export function FileUploadCore({
       altitudeType,
       csvData,
       invalidGpsFiles,
+      skipImagesWithoutGps,
       cameraSpecs,
       overlaps,
       client,
@@ -2753,17 +2756,34 @@ export function FileUploadCore({
               </Form.Group>
             )}
           <div className='mt-3'>
-            {(() => {
-              if (invalidGpsFiles.length > 0) {
-                const sample = invalidGpsFiles.slice(0, 5);
-                return (
-                  <div className='alert alert-danger mb-0'>
+            {invalidGpsFiles.length > 0 && (() => {
+              const sample = invalidGpsFiles.slice(0, 5);
+              const plural = invalidGpsFiles.length === 1 ? '' : 's';
+              const examplePlural = sample.length === 1 ? '' : 's';
+              return (
+                <div
+                  className={`alert ${
+                    skipImagesWithoutGps ? 'alert-warning' : 'alert-danger'
+                  } mb-2`}
+                >
+                  <div>
                     Missing GPS coordinates for {invalidGpsFiles.length} image
-                    {invalidGpsFiles.length === 1 ? '' : 's'}. Example
-                    {sample.length === 1 ? '' : 's'}: {sample.join(', ')}
+                    {plural}. Example{examplePlural}: {sample.join(', ')}
                   </div>
-                );
-              }
+                  <Form.Check
+                    type='checkbox'
+                    id='skip-images-without-gps'
+                    className='mt-2'
+                    label={`Skip ${invalidGpsFiles.length} image${plural} without GPS data and continue`}
+                    checked={skipImagesWithoutGps}
+                    onChange={(e) =>
+                      setSkipImagesWithoutGps(e.target.checked)
+                    }
+                  />
+                </div>
+              );
+            })()}
+            {(invalidGpsFiles.length === 0 || skipImagesWithoutGps) && (() => {
               let message = '';
               const hasTimestampData =
                 csvData &&
