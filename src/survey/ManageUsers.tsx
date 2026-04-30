@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Form } from 'react-bootstrap';
+import { Button, Form } from 'react-bootstrap';
 import { GlobalContext } from '../Context';
 import { useUsers } from '../apiInterface';
 import { fetchAllPaginatedResults } from '../utils';
@@ -235,35 +235,23 @@ export default function ManageUsers({
 
   return (
     <div className='d-flex flex-column gap-3'>
-      <Card>
-        <Card.Header>
-          <h5 className='mb-0'>Manage User Access</h5>
-        </Card.Header>
-        <Card.Body className='p-0'>
-          <div
-            style={{
-              color: 'var(--ss-text-muted)',
-              fontSize: 12,
-              lineHeight: 1.4,
-              padding: '12px 16px',
-              borderBottom: '1px solid var(--ss-border-soft)',
-            }}
-          >
-            Grant or revoke annotation and admin access for each organisation
-            member on this survey. Organisation admins automatically have full
-            access and cannot be modified here. Enabling admin access
-            automatically grants annotation access.
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 8,
-              alignItems: 'center',
-              padding: '12px 16px',
-              borderBottom: '1px solid var(--ss-border-soft)',
-            }}
-          >
+      <div>
+        <h5 className='mb-1'>Manage User Access</h5>
+        <div style={{ color: 'var(--ss-text-muted)', fontSize: 12, lineHeight: 1.4 }}>
+          Grant or revoke annotation and admin access for each organisation
+          member on this survey. Organisation admins automatically have full
+          access and cannot be modified here. Enabling admin access
+          automatically grants annotation access.
+        </div>
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 8,
+          alignItems: 'center',
+        }}
+      >
             <Form.Control
               type='text'
               placeholder='Search users…'
@@ -344,8 +332,9 @@ export default function ManageUsers({
               </Button>
             </div>
           </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table className='ss-data-table'>
+          <div className='ss-card' style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table className='ss-data-table'>
               <thead>
               <tr>
                 <th>Username</th>
@@ -422,9 +411,8 @@ export default function ManageUsers({
               )}
             </tbody>
           </table>
-        </div>
-        </Card.Body>
-      </Card>
+            </div>
+          </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <Button
           variant='primary'

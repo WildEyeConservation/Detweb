@@ -266,36 +266,32 @@ export default function Logs({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      <Card>
-        <Card.Header className="d-flex justify-content-between align-items-center">
-          <h5 className="mb-0">Admin Action Logs</h5>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={handleDownload}
-            disabled={logs.length === 0}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <h5 className='mb-0'>Admin Action Logs</h5>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={handleDownload}
+          disabled={logs.length === 0}
+        >
+          <Download size={16} className="me-1" />
+          Download CSV
+        </Button>
+      </div>
+      {loading ? (
+        <div className='text-center py-4'>
+          <Spinner />
+        </div>
+      ) : (
+        <>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 8,
+              alignItems: 'center',
+            }}
           >
-            <Download size={16} className="me-1" />
-            Download CSV
-          </Button>
-        </Card.Header>
-        <Card.Body className='p-0'>
-          {loading ? (
-            <div className='text-center py-4'>
-              <Spinner />
-            </div>
-          ) : (
-            <>
-              <div
-                style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 8,
-                  alignItems: 'center',
-                  padding: '12px 16px',
-                  borderBottom: '1px solid var(--ss-border-soft)',
-                }}
-              >
                 <Form.Control
                   type='text'
                   placeholder='Search logs…'
@@ -378,8 +374,9 @@ export default function Logs({ projectId }: { projectId: string }) {
                   </Button>
                 </div>
               </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table className='ss-data-table'>
+              <div className='ss-card' style={{ padding: 0, overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className='ss-data-table'>
                   <thead>
                     <tr>
                       <th>Timestamp</th>
@@ -415,11 +412,10 @@ export default function Logs({ projectId }: { projectId: string }) {
                     )}
                   </tbody>
                 </table>
+                </div>
               </div>
             </>
           )}
-        </Card.Body>
-      </Card>
     </div>
   );
 }

@@ -465,11 +465,8 @@ export default function Results() {
       )}
 
       {canShowResults && (
-        <Card>
-          <Card.Header className='d-flex justify-content-between align-items-center'>
-            <h5 className='mb-0'>All Results</h5>
-          </Card.Header>
-          <Card.Body className='p-0'>
+        <div className='d-flex flex-column gap-3'>
+          <h5 className='mb-0'>All Results</h5>
             {!hasData ? (
               <div
                 style={{
@@ -488,8 +485,6 @@ export default function Results() {
                     flexWrap: 'wrap',
                     gap: 8,
                     alignItems: 'center',
-                    padding: '12px 16px',
-                    borderBottom: '1px solid var(--ss-border-soft)',
                   }}
                 >
                   <div style={{ flex: 1 }} />
@@ -543,8 +538,9 @@ export default function Results() {
                     </Button>
                   </div>
                 </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table className='ss-data-table'>
+                <div className='ss-card' style={{ padding: 0, overflow: 'hidden' }}>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className='ss-data-table'>
                     <thead>
                       <tr>
                         <SortableTh
@@ -615,12 +611,12 @@ export default function Results() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               </>
             )}
-          </Card.Body>
           {hasData && (
-            <Card.Footer className='d-flex gap-2 justify-content-end'>
+            <div className='d-flex gap-2 justify-content-end'>
               <Button
                 variant='danger'
                 onClick={purgeResults}
@@ -631,9 +627,9 @@ export default function Results() {
               <Button variant='primary' onClick={exportResults}>
                 Export Results
               </Button>
-            </Card.Footer>
+            </div>
           )}
-        </Card>
+        </div>
       )}
 
       {canShowResults && hasData && accuracyByCategory.length > 0 && (

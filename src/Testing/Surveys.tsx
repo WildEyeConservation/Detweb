@@ -1,6 +1,6 @@
 import { useState, useContext, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Card, Form } from 'react-bootstrap';
+import { Button, Form } from 'react-bootstrap';
 import { ChevronRight } from 'lucide-react';
 import { TestingContext, GlobalContext } from '../Context';
 
@@ -102,34 +102,23 @@ export default function Surveys() {
   }
 
   return (
-    <Card>
-      <Card.Header>
-        <h5 className='mb-0'>Surveys</h5>
-      </Card.Header>
-      <Card.Body className='p-0'>
-        <div
-          style={{
-            color: 'var(--ss-text-muted)',
-            fontSize: 12,
-            lineHeight: 1.4,
-            padding: '12px 16px',
-            borderBottom: '1px solid var(--ss-border-soft)',
-          }}
-        >
+    <div className='d-flex flex-column gap-3'>
+      <div>
+        <h5 className='mb-1'>Surveys</h5>
+        <div style={{ color: 'var(--ss-text-muted)', fontSize: 12, lineHeight: 1.4 }}>
           Open a survey to manage its location pool, add or remove testing
           locations, configure test rules, and share its pool with other
           surveys.
         </div>
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 8,
-            alignItems: 'center',
-            padding: '12px 16px',
-            borderBottom: '1px solid var(--ss-border-soft)',
-          }}
-        >
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 8,
+          alignItems: 'center',
+        }}
+      >
           <Form.Control
             type='text'
             placeholder='Search surveys…'
@@ -200,8 +189,9 @@ export default function Surveys() {
             </Button>
           </div>
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className='ss-data-table'>
+        <div className='ss-card' style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table className='ss-data-table'>
             <thead>
               <tr>
                 <th style={{ width: '40%' }}>Name</th>
@@ -256,8 +246,8 @@ export default function Surveys() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
-      </Card.Body>
-    </Card>
+    </div>
   );
 }

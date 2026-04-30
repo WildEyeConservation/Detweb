@@ -296,6 +296,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
   const [savingImageCount, setSavingImageCount] = useState(0);
   const [savingProgress, setSavingProgress] = useState(0);
   const [saveDisabled, setSaveDisabled] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
   const [polygonCoords, setPolygonCoords] = useState<
     L.LatLngExpression[] | null
   >(null);
@@ -1200,39 +1201,67 @@ export default function DefineTransects({ projectId, organizationId }: { project
           )}
         </Card.Header>
         <Card.Body>
-          <div className='text-muted mb-2' style={{ fontSize: '14px' }}>
-            <ul className='mb-0'>
-              <li>
-                Single-click a point to select its transect (Ctrl-click for
-                multi-select). Clicking a selected transect will deselect it.
-              </li>
-              <li>
-                Right-click a point to view that transect's info (name/number
-                and image count). If multiple transects are selected,
-                right-click to merge them, or use the "Merge Selected Transects"
-                button that appears at the bottom of the map.
-              </li>
-              <li>
-                Use the polygon tool (top-right) to draw around points, then
-                click "Merge points" to put only the enclosed points into a new
-                transect.
-              </li>
-              <li>
-                Define strata by selecting the polyline tool in the top right
-                corner of the map and drawing a line across the boundary. Start
-                and end points should be outside the boundary.
-              </li>
-              <li>
-                Save your work by clicking the save button at the bottom of the
-                page (even if you haven't made any changes).
-              </li>
-              {existingData && (
+          <div className='mb-2'>
+            <button
+              type='button'
+              onClick={() => setShowInstructions((v) => !v)}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                color: 'var(--ss-text-muted)',
+                fontSize: 13,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              <span
+                style={{
+                  display: 'inline-block',
+                  transform: showInstructions ? 'rotate(90deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.15s',
+                }}
+              >
+                ▶
+              </span>
+              Instructions
+            </button>
+            {showInstructions && (
+              <ul className='mt-2 mb-0 text-muted' style={{ fontSize: '14px' }}>
                 <li>
-                  To make changes to strata, clear strata and redraw the strata
-                  lines.
+                  Single-click a point to select its transect (Ctrl-click for
+                  multi-select). Clicking a selected transect will deselect it.
                 </li>
-              )}
-            </ul>
+                <li>
+                  Right-click a point to view that transect's info (name/number
+                  and image count). If multiple transects are selected,
+                  right-click to merge them, or use the "Merge Selected Transects"
+                  button that appears at the bottom of the map.
+                </li>
+                <li>
+                  Use the polygon tool (top-right) to draw around points, then
+                  click "Merge points" to put only the enclosed points into a new
+                  transect.
+                </li>
+                <li>
+                  Define strata by selecting the polyline tool in the top right
+                  corner of the map and drawing a line across the boundary. Start
+                  and end points should be outside the boundary.
+                </li>
+                <li>
+                  Save your work by clicking the save button at the bottom of the
+                  page (even if you haven't made any changes).
+                </li>
+                {existingData && (
+                  <li>
+                    To make changes to strata, clear strata and redraw the strata
+                    lines.
+                  </li>
+                )}
+              </ul>
+            )}
           </div>
           <div className='define-transects-map'>
             {partsLoading !== null ? (

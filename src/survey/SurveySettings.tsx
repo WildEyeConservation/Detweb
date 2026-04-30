@@ -200,7 +200,7 @@ export default function SurveySettings() {
               borderStyle: 'solid',
             }}
           >
-            <h4 style={{ marginTop: 0, marginBottom: 8 }}>Delete Survey</h4>
+            <h5 style={{ marginTop: 0, marginBottom: 8 }}>Delete Survey</h5>
             <p style={{ color: 'var(--ss-text-dim)', marginBottom: 16 }}>
               Permanently deletes <strong>{project.name}</strong> along with
               all of its images, annotations, and associated jobs. This action

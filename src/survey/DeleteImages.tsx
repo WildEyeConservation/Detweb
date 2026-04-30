@@ -77,6 +77,7 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
     null
   );
   const [popupImage, setPopupImage] = useState<ImageData | null>(null);
+  const [showInstructions, setShowInstructions] = useState(false);
   const featureGroupRef = useRef<L.FeatureGroup>(null);
   const isActiveRef = useRef(true);
 
@@ -658,21 +659,6 @@ This action cannot be undone.`;
 
   return (
     <div className='d-flex flex-column gap-3'>
-      <Alert variant='info' className='mb-0'>
-        <strong>Instructions:</strong>
-        <ul className='mb-0 mt-2'>
-          <li>Click on an image marker to select it</li>
-          <li>
-            Hold <kbd>Ctrl</kbd> + click to select multiple images
-          </li>
-          <li>
-            Use the polygon tool (top-right) to draw around multiple images
-          </li>
-          <li>Right-click on a marker to view image details</li>
-          <li>Blue markers = unselected, Red markers = selected</li>
-        </ul>
-      </Alert>
-
       <Card>
         <Card.Header className='d-flex justify-content-between align-items-center flex-wrap gap-2'>
           <div className='d-flex align-items-baseline gap-2'>
@@ -687,6 +673,47 @@ This action cannot be undone.`;
           </div>
         </Card.Header>
         <Card.Body>
+          <div className='mb-3'>
+            <button
+              type='button'
+              onClick={() => setShowInstructions((v) => !v)}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                color: 'var(--ss-text-muted)',
+                fontSize: 13,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              <span
+                style={{
+                  display: 'inline-block',
+                  transform: showInstructions ? 'rotate(90deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.15s',
+                }}
+              >
+                ▶
+              </span>
+              Instructions
+            </button>
+            {showInstructions && (
+              <ul className='mt-2 mb-0 text-muted' style={{ fontSize: 13 }}>
+                <li>Click on an image marker to select it</li>
+                <li>
+                  Hold <kbd>Ctrl</kbd> + click to select multiple images
+                </li>
+                <li>
+                  Use the polygon tool (top-right) to draw around multiple images
+                </li>
+                <li>Right-click on a marker to view image details</li>
+                <li>Blue markers = unselected, Red markers = selected</li>
+              </ul>
+            )}
+          </div>
           {loadingStatus && !error && (
             <div className='text-muted small mb-2'>{loadingStatus}</div>
           )}

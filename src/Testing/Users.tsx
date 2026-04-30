@@ -1,6 +1,6 @@
 import { TestingContext } from '../Context';
 import { useContext, useMemo, useState } from 'react';
-import { Button, Card, Form } from 'react-bootstrap';
+import { Button, Form } from 'react-bootstrap';
 import { useUsers } from '../apiInterface';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
 
@@ -70,33 +70,22 @@ export default function Users() {
   );
 
   return (
-    <Card>
-      <Card.Header>
-        <h5 className='mb-0'>Organisation Users</h5>
-      </Card.Header>
-      <Card.Body className='p-0'>
-        <div
-          style={{
-            color: 'var(--ss-text-muted)',
-            fontSize: 12,
-            lineHeight: 1.4,
-            padding: '12px 16px',
-            borderBottom: '1px solid var(--ss-border-soft)',
-          }}
-        >
+    <div className='d-flex flex-column gap-3'>
+      <div>
+        <h5 className='mb-1'>Organisation Users</h5>
+        <div style={{ color: 'var(--ss-text-muted)', fontSize: 12, lineHeight: 1.4 }}>
           Mark members as test users to have them complete testing tasks before
           annotating surveys.
         </div>
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 8,
-            alignItems: 'center',
-            padding: '12px 16px',
-            borderBottom: '1px solid var(--ss-border-soft)',
-          }}
-        >
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 8,
+          alignItems: 'center',
+        }}
+      >
           <Form.Control
             type='text'
             placeholder='Search users…'
@@ -167,8 +156,9 @@ export default function Users() {
             </Button>
           </div>
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className='ss-data-table'>
+        <div className='ss-card' style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table className='ss-data-table'>
             <thead>
               <tr>
                 <th>Name</th>
@@ -212,8 +202,8 @@ export default function Users() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
-      </Card.Body>
-    </Card>
+    </div>
   );
 }
