@@ -22,6 +22,7 @@ import {
   PanelLeftOpen,
   type LucideIcon,
 } from 'lucide-react';
+import { fetchUserAttributes } from 'aws-amplify/auth';
 import { ProgressIndicators } from './ProgressIndicators.jsx';
 import Notifications from './user/Notifications.tsx';
 import Settings from './user/Settings.tsx';
@@ -31,6 +32,11 @@ import { useOrg, OrgSummary } from './OrgContext';
 import { verifyToken } from './utils/jwt.ts';
 import { useQueryClient } from '@tanstack/react-query';
 import { AnnotateShell } from './ss/AnnotateChrome.tsx';
+import {
+  OrgInvite,
+  useOrgInvitations,
+  useRespondToInvite,
+} from './user/useOrgInvitations';
 
 type NavDef = {
   id: string;
@@ -154,8 +160,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
     if (
       belongsToOrganization &&
       (location.pathname === '' ||
-        location.pathname === '/' ||
-        location.pathname === '/SSRegisterOrganization')
+        location.pathname === '/')
     ) {
       navigate(canAccessSurveys ? '/surveys' : '/jobs');
     }
@@ -237,9 +242,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
 
   if (!belongsToOrganization) {
     return (
-      <NoOrgShell signOut={signOut}>
-        <Outlet />
-      </NoOrgShell>
+      <NoOrgShell signOut={signOut} />
     );
   }
 
@@ -474,31 +477,6 @@ function SidebarHeader({
         <X size={16} />
       </button>
     </div>
-  );
-}
-
-function LogoMark() {
-  return (
-    <svg width='22' height='22' viewBox='0 0 22 22' fill='none'>
-      <rect
-        x='1'
-        y='1'
-        width='20'
-        height='20'
-        rx='5'
-        fill='rgba(255,255,255,0.12)'
-        stroke='rgba(255,255,255,0.2)'
-        strokeWidth='1'
-      />
-      <circle cx='11' cy='11' r='5' stroke='rgba(255,255,255,0.8)' strokeWidth='1.5' />
-      <circle cx='11' cy='11' r='2' fill='rgba(255,255,255,0.9)' />
-      <path
-        d='M11 1v3M11 18v3M1 11h3M18 11h3'
-        stroke='rgba(255,255,255,0.4)'
-        strokeWidth='1'
-        strokeLinecap='round'
-      />
-    </svg>
   );
 }
 
@@ -927,11 +905,20 @@ function SidebarFooter({
 
 function NoOrgShell({
   signOut,
-  children,
 }: {
   signOut: () => void;
-  children: React.ReactNode;
 }) {
+  const { pendingInvites, queryKey } = useOrgInvitations();
+  const { user } = useContext(UserContext)!;
+  const hasInvites = pendingInvites.length > 0;
+
+  const [attrs, setAttrs] = useState<{ email?: string }>({});
+  useEffect(() => {
+    fetchUserAttributes().then((a) => setAttrs({ email: a.email }));
+  }, []);
+
+  const displayEmail = attrs.email ?? user.signInDetails?.loginId;
+
   return (
     <div
       style={{
@@ -951,9 +938,9 @@ function NoOrgShell({
           justifyContent: 'space-between',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <LogoMark />
-          <span style={{ fontWeight: 700, fontSize: 15 }}>SurveyScope</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <img src='/Logo.png' alt='Logo' style={{ height: 24 }} />
+          <span style={{ fontWeight: 700, fontSize: 14 }}>SurveyScope</span>
         </div>
         <button
           onClick={signOut}
@@ -972,28 +959,158 @@ function NoOrgShell({
       </header>
       <main
         style={{
-          flex: 1,
           overflowY: 'auto',
           display: 'flex',
           justifyContent: 'center',
           padding: '48px 24px',
         }}
       >
-        <div className='ss-card' style={{ maxWidth: 520, width: '100%' }}>
-          <h4 style={{ marginBottom: 8 }}>Welcome</h4>
-          <p style={{ color: 'var(--ss-text-muted)' }}>
-            You are not currently a member of any organisation.
-          </p>
-          <p style={{ color: 'var(--ss-text-muted)' }}>
-            Please visit the{' '}
-            <a href='https://wildeyeconservation.org/surveyscope-registration/'>
-              WildEye Conservation website
-            </a>{' '}
-            to register your organisation.
-          </p>
-          {children}
+        <div
+          style={{
+            maxWidth: 520,
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+          }}
+        >
+          <div className='ss-card'>
+            <h4 style={{ marginBottom: 8 }}>Welcome</h4>
+            {hasInvites ? (
+              <p style={{ color: 'var(--ss-text-muted)', marginBottom: 12 }}>
+                You have {pendingInvites.length} pending organisation{' '}
+                {pendingInvites.length === 1 ? 'invitation' : 'invitations'}.
+                Accept one below to get started.
+              </p>
+            ) : (
+              <>
+                <p style={{ color: 'var(--ss-text-muted)' }}>
+                  You are not currently a member of any organisation.
+                </p>
+                <p style={{ color: 'var(--ss-text-muted)', marginBottom: 12 }}>
+                  Ask your organisation admin to invite you using the account
+                  details below, or visit the{' '}
+                  <a href='https://wildeyeconservation.org/surveyscope-registration/'>
+                    WildEye Conservation website
+                  </a>{' '}
+                  to register your organisation.
+                </p>
+              </>
+            )}
+            <div
+              style={{
+                background: 'var(--ss-surface-alt)',
+                border: '1px solid var(--ss-border-soft)',
+                borderRadius: 8,
+                padding: '10px 12px',
+                fontSize: 13,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+              }}
+            >
+              <div>
+                <strong>Your email:</strong>{' '}
+                {displayEmail ?? (
+                  <span style={{ color: 'var(--ss-text-muted)' }}>—</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {hasInvites && (
+            <div
+              style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+            >
+              {pendingInvites.map((invite) => (
+                <InviteCardLight
+                  key={invite.id}
+                  invite={invite}
+                  queryKey={queryKey}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </main>
+    </div>
+  );
+}
+
+function InviteCardLight({
+  invite,
+  queryKey,
+}: {
+  invite: OrgInvite;
+  queryKey: readonly unknown[];
+}) {
+  const { accept, decline, responding } = useRespondToInvite(invite, queryKey);
+
+  const organizationName =
+    (invite as { organizationName?: string }).organizationName ??
+    'Unknown organisation';
+
+  return (
+    <div
+      className='ss-card'
+      style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: 'var(--ss-text-muted)',
+            marginBottom: 4,
+          }}
+        >
+          Organisation invite
+        </div>
+        <div
+          style={{
+            fontSize: 16,
+            fontWeight: 600,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          title={organizationName}
+        >
+          {organizationName}
+        </div>
+        <div
+          style={{
+            color: 'var(--ss-text-muted)',
+            fontSize: 13,
+            marginTop: 2,
+            lineHeight: 1.4,
+          }}
+        >
+          invited you to join their organisation.
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button
+          type='button'
+          className='btn btn-outline-secondary btn-sm'
+          onClick={decline}
+          disabled={responding}
+        >
+          <X size={14} style={{ marginRight: 4, verticalAlign: '-2px' }} />
+          Decline
+        </button>
+        <button
+          type='button'
+          className='btn btn-primary btn-sm'
+          onClick={accept}
+          disabled={responding}
+        >
+          <Check size={14} style={{ marginRight: 4, verticalAlign: '-2px' }} />
+          Accept
+        </button>
+      </div>
     </div>
   );
 }

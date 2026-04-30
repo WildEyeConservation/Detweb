@@ -1,27 +1,16 @@
-import { useContext, useState } from 'react';
-import { GlobalContext, UserContext } from '../Context';
-import { Schema } from '../amplify/client-schema';
+import { useState } from 'react';
 import { Bell, Check, X, RefreshCw } from 'lucide-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  OrgInvite,
+  useOrgInvitations,
+  useRespondToInvite,
+} from './useOrgInvitations';
 
 export default function Notifications() {
   const [show, setShow] = useState(false);
-  const { user } = useContext(UserContext)!;
-  const { client } = useContext(GlobalContext)!;
-  const username = user.username;
+  const { pendingInvites, isFetching, refetch, queryKey, username } =
+    useOrgInvitations();
 
-  const { data: allInvites, isFetching, refetch } = useQuery<Schema['OrganizationInvite']['type'][]>({
-    queryKey: ['OrganizationInvite', username],
-    queryFn: async () => {
-      const result = await client.models.OrganizationInvite.organizationInvitesByUsername({ username });
-      return result.data;
-    },
-    enabled: !!username,
-    staleTime: 0,
-    gcTime: 0,
-  });
-
-  const pendingInvites = allInvites?.filter((inv) => inv.status === 'pending') ?? [];
   const totalNotifications = pendingInvites.length;
   const hasActivity = totalNotifications > 0;
 
@@ -85,7 +74,7 @@ export default function Notifications() {
           isFetching={isFetching}
           onRefresh={() => refetch()}
           onClose={() => setShow(false)}
-          queryKey={['OrganizationInvite', username]}
+          queryKey={queryKey}
         />
       )}
     </div>
@@ -100,12 +89,12 @@ function NotificationsPopover({
   onClose,
   queryKey,
 }: {
-  invites: Schema['OrganizationInvite']['type'][];
+  invites: OrgInvite[];
   totalNotifications: number;
   isFetching: boolean;
   onRefresh: () => void;
   onClose: () => void;
-  queryKey: unknown[];
+  queryKey: readonly unknown[];
 }) {
   return (
     <div className='ss-sidebar-popover'>
@@ -234,77 +223,10 @@ function Invite({
   invite,
   queryKey,
 }: {
-  invite: Schema['OrganizationInvite']['type'];
-  queryKey: unknown[];
+  invite: OrgInvite;
+  queryKey: readonly unknown[];
 }) {
-  const { client } = useContext(GlobalContext)!;
-  const queryClient = useQueryClient();
-  const [responding, setResponding] = useState(false);
-
-  function updateCacheStatus(status: 'accepted' | 'declined') {
-    queryClient.setQueryData<Schema['OrganizationInvite']['type'][]>(
-      queryKey,
-      (old) => old?.map((inv) => inv.id === invite.id ? { ...inv, status } : inv)
-    );
-  }
-
-  async function acceptInvite() {
-    setResponding(true);
-    try {
-      const { data, errors } = await client.mutations.respondToInvite({
-        inviteId: invite.id,
-        accept: true,
-      });
-      if (errors?.length) {
-        alert(errors[0].message);
-        return;
-      }
-      updateCacheStatus('accepted');
-
-      // Check if user was added to the cognito group or hit the limit
-      let parsed = data;
-      while (typeof parsed === 'string') parsed = JSON.parse(parsed);
-      if (parsed?.addedToGroup) {
-        // Clear cache and reload to pick up new cognito group
-        localStorage.clear();
-        sessionStorage.clear();
-        if (window.indexedDB && 'databases' in indexedDB) {
-          indexedDB.databases().then((dbs) => {
-            dbs.forEach((db) => { if (db.name) indexedDB.deleteDatabase(db.name); });
-          });
-        }
-        if ('caches' in window) {
-          caches.keys().then((names) => { names.forEach((n) => caches.delete(n)); });
-        }
-        window.location.reload();
-      } else if (parsed && !parsed.addedToGroup) {
-        alert('You belong to too many organisations. Go to Settings > Active Organisations to choose which ones are active.');
-      }
-    } catch (err: any) {
-      alert(err.message ?? 'Failed to accept invite');
-    } finally {
-      setResponding(false);
-    }
-  }
-
-  async function declineInvite() {
-    setResponding(true);
-    try {
-      const { errors } = await client.mutations.respondToInvite({
-        inviteId: invite.id,
-        accept: false,
-      });
-      if (errors?.length) {
-        alert(errors[0].message);
-        return;
-      }
-      updateCacheStatus('declined');
-    } catch (err: any) {
-      alert(err.message ?? 'Failed to decline invite');
-    } finally {
-      setResponding(false);
-    }
-  }
+  const { accept, decline, responding } = useRespondToInvite(invite, queryKey);
 
   const organizationName =
     (invite as { organizationName?: string }).organizationName ??
@@ -361,14 +283,14 @@ function Invite({
       </div>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <ActionButton
-          onClick={declineInvite}
+          onClick={decline}
           disabled={responding}
           variant='decline'
           icon={<X size={14} />}
           label='Decline'
         />
         <ActionButton
-          onClick={acceptInvite}
+          onClick={accept}
           disabled={responding}
           variant='accept'
           icon={<Check size={14} />}

@@ -45,6 +45,11 @@ export function AnnotationSetDropdown({
       onChange={onSelect}
       name='Select annotation set'
       options={options}
+      menuPortalTarget={document.body}
+      menuPosition='fixed'
+      styles={{
+        menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+      }}
     />
   );
 }

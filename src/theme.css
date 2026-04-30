@@ -841,16 +841,91 @@ body.ss-sidebar-collapsed {
 
 
 /* Override Amplify Authenticator visuals so the modal sign-in matches */
-[data-amplify-authenticator] {
+[data-amplify-authenticator],
+[data-amplify-theme] {
   --amplify-colors-brand-primary-10: #e8f5ee;
+  --amplify-colors-brand-primary-20: #d4ebde;
+  --amplify-colors-brand-primary-40: #a0c9b8;
+  --amplify-colors-brand-primary-60: #6ea88c;
   --amplify-colors-brand-primary-80: var(--ss-accent);
   --amplify-colors-brand-primary-90: var(--ss-accent-hover);
   --amplify-colors-brand-primary-100: var(--ss-accent-hover);
   --amplify-colors-background-primary: var(--ss-surface);
   --amplify-colors-background-secondary: var(--ss-surface-alt);
   --amplify-colors-font-primary: var(--ss-text);
+  --amplify-colors-font-interactive: var(--ss-accent);
+  --amplify-colors-font-hover: var(--ss-accent-hover);
+  --amplify-colors-font-focus: var(--ss-accent-hover);
+  --amplify-colors-font-active: var(--ss-accent-hover);
+  --amplify-colors-border-focus: var(--ss-accent);
+
+  /* Anchor / Link component (e.g. "website" external link) */
+  --amplify-components-link-color: var(--ss-accent);
+  --amplify-components-link-hover-color: var(--ss-accent-hover);
+  --amplify-components-link-focus-color: var(--ss-accent-hover);
+  --amplify-components-link-active-color: var(--ss-accent-hover);
+  --amplify-components-link-visited-color: var(--ss-accent);
   --amplify-fonts-default-variable: 'DM Sans', sans-serif;
   --amplify-fonts-default-static: 'DM Sans', sans-serif;
+
+  /* Primary button (Sign in, Submit, Confirm) */
+  --amplify-components-button-primary-background-color: var(--ss-accent);
+  --amplify-components-button-primary-color: #fff;
+  --amplify-components-button-primary-border-color: var(--ss-accent);
+  --amplify-components-button-primary-hover-background-color: var(--ss-accent-hover);
+  --amplify-components-button-primary-hover-border-color: var(--ss-accent-hover);
+  --amplify-components-button-primary-hover-color: #fff;
+  --amplify-components-button-primary-focus-background-color: var(--ss-accent-hover);
+  --amplify-components-button-primary-focus-border-color: var(--ss-accent-hover);
+  --amplify-components-button-primary-focus-color: #fff;
+  --amplify-components-button-primary-active-background-color: var(--ss-accent-hover);
+  --amplify-components-button-primary-active-border-color: var(--ss-accent-hover);
+  --amplify-components-button-primary-active-color: #fff;
+  --amplify-components-button-primary-disabled-background-color: var(--ss-accent);
+  --amplify-components-button-primary-disabled-border-color: var(--ss-accent);
+  --amplify-components-button-primary-disabled-color: #fff;
+  --amplify-components-button-loading-background-color: var(--ss-accent);
+  --amplify-components-button-loading-color: #fff;
+
+  /* Link-variation buttons (Reset Password, Forgot Password, Back to Sign In) */
+  --amplify-components-button-link-color: var(--ss-accent);
+  --amplify-components-button-link-hover-color: var(--ss-accent-hover);
+  --amplify-components-button-link-hover-background-color: var(--ss-accent-soft);
+  --amplify-components-button-link-focus-color: var(--ss-accent-hover);
+  --amplify-components-button-link-active-color: var(--ss-accent-hover);
+
+  /* Tab underline + heading accents */
+  --amplify-components-tabs-item-active-color: var(--ss-accent);
+  --amplify-components-tabs-item-active-border-color: var(--ss-accent);
+  --amplify-components-tabs-item-focus-color: var(--ss-accent);
+  --amplify-components-tabs-item-hover-color: var(--ss-accent-hover);
+
+  /* Field focus ring */
+  --amplify-components-fieldcontrol-focus-border-color: var(--ss-accent);
+  --amplify-components-fieldcontrol-focus-box-shadow: 0 0 0 3px rgba(77, 143, 110, 0.18);
+
+  /* Rounded corners across the authenticator */
+  --amplify-radii-small: 6px;
+  --amplify-radii-medium: 8px;
+  --amplify-radii-large: 12px;
+  --amplify-components-button-border-radius: 8px;
+  --amplify-components-fieldcontrol-border-radius: 8px;
+  --amplify-components-authenticator-router-border-radius: 14px;
+  --amplify-components-authenticator-modal-border-radius: 14px;
+}
+
+/* Wrap the Logo header + form card as a single rounded surface */
+[data-amplify-authenticator] [data-amplify-container] {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--ss-border);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  background: var(--ss-surface);
+}
+[data-amplify-authenticator] [data-amplify-router] {
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
 }
 
 /* Leaflet tweaks — leaflet.css imported separately; just keep colour consistent */

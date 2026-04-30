@@ -73,7 +73,6 @@ function App({ signOut = () => { }, user }: AppProps) {
       'If you use refresh to load new data it may result in some of your work being lost.'
     );
     e.preventDefault();
-    e.returnValue = '';
   };
 
   useEffect(() => {
@@ -221,14 +220,17 @@ export default function AppWithAuthenticator() {
 
 function Logo() {
   return (
-    <div className='p-3 w-100 d-flex flex-column justify-content-center align-items-center bg-secondary'>
+    <div
+      className='p-3 w-100 d-flex flex-column justify-content-center align-items-center'
+      style={{ background: 'var(--ss-accent)' }}
+    >
       <div className='d-flex flex-row align-items-center flex-nowrap'>
         <img
           src='/Logo.png'
           alt='Logo'
           style={{ height: '32px', marginRight: '4px' }}
         />
-        <h1 style={{ marginBottom: '0px', fontSize: '24px' }}>SurveyScope</h1>
+        <h1 style={{ marginBottom: '0px', fontSize: '24px', color: '#fff' }}>SurveyScope</h1>
       </div>
     </div>
   );

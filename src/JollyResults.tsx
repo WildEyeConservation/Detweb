@@ -4,7 +4,8 @@ import { useParams } from 'react-router-dom';
 import { GlobalContext, UserContext } from './Context.tsx';
 import { fetchAllPaginatedResults } from './utils.tsx';
 import MyTable from './Table.tsx';
-import { Button, Card, Form, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Button, Form, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Page, PageHeader, ContentArea, Crumb, CrumbSep } from './ss/PageShell';
 import DensityMap from './DensityMap.tsx';
 import exportFromJSON from 'export-from-json';
 import { useUsers } from './apiInterface';
@@ -425,235 +426,306 @@ export default function JollyResults() {
     ],
   }));
 
+  const sectionLabelStyle: React.CSSProperties = {
+    fontWeight: 700,
+    fontSize: 14,
+    marginBottom: 10,
+    color: 'var(--ss-text)',
+  };
+
+  const breadcrumb = (
+    <>
+      <Crumb onClick={() => navigate('/surveys')}>Surveys</Crumb>
+      <CrumbSep />
+      <Crumb onClick={() => navigate(`/surveys/${surveyId}/detail`)}>
+        {surveyName || surveyId}
+      </Crumb>
+      {annotationSetName && (
+        <>
+          <CrumbSep />
+          <span>{annotationSetName}</span>
+        </>
+      )}
+      <CrumbSep />
+      <span>Jolly Results</span>
+    </>
+  );
+
   return (
-    <div
-      style={{
-        width: '100%',
-        maxWidth: '1555px',
-        marginTop: '16px',
-        marginBottom: '16px',
-      }}
-    >
-      <div className='d-flex flex-row gap-2 w-100 h-100'>
-        <div className='d-flex flex-column gap-2' style={{ width: '300px' }}>
-          <Card>
-            <Card.Header>
-              <Card.Title>
-                <h4 className='mb-0'>Information</h4>
-              </Card.Title>
-            </Card.Header>
-            <Card.Body>
-              <p className='mb-0'>
-                <strong>Survey:</strong> {surveyName}
-              </p>
-              <p className='mb-0'>
-                <strong>Annotation Set:</strong> {annotationSetName}
-              </p>
-            </Card.Body>
-          </Card>
-          <Card>
-            <Card.Header>
-              <Card.Title>
-                <h4 className='mb-0'>Filter</h4>
-              </Card.Title>
-            </Card.Header>
-            <Card.Body>
+    <Page>
+      <PageHeader
+        title='Jolly Results'
+        breadcrumb={breadcrumb}
+        actions={
+          <Button
+            variant='primary'
+            size='sm'
+            onClick={exportResultsAsCSV}
+            disabled={exporting}
+          >
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </Button>
+        }
+      />
+      <ContentArea style={{ paddingTop: 16 }}>
+        <div
+          className='d-flex flex-column flex-md-row gap-3'
+          style={{ minHeight: '100%' }}
+        >
+          <div
+            className='d-flex flex-column gap-3'
+            style={{ width: '100%', maxWidth: 320, flexShrink: 0 }}
+          >
+            <div className='ss-card'>
+              <div style={sectionLabelStyle}>Filter</div>
+              <Form.Label
+                className='mb-1'
+                style={{ fontSize: 12, color: 'var(--ss-text-dim)' }}
+              >
+                Labels
+              </Form.Label>
               <Select
                 isMulti
-                placeholder='Select labels'
+                placeholder='All labels'
                 options={categoryOptions}
                 onChange={(e) => setSelectedCategories([...e])}
                 className='text-black'
+                closeMenuOnSelect={false}
+                menuPortalTarget={document.body}
+                menuPosition='fixed'
+                styles={{
+                  menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                }}
               />
-            </Card.Body>
-          </Card>
-          <Card className='flex-grow-1 overflow-auto'>
-            <Card.Header>
-              <Card.Title>
-                <h4 className='mb-0'>Sharing</h4>
-              </Card.Title>
-            </Card.Header>
-            <Card.Body className='d-flex flex-column justify-content-between'>
-              {isProjectAdmin && (
-                <div className='d-flex flex-column gap-3'>
-                  <Form.Group>
-                    <Button
-                      variant='link'
-                      className='p-0 mb-1'
-                      onClick={() => setMoreInfo(!moreInfo)}
+            </div>
+
+            {isProjectAdmin && (
+              <div className='ss-card'>
+                <div style={sectionLabelStyle}>Sharing</div>
+                <Form.Group>
+                  <Button
+                    variant='link'
+                    className='p-0 mb-1'
+                    onClick={() => setMoreInfo(!moreInfo)}
+                    style={{ fontSize: 12 }}
+                  >
+                    {moreInfo ? 'Less info' : 'More info…'}
+                  </Button>
+                  {moreInfo && (
+                    <span
+                      className='text-muted d-block mb-2 mt-0'
+                      style={{ fontSize: 12 }}
                     >
-                      {moreInfo ? 'Less Info' : 'Click for more info...'}
-                    </Button>
-                    {moreInfo && (
-                      <span
-                        className='text-muted d-block mb-2 mt-0'
-                        style={{ fontSize: '14px' }}
-                      >
-                        After copying the link, it will remain valid until the
-                        expiration date. Any user who clicks the link will be
-                        required to sign in. These users will be granted access
-                        to this results page. You can revoke access by removing
-                        them from the list below. You must wait for the link to
-                        expire before creating a new one. As a safety measure,
-                        choose the shortest expiration date possible.
-                      </span>
-                    )}
-                    <Form.Label className='mb-0 d-block'>
-                      Expiration Date:
-                    </Form.Label>
-                    {tokenExpiry && (
-                      <span
-                        className='text-muted d-block mb-2 mt-0'
-                        style={{ fontSize: '14px' }}
-                      >
-                        Link still valid until{' '}
-                        {new Date(tokenExpiry).toLocaleDateString()}
-                      </span>
-                    )}
-                    <Form.Control
-                      type='date'
-                      disabled={true}
-                      placeholder='Expiration'
-                      value={DateTime.fromMillis(expiration).toFormat(
-                        'yyyy-MM-dd'
-                      )}
-                      onChange={(e) =>
-                        setExpiration(
-                          DateTime.fromFormat(
-                            e.target.value,
-                            'yyyy-MM-dd'
-                          ).toMillis()
-                        )
-                      }
-                      min={DateTime.now().toFormat('yyyy-MM-dd')}
-                    />
-                    <OverlayTrigger
-                      placement='top'
-                      overlay={<Tooltip id='copy-link-tooltip'>Under maintenance</Tooltip>}
+                      After copying the link, it will remain valid until the
+                      expiration date. Any user who clicks the link will be
+                      required to sign in. These users will be granted access
+                      to this results page. You can revoke access by removing
+                      them from the list below. You must wait for the link to
+                      expire before creating a new one. As a safety measure,
+                      choose the shortest expiration date possible.
+                    </span>
+                  )}
+                  <Form.Label
+                    className='mb-1 d-block'
+                    style={{ fontSize: 12, color: 'var(--ss-text-dim)' }}
+                  >
+                    Expiration date
+                  </Form.Label>
+                  {tokenExpiry && (
+                    <span
+                      className='text-muted d-block mb-2 mt-0'
+                      style={{ fontSize: 12 }}
                     >
-                      <div className='d-inline-block w-100'>
+                      Link still valid until{' '}
+                      {new Date(tokenExpiry).toLocaleDateString()}
+                    </span>
+                  )}
+                  <Form.Control
+                    type='date'
+                    size='sm'
+                    disabled={true}
+                    placeholder='Expiration'
+                    value={DateTime.fromMillis(expiration).toFormat(
+                      'yyyy-MM-dd'
+                    )}
+                    onChange={(e) =>
+                      setExpiration(
+                        DateTime.fromFormat(
+                          e.target.value,
+                          'yyyy-MM-dd'
+                        ).toMillis()
+                      )
+                    }
+                    min={DateTime.now().toFormat('yyyy-MM-dd')}
+                  />
+                  <OverlayTrigger
+                    placement='top'
+                    overlay={
+                      <Tooltip id='copy-link-tooltip'>
+                        Under maintenance
+                      </Tooltip>
+                    }
+                  >
+                    <div className='d-inline-block w-100'>
+                      <Button
+                        variant='outline-primary'
+                        size='sm'
+                        className='mt-2 w-100'
+                        onClick={handleShare}
+                        disabled={true}
+                        style={{ pointerEvents: 'none' }}
+                      >
+                        {isCopying ? 'Copying…' : 'Copy Link'}
+                      </Button>
+                    </div>
+                  </OverlayTrigger>
+                </Form.Group>
+                <Form.Group className='mt-3'>
+                  <Form.Label
+                    className='mb-1'
+                    style={{ fontSize: 12, color: 'var(--ss-text-dim)' }}
+                  >
+                    Shared with
+                  </Form.Label>
+                  {resultsMemberships.length > 0 ? (
+                    resultsMemberships.map((m) => (
+                      <div
+                        className='mb-1 w-100 d-flex justify-content-between align-items-center'
+                        style={{
+                          border: '1px solid var(--ss-border)',
+                          borderRadius: 6,
+                          padding: '2px 4px 2px 10px',
+                          fontSize: 13,
+                          overflow: 'hidden',
+                        }}
+                        key={m.userId}
+                      >
+                        <span className='m-0'>
+                          {users?.find((u) => u.id === m.userId)?.name ||
+                            'New User'}
+                        </span>
                         <Button
-                          variant='outline-primary'
-                          className='mt-2 w-100'
-                          onClick={handleShare}
-                          disabled={true}
-                          style={{ pointerEvents: 'none' }}
+                          variant='link'
+                          size='sm'
+                          className='p-1'
+                          style={{ color: 'var(--ss-red)' }}
+                          onClick={() => removeResultsMembership(m.userId)}
+                          aria-label='Remove'
                         >
-                          {isCopying ? 'Copying...' : 'Copy Link'}
+                          <X size={14} />
                         </Button>
                       </div>
-                    </OverlayTrigger>
-                  </Form.Group>
-                  <Form.Group>
-                    <Form.Label className='m-0'>Shared with:</Form.Label>
-                    {resultsMemberships.length > 0 ? (
-                      resultsMemberships.map((m) => (
-                        <div
-                          className='mb-2 w-100 d-flex justify-content-between align-items-center'
-                          style={{
-                            border: '1px solid #ccc',
-                            borderRadius: '4px',
-                            padding: '0px 0px 0px 8px',
-                            fontSize: '14px',
-                            overflow: 'hidden',
-                          }}
-                          key={m.userId}
-                        >
-                          <span className='m-0'>
-                            {users?.find((u) => u.id === m.userId)?.name ||
-                              'New User'}
-                          </span>
-                          <Button
-                            variant='danger'
-                            size='sm'
-                            onClick={() => removeResultsMembership(m.userId)}
-                          >
-                            <X />
-                          </Button>
-                        </div>
-                      ))
-                    ) : (
-                      <p
-                        className='mb-0 text-muted'
-                        style={{ fontSize: '14px' }}
-                      >
-                        No one has been shared with yet.
-                      </p>
-                    )}
-                  </Form.Group>
-                </div>
-              )}
-              <Button onClick={exportResultsAsCSV} disabled={exporting}>
-                {exporting
-                  ? 'Exporting, Please wait...'
-                  : 'Export Results as CSV'}
-              </Button>
-            </Card.Body>
-          </Card>
-        </div>
-        <div className='d-flex flex-column gap-2 flex-grow-1'>
-          <Card className='flex-grow-1'>
-            <Card.Header>
-              <Card.Title>
-                <h4 className='mb-0'>Density Map</h4>
-              </Card.Title>
-            </Card.Header>
-            <Card.Body>
-              <DensityMap
-                surveyId={surveyId}
-                annotationSetId={annotationSetId}
-                categoryIds={
-                  selectedCategories.length > 0
-                    ? categoryIds
-                    : categoryOptions.map((c) => c.value)
-                }
-                primaryOnly
-                dropFalseNegatives
-              />
-            </Card.Body>
-          </Card>
-          <Card>
-            <Card.Header className='d-flex justify-content-between align-items-center gap-2'>
-              <Card.Title className='mb-0 w-100' style={{ maxWidth: '300px' }}>
-                <h4 className='mb-0'>Jolly Results</h4>
-              </Card.Title>
-            </Card.Header>
-            <Card.Body>
+                    ))
+                  ) : (
+                    <p
+                      className='mb-0 text-muted'
+                      style={{ fontSize: 12 }}
+                    >
+                      No one has been shared with yet.
+                    </p>
+                  )}
+                </Form.Group>
+              </div>
+            )}
+          </div>
+
+          <div
+            className='d-flex flex-column gap-3 flex-grow-1'
+            style={{ minWidth: 0 }}
+          >
+            <div
+              className='ss-card d-flex flex-column'
+              style={{
+                padding: 14,
+                flex: 1,
+                minHeight: 360,
+              }}
+            >
+              <div style={sectionLabelStyle}>Density Map</div>
+              <div style={{ flex: 1, minHeight: 0, width: '100%' }}>
+                <DensityMap
+                  surveyId={surveyId}
+                  annotationSetId={annotationSetId}
+                  categoryIds={
+                    selectedCategories.length > 0
+                      ? categoryIds
+                      : categoryOptions.map((c) => c.value)
+                  }
+                  primaryOnly
+                  dropFalseNegatives
+                />
+              </div>
+            </div>
+
+            <div className='ss-card' style={{ padding: 14 }}>
+              <div style={sectionLabelStyle}>Results</div>
               <MyTable
                 tableHeadings={tableHeadings}
                 tableData={tableData}
                 pagination={false}
                 emptyMessage='No Jolly results found.'
               />
-              <div className='mt-3 p-2 border-top'>
-                <h5>Totals</h5>
-                <div className='d-flex flex-wrap gap-4'>
+              <div
+                className='mt-3 pt-3'
+                style={{ borderTop: '1px solid var(--ss-border)' }}
+              >
+                <div
+                  style={{
+                    fontWeight: 700,
+                    fontSize: 13,
+                    marginBottom: 8,
+                    color: 'var(--ss-text)',
+                  }}
+                >
+                  Totals
+                </div>
+                <div
+                  className='d-flex flex-wrap'
+                  style={{ gap: '8px 24px', fontSize: 13 }}
+                >
                   <div>
-                    <strong>Estimate:</strong> {Math.round(totalEstimate)}
+                    <span style={{ color: 'var(--ss-text-dim)' }}>
+                      Estimate:
+                    </span>{' '}
+                    <strong>{Math.round(totalEstimate)}</strong>
                   </div>
                   <div>
-                    <strong>Variance:</strong> {totalVariance.toFixed(2)}
+                    <span style={{ color: 'var(--ss-text-dim)' }}>
+                      Variance:
+                    </span>{' '}
+                    <strong>{totalVariance.toFixed(2)}</strong>
                   </div>
                   <div>
-                    <strong>Std Error:</strong> {totalStdError.toFixed(2)}
+                    <span style={{ color: 'var(--ss-text-dim)' }}>
+                      Std Error:
+                    </span>{' '}
+                    <strong>{totalStdError.toFixed(2)}</strong>
                   </div>
                   <div>
-                    <strong>t Value (n={totalSamples}):</strong>{' '}
-                    {tValue.toFixed(3)}
+                    <span style={{ color: 'var(--ss-text-dim)' }}>
+                      t Value (n={totalSamples}):
+                    </span>{' '}
+                    <strong>{tValue.toFixed(3)}</strong>
                   </div>
                   <div>
-                    <strong>Lower 95:</strong> {Math.round(totalLower95)}
+                    <span style={{ color: 'var(--ss-text-dim)' }}>
+                      Lower 95:
+                    </span>{' '}
+                    <strong>{Math.round(totalLower95)}</strong>
                   </div>
                   <div>
-                    <strong>Upper 95:</strong> {Math.round(totalUpper95)}
+                    <span style={{ color: 'var(--ss-text-dim)' }}>
+                      Upper 95:
+                    </span>{' '}
+                    <strong>{Math.round(totalUpper95)}</strong>
                   </div>
                 </div>
               </div>
-            </Card.Body>
-          </Card>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      </ContentArea>
+    </Page>
   );
 }
 

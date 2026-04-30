@@ -12,7 +12,6 @@ import { ImageLoader } from './ImageLoader';
 import QuickTest from './QuickTest';
 import { Review } from './Review';
 import { PairLoader } from './PairLoader';
-import RegisterOrganization from './RegisterOrganization';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import ErrorPage from './error-page';
 import ProjectView from './ProjectView';
@@ -183,10 +182,6 @@ const router = createBrowserRouter([
       {
         path: 'surveys/:surveyId/add-annotation-set',
         element: <AddAnnotationSet />,
-      },
-      {
-        path: 'SSRegisterOrganization',
-        element: <RegisterOrganization />,
       },
       {
         path: 'permissions',
