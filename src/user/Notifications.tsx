@@ -122,9 +122,9 @@ function NotificationsPopover({
           {totalNotifications > 0 && (
             <div
               style={{
-                background: 'rgba(77,143,110,0.25)',
-                color: '#a6e0c2',
-                border: '1px solid rgba(77,143,110,0.45)',
+                background: '#334657',
+                color: '#a6cee0',
+                border: '1px solid #3F5060',
                 fontSize: 11,
                 fontWeight: 700,
                 padding: '1px 7px',

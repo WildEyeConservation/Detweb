@@ -6,14 +6,14 @@
 
 :root {
   /* SurveyScope palette */
-  --ss-accent: #4d8f6e;
-  --ss-accent-hover: #3d7758;
-  --ss-accent-soft: #e8f5ee;
-  --ss-sidebar-bg: #1b2820;
+  --ss-accent: #DF6919;
+  --ss-accent-hover: #BE5915;
+  --ss-accent-soft: #fdece0;
+  --ss-sidebar-bg: #2B3E50;
   --ss-sidebar-text: #ffffff;
   --ss-sidebar-muted: rgba(255, 255, 255, 0.55);
   --ss-sidebar-dim: rgba(255, 255, 255, 0.3);
-  --ss-content-bg: #f2f1ec;
+  --ss-content-bg: #F5F7FA;
   --ss-surface: #ffffff;
   --ss-surface-alt: #faf9f5;
   --ss-surface-head: #f7f6f1;
@@ -48,7 +48,7 @@
   --bs-body-bg: var(--ss-content-bg);
   --bs-body-color: var(--ss-text);
   --bs-body-color-rgb: 28, 28, 26;
-  --bs-body-bg-rgb: 242, 241, 236;
+  --bs-body-bg-rgb: 245, 247, 250;
   --bs-heading-color: var(--ss-text);
   --bs-emphasis-color: var(--ss-text);
   --bs-secondary-color: var(--ss-text-muted);
@@ -58,11 +58,11 @@
   --bs-border-color-translucent: var(--ss-border);
 
   --bs-primary: var(--ss-accent);
-  --bs-primary-rgb: 77, 143, 110;
+  --bs-primary-rgb: 223, 105, 25;
   --bs-secondary: #dddcd5;
   --bs-secondary-rgb: 221, 220, 213;
   --bs-success: var(--ss-accent);
-  --bs-success-rgb: 77, 143, 110;
+  --bs-success-rgb: 223, 105, 25;
   --bs-info: #3a7aaa;
   --bs-info-rgb: 58, 122, 170;
   --bs-warning: #d4a820;
@@ -72,7 +72,7 @@
   --bs-light: var(--ss-surface-alt);
   --bs-light-rgb: 250, 249, 245;
   --bs-dark: var(--ss-sidebar-bg);
-  --bs-dark-rgb: 27, 40, 32;
+  --bs-dark-rgb: 43, 62, 80;
 
   --bs-link-color: var(--ss-accent);
   --bs-link-hover-color: var(--ss-accent-hover);
@@ -130,7 +130,7 @@ a:hover { color: var(--ss-accent-hover); }
   transition: all 0.12s ease;
 }
 .btn:focus, .btn:focus-visible {
-  box-shadow: 0 0 0 3px rgba(77, 143, 110, 0.25);
+  box-shadow: 0 0 0 3px rgba(223, 105, 25, 0.25);
 }
 
 .btn-primary {
@@ -286,7 +286,7 @@ a:hover { color: var(--ss-accent-hover); }
   background: var(--ss-surface);
   color: var(--ss-text);
   border-color: var(--ss-accent);
-  box-shadow: 0 0 0 3px rgba(77, 143, 110, 0.12);
+  box-shadow: 0 0 0 3px rgba(223, 105, 25, 0.12);
 }
 .form-control::placeholder { color: var(--ss-text-dim); }
 .form-control:disabled,
@@ -632,7 +632,7 @@ body.ss-sidebar-collapsed {
   bottom: 16px;
   width: min(360px, calc(100vw - var(--ss-shell-left) - 26px));
   max-height: calc(100vh - 32px);
-  background: #1b2820;
+  background: #2B3E50;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
@@ -754,7 +754,7 @@ body.ss-sidebar-collapsed {
 }
 .ss-nav-item.active {
   color: #fff;
-  background: rgba(77, 143, 110, 0.2);
+  background: rgba(223, 105, 25, 0.2);
   font-weight: 600;
 }
 .ss-nav-item.active .ss-nav-icon { color: var(--ss-accent); }
@@ -902,7 +902,7 @@ body.ss-sidebar-collapsed {
 
   /* Field focus ring */
   --amplify-components-fieldcontrol-focus-border-color: var(--ss-accent);
-  --amplify-components-fieldcontrol-focus-box-shadow: 0 0 0 3px rgba(77, 143, 110, 0.18);
+  --amplify-components-fieldcontrol-focus-box-shadow: 0 0 0 3px rgba(223, 105, 25, 0.18);
 
   /* Rounded corners across the authenticator */
   --amplify-radii-small: 6px;
@@ -918,7 +918,7 @@ body.ss-sidebar-collapsed {
 [data-amplify-authenticator] [data-amplify-container] {
   border-radius: 14px;
   overflow: hidden;
-  border: 1px solid var(--ss-border);
+  border: 1px solid var(--ss-sidebar-bg);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
   background: var(--ss-surface);
 }

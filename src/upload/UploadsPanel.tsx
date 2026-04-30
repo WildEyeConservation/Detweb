@@ -196,7 +196,7 @@ function SpeedSparkline({ samples }: { samples: number[] }) {
           y1={height - padding}
           x2={width}
           y2={height - padding}
-          stroke='rgba(77,143,110,0.25)'
+          stroke='#37495A'
           strokeWidth={1}
         />
       </svg>
@@ -226,15 +226,15 @@ function SpeedSparkline({ samples }: { samples: number[] }) {
     <svg width={width} height={height} style={{ display: 'block' }}>
       <defs>
         <linearGradient id='ss-upload-spark' x1='0' y1='0' x2='0' y2='1'>
-          <stop offset='0%' stopColor='#4d8f6e' stopOpacity='0.5' />
-          <stop offset='100%' stopColor='#4d8f6e' stopOpacity='0.02' />
+          <stop offset='0%' stopColor='#DF6919' stopOpacity='0.5' />
+          <stop offset='100%' stopColor='#DF6919' stopOpacity='0.02' />
         </linearGradient>
       </defs>
       <path d={areaPath} fill='url(#ss-upload-spark)' />
       <path
         d={linePath}
         fill='none'
-        stroke='#4d8f6e'
+        stroke='#DF6919'
         strokeWidth={1.5}
         strokeLinecap='round'
         strokeLinejoin='round'
@@ -447,9 +447,9 @@ function UploadsPopover({
           {activeCount > 0 && (
             <div
               style={{
-                background: 'rgba(77,143,110,0.25)',
-                color: '#a6e0c2',
-                border: '1px solid rgba(77,143,110,0.45)',
+                background: '#37495A',
+                color: '#ffffff',
+                border: '1px solid #475867',
                 fontSize: 11,
                 fontWeight: 700,
                 padding: '1px 7px',
@@ -600,7 +600,7 @@ export default function UploadStatusButton() {
               height: 7,
               borderRadius: '50%',
               background: '#6dcba0',
-              border: '1.5px solid #1b2820',
+              border: '1.5px solid #2B3E50',
             }}
           />
         )}

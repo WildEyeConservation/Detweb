@@ -72,7 +72,7 @@ const NAV: NavSection[] = [
     ],
   },
   {
-    section: 'Org',
+    section: 'Organisation',
     items: [
       {
         id: 'permissions',
@@ -324,14 +324,14 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
             <div
               className='ss-sidebar-system-group'
               style={{
-                margin: '10px 10px 4px',
+                margin: '10px 0px',
                 borderTop: '1px solid rgba(255,255,255,0.07)',
                 paddingTop: 10,
               }}
             >
               <div
                 className='ss-sidebar-section-label'
-                style={{ padding: '0 4px 4px' }}
+                style={{ padding: '0 14px 4px 14px' }}
               >
                 <span style={{ color: 'rgba(255,255,255,0.22)' }}>System</span>
               </div>
@@ -563,8 +563,8 @@ function OrgSwitcher({
             width: 32,
             height: 32,
             borderRadius: 8,
-            background: 'rgba(77,143,110,0.27)',
-            border: '1px solid rgba(77,143,110,0.4)',
+            background: '#37495A',
+            border: '1px solid #57738d',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -623,7 +623,7 @@ function OrgSwitcher({
             width: 8,
             height: 8,
             borderRadius: '50%',
-            background: currentOrg ? '#6dcba0' : '#6b7a72',
+            background: currentOrg ? '#DF6919' : '#6b707a',
           }}
         />
       </div>
@@ -665,7 +665,7 @@ function OrgSwitcherDropdown({
         left: 0,
         right: 0,
         zIndex: 100,
-        background: '#1e2f28',
+        background: '#37495A',
         border: '1px solid rgba(255,255,255,0.12)',
         borderRadius: 10,
         overflow: 'hidden',
@@ -741,8 +741,8 @@ function OrgSwitcherDropdown({
                   height: 28,
                   borderRadius: 7,
                   flexShrink: 0,
-                  background: 'rgba(77,143,110,0.27)',
-                  border: '1px solid rgba(77,143,110,0.4)',
+                  background: '#2b3946',
+                  border: '1px solid #57738d',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -815,7 +815,7 @@ function SidebarFooter({
             width: 30,
             height: 30,
             borderRadius: '50%',
-            background: 'rgba(77,143,110,0.4)',
+            background: '#37495A',
             border: '1.5px solid var(--ss-accent)',
             display: 'flex',
             alignItems: 'center',
@@ -859,7 +859,7 @@ function SidebarFooter({
           width: 30,
           height: 30,
           borderRadius: '50%',
-          background: 'rgba(77,143,110,0.4)',
+          background: '#37495A',
           border: '1.5px solid var(--ss-accent)',
           display: 'flex',
           alignItems: 'center',

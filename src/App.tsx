@@ -222,7 +222,7 @@ function Logo() {
   return (
     <div
       className='p-3 w-100 d-flex flex-column justify-content-center align-items-center'
-      style={{ background: 'var(--ss-accent)' }}
+      style={{ background: '#2B3E50' }}
     >
       <div className='d-flex flex-row align-items-center flex-nowrap'>
         <img

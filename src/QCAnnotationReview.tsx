@@ -1000,7 +1000,14 @@ export default function QCAnnotationReview({
             <Badge bg='secondary'>
               Working on: {displayCategory?.name ?? 'Unknown'}
             </Badge>
-            {reviewedCatId && <Badge bg='success'>Reviewed</Badge>}
+            {reviewedCatId && (
+              <Badge
+                bg=''
+                style={{ backgroundColor: '#1b5e20', color: '#fff' }}
+              >
+                Reviewed
+              </Badge>
+            )}
           </>,
           centerEl
         )

@@ -180,7 +180,7 @@ export default function Settings({ signOut }: { signOut: () => void }) {
         }}
         onClick={() => setShow(true)}
       >
-        <UserIcon />
+        <UserIcon size={18} color='rgba(255,255,255,0.5)'/>
       </button>
 
       <Modal
