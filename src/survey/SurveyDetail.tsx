@@ -243,6 +243,10 @@ export default function SurveyDetail() {
   const [readyToSubmit, setReadyToSubmit] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cancellingSetId, setCancellingSetId] = useState<string | null>(null);
+  // Set when QueueProgress detects the queue is empty but work is still being
+  // observed/requeued (scanning) or workers are polling for stragglers. Cancel
+  // and "Take to Jobs" are locked out while this is true — see QueueProgress.
+  const [queueWindingDown, setQueueWindingDown] = useState(false);
 
   const fetchProject = async (): Promise<ProjectDetail | null> => {
     if (!surveyId) return null;
@@ -753,7 +757,10 @@ export default function SurveyDetail() {
                           className='ss-job-progress'
                           style={{ marginTop: 10, marginBottom: 6 }}
                         >
-                          <QueueProgress queue={activeQueue} />
+                          <QueueProgress
+                            queue={activeQueue}
+                            onScanningChange={setQueueWindingDown}
+                          />
                         </div>
                       )}
                     {isRegistrationActive &&
@@ -812,10 +819,14 @@ export default function SurveyDetail() {
                           <Button
                             size='sm'
                             variant='primary'
-                            disabled={isCancelling || isProjectBusy}
+                            disabled={
+                              isCancelling || isProjectBusy || queueWindingDown
+                            }
                             title={
                               isProjectBusy
                                 ? `Project is ${transientStatusLabel!.toLowerCase()} — please wait…`
+                                : queueWindingDown
+                                ? 'Job is finishing up — no work left to take.'
                                 : undefined
                             }
                             onClick={() => navigate('/jobs')}
@@ -825,10 +836,14 @@ export default function SurveyDetail() {
                           <Button
                             size='sm'
                             variant='danger'
-                            disabled={isCancelling || isProjectBusy}
+                            disabled={
+                              isCancelling || isProjectBusy || queueWindingDown
+                            }
                             title={
                               isProjectBusy
                                 ? `Project is ${transientStatusLabel!.toLowerCase()} — please wait…`
+                                : queueWindingDown
+                                ? 'Job is finishing up — cancellation is unavailable while the queue drains.'
                                 : undefined
                             }
                             onClick={() => {
