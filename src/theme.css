@@ -194,6 +194,10 @@ a:hover { color: var(--ss-accent-hover); }
   --bs-btn-border-color: var(--ss-accent);
   --bs-btn-hover-bg: var(--ss-accent-hover);
   --bs-btn-hover-border-color: var(--ss-accent-hover);
+  --bs-btn-active-bg: var(--ss-accent-hover);
+  --bs-btn-active-border-color: var(--ss-accent-hover);
+  --bs-btn-disabled-bg: var(--ss-accent);
+  --bs-btn-disabled-border-color: var(--ss-accent);
   color: #fff;
 }
 
