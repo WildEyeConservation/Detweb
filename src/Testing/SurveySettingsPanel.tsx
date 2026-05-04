@@ -4,6 +4,7 @@ import Select from 'react-select';
 import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
 import Tooltip from 'react-bootstrap/Tooltip';
 import { GlobalContext, TestingContext } from '../Context';
+import { Schema } from '../amplify/client-schema';
 
 type TestType = 'random' | 'interval';
 type Option = { label: string; value: string };
@@ -67,13 +68,20 @@ export default function SurveySettingsPanel({ survey, preset }: Props) {
     let cancelled = false;
     (async () => {
       setSharingLoading(true);
-      const { data: rows } = await client.models.TestPresetProject.list({
-        filter: { testPresetId: { eq: preset.id } },
-      });
+      const rows: Schema['TestPresetProject']['type'][] = [];
+      let nextToken: string | null | undefined = undefined;
+      do {
+        const page = await client.models.TestPresetProject.list({
+          filter: { testPresetId: { eq: preset.id } },
+          nextToken,
+        });
+        rows.push(...(page.data ?? []));
+        nextToken = page.nextToken;
+      } while (nextToken);
       if (cancelled) return;
-      const current = ((rows ?? []) as any[])
-        .filter((r: any) => r.projectId !== survey.id)
-        .map<Option>((r: any) => {
+      const current = rows
+        .filter((r) => r.projectId !== survey.id)
+        .map<Option>((r) => {
           const p = organizationProjects.find(
             (op) => op.id === r.projectId
           );
