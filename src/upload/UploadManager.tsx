@@ -5,6 +5,9 @@ import { uploadData, list, getUrl } from 'aws-amplify/storage';
 import { CreatedImage, ImageData, UploadedFiles } from '../types/ImageData';
 import ConfirmationModal from '../ConfirmationModal';
 import { fetchAllPaginatedResults } from '../utils';
+import { PhashIndex } from './phashDedup';
+import { PhashService } from './phashService';
+import { logAdminAction } from '../utils/adminActionLogger';
 
 const fileStore = localforage.createInstance({
   name: 'fileStore',
@@ -37,6 +40,18 @@ const hasValidLatLng = (lat: unknown, lng: unknown): boolean =>
   lng >= -180 &&
   lng <= 180;
 
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = bytes;
+  let i = 0;
+  while (size >= 1024 && i < units.length - 1) {
+    size /= 1024;
+    i++;
+  }
+  return `${size.toFixed(2)} ${units[i]}`;
+}
+
 async function retryCreate<T>(
   fn: () => Promise<T>,
   maxAttempts = 3
@@ -61,13 +76,21 @@ export default function UploadManager() {
     setProgress,
   } = useContext(UploadContext)!;
   const { client, backend } = useContext(GlobalContext)!;
-  const { myMembershipHook: myProjectsHook } = useContext(UserContext)!;
+  const { user, myMembershipHook: myProjectsHook } = useContext(UserContext)!;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingResumeProjectIdRef = useRef<{ id: string; name: string } | null>(
     null
   );
   const activeUploadRef = useRef<boolean>(false);
   const retryPendingRef = useRef<boolean>(false);
+  // Phash dupes detected during the current upload session. Read by
+  // handleComplete to write an AdminActionLog entry.
+  const duplicatesRef = useRef<
+    { originalPath: string; matchedPath: string; scope: 'batch' | 'db' }[]
+  >([]);
+  // Track which projectIds have already logged a "started" entry in this
+  // component lifecycle, so retries within a session don't double-log.
+  const loggedStartRef = useRef<Set<string>>(new Set());
   const [projectBackOff, setProjectBackOff] = useState<Record<string, number>>(
     {}
   );
@@ -236,6 +259,7 @@ export default function UploadManager() {
       cancelledRef.current = false;
     }
 
+    let phashService: PhashService | null = null;
     try {
       const {
         data: [imageSet],
@@ -302,7 +326,7 @@ export default function UploadManager() {
         client.models.Image.imagesByProjectId,
         {
           projectId,
-          selectionSet: ['id', 'originalPath', 'timestamp', 'cameraId'],
+          selectionSet: ['id', 'originalPath', 'timestamp', 'cameraId', 'phash'],
           limit: 10000,
         }
       )) as {
@@ -310,7 +334,54 @@ export default function UploadManager() {
         originalPath: string;
         timestamp: number;
         cameraId?: string | null;
+        phash?: string | null;
       }[];
+
+      // Reset per-session duplicates tracking and seed the in-memory phash
+      // index from existing DB records. The index is shared by both seed
+      // and upload workers; findMatch+add is synchronous so concurrent
+      // workers can't both classify the same hash as unique.
+      duplicatesRef.current = [];
+      const phashIndex = new PhashIndex<{ originalPath: string }>(4);
+      const dbSeededPaths = new Set<string>();
+      for (const img of dbRawImages) {
+        if (img.phash) {
+          phashIndex.add(img.phash, { originalPath: img.originalPath });
+          dbSeededPaths.add(img.originalPath);
+        }
+      }
+      phashService = new PhashService(4);
+      const phashSvc = phashService;
+
+      // Hash a file and atomically test-and-insert against the shared index.
+      // Returns the file's phash plus, when a duplicate is detected, the
+      // matched originalPath so the caller can record it. The phash is
+      // returned even on duplicate so the DB record (if we still write one)
+      // stays consistent.
+      const checkPhashDup = async (
+        file: File,
+        originalPath: string
+      ): Promise<{ phash: string | null; duplicateOf: string | null; scope: 'batch' | 'db' | null }> => {
+        const phash = await phashSvc.hash(file);
+        if (!phash) return { phash: null, duplicateOf: null, scope: null };
+        const existing = phashIndex.findMatch(phash);
+        if (existing && existing.payload.originalPath !== originalPath) {
+          // Anything seeded from DB at the start of this session is "db";
+          // anything added during the run is "batch".
+          const scope: 'batch' | 'db' = dbSeededPaths.has(
+            existing.payload.originalPath
+          )
+            ? 'db'
+            : 'batch';
+          return {
+            phash,
+            duplicateOf: existing.payload.originalPath,
+            scope,
+          };
+        }
+        phashIndex.add(phash, { originalPath });
+        return { phash, duplicateOf: null, scope: null };
+      };
 
       // track which files are already on S3
       const uploadedFiles = Array.from(s3Files);
@@ -342,6 +413,35 @@ export default function UploadManager() {
         isComplete: false,
         error: null,
       });
+
+      // Log session start once per projectId (gated against retries within
+      // the same component lifecycle).
+      if (
+        organizationId &&
+        totalTasks > 0 &&
+        !loggedStartRef.current.has(projectId)
+      ) {
+        loggedStartRef.current.add(projectId);
+        const uploadBytes = images.reduce((acc, img) => {
+          const f = files.find(
+            (file) => file.webkitRelativePath === img.originalPath
+          );
+          return acc + (f?.size ?? 0);
+        }, 0);
+        const seedNote =
+          seedPaths.length > 0
+            ? `, ${seedPaths.length} already on S3 awaiting DB sync`
+            : '';
+        await logAdminAction(
+          client,
+          user.userId,
+          `Started upload: ${images.length} file${
+            images.length === 1 ? '' : 's'
+          } queued (${formatBytes(uploadBytes)})${seedNote}`,
+          projectId,
+          organizationId
+        );
+      }
       // 1) seed existing S3 files into DB in parallel
       const SEED_CONCURRENCY = 5;
       const seedIterator = seedPaths[Symbol.iterator]();
@@ -371,6 +471,31 @@ export default function UploadManager() {
               (f) => f.webkitRelativePath === originalPath
             );
             const fileType = fileObj?.type ?? 'application/octet-stream';
+
+            // Phash dedup: skip seeding a DB record if the file matches
+            // another already in the index. The S3 object stays put — it's
+            // unreferenced, but harmless. Without a fileObj we can't hash;
+            // fall through and seed the record so we don't lose data.
+            let phashForRecord: string | undefined;
+            if (fileObj) {
+              const { phash, duplicateOf, scope } = await checkPhashDup(
+                fileObj,
+                originalPath
+              );
+              if (duplicateOf) {
+                duplicatesRef.current.push({
+                  originalPath,
+                  matchedPath: duplicateOf,
+                  scope: scope!,
+                });
+                setProgress((prev) => ({
+                  ...prev,
+                  processed: prev.processed + 1,
+                }));
+                continue;
+              }
+              phashForRecord = phash ?? undefined;
+            }
 
             let elevation = 0;
             if (
@@ -414,6 +539,7 @@ export default function UploadManager() {
                     ? altitude - elevation
                     : undefined),
                 cameraId,
+                phash: phashForRecord,
                 group: organizationId,
               })
             );
@@ -470,6 +596,21 @@ export default function UploadManager() {
               (f) => f.webkitRelativePath === image.originalPath
             );
             if (file) {
+              // Phash check before uploading so duplicates never spend
+              // bandwidth. checkPhashDup is atomic w.r.t. other workers.
+              const { phash, duplicateOf, scope } = await checkPhashDup(
+                file,
+                image.originalPath
+              );
+              if (duplicateOf) {
+                duplicatesRef.current.push({
+                  originalPath: image.originalPath,
+                  matchedPath: duplicateOf,
+                  scope: scope!,
+                });
+                continue;
+              }
+
               const s3Key = makeKey(image.originalPath);
               await uploadData({
                 path: 'images/' + s3Key,
@@ -523,6 +664,7 @@ export default function UploadManager() {
                       ? altitude - elevation
                       : undefined),
                   cameraId,
+                  phash: phash ?? undefined,
                   group: organizationId,
                 })
               );
@@ -569,6 +711,24 @@ export default function UploadManager() {
       const workers: Promise<void>[] = [];
       for (let i = 0; i < CONCURRENCY; i++) workers.push(runWorker());
       await Promise.all(workers);
+
+      // Prune phash-dupe paths from fileStore so handleComplete's
+      // "uploaded == filesToUpload" check doesn't loop forever waiting for
+      // files we deliberately skipped.
+      if (duplicatesRef.current.length > 0) {
+        const dupePaths = new Set(
+          duplicatesRef.current.map((d) => d.originalPath)
+        );
+        const stored =
+          ((await fileStore.getItem(projectId)) as ImageData[]) ?? [];
+        const remaining = stored.filter(
+          (img) => !dupePaths.has(img.originalPath)
+        );
+        if (remaining.length !== stored.length) {
+          await fileStore.setItem(projectId, remaining);
+        }
+      }
+
       // if pause was requested, after active uploads finish, reset state
       if (cancelledRef.current) {
         // If we're finalizing after max attempts, do NOT reset; allow completion flow
@@ -606,6 +766,10 @@ export default function UploadManager() {
       }));
     } finally {
       activeUploadRef.current = false;
+      if (phashService) {
+        phashService.destroy();
+        phashService = null;
+      }
       // If we hit max attempts, force completion instead of retrying
       if (
         finalizeAfterMaxAttemptsRef.current &&
@@ -1241,6 +1405,66 @@ export default function UploadManager() {
           status: 'processing-mad',
         });
       }
+
+      // Persist phash dupes detected during this session to AdminActionLog
+      // so admins can audit what was skipped. The list is truncated to keep
+      // the message under DynamoDB's per-item limit; the count prefix is
+      // always accurate even when the list is shortened.
+      if (duplicatesRef.current.length > 0 && organizationId) {
+        const dupes = duplicatesRef.current;
+        const MAX_MESSAGE_CHARS = 30000;
+        const header = `Skipped ${dupes.length} hash-based duplicate${
+          dupes.length === 1 ? '' : 's'
+        } during upload:`;
+        const lines = dupes.map(
+          (d) =>
+            `- ${d.originalPath} matches ${d.matchedPath} (${
+              d.scope === 'db' ? 'already in survey' : 'within this upload'
+            })`
+        );
+        let message = `${header}\n${lines.join('\n')}`;
+        if (message.length > MAX_MESSAGE_CHARS) {
+          const kept: string[] = [];
+          let used = header.length + 1;
+          let truncatedAt = lines.length;
+          for (let i = 0; i < lines.length; i++) {
+            const next = used + lines[i].length + 1;
+            if (next > MAX_MESSAGE_CHARS - 64) {
+              truncatedAt = i;
+              break;
+            }
+            kept.push(lines[i]);
+            used = next;
+          }
+          const remaining = lines.length - truncatedAt;
+          message =
+            `${header}\n${kept.join('\n')}\n…and ${remaining} more (truncated)`;
+        }
+        await logAdminAction(
+          client,
+          user.userId,
+          message,
+          projectId,
+          organizationId
+        );
+        duplicatesRef.current = [];
+      }
+
+      // Log session completion. The start log is gated by loggedStartRef;
+      // we clear it here so a subsequent upload to this same project (e.g.
+      // a follow-up batch) gets a fresh "Started upload" entry.
+      if (organizationId) {
+        await logAdminAction(
+          client,
+          user.userId,
+          `Completed upload: ${dedupedDbImages.length} image${
+            dedupedDbImages.length === 1 ? '' : 's'
+          } now in survey`,
+          projectId,
+          organizationId
+        );
+      }
+      loggedStartRef.current.delete(projectId);
 
       //clear local storage
       await fileStore.removeItem(projectId);

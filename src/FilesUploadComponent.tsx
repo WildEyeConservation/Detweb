@@ -159,6 +159,7 @@ export function FileUploadCore({
     undefined
   );
   const [missingGpsData, setMissingGpsData] = useState(false);
+  const [skipImagesWithoutGps, setSkipImagesWithoutGps] = useState(false);
   const [associateByTimestamp, setAssociateByTimestamp] = useState(false);
   const [minTimestamp, setMinTimestamp] = useState(0);
   const [maxTimestamp, setMaxTimestamp] = useState(0);
@@ -175,8 +176,8 @@ export function FileUploadCore({
     {}
   );
   const [masks, setMasks] = useState<number[][][]>([]);
-  const [toUploadFiles, setToUploadFiles] = useState<File[]>([]);
-  const [toUploadSize, setToUploadSize] = useState(0);
+  // toUploadFiles / toUploadSize are derived later via useMemo so they
+  // automatically reflect the latest existing-image and map-filter state.
   const [existingSurveyImages, setExistingSurveyImages] = useState<
     { originalPath: string; latitude: number; longitude: number }[]
   >([]);
@@ -269,6 +270,64 @@ export function FileUploadCore({
   const [failedFiles, setFailedFiles] = useState<
     Array<{ path: string; error: string }>
   >([]);
+
+  // webkitRelativePaths whose csvData row survived the current map/polygon
+  // subset. null when csvData isn't populated yet (no filtering applies).
+  // Mirrors the matching the submit pipeline uses: by filepath when present,
+  // otherwise by exact exif-timestamp match.
+  const csvFilteredPathSet = useMemo<Set<string> | null>(() => {
+    if (!csvData) return null;
+    const validFilepaths = new Set<string>();
+    const validTimestamps = new Set<number>();
+    for (const row of csvData.data) {
+      if (!Number.isFinite(row.lat) || !Number.isFinite(row.lng)) continue;
+      if (row.filepath) validFilepaths.add(row.filepath.toLowerCase());
+      if (typeof row.timestamp === 'number') {
+        validTimestamps.add(row.timestamp);
+      }
+    }
+    const result = new Set<string>();
+    for (const file of imageFiles) {
+      const path = file.webkitRelativePath;
+      if (validFilepaths.has(path.toLowerCase())) {
+        result.add(path);
+        continue;
+      }
+      const exifMeta = exifData[path];
+      if (exifMeta && validTimestamps.has(exifMeta.timestamp)) {
+        result.add(path);
+      }
+    }
+    return result;
+  }, [csvData, imageFiles, exifData]);
+
+  // Files actually destined for upload, post all filters. Drives the count
+  // shown in the UI. Phash dedup happens during upload, not here.
+  const toUploadFiles = useMemo(() => {
+    if (loadingExistingImages) return [] as File[];
+    let candidates = newProject
+      ? imageFiles
+      : imageFiles.filter(
+          (file) => !existingImagePathSet.has(file.webkitRelativePath)
+        );
+    if (csvFilteredPathSet) {
+      candidates = candidates.filter((file) =>
+        csvFilteredPathSet.has(file.webkitRelativePath)
+      );
+    }
+    return candidates;
+  }, [
+    imageFiles,
+    existingImagePathSet,
+    newProject,
+    loadingExistingImages,
+    csvFilteredPathSet,
+  ]);
+
+  const toUploadSize = useMemo(
+    () => toUploadFiles.reduce((acc, f) => acc + f.size, 0),
+    [toUploadFiles]
+  );
 
   // Handler to confirm column mapping before processing
   const handleConfirmMapping = () => {
@@ -395,8 +454,6 @@ export function FileUploadCore({
         : imageFiles.filter(
           (file) => !existingImagePathSet.has(file.webkitRelativePath)
         );
-      setToUploadFiles(uploadFiles);
-      setToUploadSize(uploadFiles.reduce((acc, f) => acc + f.size, 0));
 
       // Files to show on map/exif: all for new project, only new for existing
       const mapFiles = newProject ? imageFiles : uploadFiles;
@@ -1364,7 +1421,8 @@ export function FileUploadCore({
   }, [filteredImageFiles, exifData, fullCsvData, associateByTimestamp, failedFiles]);
 
   const hasValidGpsForAllImages =
-    filteredImageFiles.length > 0 && invalidGpsFiles.length === 0;
+    filteredImageFiles.length > 0 &&
+    (invalidGpsFiles.length === 0 || skipImagesWithoutGps);
 
   useEffect(() => {
     if (setGpsDataReady) {
@@ -1455,7 +1513,7 @@ export function FileUploadCore({
         return;
       }
 
-      if (invalidGpsFiles.length > 0) {
+      if (invalidGpsFiles.length > 0 && !skipImagesWithoutGps) {
         const sample = invalidGpsFiles.slice(0, 5);
         alert(
           `GPS coordinates are missing or invalid for ${invalidGpsFiles.length
@@ -1685,6 +1743,8 @@ export function FileUploadCore({
         altitude_agl?: number;
       }[];
 
+      // Phash dedup runs during upload (see UploadManager) so we don't
+      // pre-filter here.
       for (const file of gpsFilteredImageFiles) {
         const exifmeta = exifData[file.webkitRelativePath];
         const gpsData = getGpsForFile(file);
@@ -1766,6 +1826,7 @@ export function FileUploadCore({
       altitudeType,
       csvData,
       invalidGpsFiles,
+      skipImagesWithoutGps,
       cameraSpecs,
       overlaps,
       client,
@@ -2826,18 +2887,37 @@ export function FileUploadCore({
                 )}
               {csvData && (
                 <div className='mt-3'>
-                  {(() => {
-                    if (invalidGpsFiles.length > 0) {
-                      const sample = invalidGpsFiles.slice(0, 5);
-                      return (
-                        <div className='alert alert-danger mb-0'>
+                  {invalidGpsFiles.length > 0 && (() => {
+                    const sample = invalidGpsFiles.slice(0, 5);
+                    const plural = invalidGpsFiles.length === 1 ? '' : 's';
+                    const examplePlural = sample.length === 1 ? '' : 's';
+                    return (
+                      <div
+                        className={`alert ${
+                          skipImagesWithoutGps
+                            ? 'alert-warning'
+                            : 'alert-danger'
+                        } mb-2`}
+                      >
+                        <div>
                           Missing GPS coordinates for {invalidGpsFiles.length}{' '}
-                          image{invalidGpsFiles.length === 1 ? '' : 's'}.
-                          Example{sample.length === 1 ? '' : 's'}:{' '}
+                          image{plural}. Example{examplePlural}:{' '}
                           {sample.join(', ')}
                         </div>
-                      );
-                    }
+                        <Form.Check
+                          type='checkbox'
+                          id='skip-images-without-gps'
+                          className='mt-2'
+                          label={`Skip ${invalidGpsFiles.length} image${plural} without GPS data and continue`}
+                          checked={skipImagesWithoutGps}
+                          onChange={(e) =>
+                            setSkipImagesWithoutGps(e.target.checked)
+                          }
+                        />
+                      </div>
+                    );
+                  })()}
+                  {(invalidGpsFiles.length === 0 || skipImagesWithoutGps) && (() => {
                     let message = '';
                     const hasTimestampData =
                       csvData &&

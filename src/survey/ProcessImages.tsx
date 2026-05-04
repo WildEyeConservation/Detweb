@@ -1,23 +1,23 @@
-import { Form, Spinner, Button, Card } from 'react-bootstrap';
+import { Form, Spinner, Button, Card, Modal } from 'react-bootstrap';
 import { useState, useContext, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { GlobalContext } from '../Context';
 import Select from 'react-select';
 
 export default function ProcessImages({ projectId, organizationId }: { projectId: string; organizationId: string }) {
   const { client, backend } = useContext(GlobalContext)!;
+  const navigate = useNavigate();
   const [model, setModel] = useState<{ label: string; value: string } | null>(
     null
   );
-  const [loading, setLoading] = useState(false);
-  const [unprocessedImages, setUnprocessedImages] = useState<
-    {
-      id: string;
-      originalPath: string;
-    }[]
-  >([]);
+  const [scanning, setScanning] = useState(false);
+  const [dispatching, setDispatching] = useState(false);
   const [imagesLoaded, setImagesLoaded] = useState<number | null>(null);
-  const [scanned, setScanned] = useState(false);
-  const [disabled, setDisabled] = useState(false);
+  const [pendingImages, setPendingImages] = useState<
+    { id: string; originalPath: string }[] | null
+  >(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [showNothingToDo, setShowNothingToDo] = useState(false);
   const isActiveRef = useRef(true);
 
   useEffect(() => {
@@ -57,16 +57,19 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
     [client.models.LocationSet, projectId]
   );
 
-  const scanImages = useCallback(async () => {
-    if (!model) return;
-    setLoading(true);
+  const scanImages = useCallback(async (): Promise<
+    { id: string; originalPath: string }[] | null
+  > => {
+    if (!model) return null;
+    setScanning(true);
+    setImagesLoaded(0);
     let unprocessed: { id: string; originalPath: string }[] = [];
     let nextToken: string | null | undefined = undefined;
     let imgCount = 0;
     do {
       if (!isActiveRef.current) {
-        setLoading(false);
-        return;
+        setScanning(false);
+        return null;
       }
       const res = await client.models.Image.imagesByProjectId(
         { projectId },
@@ -83,29 +86,28 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
       setImagesLoaded(imgCount);
     } while (nextToken);
 
-    if (!isActiveRef.current) {
-      setLoading(false);
-      return;
-    }
-    setUnprocessedImages(unprocessed);
-    setLoading(false);
-    setScanned(true);
+    setScanning(false);
+    if (!isActiveRef.current) return null;
+    return unprocessed;
   }, [client, projectId, model]);
 
-  useEffect(() => {
-    // reset when model changes
-    setScanned(false);
-    setUnprocessedImages([]);
-    setImagesLoaded(null);
-  }, [model]);
-
-  const processImages = async () => {
-    if (!model) {
+  const handleProcessClick = async () => {
+    if (!model) return;
+    const result = await scanImages();
+    if (!result) return;
+    if (result.length === 0) {
+      setShowNothingToDo(true);
       return;
     }
+    setPendingImages(result);
+    setShowConfirm(true);
+  };
 
-    setDisabled(true);
-    setLoading(true);
+  const dispatchProcessing = async () => {
+    if (!model || !pendingImages) return;
+
+    setShowConfirm(false);
+    setDispatching(true);
 
     const locationSetName =
       model.value === 'heatmap'
@@ -127,10 +129,10 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
     if (!locationSet?.id) {
       console.error('Failed to create location set');
       alert('Something went wrong, please try again.');
+      setDispatching(false);
       return;
     }
 
-    // Fetch project to determine organization and legacy handling
     const { data: project } = await client.models.Project.get(
       { id: projectId },
       { selectionSet: ['id', 'organizationId', 'tags'] as const }
@@ -154,8 +156,8 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
 
     switch (model.value) {
       case 'scoutbotv3':
-        for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
-          const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
+        for (let i = 0; i < pendingImages.length; i += BATCH_SIZE) {
+          const batch = pendingImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map(
             (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
@@ -175,8 +177,8 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
         }
         break;
       case 'heatmap':
-        for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
-          const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
+        for (let i = 0; i < pendingImages.length; i += BATCH_SIZE) {
+          const batch = pendingImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map((image) =>
             makeKey(image.originalPath)
           );
@@ -193,8 +195,8 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
         });
         break;
       case 'mad':
-        for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
-          const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
+        for (let i = 0; i < pendingImages.length; i += BATCH_SIZE) {
+          const batch = pendingImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map(
             (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
@@ -219,9 +221,11 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
       projectId: projectId,
     });
 
-    setLoading(false);
-    setDisabled(false);
+    setDispatching(false);
+    navigate('/surveys');
   };
+
+  const busy = scanning || dispatching;
 
   return (
     <div className='d-flex flex-column gap-3'>
@@ -240,37 +244,73 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
               { label: 'MAD', value: 'mad' },
             ]}
             placeholder='Select a model'
+            isDisabled={busy}
+            menuPortalTarget={typeof document !== 'undefined' ? document.body : undefined}
+            menuPosition='fixed'
+            styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
           />
-          <Button
-            variant='secondary'
-            onClick={scanImages}
-            disabled={!model || loading}
-            className='mt-2'
-          >
-            Scan
-          </Button>
-          {loading ? (
-            <div className='d-flex flex-column align-items-center mt-2'>
+          {scanning && (
+            <div className='d-flex flex-column align-items-center mt-3'>
               <Spinner animation='border' role='status' />
-              <p className='mb-0'>Determining images to process...</p>
-              <p className='mb-1'>Found {imagesLoaded ?? 0} images</p>
+              <p className='mb-0 mt-2'>Determining images to process...</p>
+              <p className='mb-0'>Found {imagesLoaded ?? 0} images</p>
             </div>
-          ) : scanned ? (
-            unprocessedImages.length > 0 ? (
-              <p className='mb-0 mt-2'>
-                Found {unprocessedImages.length} unprocessed images
-              </p>
-            ) : (
-              <p className='mb-0 mt-2'>All images have been processed</p>
-            )
-          ) : null}
+          )}
+          {dispatching && (
+            <div className='d-flex flex-column align-items-center mt-3'>
+              <Spinner animation='border' role='status' />
+              <p className='mb-0 mt-2'>Submitting processing jobs...</p>
+            </div>
+          )}
         </Card.Body>
       </Card>
       <div style={{ display: 'flex', gap: 8 }}>
-        <Button variant='primary' onClick={processImages} disabled={disabled}>
+        <Button
+          variant='primary'
+          onClick={handleProcessClick}
+          disabled={!model || busy}
+        >
           Process Images
         </Button>
       </div>
+
+      <Modal show={showConfirm} onHide={() => setShowConfirm(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Confirm processing</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {pendingImages?.length ?? 0} image
+          {(pendingImages?.length ?? 0) === 1 ? '' : 's'} will be processed with{' '}
+          <strong>{model?.label}</strong>. Continue?
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant='secondary' onClick={() => setShowConfirm(false)}>
+            Cancel
+          </Button>
+          <Button variant='primary' onClick={dispatchProcessing}>
+            Process Images
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal
+        show={showNothingToDo}
+        onHide={() => setShowNothingToDo(false)}
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Nothing to process</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          All images have already been processed with{' '}
+          <strong>{model?.label}</strong>.
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant='primary' onClick={() => setShowNothingToDo(false)}>
+            OK
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 }

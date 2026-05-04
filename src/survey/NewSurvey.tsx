@@ -94,9 +94,11 @@ export default function NewSurvey() {
 
   const [filesReady, setFilesReady] = useState(false);
   const [name, setName] = useState('');
-  const organization = currentOrg
-    ? { label: currentOrg.name, value: currentOrg.id }
-    : null;
+  const organization = useMemo(
+    () =>
+      currentOrg ? { label: currentOrg.name, value: currentOrg.id } : null,
+    [currentOrg?.id, currentOrg?.name]
+  );
   const [globalAnnotationAccess, setGlobalAnnotationAccess] = useState<{
     label: string;
     value: string;

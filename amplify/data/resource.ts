@@ -148,6 +148,9 @@ const schema = a
         transect: a.belongsTo('Transect', 'transectId'),
         processedBy: a.hasMany('ImageProcessedBy', 'imageId'),
         group: a.string(),
+        // 64-bit perceptual hash (blockhash) of the image, as 16 hex chars.
+        // Used for stricter dedup beyond originalPath matching.
+        phash: a.string(),
         // Stamped by pretileImage worker when the slippy-map pyramid is fully generated.
         tiledAt: a.datetime(),
         // sets: [ImageSet] @manyToMany(relationName: "ImageSetMembership")
@@ -1201,12 +1204,12 @@ const schema = a
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(generateTile)),
     // Dummy table used to force full deployment instead of hotswapping resources
-    fixDeploymentTable: a
-      .model({
-        name: a.string().required(),
-        version: a.string().required(),
-      })
-      .authorization((allow) => [allow.group("sysadmin")])
+    // fixDeploymentTable: a
+    //   .model({
+    //     name: a.string().required(),
+    //     version: a.string().required(),
+    //   })
+    //   .authorization((allow) => [allow.group("sysadmin")])
   })
   .authorization((allow) => [
     allow.resource(processImages),
