@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Alert, Badge, Button, Spinner } from 'react-bootstrap';
+import { Alert, Button, Spinner } from 'react-bootstrap';
 import { Check, Copy, RefreshCw } from 'lucide-react';
 import {
   DeleteMessageBatchCommand,
@@ -666,101 +666,55 @@ export default function AwsServiceHealth() {
         ) : ecsState.clusters.length === 0 ? (
           <Alert variant='info'>No ECS clusters found.</Alert>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {ecsState.clusters.map((cluster) => (
-              <div
-                key={cluster.clusterArn}
-                className='ss-card'
-                style={{ padding: 0, overflow: 'hidden' }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '12px 16px',
-                    borderBottom: '1px solid var(--ss-border)',
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      minWidth: 0,
-                    }}
-                  >
-                    <strong>{shortName(cluster.name)}</strong>
-                    <CopyButton
-                      value={cluster.name}
-                      title='Copy full cluster name'
-                    />
-                  </div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <Badge bg='warning'>
-                      Running {cluster.runningTasksCount ?? 0}
-                    </Badge>
-                    <Badge bg='warning' text='dark'>
-                      Pending {cluster.pendingTasksCount ?? 0}
-                    </Badge>
-                    <Badge bg='warning'>
-                      Services {cluster.activeServicesCount ?? 0}
-                    </Badge>
-                  </div>
-                </div>
-                {cluster.services.length === 0 ? (
-                  <div
-                    style={{
-                      padding: '16px',
-                      color: 'var(--ss-text-dim)',
-                      fontSize: 13,
-                    }}
-                  >
-                    No services in this cluster.
-                  </div>
-                ) : (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className='ss-data-table'>
-                      <thead>
-                        <tr>
-                          <th>Status</th>
-                          <th style={{ textAlign: 'right' }}>Desired</th>
-                          <th style={{ textAlign: 'right' }}>Running</th>
-                          <th style={{ textAlign: 'right' }}>Pending</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {cluster.services.map((service) => {
-                          return (
-                            <tr key={service.serviceArn}>
-                              <td>{service.status || '—'}</td>
-                              <td style={{ textAlign: 'right' }}>
-                                {service.desiredCount ?? '—'}
-                              </td>
-                              <td style={{ textAlign: 'right' }}>
-                                {service.runningCount ?? '—'}
-                              </td>
-                              <td style={{ textAlign: 'right' }}>
-                                {service.pendingCount ?? '—'}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            ))}
+          <div className='ss-card' style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table className='ss-data-table'>
+                <thead>
+                  <tr>
+                    <th>Service</th>
+                    <th>Status</th>
+                    <th style={{ textAlign: 'right' }}>Desired</th>
+                    <th style={{ textAlign: 'right' }}>Running</th>
+                    <th style={{ textAlign: 'right' }}>Pending</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ecsState.clusters.flatMap((cluster) =>
+                    cluster.services.map((service) => (
+                      <tr key={service.serviceArn ?? `${cluster.clusterArn}-${service.name}`}>
+                        <td>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <span style={{ fontWeight: 500 }}>
+                              {shortName(cluster.name)}
+                            </span>
+                            <CopyButton
+                              value={cluster.name}
+                              title='Copy full cluster name'
+                            />
+                          </div>
+                        </td>
+                        <td>{service.status || '—'}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          {service.desiredCount ?? '—'}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          {service.runningCount ?? '—'}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          {service.pendingCount ?? '—'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </section>

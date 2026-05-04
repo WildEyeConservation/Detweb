@@ -212,7 +212,7 @@ a:hover { color: var(--ss-accent-hover); }
 
 .btn-outline-primary {
   --bs-btn-color: var(--ss-accent);
-  --bs-btn-border-color: #c2dccf;
+  --bs-btn-border-color: #f5cbab;
   --bs-btn-hover-bg: var(--ss-accent);
   --bs-btn-hover-border-color: var(--ss-accent);
   --bs-btn-hover-color: #fff;
@@ -361,9 +361,9 @@ a:hover { color: var(--ss-accent-hover); }
   letter-spacing: 0.02em;
   border: 1px solid transparent;
 }
-.badge.bg-primary  { background: var(--ss-accent-soft) !important; color: #1f5638; border-color: #bcdcc9; }
+.badge.bg-primary  { background: var(--ss-accent-soft) !important; color: var(--ss-accent-hover); border-color: #f5cbab; }
 .badge.bg-secondary{ background: #e4e3d9 !important; color: #4a4a42; border-color: #c9c8bd; }
-.badge.bg-success  { background: var(--ss-green-soft) !important; color: #1f5638; border-color: #bcdcc9; }
+.badge.bg-success  { background: var(--ss-accent-soft) !important; color: var(--ss-accent-hover); border-color: #f5cbab; }
 .badge.bg-info     { background: var(--ss-blue-soft) !important; color: #1c4e85; border-color: #bfd4ee; }
 .badge.bg-warning  { background: var(--ss-amber-soft) !important; color: #6f4a06; border-color: #eccf95; }
 .badge.bg-danger   { background: var(--ss-red-soft) !important; color: #8a2a1e; border-color: var(--ss-red-border); }
@@ -439,7 +439,7 @@ a:hover { color: var(--ss-accent-hover); }
 .dropdown-item.active,
 .dropdown-item:active {
   background: var(--ss-accent-soft);
-  color: var(--ss-green);
+  color: var(--ss-accent-hover);
 }
 
 /* Alerts */
@@ -837,7 +837,7 @@ body.ss-sidebar-collapsed {
 }
 .ss-progress-fill {
   height: 100%;
-  background: #a0c9b8;
+  background: #f5b07a;
   border-radius: 3px;
   transition: width 0.4s;
 }
@@ -847,10 +847,10 @@ body.ss-sidebar-collapsed {
 /* Override Amplify Authenticator visuals so the modal sign-in matches */
 [data-amplify-authenticator],
 [data-amplify-theme] {
-  --amplify-colors-brand-primary-10: #e8f5ee;
-  --amplify-colors-brand-primary-20: #d4ebde;
-  --amplify-colors-brand-primary-40: #a0c9b8;
-  --amplify-colors-brand-primary-60: #6ea88c;
+  --amplify-colors-brand-primary-10: var(--ss-accent-soft);
+  --amplify-colors-brand-primary-20: #fbd9bf;
+  --amplify-colors-brand-primary-40: #f5b07a;
+  --amplify-colors-brand-primary-60: #ec8a3f;
   --amplify-colors-brand-primary-80: var(--ss-accent);
   --amplify-colors-brand-primary-90: var(--ss-accent-hover);
   --amplify-colors-brand-primary-100: var(--ss-accent-hover);
