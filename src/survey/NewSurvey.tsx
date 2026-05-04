@@ -25,7 +25,7 @@ export default function NewSurvey() {
   const { myOrganizationHook, myMembershipHook, user } =
     useContext(UserContext)!;
   const { client } = useContext(GlobalContext)!;
-  const { isCurrentOrgAdmin } = useOrg();
+  const { isCurrentOrgAdmin, currentOrg } = useOrg();
   const { users: allUsers } = useUsers();
   const adminProjectIds = useMemo(
     () =>
@@ -94,13 +94,9 @@ export default function NewSurvey() {
 
   const [filesReady, setFilesReady] = useState(false);
   const [name, setName] = useState('');
-  const [organization, setOrganization] = useState<{
-    label: string;
-    value: string;
-  } | null>(null);
-  const [organizations, setOrganizations] = useState<
-    { label: string; value: string }[]
-  >([]);
+  const organization = currentOrg
+    ? { label: currentOrg.name, value: currentOrg.id }
+    : null;
   const [globalAnnotationAccess, setGlobalAnnotationAccess] = useState<{
     label: string;
     value: string;
@@ -326,64 +322,29 @@ export default function NewSurvey() {
   }
 
   useEffect(() => {
-    if (allUsers && myOrganizationHook.data) {
-      const adminOrganizations = myOrganizationHook.data.filter(
-        (o) => o.isAdmin
+    if (!allUsers || !currentOrg?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data: org } = await client.models.Organization.get(
+        { id: currentOrg.id },
+        { selectionSet: ['name', 'id', 'memberships.*'] }
       );
-
-      Promise.all(
-        adminOrganizations.map(
-          async (o) =>
-            (
-              await client.models.Organization.get(
-                {
-                  id: o.organizationId,
-                },
-                {
-                  selectionSet: ['name', 'id', 'memberships.*'],
-                }
-              )
-            ).data
-        )
-      ).then((organizations) => {
-        setOrganizations(
-          organizations
-            .filter((o): o is NonNullable<typeof o> => o !== null)
-            .map((o) => ({
-              label: o.name,
-              value: o.id,
-            }))
-        );
-
-        if (organizations.length === 1 && organizations[0]) {
-          setOrganization({
-            label: organizations[0].name,
-            value: organizations[0].id,
-          });
-        }
-
-        setUsers(
-          organizations
-            .filter((o): o is NonNullable<typeof o> => o !== null)
-            .reduce(
-              (acc, o) => ({
-                ...acc,
-                [o.id]: o.memberships
-                  .filter(
-                    (m: { isAdmin: boolean | null; userId: string }) =>
-                      !m.isAdmin
-                  )
-                  .map((m: { userId: string }) => ({
-                    id: m.userId,
-                    name: allUsers.find((u) => u.id === m.userId)?.name || '',
-                  })),
-              }),
-              {}
-            )
-        );
+      if (cancelled || !org) return;
+      setUsers({
+        [org.id]: org.memberships
+          .filter(
+            (m: { isAdmin: boolean | null; userId: string }) => !m.isAdmin
+          )
+          .map((m: { userId: string }) => ({
+            id: m.userId,
+            name: allUsers.find((u) => u.id === m.userId)?.name || '',
+          })),
       });
-    }
-  }, [myOrganizationHook.data, allUsers]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentOrg?.id, allUsers, client]);
 
   useEffect(() => {
     if (organization) {
@@ -464,25 +425,6 @@ export default function NewSurvey() {
                   placeholder='Enter a unique identifying name for the survey.'
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                />
-              </Form.Group>
-              <Form.Group>
-                <Form.Label>Organisation</Form.Label>
-                <Select
-                  className='text-black'
-                  value={organization}
-                  options={organizations}
-                  onChange={(e) => setOrganization(e)}
-                  menuPortalTarget={
-                    typeof document !== 'undefined' ? document.body : undefined
-                  }
-                  styles={{
-                    valueContainer: (base) => ({
-                      ...base,
-                      overflowY: 'auto',
-                    }),
-                    menuPortal: (base) => ({ ...base, zIndex: 9999 }),
-                  }}
                 />
               </Form.Group>
             </Card.Body>
@@ -737,6 +679,16 @@ export default function NewSurvey() {
             </Card.Header>
             <Card.Body>
               <ul className='list-unstyled mb-0'>
+                <li style={{ color: organization ? 'lime' : 'red' }}>
+                  Organisation:{' '}
+                  {organization ? (
+                    <span style={{ color: 'var(--ss-text)' }}>
+                      {organization.label}
+                    </span>
+                  ) : (
+                    <X />
+                  )}
+                </li>
                 <li style={{ color: name ? 'lime' : 'red' }}>
                   Name: {name ? <Check /> : <X />}
                 </li>

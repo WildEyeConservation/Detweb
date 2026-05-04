@@ -10,19 +10,21 @@ import { Button, Spinner } from 'react-bootstrap';
 import { Page, PageHeader, ContentArea, StatCard } from './ss/PageShell';
 import SnapshotStatsModal from './SnapshotStatsModal';
 import { fetchAllPaginatedResults } from './utils';
+import { useOrg } from './OrgContext';
 
 export default function UserStats() {
   const { myOrganizationHook, myMembershipHook } =
     useContext(UserContext)!;
   const { client, modalToShow, showModal } =
     useContext(GlobalContext)!;
+  const { currentOrg } = useOrg();
   const { users: allUsers } = useUsers();
   const [projects, setProjects] = useState<
     {
       id: string;
       name: string;
       annotationSets?: { id: string; name: string }[];
-      organization: { name: string };
+      organization: { id: string; name: string };
     }[]
   >([]);
   const [project, setProject] = useState<{
@@ -86,6 +88,7 @@ export default function UserStats() {
               'name',
               'annotationSets.id',
               'annotationSets.name',
+              'organization.id',
               'organization.name',
             ] as string[],
           }
@@ -104,6 +107,18 @@ export default function UserStats() {
 
     loadProjects();
   }, [myOrganizationHook.data]);
+
+  useEffect(() => {
+    if (project && currentOrg) {
+      const stillVisible = projects.some(
+        (p) => p.id === project.value && p.organization.id === currentOrg.id
+      );
+      if (!stillVisible) {
+        setProject(null);
+        setSelectedSets([]);
+      }
+    }
+  }, [currentOrg, projects]);
 
   // Rapid fetch for initial data, then individual subscriptions for updates
   useEffect(() => {
@@ -531,10 +546,14 @@ export default function UserStats() {
               <Select
                 className='text-black'
                 value={project}
-                options={projects.map((p) => ({
-                  label: `${p.name} (${p.organization.name})`,
-                  value: p.id,
-                }))}
+                options={projects
+                  .filter((p) =>
+                    currentOrg ? p.organization.id === currentOrg.id : true
+                  )
+                  .map((p) => ({
+                    label: `${p.name} (${p.organization.name})`,
+                    value: p.id,
+                  }))}
                 onChange={(e) => {
                   setProject(e);
                   const sets = projects
