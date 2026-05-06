@@ -644,30 +644,76 @@ export default function Results() {
             >
               Over/Under Count Percentage By Label
             </p>
+            <details
+              className='mb-3'
+              style={{
+                background: 'var(--ss-surface-alt)',
+                border: '1px solid var(--ss-border-soft)',
+                borderRadius: 6,
+                padding: '8px 12px',
+                fontSize: 13,
+                color: 'var(--ss-text)',
+              }}
+            >
+              <summary
+                style={{
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  color: 'var(--ss-text-muted)',
+                }}
+              >
+                How to read this chart
+              </summary>
+              <div className='mt-2' style={{ lineHeight: 1.5 }}>
+                <p className='mb-2'>
+                  Each bar compares the user&apos;s count for a label against
+                  the expected test count, summed across all of this user&apos;s
+                  tests in the selected survey.
+                </p>
+                <ul className='mb-0' style={{ paddingLeft: 18 }}>
+                  <li>
+                    <strong>0%</strong> &mdash; the user&apos;s count matched
+                    the test exactly.
+                  </li>
+                  <li>
+                    <strong style={{ color: '#DF691A' }}>Negative</strong>{' '}
+                    (orange) &mdash; undercount. <em>&minus;50%</em> means they
+                    counted only half of the expected; <em>&minus;100%</em>{' '}
+                    means they missed every one of that label.
+                  </li>
+                  <li>
+                    <strong style={{ color: '#5bc0de' }}>Positive</strong>{' '}
+                    (blue) &mdash; overcount. <em>+50%</em> means they counted
+                    1.5&times; the expected; <em>+100%</em> means twice as many.
+                  </li>
+                </ul>
+              </div>
+            </details>
             <BarChart
               dataset={accuracyByCategory}
-              margin={{ bottom: 80 }}
+              layout='horizontal'
+              margin={{ top: 20, right: 40, bottom: 50, left: 120 }}
               sx={{
-                '& .MuiChartsAxis-bottom .MuiChartsAxis-line': {
-                  stroke: '#FFFFFF',
-                  strokeWidth: 1,
+                '& .MuiChartsAxis-line, & .MuiChartsAxis-tick': {
+                  stroke: 'var(--ss-border-strong)',
                 },
-                '& .MuiChartsAxis-left .MuiChartsAxis-line': {
-                  stroke: '#FFFFFF',
-                  strokeWidth: 1,
-                },
-                '& .MuiChartsAxis-tickContainer .MuiChartsAxis-tickLabel': {
-                  fill: '#FFFFFF',
+                '& .MuiChartsAxis-tickLabel': {
+                  fill: 'var(--ss-text)',
                   fontSize: 12,
                 },
-                '& .MuiChartsAxis-tick': {
-                  stroke: '#FFFFFF',
-                  strokeWidth: 1,
+                '& .MuiBarLabel-root': {
+                  fill: 'var(--ss-text)',
+                  fontSize: 11,
+                  fontWeight: 600,
+                },
+                '& .MuiChartsGrid-line': {
+                  stroke: 'var(--ss-border-soft)',
                 },
               }}
-              xAxis={[{ scaleType: 'band', dataKey: 'name' }]}
-              yAxis={[
+              xAxis={[
                 {
+                  valueFormatter: (value: number) =>
+                    `${(value * 100).toFixed(0)}%`,
                   colorMap: {
                     type: 'piecewise',
                     thresholds: [0],
@@ -675,15 +721,29 @@ export default function Results() {
                   },
                 },
               ]}
-              bottomAxis={{
-                tickLabelStyle: {
-                  angle: 45,
-                  textAnchor: 'start',
-                  fontSize: 12,
+              yAxis={[
+                {
+                  scaleType: 'band',
+                  dataKey: 'name',
                 },
+              ]}
+              series={[
+                {
+                  dataKey: 'countPercentage',
+                  valueFormatter: (value) =>
+                    value === null ? '' : `${(value * 100).toFixed(2)}%`,
+                },
+              ]}
+              barLabel={(item) => {
+                const v = item.value as number | null;
+                if (v === null || v === undefined) return '';
+                return `${(v * 100).toFixed(1)}%`;
               }}
-              series={[{ dataKey: 'countPercentage' }]}
-              height={400}
+              grid={{ vertical: true }}
+              height={Math.max(
+                260,
+                accuracyByCategory.length * 56 + 80
+              )}
               borderRadius={4}
             />
           </Card.Body>

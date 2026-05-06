@@ -74,8 +74,7 @@ export default function Users() {
       <div>
         <h5 className='mb-1'>Organisation Users</h5>
         <div style={{ color: 'var(--ss-text-muted)', fontSize: 12, lineHeight: 1.4 }}>
-          Mark members as test users to have them complete testing tasks before
-          annotating surveys.
+          Enable organisation wide tests for users by setting the "TEST USER" toggle to "Yes"
         </div>
       </div>
       <div
