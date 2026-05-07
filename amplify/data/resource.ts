@@ -159,7 +159,7 @@ const schema = a
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
-        index('projectId').queryField('imagesByProjectId'),
+        index('projectId').queryField('imagesByProjectId').sortKeys(["transectId"]),
       ]),
     // .authorization(allow => [allow.groupDefinedIn('projectId')]),
     ImageFile: a
@@ -280,11 +280,7 @@ const schema = a
         category: a.belongsTo('Category', 'categoryId'),
         group: a.string(),
       })
-      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
-      // .authorization(allow => [allow.groupDefinedIn('projectId')])
-      .secondaryIndexes((index) => [
-        index('categoryId').queryField('objectsByCategoryId'),
-      ]),
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')]),
     Location: a
       .model({
         projectId: a.id().required(),
@@ -585,7 +581,6 @@ const schema = a
       .identifier(['testPresetId', 'locationId', 'annotationSetId'])
       .secondaryIndexes((index) => [
         index('testPresetId').queryField('locationsByTestPresetId'),
-        index('locationId').queryField('testPresetsByLocationId'),
       ]),
     TestResult: a
       .model({
@@ -607,7 +602,6 @@ const schema = a
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('userId').queryField('testResultsByUserId'),
-        index('testPresetId').queryField('testResultsByTestPresetId'),
       ]),
     TestResultCategoryCount: a
       .model({
@@ -619,10 +613,7 @@ const schema = a
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
-      .identifier(['testResultId', 'categoryName'])
-      .secondaryIndexes((index) => [
-        index('testResultId').queryField('categoryCountsByTestResultId'),
-      ]),
+      .identifier(['testResultId', 'categoryName']),
     Shapefile: a
       .model({
         projectId: a.id().required(),
@@ -726,7 +717,6 @@ const schema = a
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group').to(['read', 'update'])])
       .secondaryIndexes((index) => [
         index('surveyId').queryField('jollyResultsBySurveyId'),
-        index('stratumId').queryField('jollyResultsByStratumId'),
       ]),
     // Lambda-only: users will manage groups through dedicated authorized lambdas
     addUserToGroup: a
