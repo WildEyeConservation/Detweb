@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, type ReactNode } from 'react';
 import { Modal, Button, Form } from 'react-bootstrap';
-import { Search, X } from 'lucide-react';
+import { Search, X, AlertTriangle } from 'lucide-react';
 import type { CategoryType } from './schemaTypes';
 
 interface ChangeCategoryModalProps {
@@ -9,6 +9,12 @@ interface ChangeCategoryModalProps {
   categories: CategoryType[];
   currentCategoryId?: string;
   onSelectCategory: (categoryId: string) => void;
+  /**
+   * Optional warning rendered as an amber alert at the top of the modal
+   * body. Use it to flag side effects of the label change in the calling
+   * context (e.g. "this annotation will disappear from the current view").
+   */
+  warning?: ReactNode;
 }
 
 export default function ChangeCategoryModal({
@@ -17,6 +23,7 @@ export default function ChangeCategoryModal({
   categories,
   currentCategoryId,
   onSelectCategory,
+  warning,
 }: ChangeCategoryModalProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -107,6 +114,31 @@ export default function ChangeCategoryModal({
                 {currentCategory.name}
               </span>
             </div>
+          </div>
+        )}
+
+        {/* Caller-supplied warning (e.g. "this annotation will disappear
+            from the current view"). Amber to differentiate from the
+            project's slate-blue palette without being alarming. */}
+        {warning && (
+          <div
+            style={{
+              padding: '12px 20px',
+              background: 'rgba(255, 193, 7, 0.12)',
+              borderBottom: '1px solid rgba(255, 193, 7, 0.45)',
+              color: '#ffd154',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px',
+              lineHeight: 1.4,
+            }}
+          >
+            <AlertTriangle
+              size={18}
+              style={{ flexShrink: 0, marginTop: '1px' }}
+            />
+            <div>{warning}</div>
           </div>
         )}
 
