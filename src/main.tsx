@@ -21,6 +21,7 @@ import Surveys from './survey/Surveys.tsx';
 import Permissions from './Permissions.tsx';
 import Testing from './Testing/Testing';
 import { Registration } from './Registration';
+import { IndividualIdHarness } from './individual-id';
 import HomographyTask from './homography/HomographyTask';
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
@@ -107,6 +108,14 @@ const router = createBrowserRouter([
           {
             path: 'registration',
             element: <Registration />,
+          },
+          {
+            // Reads transectId, categoryId (and optional annotationSetId,
+            // leniency) from the query string, e.g.
+            //   /surveys/<id>/individual-id?transectId=…&categoryId=…
+            // The annotationSetId is derived from the category if absent.
+            path: 'individual-id',
+            element: <IndividualIdHarness />,
           },
           {
             path: 'homography/:queueId',
