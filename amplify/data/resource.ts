@@ -159,7 +159,10 @@ const schema = a
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
-        index('projectId').queryField('imagesByProjectId').sortKeys(["transectId"]),
+        index('projectId').queryField('imagesByProjectId'),
+        index('projectId')
+          .sortKeys(['transectId'])
+          .queryField('imagesByProjectIdAndTransectId'),
       ]),
     // .authorization(allow => [allow.groupDefinedIn('projectId')]),
     ImageFile: a

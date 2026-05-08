@@ -80,9 +80,10 @@ export function useTransectData(input: UseTransectDataInput) {
         );
       }
 
-      // 2. Images for the transect.
+      // 2. Images for the transect. Uses the projectId+transectId GSI so we
+      // don't pull every image in the project and filter client-side.
       const images = (await fetchAllPaginatedResults<ImageType>(
-        client.models.Image.imagesByProjectId,
+        client.models.Image.imagesByProjectIdAndTransectId,
         {
           projectId: project!.id,
           transectId: { eq: transectId },
