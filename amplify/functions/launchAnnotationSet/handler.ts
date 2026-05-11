@@ -439,35 +439,28 @@ export const handler: LaunchAnnotationSetHandler = async (event) => {
   }
 };
 
-// Orchestrate queue creation, task enqueuing, and bookkeeping.
-const getLocationImageIdQuery = /* GraphQL */ `
-  query GetLocationImageId($id: ID!) {
-    getLocation(id: $id) { id imageId }
-  }
-`;
+// Read the location manifest the client uploaded and pull out the unique image IDs
+type ManifestItem = { locationId: string; imageId: string };
 
-async function resolveImageIdsFromLocations(
-  locationIds: string[]
-): Promise<string[]> {
-  if (locationIds.length === 0) return [];
-  const limit = pLimit(15);
-  const results = await Promise.all(
-    locationIds.map((id) =>
-      limit(async () => {
-        try {
-          const data = await executeGraphql<{
-            getLocation?: { id: string; imageId: string } | null;
-          }>(getLocationImageIdQuery, { id });
-          return data.getLocation?.imageId ?? null;
-        } catch (err) {
-          console.warn('Failed to fetch location for pretile', { id, err });
-          return null;
-        }
-      })
-    )
+async function readImageIdsFromManifest(key: string): Promise<string[]> {
+  const bucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!bucketName) {
+    throw new Error('OUTPUTS_BUCKET_NAME environment variable not set');
+  }
+  const response = await s3Client.send(
+    new GetObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    })
   );
+  const bodyStr = await response.Body?.transformToString();
+  if (!bodyStr) {
+    throw new Error('Empty manifest file');
+  }
+  const manifest = JSON.parse(bodyStr) as { items?: ManifestItem[] };
+  const items = manifest.items ?? [];
   return Array.from(
-    new Set(results.filter((v): v is string => !!v))
+    new Set(items.map((i) => i.imageId).filter((id): id is string => !!id))
   );
 }
 
@@ -560,10 +553,22 @@ async function handleLaunch(payload: LaunchLambdaPayload, organizationId: string
     )
   );
 
-  const pretileImageIds =
-    payload.launchImageIds && payload.launchImageIds.length > 0
-      ? Array.from(new Set(payload.launchImageIds))
-      : await resolveImageIdsFromLocations(locationIds);
+  let pretileImageIds: string[];
+  if (payload.launchImageIds && payload.launchImageIds.length > 0) {
+    pretileImageIds = Array.from(new Set(payload.launchImageIds));
+  } else if (payload.locationManifestS3Key) {
+    pretileImageIds = await readImageIdsFromManifest(
+      payload.locationManifestS3Key
+    );
+    console.log('Resolved image IDs from manifest', {
+      manifestKey: payload.locationManifestS3Key,
+      uniqueImages: pretileImageIds.length,
+    });
+  } else {
+    throw new Error(
+      'Cannot resolve image IDs: neither launchImageIds nor locationManifestS3Key was provided'
+    );
+  }
 
   let pretileNoWorkNeeded = false;
   if (pretileImageIds.length > 0) {

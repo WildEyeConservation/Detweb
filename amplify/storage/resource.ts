@@ -61,7 +61,7 @@ export const outputBucket = defineStorage({
     // Queue manifests for requeue detection
     'queue-manifests/*': [
       allow.authenticated.to(['write', 'read']),
-      allow.resource(launchAnnotationSet).to(['write']),
+      allow.resource(launchAnnotationSet).to(['read', 'write']),
       allow.resource(launchQCReview).to(['write']),
       allow.resource(launchHomography).to(['read']),
       allow.resource(monitorTilingTasks).to(['write']),
