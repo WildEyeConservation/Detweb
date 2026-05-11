@@ -35,6 +35,8 @@ import { updateActiveOrganizations } from '../functions/updateActiveOrganization
 import { launchQCReview } from '../functions/launchQCReview/resource';
 import { launchHomography } from '../functions/launchHomography/resource';
 import { reconcileHomographies } from '../functions/reconcileHomographies/resource';
+import { registrationBucketCleanup } from '../functions/registrationBucketCleanup/resource';
+import { deleteRegistrationNeighbour } from '../functions/deleteRegistrationNeighbour/resource';
 import { reconcilePretileLaunches } from '../functions/reconcilePretileLaunches/resource';
 import { extendTileLifecycles } from '../functions/extendTileLifecycles/resource';
 import { pretileImage } from '../functions/pretileImage/resource';
@@ -448,6 +450,18 @@ const schema = a
         suggestedPoints1: a.float().array(),
         suggestedPoints2: a.float().array(),
         suggestedPointsKept: a.integer(),
+        // Cross-camera bucketing. Null for same-camera pairs. cameraPairKey is
+        // the canonical "min(camAId,camBId)|max(camAId,camBId)" identifier so
+        // both A→B and B→A scans hash to the same value. bucketIndex is the
+        // signed offset of image2 from the temporally-nearest partner of image1
+        // on the other camera's track (-1 = previous frame, 0 = nearest, +1 = next).
+        cameraPairKey: a.string(),
+        bucketIndex: a.integer(),
+        // Stamped exactly once by the lightglue container when it finishes
+        // processing this pair (success OR fallback to suggested points). Used
+        // as the idempotency guard for incrementing RegistrationProgress so
+        // SQS redeliveries don't double-count.
+        registrationProcessedAt: a.datetime(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
@@ -455,6 +469,44 @@ const schema = a
       .secondaryIndexes((index) => [
         index('image1Id').queryField('imageNeighboursByImage1key'),
         index('image2Id').queryField('imageNeighboursByImage2key'),
+        // Cleanup queries the losing-bucket rows by (cameraPairKey, bucketIndex).
+        // Same-camera rows (null cameraPairKey) are not projected into the GSI.
+        index('cameraPairKey')
+          .sortKeys(['bucketIndex'])
+          .queryField('imageNeighboursByCameraPairAndBucket'),
+      ]),
+    // One row per project. Tracks registration model completion and serves as
+    // the trigger gate for bucket cleanup. Updated atomically via custom
+    // mutations to support concurrent container writes.
+    RegistrationProgress: a
+      .model({
+        projectId: a.id().required(),
+        pairsCreated: a.integer().default(0),
+        pairsProcessed: a.integer().default(0),
+        // 'pending' (default) | 'in-progress' | 'done'
+        cleanupState: a.string().default('pending'),
+        group: a.string(),
+      })
+      .identifier(['projectId'])
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
+      .secondaryIndexes((index) => [
+        index('cleanupState').queryField('registrationProgressByCleanupState'),
+      ]),
+    // One row per (project, cameraPair, bucket). The lightglue container ADDs
+    // 1 to successCount on every successful homography. The cleanup lambda
+    // reads these rows to pick the winning bucket per camera pair.
+    RegistrationBucketStat: a
+      .model({
+        projectId: a.id().required(),
+        cameraPairKey: a.string().required(),
+        bucketIndex: a.integer().required(),
+        successCount: a.integer().default(0),
+        group: a.string(),
+      })
+      .identifier(['projectId', 'cameraPairKey', 'bucketIndex'])
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
+      .secondaryIndexes((index) => [
+        index('projectId').queryField('registrationBucketStatsByProjectId'),
       ]),
     Queue: a
       .model({
@@ -1170,6 +1222,41 @@ const schema = a
         dataSource: a.ref('Queue'),
       }))
       .authorization((allow) => [allow.authenticated()]),
+    // Atomic upsert + ADD on RegistrationProgress. All deltas are optional so
+    // the same mutation handles "kickoff" (pairsCreatedDelta + resetCleanupState)
+    // and "per-pair processed" (pairsProcessedDelta) without separate roundtrips.
+    incrementRegistrationProgress: a
+      .mutation()
+      .arguments({
+        projectId: a.id().required(),
+        pairsCreatedDelta: a.integer(),
+        pairsProcessedDelta: a.integer(),
+        resetCleanupState: a.boolean(),
+        group: a.string(),
+      })
+      .returns(a.json())
+      .handler(a.handler.custom({
+        entry: './incrementRegistrationProgress.js',
+        dataSource: a.ref('RegistrationProgress'),
+      }))
+      .authorization((allow) => [allow.authenticated()]),
+    // Atomic upsert + ADD 1 to RegistrationBucketStat.successCount. Called by
+    // the lightglue container on every successful homography for a cross-camera
+    // pair (same-camera pairs have no bucket and don't call this).
+    incrementRegistrationBucketStat: a
+      .mutation()
+      .arguments({
+        projectId: a.id().required(),
+        cameraPairKey: a.string().required(),
+        bucketIndex: a.integer().required(),
+        group: a.string(),
+      })
+      .returns(a.json())
+      .handler(a.handler.custom({
+        entry: './incrementRegistrationBucketStat.js',
+        dataSource: a.ref('RegistrationBucketStat'),
+      }))
+      .authorization((allow) => [allow.authenticated()]),
     //TODO: Rethink sharing completely
     getJwtSecret: a
       .mutation()
@@ -1220,6 +1307,8 @@ const schema = a
     allow.resource(launchQCReview),
     allow.resource(launchHomography),
     allow.resource(reconcileHomographies),
+    allow.resource(registrationBucketCleanup),
+    allow.resource(deleteRegistrationNeighbour),
     allow.resource(reconcilePretileLaunches),
     allow.resource(extendTileLifecycles),
     allow.resource(pretileImage),

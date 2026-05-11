@@ -31,13 +31,19 @@ Workaround is to clear docker cache.
 Sometimes npx ampx would fail to use local sso credentials, hidden in the error message was something about a socket timeout. This ultimately led me to 
 https://stackoverflow.com/questions/76179568/socket-connection-timout-error-in-node-js and an upgrade to 20.17.0 did indeed solve the problem.
 
-### 4. Docker Credential Store Issue
+### 4. Docker push to ECR fails with 400 Bad Request on manifest PUT
+Cause: Docker Desktop 4.34+ defaults to the containerd image store, which makes two ecr:PutImage calls for the same layer. ECR rejects the second one with 400.
+
+Fix: Docker Desktop > Settings > General > uncheck "Use containerd for
+pulling and storing images" > Apply & restart.
+
+### 5. Docker Credential Store Issue
 Docker credential store is unable to deal with the long strings that ECR uses for auth.
 This can be solved by opening ~\.docker\config.json and deleting the line 
 "credsStore": "desktop",
 This one tends to recur. I suspect that docker desktop restores that file to previous status.
 
-### 5. Amplify ECR Authentication
+### 6. Amplify ECR Authentication
 Amplify does not correctly refresh the credentials for pushing images to ecr with docker (at 
 least not on windows). This affects deploys that try to push new images to the sandbox environment.
 You'll get an error similar to:
@@ -54,7 +60,7 @@ aws ecr get-login-password --region eu-west-2 | docker login --username AWS --pa
 
 Replace "275736403632" with your account number and both occurrences of eu-west-2 with your region.
 
-### 6. API Field Undefined Error
+### 7. API Field Undefined Error
 Writing this up as it has now happened twice. Sometimes API calls would "randomly" start failing with the following error reported in the browser console:
 
 ```
@@ -63,7 +69,7 @@ Cannot destructure property 'isReadOnly' of 'fields7[fieldName]' as it is undefi
 
 This is not very informative, but it usually means that your client.models.SomeModel.someAction call is referring to a field that does not exist. If you checked against the schema, and everything seems correct, then the likely cause is simply that your amplify_outputs.json file is out of date. If you are testing against the production backend, then just make sure your latest schema is deployed in production, download the latest amplify_outputs.json from the aws amplify dashboard and place it in the project folder. If you are testing in your sandbox, you just need to make sure npx ampx sandbox has completed succesfully against your latest backend definition.
 
-### 7. Amplify Type System Limitations
+### 8. Amplify Type System Limitations
 Amplify Gen2’s type system can break in larger/complex schemas (see the upstream issue). While this is being addressed, we generate a typed data client from `amplify_outputs.json` to restore full typing in the IDE. For the workaround details, see the referenced comment below.
 
 - Issue: https://github.com/aws-amplify/amplify-data/issues/424
