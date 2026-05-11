@@ -144,6 +144,58 @@ const createImageProcessedBy = /* GraphQL */ `mutation CreateImageProcessedBy(
 }
 `;
 
+// Registration completion polling: list RegistrationProgress rows that have
+// been queued by runImageRegistration but not yet handed off to the cleanup
+// lambda. The conditional update is the race guard between concurrent monitor
+// runs (we deploy this on a 30m cron so concurrency is unlikely, but the
+// invariant is cheap to preserve).
+const registrationProgressByCleanupState = /* GraphQL */ `
+  query RegistrationProgressByCleanupState(
+    $cleanupState: String!
+    $limit: Int
+    $nextToken: String
+  ) {
+    registrationProgressByCleanupState(
+      cleanupState: $cleanupState
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        projectId
+        pairsCreated
+        pairsProcessed
+        cleanupState
+        group
+      }
+      nextToken
+    }
+  }
+`;
+
+const updateRegistrationProgressStatus = /* GraphQL */ `
+  mutation UpdateRegistrationProgressStatus(
+    $projectId: ID!
+    $cleanupState: String!
+    $expected: String!
+  ) {
+    updateRegistrationProgress(
+      input: { projectId: $projectId, cleanupState: $cleanupState }
+      condition: { cleanupState: { eq: $expected } }
+    ) {
+      projectId
+      cleanupState
+    }
+  }
+`;
+
+interface RegistrationProgressRow {
+  projectId: string;
+  pairsCreated?: number | null;
+  pairsProcessed?: number | null;
+  cleanupState?: string | null;
+  group?: string | null;
+}
+
 // Helper function to handle pagination for GraphQL queries
 async function fetchAllPages<T, K extends string>(
   queryFn: (
@@ -448,6 +500,94 @@ export const handler: Handler = async (event, context) => {
       if (project.status?.includes('pointFinder')) {
         console.log(`Project ${project.id} is running pointFinder`);
         await updateProgress(project, projectImages, 'heatmap');
+      }
+    }
+
+    // Registration model completion + bucket cleanup trigger. Independent of
+    // project.status because registration runs alongside whatever other model
+    // the user picked at upload time — we just need to fire cleanup once the
+    // container has matched pairsProcessed up to pairsCreated.
+    console.log('Polling RegistrationProgress for projects ready for bucket cleanup');
+    const pendingProgress = await fetchAllPages<RegistrationProgressRow, 'registrationProgressByCleanupState'>(
+      (nextToken) =>
+        client.graphql({
+          query: registrationProgressByCleanupState,
+          variables: { cleanupState: 'pending', limit: 1000, nextToken },
+        }) as Promise<GraphQLResult<{ registrationProgressByCleanupState: PagedList<RegistrationProgressRow> }>>,
+      'registrationProgressByCleanupState'
+    );
+
+    console.log(`Found ${pendingProgress.length} project(s) with cleanupState='pending'`);
+
+    if (pendingProgress.length > 0) {
+      const lambdaClient = new LambdaClient({
+        region: env.AWS_REGION,
+        credentials: {
+          accessKeyId: env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+          sessionToken: env.AWS_SESSION_TOKEN,
+        },
+      });
+
+      for (const row of pendingProgress) {
+        const pairsCreated = row.pairsCreated ?? 0;
+        const pairsProcessed = row.pairsProcessed ?? 0;
+        if (pairsCreated <= 0) continue;
+        if (pairsProcessed < pairsCreated) {
+          console.log(
+            `Project ${row.projectId}: ${pairsProcessed}/${pairsCreated} pairs processed; not ready`
+          );
+          continue;
+        }
+
+        // Race-safe flip pending -> in-progress. Any concurrent monitor run or
+        // a fresh runImageRegistration that just reset state to 'pending' loses
+        // this CAS (condition fails) and we skip.
+        try {
+          await client.graphql({
+            query: updateRegistrationProgressStatus,
+            variables: {
+              projectId: row.projectId,
+              cleanupState: 'in-progress',
+              expected: 'pending',
+            },
+          });
+        } catch (e) {
+          console.log(
+            `Skipping ${row.projectId}: flip to in-progress failed (CAS lost or transient error):`,
+            e
+          );
+          continue;
+        }
+
+        try {
+          await lambdaClient.send(
+            new InvokeCommand({
+              FunctionName: env.REGISTRATION_BUCKET_CLEANUP_FUNCTION_NAME,
+              InvocationType: 'Event',
+              Payload: Buffer.from(JSON.stringify({ projectId: row.projectId })),
+            })
+          );
+          console.log(`Invoked registrationBucketCleanup for project ${row.projectId}`);
+        } catch (invokeErr) {
+          console.error(
+            `Failed to invoke registrationBucketCleanup for ${row.projectId}, rolling back state:`,
+            invokeErr
+          );
+          // Best-effort rollback so the next monitor pass retries this project.
+          try {
+            await client.graphql({
+              query: updateRegistrationProgressStatus,
+              variables: {
+                projectId: row.projectId,
+                cleanupState: 'pending',
+                expected: 'in-progress',
+              },
+            });
+          } catch (rollbackErr) {
+            console.error(`Rollback of state failed for ${row.projectId}:`, rollbackErr);
+          }
+        }
       }
     }
 

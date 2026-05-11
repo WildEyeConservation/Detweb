@@ -44,6 +44,8 @@ import { updateActiveOrganizations } from './functions/updateActiveOrganizations
 import { launchQCReview } from './functions/launchQCReview/resource';
 import { launchHomography } from './functions/launchHomography/resource';
 import { reconcileHomographies } from './functions/reconcileHomographies/resource';
+import { registrationBucketCleanup } from './functions/registrationBucketCleanup/resource';
+import { deleteRegistrationNeighbour } from './functions/deleteRegistrationNeighbour/resource';
 import { pretileImage } from './functions/pretileImage/resource';
 import { refreshTiles } from './functions/refreshTiles/resource';
 import { reconcilePretileLaunches } from './functions/reconcilePretileLaunches/resource';
@@ -92,6 +94,8 @@ const backend = defineBackend({
   launchQCReview,
   launchHomography,
   reconcileHomographies,
+  registrationBucketCleanup,
+  deleteRegistrationNeighbour,
   pretileImage,
   refreshTiles,
   reconcilePretileLaunches,
@@ -988,6 +992,77 @@ for (const fn of launchLambdasUsingPretile) {
   fn.addEnvironment('REFRESH_TILES_QUEUE_URL', refreshTilesQueue.queueUrl);
 }
 
+
+// ── Registration neighbour bucket cleanup ──
+//
+// After LightGlue finishes processing the SQS queue, monitorModelProgress
+// (cron 30m) invokes registrationBucketCleanup once pairsProcessed catches up
+// to pairsCreated. That lambda picks the winning bucket per camera-pair and
+// enqueues every losing-bucket neighbour to this queue; deleteRegistrationNeighbour
+// consumes the queue and deletes each ImageNeighbour row.
+//
+// Splitting cleanup into "enumerate" (cron-driven) + "delete" (SQS-driven)
+// keeps the 15-min Lambda timeout out of the critical path even when a survey
+// has hundreds of thousands of cross-camera pairs.
+
+const registrationStack = backend.createStack('DetwebRegistration');
+
+const registrationDeleteDlq = new sqs.Queue(
+  registrationStack,
+  'RegistrationDeleteDlq',
+  { retentionPeriod: Duration.days(14) }
+);
+
+const registrationDeleteQueue = new sqs.Queue(
+  registrationStack,
+  'RegistrationDeleteQueue',
+  {
+    // Visibility comfortably above the delete-neighbour lambda timeout (60s).
+    visibilityTimeout: Duration.seconds(120),
+    retentionPeriod: Duration.days(14),
+    deadLetterQueue: {
+      queue: registrationDeleteDlq,
+      maxReceiveCount: 5,
+    },
+  }
+);
+
+const deleteRegistrationNeighbourLambda =
+  backend.deleteRegistrationNeighbour.resources.lambda as lambda.Function;
+deleteRegistrationNeighbourLambda.addEventSource(
+  new SqsEventSource(registrationDeleteQueue, {
+    batchSize: 10,
+    reportBatchItemFailures: true,
+    maxConcurrency: 50,
+  })
+);
+
+// registrationBucketCleanup needs to write deletion messages onto the queue
+// and know its URL.
+backend.registrationBucketCleanup.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['sqs:SendMessage', 'sqs:SendMessageBatch'],
+    resources: [registrationDeleteQueue.queueArn],
+  })
+);
+backend.registrationBucketCleanup.addEnvironment(
+  'REGISTRATION_DELETE_QUEUE_URL',
+  registrationDeleteQueue.queueUrl
+);
+
+// monitorModelProgress invokes registrationBucketCleanup asynchronously
+// (InvocationType: 'Event'). Reuses the same Lambda-invoke pattern used for
+// runPointFinder above.
+backend.monitorModelProgress.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['lambda:InvokeFunction'],
+    resources: [backend.registrationBucketCleanup.resources.lambda.functionArn],
+  })
+);
+backend.monitorModelProgress.addEnvironment(
+  'REGISTRATION_BUCKET_CLEANUP_FUNCTION_NAME',
+  backend.registrationBucketCleanup.resources.lambda.functionName
+);
 
 const generalBucketName = 'surveyscope';
 

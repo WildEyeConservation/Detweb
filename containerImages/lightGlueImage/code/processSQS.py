@@ -1,6 +1,7 @@
 import json
 import os
 import time
+from datetime import datetime, timezone
 from tempfile import NamedTemporaryFile
 
 import boto3
@@ -47,6 +48,59 @@ mutation SaveSuggestions($image1Id: ID!, $image2Id: ID!, $suggestedPoints1: [Flo
     image1Id
     image2Id
   }
+}
+""")
+
+# Idempotency guard for the registration progress counters: stamp
+# registrationProcessedAt only if it isn't already set. The conditional update
+# fails with ConditionalCheckFailedException on SQS redeliveries we've already
+# tracked, which we treat as "skip the counter bumps".
+markImageNeighbourProcessed = gql("""
+mutation MarkProcessed($image1Id: ID!, $image2Id: ID!, $now: AWSDateTime!) {
+  updateImageNeighbour(
+    input: {image1Id: $image1Id, image2Id: $image2Id, registrationProcessedAt: $now}
+    condition: {registrationProcessedAt: {attributeExists: false}}
+  ) {
+    image1Id
+    image2Id
+  }
+}
+""")
+
+# Per-image "this image has been touched by registration" marker. Composite key
+# is (imageId, source) so duplicate creates fail loudly — we swallow that.
+createImageProcessedBy = gql("""
+mutation CreateProcessedBy($imageId: ID!, $source: String!, $projectId: ID!, $group: String) {
+  createImageProcessedBy(input: {imageId: $imageId, source: $source, projectId: $projectId, group: $group}) {
+    imageId
+    source
+  }
+}
+""")
+
+# Atomic ADD on RegistrationProgress.pairsProcessed (and upserts the row if it
+# doesn't exist yet — unlikely, but the runImageRegistration kickoff guarantees
+# it).
+incrementRegistrationProgress = gql("""
+mutation IncProgress($projectId: ID!, $pairsProcessedDelta: Int, $group: String) {
+  incrementRegistrationProgress(
+    projectId: $projectId
+    pairsProcessedDelta: $pairsProcessedDelta
+    group: $group
+  )
+}
+""")
+
+# Atomic ADD 1 on RegistrationBucketStat.successCount. Only called for
+# cross-camera pairs on successful homography.
+incrementRegistrationBucketStat = gql("""
+mutation IncBucket($projectId: ID!, $cameraPairKey: String!, $bucketIndex: Int!, $group: String) {
+  incrementRegistrationBucketStat(
+    projectId: $projectId
+    cameraPairKey: $cameraPairKey
+    bucketIndex: $bucketIndex
+    group: $group
+  )
 }
 """)
 
@@ -183,6 +237,7 @@ def _save_suggestions(body, matches0, matches1, confidences, homography_mask):
 
 
 def alignImages(body, img0, img1):
+    """Return True iff a homography was written; False if we fell back to suggestions."""
     matches0, matches1, confidences, scale = _match(img0, img1)
 
     if "masks" in body:
@@ -209,8 +264,97 @@ def alignImages(body, img0, img1):
 
     print(f'Failed to link {body["image1Id"]}/{body["image2Id"]} ({int(sum(homography_inliers))} inliers)')
     _save_suggestions(body, inliers0, inliers1, inlier_confidences, homography_mask)
-    # Return True so SQS drops the message — the pair now lives in the manual queue.
-    return True
+    return False
+
+
+def _is_already_processed_error(exc):
+    """ConditionalCheckFailedException = SQS redelivered a pair we already tracked."""
+    msg = str(exc)
+    return 'ConditionalCheckFailedException' in msg or 'conditional' in msg.lower()
+
+
+def _is_duplicate_create_error(exc):
+    """Composite key conflict on createImageProcessedBy — fine, the marker exists."""
+    msg = str(exc).lower()
+    return (
+        'conditionalcheckfailed' in msg.replace(' ', '')
+        or 'already exists' in msg
+        or 'conflict' in msg
+    )
+
+
+def _track_processed(body, homography_written):
+    """
+    Idempotently record that this pair has been processed by the registration
+    model. The conditional update on registrationProcessedAt is the single
+    source of truth — if it flips, we own the counter bumps for this pair; if
+    the condition fails, another delivery already counted us.
+    """
+    image1Id = body["image1Id"]
+    image2Id = body["image2Id"]
+    project_id = body.get("projectId")
+    group = body.get("group")
+    camera_pair_key = body.get("cameraPairKey")
+    bucket_index = body.get("bucketIndex")
+
+    if not project_id:
+        # Older messages (before this rollout) don't carry projectId. Skip
+        # tracking rather than failing — the pair was still processed.
+        print(f'No projectId in message for {image1Id}/{image2Id}; skipping registration tracking')
+        return
+
+    now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+    try:
+        client.execute(markImageNeighbourProcessed, variable_values={
+            "image1Id": image1Id,
+            "image2Id": image2Id,
+            "now": now_iso,
+        })
+    except Exception as e:
+        if _is_already_processed_error(e):
+            print(f'Pair {image1Id}/{image2Id} already tracked (SQS redelivery); skipping increments')
+            return
+        # Some other failure — log and bail on tracking but let SQS drop
+        # the message (the pair itself was processed).
+        print(f'Failed to mark {image1Id}/{image2Id} processed: {e}')
+        return
+
+    # We're the unique tracker for this pair. Bump progress, write per-image
+    # processedBy markers, and increment the bucket counter on success.
+    try:
+        client.execute(incrementRegistrationProgress, variable_values={
+            "projectId": project_id,
+            "pairsProcessedDelta": 1,
+            "group": group,
+        })
+    except Exception as e:
+        print(f'Failed to increment RegistrationProgress for {project_id}: {e}')
+
+    for img_id in (image1Id, image2Id):
+        try:
+            client.execute(createImageProcessedBy, variable_values={
+                "imageId": img_id,
+                "source": "registration",
+                "projectId": project_id,
+                "group": group,
+            })
+        except Exception as e:
+            if not _is_duplicate_create_error(e):
+                print(f'Failed to create ImageProcessedBy for image {img_id}: {e}')
+
+    if homography_written and camera_pair_key is not None and bucket_index is not None:
+        try:
+            client.execute(incrementRegistrationBucketStat, variable_values={
+                "projectId": project_id,
+                "cameraPairKey": camera_pair_key,
+                "bucketIndex": bucket_index,
+                "group": group,
+            })
+        except Exception as e:
+            print(
+                f'Failed to increment RegistrationBucketStat '
+                f'({project_id}, {camera_pair_key}, {bucket_index}): {e}'
+            )
 
 
 def process(body):
@@ -222,8 +366,21 @@ def process(body):
         s3_client.download_file(os.environ["BUCKET"], "images/" + key1, file1.name)
         img0 = read_image(file0.name, mode=ImageReadMode.GRAY, apply_exif_orientation=True).to("cuda", dtype=torch.float32) / 255
         img1 = read_image(file1.name, mode=ImageReadMode.GRAY, apply_exif_orientation=True).to("cuda", dtype=torch.float32) / 255
-    return alignImages(body, img0, img1)
+    homography_written = alignImages(body, img0, img1)
+    # Tracking is best-effort and idempotent — never propagates exceptions.
+    try:
+        _track_processed(body, homography_written)
+    except Exception as e:
+        print(f'Tracking error for {body.get("image1Id")}/{body.get("image2Id")}: {e}')
+    # Always drop the message: either we have a homography or suggestions are
+    # saved and the pair is the user-workflow's problem now.
+    return True
 
+
+# Build marker — bumped to force an image rebuild after adding the
+# registration-tracking mutations. Bump again on future container-code changes
+# that the deploy diff might otherwise consider a no-op.
+print("processSQS build: registration-bucketing v1")
 
 while True:
     response = sqs.receive_message(
