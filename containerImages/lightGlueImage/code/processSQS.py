@@ -92,11 +92,14 @@ mutation IncProgress($projectId: ID!, $pairsProcessedDelta: Int, $group: String)
 """)
 
 # Atomic ADD 1 on RegistrationBucketStat.successCount. Only called for
-# cross-camera pairs on successful homography.
+# cross-camera pairs on successful homography. bucketKey is the composite
+# "<cameraPairKey>#<bucketIndex>" sort-key value; the other two are kept as
+# denormalised attributes on the row.
 incrementRegistrationBucketStat = gql("""
-mutation IncBucket($projectId: ID!, $cameraPairKey: String!, $bucketIndex: Int!, $group: String) {
+mutation IncBucket($projectId: ID!, $bucketKey: String!, $cameraPairKey: String!, $bucketIndex: Int!, $group: String) {
   incrementRegistrationBucketStat(
     projectId: $projectId
+    bucketKey: $bucketKey
     cameraPairKey: $cameraPairKey
     bucketIndex: $bucketIndex
     group: $group
@@ -343,9 +346,11 @@ def _track_processed(body, homography_written):
                 print(f'Failed to create ImageProcessedBy for image {img_id}: {e}')
 
     if homography_written and camera_pair_key is not None and bucket_index is not None:
+        bucket_key = f'{camera_pair_key}#{bucket_index}'
         try:
             client.execute(incrementRegistrationBucketStat, variable_values={
                 "projectId": project_id,
+                "bucketKey": bucket_key,
                 "cameraPairKey": camera_pair_key,
                 "bucketIndex": bucket_index,
                 "group": group,
@@ -353,7 +358,7 @@ def _track_processed(body, homography_written):
         except Exception as e:
             print(
                 f'Failed to increment RegistrationBucketStat '
-                f'({project_id}, {camera_pair_key}, {bucket_index}): {e}'
+                f'({project_id}, {bucket_key}): {e}'
             )
 
 
@@ -380,7 +385,7 @@ def process(body):
 # Build marker — bumped to force an image rebuild after adding the
 # registration-tracking mutations. Bump again on future container-code changes
 # that the deploy diff might otherwise consider a no-op.
-print("processSQS build: registration-bucketing v1")
+print("processSQS build: registration-bucketing v2 (composite bucketKey)")
 
 while True:
     response = sqs.receive_message(
