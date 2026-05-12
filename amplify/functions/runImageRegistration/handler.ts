@@ -172,7 +172,11 @@ async function handlePair(
   // Set only for cross-camera pairs. Same-camera pairs leave these null,
   // which keeps them out of the bucket-cleanup GSI.
   cameraPairKey?: string,
-  bucketIndex?: number
+  bucketIndex?: number,
+  // When true, skip pairs that already have suggestedPoints1 set (i.e.
+  // LightGlue already tried and failed). Used by re-runs that want to fill
+  // newly-introduced pairs without re-paying compute on known-failed ones.
+  skipExistingSuggestions?: boolean
 ) {
   try {
     console.log(`Processing pair ${image1.id} and ${image2.id}`);
@@ -200,6 +204,18 @@ async function handlePair(
         `Homography already exists for pair ${image1.id} and ${image2.id}`
       );
       return null; // Return null for filtered pairs
+    }
+
+    if (skipExistingSuggestions) {
+      // suggestedPoints1 isn't always typed on the generated client schema —
+      // access via untyped cast so this works even if codegen is stale.
+      const suggested = (existingNeighbour as { suggestedPoints1?: number[] | null } | null | undefined)?.suggestedPoints1;
+      if (Array.isArray(suggested) && suggested.length > 0) {
+        console.log(
+          `Suggestions already exist for pair ${image1.id} and ${image2.id}; skipping (skipExistingSuggestions)`
+        );
+        return null;
+      }
     }
 
     if (!existingNeighbour) {
@@ -292,7 +308,8 @@ function addAdjacentPairTasks(
   outTasks: Array<() => Promise<SqsEntry | null>>,
   computeKey: (orig: string) => string,
   projectId: string,
-  organizationId?: string
+  organizationId?: string,
+  skipExistingSuggestions?: boolean
 ) {
   for (let i = 0; i < images.length - 1; i++) {
     const image1 = images[i];
@@ -303,7 +320,17 @@ function addAdjacentPairTasks(
       if (!seenPairs.has(key)) {
         seenPairs.add(key);
         outTasks.push(() =>
-          handlePair(image1, image2, masks, computeKey, projectId, organizationId)
+          handlePair(
+            image1,
+            image2,
+            masks,
+            computeKey,
+            projectId,
+            organizationId,
+            undefined,
+            undefined,
+            skipExistingSuggestions
+          )
         );
       }
     } else {
@@ -342,7 +369,12 @@ function medianConsecutiveDelta(sortedImgs: MinimalImage[]): number | null {
 // the gap to the next-frame partner is the OTHER camera's firing interval. Half of that
 // interval is the natural cutoff that separates "right partner" from "next-frame partner".
 const DEFAULT_THRESHOLD_SECONDS = 1.0;
-const MIN_THRESHOLD_SECONDS = 0.1;
+// Integer-second timestamps mean any threshold < 1.0s effectively requires
+// pairs to share the exact same stored second — much stricter than the rig
+// actually is. Bumping the floor to 2.0s opens it to Δt ∈ {0, 1, 2} which
+// catches truncation-artifact straddles, clock drift, and near-boundary
+// edges. The bucket cleanup absorbs any "wrong frame" partners pulled in.
+const MIN_THRESHOLD_SECONDS = 2.0;
 const MAX_THRESHOLD_SECONDS = 5.0;
 
 function deriveCrossCameraThresholds(
@@ -419,7 +451,8 @@ function addNearestBucketTasks(
   outTasks: Array<() => Promise<SqsEntry | null>>,
   computeKey: (orig: string) => string,
   projectId: string,
-  organizationId?: string
+  organizationId?: string,
+  skipExistingSuggestions?: boolean
 ) {
   const queue = (
     x: MinimalImage,
@@ -440,7 +473,8 @@ function addNearestBucketTasks(
         projectId,
         organizationId,
         cameraPairKey,
-        bucketIndex
+        bucketIndex,
+        skipExistingSuggestions
       )
     );
   };
@@ -513,8 +547,10 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
         cameraId?: string | null;
       }>;
       sessionIds?: string[];
+      skipExistingSuggestions?: boolean;
     };
     const masks = Array.isArray(metadata?.masks) ? (metadata.masks as number[][][]) : [];
+    const skipExistingSuggestions = !!metadata?.skipExistingSuggestions;
     const queueUrl = event.arguments.queueUrl;
 
     // Fetch project info to determine key prefixing
@@ -633,7 +669,16 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
 
     // process images by camera
     Object.entries(imagesByCamera).forEach(([, images]) => {
-      addAdjacentPairTasks(images, masks, seenPairs, tasks, computeKey, projectId, organizationId);
+      addAdjacentPairTasks(
+        images,
+        masks,
+        seenPairs,
+        tasks,
+        computeKey,
+        projectId,
+        organizationId,
+        skipExistingSuggestions
+      );
       if (sessionIdSet.size > 0) {
         addStalePairDeletionTasks(images, sessionIdSet, deletionTasks);
       }
@@ -678,12 +723,22 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
         tasks,
         computeKey,
         projectId,
-        organizationId
+        organizationId,
+        skipExistingSuggestions
       );
     });
 
     // process images with no camera
-    addAdjacentPairTasks(noCamImgs, masks, seenPairs, tasks, computeKey, projectId, organizationId);
+    addAdjacentPairTasks(
+      noCamImgs,
+      masks,
+      seenPairs,
+      tasks,
+      computeKey,
+      projectId,
+      organizationId,
+      skipExistingSuggestions
+    );
     if (sessionIdSet.size > 0 && noCamImgs.length > 0) {
       addStalePairDeletionTasks(noCamImgs, sessionIdSet, deletionTasks);
     }

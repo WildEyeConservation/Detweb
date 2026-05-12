@@ -442,26 +442,14 @@ const schema = a
         image2: a.belongsTo('Image', 'image2Id'),
         homography: a.float().array(),
         homographySource: a.string(),
-        // When true, this pair is intentionally skipped for registration
-        // (images are neighbours but don't need homography computed)
         skipped: a.boolean().default(false),
-        // Candidate correspondences written by the lightglue container when
-        // its automatic homography attempt fails.
         suggestedPoints1: a.float().array(),
         suggestedPoints2: a.float().array(),
         suggestedPointsKept: a.integer(),
-        // Cross-camera bucketing. Null for same-camera pairs. cameraPairKey is
-        // the canonical "min(camAId,camBId)|max(camAId,camBId)" identifier so
-        // both A→B and B→A scans hash to the same value. bucketIndex is the
-        // signed offset of image2 from the temporally-nearest partner of image1
-        // on the other camera's track (-1 = previous frame, 0 = nearest, +1 = next).
         cameraPairKey: a.string(),
         bucketIndex: a.integer(),
-        // Stamped exactly once by the lightglue container when it finishes
-        // processing this pair (success OR fallback to suggested points). Used
-        // as the idempotency guard for incrementing RegistrationProgress so
-        // SQS redeliveries don't double-count.
         registrationProcessedAt: a.datetime(),
+        registrationFailedAt: a.datetime(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
