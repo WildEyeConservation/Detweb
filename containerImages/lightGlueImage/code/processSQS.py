@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import time
 from datetime import datetime, timezone
 from tempfile import NamedTemporaryFile
@@ -51,15 +52,53 @@ mutation SaveSuggestions($image1Id: ID!, $image2Id: ID!, $suggestedPoints1: [Flo
 }
 """)
 
-# Idempotency guard for the registration progress counters: stamp
-# registrationProcessedAt only if it isn't already set. The conditional update
-# fails with ConditionalCheckFailedException on SQS redeliveries we've already
-# tracked, which we treat as "skip the counter bumps".
-markImageNeighbourProcessed = gql("""
-mutation MarkProcessed($image1Id: ID!, $image2Id: ID!, $now: AWSDateTime!) {
+# Three transition-specific mutations. Each is conditional on a precise prior
+# state so we can tell, from which one succeeded, whether to bump the counter:
+#
+#   - markImageNeighbourProcessedFresh: pair has never been tracked (neither
+#     processedAt nor failedAt set). On success we bump pairsProcessed.
+#
+#   - markImageNeighbourProcessedAfterFail: pair was previously marked failed
+#     and is now succeeding (redelivery after retry). Clears failedAt and sets
+#     processedAt. Counter was already bumped on the failed-mark, so we DON'T
+#     bump again here.
+#
+#   - markImageNeighbourFailed: pair has never been tracked and processing
+#     blew up before a homography or suggestions could be written. On success
+#     we bump pairsProcessed so the cleanup gate doesn't stall even if the
+#     pair eventually DLQs.
+#
+# A pair that's already-processed (processedAt set) is invariant — we never
+# downgrade it to failed.
+markImageNeighbourProcessedFresh = gql("""
+mutation MarkProcessedFresh($image1Id: ID!, $image2Id: ID!, $now: AWSDateTime!) {
   updateImageNeighbour(
     input: {image1Id: $image1Id, image2Id: $image2Id, registrationProcessedAt: $now}
-    condition: {registrationProcessedAt: {attributeExists: false}}
+    condition: {registrationProcessedAt: {attributeExists: false}, registrationFailedAt: {attributeExists: false}}
+  ) {
+    image1Id
+    image2Id
+  }
+}
+""")
+
+markImageNeighbourProcessedAfterFail = gql("""
+mutation MarkProcessedAfterFail($image1Id: ID!, $image2Id: ID!, $now: AWSDateTime!) {
+  updateImageNeighbour(
+    input: {image1Id: $image1Id, image2Id: $image2Id, registrationProcessedAt: $now, registrationFailedAt: null}
+    condition: {registrationProcessedAt: {attributeExists: false}, registrationFailedAt: {attributeExists: true}}
+  ) {
+    image1Id
+    image2Id
+  }
+}
+""")
+
+markImageNeighbourFailed = gql("""
+mutation MarkFailed($image1Id: ID!, $image2Id: ID!, $now: AWSDateTime!) {
+  updateImageNeighbour(
+    input: {image1Id: $image1Id, image2Id: $image2Id, registrationFailedAt: $now}
+    condition: {registrationProcessedAt: {attributeExists: false}, registrationFailedAt: {attributeExists: false}}
   ) {
     image1Id
     image2Id
@@ -286,12 +325,43 @@ def _is_duplicate_create_error(exc):
     )
 
 
+def _is_terminal_for_retry(exc):
+    """
+    Errors that should NOT be retried.
+    """
+    msg = str(exc).lower()
+    return (
+        'conditionalcheckfailed' in msg.replace(' ', '')
+        or 'conditional' in msg
+        or 'already exists' in msg
+        or 'conflict' in msg
+    )
+
+
+def _exec_with_retry(query, variables, attempts=3):
+    """
+    Execute an AppSync mutation with exponential-backoff retry on transient errors.
+    """
+    last_err = None
+    for attempt in range(attempts):
+        try:
+            return client.execute(query, variable_values=variables)
+        except Exception as e:
+            if _is_terminal_for_retry(e):
+                raise
+            last_err = e
+            if attempt < attempts - 1:
+                time.sleep(0.3 * (2 ** attempt) + random.random() * 0.2)
+    raise last_err
+
+
 def _track_processed(body, homography_written):
     """
-    Idempotently record that this pair has been processed by the registration
-    model. The conditional update on registrationProcessedAt is the single
-    source of truth — if it flips, we own the counter bumps for this pair; if
-    the condition fails, another delivery already counted us.
+    Record that this pair has been processed. Handles two transitions:
+      (A) fresh:  no prior tracking → set processedAt, bump counter
+      (B) upgrade: previously failed → set processedAt, clear failedAt,
+                    do NOT bump counter (already bumped on the failed mark)
+    Either-already-processed is a no-op (returns immediately).
     """
     image1Id = body["image1Id"]
     image2Id = body["image2Id"]
@@ -307,35 +377,55 @@ def _track_processed(body, homography_written):
         return
 
     now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+
+    # Transition A — fresh. Conditional on both processedAt and failedAt unset.
+    bump_counter = False
     try:
-        client.execute(markImageNeighbourProcessed, variable_values={
+        _exec_with_retry(markImageNeighbourProcessedFresh, variables={
             "image1Id": image1Id,
             "image2Id": image2Id,
             "now": now_iso,
         })
+        bump_counter = True
     except Exception as e:
         if _is_already_processed_error(e):
-            print(f'Pair {image1Id}/{image2Id} already tracked (SQS redelivery); skipping increments')
+            # Conditional check failed. Either we're upgrading from failed, or
+            # the pair is already processed. Try the upgrade path next.
+            try:
+                _exec_with_retry(markImageNeighbourProcessedAfterFail, variables={
+                    "image1Id": image1Id,
+                    "image2Id": image2Id,
+                    "now": now_iso,
+                })
+                print(f'Upgraded pair {image1Id}/{image2Id} from failed to processed (no counter bump)')
+                # bump_counter stays False — counter was already incremented
+                # when we marked failed earlier.
+            except Exception as e2:
+                if _is_already_processed_error(e2):
+                    print(f'Pair {image1Id}/{image2Id} already processed (SQS redelivery); skipping increments')
+                    return
+                print(f'Failed to upgrade {image1Id}/{image2Id} from failed to processed: {e2}')
+                return
+        else:
+            # Transient AppSync issue after all retries — log and bail. The
+            # pair itself was processed; the counter just won't reflect it.
+            print(f'Failed to mark {image1Id}/{image2Id} processed: {e}')
             return
-        # Some other failure — log and bail on tracking but let SQS drop
-        # the message (the pair itself was processed).
-        print(f'Failed to mark {image1Id}/{image2Id} processed: {e}')
-        return
 
-    # We're the unique tracker for this pair. Bump progress, write per-image
-    # processedBy markers, and increment the bucket counter on success.
-    try:
-        client.execute(incrementRegistrationProgress, variable_values={
-            "projectId": project_id,
-            "pairsProcessedDelta": 1,
-            "group": group,
-        })
-    except Exception as e:
-        print(f'Failed to increment RegistrationProgress for {project_id}: {e}')
+    # Bump the progress counter only on the fresh transition.
+    if bump_counter:
+        try:
+            _exec_with_retry(incrementRegistrationProgress, variables={
+                "projectId": project_id,
+                "pairsProcessedDelta": 1,
+                "group": group,
+            })
+        except Exception as e:
+            print(f'Failed to increment RegistrationProgress for {project_id}: {e}')
 
     for img_id in (image1Id, image2Id):
         try:
-            client.execute(createImageProcessedBy, variable_values={
+            _exec_with_retry(createImageProcessedBy, variables={
                 "imageId": img_id,
                 "source": "registration",
                 "projectId": project_id,
@@ -348,7 +438,7 @@ def _track_processed(body, homography_written):
     if homography_written and camera_pair_key is not None and bucket_index is not None:
         bucket_key = f'{camera_pair_key}#{bucket_index}'
         try:
-            client.execute(incrementRegistrationBucketStat, variable_values={
+            _exec_with_retry(incrementRegistrationBucketStat, variables={
                 "projectId": project_id,
                 "bucketKey": bucket_key,
                 "cameraPairKey": camera_pair_key,
@@ -362,30 +452,93 @@ def _track_processed(body, homography_written):
             )
 
 
+def _track_failed(body, error_msg):
+    """
+    Mark a pair as having failed processing. Bumps pairsProcessed on the first
+    failure so the cleanup gate doesn't stall even if the message eventually
+    DLQs. Subsequent failed redeliveries are no-ops on the counter (the
+    conditional check prevents double-bumping), and a later successful
+    redelivery routes through _track_processed's upgrade path.
+    """
+    image1Id = body["image1Id"]
+    image2Id = body["image2Id"]
+    project_id = body.get("projectId")
+    group = body.get("group")
+
+    if not project_id:
+        print(f'No projectId in message for {image1Id}/{image2Id}; skipping failure tracking')
+        return
+
+    now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+
+    try:
+        _exec_with_retry(markImageNeighbourFailed, variables={
+            "image1Id": image1Id,
+            "image2Id": image2Id,
+            "now": now_iso,
+        })
+    except Exception as e:
+        if _is_already_processed_error(e):
+            # Either already processed (don't downgrade) or already failed
+            # (no double-count). Either way the counter is correctly accounted.
+            print(f'Pair {image1Id}/{image2Id} already tracked; skipping failure bump')
+            return
+        print(f'Failed to mark {image1Id}/{image2Id} as failed: {e}')
+        return
+
+    # First-time failure mark — bump pairsProcessed so the gate advances.
+    try:
+        _exec_with_retry(incrementRegistrationProgress, variables={
+            "projectId": project_id,
+            "pairsProcessedDelta": 1,
+            "group": group,
+        })
+    except Exception as e:
+        print(f'Failed to increment RegistrationProgress (on failed path) for {project_id}: {e}')
+
+    # Truncate the error message so a poison-pill traceback doesn't flood logs.
+    print(f'Marked pair {image1Id}/{image2Id} as failed: {error_msg[:300]}')
+
+
 def process(body):
-    s3_client = boto3.client("s3", os.environ["REGION"])
-    key0, key1 = body["keys"]
-    with NamedTemporaryFile(suffix=os.path.splitext(key0)[1]) as file0, \
-         NamedTemporaryFile(suffix=os.path.splitext(key1)[1]) as file1:
-        s3_client.download_file(os.environ["BUCKET"], "images/" + key0, file0.name)
-        s3_client.download_file(os.environ["BUCKET"], "images/" + key1, file1.name)
-        img0 = read_image(file0.name, mode=ImageReadMode.GRAY, apply_exif_orientation=True).to("cuda", dtype=torch.float32) / 255
-        img1 = read_image(file1.name, mode=ImageReadMode.GRAY, apply_exif_orientation=True).to("cuda", dtype=torch.float32) / 255
-    homography_written = alignImages(body, img0, img1)
+    # The full processing path is inside a try block: any exception raised
+    # before _track_processed has a chance to run (S3 download, image decode,
+    # LightGlue crash) routes through _track_failed instead. That keeps the
+    # cleanup gate honest even when a message will end up in the DLQ.
+    try:
+        s3_client = boto3.client("s3", os.environ["REGION"])
+        key0, key1 = body["keys"]
+        with NamedTemporaryFile(suffix=os.path.splitext(key0)[1]) as file0, \
+             NamedTemporaryFile(suffix=os.path.splitext(key1)[1]) as file1:
+            s3_client.download_file(os.environ["BUCKET"], "images/" + key0, file0.name)
+            s3_client.download_file(os.environ["BUCKET"], "images/" + key1, file1.name)
+            img0 = read_image(file0.name, mode=ImageReadMode.GRAY, apply_exif_orientation=True).to("cuda", dtype=torch.float32) / 255
+            img1 = read_image(file1.name, mode=ImageReadMode.GRAY, apply_exif_orientation=True).to("cuda", dtype=torch.float32) / 255
+        homography_written = alignImages(body, img0, img1)
+    except Exception as e:
+        print(f'Processing error for {body.get("image1Id")}/{body.get("image2Id")}: {e}')
+        try:
+            _track_failed(body, str(e))
+        except Exception as track_err:
+            print(f'Also failed to track failure: {track_err}')
+        # Return False so the outer loop doesn't delete the message. SQS will
+        # redeliver it up to maxReceiveCount times; eventually it either
+        # succeeds (→ _track_processed's upgrade path clears failedAt) or
+        # lands in the DLQ (with failedAt set and the counter already bumped).
+        return False
+
     # Tracking is best-effort and idempotent — never propagates exceptions.
     try:
         _track_processed(body, homography_written)
     except Exception as e:
         print(f'Tracking error for {body.get("image1Id")}/{body.get("image2Id")}: {e}')
-    # Always drop the message: either we have a homography or suggestions are
-    # saved and the pair is the user-workflow's problem now.
     return True
 
 
 # Build marker — bumped to force an image rebuild after adding the
 # registration-tracking mutations. Bump again on future container-code changes
 # that the deploy diff might otherwise consider a no-op.
-print("processSQS build: registration-bucketing v2 (composite bucketKey)")
+print("processSQS build: registration-bucketing v4 (inline failure tracking)")
 
 while True:
     response = sqs.receive_message(
