@@ -435,7 +435,17 @@ def _track_processed(body, homography_written):
             if not _is_duplicate_create_error(e):
                 print(f'Failed to create ImageProcessedBy for image {img_id}: {e}')
 
-    if homography_written and camera_pair_key is not None and bucket_index is not None:
+    # skipBucketStat is set by runImageRegistration on re-runs against an
+    # established winner — the lambda picks the winner from existing stats,
+    # emits only that bucket's pair, and tells us not to bump the counter so
+    # the lock-in stays stable instead of drifting on every re-run.
+    skip_bucket_stat = bool(body.get("skipBucketStat"))
+    if (
+        homography_written
+        and camera_pair_key is not None
+        and bucket_index is not None
+        and not skip_bucket_stat
+    ):
         bucket_key = f'{camera_pair_key}#{bucket_index}'
         try:
             _exec_with_retry(incrementRegistrationBucketStat, variables={
@@ -538,7 +548,7 @@ def process(body):
 # Build marker — bumped to force an image rebuild after adding the
 # registration-tracking mutations. Bump again on future container-code changes
 # that the deploy diff might otherwise consider a no-op.
-print("processSQS build: registration-bucketing v4 (inline failure tracking)")
+print("processSQS build: registration-bucketing v5 (skipBucketStat lock-in)")
 
 while True:
     response = sqs.receive_message(

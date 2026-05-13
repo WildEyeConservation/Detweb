@@ -46,6 +46,7 @@ import { launchHomography } from './functions/launchHomography/resource';
 import { reconcileHomographies } from './functions/reconcileHomographies/resource';
 import { registrationBucketCleanup } from './functions/registrationBucketCleanup/resource';
 import { deleteRegistrationNeighbour } from './functions/deleteRegistrationNeighbour/resource';
+import { processRegistrationStream } from './functions/processRegistrationStream/resource';
 import { pretileImage } from './functions/pretileImage/resource';
 import { refreshTiles } from './functions/refreshTiles/resource';
 import { reconcilePretileLaunches } from './functions/reconcilePretileLaunches/resource';
@@ -96,6 +97,7 @@ const backend = defineBackend({
   reconcileHomographies,
   registrationBucketCleanup,
   deleteRegistrationNeighbour,
+  processRegistrationStream,
   pretileImage,
   refreshTiles,
   reconcilePretileLaunches,
@@ -1063,6 +1065,55 @@ backend.monitorModelProgress.addEnvironment(
   'REGISTRATION_BUCKET_CLEANUP_FUNCTION_NAME',
   backend.registrationBucketCleanup.resources.lambda.functionName
 );
+
+// ── Registration progress stream consumer ──
+//
+// Listens to the ImageNeighbour DDB stream and maintains the per-project
+// pendingCount on RegistrationProgress. INSERT +1, MODIFY-with-tracking-
+// transition -1, REMOVE-of-untracked -1. Manual frontend homography saves
+// don't toggle processedAt/failedAt and so don't move the counter.
+//
+// monitorModelProgress reads pendingCount as the load-bearing gate (replacing
+// the old pairsProcessed >= pairsCreated check, which drifted on re-runs).
+
+const imageNeighbourTable = backend.data.resources.tables['ImageNeighbour'];
+
+const registrationStreamPolicy = new Policy(
+  Stack.of(imageNeighbourTable),
+  'RegistrationStreamConsumerPolicy',
+  {
+    statements: [
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: [
+          'dynamodb:DescribeStream',
+          'dynamodb:GetRecords',
+          'dynamodb:GetShardIterator',
+          'dynamodb:ListStreams',
+        ],
+        resources: ['*'],
+      }),
+    ],
+  }
+);
+backend.processRegistrationStream.resources.lambda.role?.attachInlinePolicy(
+  registrationStreamPolicy
+);
+
+const registrationStreamMapping = new EventSourceMapping(
+  Stack.of(imageNeighbourTable),
+  'ImageNeighbourStreamMapping',
+  {
+    target: backend.processRegistrationStream.resources.lambda,
+    eventSourceArn: imageNeighbourTable.tableStreamArn,
+    startingPosition: StartingPosition.LATEST,
+    // Modest batching keeps per-record error isolation predictable. The
+    // handler swallows per-record errors so a poison pill doesn't double-count
+    // its batch on retry.
+    batchSize: 25,
+  }
+);
+registrationStreamMapping.node.addDependency(registrationStreamPolicy);
 
 const generalBucketName = 'surveyscope';
 
