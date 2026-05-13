@@ -278,34 +278,124 @@ def _save_suggestions(body, matches0, matches1, confidences, homography_mask):
         print(f'Failed to persist suggested points for {body["image1Id"]}/{body["image2Id"]}: {e}')
 
 
-def alignImages(body, img0, img1):
-    """Return True iff a homography was written; False if we fell back to suggestions."""
-    matches0, matches1, confidences, scale = _match(img0, img1)
+# Below this raw-match count at 0°, LoFTR is signalling "no visual similarity here" —
+# rotating won't recover that, so skip the extra GPU passes.
+MIN_RAW_MATCHES_FOR_ROTATION_RETRY = 20
 
+
+def _unrotate_points(points, rot_k, original_h, original_w):
+    """Map points from a k*90°-CCW-rotated image back into original coordinates."""
+    if rot_k == 0 or len(points) == 0:
+        return points
+    x = points[:, 0]
+    y = points[:, 1]
+    if rot_k == 1:
+        new_x = original_w - 1 - y
+        new_y = x
+    elif rot_k == 2:
+        new_x = original_w - 1 - x
+        new_y = original_h - 1 - y
+    else:  # rot_k == 3
+        new_x = y
+        new_y = original_h - 1 - x
+    return np.stack([new_x, new_y], axis=-1)
+
+
+def _match_with_rotation(img0, img1, rot_k):
+    """Run LoFTR with img1 pre-rotated by rot_k*90° CCW. Returned matches1 are in img1's original frame."""
+    rotated1 = torch.rot90(img1, rot_k, dims=[-2, -1]) if rot_k else img1
+    matches0, matches1, confidences, scale = _match(img0, rotated1)
+    if rot_k:
+        h, w = img1.shape[1], img1.shape[2]
+        matches1 = _unrotate_points(matches1, rot_k, h, w)
+    return matches0, matches1, confidences, scale
+
+
+def _evaluate_attempt(body, matches0, matches1, confidences, scale):
+    """Mask + epipolar + homography over a candidate match set. Returns None if the
+    inputs degenerate before a homography can be fit (so the rotation loop can
+    move on cleanly)."""
     if "masks" in body:
         matches0, matches1, confidences = _apply_masks(matches0, matches1, confidences, body["masks"])
+    if len(matches0) < 8:
+        return None
 
-    # USAC_MAGSAC filters epipolar outliers before we try to fit a homography.
     _, epipolar_inliers = cv2.findFundamentalMat(matches0, matches1, cv2.USAC_MAGSAC, scale, 0.999, 100000)
+    if epipolar_inliers is None:
+        return None
     epipolar_mask = (epipolar_inliers > 0).squeeze()
     inliers0 = matches0[epipolar_mask, :]
     inliers1 = matches1[epipolar_mask, :]
     inlier_confidences = confidences[epipolar_mask] if confidences is not None else None
+    if len(inliers0) < 4:
+        return None
 
     homography, homography_inliers = cv2.findHomography(inliers0, inliers1, cv2.RHO, scale * 2)
-    homography_mask = homography_inliers.ravel().astype(bool) if homography_inliers is not None else None
+    if homography is None or homography_inliers is None:
+        return None
+    homography_mask = homography_inliers.ravel().astype(bool)
+    return {
+        "homography": homography,
+        "inlier_count": int(homography_mask.sum()),
+        "inliers0": inliers0,
+        "inliers1": inliers1,
+        "inlier_confidences": inlier_confidences,
+        "homography_mask": homography_mask,
+    }
 
-    if sum(homography_inliers) > MIN_HOMOGRAPHY_INLIERS:
-        client.execute(updateNeighbour, variable_values={
-            "image1Id": body["image1Id"],
-            "image2Id": body["image2Id"],
-            "homography": homography.reshape(-1).tolist(),
-        })
-        print(f'Linked {body["image1Id"]}/{body["image2Id"]}')
-        return True
 
-    print(f'Failed to link {body["image1Id"]}/{body["image2Id"]} ({int(sum(homography_inliers))} inliers)')
-    _save_suggestions(body, inliers0, inliers1, inlier_confidences, homography_mask)
+def alignImages(body, img0, img1):
+    """Return True iff a homography was written; False if we fell back to suggestions.
+
+    Tries img1 at four 90° steps to recover pairs from cameras mounted at different
+    orientations (cross-track pairs where one camera saves images sideways). The
+    first attempt that clears MIN_HOMOGRAPHY_INLIERS wins; if none do, the best
+    attempt by inlier count (tiebreak: mean confidence) is persisted as suggestions
+    in original-image coordinates.
+    """
+    pair_label = f'{body["image1Id"]}/{body["image2Id"]}'
+    best_attempt = None
+    best_score = None
+    best_rot = 0
+
+    for rot_k in range(4):
+        matches0, matches1, confidences, scale = _match_with_rotation(img0, img1, rot_k)
+        attempt = _evaluate_attempt(body, matches0, matches1, confidences, scale)
+
+        if attempt is not None:
+            if attempt["inlier_count"] > MIN_HOMOGRAPHY_INLIERS:
+                client.execute(updateNeighbour, variable_values={
+                    "image1Id": body["image1Id"],
+                    "image2Id": body["image2Id"],
+                    "homography": attempt["homography"].reshape(-1).tolist(),
+                })
+                print(f'Linked {pair_label} (rotation {rot_k * 90}°, {attempt["inlier_count"]} inliers)')
+                return True
+
+            mean_conf = (
+                float(attempt["inlier_confidences"].mean())
+                if attempt["inlier_confidences"] is not None and len(attempt["inlier_confidences"]) > 0
+                else 0.0
+            )
+            score = (attempt["inlier_count"], mean_conf)
+            if best_score is None or score > best_score:
+                best_score, best_attempt, best_rot = score, attempt, rot_k
+
+        if rot_k == 0 and len(matches0) < MIN_RAW_MATCHES_FOR_ROTATION_RETRY:
+            print(f'Too few raw matches at 0° ({len(matches0)}) for {pair_label}; skipping rotation retries')
+            break
+
+    if best_attempt is not None:
+        print(f'Failed to link {pair_label} (best: rotation {best_rot * 90}°, {best_attempt["inlier_count"]} inliers)')
+        _save_suggestions(
+            body,
+            best_attempt["inliers0"],
+            best_attempt["inliers1"],
+            best_attempt["inlier_confidences"],
+            best_attempt["homography_mask"],
+        )
+    else:
+        print(f'Failed to link {pair_label} (no usable matches at any rotation)')
     return False
 
 
@@ -548,7 +638,7 @@ def process(body):
 # Build marker — bumped to force an image rebuild after adding the
 # registration-tracking mutations. Bump again on future container-code changes
 # that the deploy diff might otherwise consider a no-op.
-print("processSQS build: registration-bucketing v5 (skipBucketStat lock-in)")
+print("processSQS build: registration-bucketing v6 (rotation-retry on alignImages)")
 
 while True:
     response = sqs.receive_message(
