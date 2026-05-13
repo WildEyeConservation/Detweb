@@ -33,25 +33,77 @@ const deleteImageNeighbour = /* GraphQL */ `
 `;
 
 // Custom atomic upsert on RegistrationProgress. Called once at the end of this
-// lambda to bump pairsCreated by the number of SQS messages we actually queued
-// and to force cleanupState back to 'pending' so the monitor picks this run up.
+// lambda to bump pairsCreated (visibility-only counter) and to stamp
+// lastKickoffAt + force cleanupState back to 'pending' via kickoff:true so
+// the monitor picks this run up. The load-bearing pendingCount is maintained
+// by processRegistrationStream off the ImageNeighbour DDB stream.
 const incrementRegistrationProgress = /* GraphQL */ `
   mutation IncrementRegistrationProgress(
     $projectId: ID!
     $pairsCreatedDelta: Int
-    $pairsProcessedDelta: Int
-    $resetCleanupState: Boolean
+    $kickoff: Boolean
     $group: String
   ) {
     incrementRegistrationProgress(
       projectId: $projectId
       pairsCreatedDelta: $pairsCreatedDelta
-      pairsProcessedDelta: $pairsProcessedDelta
-      resetCleanupState: $resetCleanupState
+      kickoff: $kickoff
       group: $group
     )
   }
 `;
+
+const registrationBucketStatsByProjectId = /* GraphQL */ `
+  query StatsByProject($projectId: ID!, $limit: Int, $nextToken: String) {
+    registrationBucketStatsByProjectId(
+      projectId: $projectId
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        projectId
+        cameraPairKey
+        bucketIndex
+        successCount
+      }
+      nextToken
+    }
+  }
+`;
+
+interface BucketStatRow {
+  projectId: string;
+  cameraPairKey: string;
+  bucketIndex: number;
+  successCount?: number | null;
+}
+
+// Mirrors registrationBucketCleanup's tie-break: prefer bucket 0, then nearer
+// |index|, then lower signed value. Duplicated rather than shared because the
+// two lambdas have no common module today.
+function compareBuckets(a: number, b: number): number {
+  if (a === 0 && b !== 0) return -1;
+  if (b === 0 && a !== 0) return 1;
+  const absDiff = Math.abs(a) - Math.abs(b);
+  if (absDiff !== 0) return absDiff;
+  return a - b;
+}
+
+function pickWinningBucket(stats: BucketStatRow[]): number {
+  let bestIndex = stats[0].bucketIndex;
+  let bestCount = stats[0].successCount ?? 0;
+  for (let i = 1; i < stats.length; i++) {
+    const c = stats[i].successCount ?? 0;
+    if (
+      c > bestCount ||
+      (c === bestCount && compareBuckets(stats[i].bucketIndex, bestIndex) < 0)
+    ) {
+      bestIndex = stats[i].bucketIndex;
+      bestCount = c;
+    }
+  }
+  return bestIndex;
+}
 
 Amplify.configure(
   {
@@ -176,7 +228,10 @@ async function handlePair(
   // When true, skip pairs that already have suggestedPoints1 set (i.e.
   // LightGlue already tried and failed). Used by re-runs that want to fill
   // newly-introduced pairs without re-paying compute on known-failed ones.
-  skipExistingSuggestions?: boolean
+  skipExistingSuggestions?: boolean,
+  // Re-runs against an established winning bucket pass this so the container
+  // skips the RegistrationBucketStat increment — keeps the lock-in stable.
+  skipBucketStat?: boolean
 ) {
   try {
     console.log(`Processing pair ${image1.id} and ${image2.id}`);
@@ -223,9 +278,13 @@ async function handlePair(
       // ("Type mismatch ... Expected: N Actual: NULL"). For same-camera pairs
       // we want the attributes ABSENT, not null, so the row simply isn't
       // projected into the GSI. Build the input conditionally.
+      // projectId is stamped here so processRegistrationStream can update
+      // pendingCount on the per-project RegistrationProgress row without
+      // looking up the parent Image per stream event.
       const input: Record<string, unknown> = {
         image1Id: image1.id,
         image2Id: image2.id,
+        projectId,
         group: organizationId,
       };
       if (cameraPairKey != null && bucketIndex != null) {
@@ -290,6 +349,7 @@ async function handlePair(
         group: organizationId,
         cameraPairKey: cameraPairKey ?? null,
         bucketIndex: bucketIndex ?? null,
+        skipBucketStat: skipBucketStat ? true : undefined,
       }),
     };
   } catch (error: unknown) {
@@ -441,6 +501,10 @@ function canonicalCameraPairKey(camIdX: string, camIdY: string): string {
 // Pairs are stored with image1 = earlier-timestamp to match existing ordering.
 // bucketIndex is always computed from A's perspective (offset on B's track),
 // so the same physical rig-offset lands in the same bucket across all A's.
+// When forcedBucket is set, we already know the winning offset for this pair
+// and emit only that bucket's pair per A image. Container is told (via
+// skipBucketStat on the SQS body) not to bump RegistrationBucketStat, so the
+// established winner stays locked in across re-runs.
 function addNearestBucketTasks(
   imgsACam: MinimalImage[],
   imgsBCam: MinimalImage[],
@@ -452,8 +516,10 @@ function addNearestBucketTasks(
   computeKey: (orig: string) => string,
   projectId: string,
   organizationId?: string,
-  skipExistingSuggestions?: boolean
+  skipExistingSuggestions?: boolean,
+  forcedBucket?: number
 ) {
+  const skipBucketStat = forcedBucket != null;
   const queue = (
     x: MinimalImage,
     y: MinimalImage,
@@ -474,7 +540,8 @@ function addNearestBucketTasks(
         organizationId,
         cameraPairKey,
         bucketIndex,
-        skipExistingSuggestions
+        skipExistingSuggestions,
+        skipBucketStat
       )
     );
   };
@@ -482,6 +549,11 @@ function addNearestBucketTasks(
   for (const a of imgsACam) {
     const nIdx = findNearestIndex(a, imgsBCam, thresholdToB);
     if (nIdx === -1) continue;
+    if (forcedBucket != null) {
+      const idx = nIdx + forcedBucket;
+      if (idx >= 0 && idx < imgsBCam.length) queue(a, imgsBCam[idx], forcedBucket);
+      continue;
+    }
     // bucket -1 (predecessor on B's track) — skipped at the start of B's track
     if (nIdx - 1 >= 0) queue(a, imgsBCam[nIdx - 1], -1);
     // bucket 0 (the nearest itself)
@@ -684,6 +756,33 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
       }
     });
 
+    const existingStats = await fetchAllPages<BucketStatRow, 'registrationBucketStatsByProjectId'>(
+      (nextToken) =>
+        client.graphql({
+          query: registrationBucketStatsByProjectId,
+          variables: { projectId, limit: 1000, nextToken },
+        }) as Promise<GraphQLResult<{ registrationBucketStatsByProjectId: PagedList<BucketStatRow> }>>,
+      'registrationBucketStatsByProjectId'
+    );
+
+    const winnersByPair = new Map<string, number>();
+    {
+      const byPair = new Map<string, BucketStatRow[]>();
+      for (const row of existingStats) {
+        const list = byPair.get(row.cameraPairKey) ?? [];
+        list.push(row);
+        byPair.set(row.cameraPairKey, list);
+      }
+      for (const [pairKey, rows] of byPair) {
+        if (rows.some((r) => (r.successCount ?? 0) > 0)) {
+          winnersByPair.set(pairKey, pickWinningBucket(rows));
+        }
+      }
+    }
+    console.log(
+      `Re-run detection: ${winnersByPair.size} camera pair(s) with established winners`
+    );
+
     // process images from overlapping cameras using 3-nearest bucket pairing.
     // For each image on the lower-id camera (canonically "A"), we create up to
     // three pairs with images on the other camera ("B"): the nearest in time
@@ -709,8 +808,10 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
       // B. It's gated by B's median firing interval (half-interval = the
       // boundary between "synchronous B" and "next-frame B").
       const { thresholdToB } = deriveCrossCameraThresholds(imgsACam, imgsBCam);
+      const forcedBucket = winnersByPair.get(cameraPairKey);
       console.log(
-        `CameraOverlap ${cameraPairKey}: thresholdToB=${thresholdToB.toFixed(3)}s, |A|=${imgsACam.length}, |B|=${imgsBCam.length}`
+        `CameraOverlap ${cameraPairKey}: thresholdToB=${thresholdToB.toFixed(3)}s, |A|=${imgsACam.length}, |B|=${imgsBCam.length}` +
+          (forcedBucket != null ? `, forcedBucket=${forcedBucket}` : '')
       );
 
       addNearestBucketTasks(
@@ -724,7 +825,8 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
         computeKey,
         projectId,
         organizationId,
-        skipExistingSuggestions
+        skipExistingSuggestions,
+        forcedBucket
       );
     });
 
@@ -777,12 +879,12 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
       }
     }
 
-    // Atomically bump pairsCreated by the number of pairs we actually queued
-    // and force cleanupState back to 'pending'. The monitor will flip this to
-    // 'in-progress' once the container has matched pairsProcessed up to
-    // pairsCreated, which then invokes the bucket cleanup. No-op SQS sends
-    // (messages.length === 0) still re-arm cleanupState so a previously-'done'
-    // cycle gets re-evaluated on the next monitor pass.
+    // Atomically bump pairsCreated (observability) and stamp lastKickoffAt +
+    // force cleanupState back to 'pending'. Cleanup gates on pendingCount==0
+    // (maintained by the DDB-stream consumer) AND lastKickoffAt being set, so
+    // we always emit kickoff: true here even if no new SQS messages were sent
+    // — that way a previously-'done' cycle gets re-evaluated on the next
+    // monitor pass once any in-flight pairs settle.
     if (messages.length > 0 || sessionIdSet.size > 0) {
       try {
         await gqlWithRetry(() =>
@@ -791,13 +893,13 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
             variables: {
               projectId,
               pairsCreatedDelta: messages.length,
-              resetCleanupState: true,
+              kickoff: true,
               group: organizationId ?? null,
             },
           }) as Promise<GraphQLResult<any>>
         );
         console.log(
-          `RegistrationProgress: pairsCreated += ${messages.length} for project ${projectId}`
+          `RegistrationProgress: pairsCreated += ${messages.length}, kickoff stamped for project ${projectId}`
         );
       } catch (e) {
         console.error('Failed to increment RegistrationProgress:', e);

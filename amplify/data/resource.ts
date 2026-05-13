@@ -36,6 +36,7 @@ import { launchQCReview } from '../functions/launchQCReview/resource';
 import { launchHomography } from '../functions/launchHomography/resource';
 import { reconcileHomographies } from '../functions/reconcileHomographies/resource';
 import { registrationBucketCleanup } from '../functions/registrationBucketCleanup/resource';
+import { processRegistrationStream } from '../functions/processRegistrationStream/resource';
 import { deleteRegistrationNeighbour } from '../functions/deleteRegistrationNeighbour/resource';
 import { reconcilePretileLaunches } from '../functions/reconcilePretileLaunches/resource';
 import { extendTileLifecycles } from '../functions/extendTileLifecycles/resource';
@@ -440,6 +441,7 @@ const schema = a
         image1: a.belongsTo('Image', 'image1Id'),
         image2Id: a.id().required(),
         image2: a.belongsTo('Image', 'image2Id'),
+        projectId: a.id(),
         homography: a.float().array(),
         homographySource: a.string(),
         skipped: a.boolean().default(false),
@@ -463,14 +465,14 @@ const schema = a
           .sortKeys(['bucketIndex'])
           .queryField('imageNeighboursByCameraPairAndBucket'),
       ]),
-    // One row per project. Tracks registration model completion and serves as
-    // the trigger gate for bucket cleanup. Updated atomically via custom
-    // mutations to support concurrent container writes.
     RegistrationProgress: a
       .model({
         projectId: a.id().required(),
         pairsCreated: a.integer().default(0),
         pairsProcessed: a.integer().default(0),
+        pendingCount: a.integer().default(0),
+        lastKickoffAt: a.datetime(),
+        lastChangeAt: a.datetime(),
         // 'pending' (default) | 'in-progress' | 'done'
         cleanupState: a.string().default('pending'),
         group: a.string(),
@@ -1228,6 +1230,11 @@ const schema = a
         projectId: a.id().required(),
         pairsCreatedDelta: a.integer(),
         pairsProcessedDelta: a.integer(),
+        // Stream-consumer-driven counter. ±1 per ImageNeighbour transition.
+        pendingCountDelta: a.integer(),
+        // Set by runImageRegistration on kickoff to stamp lastKickoffAt and
+        // force cleanupState back to 'pending' in one atomic update.
+        kickoff: a.boolean(),
         resetCleanupState: a.boolean(),
         group: a.string(),
       })
@@ -1307,6 +1314,7 @@ const schema = a
     allow.resource(launchHomography),
     allow.resource(reconcileHomographies),
     allow.resource(registrationBucketCleanup),
+    allow.resource(processRegistrationStream),
     allow.resource(deleteRegistrationNeighbour),
     allow.resource(reconcilePretileLaunches),
     allow.resource(extendTileLifecycles),

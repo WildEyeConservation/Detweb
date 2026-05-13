@@ -10,6 +10,8 @@ export function request(ctx) {
     projectId,
     pairsCreatedDelta,
     pairsProcessedDelta,
+    pendingCountDelta,
+    kickoff,
     resetCleanupState,
     group,
   } = ctx.args;
@@ -44,10 +46,19 @@ export function request(ctx) {
     expressionValues[':processed'] = pairsProcessedDelta;
   }
 
-  // resetCleanupState forces 'pending' even on an existing row (used at the
-  // start of a new runImageRegistration cycle). Otherwise initialise to
-  // 'pending' only when the row is brand new.
-  if (resetCleanupState) {
+  if (pendingCountDelta != null) {
+    addParts.push('pendingCount :pendingDelta');
+    expressionValues[':pendingDelta'] = pendingCountDelta;
+    expressionNames['#lastChangeAt'] = 'lastChangeAt';
+    setParts.push('#lastChangeAt = :now');
+  }
+
+  if (kickoff) {
+    expressionNames['#lastKickoffAt'] = 'lastKickoffAt';
+    setParts.push('#lastKickoffAt = :now');
+    setParts.push('#cs = :pending');
+    expressionValues[':pending'] = 'pending';
+  } else if (resetCleanupState) {
     setParts.push('#cs = :pending');
     expressionValues[':pending'] = 'pending';
   } else {

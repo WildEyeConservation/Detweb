@@ -144,11 +144,6 @@ const createImageProcessedBy = /* GraphQL */ `mutation CreateImageProcessedBy(
 }
 `;
 
-// Registration completion polling: list RegistrationProgress rows that have
-// been queued by runImageRegistration but not yet handed off to the cleanup
-// lambda. The conditional update is the race guard between concurrent monitor
-// runs (we deploy this on a 30m cron so concurrency is unlikely, but the
-// invariant is cheap to preserve).
 const registrationProgressByCleanupState = /* GraphQL */ `
   query RegistrationProgressByCleanupState(
     $cleanupState: String!
@@ -164,6 +159,9 @@ const registrationProgressByCleanupState = /* GraphQL */ `
         projectId
         pairsCreated
         pairsProcessed
+        pendingCount
+        lastKickoffAt
+        lastChangeAt
         cleanupState
         group
       }
@@ -192,9 +190,14 @@ interface RegistrationProgressRow {
   projectId: string;
   pairsCreated?: number | null;
   pairsProcessed?: number | null;
+  pendingCount?: number | null;
+  lastKickoffAt?: string | null;
+  lastChangeAt?: string | null;
   cleanupState?: string | null;
   group?: string | null;
 }
+
+const STALE_PROGRESS_MS = 60 * 60 * 1000;
 
 // Helper function to handle pagination for GraphQL queries
 async function fetchAllPages<T, K extends string>(
@@ -529,15 +532,49 @@ export const handler: Handler = async (event, context) => {
         },
       });
 
+      const now = Date.now();
       for (const row of pendingProgress) {
+        const pendingCount = row.pendingCount ?? 0;
         const pairsCreated = row.pairsCreated ?? 0;
         const pairsProcessed = row.pairsProcessed ?? 0;
-        if (pairsCreated <= 0) continue;
-        if (pairsProcessed < pairsCreated) {
+        const lastKickoffMs = row.lastKickoffAt
+          ? Date.parse(row.lastKickoffAt)
+          : NaN;
+        const lastChangeMs = row.lastChangeAt
+          ? Date.parse(row.lastChangeAt)
+          : NaN;
+
+        // Don't fire on a project that has never been kicked off (pendingCount
+        // would also be 0, but the lastKickoffAt check is the explicit guard).
+        if (!Number.isFinite(lastKickoffMs)) {
           console.log(
-            `Project ${row.projectId}: ${pairsProcessed}/${pairsCreated} pairs processed; not ready`
+            `Project ${row.projectId}: no lastKickoffAt; skipping`
           );
           continue;
+        }
+
+        const idleMs = Number.isFinite(lastChangeMs) ? now - lastChangeMs : Infinity;
+        const sinceKickoffMs = now - lastKickoffMs;
+        const isReady = pendingCount === 0;
+        const isStale =
+          pendingCount > 0 &&
+          idleMs >= STALE_PROGRESS_MS &&
+          sinceKickoffMs >= STALE_PROGRESS_MS;
+
+        if (!isReady && !isStale) {
+          console.log(
+            `Project ${row.projectId}: pendingCount=${pendingCount}, ` +
+              `pairsProcessed=${pairsProcessed}/${pairsCreated}; not ready ` +
+              `(idle ${Math.round(idleMs / 60000)}m, since kickoff ${Math.round(sinceKickoffMs / 60000)}m)`
+          );
+          continue;
+        }
+        if (isStale) {
+          console.warn(
+            `Project ${row.projectId}: STALE — pendingCount=${pendingCount} ` +
+              `but no progress for ${Math.round(idleMs / 60000)}m and last kickoff ` +
+              `${Math.round(sinceKickoffMs / 60000)}m ago. Firing cleanup anyway.`
+          );
         }
 
         // Race-safe flip pending -> in-progress. Any concurrent monitor run or
