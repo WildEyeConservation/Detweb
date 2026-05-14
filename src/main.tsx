@@ -23,6 +23,7 @@ import Testing from './Testing/Testing';
 import { Registration } from './Registration';
 import { IndividualIdHarness } from './individual-id';
 import HomographyTask from './homography/HomographyTask';
+import HomographyViewer from './homography/HomographyViewer';
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import Admin from './Admin';
@@ -92,6 +93,10 @@ const router = createBrowserRouter([
       {
         path: 'image-neighbour-viewer',
         element: <ImageNeighbourViewer />,
+      },
+      {
+        path: 'homography-viewer',
+        element: <HomographyViewer />,
       },
       {
         path: 'surveys/:surveyId',
