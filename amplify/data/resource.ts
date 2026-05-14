@@ -87,17 +87,11 @@ const schema = a
         cameraOverlaps: a.hasMany('CameraOverlap', 'projectId'),
         shapefileExclusions: a.hasMany('ShapefileExclusions', 'projectId'),
         adminActionLogs: a.hasMany('AdminActionLog', 'projectId'),
-        // Global tiled location set ID for the project (no belongsTo to avoid bidirectional requirement)
         tiledLocationSetId: a.id(),
-        // Points at an in-flight pretile launch manifest in the outputs bucket.
-        // Reconciler clears this once every image in the manifest has Image.tiledAt set.
         pretileManifestS3Key: a.string(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')]),
-    // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
-    // allow.group('orgadmin').to(['create', 'update', 'delete', 'read']),
-    // allow.custom()]),
     Category: a
       .model({
         projectId: a.id().required(),
@@ -116,7 +110,6 @@ const schema = a
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
-      // .authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
         index('annotationSetId').queryField('categoriesByAnnotationSetId'),
         index('projectId').queryField('categoriesByProjectId'),
@@ -151,14 +144,8 @@ const schema = a
         transect: a.belongsTo('Transect', 'transectId'),
         processedBy: a.hasMany('ImageProcessedBy', 'imageId'),
         group: a.string(),
-        // 64-bit perceptual hash (blockhash) of the image, as 16 hex chars.
-        // Used for stricter dedup beyond originalPath matching.
         phash: a.string(),
-        // Stamped by pretileImage worker when the slippy-map pyramid is fully generated.
         tiledAt: a.datetime(),
-        // sets: [ImageSet] @manyToMany(relationName: "ImageSetMembership")
-        //   leftNeighbours: [ImageNeighbour] @hasMany(indexName:"bySecondNeighbour",fields:["key"])
-        //   rightNeighbours: [ImageNeighbour] @hasMany(indexName:"byFirstNeighbour",fields:["key"])
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
@@ -167,7 +154,6 @@ const schema = a
           .sortKeys(['transectId'])
           .queryField('imagesByProjectIdAndTransectId'),
       ]),
-    // .authorization(allow => [allow.groupDefinedIn('projectId')]),
     ImageFile: a
       .model({
         projectId: a.id().required(),
@@ -178,20 +164,17 @@ const schema = a
         image: a.belongsTo('Image', 'imageId'),
         type: a.string().required(),
         group: a.string(),
-        // Add this line to define the reverse relationship
-        // .authorization(allow => [allow.groupDefinedIn('projectId')])
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('imageId').queryField('imagesByimageId'),
         index('path').queryField('imagesByPath'),
       ]),
-    // Tracks which models have processed each image
     ImageProcessedBy: a
       .model({
         imageId: a.id().required(),
         image: a.belongsTo('Image', 'imageId'),
-        source: a.string().required(), // e.g., 'scoutbotv3', 'mad-v2', 'pointfinder'
+        source: a.string().required(),
         projectId: a.id().required(),
         group: a.string(),
       })
@@ -226,7 +209,6 @@ const schema = a
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
-      // .authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('annotationSetsByProjectId'),
       ]),
@@ -309,8 +291,6 @@ const schema = a
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
-      // .authorization(allow => [allow.groupDefinedIn('projectId')])
-
       .secondaryIndexes((index) => [
         index('imageId')
           .sortKeys(['confidence'])
@@ -362,7 +342,6 @@ const schema = a
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
-      // .authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('locationSetsByProjectId'),
       ]),
@@ -397,7 +376,6 @@ const schema = a
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
-      //.authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('imageSetsByProjectId'),
       ]),
@@ -418,23 +396,7 @@ const schema = a
       .secondaryIndexes((index) => [
         index('projectId').queryField('userProjectMembershipsByProjectId'),
         index('userId').queryField('userProjectMembershipsByUserId'),
-        // index('queueId')  .queryField('userProjectMembershipsByQueueId')
       ]),
-    //   type ImageNeighbour
-    //   @model
-    //   @auth(
-    //   rules: [
-    //     {allow: public, provider: iam},
-    //     {allow: private, provider: iam},
-    //     { allow: groups, groups: ["admin"] }
-    //   ])
-    // {
-    //  image1key: String! @index(name:"byFirstNeighbour")
-    //  image1: Image @belongsTo (fields: ["image1key"])
-    //  image2key: String! @index(name:"bySecondNeighbour")
-    //  image2: Image @belongsTo (fields: ["image2key"])
-    //  homography: [Float]
-    // }
     ImageNeighbour: a
       .model({
         image1Id: a.id().required(),
@@ -459,8 +421,7 @@ const schema = a
       .secondaryIndexes((index) => [
         index('image1Id').queryField('imageNeighboursByImage1key'),
         index('image2Id').queryField('imageNeighboursByImage2key'),
-        // Cleanup queries the losing-bucket rows by (cameraPairKey, bucketIndex).
-        // Same-camera rows (null cameraPairKey) are not projected into the GSI.
+        // Same-camera rows (null cameraPairKey) are intentionally not projected.
         index('cameraPairKey')
           .sortKeys(['bucketIndex'])
           .queryField('imageNeighboursByCameraPairAndBucket'),
@@ -473,7 +434,7 @@ const schema = a
         pendingCount: a.integer().default(0),
         lastKickoffAt: a.datetime(),
         lastChangeAt: a.datetime(),
-        // 'pending' (default) | 'in-progress' | 'done'
+        // 'pending' | 'in-progress' | 'done'
         cleanupState: a.string().default('pending'),
         group: a.string(),
       })
@@ -482,17 +443,9 @@ const schema = a
       .secondaryIndexes((index) => [
         index('cleanupState').queryField('registrationProgressByCleanupState'),
       ]),
-    // One row per (project, cameraPair, bucket). The lightglue container ADDs
-    // 1 to successCount on every successful homography. The cleanup lambda
-    // reads these rows to pick the winning bucket per camera pair.
-    //
-    // bucketKey is the canonical composite "<cameraPairKey>#<bucketIndex>".
-    // We carry it as an explicit field rather than using a 3-part identifier
-    // because DynamoDB only supports 2-attribute primary keys; a synthetic
-    // sort key generated by Amplify makes custom JS resolvers hard to write
-    // correctly. cameraPairKey and bucketIndex are kept as denormalised
-    // attributes so the cleanup lambda can group and pick winners without
-    // string-splitting.
+    // bucketKey is the composite "<cameraPairKey>#<bucketIndex>" — carried as
+    // an explicit field (not a 3-part identifier) because DynamoDB primary keys
+    // are 2-attribute max and Amplify's synthetic sort key breaks custom JS resolvers.
     RegistrationBucketStat: a
       .model({
         projectId: a.id().required(),
@@ -524,27 +477,18 @@ const schema = a
         tag: a.string(),
         requeueAt: a.string(),
         updatedAt: a.string(),
-
-        // Track what was launched (for requeue detection)
         annotationSetId: a.id(),
         locationSetId: a.id(),
-        confidenceThreshold: a.float(),    // Lower confidence threshold (keep in mind for when users are queuing under upper threshold of 1)
-
-        // Progress tracking
+        confidenceThreshold: a.float(),
         launchedCount: a.integer(),
         observedCount: a.integer().default(0),
-
-        // S3 manifest for efficient lookup
         locationManifestS3Key: a.string(),
-
-        // Empty detection and requeue tracking
         emptyQueueTimestamp: a.string(),
         requeuesCompleted: a.integer().default(0),
         lastObservationAt: a.string(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
-      //.authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('queuesByProjectId'),
       ]),
@@ -772,7 +716,6 @@ const schema = a
       .secondaryIndexes((index) => [
         index('surveyId').queryField('jollyResultsBySurveyId'),
       ]),
-    // Lambda-only: users will manage groups through dedicated authorized lambdas
     addUserToGroup: a
       .mutation()
       .arguments({
@@ -799,7 +742,6 @@ const schema = a
       .authorization((allow) => [allow.group('sysadmin')])
       .handler(a.handler.function(createGroup))
       .returns(a.json()),
-    //TODO: own validation
     listUsers: a
       .query()
       .arguments({
@@ -822,7 +764,6 @@ const schema = a
       .authorization((allow) => [allow.group('sysadmin')])
       .handler(a.handler.function(listGroupsForUser))
       .returns(a.json()),
-    // Organization management mutations
     createOrganizationMutation: a
       .mutation()
       .arguments({
@@ -877,8 +818,6 @@ const schema = a
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(deleteQueue))
       .returns(a.json()),
-    // Message publish mutation
-    // Message type that's used for this PubSub sample
     Message: a.customType({
       content: a.string().required(),
       channelName: a.string().required(),
@@ -896,62 +835,14 @@ const schema = a
       ]),
     receive: a
       .subscription()
-      // subscribes to the 'publish' mutation
       .for(a.ref('publish'))
       .arguments({ namePrefix: a.string() })
-      // subscription handler to set custom filters
       .handler(
         a.handler.custom({
           entry: './receive.js',
         })
       )
       .authorization((allow) => [allow.authenticated()]),
-    // Legacy function
-    // processImages: a
-    //   .mutation()
-    //   .arguments({
-    //     s3key: a.string().required(),
-    //     model: a.string().required(),
-    //     threshold: a.float(),
-    //   })
-    //   .handler(a.handler.function(processImages))
-    //   .returns(a.string())
-    //   .authorization((allow) => [allow.authenticated()]),
-    // CountType: a.customType({
-    //   count: a.integer().required(),
-    // }),
-    // Legacy function
-    // getImageCounts: a
-    //   .query()
-    //   .arguments({
-    //     imageSetId: a.string().required(),
-    //     nextToken: a.string(),
-    //   })
-    //   .returns(a.customType({ count: a.integer(), nextToken: a.string() }))
-    //   .authorization((allow) => [allow.authenticated()])
-    //   .handler(
-    //     a.handler.custom({
-    //       entry: './getImageCounts.js',
-    //       dataSource: a.ref('ImageSetMembership'),
-    //     })
-    //   ),
-    //.authorization(allow => [allow.authenticated()])
-
-    // registerImages: a
-    //   .mutation()
-    //   .arguments({
-    //     s3keys: a.string().array().array().required(),
-    //     model: a.string().required(),
-    //     threshold: a.float(),
-    //   }),
-    // decimateImageSets: a
-    //   .mutation()
-    //   .arguments({
-    //     imageSetIds: a.string().array().required(),
-    //     type: a.string().required(),
-    //     level: a.float(),
-    //   })
-
     Organization: a
       .model({
         name: a.string().required(),
@@ -992,7 +883,6 @@ const schema = a
       .secondaryIndexes((index) => [
         index('username').queryField('organizationInvitesByUsername'),
       ]),
-    // Handle registration through WildEye website for now
     OrganizationRegistration: a
       .model({
         organizationName: a.string().required(),
@@ -1013,7 +903,6 @@ const schema = a
         group: a.string(),
       })
       .identifier(['surveyId', 'annotationSetId'])
-      // TODO: Rethink sharing permissions
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn("group")]),
     JollyResultsMembership: a
       .model({
@@ -1025,7 +914,6 @@ const schema = a
         group: a.string(),
       })
       .identifier(['surveyId', 'annotationSetId', 'userId'])
-      // TODO: Rethink sharing permissions
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn("group")])
       .secondaryIndexes((index) => [
         index('surveyId')
@@ -1060,7 +948,6 @@ const schema = a
         index('projectId').queryField('adminActionLogsByProjectId'),
         index('userId').queryField('adminActionLogsByUserId'),
       ]),
-    // Tiling Task - tracks the whole launch process for tiled tasks
     TilingTask: a
       .model({
         projectId: a.id().required(),
@@ -1069,12 +956,10 @@ const schema = a
         annotationSetId: a.id().required(),
         // 'pending' | 'processing' | 'completed' | 'failed'
         status: a.string().default('pending'),
-        // JSON string with queue options and other launch parameters
         launchConfig: a.string().required(),
         totalBatches: a.integer().default(0),
         completedBatches: a.integer().default(0),
         totalLocations: a.integer().default(0),
-        // S3 key for the merged output file with all created location IDs
         outputS3Key: a.string(),
         errorMessage: a.string(),
         batches: a.hasMany('TilingBatch', 'tilingTaskId'),
@@ -1085,7 +970,6 @@ const schema = a
         index('status').queryField('tilingTasksByStatus'),
         index('projectId').queryField('tilingTasksByProjectId'),
       ]),
-    // Tiling Batch - tracks each batch's progress
     TilingBatch: a
       .model({
         tilingTaskId: a.id().required(),
@@ -1093,9 +977,7 @@ const schema = a
         batchIndex: a.integer().required(),
         // 'pending' | 'processing' | 'completed' | 'failed'
         status: a.string().default('pending'),
-        // S3 key for input file containing location data to create
         inputS3Key: a.string().required(),
-        // S3 key for output file containing created location IDs
         outputS3Key: a.string(),
         locationCount: a.integer().default(0),
         createdCount: a.integer().default(0),
@@ -1120,10 +1002,8 @@ const schema = a
       .mutation()
       .arguments({
         projectId: a.string().required(),
-        //JSON stringified metadata
         metadata: a.string().required(),
         queueUrl: a.string().required(),
-        // Optional: batch of images to process (each as JSON string with id, originalPath, timestamp, cameraId)
         images: a.string().array(),
       })
       .returns(a.json())
@@ -1221,19 +1101,13 @@ const schema = a
         dataSource: a.ref('Queue'),
       }))
       .authorization((allow) => [allow.authenticated()]),
-    // Atomic upsert + ADD on RegistrationProgress. All deltas are optional so
-    // the same mutation handles "kickoff" (pairsCreatedDelta + resetCleanupState)
-    // and "per-pair processed" (pairsProcessedDelta) without separate roundtrips.
     incrementRegistrationProgress: a
       .mutation()
       .arguments({
         projectId: a.id().required(),
         pairsCreatedDelta: a.integer(),
         pairsProcessedDelta: a.integer(),
-        // Stream-consumer-driven counter. ±1 per ImageNeighbour transition.
         pendingCountDelta: a.integer(),
-        // Set by runImageRegistration on kickoff to stamp lastKickoffAt and
-        // force cleanupState back to 'pending' in one atomic update.
         kickoff: a.boolean(),
         resetCleanupState: a.boolean(),
         group: a.string(),
@@ -1244,10 +1118,6 @@ const schema = a
         dataSource: a.ref('RegistrationProgress'),
       }))
       .authorization((allow) => [allow.authenticated()]),
-    // Atomic upsert + ADD 1 to RegistrationBucketStat.successCount. Called by
-    // the lightglue container on every successful homography for a cross-camera
-    // pair (same-camera pairs have no bucket and don't call this). bucketKey is
-    // the composite "<cameraPairKey>#<bucketIndex>" — the table's sort key.
     incrementRegistrationBucketStat: a
       .mutation()
       .arguments({
@@ -1263,7 +1133,6 @@ const schema = a
         dataSource: a.ref('RegistrationBucketStat'),
       }))
       .authorization((allow) => [allow.authenticated()]),
-    //TODO: Rethink sharing completely
     getJwtSecret: a
       .mutation()
       .returns(a.string())
@@ -1289,7 +1158,7 @@ const schema = a
       .returns(a.string().array())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(generateTile)),
-    // Dummy table used to force full deployment instead of hotswapping resources
+    // Forces full deployment instead of hotswapping resources.
     fixDeploymentTable: a
       .model({
         name: a.string().required(),
@@ -1336,13 +1205,10 @@ const schema = a
     allow.resource(updateOrganizationMemberAdmin),
     allow.resource(deleteQueue),
     allow.resource(updateActiveOrganizations),
-    // allow.resource(consolidateUserStats),
   ]);
 
 export type ServerSchema = typeof schema;
-// Do NOT re-export client Schema here; backend build shouldn't depend on generated frontend types.
 
-// Minimal, explicit server handler types to avoid indexing into ModelSchema
 interface LambdaContext {
   awsRequestId?: string;
   callbackWaitsForEmptyEventLoop: boolean;
@@ -1363,16 +1229,13 @@ type MutationHandler<Args, Result = unknown> = (
   context: LambdaContext
 ) => Promise<Result>;
 
-// User management -> shouldn't be able to call this from client
 export type AddUserToGroupHandler = MutationHandler<{ userId: string; groupName: string }>;
 export type RemoveUserFromGroupHandler = MutationHandler<{ userId: string; groupName: string }>;
 export type CreateGroupHandler = MutationHandler<{ groupName: string }>;
 
-// Rethink user listing
 export type ListUsersHandler = MutationHandler<{ nextToken?: string | null }>;
 export type ListGroupsForUserHandler = MutationHandler<{ userId: string; nextToken?: string | null }>;
 
-// Lambdas authorize user requests based on user groups (event.identity.groups)
 export type DeleteProjectInFullHandler = MutationHandler<{ projectId: string }>;
 export type GenerateSurveyResultsHandler = MutationHandler<{
   surveyId: string;
@@ -1383,17 +1246,15 @@ export type LaunchAnnotationSetHandler = MutationHandler<{ request: string }>;
 export type LaunchFalseNegativesHandler = MutationHandler<{ request: string }>;
 export type LaunchQCReviewHandler = MutationHandler<{ request: string }>;
 export type LaunchHomographyHandler = MutationHandler<{ request: string }>;
-export type ProcessImagesHandler = MutationHandler<{ s3key: string; model: string; threshold?: number | null }>; //legacy
+export type ProcessImagesHandler = MutationHandler<{ s3key: string; model: string; threshold?: number | null }>;
 export type UpdateProjectMembershipsHandler = MutationHandler<{ projectId: string }>;
 export type RunImageRegistrationHandler = MutationHandler<{ projectId: string; metadata: string; queueUrl: string; images?: string[] | null }>;
 export type RunScoutbotHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string }>;
 export type RunMadDetectorHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string }>;
 export type RunHeatmapperHandler = MutationHandler<{ projectId: string; images?: string[] | null }>;
 
-// TODO: Rethink sharing completely
 export type GetJwtSecretHandler = MutationHandler<Record<string, never>, string>;
 
-// Organization management
 export type CreateOrganizationHandler = MutationHandler<{ name: string; description?: string | null; adminEmail: string; registrationId?: string | null }>;
 export type InviteUserToOrganizationHandler = MutationHandler<{ organizationId: string; email: string }>;
 export type RespondToInviteHandler = MutationHandler<{ inviteId: string; accept: boolean }>;

@@ -7,8 +7,8 @@ import {
   userProjectMembershipsByProjectId,
   imagesByProjectId,
 } from './graphql/queries';
-// Inline minimal mutations – return key fields + `group` to avoid nested-resolver
-// auth failures while still enabling subscription delivery via groupDefinedIn('group').
+// Return key fields + `group` to avoid nested-resolver auth failures while
+// keeping subscription delivery via groupDefinedIn('group') working.
 const updateProject = /* GraphQL */ `
   mutation UpdateProject($input: UpdateProjectInput!) {
     updateProject(input: $input) { id group }
@@ -98,7 +98,6 @@ interface ImageWithDetails {
 }
 
 
-// Custom query to fetch images with nested locations and processedBy records
 const imagesByProjectIdWithDetails = /* GraphQL */ `query ImagesByProjectIdWithDetails(
   $projectId: ID!
   $limit: Int
@@ -131,7 +130,6 @@ const imagesByProjectIdWithDetails = /* GraphQL */ `query ImagesByProjectIdWithD
 }
 `;
 
-// Mutation to create ImageProcessedBy record
 const createImageProcessedBy = /* GraphQL */ `mutation CreateImageProcessedBy(
   $input: CreateImageProcessedByInput!
 ) {
@@ -216,7 +214,6 @@ async function fetchAllPages<T, K extends string>(
     allItems.push(...(items as T[]));
     nextToken = response.data?.[queryName]?.nextToken ?? undefined;
 
-    // Log progress at 1000 intervals if callback provided
     if (onProgress && allItems.length % 1000 === 0) {
       onProgress(allItems.length);
     }
@@ -233,8 +230,6 @@ async function updateProgress(
   projectImages: Image[],
   source: string
 ) {
-  // Optimized approach: Fetch images with nested locations and processedBy in selection set
-  // This avoids fetching all locations separately and just checks if at least one exists per image
   console.log(`Fetching images with processing status for project ${project.id} (source: ${source})`);
 
   const imagesWithDetails = await fetchAllPages<ImageWithDetails, 'imagesByProjectId'>(
@@ -259,15 +254,12 @@ async function updateProgress(
   const processedImageIds = new Set<string>();
   const imagesToUpdateProcessedBy: ImageWithDetails[] = [];
 
-  // Check each image for processing status
   for (const image of imagesWithDetails) {
     const hasLocation = (image.locations?.items?.length ?? 0) > 0;
     const hasProcessedByRecord = (image.processedBy?.items?.length ?? 0) > 0;
 
     if (hasLocation || hasProcessedByRecord) {
       processedImageIds.add(image.id);
-
-      // If it has a location but no processedBy record, we need to create one
       if (hasLocation && !hasProcessedByRecord) {
         imagesToUpdateProcessedBy.push(image);
       }
@@ -277,7 +269,6 @@ async function updateProgress(
   console.log(`Processed images: ${processedImageIds.size}/${imagesWithDetails.length}`);
   console.log(`Images needing processedBy record update: ${imagesToUpdateProcessedBy.length}`);
 
-  // Create processedBy records for images that have locations but no record
   if (imagesToUpdateProcessedBy.length > 0) {
     const BATCH_SIZE = 50;
     for (let i = 0; i < imagesToUpdateProcessedBy.length; i += BATCH_SIZE) {
@@ -307,11 +298,9 @@ async function updateProgress(
     }
   }
 
-  // Check if all images are processed
   const allImagesProcessed = imagesWithDetails.length > 0 &&
     imagesWithDetails.every((image) => processedImageIds.has(image.id));
 
-  // Update project status if all images are processed
   if (allImagesProcessed) {
     console.log(
       `All images processed for project ${project.id}, updating status to "active"`
@@ -326,7 +315,6 @@ async function updateProgress(
       },
     });
 
-    // Get all UserProjectMembership records for the project using indexed query
     const memberships = await fetchAllPages<
       UserProjectMembership,
       'userProjectMembershipsByProjectId'
@@ -347,7 +335,6 @@ async function updateProgress(
       'userProjectMembershipsByProjectId'
     );
 
-    // Dummy update the project memberships
     for (const membership of memberships) {
       await client.graphql({
         query: updateUserProjectMembership,
@@ -372,7 +359,6 @@ async function updateProgress(
 export const handler: Handler = async (event, context) => {
   console.log('Starting monitorModelProgress function execution');
   try {
-    // 1. List all projects with status "processing"
     console.log('Fetching projects with status "processing"');
     const processingProjects = await fetchAllPages<Project, 'listProjects'>(
       (nextToken) =>
@@ -395,7 +381,6 @@ export const handler: Handler = async (event, context) => {
       `Found ${processingProjects.length} projects in processing state`
     );
 
-    // Process each project
     for (const project of processingProjects) {
       console.log(`Processing project ${project.name} (${project.id})`);
 
@@ -405,7 +390,6 @@ export const handler: Handler = async (event, context) => {
         : [];
       const isLegacyProject = tags.includes('legacy');
 
-      // 2.1 List all images for the project
       console.log(`Fetching images for project ${project.id}`);
       const projectImages = await fetchAllPages<Image, 'imagesByProjectId'>(
         (nextToken) =>
@@ -506,10 +490,8 @@ export const handler: Handler = async (event, context) => {
       }
     }
 
-    // Registration model completion + bucket cleanup trigger. Independent of
-    // project.status because registration runs alongside whatever other model
-    // the user picked at upload time — we just need to fire cleanup once the
-    // container has matched pairsProcessed up to pairsCreated.
+    // Decoupled from project.status: registration runs alongside whatever
+    // other model the user picked at upload time.
     console.log('Polling RegistrationProgress for projects ready for bucket cleanup');
     const pendingProgress = await fetchAllPages<RegistrationProgressRow, 'registrationProgressByCleanupState'>(
       (nextToken) =>
@@ -544,8 +526,7 @@ export const handler: Handler = async (event, context) => {
           ? Date.parse(row.lastChangeAt)
           : NaN;
 
-        // Don't fire on a project that has never been kicked off (pendingCount
-        // would also be 0, but the lastKickoffAt check is the explicit guard).
+        // Explicit guard against firing on a never-kicked-off project.
         if (!Number.isFinite(lastKickoffMs)) {
           console.log(
             `Project ${row.projectId}: no lastKickoffAt; skipping`
@@ -577,9 +558,8 @@ export const handler: Handler = async (event, context) => {
           );
         }
 
-        // Race-safe flip pending -> in-progress. Any concurrent monitor run or
-        // a fresh runImageRegistration that just reset state to 'pending' loses
-        // this CAS (condition fails) and we skip.
+        // CAS pending -> in-progress. Concurrent monitor runs or a fresh
+        // runImageRegistration kickoff lose the race and are skipped here.
         try {
           await client.graphql({
             query: updateRegistrationProgressStatus,
@@ -611,7 +591,7 @@ export const handler: Handler = async (event, context) => {
             `Failed to invoke registrationBucketCleanup for ${row.projectId}, rolling back state:`,
             invokeErr
           );
-          // Best-effort rollback so the next monitor pass retries this project.
+          // Roll back so the next monitor pass retries.
           try {
             await client.graphql({
               query: updateRegistrationProgressStatus,

@@ -1,19 +1,12 @@
 import { util } from '@aws-appsync/utils';
 
-// Atomic upsert + ADD 1 on RegistrationBucketStat.successCount, keyed by
-// (projectId, bucketKey). cameraPairKey and bucketIndex are denormalised
-// attributes stamped on first write so the cleanup lambda can group/sort
-// without parsing the composite key. createdAt / updatedAt / __typename
-// stamped explicitly because we're bypassing the model's auto-generated
-// mutations.
+// Bypasses model-generated mutations, so createdAt/updatedAt/__typename
+// must be stamped explicitly here.
 export function request(ctx) {
   const { projectId, bucketKey, cameraPairKey, bucketIndex, group } = ctx.args;
 
-  // Key attributes (projectId, bucketKey) must NOT appear in the
-  // UpdateExpression — DynamoDB writes them from the Key parameter on upsert
-  // and rejects any SET against a key attribute. cameraPairKey and bucketIndex
-  // are non-key attributes, so they DO get set here (only on first write,
-  // via if_not_exists).
+  // Key attributes (projectId, bucketKey) must not appear in UpdateExpression —
+  // DynamoDB rejects SET against a key attribute on upsert.
   const setParts = [
     '#cameraPairKey = if_not_exists(#cameraPairKey, :cameraPairKey)',
     '#bucketIndex = if_not_exists(#bucketIndex, :bucketIndex)',
