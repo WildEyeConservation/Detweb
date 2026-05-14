@@ -73,10 +73,7 @@ const registrationBucketStatsByProjectId = /* GraphQL */ `
   }
 `;
 
-// Composite-key query: partition by cameraPairKey, sort by bucketIndex (= eq).
-// Identifies the cross-camera neighbour rows in a losing bucket so we can
-// queue them for deletion. Same-camera rows have null cameraPairKey and are
-// not projected into this GSI.
+// Same-camera rows have null cameraPairKey and aren't projected into this GSI.
 const imageNeighboursByCameraPairAndBucket = /* GraphQL */ `
   query NeighboursByPairAndBucket(
     $cameraPairKey: String!
@@ -132,8 +129,7 @@ async function fetchAllPages<T, K extends string>(
   return allItems;
 }
 
-// Tie-break: prefer bucket 0 (the truly-synchronous hypothesis), then the
-// lower |index| (nearer offsets first), then the lower signed value.
+// Tie-break: bucket 0 (synchronous hypothesis) wins, then lower |index|, then lower signed value.
 function compareBuckets(a: number, b: number): number {
   if (a === 0 && b !== 0) return -1;
   if (b === 0 && a !== 0) return 1;
@@ -143,7 +139,6 @@ function compareBuckets(a: number, b: number): number {
 }
 
 function pickWinningBucket(stats: BucketStatRow[]): number {
-  // Highest successCount wins; tie-break by compareBuckets.
   let bestIndex = stats[0].bucketIndex;
   let bestCount = stats[0].successCount ?? 0;
   for (let i = 1; i < stats.length; i++) {
@@ -168,7 +163,6 @@ export const handler: Handler = async (event, _context) => {
   console.log(`Starting registrationBucketCleanup for project ${projectId}`);
 
   try {
-    // 1. Fetch all bucket-stat rows for the project.
     const stats = await fetchAllPages<BucketStatRow, 'registrationBucketStatsByProjectId'>(
       (nextToken) =>
         client.graphql({
@@ -180,7 +174,6 @@ export const handler: Handler = async (event, _context) => {
 
     console.log(`Found ${stats.length} RegistrationBucketStat row(s) for ${projectId}`);
 
-    // 2. Group by cameraPairKey, pick winner per group.
     const byPair = new Map<string, BucketStatRow[]>();
     for (const row of stats) {
       const list = byPair.get(row.cameraPairKey) ?? [];
@@ -199,9 +192,7 @@ export const handler: Handler = async (event, _context) => {
       );
     }
 
-    // 3. For each pair, query losing-bucket neighbours via the GSI and batch
-    // them onto the deletion queue. We stream — pagination keeps memory flat
-    // even at 100k+ loser rows per pair.
+    // Stream via GSI pagination — keeps memory flat at 100k+ loser rows per pair.
     const queueUrl = env.REGISTRATION_DELETE_QUEUE_URL;
     const sqsClient = new SQSClient({
       region: env.AWS_REGION,
@@ -270,9 +261,8 @@ export const handler: Handler = async (event, _context) => {
       `registrationBucketCleanup enqueued ${totalEnqueued} deletion(s) for project ${projectId}`
     );
 
-    // 4. Mark cleanupState='done' iff still 'in-progress'. A concurrent
-    // runImageRegistration that reset state to 'pending' loses this CAS and
-    // the next monitor pass will re-run cleanup over the updated bucket stats.
+    // CAS to 'done' — a concurrent runImageRegistration kickoff that reset
+    // state to 'pending' loses this and the next monitor pass re-runs cleanup.
     try {
       await client.graphql({
         query: updateRegistrationProgressStatus,

@@ -18,15 +18,11 @@ from requests_aws4auth import AWS4Auth
 from shapely.geometry import Point, Polygon
 from torchvision.io import ImageReadMode, read_image
 
-# LoFTR is trained at 528px on the short side; matching quality drops sharply off that.
+# LoFTR is trained at 528px short side; matching quality drops sharply off that.
 TARGET_SIZE = 528
-# Cap on points shown to the manual homography workbench.
 MAX_SUGGESTED_POINTS = 10
-# Grid cells used to force spatial spread; oversamples past the cap so empty cells don't starve the pick.
 SUGGESTION_GRID = (5, 3)
-# Below this many RHO inliers, the plane fit is unreliable and we skip using it as a seed.
 MIN_HOMOGRAPHY_SEED = 4
-# Minimum RHO inliers before we trust the homography.
 MIN_HOMOGRAPHY_INLIERS = 10
 
 torch.set_default_device("cuda")
@@ -41,8 +37,7 @@ mutation MyMutation($homography: [Float], $image1Id: ID!, $image2Id: ID!) {
 }
 """)
 
-# Used when automatic homography fails: persist the best candidate matches
-# so the manual workbench can seed the user with a starting point.
+# On automatic failure, persist best candidate matches as a manual-workbench seed.
 updateSuggestions = gql("""
 mutation SaveSuggestions($image1Id: ID!, $image2Id: ID!, $suggestedPoints1: [Float], $suggestedPoints2: [Float]) {
   updateImageNeighbour(input: {image1Id: $image1Id, image2Id: $image2Id, suggestedPoints1: $suggestedPoints1, suggestedPoints2: $suggestedPoints2}) {
@@ -52,24 +47,9 @@ mutation SaveSuggestions($image1Id: ID!, $image2Id: ID!, $suggestedPoints1: [Flo
 }
 """)
 
-# Three transition-specific mutations. Each is conditional on a precise prior
-# state so we can tell, from which one succeeded, whether to bump the counter:
-#
-#   - markImageNeighbourProcessedFresh: pair has never been tracked (neither
-#     processedAt nor failedAt set). On success we bump pairsProcessed.
-#
-#   - markImageNeighbourProcessedAfterFail: pair was previously marked failed
-#     and is now succeeding (redelivery after retry). Clears failedAt and sets
-#     processedAt. Counter was already bumped on the failed-mark, so we DON'T
-#     bump again here.
-#
-#   - markImageNeighbourFailed: pair has never been tracked and processing
-#     blew up before a homography or suggestions could be written. On success
-#     we bump pairsProcessed so the cleanup gate doesn't stall even if the
-#     pair eventually DLQs.
-#
-# A pair that's already-processed (processedAt set) is invariant — we never
-# downgrade it to failed.
+# Each mutation is conditional on a precise prior state — which one succeeds
+# tells us whether to bump pairsProcessed. processedAt is invariant once set;
+# we never downgrade to failed.
 markImageNeighbourProcessedFresh = gql("""
 mutation MarkProcessedFresh($image1Id: ID!, $image2Id: ID!, $now: AWSDateTime!) {
   updateImageNeighbour(
@@ -106,8 +86,7 @@ mutation MarkFailed($image1Id: ID!, $image2Id: ID!, $now: AWSDateTime!) {
 }
 """)
 
-# Per-image "this image has been touched by registration" marker. Composite key
-# is (imageId, source) so duplicate creates fail loudly — we swallow that.
+# Composite key (imageId, source) makes duplicate creates fail loudly — swallowed by caller.
 createImageProcessedBy = gql("""
 mutation CreateProcessedBy($imageId: ID!, $source: String!, $projectId: ID!, $group: String) {
   createImageProcessedBy(input: {imageId: $imageId, source: $source, projectId: $projectId, group: $group}) {
@@ -117,9 +96,6 @@ mutation CreateProcessedBy($imageId: ID!, $source: String!, $projectId: ID!, $gr
 }
 """)
 
-# Atomic ADD on RegistrationProgress.pairsProcessed (and upserts the row if it
-# doesn't exist yet — unlikely, but the runImageRegistration kickoff guarantees
-# it).
 incrementRegistrationProgress = gql("""
 mutation IncProgress($projectId: ID!, $pairsProcessedDelta: Int, $group: String) {
   incrementRegistrationProgress(
@@ -130,10 +106,6 @@ mutation IncProgress($projectId: ID!, $pairsProcessedDelta: Int, $group: String)
 }
 """)
 
-# Atomic ADD 1 on RegistrationBucketStat.successCount. Only called for
-# cross-camera pairs on successful homography. bucketKey is the composite
-# "<cameraPairKey>#<bucketIndex>" sort-key value; the other two are kept as
-# denormalised attributes on the row.
 incrementRegistrationBucketStat = gql("""
 mutation IncBucket($projectId: ID!, $bucketKey: String!, $cameraPairKey: String!, $bucketIndex: Int!, $group: String) {
   incrementRegistrationBucketStat(
@@ -167,7 +139,6 @@ client = Client(transport=transport, fetch_schema_from_transport=False)
 
 
 def _resize_for_matcher(img):
-    """Resize so the short side is TARGET_SIZE; return tensor and scale factor."""
     height, width = img.shape[1], img.shape[2]
     scale = min(height, width) / TARGET_SIZE
     resized = K.geometry.resize(img, TARGET_SIZE, antialias=True, align_corners=False).unsqueeze(0)
@@ -175,15 +146,13 @@ def _resize_for_matcher(img):
 
 
 def _match(img0, img1):
-    """Run LoFTR and return matched points in each image's original coordinates plus confidences."""
     resized0, scale0 = _resize_for_matcher(img0)
     resized1, scale1 = _resize_for_matcher(img1)
 
     with torch.inference_mode():
         correspondences = matcher({"image0": resized0, "image1": resized1})
 
-    # +0.5 / -0.5 converts between pixel-centre and pixel-corner conventions
-    # because we resized with align_corners=False.
+    # +0.5/-0.5 converts pixel-centre vs pixel-corner conventions (align_corners=False).
     matches0 = (correspondences["keypoints0"].cpu().numpy() + 0.5) * scale0 - 0.5
     matches1 = (correspondences["keypoints1"].cpu().numpy() + 0.5) * scale1 - 0.5
     confidences = correspondences.get("confidence")
@@ -193,7 +162,6 @@ def _match(img0, img1):
 
 
 def _apply_masks(matches0, matches1, confidences, masks):
-    """Drop matches whose endpoint falls inside any exclusion polygon."""
     polygons = [Polygon(m) for m in masks]
     points = [[Point(x, y) for x, y in pts] for pts in [matches0, matches1]]
     excluded = np.array([p.contains(points) for p in polygons]).any(axis=(0, 1))
@@ -202,12 +170,9 @@ def _apply_masks(matches0, matches1, confidences, masks):
 
 
 def _pick_suggested(matches0, matches1, confidences, homography_mask):
-    """Return up to MAX_SUGGESTED_POINTS pairs, seeded from RHO inliers and spread across a grid.
-
-    Picking purely by confidence clusters points on the most textured region; grid-binning
-    forces coverage. RHO inliers get priority when there are enough of them because they're
-    already plane-consistent — better anchors for a manual seed than raw feature matches.
-    """
+    """Pure-confidence picks cluster on textured regions; grid-binning forces
+    coverage. RHO inliers seed when available — plane-consistent → better
+    manual anchors than raw matches."""
     count = min(len(matches0), len(matches1))
     if count <= MAX_SUGGESTED_POINTS:
         return matches0, matches1
@@ -237,7 +202,7 @@ def _pick_suggested(matches0, matches1, confidences, homography_mask):
     if confidences is not None and len(remaining):
         remaining = remaining[np.argsort(-confidences[remaining])]
 
-    # One top-confidence match per empty cell — this is what kills the clustering.
+    # One top-confidence match per empty cell — kills clustering.
     for i in remaining:
         if len(picked) >= MAX_SUGGESTED_POINTS:
             break
@@ -248,7 +213,7 @@ def _pick_suggested(matches0, matches1, confidences, homography_mask):
         chosen.add(int(i))
         used_bins.add(b)
 
-    # Cells exhausted — top off by raw confidence, clustering allowed.
+    # Top off by raw confidence once cells are exhausted.
     if len(picked) < MAX_SUGGESTED_POINTS:
         for i in remaining:
             if len(picked) >= MAX_SUGGESTED_POINTS:
@@ -278,13 +243,11 @@ def _save_suggestions(body, matches0, matches1, confidences, homography_mask):
         print(f'Failed to persist suggested points for {body["image1Id"]}/{body["image2Id"]}: {e}')
 
 
-# Below this raw-match count at 0°, LoFTR is signalling "no visual similarity here" —
-# rotating won't recover that, so skip the extra GPU passes.
+# Below this at 0°, LoFTR is signalling "no visual similarity" — rotating won't recover it.
 MIN_RAW_MATCHES_FOR_ROTATION_RETRY = 20
 
 
 def _unrotate_points(points, rot_k, original_h, original_w):
-    """Map points from a k*90°-CCW-rotated image back into original coordinates."""
     if rot_k == 0 or len(points) == 0:
         return points
     x = points[:, 0]
@@ -302,7 +265,6 @@ def _unrotate_points(points, rot_k, original_h, original_w):
 
 
 def _match_with_rotation(img0, img1, rot_k):
-    """Run LoFTR with img1 pre-rotated by rot_k*90° CCW. Returned matches1 are in img1's original frame."""
     rotated1 = torch.rot90(img1, rot_k, dims=[-2, -1]) if rot_k else img1
     matches0, matches1, confidences, scale = _match(img0, rotated1)
     if rot_k:
@@ -312,9 +274,7 @@ def _match_with_rotation(img0, img1, rot_k):
 
 
 def _evaluate_attempt(body, matches0, matches1, confidences, scale):
-    """Mask + epipolar + homography over a candidate match set. Returns None if the
-    inputs degenerate before a homography can be fit (so the rotation loop can
-    move on cleanly)."""
+    """Returns None on degenerate inputs so the rotation loop can move on cleanly."""
     if "masks" in body:
         matches0, matches1, confidences = _apply_masks(matches0, matches1, confidences, body["masks"])
     if len(matches0) < 8:
@@ -345,14 +305,10 @@ def _evaluate_attempt(body, matches0, matches1, confidences, scale):
 
 
 def alignImages(body, img0, img1):
-    """Return True iff a homography was written; False if we fell back to suggestions.
-
-    Tries img1 at four 90° steps to recover pairs from cameras mounted at different
-    orientations (cross-track pairs where one camera saves images sideways). The
-    first attempt that clears MIN_HOMOGRAPHY_INLIERS wins; if none do, the best
-    attempt by inlier count (tiebreak: mean confidence) is persisted as suggestions
-    in original-image coordinates.
-    """
+    """Tries img1 at four 90° steps to handle cross-track cameras mounted
+    sideways. First attempt clearing MIN_HOMOGRAPHY_INLIERS wins; otherwise
+    best-by-inlier-count is saved as suggestions. Returns True iff a homography
+    was written."""
     pair_label = f'{body["image1Id"]}/{body["image2Id"]}'
     best_attempt = None
     best_score = None
@@ -400,13 +356,11 @@ def alignImages(body, img0, img1):
 
 
 def _is_already_processed_error(exc):
-    """ConditionalCheckFailedException = SQS redelivered a pair we already tracked."""
     msg = str(exc)
     return 'ConditionalCheckFailedException' in msg or 'conditional' in msg.lower()
 
 
 def _is_duplicate_create_error(exc):
-    """Composite key conflict on createImageProcessedBy — fine, the marker exists."""
     msg = str(exc).lower()
     return (
         'conditionalcheckfailed' in msg.replace(' ', '')
@@ -416,9 +370,6 @@ def _is_duplicate_create_error(exc):
 
 
 def _is_terminal_for_retry(exc):
-    """
-    Errors that should NOT be retried.
-    """
     msg = str(exc).lower()
     return (
         'conditionalcheckfailed' in msg.replace(' ', '')
@@ -429,9 +380,6 @@ def _is_terminal_for_retry(exc):
 
 
 def _exec_with_retry(query, variables, attempts=3):
-    """
-    Execute an AppSync mutation with exponential-backoff retry on transient errors.
-    """
     last_err = None
     for attempt in range(attempts):
         try:
@@ -446,13 +394,9 @@ def _exec_with_retry(query, variables, attempts=3):
 
 
 def _track_processed(body, homography_written):
-    """
-    Record that this pair has been processed. Handles two transitions:
-      (A) fresh:  no prior tracking → set processedAt, bump counter
-      (B) upgrade: previously failed → set processedAt, clear failedAt,
-                    do NOT bump counter (already bumped on the failed mark)
-    Either-already-processed is a no-op (returns immediately).
-    """
+    """Two transitions: fresh (bump counter), or upgrade-from-failed (no
+    bump — counter was already bumped on the failed mark). Already-processed
+    is a no-op."""
     image1Id = body["image1Id"]
     image2Id = body["image2Id"]
     project_id = body.get("projectId")
@@ -461,14 +405,12 @@ def _track_processed(body, homography_written):
     bucket_index = body.get("bucketIndex")
 
     if not project_id:
-        # Older messages (before this rollout) don't carry projectId. Skip
-        # tracking rather than failing — the pair was still processed.
+        # Pre-rollout messages lack projectId; skip rather than fail.
         print(f'No projectId in message for {image1Id}/{image2Id}; skipping registration tracking')
         return
 
     now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
 
-    # Transition A — fresh. Conditional on both processedAt and failedAt unset.
     bump_counter = False
     try:
         _exec_with_retry(markImageNeighbourProcessedFresh, variables={
@@ -479,8 +421,7 @@ def _track_processed(body, homography_written):
         bump_counter = True
     except Exception as e:
         if _is_already_processed_error(e):
-            # Conditional check failed. Either we're upgrading from failed, or
-            # the pair is already processed. Try the upgrade path next.
+            # Try upgrade-from-failed; if that also CAS-fails, pair is already processed.
             try:
                 _exec_with_retry(markImageNeighbourProcessedAfterFail, variables={
                     "image1Id": image1Id,
@@ -488,8 +429,6 @@ def _track_processed(body, homography_written):
                     "now": now_iso,
                 })
                 print(f'Upgraded pair {image1Id}/{image2Id} from failed to processed (no counter bump)')
-                # bump_counter stays False — counter was already incremented
-                # when we marked failed earlier.
             except Exception as e2:
                 if _is_already_processed_error(e2):
                     print(f'Pair {image1Id}/{image2Id} already processed (SQS redelivery); skipping increments')
@@ -497,12 +436,9 @@ def _track_processed(body, homography_written):
                 print(f'Failed to upgrade {image1Id}/{image2Id} from failed to processed: {e2}')
                 return
         else:
-            # Transient AppSync issue after all retries — log and bail. The
-            # pair itself was processed; the counter just won't reflect it.
             print(f'Failed to mark {image1Id}/{image2Id} processed: {e}')
             return
 
-    # Bump the progress counter only on the fresh transition.
     if bump_counter:
         try:
             _exec_with_retry(incrementRegistrationProgress, variables={
@@ -525,10 +461,7 @@ def _track_processed(body, homography_written):
             if not _is_duplicate_create_error(e):
                 print(f'Failed to create ImageProcessedBy for image {img_id}: {e}')
 
-    # skipBucketStat is set by runImageRegistration on re-runs against an
-    # established winner — the lambda picks the winner from existing stats,
-    # emits only that bucket's pair, and tells us not to bump the counter so
-    # the lock-in stays stable instead of drifting on every re-run.
+    # skipBucketStat locks in an established winner on re-runs — don't drift.
     skip_bucket_stat = bool(body.get("skipBucketStat"))
     if (
         homography_written
@@ -553,13 +486,8 @@ def _track_processed(body, homography_written):
 
 
 def _track_failed(body, error_msg):
-    """
-    Mark a pair as having failed processing. Bumps pairsProcessed on the first
-    failure so the cleanup gate doesn't stall even if the message eventually
-    DLQs. Subsequent failed redeliveries are no-ops on the counter (the
-    conditional check prevents double-bumping), and a later successful
-    redelivery routes through _track_processed's upgrade path.
-    """
+    """Bumps pairsProcessed on first failure so the cleanup gate doesn't
+    stall even if the message eventually DLQs. CAS prevents double-bumping."""
     image1Id = body["image1Id"]
     image2Id = body["image2Id"]
     project_id = body.get("projectId")
@@ -579,14 +507,11 @@ def _track_failed(body, error_msg):
         })
     except Exception as e:
         if _is_already_processed_error(e):
-            # Either already processed (don't downgrade) or already failed
-            # (no double-count). Either way the counter is correctly accounted.
             print(f'Pair {image1Id}/{image2Id} already tracked; skipping failure bump')
             return
         print(f'Failed to mark {image1Id}/{image2Id} as failed: {e}')
         return
 
-    # First-time failure mark — bump pairsProcessed so the gate advances.
     try:
         _exec_with_retry(incrementRegistrationProgress, variables={
             "projectId": project_id,
@@ -596,15 +521,14 @@ def _track_failed(body, error_msg):
     except Exception as e:
         print(f'Failed to increment RegistrationProgress (on failed path) for {project_id}: {e}')
 
-    # Truncate the error message so a poison-pill traceback doesn't flood logs.
+    # Truncate to avoid flooding logs with a poison-pill traceback.
     print(f'Marked pair {image1Id}/{image2Id} as failed: {error_msg[:300]}')
 
 
 def process(body):
-    # The full processing path is inside a try block: any exception raised
-    # before _track_processed has a chance to run (S3 download, image decode,
-    # LightGlue crash) routes through _track_failed instead. That keeps the
-    # cleanup gate honest even when a message will end up in the DLQ.
+    # Wrap the processing path so any pre-tracking exception (S3, decode,
+    # LightGlue) routes through _track_failed — keeps the cleanup gate honest
+    # even when a message ends up in the DLQ.
     try:
         s3_client = boto3.client("s3", os.environ["REGION"])
         key0, key1 = body["keys"]
@@ -621,13 +545,10 @@ def process(body):
             _track_failed(body, str(e))
         except Exception as track_err:
             print(f'Also failed to track failure: {track_err}')
-        # Return False so the outer loop doesn't delete the message. SQS will
-        # redeliver it up to maxReceiveCount times; eventually it either
-        # succeeds (→ _track_processed's upgrade path clears failedAt) or
-        # lands in the DLQ (with failedAt set and the counter already bumped).
+        # Returning False keeps the message; SQS redelivers up to
+        # maxReceiveCount before DLQ.
         return False
 
-    # Tracking is best-effort and idempotent — never propagates exceptions.
     try:
         _track_processed(body, homography_written)
     except Exception as e:
@@ -635,9 +556,7 @@ def process(body):
     return True
 
 
-# Build marker — bumped to force an image rebuild after adding the
-# registration-tracking mutations. Bump again on future container-code changes
-# that the deploy diff might otherwise consider a no-op.
+# Bump on container-code changes that the deploy diff might consider a no-op.
 print("processSQS build: registration-bucketing v6 (rotation-retry on alignImages)")
 
 while True:

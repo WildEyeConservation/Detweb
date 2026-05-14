@@ -1,10 +1,7 @@
 import { util } from '@aws-appsync/utils';
 
-// Atomic upsert of a RegistrationProgress row keyed by projectId.
-// All deltas are optional — caller passes whichever counters need bumping,
-// plus an optional resetCleanupState flag for the runImageRegistration kickoff
-// path. createdAt / updatedAt / __typename are stamped here because we're
-// bypassing the model's auto-generated mutations.
+// Bypasses model-generated mutations, so createdAt/updatedAt/__typename
+// must be stamped explicitly here.
 export function request(ctx) {
   const {
     projectId,
@@ -16,10 +13,8 @@ export function request(ctx) {
     group,
   } = ctx.args;
 
-  // The key attribute (projectId) must NOT appear in the UpdateExpression —
-  // DynamoDB writes it from the Key parameter automatically on upsert and
-  // rejects any attempt to SET a key attribute on an existing item with
-  // "Cannot update attribute projectId. This attribute is part of the key".
+  // projectId (key attribute) must not appear in UpdateExpression — DynamoDB
+  // rejects SET against a key attribute on upsert.
   const addParts = [];
   const setParts = [
     '#createdAt = if_not_exists(#createdAt, :now)',

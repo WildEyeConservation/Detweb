@@ -84,10 +84,7 @@ const isTracked = (row: NeighbourRow | null): boolean => {
   return Boolean(row.registrationProcessedAt) || Boolean(row.registrationFailedAt);
 };
 
-// Marker for ImageNeighbour rows created out-of-band (e.g. DevActions
-// launchRigStudyNeighbours for the oblique-camera study rig). These bypass
-// the registration progress accounting entirely — the operator manages them
-// directly and they shouldn't move pendingCount or trigger bucket cleanup.
+// Out-of-band rows (e.g. DevActions rig-study) bypass pendingCount accounting.
 const PROGRESS_OPT_OUT_SOURCES = new Set(['rig-study']);
 const isProgressOptOut = (row: NeighbourRow | null): boolean => {
   if (!row) return false;
@@ -106,9 +103,7 @@ const decode = (
   return unmarshall(image as Record<string, AttributeValue>) as NeighbourRow;
 };
 
-// Best-effort backfill: writes projectId onto an ImageNeighbour row that was
-// created before this denormalisation existed. Failure here is non-fatal —
-// the row stays unprojected and the next stream event for it will retry.
+// Failure is non-fatal — next stream event for this row will retry.
 async function backfillProjectId(
   image1Id: string,
   image2Id: string,
@@ -127,9 +122,8 @@ async function backfillProjectId(
   }
 }
 
-// Resolve projectId for a stream record. Prefers the denormalised attribute on
-// the row; falls back to a lookup against Image.image1Id and writes the value
-// back so subsequent events for this row don't pay the lookup cost.
+// Falls back to Image lookup and writes the value back so subsequent events
+// don't repeat it.
 async function resolveProjectId(
   newRow: NeighbourRow | null,
   oldRow: NeighbourRow | null
@@ -157,10 +151,7 @@ async function resolveProjectId(
   }
 }
 
-// Determine pendingCount delta for one stream record. Mirrors the table at
-// the design: INSERT +1, fresh tracking transition -1, REMOVE-of-untracked -1.
-// Anything else (manual homography save, suggestions write that doesn't toggle
-// processedAt, REMOVE of an already-tracked row) is a no-op.
+// INSERT +1, fresh tracking transition -1, REMOVE-of-untracked -1; else no-op.
 function computeDelta(
   eventName: string,
   oldRow: NeighbourRow | null,
@@ -182,18 +173,14 @@ async function processRecord(record: DynamoDBRecord): Promise<void> {
   const oldRow = decode(record.dynamodb?.OldImage as Record<string, AttributeValue> | undefined);
   const newRow = decode(record.dynamodb?.NewImage as Record<string, AttributeValue> | undefined);
 
-  // Skip rows that are explicitly opted out of registration progress
-  // accounting (e.g. DevActions-launched study rig pairs). Check both NEW and
-  // OLD so a REMOVE of an opted-out row also doesn't move the counter.
+  // Check both NEW and OLD so a REMOVE of an opted-out row doesn't move the counter.
   if (isProgressOptOut(newRow) || isProgressOptOut(oldRow)) {
     return;
   }
 
   const delta = computeDelta(eventName, oldRow, newRow);
   if (delta === 0) {
-    // INSERT and untracked-REMOVE are the only events that need projectId
-    // resolution. A no-op MODIFY (manual save, second tracking write) doesn't
-    // touch the counter so we skip the (potentially expensive) lookup.
+    // Skip the potentially-expensive projectId lookup on no-op events.
     return;
   }
 
@@ -223,10 +210,8 @@ export const handler: DynamoDBStreamHandler = async (event) => {
     try {
       await processRecord(record);
     } catch (err) {
-      // Swallow per-record errors so a single poison record doesn't make Lambda
-      // retry the whole batch (which would double-count successful records).
-      // Counter drift is bounded and self-corrected by the staleness fallback
-      // in monitorModelProgress.
+      // Swallow so one poison record doesn't retry the whole batch and
+      // double-count. Staleness fallback in monitorModelProgress self-corrects.
       console.error(`Stream record ${record.eventID} failed:`, err);
     }
   }

@@ -18,8 +18,8 @@ import {
   GetProjectQuery,
 } from '../runImageRegistration/graphql/API';
 
-// Inline minimal mutation – return composite key fields + `group` to avoid
-// nested-resolver auth failures while enabling subscription delivery via groupDefinedIn('group').
+// Return key fields + `group` to avoid nested-resolver auth failures while
+// keeping subscription delivery via groupDefinedIn('group') working.
 const createImageNeighbour = /* GraphQL */ `
   mutation CreateImageNeighbour($input: CreateImageNeighbourInput!) {
     createImageNeighbour(input: $input) { image1Id image2Id group cameraPairKey bucketIndex }
@@ -32,11 +32,6 @@ const deleteImageNeighbour = /* GraphQL */ `
   }
 `;
 
-// Custom atomic upsert on RegistrationProgress. Called once at the end of this
-// lambda to bump pairsCreated (visibility-only counter) and to stamp
-// lastKickoffAt + force cleanupState back to 'pending' via kickoff:true so
-// the monitor picks this run up. The load-bearing pendingCount is maintained
-// by processRegistrationStream off the ImageNeighbour DDB stream.
 const incrementRegistrationProgress = /* GraphQL */ `
   mutation IncrementRegistrationProgress(
     $projectId: ID!
@@ -78,9 +73,7 @@ interface BucketStatRow {
   successCount?: number | null;
 }
 
-// Mirrors registrationBucketCleanup's tie-break: prefer bucket 0, then nearer
-// |index|, then lower signed value. Duplicated rather than shared because the
-// two lambdas have no common module today.
+// Mirrors registrationBucketCleanup's tie-break (duplicated, no shared module).
 function compareBuckets(a: number, b: number): number {
   if (a === 0 && b !== 0) return -1;
   if (b === 0 && a !== 0) return 1;
@@ -144,7 +137,6 @@ interface PagedList<T> {
 
 type SqsEntry = SendMessageBatchRequestEntry;
 
-// Minimal image fields needed for registration and pairing logic
 interface MinimalImage {
   id: string;
   originalPath?: string | null;
@@ -152,7 +144,6 @@ interface MinimalImage {
   cameraId?: string | null;
 }
 
-// Simple exponential backoff for transient errors on GraphQL calls
 async function gqlWithRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   let lastError: unknown;
   for (let attemptIndex = 0; attemptIndex < attempts; attemptIndex++) {
@@ -167,7 +158,6 @@ async function gqlWithRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   throw lastError as Error;
 }
 
-// Concurrency limiter for running many async tasks without overwhelming the runtime
 async function withConcurrency<T>(
   tasks: Array<() => Promise<T>>,
   limit: number
@@ -190,7 +180,6 @@ async function withConcurrency<T>(
   return results;
 }
 
-// Helper function to handle pagination for GraphQL queries
 async function fetchAllPages<T, K extends string>(
   queryFn: (
     nextToken?: string
@@ -221,16 +210,13 @@ async function handlePair(
   computeKey: (orig: string) => string,
   projectId: string,
   organizationId?: string,
-  // Set only for cross-camera pairs. Same-camera pairs leave these null,
-  // which keeps them out of the bucket-cleanup GSI.
+  // Same-camera pairs leave these null to stay out of the bucket-cleanup GSI.
   cameraPairKey?: string,
   bucketIndex?: number,
-  // When true, skip pairs that already have suggestedPoints1 set (i.e.
-  // LightGlue already tried and failed). Used by re-runs that want to fill
-  // newly-introduced pairs without re-paying compute on known-failed ones.
+  // Re-runs skip pairs LightGlue already tried and failed (suggestedPoints1 set).
   skipExistingSuggestions?: boolean,
-  // Re-runs against an established winning bucket pass this so the container
-  // skips the RegistrationBucketStat increment — keeps the lock-in stable.
+  // Re-runs against an established winner skip the RegistrationBucketStat
+  // increment to keep the lock-in stable.
   skipBucketStat?: boolean
 ) {
   try {
@@ -262,8 +248,7 @@ async function handlePair(
     }
 
     if (skipExistingSuggestions) {
-      // suggestedPoints1 isn't always typed on the generated client schema —
-      // access via untyped cast so this works even if codegen is stale.
+      // Untyped cast — suggestedPoints1 may be missing from stale codegen.
       const suggested = (existingNeighbour as { suggestedPoints1?: number[] | null } | null | undefined)?.suggestedPoints1;
       if (Array.isArray(suggested) && suggested.length > 0) {
         console.log(
@@ -274,13 +259,9 @@ async function handlePair(
     }
 
     if (!existingNeighbour) {
-      // bucketIndex is the GSI sort key — DynamoDB rejects an explicit null
-      // ("Type mismatch ... Expected: N Actual: NULL"). For same-camera pairs
-      // we want the attributes ABSENT, not null, so the row simply isn't
-      // projected into the GSI. Build the input conditionally.
-      // projectId is stamped here so processRegistrationStream can update
-      // pendingCount on the per-project RegistrationProgress row without
-      // looking up the parent Image per stream event.
+      // bucketIndex is the GSI sort key — DDB rejects explicit null. For
+      // same-camera pairs we need the attribute ABSENT, not null, so the row
+      // isn't projected into the GSI.
       const input: Record<string, unknown> = {
         image1Id: image1.id,
         image2Id: image2.id,
@@ -337,14 +318,13 @@ async function handlePair(
     }
 
     return {
-      Id: `${image1.id}-${image2.id}`, // Required unique ID for batch entries
+      Id: `${image1.id}-${image2.id}`,
       MessageBody: JSON.stringify({
         image1Id: image1.id,
         image2Id: image2.id,
         keys: [computeKey(originalPath1), computeKey(originalPath2)],
         action: 'register',
         masks: masks.length > 0 ? masks : undefined,
-        // Container uses these to write ImageProcessedBy and bucket counters.
         projectId,
         group: organizationId,
         cameraPairKey: cameraPairKey ?? null,
@@ -402,9 +382,7 @@ function addAdjacentPairTasks(
   }
 }
 
-// Median consecutive timestamp delta within a sorted image list. Returns null when
-// there is insufficient data to estimate a firing interval. Median (vs mean) is robust
-// to dropped frames, which would otherwise skew the estimate via long gaps.
+// Median (not mean) — robust to dropped frames that would skew the estimate.
 function medianConsecutiveDelta(sortedImgs: MinimalImage[]): number | null {
   if (sortedImgs.length < 2) return null;
   const deltas: number[] = [];
@@ -424,16 +402,11 @@ function medianConsecutiveDelta(sortedImgs: MinimalImage[]): number | null {
     : deltas[mid];
 }
 
-// Per-direction thresholds for cross-camera nearest-neighbour pairing.
-// The gap from an image to its truly-synchronous partner on the other camera is ~0;
-// the gap to the next-frame partner is the OTHER camera's firing interval. Half of that
-// interval is the natural cutoff that separates "right partner" from "next-frame partner".
+// Half of the OTHER camera's firing interval is the cutoff between
+// "synchronous partner" and "next-frame partner".
 const DEFAULT_THRESHOLD_SECONDS = 1.0;
-// Integer-second timestamps mean any threshold < 1.0s effectively requires
-// pairs to share the exact same stored second — much stricter than the rig
-// actually is. Bumping the floor to 2.0s opens it to Δt ∈ {0, 1, 2} which
-// catches truncation-artifact straddles, clock drift, and near-boundary
-// edges. The bucket cleanup absorbs any "wrong frame" partners pulled in.
+// Floor at 2s — integer-second timestamps make <1s require exact-second match,
+// which is stricter than the rig actually is. Bucket cleanup absorbs strays.
 const MIN_THRESHOLD_SECONDS = 2.0;
 const MAX_THRESHOLD_SECONDS = 5.0;
 
@@ -451,9 +424,7 @@ function deriveCrossCameraThresholds(
   };
 }
 
-// Binary-search the index of the nearest candidate by timestamp, gated by a max
-// gap. Returns -1 when no candidate is within threshold. `candidates` must be
-// sorted ascending by timestamp.
+// `candidates` must be sorted ascending by timestamp.
 function findNearestIndex(
   target: MinimalImage,
   candidates: MinimalImage[],
@@ -483,28 +454,16 @@ function findNearestIndex(
   return bestIdx !== -1 && bestDelta <= thresholdSeconds ? bestIdx : -1;
 }
 
-// Canonical key for a camera-overlap pair. Sorting the IDs lexicographically
-// makes the key independent of which side of the CameraOverlap row the user
-// configured each camera on, and also fixes which camera we treat as the
-// "A side" (= lower id) so the bucketIndex labels are consistent across the
-// whole survey.
+// Sorting fixes which camera is "A side" (lower id), so bucketIndex labels
+// are consistent regardless of how CameraOverlap was configured.
 function canonicalCameraPairKey(camIdX: string, camIdY: string): string {
   return camIdX < camIdY ? `${camIdX}|${camIdY}` : `${camIdY}|${camIdX}`;
 }
 
-// For each image on the "A" side (lower-id camera), create up to three pairs
-// with images on the "B" side: bucket 0 = A's nearest B, bucket -1 = the B
-// one frame earlier on B's track, bucket +1 = one frame later. The nearest
-// lookup is threshold-gated (drops A's with no plausibly-synchronous B), but
-// once a nearest exists the ±1 partners are taken unconditionally — they're
-// the "wrong-frame" hypotheses we want to measure against the nearest.
-// Pairs are stored with image1 = earlier-timestamp to match existing ordering.
-// bucketIndex is always computed from A's perspective (offset on B's track),
-// so the same physical rig-offset lands in the same bucket across all A's.
-// When forcedBucket is set, we already know the winning offset for this pair
-// and emit only that bucket's pair per A image. Container is told (via
-// skipBucketStat on the SQS body) not to bump RegistrationBucketStat, so the
-// established winner stays locked in across re-runs.
+// Emits buckets 0/-1/+1 per A image (B's nearest, predecessor, successor).
+// bucketIndex is always B's-track offset so the same physical rig-offset lands
+// in the same bucket across all A's. forcedBucket locks in an established
+// winner; skipBucketStat tells the container not to drift it on re-runs.
 function addNearestBucketTasks(
   imgsACam: MinimalImage[],
   imgsBCam: MinimalImage[],
@@ -554,18 +513,12 @@ function addNearestBucketTasks(
       if (idx >= 0 && idx < imgsBCam.length) queue(a, imgsBCam[idx], forcedBucket);
       continue;
     }
-    // bucket -1 (predecessor on B's track) — skipped at the start of B's track
     if (nIdx - 1 >= 0) queue(a, imgsBCam[nIdx - 1], -1);
-    // bucket 0 (the nearest itself)
     queue(a, imgsBCam[nIdx], 0);
-    // bucket +1 (successor on B's track) — skipped at the end of B's track
     if (nIdx + 1 < imgsBCam.length) queue(a, imgsBCam[nIdx + 1], 1);
   }
 }
 
-// For each maximal contiguous run of session images flanked by boundary images,
-// queue a deletion of the now-stale direct pair between those flanking images.
-// Runs in O(n) — one pass through the sorted list per camera/overlap group.
 function addStalePairDeletionTasks(
   images: MinimalImage[],
   sessionIdSet: Set<string>,
@@ -607,7 +560,6 @@ function addStalePairDeletionTasks(
 
 export const handler: RunImageRegistrationHandler = async (event, context) => {
   try {
-    // Do not wait for open handles after we return a response
     context.callbackWaitsForEmptyEventLoop = false;
     const projectId = event.arguments.projectId;
     const metadata = JSON.parse(event.arguments.metadata) as {
@@ -625,7 +577,6 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
     const skipExistingSuggestions = !!metadata?.skipExistingSuggestions;
     const queueUrl = event.arguments.queueUrl;
 
-    // Fetch project info to determine key prefixing
     let organizationId: string | undefined = undefined;
     let isLegacyProject = false;
     try {
@@ -654,8 +605,7 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
         ? `${organizationId}/${projectId}/${orig}`
         : orig;
 
-    // If a batch of images was provided in metadata, use that to avoid scanning the entire project.
-    // Otherwise, fall back to fetching all project images (legacy behavior).
+    // If metadata supplies a batch, use it to avoid scanning the whole project.
     const providedBatch = Array.isArray(metadata?.images)
       ? metadata.images.filter((it): it is NonNullable<typeof it> => Boolean(it))
       : [];
@@ -669,7 +619,6 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
         cameraId: (it.cameraId ?? null) as string | null,
       }))
       : (await fetchAllPages<
-        // Fetch full Image records then map down to MinimalImage to keep types narrow
         { id: string; originalPath?: string | null; timestamp?: number | null; cameraId?: string | null },
         'imagesByProjectId'
       >(
@@ -713,10 +662,8 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
       'cameraOverlapsByProjectId'
     );
 
-    // keep track of images with no camera information (this should never happen but just in case)
     const noCamImgs: MinimalImage[] = [];
 
-    // group images by camera
     const imagesByCamera = sortedImages.reduce((acc, image) => {
       if (!image.cameraId) {
         noCamImgs.push(image);
@@ -739,7 +686,6 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
       Array.isArray(metadata?.sessionIds) ? metadata.sessionIds : []
     );
 
-    // process images by camera
     Object.entries(imagesByCamera).forEach(([, images]) => {
       addAdjacentPairTasks(
         images,
@@ -783,13 +729,8 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
       `Re-run detection: ${winnersByPair.size} camera pair(s) with established winners`
     );
 
-    // process images from overlapping cameras using 3-nearest bucket pairing.
-    // For each image on the lower-id camera (canonically "A"), we create up to
-    // three pairs with images on the other camera ("B"): the nearest in time
-    // (bucket 0) plus the immediate predecessor/successor on B's track (-1,
-    // +1). Stats aggregated per bucket let monitorModelProgress's cleanup pick
-    // the winning offset and delete losers. Stale-pair deletion at this layer
-    // is deferred — the bucket cleanup absorbs the responsibility.
+    // 3-nearest bucket pairing for overlapping cameras; bucket cleanup picks
+    // the winning offset and absorbs stale-pair deletion.
     cameraOverlaps.forEach((overlap) => {
       const camIdLow =
         overlap.cameraAId < overlap.cameraBId
@@ -804,9 +745,7 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
       if (imgsACam.length === 0 || imgsBCam.length === 0) return;
 
       const cameraPairKey = canonicalCameraPairKey(camIdLow, camIdHigh);
-      // thresholdToB is the only one we need — we only iterate A and look up
-      // B. It's gated by B's median firing interval (half-interval = the
-      // boundary between "synchronous B" and "next-frame B").
+      // Only iterate A → look up B, so only thresholdToB is needed.
       const { thresholdToB } = deriveCrossCameraThresholds(imgsACam, imgsBCam);
       const forcedBucket = winnersByPair.get(cameraPairKey);
       console.log(
@@ -830,7 +769,6 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
       );
     });
 
-    // process images with no camera
     addAdjacentPairTasks(
       noCamImgs,
       masks,
@@ -845,13 +783,11 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
       addStalePairDeletionTasks(noCamImgs, sessionIdSet, deletionTasks);
     }
 
-    // Delete stale pairs before queuing new registration work
     if (deletionTasks.length > 0) {
       console.log(`Deleting ${deletionTasks.length} stale neighbour pair(s)`);
       await withConcurrency(deletionTasks, 10);
     }
 
-    // Limit concurrency to prevent exhausting file descriptors and network resources
     const messages = (await withConcurrency<SqsEntry | null>(tasks, 10)).filter(
       (msg): msg is NonNullable<typeof msg> => msg !== null
     );
@@ -879,12 +815,8 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
       }
     }
 
-    // Atomically bump pairsCreated (observability) and stamp lastKickoffAt +
-    // force cleanupState back to 'pending'. Cleanup gates on pendingCount==0
-    // (maintained by the DDB-stream consumer) AND lastKickoffAt being set, so
-    // we always emit kickoff: true here even if no new SQS messages were sent
-    // — that way a previously-'done' cycle gets re-evaluated on the next
-    // monitor pass once any in-flight pairs settle.
+    // Always kickoff so a previously-'done' cycle gets re-evaluated by the
+    // monitor — even when no new SQS messages were sent.
     if (messages.length > 0 || sessionIdSet.size > 0) {
       try {
         await gqlWithRetry(() =>

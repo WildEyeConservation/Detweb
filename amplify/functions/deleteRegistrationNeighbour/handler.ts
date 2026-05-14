@@ -48,10 +48,6 @@ interface MessageBody {
   image2Id: string;
 }
 
-// SQS-triggered worker for the registration neighbour deletion queue. Each
-// message is one pair to delete. Idempotent — a row that has already been
-// deleted (e.g. by a redelivery, or by a concurrent stale-pair cleanup) is
-// treated as success.
 export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
   const batchItemFailures: SQSBatchItemFailure[] = [];
 
@@ -71,7 +67,7 @@ export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
           },
         })) as GraphQLResult<unknown>;
       } catch (e) {
-        // Treat "not found" as success — already deleted is the desired end state.
+        // Already-deleted is the desired end state.
         const msg = e instanceof Error ? e.message : String(e);
         const isNotFound =
           msg.includes('ConditionalCheckFailedException') ||
@@ -87,8 +83,8 @@ export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
         }
       }
     } catch (e) {
+      // Bad JSON — let it drop rather than redelivering forever.
       console.error(`Failed to parse message ${record.messageId}:`, e);
-      // Bad JSON — don't keep redelivering forever; let it drop.
     }
   }
 
