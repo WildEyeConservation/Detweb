@@ -68,6 +68,20 @@ export interface MatchCandidate {
    * all skip it. The hover popup (Change Label, Delete) still works.
    */
   informational?: boolean;
+  /**
+   * Set when one side of this candidate is an "out of view" (OOV)
+   * annotation: an animal known to be on this point but not visible in the
+   * image (plane yaw/roll moved it out of frame). `'A'` means the OOV row is
+   * on image A, `'B'` on image B. The OOV side carries `null` position and
+   * is rendered in the side panel, never on the map; the other side, when
+   * linked, is a normal real annotation drawn on its map as usual.
+   *
+   * An unlinked OOV candidate (no partner yet) keeps the pair `incomplete`
+   * so its neighbouring pairs flag for attention, exactly like a pending
+   * Munkres proposal. It is resolved (status `accepted`) once it shares an
+   * objectId with a real annotation on the other image of this pair.
+   */
+  oovSide?: 'A' | 'B';
 }
 
 export interface PairCompletionState {

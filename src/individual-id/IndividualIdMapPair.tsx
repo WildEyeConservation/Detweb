@@ -20,6 +20,7 @@ import type { AnnotationType } from '../schemaTypes';
 import type { MatchCandidate, NeighbourPair, PixelTransform } from './types';
 import { Button } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
+import { OovPanel } from './components/OovPanel';
 
 interface Props {
   pair: NeighbourPair;
@@ -97,6 +98,12 @@ interface Props {
    * candidate is `accepted`.
    */
   onAllAccepted?: () => void;
+  /**
+   * User clicked the "Add out-of-view" map control on side A or B. The harness
+   * creates an OOV annotation bound to that image; it surfaces as a card in
+   * the side panel.
+   */
+  onAddOov?: (side: 'A' | 'B') => void;
   /** User clicked Prev / Next pair — harness handles confirmation. */
   onRequestPrevPair: () => void;
   onRequestNextPair: () => void;
@@ -150,6 +157,7 @@ export function IndividualIdMapPair(props: Props) {
     onAllAccepted,
     onRequestPrevPair,
     onRequestNextPair,
+    onAddOov,
     leniency,
     onLeniencyChange,
   } = props;
@@ -492,6 +500,14 @@ export function IndividualIdMapPair(props: Props) {
       advanceFocus(1);
       return;
     }
+    // OOV candidates can't be locked/accepted via Space — they have no
+    // positional partner Munkres can confirm. The user must Ctrl/right-click
+    // a real annotation on the other image (or another OOV card) to link
+    // them. Pressing Space just skips ahead.
+    if (activeCandidate.oovSide) {
+      advanceFocus(1);
+      return;
+    }
     if (activeCandidate.status === 'pending') {
       onLock(activeCandidate.pairKey);
       return;
@@ -712,6 +728,41 @@ export function IndividualIdMapPair(props: Props) {
     [activeCandidate, candidates, onManualLinkRequest]
   );
 
+  // OOV candidates split by side. The OOV row itself lives on `side` (its
+  // realA/realB on that side is the oov:true row); the partner, if any,
+  // lives on the OTHER side as a normal positioned annotation that the map
+  // still renders. So markers on a map can coexist with a panel card on the
+  // same side that lives in the opposite-side panel — there is no overlap.
+  const oovCandidatesA = useMemo(
+    () => candidates.filter((c) => c.oovSide === 'A'),
+    [candidates]
+  );
+  const oovCandidatesB = useMemo(
+    () => candidates.filter((c) => c.oovSide === 'B'),
+    [candidates]
+  );
+
+  // Panel cards reuse the map-side ctrl-click handlers — the geometry is
+  // identical (clicking a side-A card against a side-B active candidate is
+  // the same gesture as ctrl-clicking a side-A map marker).
+  const handleCardDeleteA = useCallback(
+    (candidateKey: string) => {
+      const c = candidates.find((cc) => cc.pairKey === candidateKey);
+      if (c?.realA) onDelete?.(c.realA.id);
+    },
+    [candidates, onDelete]
+  );
+  const handleCardDeleteB = useCallback(
+    (candidateKey: string) => {
+      const c = candidates.find((cc) => cc.pairKey === candidateKey);
+      if (c?.realB) onDelete?.(c.realB.id);
+    },
+    [candidates, onDelete]
+  );
+
+  const addOovA = useCallback(() => onAddOov?.('A'), [onAddOov]);
+  const addOovB = useCallback(() => onAddOov?.('B'), [onAddOov]);
+
   // Image-space coords of the active candidate on each side, fed to the
   // maps so they can render a leniency-radius ring around the right marker.
   const activeAnchorA = activeCandidate?.posA ?? null;
@@ -720,6 +771,17 @@ export function IndividualIdMapPair(props: Props) {
   return (
     <div className='w-100 h-100 d-flex flex-column gap-2'>
       <div className='d-flex flex-row gap-2 w-100' style={{ flex: 1 }}>
+        <OovPanel
+          side='A'
+          candidates={oovCandidatesA}
+          category={category}
+          activeKey={activeKey}
+          passiveHoverKey={passiveForA}
+          onActivate={handleMarkerClick}
+          onCtrlClick={handleCtrlClickA}
+          onHoverChange={handleHoverA}
+          onDelete={handleCardDeleteA}
+        />
         <div style={{ flex: 1, minHeight: 0 }}>
           <IndividualIdMap
             image={imageA}
@@ -735,6 +797,7 @@ export function IndividualIdMapPair(props: Props) {
             onMarkerChangeLabel={handleChangeLabelA}
             onMarkerToggleObscured={handleToggleObscuredA}
             onMarkerCtrlClick={handleCtrlClickA}
+            onAddOov={addOovA}
             leniency={leniency}
             leniencyAnchor={activeAnchorA}
             // Side A's overlay traces image B's bounds projected onto A.
@@ -757,6 +820,7 @@ export function IndividualIdMapPair(props: Props) {
             onMarkerChangeLabel={handleChangeLabelB}
             onMarkerToggleObscured={handleToggleObscuredB}
             onMarkerCtrlClick={handleCtrlClickB}
+            onAddOov={addOovB}
             leniency={leniency}
             leniencyAnchor={activeAnchorB}
             // Side B's overlay traces image A's bounds projected onto B.
@@ -764,6 +828,17 @@ export function IndividualIdMapPair(props: Props) {
             otherImage={imageA}
           />
         </div>
+        <OovPanel
+          side='B'
+          candidates={oovCandidatesB}
+          category={category}
+          activeKey={activeKey}
+          passiveHoverKey={passiveForB}
+          onActivate={handleMarkerClick}
+          onCtrlClick={handleCtrlClickB}
+          onHoverChange={handleHoverB}
+          onDelete={handleCardDeleteB}
+        />
       </div>
       <PairToolbar
         active={activeCandidate}
