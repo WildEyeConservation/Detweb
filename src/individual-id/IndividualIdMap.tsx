@@ -165,7 +165,7 @@ class RotateControl implements maplibregl.IControl {
       <RotateCw size={16} color='#333' strokeWidth={2.5} />
     );
     btn.onclick = () => {
-      const next = Math.round(map.getBearing() / 90) * 90 + 90;
+      const next = Math.round(map.getBearing() / 90) * 90 - 90;
       map.easeTo({ bearing: next, duration: 300 });
     };
     c.appendChild(btn);

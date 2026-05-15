@@ -19,6 +19,7 @@ import { buildMatchCandidates } from './utils/munkres';
 import { buildNeighbourTransforms } from './utils/transforms';
 import { evaluatePairCompletion } from './utils/completion';
 import { isOov } from './utils/identity';
+import { buildLanes } from './utils/lanes';
 import type {
   MatchCandidate,
   NeighbourPairWithMeta,
@@ -258,8 +259,21 @@ export function IndividualIdHarness() {
     // recomputes when the user drags / locks / accepts.
   }, [pairs, annotationsByImage, leniency, categoryId, working, working.version]);
 
+  // ---- Per-camera lanes for the progress bar ----
+  // Pure presentation grouping over the flat `pairs` array. Same-camera
+  // pairs sit in their camera's lane; cross-camera pairs appear in both
+  // lanes (one logical pair shown twice). Single camera → one lane.
+  const lanes = useMemo(
+    () => buildLanes(pairs, transect.data?.cameraNamesById ?? {}),
+    [pairs, transect.data?.cameraNamesById]
+  );
+
   // ---- Current pair index + navigation guards ----
   const [currentIndex, setCurrentIndex] = useState(0);
+  // Which lane the prev/next arrows are walking. A cross-camera pair lives
+  // in two lanes; this records which one the user is navigating so "next"
+  // stays on the expected camera instead of jumping rigs.
+  const [activeLane, setActiveLane] = useState(0);
   // After the first load, skip to the first incomplete (yellow) pair.
   //
   // We deliberately wait for the annotations sync to finish before
@@ -285,30 +299,66 @@ export function IndividualIdHarness() {
     setCurrentIndex(Math.max(0, firstIncomplete));
   }, [pairViews, transect.data?.annotations, localAnnotations.length]);
 
+  // Keep `activeLane` pointing at a lane that actually contains the current
+  // pair. The pair-complete popups move `currentIndex` directly with no lane
+  // context; snap to a lane containing it so the arrows keep working.
+  useEffect(() => {
+    if (!lanes.length) return;
+    if (lanes[activeLane]?.entries.includes(currentIndex)) return;
+    const li = lanes.findIndex((l) => l.entries.includes(currentIndex));
+    setActiveLane(li >= 0 ? li : 0);
+  }, [currentIndex, lanes, activeLane]);
+
   const [navAway, setNavAway] = useState<{
     show: boolean;
     target: number;
     direction: 'prev' | 'next' | 'jump';
-  }>({ show: false, target: 0, direction: 'jump' });
+    lane: number;
+  }>({ show: false, target: 0, direction: 'jump', lane: 0 });
 
   const requestPair = useCallback(
-    (target: number, direction: 'prev' | 'next' | 'jump') => {
+    (target: number, direction: 'prev' | 'next' | 'jump', lane: number) => {
       if (target < 0 || target >= pairViews.length) return;
-      if (target === currentIndex) return;
+      if (target === currentIndex) {
+        // Same pair, clicked in a different lane — just refocus that lane.
+        setActiveLane(lane);
+        return;
+      }
       const here = pairViews[currentIndex];
       const stillHasWork =
         here && here.completion.status === 'incomplete';
       if (stillHasWork) {
-        setNavAway({ show: true, target, direction });
+        setNavAway({ show: true, target, direction, lane });
       } else {
         setCurrentIndex(target);
+        setActiveLane(lane);
       }
     },
     [pairViews, currentIndex]
   );
 
+  // Prev/next arrows walk the active lane's entries, not the global flat
+  // order — so navigation stays on one camera.
+  const laneNav = useCallback(
+    (delta: 1 | -1) => {
+      const lane = lanes[activeLane];
+      if (!lane) return;
+      const pos = lane.entries.indexOf(currentIndex);
+      if (pos === -1) return;
+      const next = pos + delta;
+      if (next < 0 || next >= lane.entries.length) return;
+      requestPair(
+        lane.entries[next],
+        delta === 1 ? 'next' : 'prev',
+        activeLane
+      );
+    },
+    [lanes, activeLane, currentIndex, requestPair]
+  );
+
   const confirmNavAway = () => {
     setCurrentIndex(navAway.target);
+    setActiveLane(navAway.lane);
     setNavAway({ ...navAway, show: false });
   };
   const cancelNavAway = () => setNavAway({ ...navAway, show: false });
@@ -1155,19 +1205,17 @@ export function IndividualIdHarness() {
             onManualLinkRequest={requestManualLink}
             onAddOov={handlePlaceOov}
             onAllAccepted={handleAllAccepted}
-            onRequestPrevPair={() =>
-              requestPair(currentIndex - 1, 'prev')
-            }
-            onRequestNextPair={() =>
-              requestPair(currentIndex + 1, 'next')
-            }
+            onRequestPrevPair={() => laneNav(-1)}
+            onRequestNextPair={() => laneNav(1)}
           />
         )}
       </div>
       <ProgressBar
         states={completionStates}
+        lanes={lanes}
         activeIndex={currentIndex}
-        onJump={(i) => requestPair(i, 'jump')}
+        activeLane={activeLane}
+        onJump={(i, lane) => requestPair(i, 'jump', lane)}
       />
       <NavigateAwayDialog
         show={navAway.show}

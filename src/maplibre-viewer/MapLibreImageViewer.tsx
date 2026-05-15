@@ -41,7 +41,7 @@ class RotateControl implements maplibregl.IControl {
     
     button.onclick = () => {
       const currentBearing = map.getBearing();
-      const nextBearing = (Math.round(currentBearing / 90) * 90) + 90;
+      const nextBearing = (Math.round(currentBearing / 90) * 90) - 90;
       map.easeTo({
         bearing: nextBearing,
         duration: 300
