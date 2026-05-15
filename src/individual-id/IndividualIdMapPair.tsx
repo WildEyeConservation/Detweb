@@ -77,6 +77,22 @@ interface Props {
    */
   onChangeLabel?: (annotationId: string, currentCategoryId: string) => void;
   /**
+   * User clicked "Mark as obscured" / "Mark as visible" on a marker's popup.
+   * Receives the real annotation's id (never a shadow). The harness toggles
+   * the annotation's `obscured` flag.
+   */
+  onToggleObscured?: (annotationId: string) => void;
+  /**
+   * User ctrl+clicked a real marker on the other image while a candidate is
+   * active. Args: the active candidate's real annotation id (on the image
+   * opposite the click) and the ctrl-clicked real annotation id. The harness
+   * shows a confirm dialog, then commits the link.
+   */
+  onManualLinkRequest?: (
+    activeAnnotationId: string,
+    clickedAnnotationId: string
+  ) => void;
+  /**
    * The harness asks: are we done with this pair? Returns true iff every
    * candidate is `accepted`.
    */
@@ -129,6 +145,8 @@ export function IndividualIdMapPair(props: Props) {
     onPlaceNew,
     onDelete,
     onChangeLabel,
+    onToggleObscured,
+    onManualLinkRequest,
     onAllAccepted,
     onRequestPrevPair,
     onRequestNextPair,
@@ -253,6 +271,7 @@ export function IndividualIdMapPair(props: Props) {
         kind: classify(c.realA, c.isShadowA),
         identityKey: c.pairKey,
         active: c.pairKey === activeKey,
+        obscured: !!c.realA?.obscured,
       });
     }
     return out;
@@ -272,6 +291,7 @@ export function IndividualIdMapPair(props: Props) {
         kind: classify(c.realB, c.isShadowB),
         identityKey: c.pairKey,
         active: c.pairKey === activeKey,
+        obscured: !!c.realB?.obscured,
       });
     }
     return out;
@@ -645,6 +665,53 @@ export function IndividualIdMapPair(props: Props) {
     [candidates, onChangeLabel]
   );
 
+  const handleToggleObscuredA = useCallback(
+    (candidateKey: string) => {
+      const c = candidates.find((cc) => cc.pairKey === candidateKey);
+      if (c?.realA) onToggleObscured?.(c.realA.id);
+    },
+    [candidates, onToggleObscured]
+  );
+  const handleToggleObscuredB = useCallback(
+    (candidateKey: string) => {
+      const c = candidates.find((cc) => cc.pairKey === candidateKey);
+      if (c?.realB) onToggleObscured?.(c.realB.id);
+    },
+    [candidates, onToggleObscured]
+  );
+
+  // ---- Manual cross-image link (ctrl+click the other image's marker) ----
+  // When a candidate is active, ctrl+clicking a *real* marker on the OTHER
+  // image asks to link that annotation with the active candidate's real
+  // annotation on the image opposite the click. v1 only allows this when the
+  // active candidate's far side (the side being clicked toward) is a
+  // shadow/informational proposal — never silently breaking an existing
+  // real↔real link. Invalid ctrl+clicks are ignored (no activation).
+  const handleCtrlClickA = useCallback(
+    (candidateKey: string) => {
+      if (!activeCandidate || activeCandidate.pairKey === candidateKey) return;
+      const clicked = candidates.find((c) => c.pairKey === candidateKey);
+      if (!clicked?.realA) return; // clicked a shadow, nothing to link
+      // Anchor = active candidate's real on the opposite image (B). Its A
+      // side must currently be a shadow/informational, not a real↔real.
+      if (!activeCandidate.realB) return;
+      if (activeCandidate.realA && !activeCandidate.informational) return;
+      onManualLinkRequest?.(activeCandidate.realB.id, clicked.realA.id);
+    },
+    [activeCandidate, candidates, onManualLinkRequest]
+  );
+  const handleCtrlClickB = useCallback(
+    (candidateKey: string) => {
+      if (!activeCandidate || activeCandidate.pairKey === candidateKey) return;
+      const clicked = candidates.find((c) => c.pairKey === candidateKey);
+      if (!clicked?.realB) return;
+      if (!activeCandidate.realA) return;
+      if (activeCandidate.realB && !activeCandidate.informational) return;
+      onManualLinkRequest?.(activeCandidate.realA.id, clicked.realB.id);
+    },
+    [activeCandidate, candidates, onManualLinkRequest]
+  );
+
   // Image-space coords of the active candidate on each side, fed to the
   // maps so they can render a leniency-radius ring around the right marker.
   const activeAnchorA = activeCandidate?.posA ?? null;
@@ -666,6 +733,8 @@ export function IndividualIdMapPair(props: Props) {
             onHoverChange={handleHoverA}
             onMarkerDelete={handleDeleteA}
             onMarkerChangeLabel={handleChangeLabelA}
+            onMarkerToggleObscured={handleToggleObscuredA}
+            onMarkerCtrlClick={handleCtrlClickA}
             leniency={leniency}
             leniencyAnchor={activeAnchorA}
             // Side A's overlay traces image B's bounds projected onto A.
@@ -686,6 +755,8 @@ export function IndividualIdMapPair(props: Props) {
             onHoverChange={handleHoverB}
             onMarkerDelete={handleDeleteB}
             onMarkerChangeLabel={handleChangeLabelB}
+            onMarkerToggleObscured={handleToggleObscuredB}
+            onMarkerCtrlClick={handleCtrlClickB}
             leniency={leniency}
             leniencyAnchor={activeAnchorB}
             // Side B's overlay traces image A's bounds projected onto B.
