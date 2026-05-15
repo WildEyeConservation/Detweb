@@ -18,6 +18,8 @@ import {
 import { buildMatchCandidates } from './utils/munkres';
 import { buildNeighbourTransforms } from './utils/transforms';
 import { evaluatePairCompletion } from './utils/completion';
+import { isOov } from './utils/identity';
+import { buildLanes } from './utils/lanes';
 import type {
   MatchCandidate,
   NeighbourPairWithMeta,
@@ -257,8 +259,21 @@ export function IndividualIdHarness() {
     // recomputes when the user drags / locks / accepts.
   }, [pairs, annotationsByImage, leniency, categoryId, working, working.version]);
 
+  // ---- Per-camera lanes for the progress bar ----
+  // Pure presentation grouping over the flat `pairs` array. Same-camera
+  // pairs sit in their camera's lane; cross-camera pairs appear in both
+  // lanes (one logical pair shown twice). Single camera → one lane.
+  const lanes = useMemo(
+    () => buildLanes(pairs, transect.data?.cameraNamesById ?? {}),
+    [pairs, transect.data?.cameraNamesById]
+  );
+
   // ---- Current pair index + navigation guards ----
   const [currentIndex, setCurrentIndex] = useState(0);
+  // Which lane the prev/next arrows are walking. A cross-camera pair lives
+  // in two lanes; this records which one the user is navigating so "next"
+  // stays on the expected camera instead of jumping rigs.
+  const [activeLane, setActiveLane] = useState(0);
   // After the first load, skip to the first incomplete (yellow) pair.
   //
   // We deliberately wait for the annotations sync to finish before
@@ -284,30 +299,66 @@ export function IndividualIdHarness() {
     setCurrentIndex(Math.max(0, firstIncomplete));
   }, [pairViews, transect.data?.annotations, localAnnotations.length]);
 
+  // Keep `activeLane` pointing at a lane that actually contains the current
+  // pair. The pair-complete popups move `currentIndex` directly with no lane
+  // context; snap to a lane containing it so the arrows keep working.
+  useEffect(() => {
+    if (!lanes.length) return;
+    if (lanes[activeLane]?.entries.includes(currentIndex)) return;
+    const li = lanes.findIndex((l) => l.entries.includes(currentIndex));
+    setActiveLane(li >= 0 ? li : 0);
+  }, [currentIndex, lanes, activeLane]);
+
   const [navAway, setNavAway] = useState<{
     show: boolean;
     target: number;
     direction: 'prev' | 'next' | 'jump';
-  }>({ show: false, target: 0, direction: 'jump' });
+    lane: number;
+  }>({ show: false, target: 0, direction: 'jump', lane: 0 });
 
   const requestPair = useCallback(
-    (target: number, direction: 'prev' | 'next' | 'jump') => {
+    (target: number, direction: 'prev' | 'next' | 'jump', lane: number) => {
       if (target < 0 || target >= pairViews.length) return;
-      if (target === currentIndex) return;
+      if (target === currentIndex) {
+        // Same pair, clicked in a different lane — just refocus that lane.
+        setActiveLane(lane);
+        return;
+      }
       const here = pairViews[currentIndex];
       const stillHasWork =
         here && here.completion.status === 'incomplete';
       if (stillHasWork) {
-        setNavAway({ show: true, target, direction });
+        setNavAway({ show: true, target, direction, lane });
       } else {
         setCurrentIndex(target);
+        setActiveLane(lane);
       }
     },
     [pairViews, currentIndex]
   );
 
+  // Prev/next arrows walk the active lane's entries, not the global flat
+  // order — so navigation stays on one camera.
+  const laneNav = useCallback(
+    (delta: 1 | -1) => {
+      const lane = lanes[activeLane];
+      if (!lane) return;
+      const pos = lane.entries.indexOf(currentIndex);
+      if (pos === -1) return;
+      const next = pos + delta;
+      if (next < 0 || next >= lane.entries.length) return;
+      requestPair(
+        lane.entries[next],
+        delta === 1 ? 'next' : 'prev',
+        activeLane
+      );
+    },
+    [lanes, activeLane, currentIndex, requestPair]
+  );
+
   const confirmNavAway = () => {
     setCurrentIndex(navAway.target);
+    setActiveLane(navAway.lane);
     setNavAway({ ...navAway, show: false });
   };
   const cancelNavAway = () => setNavAway({ ...navAway, show: false });
@@ -449,6 +500,81 @@ export function IndividualIdHarness() {
   );
 
   /**
+   * User clicked the "Add out-of-view" control on a map. Creates an OOV
+   * annotation for THAT map's image (the one the user judges is missing the
+   * animal that breaks the chain). It gets the active category, a placeholder
+   * x/y of 0,0 (never rendered on the map — it lives in the side panel), and
+   * `oov: true`. Once created, Munkres flags every pair containing this
+   * image as needing attention until the user links the OOV on each side.
+   */
+  const handlePlaceOov = useCallback(
+    async (side: 'A' | 'B') => {
+      if (!currentPair || !categoryId) return;
+      const setId =
+        transect.data?.category?.annotationSetId ?? annotationSetId ?? '';
+      if (!setId) return;
+      const group = (projectCtx?.project as any)?.organizationId ?? undefined;
+      const nowIso = new Date().toISOString();
+      const newId = crypto.randomUUID();
+      const imageId =
+        side === 'A' ? currentPair.image1Id : currentPair.image2Id;
+      const dbInput = {
+        id: newId,
+        imageId,
+        setId,
+        categoryId,
+        x: 0,
+        y: 0,
+        oov: true,
+        source: 'individual-id',
+        projectId: projectCtx?.project?.id,
+        group,
+      };
+      const localRow = {
+        ...dbInput,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      } as unknown as AnnotationType;
+
+      setLocalAnnotations((prev) => [...prev, localRow]);
+      patchTransectCache((old) => {
+        const annotations = [...old.annotations, localRow];
+        return {
+          ...old,
+          annotations,
+          annotationsByImage: indexByImage(annotations),
+        };
+      });
+
+      try {
+        await client.models.Annotation.create(dbInput as any);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to create OOV annotation', err);
+        setLocalAnnotations((prev) => prev.filter((a) => a.id !== newId));
+        patchTransectCache((old) => {
+          const annotations = old.annotations.filter((a) => a.id !== newId);
+          return {
+            ...old,
+            annotations,
+            annotationsByImage: indexByImage(annotations),
+          };
+        });
+      }
+    },
+    [
+      currentPair,
+      categoryId,
+      transect.data?.category?.annotationSetId,
+      annotationSetId,
+      projectCtx?.project?.id,
+      projectCtx?.project,
+      client,
+      patchTransectCache,
+    ]
+  );
+
+  /**
    * User clicked Delete in a marker's popup. Fires `Annotation.delete` and
    * optimistically removes from `localAnnotations` so Munkres rebuilds
    * without it on the next render. We deliberately don't cascade to a
@@ -460,24 +586,103 @@ export function IndividualIdHarness() {
   const handleDelete = useCallback(
     async (annotationId: string) => {
       const before = localAnnotations;
-      // Optimistic in-memory removal.
-      setLocalAnnotations((prev) => prev.filter((a) => a.id !== annotationId));
+      const target = localAnnotations.find((a) => a.id === annotationId);
+
+      // OOV deletion: the OOV is almost always a secondary bridging the
+      // chain across an image where the animal isn't visible. Deleting it
+      // should un-bridge — annotations OLDER than the OOV keep their
+      // existing identity, while annotations NEWER than the OOV form their
+      // own chain rooted at the chronologically nearest survivor (the one
+      // on the image immediately after the OOV). The older segment and the
+      // newer segment end up independent, exactly as if the OOV had never
+      // been inserted.
+      //
+      // For a non-OOV deletion the existing convention is to leave
+      // secondaries orphaned and let Munkres re-propose — keep that.
+      const reRootUpdates: Array<{
+        id: string;
+        patch: Partial<AnnotationType>;
+      }> = [];
+      if (target && isOov(target)) {
+        const chainKey = target.objectId ?? target.id;
+        const chainMembers = localAnnotations.filter(
+          (a) =>
+            a.id !== annotationId &&
+            (a.objectId === chainKey || a.id === chainKey)
+        );
+        const imagesById = transect.data?.imagesById ?? {};
+        const ageOf = (imageId: string) => {
+          const img: any = imagesById[imageId];
+          return {
+            timestamp: (img?.timestamp ?? null) as number | null,
+            originalPath: (img?.originalPath ?? null) as string | null,
+          };
+        };
+        const oovAge = ageOf(target.imageId);
+        const newer = chainMembers.filter((a) =>
+          isOlder(oovAge, ageOf(a.imageId))
+        );
+        if (newer.length > 0) {
+          // Chronologically nearest survivor (= oldest of the newer set)
+          // becomes the new primary.
+          let nearest = newer[0];
+          for (let i = 1; i < newer.length; i++) {
+            if (isOlder(ageOf(newer[i].imageId), ageOf(nearest.imageId))) {
+              nearest = newer[i];
+            }
+          }
+          for (const a of newer) {
+            if (a.objectId !== nearest.id) {
+              reRootUpdates.push({
+                id: a.id,
+                patch: { objectId: nearest.id },
+              });
+            }
+          }
+        }
+      }
+
+      const applyDeleteAndReRoot = (
+        prev: AnnotationType[]
+      ): AnnotationType[] => {
+        let next = prev.filter((a) => a.id !== annotationId);
+        if (reRootUpdates.length > 0) {
+          const patchById = new Map(
+            reRootUpdates.map((u) => [u.id, u.patch])
+          );
+          next = next.map((a) =>
+            patchById.has(a.id) ? { ...a, ...patchById.get(a.id)! } : a
+          );
+        }
+        return next;
+      };
+
+      // Optimistic in-memory removal + re-root.
+      setLocalAnnotations(applyDeleteAndReRoot);
       // Persisted cache removal — so the deletion survives a reload.
-      patchTransectCache((old) => ({
-        ...old,
-        annotations: old.annotations.filter((a) => a.id !== annotationId),
-        annotationsByImage: Object.fromEntries(
-          Object.entries(old.annotationsByImage).map(([k, list]) => [
-            k,
-            list.filter((a) => a.id !== annotationId),
-          ])
-        ),
-      }));
+      patchTransectCache((old) => {
+        const annotations = applyDeleteAndReRoot(old.annotations);
+        return {
+          ...old,
+          annotations,
+          annotationsByImage: indexByImage(annotations),
+        };
+      });
 
       try {
         const result: any = await client.models.Annotation.delete({
           id: annotationId,
         } as any);
+        // Re-root patches run in parallel with the delete — failure of any
+        // single update is logged but doesn't abort the others.
+        await Promise.all(
+          reRootUpdates.map((u) =>
+            client.models.Annotation.update({
+              id: u.id,
+              ...u.patch,
+            } as any)
+          )
+        );
         // AppSync returns `data: null` (with no errors) when an owner/group
         // auth filter blocks the mutation. The user won't see the row in
         // the UI either way (the cache is updated), but on next reload the
@@ -501,7 +706,7 @@ export function IndividualIdHarness() {
         }));
       }
     },
-    [client, localAnnotations, patchTransectCache]
+    [client, localAnnotations, patchTransectCache, transect.data?.imagesById]
   );
 
   /**
@@ -998,20 +1203,19 @@ export function IndividualIdHarness() {
             onChangeLabel={handleChangeLabel}
             onToggleObscured={handleToggleObscured}
             onManualLinkRequest={requestManualLink}
+            onAddOov={handlePlaceOov}
             onAllAccepted={handleAllAccepted}
-            onRequestPrevPair={() =>
-              requestPair(currentIndex - 1, 'prev')
-            }
-            onRequestNextPair={() =>
-              requestPair(currentIndex + 1, 'next')
-            }
+            onRequestPrevPair={() => laneNav(-1)}
+            onRequestNextPair={() => laneNav(1)}
           />
         )}
       </div>
       <ProgressBar
         states={completionStates}
+        lanes={lanes}
         activeIndex={currentIndex}
-        onJump={(i) => requestPair(i, 'jump')}
+        activeLane={activeLane}
+        onJump={(i, lane) => requestPair(i, 'jump', lane)}
       />
       <NavigateAwayDialog
         show={navAway.show}

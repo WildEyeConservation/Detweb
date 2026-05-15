@@ -35,6 +35,8 @@ export interface TransectData {
   annotationsByImage: Record<string, AnnotationType[]>;
   /** Image-neighbour rows that pass the basic filter (within transect, not skipped). */
   rawNeighbours: ImageNeighbourType[];
+  /** camera id → camera name, used to label the progress-bar lanes. */
+  cameraNamesById: Record<string, string>;
 }
 
 /**
@@ -93,6 +95,19 @@ export function useTransectData(input: UseTransectDataInput) {
 
       const imagesById: Record<string, ImageType> = {};
       for (const img of images) imagesById[img.id] = img;
+
+      // 2b. Project cameras — only id → name, for progress-bar lane labels.
+      const cameraResp = await client.models.Camera.camerasByProjectId(
+        { projectId: project!.id },
+        { selectionSet: ['id', 'name'], limit: 1000 }
+      );
+      const cameraNamesById: Record<string, string> = {};
+      for (const c of (cameraResp.data ?? []) as Array<{
+        id?: string | null;
+        name?: string | null;
+      }>) {
+        if (c?.id && c?.name) cameraNamesById[c.id] = c.name;
+      }
 
       // 3. Neighbours touching any of those images.
       const imageIds = new Set(images.map((i) => i.id));
@@ -154,6 +169,7 @@ export function useTransectData(input: UseTransectDataInput) {
         annotations,
         annotationsByImage,
         rawNeighbours,
+        cameraNamesById,
       };
     },
   });

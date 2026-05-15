@@ -1,37 +1,56 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PairCompletionState } from '../types';
+import type { Lane } from '../utils/lanes';
 import { completionColor } from '../utils/completion';
 
 interface Props {
-  /** Completion state for each pair, in display order. */
+  /** Completion state for each pair, in flat (global) display order. */
   states: PairCompletionState[];
-  /** Index of the pair currently being worked on. */
+  /**
+   * Per-camera lanes. `entries` index into `states`. Cross-camera pairs
+   * appear in two lanes; clicking either jumps to the same flat index.
+   */
+  lanes: Lane[];
+  /** Flat index of the pair currently being worked on. */
   activeIndex: number;
-  /** Click a slot to jump to that pair (harness shows confirm if needed). */
-  onJump: (index: number) => void;
+  /** Which lane the prev/next arrows are walking. */
+  activeLane: number;
+  /** Click a slot to jump to that pair, carrying the lane it was clicked in. */
+  onJump: (index: number, lane: number) => void;
 }
 
 const HEIGHT = 22;
 const PADDING_X = 12;
 
 /**
- * Canvas-based progress bar that scales to any number of pairs.
+ * Canvas-based bar for one camera lane. Scales to any number of pairs:
  *
- *   - Plenty of room (slot >= 8px) → render filled circles.
- *   - Less room (slot >= 1.5px) → render thin filled bars.
- *   - Less than 1px per pair → quantise: each on-screen column represents
- *     a bucket of pairs and is coloured by the worst (yellow > green) state
- *     in the bucket so that incomplete pairs are never visually swallowed.
+ *   - Plenty of room (slot >= 8px) → filled circles.
+ *   - Less room (slot >= 1.5px) → thin filled bars.
+ *   - Less than 1.5px per pair → quantise: each on-screen column is a bucket
+ *     of pairs, coloured by the worst (yellow > green) state so a single
+ *     incomplete pair is never visually swallowed.
  *
- * Click and hover work in slot-space regardless of render mode.
+ * `activeLocal` is the position of the globally-active pair within THIS
+ * lane's entries, or -1 if it isn't in this lane. The white marker is drawn
+ * whenever it is present, so a shared cross-camera pair lights up in both
+ * lanes regardless of which one the arrows are following.
  */
-export function ProgressBar({ states, activeIndex, onJump }: Props) {
+function LaneBar({
+  states,
+  activeLocal,
+  onPick,
+  onHover,
+}: {
+  states: PairCompletionState[];
+  activeLocal: number;
+  onPick: (local: number) => void;
+  onHover: (local: number | null) => void;
+}) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(0);
-  const [hover, setHover] = useState<number | null>(null);
 
-  // ResizeObserver to keep the canvas pinned to its container width.
   useEffect(() => {
     const wrap = wrapperRef.current;
     if (!wrap) return;
@@ -46,16 +65,6 @@ export function ProgressBar({ states, activeIndex, onJump }: Props) {
   const innerWidth = Math.max(0, width - 2 * PADDING_X);
   const slotWidth = states.length > 0 ? innerWidth / states.length : 0;
 
-  const acceptedCount = useMemo(
-    () =>
-      states.reduce(
-        (n, s) => n + (s.status === 'complete' || s.status === 'empty' ? 1 : 0),
-        0
-      ),
-    [states]
-  );
-
-  // Render the canvas whenever inputs change.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || width === 0) return;
@@ -72,7 +81,6 @@ export function ProgressBar({ states, activeIndex, onJump }: Props) {
     if (states.length === 0 || slotWidth <= 0) return;
 
     if (slotWidth >= 8) {
-      // Dot mode.
       const radius = Math.min(8, slotWidth / 2 - 1);
       states.forEach((s, i) => {
         const cx = PADDING_X + i * slotWidth + slotWidth / 2;
@@ -81,14 +89,13 @@ export function ProgressBar({ states, activeIndex, onJump }: Props) {
         ctx.arc(cx, cy, radius, 0, Math.PI * 2);
         ctx.fillStyle = completionColor(s);
         ctx.fill();
-        if (i === activeIndex) {
+        if (i === activeLocal) {
           ctx.strokeStyle = '#ffffff';
           ctx.lineWidth = 2;
           ctx.stroke();
         }
       });
     } else if (slotWidth >= 1.5) {
-      // Slim bar mode — one bar per pair, 1px gap if there's room.
       const barW = Math.max(1, slotWidth - 0.5);
       const top = 4;
       const barH = HEIGHT - 8;
@@ -97,20 +104,16 @@ export function ProgressBar({ states, activeIndex, onJump }: Props) {
         ctx.fillStyle = completionColor(s);
         ctx.fillRect(x, top, barW, barH);
       });
-      if (activeIndex >= 0 && activeIndex < states.length) {
-        const x = PADDING_X + activeIndex * slotWidth;
+      if (activeLocal >= 0 && activeLocal < states.length) {
+        const x = PADDING_X + activeLocal * slotWidth;
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1;
         ctx.strokeRect(x - 0.5, top - 1.5, barW + 1, barH + 3);
       }
     } else {
-      // Quantised mode: bucket pairs into pixels. Each on-screen column
-      // shows the worst (incomplete > complete) status in its bucket so a
-      // single yellow pair in a 200-pair window still gets a visible mark.
       const cols = Math.max(1, Math.floor(innerWidth));
       const top = 4;
       const barH = HEIGHT - 8;
-      // Pre-compute per-column colour.
       const perCol = new Array(cols).fill('') as string[];
       const perColPriority = new Array(cols).fill(0) as number[]; // 0 empty, 1 green, 2 yellow
       for (let i = 0; i < states.length; i++) {
@@ -126,17 +129,16 @@ export function ProgressBar({ states, activeIndex, onJump }: Props) {
         ctx.fillStyle = perCol[col];
         ctx.fillRect(PADDING_X + col, top, 1, barH);
       }
-      // Active marker.
-      if (activeIndex >= 0 && activeIndex < states.length) {
-        const x = PADDING_X + Math.floor((activeIndex / states.length) * cols);
+      if (activeLocal >= 0 && activeLocal < states.length) {
+        const x =
+          PADDING_X + Math.floor((activeLocal / states.length) * cols);
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1;
         ctx.strokeRect(x - 0.5, top - 1.5, 2, barH + 3);
       }
     }
-  }, [states, slotWidth, innerWidth, width, activeIndex]);
+  }, [states, slotWidth, innerWidth, width, activeLocal]);
 
-  // Map a screen x to a pair index.
   const xToIndex = (clientX: number): number | null => {
     const canvas = canvasRef.current;
     if (!canvas || states.length === 0 || slotWidth <= 0) return null;
@@ -148,8 +150,62 @@ export function ProgressBar({ states, activeIndex, onJump }: Props) {
   };
 
   return (
+    <div ref={wrapperRef} className='w-100'>
+      <canvas
+        ref={canvasRef}
+        onMouseMove={(e) => onHover(xToIndex(e.clientX))}
+        onMouseLeave={() => onHover(null)}
+        onClick={(e) => {
+          const i = xToIndex(e.clientX);
+          if (i !== null) onPick(i);
+        }}
+        style={{ display: 'block', cursor: 'pointer' }}
+      />
+    </div>
+  );
+}
+
+/**
+ * Multi-camera progress bar. Renders one {@link LaneBar} per camera lane,
+ * stacked. Same-camera pairs sit in their camera's lane; cross-camera pairs
+ * appear in both lanes but are one logical pair. The lane the prev/next
+ * arrows follow (`activeLane`) is highlighted; the others are dimmed.
+ *
+ * A single lane renders exactly like the original single-bar progress bar.
+ */
+export function ProgressBar({
+  states,
+  lanes,
+  activeIndex,
+  activeLane,
+  onJump,
+}: Props) {
+  const [hover, setHover] = useState<{ lane: number; local: number } | null>(
+    null
+  );
+
+  const acceptedCount = useMemo(
+    () =>
+      states.reduce(
+        (n, s) => n + (s.status === 'complete' || s.status === 'empty' ? 1 : 0),
+        0
+      ),
+    [states]
+  );
+
+  const multi = lanes.length > 1;
+
+  const headerLeft = (() => {
+    if (hover) {
+      const lane = lanes[hover.lane];
+      const within = `Pair ${hover.local + 1} / ${lane.entries.length}`;
+      return multi ? `${lane.label} · ${within}` : within;
+    }
+    return `${acceptedCount} / ${states.length} done`;
+  })();
+
+  return (
     <div
-      ref={wrapperRef}
       style={{
         // Same colour as the toolbar above; a 1px top border gives the
         // sense of two sections within one bar.
@@ -164,29 +220,56 @@ export function ProgressBar({ states, activeIndex, onJump }: Props) {
         className='d-flex flex-row align-items-center justify-content-between px-3 pb-1'
         style={{ fontSize: 11, opacity: 0.85 }}
       >
-        <span>
-          {hover !== null
-            ? `Pair ${hover + 1} / ${states.length}`
-            : `${acceptedCount} / ${states.length} done`}
-        </span>
-        <span style={{ opacity: 0.75 }}>
-          {slotWidth >= 8
-            ? 'click a dot to jump'
-            : slotWidth >= 1.5
-            ? 'click a bar to jump'
-            : 'click anywhere to jump'}
-        </span>
+        <span>{headerLeft}</span>
+        <span style={{ opacity: 0.75 }}>click to jump</span>
       </div>
-      <canvas
-        ref={canvasRef}
-        onMouseMove={(e) => setHover(xToIndex(e.clientX))}
-        onMouseLeave={() => setHover(null)}
-        onClick={(e) => {
-          const i = xToIndex(e.clientX);
-          if (i !== null) onJump(i);
-        }}
-        style={{ display: 'block', cursor: 'pointer' }}
-      />
+
+      <div className='d-flex flex-column' style={{ gap: multi ? 6 : 0 }}>
+        {lanes.map((lane, laneIdx) => {
+          const laneStates = lane.entries.map((i) => states[i]);
+          const activeLocal = lane.entries.indexOf(activeIndex);
+          const isActiveLane = laneIdx === activeLane;
+          const laneDone = laneStates.reduce(
+            (n, s) =>
+              n + (s.status === 'complete' || s.status === 'empty' ? 1 : 0),
+            0
+          );
+          return (
+            <div
+              key={lane.cameraId || `lane-${laneIdx}`}
+              style={{
+                borderLeft: multi
+                  ? `3px solid ${
+                      isActiveLane ? '#f8f9fa' : 'transparent'
+                    }`
+                  : undefined,
+              }}
+            >
+              {multi && (
+                <div
+                  className='d-flex flex-row align-items-center px-3'
+                  style={{ fontSize: 11, opacity: 0.85, gap: 6 }}
+                >
+                  <span style={{ fontWeight: isActiveLane ? 600 : 400 }}>
+                    {lane.label}
+                  </span>
+                  <span style={{ opacity: 0.6 }}>
+                    {laneDone} / {lane.entries.length}
+                  </span>
+                </div>
+              )}
+              <LaneBar
+                states={laneStates}
+                activeLocal={activeLocal}
+                onHover={(local) =>
+                  setHover(local === null ? null : { lane: laneIdx, local })
+                }
+                onPick={(local) => onJump(lane.entries[local], laneIdx)}
+              />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
