@@ -226,6 +226,7 @@ const schema = a
         x: a.integer().required(),
         y: a.integer().required(),
         obscured: a.boolean(),
+        oov: a.boolean(),
         objectId: a.id(),
         object: a.belongsTo('Object', 'objectId'),
         reviewCatId: a.string(),
