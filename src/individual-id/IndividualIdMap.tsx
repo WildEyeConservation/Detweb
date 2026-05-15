@@ -8,7 +8,7 @@ import {
   names,
 } from 'unique-names-generator';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { RotateCw, Layers, Copy, Check } from 'lucide-react';
+import { RotateCw, Layers, Copy, Check, EyeOff } from 'lucide-react';
 import { getTileBlob } from '../StorageLayer';
 import type { ImageType } from '../schemaTypes';
 import type { CandidateStatus, PixelTransform } from './types';
@@ -54,6 +54,12 @@ export interface MapMarker {
   identityKey: string;
   /** Active candidate is rendered larger with a halo. */
   active: boolean;
+  /**
+   * Current `obscured` state of the underlying real annotation (false for
+   * shadows). Drives the popup's "Mark as obscured" / "Mark as visible"
+   * toggle label.
+   */
+  obscured: boolean;
 }
 
 export type MapInstanceCallback = (
@@ -68,6 +74,13 @@ interface Props {
   markers: MapMarker[];
   onMarkerDrag: (candidateKey: string, x: number, y: number) => void;
   onMarkerClick: (candidateKey: string) => void;
+  /**
+   * Ctrl/⌘+click on a marker. Used for manual cross-image linking — the
+   * parent decides whether the gesture is valid (a candidate is active on
+   * the other image, the clicked marker is real, etc.). When this fires the
+   * normal click (activate) is suppressed.
+   */
+  onMarkerCtrlClick?: (candidateKey: string) => void;
   /**
    * Click on empty map area (not on a marker). Coordinates are in
    * image-space pixels and are guaranteed to lie inside `image` bounds.
@@ -100,6 +113,12 @@ interface Props {
    */
   onMarkerChangeLabel?: (candidateKey: string) => void;
   /**
+   * User clicked the "Mark as obscured" / "Mark as visible" button in the
+   * popup. Only fires for non-shadow markers — a shadow has no DB row to
+   * flag yet.
+   */
+  onMarkerToggleObscured?: (candidateKey: string) => void;
+  /**
    * Munkres "leave unmatched" cost in image pixels. Used to render a ring
    * around the active marker so the user can see exactly the radius within
    * which a partner annotation would be paired.
@@ -124,6 +143,14 @@ interface Props {
 const TILE_SIZE = 256;
 /** Inactive marker diameter in pixels. Active markers are ~25 (125%). */
 const BASE_MARKER_SIZE = 20;
+/**
+ * Pre-rendered EyeOff glyph for the "obscured" corner badge. Rendered once
+ * at module load rather than per-marker — applyMarkerStyle runs on every
+ * marker on every data change, so renderToStaticMarkup must not be in it.
+ */
+const EYE_OFF_SVG = renderToStaticMarkup(
+  <EyeOff size={11} color='#1f2933' strokeWidth={2.75} />
+);
 const LENIENCY_SOURCE = 'individual-id-leniency';
 const LENIENCY_LAYER = 'individual-id-leniency-ring';
 const PREVIEW_SOURCE = 'individual-id-homography-preview';
@@ -312,6 +339,39 @@ function applyMarkerStyle(el: HTMLDivElement, m: MapMarker) {
   } else {
     el.innerHTML = '';
   }
+
+  // Obscured badge. Appended AFTER the innerHTML assignment above (which
+  // would otherwise wipe it). Presence is fully derived from m.obscured on
+  // every call, so toggling it off cleanly removes the badge. The marker
+  // element carries maplibre's transform, which makes it a containing block
+  // for this absolutely-positioned child — it pins to the top-right corner.
+  // pointer-events:none keeps marker click/drag/hover unaffected.
+  if (m.obscured) {
+    const badge = document.createElement('div');
+    badge.style.cssText = `
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 1px solid #1f2933;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 0;
+      pointer-events: none;
+    `;
+    badge.innerHTML = EYE_OFF_SVG;
+    // The injected <svg> is inline by default and aligns to the text
+    // baseline, leaving descender space below it — that's what makes the
+    // glyph look slightly low. Block display removes it from baseline flow
+    // so flex centering is exact.
+    const svg = badge.firstElementChild as SVGElement | null;
+    if (svg) svg.style.display = 'block';
+    el.appendChild(badge);
+  }
 }
 
 /**
@@ -324,12 +384,14 @@ export function IndividualIdMap({
   markers,
   onMarkerDrag,
   onMarkerClick,
+  onMarkerCtrlClick,
   onMapClick,
   onMapInstance,
   passiveHoverKey,
   onHoverChange,
   onMarkerDelete,
   onMarkerChangeLabel,
+  onMarkerToggleObscured,
   leniency,
   leniencyAnchor,
   previewTransform,
@@ -346,16 +408,21 @@ export function IndividualIdMap({
   // freshest closures without needing to be re-bound.
   const dragRef = useRef(onMarkerDrag);
   const clickRef = useRef(onMarkerClick);
+  const ctrlClickRef = useRef(onMarkerCtrlClick);
   const mapClickRef = useRef(onMapClick);
   const hoverChangeRef = useRef(onHoverChange);
   const deleteRef = useRef(onMarkerDelete);
   const changeLabelRef = useRef(onMarkerChangeLabel);
+  const toggleObscuredRef = useRef(onMarkerToggleObscured);
   useEffect(() => {
     dragRef.current = onMarkerDrag;
   }, [onMarkerDrag]);
   useEffect(() => {
     clickRef.current = onMarkerClick;
   }, [onMarkerClick]);
+  useEffect(() => {
+    ctrlClickRef.current = onMarkerCtrlClick;
+  }, [onMarkerCtrlClick]);
   useEffect(() => {
     mapClickRef.current = onMapClick;
   }, [onMapClick]);
@@ -368,6 +435,9 @@ export function IndividualIdMap({
   useEffect(() => {
     changeLabelRef.current = onMarkerChangeLabel;
   }, [onMarkerChangeLabel]);
+  useEffect(() => {
+    toggleObscuredRef.current = onMarkerToggleObscured;
+  }, [onMarkerToggleObscured]);
 
   // ---- Popup state ----
   // One popup div per map, repositioned and recontentated per hover. We use
@@ -455,6 +525,11 @@ export function IndividualIdMap({
         ${kindLabel}
       </div>
       ${
+        data.obscured
+          ? `<div style="font-size:10px;opacity:0.7;margin-top:3px;font-style:italic">Obscured — not visible in this image</div>`
+          : ''
+      }
+      ${
         showActions
           ? `<button data-action="change-label" style="
                 margin-top: 6px;
@@ -467,6 +542,17 @@ export function IndividualIdMap({
                 font-size: 11px;
                 width: 100%;
               ">Change Label</button>
+             <button data-action="toggle-obscured" style="
+                margin-top: 6px;
+                background: #5B6977;
+                color: #fff;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 8px;
+                cursor: pointer;
+                font-size: 11px;
+                width: 100%;
+              ">${data.obscured ? 'Mark as visible' : 'Mark as obscured'}</button>
              <button data-action="delete" style="
                 margin-top: 6px;
                 background: #d9534f;
@@ -489,6 +575,16 @@ export function IndividualIdMap({
         changeBtn.addEventListener('click', (ev) => {
           ev.stopPropagation();
           changeLabelRef.current?.(key);
+          hidePopup();
+        });
+      }
+      const obscuredBtn = el.querySelector(
+        'button[data-action="toggle-obscured"]'
+      ) as HTMLButtonElement | null;
+      if (obscuredBtn) {
+        obscuredBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          toggleObscuredRef.current?.(key);
           hidePopup();
         });
       }
@@ -989,12 +1085,44 @@ export function IndividualIdMap({
       if (!mk) {
         const el = document.createElement('div');
         applyMarkerStyle(el, data);
+        // Block drag with any non-primary button (e.g. right-click-hold).
+        // This listener is registered BEFORE maplibre's Marker drag handler
+        // (which is attached during `new maplibregl.Marker` below), so
+        // stopImmediatePropagation prevents maplibre from ever seeing the
+        // non-left press. Left-button (button 0) passes through untouched so
+        // normal dragging still works. Both event names are guarded because
+        // maplibre's drag start is mousedown- or pointerdown-based depending
+        // on version.
+        const blockNonPrimaryDrag = (ev: MouseEvent) => {
+          if (ev.button !== 0) {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+          }
+        };
+        el.addEventListener('pointerdown', blockNonPrimaryDrag);
+        el.addEventListener('mousedown', blockNonPrimaryDrag);
+        // Right-click → same as Ctrl/⌘+click: request a manual link. The
+        // parent validates the gesture; the native context menu is always
+        // suppressed on markers either way.
+        el.addEventListener('contextmenu', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          ctrlClickRef.current?.(data.candidateKey);
+        });
         // Click → activate. We deliberately do NOT call stopPropagation on
-        // mousedown — maplibregl needs to see the pointer-down to decide
-        // whether the gesture is a drag. (The mousedown wouldn't bubble to
-        // the canvas anyway since the marker DOM is a sibling.)
+        // mousedown — maplibregl needs to see the (left) pointer-down to
+        // decide whether the gesture is a drag. (The mousedown wouldn't
+        // bubble to the canvas anyway since the marker DOM is a sibling.)
         el.addEventListener('click', (ev) => {
           ev.stopPropagation();
+          // Ctrl (Win/Linux) or ⌘ (Mac) + click is the manual-link gesture.
+          // The parent validates it; if it handles the gesture we suppress
+          // the normal activate-click.
+          if ((ev.ctrlKey || ev.metaKey) && ctrlClickRef.current) {
+            ev.preventDefault();
+            ctrlClickRef.current(data.candidateKey);
+            return;
+          }
           clickRef.current(data.candidateKey);
         });
         // Hover → show interactive popup with name + (optional) Delete.

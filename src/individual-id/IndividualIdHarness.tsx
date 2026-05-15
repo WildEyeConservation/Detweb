@@ -27,6 +27,7 @@ import { IndividualIdMapPair } from './IndividualIdMapPair';
 import { ProgressBar } from './components/ProgressBar';
 import { NavigateAwayDialog } from './components/NavigateAwayDialog';
 import { PairCompleteDialog } from './components/PairCompleteDialog';
+import { LinkAnnotationDialog } from './components/LinkAnnotationDialog';
 import ChangeCategoryModal from '../ChangeCategoryModal';
 import type { CategoryType } from '../schemaTypes';
 
@@ -81,6 +82,17 @@ function isOlder(
   }
   return false;
 }
+
+/**
+ * One participant in an identity link: an existing real annotation, or a
+ * shadow position that commitActorLink will materialise as a new row.
+ */
+type LinkActor = {
+  id: string;
+  imageId: string;
+  existing: AnnotationType | null;
+  candidatePos: { x: number; y: number } | null;
+};
 
 /**
  * Top-level "Individual ID" workflow.
@@ -492,6 +504,56 @@ export function IndividualIdHarness() {
     [client, localAnnotations, patchTransectCache]
   );
 
+  /**
+   * User clicked "Mark as obscured" / "Mark as visible" in a marker's popup.
+   * Toggles the annotation's `obscured` flag. Deliberately NOT propagated to
+   * the rest of the chain — visibility is per-image (an animal can be clearly
+   * visible in one photo and hidden behind a bush in the next), unlike a
+   * label change which must stay consistent across the whole individual.
+   */
+  const handleToggleObscured = useCallback(
+    async (annotationId: string) => {
+      const current = localAnnotations.find((a) => a.id === annotationId);
+      if (!current) return;
+      const next = !current.obscured;
+
+      const apply = (a: AnnotationType): AnnotationType =>
+        a.id === annotationId ? { ...a, obscured: next } : a;
+      const revert = (a: AnnotationType): AnnotationType =>
+        a.id === annotationId ? { ...a, obscured: current.obscured } : a;
+
+      setLocalAnnotations((prev) => prev.map(apply));
+      patchTransectCache((old) => {
+        const annotations = old.annotations.map(apply);
+        return {
+          ...old,
+          annotations,
+          annotationsByImage: indexByImage(annotations),
+        };
+      });
+
+      try {
+        await client.models.Annotation.update({
+          id: annotationId,
+          obscured: next,
+        } as any);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to toggle annotation obscured', err);
+        setLocalAnnotations((prev) => prev.map(revert));
+        patchTransectCache((old) => {
+          const annotations = old.annotations.map(revert);
+          return {
+            ...old,
+            annotations,
+            annotationsByImage: indexByImage(annotations),
+          };
+        });
+      }
+    },
+    [localAnnotations, client, patchTransectCache]
+  );
+
   // ---- Change-label flow ----
   // The marker popup's "Change Label" button asks the harness to open the
   // ChangeCategoryModal for a specific real annotation. The modal posts
@@ -613,42 +675,37 @@ export function IndividualIdHarness() {
   );
 
   /**
-   * Commit a candidate to the database.
+   * Shared core for committing an identity link between a set of "actors"
+   * (real annotations and/or Munkres-proposed shadow positions that should
+   * all share one `objectId`).
    *
    * Chain-aware primary determination:
    *
-   *   1. Each side is either a real annotation (possibly already linked to a
-   *      chain via its `objectId`) or a Munkres-proposed shadow we'll create.
-   *   2. We gather all annotations involved in the merged chain — the two
-   *      sides themselves plus every existing annotation that already shares
-   *      an `objectId` with either side (the chain members and the chain
-   *      root each side currently points to).
+   *   1. Each actor is either a real annotation (possibly already linked to a
+   *      chain via its `objectId`) or a shadow we'll create as a new row.
+   *   2. We gather all annotations in the merged chain — the actors plus
+   *      every existing annotation already sharing an `objectId` with any
+   *      actor (chain members and the chain root each actor points to).
    *   3. The chronologically oldest annotation across that whole set becomes
    *      the chain root. Its id is the shared `objectId` everyone else gets.
    *   4. Every annotation whose current `objectId` differs from the new root
-   *      id gets a patch — including chain-only annotations on images that
-   *      aren't part of this pair (e.g. merging two chains).
+   *      gets a patch — including chain-only annotations on images outside
+   *      this pair (merging two chains).
    *
-   * This handles the cases the simple pair-local rule got wrong:
+   * The cascade is bounded — only annotations already linked to an actor are
+   * touched. Two unlinked actors is the no-cascade fast path.
    *
-   *   - Side B was already linked to an older chain root X. Accepting A↔B
-   *     keeps X as the root; A links into X's chain.
-   *   - Side A is in chain V, side B is in chain W, and V's root is older
-   *     than W's. Everyone in W's chain (including W itself) gets rewritten
-   *     to point at V.id.
-   *
-   * The cascade is bounded — only annotations already linked to either side
-   * are touched. Plain "two unlinked sides" is the no-cascade fast path and
-   * behaves exactly like the simple chronological rule.
+   * We deliberately do NOT invalidate the transect query: that would refetch
+   * thousands of paginated rows and the resulting reference change would
+   * clobber the optimistic `localAnnotations`. The optimistic update is the
+   * session source of truth; the disk cache rehydrates it on next load.
    */
-  const handleAccept = useCallback(
-    async (candidateKey: string) => {
-      if (!currentPair || !currentPairKey || !currentView) return;
-      const candidate = currentView.candidates.find(
-        (c) => c.pairKey === candidateKey
-      );
-      if (!candidate) return;
-
+  const commitActorLink = useCallback(
+    async (
+      actors: LinkActor[],
+      categoryId: string
+    ) => {
+      if (actors.length === 0) return;
       const nowIso = new Date().toISOString();
       const setId =
         transect.data?.category?.annotationSetId ?? annotationSetId ?? '';
@@ -663,56 +720,8 @@ export function IndividualIdHarness() {
         };
       };
 
-      // ---- 1. Build the set of "actors" (the two pair sides). ----
-      // For shadow sides we mint the new annotation id up front so the
-      // chain calculation can include it.
-      type Actor = {
-        id: string;
-        imageId: string;
-        age: ReturnType<typeof ageOf>;
-        existing: AnnotationType | null;
-        candidatePos: { x: number; y: number } | null;
-      };
-      const actors: Actor[] = [];
-      if (candidate.realA) {
-        actors.push({
-          id: candidate.realA.id,
-          imageId: candidate.realA.imageId,
-          age: ageOf(candidate.realA.imageId),
-          existing: candidate.realA,
-          candidatePos: candidate.posA ?? null,
-        });
-      } else if (candidate.posA) {
-        actors.push({
-          id: crypto.randomUUID(),
-          imageId: currentPair.image1Id,
-          age: ageOf(currentPair.image1Id),
-          existing: null,
-          candidatePos: candidate.posA,
-        });
-      }
-      if (candidate.realB) {
-        actors.push({
-          id: candidate.realB.id,
-          imageId: candidate.realB.imageId,
-          age: ageOf(candidate.realB.imageId),
-          existing: candidate.realB,
-          candidatePos: candidate.posB ?? null,
-        });
-      } else if (candidate.posB) {
-        actors.push({
-          id: crypto.randomUUID(),
-          imageId: currentPair.image2Id,
-          age: ageOf(currentPair.image2Id),
-          existing: null,
-          candidatePos: candidate.posB,
-        });
-      }
-      if (actors.length === 0) return;
-
-      // ---- 2. Gather chain-only annotations for any actor that is already
-      // linked. We include both annotations sharing the same `objectId` and
-      // the root annotation pointed to by `objectId` itself.
+      // Gather chain-only annotations for any actor that is already linked —
+      // both annotations sharing the same `objectId` and the root pointed to.
       const actorIds = new Set(actors.map((a) => a.id));
       const chainOnly: AnnotationType[] = [];
       const seenIds = new Set<string>(actorIds);
@@ -728,13 +737,9 @@ export function IndividualIdHarness() {
         }
       }
 
-      // ---- 3. Find the chronologically oldest member of the merged set.
-      type Aged = {
-        id: string;
-        age: ReturnType<typeof ageOf>;
-      };
-      const all: Aged[] = [
-        ...actors.map((a) => ({ id: a.id, age: a.age })),
+      // Chronologically oldest member of the merged set is the chain root.
+      const all = [
+        ...actors.map((a) => ({ id: a.id, age: ageOf(a.imageId) })),
         ...chainOnly.map((a) => ({ id: a.id, age: ageOf(a.imageId) })),
       ];
       let oldest = all[0];
@@ -743,7 +748,6 @@ export function IndividualIdHarness() {
       }
       const rootId = oldest.id;
 
-      // ---- 4. Build update / create operations.
       const updates: Array<{ id: string; patch: Partial<AnnotationType> }> =
         [];
       const newRows: AnnotationType[] = [];
@@ -771,7 +775,7 @@ export function IndividualIdHarness() {
             id: actor.id,
             imageId: actor.imageId,
             setId,
-            categoryId: candidate.categoryId,
+            categoryId,
             x: Math.round(actor.candidatePos.x),
             y: Math.round(actor.candidatePos.y),
             objectId: rootId,
@@ -792,9 +796,8 @@ export function IndividualIdHarness() {
         }
       }
 
-      // Optimistic local merge so the next Munkres run treats this match as
-      // already linked. Apply the same change to the persisted transect
-      // cache so the link survives a reload.
+      // Optimistic local merge so the next Munkres run treats this as
+      // already linked, mirrored into the persisted cache.
       const applyToList = (prev: AnnotationType[]): AnnotationType[] => {
         let next = prev.slice();
         for (const u of updates) {
@@ -812,20 +815,9 @@ export function IndividualIdHarness() {
           annotationsByImage: indexByImage(annotations),
         };
       });
-      working.acceptCandidate(currentPairKey, candidateKey);
 
-      // Fire writes (non-blocking). Strip createdAt/updatedAt before sending
-      // to the DB — Amplify auto-manages those and CreateAnnotationInput
-      // rejects them.
-      //
-      // We deliberately do NOT invalidate the transect query here. Doing so
-      // would refetch every image / neighbour / annotation in the transect
-      // (potentially thousands of paginated queries), and the resulting
-      // `transect.data?.annotations` reference change would then clobber the
-      // optimistic `localAnnotations` we just set above. The optimistic
-      // update is the source of truth for this session; on next page load
-      // the cache rehydrates from disk if still fresh, or refetches from
-      // scratch otherwise.
+      // Fire writes (non-blocking). Strip createdAt/updatedAt — Amplify
+      // auto-manages those and CreateAnnotationInput rejects them.
       try {
         await Promise.all([
           ...updates.map((u) =>
@@ -838,21 +830,120 @@ export function IndividualIdHarness() {
         ]);
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.error('Failed to commit individual-id match', err);
+        console.error('Failed to commit individual-id link', err);
       }
     },
     [
-      currentPair,
-      currentPairKey,
-      currentView,
       transect.data?.category?.annotationSetId,
+      transect.data?.imagesById,
       annotationSetId,
       projectCtx?.project?.id,
-      working,
+      projectCtx?.project,
+      localAnnotations,
       client,
       patchTransectCache,
     ]
   );
+
+  /**
+   * Space-accept. Builds actors from the candidate's two sides (real
+   * annotation, or a Munkres shadow → new row) and delegates the chain-aware
+   * identity assignment to commitActorLink.
+   */
+  const handleAccept = useCallback(
+    async (candidateKey: string) => {
+      if (!currentPair || !currentPairKey || !currentView) return;
+      const candidate = currentView.candidates.find(
+        (c) => c.pairKey === candidateKey
+      );
+      if (!candidate) return;
+
+      const actors: LinkActor[] = [];
+      if (candidate.realA) {
+        actors.push({
+          id: candidate.realA.id,
+          imageId: candidate.realA.imageId,
+          existing: candidate.realA,
+          candidatePos: candidate.posA ?? null,
+        });
+      } else if (candidate.posA) {
+        actors.push({
+          id: crypto.randomUUID(),
+          imageId: currentPair.image1Id,
+          existing: null,
+          candidatePos: candidate.posA,
+        });
+      }
+      if (candidate.realB) {
+        actors.push({
+          id: candidate.realB.id,
+          imageId: candidate.realB.imageId,
+          existing: candidate.realB,
+          candidatePos: candidate.posB ?? null,
+        });
+      } else if (candidate.posB) {
+        actors.push({
+          id: crypto.randomUUID(),
+          imageId: currentPair.image2Id,
+          existing: null,
+          candidatePos: candidate.posB,
+        });
+      }
+      if (actors.length === 0) return;
+
+      working.acceptCandidate(currentPairKey, candidateKey);
+      await commitActorLink(actors, candidate.categoryId);
+    },
+    [currentPair, currentPairKey, currentView, working, commitActorLink]
+  );
+
+  /**
+   * Manual cross-image link (ctrl+click → confirm). The two ids are real
+   * annotations on opposite images that the user asserts are the same
+   * individual — Munkres couldn't pair them (e.g. the animal moved between
+   * frames so the projected distance exceeded the leniency radius). Writing a
+   * shared objectId makes the next Munkres rebuild hard-force the match,
+   * collapsing both shadow proposals automatically.
+   */
+  const handleManualLink = useCallback(
+    async (annotationIdA: string, annotationIdB: string) => {
+      const a = localAnnotations.find((x) => x.id === annotationIdA);
+      const b = localAnnotations.find((x) => x.id === annotationIdB);
+      if (!a || !b) return;
+      await commitActorLink(
+        [
+          { id: a.id, imageId: a.imageId, existing: a, candidatePos: null },
+          { id: b.id, imageId: b.imageId, existing: b, candidatePos: null },
+        ],
+        a.categoryId
+      );
+    },
+    [localAnnotations, commitActorLink]
+  );
+
+  // ---- Manual-link confirmation ----
+  // `active` is the real annotation in the currently-active candidate (on the
+  // image opposite the click); `clicked` is the real annotation the user
+  // ctrl+clicked on the other image. The dialog is the deliberate gate —
+  // confirming commits the link immediately.
+  const [pendingLink, setPendingLink] = useState<{
+    active: string;
+    clicked: string;
+  } | null>(null);
+  const requestManualLink = useCallback(
+    (activeAnnotationId: string, clickedAnnotationId: string) => {
+      setPendingLink({
+        active: activeAnnotationId,
+        clicked: clickedAnnotationId,
+      });
+    },
+    []
+  );
+  const confirmManualLink = () => {
+    if (pendingLink) handleManualLink(pendingLink.active, pendingLink.clicked);
+    setPendingLink(null);
+  };
+  const cancelManualLink = () => setPendingLink(null);
 
   // ---- Render states ----
   if (!transectId || !categoryId) {
@@ -905,6 +996,8 @@ export function IndividualIdHarness() {
             onPlaceNew={handlePlaceNew}
             onDelete={handleDelete}
             onChangeLabel={handleChangeLabel}
+            onToggleObscured={handleToggleObscured}
+            onManualLinkRequest={requestManualLink}
             onAllAccepted={handleAllAccepted}
             onRequestPrevPair={() =>
               requestPair(currentIndex - 1, 'prev')
@@ -962,6 +1055,11 @@ export function IndividualIdHarness() {
             </>
           );
         })()}
+      />
+      <LinkAnnotationDialog
+        show={pendingLink !== null}
+        onConfirm={confirmManualLink}
+        onCancel={cancelManualLink}
       />
     </div>
   );
