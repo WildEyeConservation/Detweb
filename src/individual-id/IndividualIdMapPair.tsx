@@ -46,6 +46,12 @@ interface Props {
    */
   onLock: (candidateKey: string) => void;
   /**
+   * Revert a `locked` candidate back to `pending`. Fired when the user
+   * unfocuses (Escape / click empty map) a candidate that was locked but not
+   * yet accepted — a non-active candidate must never stay locked.
+   */
+  onUnlock: (candidateKey: string) => void;
+  /**
    * Second space press: harness should commit the link to the database
    * (assign a shared objectId to both annotations, creating the shadow
    * annotation if needed) AND mark the candidate `accepted` locally.
@@ -115,6 +121,13 @@ interface Props {
    */
   leniency: number;
   onLeniencyChange: (next: number) => void;
+  /**
+   * Collapses the secondary chrome: hides the accepted count + status hint in
+   * the toolbar AND the progress bar below it, leaving just the clean top
+   * div. State is owned by the harness because it also gates the progress bar.
+   */
+  collapsed: boolean;
+  onCollapsedChange: (next: boolean) => void;
 }
 
 const DEFAULT_COLOR = '#3498db';
@@ -147,6 +160,7 @@ export function IndividualIdMapPair(props: Props) {
     visible,
     onDrag,
     onLock,
+    onUnlock,
     onAccept,
     onUnfocus,
     onPlaceNew,
@@ -160,6 +174,8 @@ export function IndividualIdMapPair(props: Props) {
     onAddOov,
     leniency,
     onLeniencyChange,
+    collapsed,
+    onCollapsedChange,
   } = props;
   const { client } = useContext(GlobalContext)!;
 
@@ -558,10 +574,13 @@ export function IndividualIdMapPair(props: Props) {
 
   const handleEscape = useCallback(() => {
     if (activeKey) {
+      if (activeCandidate?.status === 'locked') {
+        onUnlock(activeCandidate.pairKey);
+      }
       setActiveKey(null);
       onUnfocus?.();
     }
-  }, [activeKey, onUnfocus]);
+  }, [activeKey, activeCandidate, onUnlock, onUnfocus]);
 
   useHotkeys('Space', handleSpace, { enabled: visible, preventDefault: true }, [
     handleSpace,
@@ -610,6 +629,9 @@ export function IndividualIdMapPair(props: Props) {
   const placeFromClick = useCallback(
     (clickedSide: 'A' | 'B', pos: { x: number; y: number }) => {
       if (activeKey) {
+        if (activeCandidate?.status === 'locked') {
+          onUnlock(activeCandidate.pairKey);
+        }
         setActiveKey(null);
         onUnfocus?.();
         return;
@@ -619,7 +641,7 @@ export function IndividualIdMapPair(props: Props) {
       onPlaceNew(clickedSide, pos, newId);
       setActiveKey(newId);
     },
-    [activeKey, category, onPlaceNew, onUnfocus]
+    [activeKey, activeCandidate, onUnlock, category, onPlaceNew, onUnfocus]
   );
 
   const handleMapClickA = useCallback(
@@ -856,6 +878,8 @@ export function IndividualIdMapPair(props: Props) {
         onNext={onRequestNextPair}
         leniency={leniency}
         onLeniencyChange={onLeniencyChange}
+        collapsed={collapsed}
+        onCollapsedChange={onCollapsedChange}
       />
     </div>
   );
@@ -869,6 +893,8 @@ function PairToolbar({
   onNext,
   leniency,
   onLeniencyChange,
+  collapsed,
+  onCollapsedChange,
 }: {
   active: MatchCandidate | null;
   candidatesCount: number;
@@ -877,6 +903,8 @@ function PairToolbar({
   onNext: () => void;
   leniency: number;
   onLeniencyChange: (next: number) => void;
+  collapsed: boolean;
+  onCollapsedChange: (next: boolean) => void;
 }) {
   const navigate = useNavigate();
 
@@ -903,6 +931,14 @@ function PairToolbar({
     >
       <div className='d-flex flex-row gap-2 align-items-center'>
         <Button
+          size='sm'
+          variant='outline-light'
+          onClick={() => onCollapsedChange(!collapsed)}
+          title={collapsed ? 'Expand' : 'Collapse'}
+        >
+          {collapsed ? '▴' : '▾'}
+        </Button>
+        <Button
           onClick={onPrev}
           title='Previous pair (Ctrl+←)'
           size='sm'
@@ -916,9 +952,11 @@ function PairToolbar({
         >
           →
         </Button>
-        <span style={{ opacity: 0.85 }}>
-          {acceptedCount} / {candidatesCount} accepted
-        </span>
+        {!collapsed && (
+          <span style={{ opacity: 0.85 }}>
+            {acceptedCount} / {candidatesCount} accepted
+          </span>
+        )}
       </div>
       <div
         className='d-flex flex-row gap-2 align-items-center'
@@ -951,7 +989,9 @@ function PairToolbar({
           {leniency} px
         </span>
       </div>
-      <span style={{ flex: 1, textAlign: 'right' }}>{status}</span>
+      {!collapsed && (
+        <span style={{ flex: 1, textAlign: 'right' }}>{status}</span>
+      )}
       <Button
         size='sm'
         onClick={() => {

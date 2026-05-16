@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Form } from 'react-bootstrap';
 import type { PairCompletionState } from '../types';
 import type { Lane } from '../utils/lanes';
 import { completionColor } from '../utils/completion';
@@ -17,6 +18,13 @@ interface Props {
   activeLane: number;
   /** Click a slot to jump to that pair, carrying the lane it was clicked in. */
   onJump: (index: number, lane: number) => void;
+  /**
+   * "Simple view" collapses each lane to just the pairs still needing
+   * attention plus their nearest neighbours. The toggle lives here, on the
+   * progress bar it controls; the harness owns the state and the filtering.
+   */
+  simpleView: boolean;
+  onSimpleViewChange: (next: boolean) => void;
 }
 
 const HEIGHT = 22;
@@ -179,6 +187,8 @@ export function ProgressBar({
   activeIndex,
   activeLane,
   onJump,
+  simpleView,
+  onSimpleViewChange,
 }: Props) {
   const [hover, setHover] = useState<{ lane: number; local: number } | null>(
     null
@@ -217,16 +227,34 @@ export function ProgressBar({
       className='w-100 d-flex flex-column pt-2 pb-3'
     >
       <div
-        className='d-flex flex-row align-items-center justify-content-between px-3 pb-1'
-        style={{ fontSize: 11, opacity: 0.85 }}
+        className='d-flex flex-row align-items-center px-3 pb-1'
+        style={{ fontSize: 11 }}
       >
-        <span>{headerLeft}</span>
-        <span style={{ opacity: 0.75 }}>click to jump</span>
+        <span style={{ flex: 1, opacity: 0.85 }}>{headerLeft}</span>
+        <span style={{ flex: 1, textAlign: 'center', opacity: 0.75 }}>
+          click to jump
+        </span>
+        <div
+          style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}
+        >
+          <Form.Check
+            type='switch'
+            id='ii-simple-view'
+            label='Simple view'
+            checked={simpleView}
+            onChange={(e) => onSimpleViewChange(e.target.checked)}
+            title='Simple view: show only pairs that still need attention plus their 3 nearest neighbours on each side. Turn off to see every pair.'
+            style={{ fontSize: 11 }}
+          />
+        </div>
       </div>
 
       <div className='d-flex flex-column' style={{ gap: multi ? 6 : 0 }}>
         {lanes.map((lane, laneIdx) => {
           const laneStates = lane.entries.map((i) => states[i]);
+          // Simple view can filter a lane down to nothing — don't render an
+          // empty bar/label for it.
+          if (laneStates.length === 0) return null;
           const activeLocal = lane.entries.indexOf(activeIndex);
           const isActiveLane = laneIdx === activeLane;
           const laneDone = laneStates.reduce(

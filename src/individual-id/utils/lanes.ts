@@ -1,4 +1,4 @@
-import type { NeighbourPairWithMeta } from '../types';
+import type { NeighbourPairWithMeta, PairCompletionState } from '../types';
 
 /**
  * One camera's row in the progress bar. `entries` are indices into the flat,
@@ -69,5 +69,35 @@ export function buildLanes(
     const label =
       (cameraId && cameraNamesById[cameraId]) || `Camera ${laneIdx + 1}`;
     return { cameraId, label, entries };
+  });
+}
+
+/**
+ * "Simple view" filter: within each lane keep only the pairs that still need
+ * attention plus `radius` neighbours on each side (in lane display order),
+ * dropping the long runs of already-done pairs that are just noise for the
+ * 99% of users who only care about what's left.
+ *
+ * `keepIndex` (the currently-active flat pair index) is always kept, even if
+ * it's a finished pair far from any incomplete one, so the active marker
+ * stays visible and lane-relative navigation never loses its position.
+ */
+export function filterLanesToAttention(
+  lanes: Lane[],
+  states: PairCompletionState[],
+  keepIndex: number,
+  radius: number
+): Lane[] {
+  return lanes.map((lane) => {
+    const { entries } = lane;
+    const keep = new Array<boolean>(entries.length).fill(false);
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i] === keepIndex) keep[i] = true;
+      if (states[entries[i]]?.status !== 'incomplete') continue;
+      const lo = Math.max(0, i - radius);
+      const hi = Math.min(entries.length - 1, i + radius);
+      for (let j = lo; j <= hi; j++) keep[j] = true;
+    }
+    return { ...lane, entries: entries.filter((_, i) => keep[i]) };
   });
 }

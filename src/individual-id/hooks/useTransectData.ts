@@ -1,4 +1,4 @@
-import { useContext, useMemo } from 'react';
+import { useContext, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { GlobalContext, ProjectContext } from '../../Context';
 import { fetchAllPaginatedResults } from '../../utils';
@@ -8,6 +8,32 @@ import type {
   ImageNeighbourType,
   ImageType,
 } from '../../schemaTypes';
+
+/**
+ * The narrowed image shape we actually fetch in step 2: a handful of scalar
+ * fields plus the neighbour edges embedded via the selection set. Typed
+ * explicitly because the Amplify client return type doesn't reflect a custom
+ * `selectionSet`. The rest of the feature only ever reads these fields.
+ */
+type ImageWithNeighbours = Pick<
+  ImageType,
+  'id' | 'width' | 'height' | 'originalPath' | 'timestamp' | 'cameraId'
+> & {
+  leftNeighbours?: ImageNeighbourType[] | null;
+  rightNeighbours?: ImageNeighbourType[] | null;
+};
+
+/**
+ * Live progress while the transect query runs, so the harness can show a
+ * non-stuck loading card. Counts tick up per pagination page; `phase` tracks
+ * which step is in flight. Neighbours have no phase — they ride along on the
+ * images query (embedded via the selection set).
+ */
+export interface LoadProgress {
+  phase: 'idle' | 'category' | 'images' | 'cameras' | 'annotations' | 'done';
+  images: number;
+  annotations: number;
+}
 
 interface UseTransectDataInput {
   transectId: string | undefined;
@@ -56,6 +82,12 @@ export function useTransectData(input: UseTransectDataInput) {
 
   const enabled = Boolean(transectId && categoryId && project?.id);
 
+  const [progress, setProgress] = useState<LoadProgress>({
+    phase: 'idle',
+    images: 0,
+    annotations: 0,
+  });
+
   const queryKey = useMemo(
     () => [
       'individual-id-transect',
@@ -72,6 +104,7 @@ export function useTransectData(input: UseTransectDataInput) {
     enabled,
     staleTime: Infinity,
     queryFn: async () => {
+      setProgress({ phase: 'category', images: 0, annotations: 0 });
       // 1. Resolve the category (and annotationSetId if not supplied).
       const categoryResp = await client.models.Category.get({ id: categoryId! });
       const category = (categoryResp?.data ?? null) as CategoryType | null;
@@ -83,19 +116,39 @@ export function useTransectData(input: UseTransectDataInput) {
       }
 
       // 2. Images for the transect. Uses the projectId+transectId GSI so we
-      // don't pull every image in the project and filter client-side.
+      // don't pull every image in the project and filter client-side. We pull
+      // the neighbour edges (left/right) in the same query via the selection
+      // set — far cheaper than a per-image ImageNeighbour fan-out (see step 3).
+      setProgress((p) => ({ ...p, phase: 'images' }));
       const images = (await fetchAllPaginatedResults<ImageType>(
         client.models.Image.imagesByProjectIdAndTransectId,
         {
           projectId: project!.id,
           transectId: { eq: transectId },
           limit: 10000,
-        }
-      )) as ImageType[];
+          selectionSet: [
+            'id',
+            'width',
+            'height',
+            'originalPath',
+            'timestamp',
+            'cameraId',
+            'leftNeighbours.*',
+            'rightNeighbours.*',
+          ],
+        },
+        (n) => setProgress((p) => ({ ...p, images: n }))
+      )) as unknown as ImageWithNeighbours[];
 
+      // Cast back to the full ImageType at this boundary: the feature only
+      // ever reads the fields we selected, but TransectData / downstream
+      // components are typed against the full model.
       const imagesById: Record<string, ImageType> = {};
-      for (const img of images) imagesById[img.id] = img;
+      for (const img of images) {
+        imagesById[img.id] = img as unknown as ImageType;
+      }
 
+      setProgress((p) => ({ ...p, phase: 'cameras' }));
       // 2b. Project cameras — only id → name, for progress-bar lane labels.
       const cameraResp = await client.models.Camera.camerasByProjectId(
         { projectId: project!.id },
@@ -109,30 +162,19 @@ export function useTransectData(input: UseTransectDataInput) {
         if (c?.id && c?.name) cameraNamesById[c.id] = c.name;
       }
 
-      // 3. Neighbours touching any of those images.
+      // 3. Neighbours are embedded on each image via step 2's selection set,
+      // so there are no extra round-trips. Dedupe by composite key, keep only
+      // neighbours within the transect and not skipped. We do NOT compute
+      // transforms here — that happens in the harness after rehydration so we
+      // can survive JSON serialization to localStorage.
       const imageIds = new Set(images.map((i) => i.id));
-      const neighbourFetches = images.map(async (img) => {
-        const [n1, n2] = await Promise.all([
-          fetchAllPaginatedResults<ImageNeighbourType>(
-            client.models.ImageNeighbour.imageNeighboursByImage1key,
-            { image1Id: img.id, limit: 10000 }
-          ),
-          fetchAllPaginatedResults<ImageNeighbourType>(
-            client.models.ImageNeighbour.imageNeighboursByImage2key,
-            { image2Id: img.id, limit: 10000 }
-          ),
-        ]);
-        return [...n1, ...n2];
-      });
-      const neighbourLists = await Promise.all(neighbourFetches);
-      // Dedupe by composite key, keep only neighbours within the transect and
-      // not skipped. We do NOT compute transforms here — that happens in the
-      // harness after rehydration so we can survive JSON serialization to
-      // localStorage.
       const seen = new Set<string>();
       const rawNeighbours: ImageNeighbourType[] = [];
-      for (const list of neighbourLists) {
-        for (const n of list) {
+      for (const img of images) {
+        for (const n of [
+          ...(img.leftNeighbours ?? []),
+          ...(img.rightNeighbours ?? []),
+        ]) {
           if (n.skipped) continue;
           if (!imageIds.has(n.image1Id) || !imageIds.has(n.image2Id)) continue;
           const k = `${n.image1Id}__${n.image2Id}`;
@@ -142,29 +184,34 @@ export function useTransectData(input: UseTransectDataInput) {
         }
       }
 
-      // 4. Annotations for this transect's images, restricted to one category.
-      const annotationFetches = images.map((img) =>
-        fetchAllPaginatedResults<AnnotationType>(
-          client.models.Annotation.annotationsByImageIdAndSetId,
+      // 4. Annotations for this category, then narrowed to this transect's
+      // images. One paginated index query instead of one query per image —
+      // the old per-image fan-out was O(images) round-trips (thousands on a
+      // large transect).
+      setProgress((p) => ({ ...p, phase: 'annotations' }));
+      const categoryAnnotations =
+        await fetchAllPaginatedResults<AnnotationType>(
+          client.models.Annotation.annotationsByCategoryId,
           {
-            imageId: img.id,
-            setId: { eq: setId },
-            filter: { categoryId: { eq: categoryId } },
+            categoryId: categoryId!,
+            filter: { setId: { eq: setId } },
             limit: 10000,
-          }
-        )
+          },
+          (n) => setProgress((p) => ({ ...p, annotations: n }))
+        );
+      const annotations = categoryAnnotations.filter((a) =>
+        imageIds.has(a.imageId)
       );
-      const annotationsNested = await Promise.all(annotationFetches);
-      const annotations = annotationsNested.flat();
 
       const annotationsByImage: Record<string, AnnotationType[]> = {};
       for (const a of annotations) {
         (annotationsByImage[a.imageId] ??= []).push(a);
       }
 
+      setProgress((p) => ({ ...p, phase: 'done' }));
       return {
         category,
-        images,
+        images: images as unknown as ImageType[],
         imagesById,
         annotations,
         annotationsByImage,
@@ -174,5 +221,5 @@ export function useTransectData(input: UseTransectDataInput) {
     },
   });
 
-  return query;
+  return useMemo(() => ({ ...query, progress }), [query, progress]);
 }

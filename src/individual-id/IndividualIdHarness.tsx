@@ -19,7 +19,7 @@ import { buildMatchCandidates } from './utils/munkres';
 import { buildNeighbourTransforms } from './utils/transforms';
 import { evaluatePairCompletion } from './utils/completion';
 import { isOov } from './utils/identity';
-import { buildLanes } from './utils/lanes';
+import { buildLanes, filterLanesToAttention } from './utils/lanes';
 import type {
   MatchCandidate,
   NeighbourPairWithMeta,
@@ -27,6 +27,7 @@ import type {
 } from './types';
 import { IndividualIdMapPair } from './IndividualIdMapPair';
 import { ProgressBar } from './components/ProgressBar';
+import { LoadingCard } from './components/LoadingCard';
 import { NavigateAwayDialog } from './components/NavigateAwayDialog';
 import { PairCompleteDialog } from './components/PairCompleteDialog';
 import { LinkAnnotationDialog } from './components/LinkAnnotationDialog';
@@ -274,6 +275,21 @@ export function IndividualIdHarness() {
   // in two lanes; this records which one the user is navigating so "next"
   // stays on the expected camera instead of jumping rigs.
   const [activeLane, setActiveLane] = useState(0);
+
+  // "Simple view" (default on): collapse each lane to just the pairs that
+  // still need attention plus their 3 nearest neighbours, hiding the long
+  // runs of done pairs. The active pair is always kept so its marker stays
+  // visible. Everything downstream (render + lane-relative nav) runs off
+  // `visibleLanes`, so simple view transparently restricts navigation too.
+  const [simpleView, setSimpleView] = useState(true);
+  // Collapses the bottom chrome: the toolbar's secondary info and the whole
+  // progress bar, leaving just the clean top div.
+  const [toolbarCollapsed, setToolbarCollapsed] = useState(false);
+  const visibleLanes = useMemo(() => {
+    if (!simpleView) return lanes;
+    const states = pairViews.map((v) => v.completion);
+    return filterLanesToAttention(lanes, states, currentIndex, 3);
+  }, [simpleView, lanes, pairViews, currentIndex]);
   // After the first load, skip to the first incomplete (yellow) pair.
   //
   // We deliberately wait for the annotations sync to finish before
@@ -303,11 +319,13 @@ export function IndividualIdHarness() {
   // pair. The pair-complete popups move `currentIndex` directly with no lane
   // context; snap to a lane containing it so the arrows keep working.
   useEffect(() => {
-    if (!lanes.length) return;
-    if (lanes[activeLane]?.entries.includes(currentIndex)) return;
-    const li = lanes.findIndex((l) => l.entries.includes(currentIndex));
+    if (!visibleLanes.length) return;
+    if (visibleLanes[activeLane]?.entries.includes(currentIndex)) return;
+    const li = visibleLanes.findIndex((l) =>
+      l.entries.includes(currentIndex)
+    );
     setActiveLane(li >= 0 ? li : 0);
-  }, [currentIndex, lanes, activeLane]);
+  }, [currentIndex, visibleLanes, activeLane]);
 
   const [navAway, setNavAway] = useState<{
     show: boolean;
@@ -341,7 +359,7 @@ export function IndividualIdHarness() {
   // order — so navigation stays on one camera.
   const laneNav = useCallback(
     (delta: 1 | -1) => {
-      const lane = lanes[activeLane];
+      const lane = visibleLanes[activeLane];
       if (!lane) return;
       const pos = lane.entries.indexOf(currentIndex);
       if (pos === -1) return;
@@ -353,7 +371,7 @@ export function IndividualIdHarness() {
         activeLane
       );
     },
-    [lanes, activeLane, currentIndex, requestPair]
+    [visibleLanes, activeLane, currentIndex, requestPair]
   );
 
   const confirmNavAway = () => {
@@ -411,6 +429,14 @@ export function IndividualIdHarness() {
     (candidateKey: string) => {
       if (!currentPairKey) return;
       working.lockCandidate(currentPairKey, candidateKey);
+    },
+    [working, currentPairKey]
+  );
+
+  const handleUnlock = useCallback(
+    (candidateKey: string) => {
+      if (!currentPairKey) return;
+      working.unlockCandidate(currentPairKey, candidateKey);
     },
     [working, currentPairKey]
   );
@@ -1159,7 +1185,7 @@ export function IndividualIdHarness() {
     );
   }
   if (transect.isLoading) {
-    return <div className='p-4 text-light'>Loading transect data…</div>;
+    return <LoadingCard progress={transect.progress} />;
   }
   if (transect.error) {
     return (
@@ -1197,6 +1223,7 @@ export function IndividualIdHarness() {
             onLeniencyChange={setLeniency}
             onDrag={handleDrag}
             onLock={handleLock}
+            onUnlock={handleUnlock}
             onAccept={handleAccept}
             onPlaceNew={handlePlaceNew}
             onDelete={handleDelete}
@@ -1207,16 +1234,22 @@ export function IndividualIdHarness() {
             onAllAccepted={handleAllAccepted}
             onRequestPrevPair={() => laneNav(-1)}
             onRequestNextPair={() => laneNav(1)}
+            collapsed={toolbarCollapsed}
+            onCollapsedChange={setToolbarCollapsed}
           />
         )}
       </div>
-      <ProgressBar
-        states={completionStates}
-        lanes={lanes}
-        activeIndex={currentIndex}
-        activeLane={activeLane}
-        onJump={(i, lane) => requestPair(i, 'jump', lane)}
-      />
+      {!toolbarCollapsed && (
+        <ProgressBar
+          states={completionStates}
+          lanes={visibleLanes}
+          activeIndex={currentIndex}
+          activeLane={activeLane}
+          onJump={(i, lane) => requestPair(i, 'jump', lane)}
+          simpleView={simpleView}
+          onSimpleViewChange={setSimpleView}
+        />
+      )}
       <NavigateAwayDialog
         show={navAway.show}
         destination={navAway.direction}
