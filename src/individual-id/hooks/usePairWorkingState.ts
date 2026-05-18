@@ -1,78 +1,28 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { MatchCandidate } from '../types';
 
-/**
- * pairKey for the harness-wide cache: `${imageAId}__${imageBId}`.
- * Per-candidate keys are the candidate's own `pairKey`.
- *
- * The cache persists across pair switches so that a user who started moving
- * shadows on pair X, navigated to pair Y, and came back, finds their work
- * exactly where they left it.
- */
 type PairKey = string;
 type CandidateKey = string;
 
-/**
- * Stored override for a single candidate. We only persist what the user has
- * touched — un-overridden candidates fall back to whatever Munkres + the
- * latest annotations produce.
- */
 interface CandidateOverride {
   posA?: { x: number; y: number };
   posB?: { x: number; y: number };
   status?: 'pending' | 'locked' | 'accepted';
-  /**
-   * "Mark as obscured" intent for a proposed (shadow) side, set before the
-   * annotation exists. Applied to the row created at accept time.
-   */
   obscuredA?: boolean;
   obscuredB?: boolean;
-  /**
-   * When true, the user has rejected this candidate entirely on this pair.
-   * It will be filtered out at merge time.
-   */
   rejected?: boolean;
 }
 
 export interface PairWorkingState {
-  /**
-   * Increments whenever any pair's overrides mutate. Useful as a `useMemo`
-   * dependency for callers that need to recompute merged candidates.
-   */
   version: number;
-  /** Apply the user's pending edits onto the freshly-built candidates. */
-  mergeCandidates: (
-    pairKey: PairKey,
-    fresh: MatchCandidate[]
-  ) => MatchCandidate[];
-  /** Drag a candidate's marker on side A or B (no DB write). */
-  setCandidatePosition: (
-    pairKey: PairKey,
-    candidateKey: CandidateKey,
-    side: 'A' | 'B',
-    pos: { x: number; y: number }
-  ) => void;
-  /**
-   * Flag/unflag a proposed (shadow) side as obscured in memory. No DB write —
-   * the flag is consumed when the candidate is accepted and its row created.
-   */
-  setCandidateObscured: (
-    pairKey: PairKey,
-    candidateKey: CandidateKey,
-    side: 'A' | 'B',
-    value: boolean
-  ) => void;
-  /** Lock the candidate (first space press) — no DB write yet. */
+  mergeCandidates: (pairKey: PairKey, fresh: MatchCandidate[]) => MatchCandidate[];
+  setCandidatePosition: (pairKey: PairKey, candidateKey: CandidateKey, side: 'A' | 'B', pos: { x: number; y: number }) => void;
+  setCandidateObscured: (pairKey: PairKey, candidateKey: CandidateKey, side: 'A' | 'B', value: boolean) => void;
   lockCandidate: (pairKey: PairKey, candidateKey: CandidateKey) => void;
-  /** Mark accepted (second space press) — DB write happens elsewhere. */
   acceptCandidate: (pairKey: PairKey, candidateKey: CandidateKey) => void;
-  /** Clear status back to pending (Escape, etc). */
   unlockCandidate: (pairKey: PairKey, candidateKey: CandidateKey) => void;
-  /** Reject the candidate — won't be re-emitted by Munkres on this pair. */
   rejectCandidate: (pairKey: PairKey, candidateKey: CandidateKey) => void;
-  /** Drop everything we know about a pair (e.g. after harness commits). */
   clearPair: (pairKey: PairKey) => void;
-  /** Read-only summary used to detect un-saved work for the navigate-away guard. */
   hasUnsavedWork: (pairKey: PairKey) => boolean;
 }
 
@@ -80,14 +30,8 @@ export function makePairKey(imageAId: string, imageBId: string): PairKey {
   return `${imageAId}__${imageBId}`;
 }
 
-/**
- * Holds working overrides for every pair the user has ever touched. Lives at
- * the harness level so navigating between pairs preserves drag positions and
- * lock-in state, exactly as the spec requires.
- */
 export function usePairWorkingState(): PairWorkingState {
-  // We keep both a ref (for synchronous reads inside callbacks) and a state
-  // setter (to trigger re-renders for components that read merged candidates).
+  // Ref for synchronous reads in callbacks; state for triggering re-renders.
   const storeRef = useRef<Map<PairKey, Map<CandidateKey, CandidateOverride>>>(
     new Map()
   );

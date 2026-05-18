@@ -1,16 +1,6 @@
 import type { MatchCandidate, PairCompletionState } from '../types';
 
-/**
- * A pair is complete when every linkable candidate has been accepted
- * (objectIds linked on both sides) and there are no shadow positions still
- * un-confirmed.
- *
- * `empty` means the harness should still treat the pair as "done" — there
- * are no annotations in the overlap region to match.
- *
- * Informational candidates (annotations that project outside the partner
- * image and thus have no link to make) are excluded from the totals.
- */
+// Informational candidates (project outside partner image) are excluded from totals.
 export function evaluatePairCompletion(
   candidates: MatchCandidate[]
 ): PairCompletionState {
@@ -26,11 +16,6 @@ export function evaluatePairCompletion(
   };
 }
 
-/**
- * Color used by the harness progress bar.
- *  - green: complete or empty (nothing to do)
- *  - yellow: incomplete (work pending)
- */
 export function completionColor(state: PairCompletionState): string {
   return state.status === 'incomplete' ? '#f1c40f' : '#2ecc71';
 }

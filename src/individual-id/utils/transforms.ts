@@ -2,13 +2,11 @@ import { matrix, multiply, inv, type Matrix } from 'mathjs';
 import type { ImageNeighbourType } from '../../schemaTypes';
 import type { PixelTransform } from '../types';
 
-/** Reshape a flat 9-element homography array into a 3x3 matrix. */
 function array2Matrix(hc: number[] | null | undefined): number[][] | null {
   if (!hc || hc.length !== 9) return null;
   return [hc.slice(0, 3), hc.slice(3, 6), hc.slice(6, 9)];
 }
 
-/** Build a pixel→pixel transform from a 3x3 homography matrix. */
 function makeTransform(H: Matrix): PixelTransform {
   return (c: [number, number]): [number, number] => {
     const result = multiply(H, [c[0], c[1], 1]).valueOf() as number[];
@@ -22,11 +20,7 @@ export interface BuiltTransforms {
   noHomography: boolean;
 }
 
-/**
- * Build forward and backward transforms for an ImageNeighbour row. If the
- * homography is missing or malformed, returns identity transforms with
- * `noHomography: true` so callers can exclude the pair from the workflow.
- */
+// Returns identity transforms with noHomography:true when the homography is missing/malformed.
 export function buildNeighbourTransforms(n: ImageNeighbourType): BuiltTransforms {
   const arr = array2Matrix(n.homography ?? null);
   if (!arr) {
@@ -42,7 +36,6 @@ export function buildNeighbourTransforms(n: ImageNeighbourType): BuiltTransforms
   };
 }
 
-/** Returns true when (x, y) projected via `tf` lands inside [0, w) × [0, h). */
 export function projectsInside(
   x: number,
   y: number,

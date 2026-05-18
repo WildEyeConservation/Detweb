@@ -1,31 +1,13 @@
 import type { NeighbourPairWithMeta, PairCompletionState } from '../types';
 
-/**
- * One camera's row in the progress bar. `entries` are indices into the flat,
- * globally-sorted pairs/pairViews array — the lanes are a pure presentation
- * grouping, the harness still navigates by flat index.
- */
+// entries are flat pair indices — lanes are presentation-only; navigation uses the flat index.
 export interface Lane {
-  /** Camera id this lane represents. '' for images with no cameraId. */
   cameraId: string;
   label: string;
   entries: number[];
 }
 
-/**
- * Group pairs into per-camera lanes.
- *
- * A same-camera pair lands in its one camera lane. A cross-camera pair is
- * injected into BOTH camera lanes — it's one logical pair (one index) shown
- * in two rows, so clicking it in either lane jumps to the same pair.
- *
- * `pairs` is assumed globally sorted (imageA.timestamp ascending). Within a
- * lane, entries are re-sorted by the timestamp of the image on *that* lane's
- * camera, so a cross-camera pair sits chronologically correctly in each row.
- *
- * Single camera (or every image missing cameraId) collapses to exactly one
- * lane, so the progress bar looks and behaves as it did before.
- */
+// Cross-camera pairs appear in BOTH lanes (same flat index, two rows) so clicking either jumps to the same pair.
 export function buildLanes(
   pairs: NeighbourPairWithMeta[],
   cameraNamesById: Record<string, string>
@@ -72,16 +54,7 @@ export function buildLanes(
   });
 }
 
-/**
- * "Simple view" filter: within each lane keep only the pairs that still need
- * attention plus `radius` neighbours on each side (in lane display order),
- * dropping the long runs of already-done pairs that are just noise for the
- * 99% of users who only care about what's left.
- *
- * `keepIndex` (the currently-active flat pair index) is always kept, even if
- * it's a finished pair far from any incomplete one, so the active marker
- * stays visible and lane-relative navigation never loses its position.
- */
+// keepIndex is always retained so the active marker stays visible regardless of completion state.
 export function filterLanesToAttention(
   lanes: Lane[],
   states: PairCompletionState[],

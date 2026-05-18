@@ -49,7 +49,6 @@ import { completeIndividualIdTransect } from '../functions/completeIndividualIdT
 import { reconcileIndividualId } from '../functions/reconcileIndividualId/resource';
 import { releaseIndividualIdTransects } from '../functions/releaseIndividualIdTransects/resource';
 import { generateTile } from '../storage/generateTile/resource';
-// import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
   .schema({
@@ -64,7 +63,6 @@ const schema = a
         organizationId: a.id().required(),
         organization: a.belongsTo('Organization', 'organizationId'),
         name: a.string().required(),
-        // tags for flags like 'legacy'
         tags: a.string().array(),
         images: a.hasMany('Image', 'projectId'),
         imageFiles: a.hasMany('ImageFile', 'projectId'),
@@ -325,7 +323,7 @@ const schema = a
         annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
         source: a.string(),
         createdAt: a.string().required(),
-        queueId: a.id(), // Queue ID for requeue detection (observedCount tracking)
+        queueId: a.id(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.owner(), allow.groupDefinedIn('group')])
@@ -399,7 +397,6 @@ const schema = a
         backupQueue: a.belongsTo('Queue', 'backupQueueId'),
         group: a.string(),
       })
-      // TODO: listen to own memberships only
       .authorization((allow) => [allow.group('sysadmin'), allow.authenticated().to(['listen']), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('userProjectMembershipsByProjectId'),
@@ -442,7 +439,6 @@ const schema = a
         pendingCount: a.integer().default(0),
         lastKickoffAt: a.datetime(),
         lastChangeAt: a.datetime(),
-        // 'pending' | 'in-progress' | 'done'
         cleanupState: a.string().default('pending'),
         group: a.string(),
       })
@@ -451,9 +447,7 @@ const schema = a
       .secondaryIndexes((index) => [
         index('cleanupState').queryField('registrationProgressByCleanupState'),
       ]),
-    // bucketKey is the composite "<cameraPairKey>#<bucketIndex>" — carried as
-    // an explicit field (not a 3-part identifier) because DynamoDB primary keys
-    // are 2-attribute max and Amplify's synthetic sort key breaks custom JS resolvers.
+    // bucketKey = "<cameraPairKey>#<bucketIndex>" — explicit field because DynamoDB PKs are 2-attribute max.
     RegistrationBucketStat: a
       .model({
         projectId: a.id().required(),
@@ -480,7 +474,6 @@ const schema = a
         url: a.url(),
         zoom: a.integer(),
         hidden: a.boolean().default(false),
-        // used in conjuction with the cleanupJobs function (every 15m) to determine if the queue is still active
         approximateSize: a.integer(),
         tag: a.string(),
         requeueAt: a.string(),
@@ -624,7 +617,6 @@ const schema = a
       .model({
         projectId: a.id().required(),
         project: a.belongsTo('Project', 'projectId'),
-        //stores shape as poylgon to use with leaflet
         coordinates: a.float().array(),
         group: a.string(),
       })
@@ -637,7 +629,6 @@ const schema = a
       .model({
         projectId: a.id().required(),
         project: a.belongsTo('Project', 'projectId'),
-        // stores exclusion polygons as flattened lat,lng pairs
         coordinates: a.float().array(),
         group: a.string(),
       })
@@ -694,7 +685,6 @@ const schema = a
         transects: a.hasMany('Transect', 'stratumId'),
         area: a.float(),
         baselineLength: a.float(),
-        // store polygon coordinates as flattened [lat, lng, ...]
         coordinates: a.float().array(),
         group: a.string(),
       })
@@ -709,7 +699,6 @@ const schema = a
         annotationSetId: a.id().required(),
         categoryId: a.id().required(),
         name: a.string().required(),
-        // 'launching' | 'active' | 'completed'
         status: a.string().default('launching'),
         totalTransects: a.integer().default(0),
         // ACID-decremented as transects are completed; 0 => job done.
@@ -731,7 +720,6 @@ const schema = a
         annotationSetId: a.id().required(),
         categoryId: a.id().required(),
         transectId: a.id().required(),
-        // 'available' | 'assigned' | 'completed'
         status: a.string().default('available'),
         assignedUserId: a.string(),
         assignedAt: a.string(),
@@ -1003,7 +991,6 @@ const schema = a
         locationSetId: a.id().required(),
         locationSet: a.belongsTo('LocationSet', 'locationSetId'),
         annotationSetId: a.id().required(),
-        // 'pending' | 'processing' | 'completed' | 'failed'
         status: a.string().default('pending'),
         launchConfig: a.string().required(),
         totalBatches: a.integer().default(0),
@@ -1024,7 +1011,6 @@ const schema = a
         tilingTaskId: a.id().required(),
         tilingTask: a.belongsTo('TilingTask', 'tilingTaskId'),
         batchIndex: a.integer().required(),
-        // 'pending' | 'processing' | 'completed' | 'failed'
         status: a.string().default('pending'),
         inputS3Key: a.string().required(),
         outputS3Key: a.string(),

@@ -8,11 +8,7 @@ interface Props {
   onHide: () => void;
 }
 
-/**
- * A faithful, static copy of a map marker so the help text can show exactly
- * what each kind/status looks like. The style maths mirrors
- * `applyMarkerStyle` in IndividualIdMap — keep the two in sync.
- */
+// Style maths mirrors applyMarkerStyle in IndividualIdMap — keep in sync.
 function DemoMarker({
   kind,
   status = 'pending',
@@ -43,8 +39,7 @@ function DemoMarker({
     kind === 'primary' ? jdenticon.toSvg(seed, Math.round(size * 0.7)) : '';
 
   return (
-    // Muted backdrop so both the white (proposed) and dark (real) borders
-    // read the way they would over aerial imagery.
+    // Muted backdrop so proposed (white) and real (dark) borders both read correctly over aerial imagery.
     <div
       style={{
         width: 52,
@@ -148,11 +143,6 @@ function Section({
   );
 }
 
-/**
- * Explains the individual-id workflow: marker types, status colours, map
- * controls, the Space-key flow, navigation and transect concurrency.
- * Purely presentational — opened from the pair toolbar's help button.
- */
 export function HelpModal({ show, onHide }: Props) {
   return (
     <Modal show={show} onHide={onHide} size='lg' centered scrollable>

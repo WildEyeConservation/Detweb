@@ -1,19 +1,11 @@
 import { useContext, useEffect, useRef } from 'react';
 import { GlobalContext } from '../../Context';
 
-// Heartbeat at most this often, regardless of how busy the user is.
 const PING_MIN_INTERVAL_MS = 60_000;
-// Client-side idle ceiling. Matches the server-side release window so the
-// user is sent back before/just as the release cron frees their transect.
+// Matches the server-side release window so the user is bounced before the cron frees their transect.
 const IDLE_LIMIT_MS = 30 * 60_000;
 const IDLE_CHECK_MS = 60_000;
 
-/**
- * While the Individual ID harness is mounted, stamp the assigned transect's
- * lastActiveAt on user activity (throttled), and bounce the user back to /jobs
- * if they go idle for 30 minutes OR the transect is no longer theirs (the
- * conditional ping write fails because the release cron already freed it).
- */
 export function useActivityHeartbeat(params: {
   transectRowId: string | null | undefined;
   onLost: () => void;
@@ -43,8 +35,7 @@ export function useActivityHeartbeat(params: {
           onLostRef.current();
         }
       } catch {
-        // Conditional write failed => transect no longer assigned to us
-        // (released by the cron). Send the user back to pick up new work.
+        // Conditional write failed — transect was released by the cron.
         if (!cancelled) onLostRef.current();
       }
     };
@@ -58,7 +49,7 @@ export function useActivityHeartbeat(params: {
       }
     };
 
-    // Fresh heartbeat on entry so the release window restarts from "now".
+    // Ping immediately so the release window restarts from "now".
     lastActivityRef.current = Date.now();
     lastPingRef.current = Date.now();
     void ping();
