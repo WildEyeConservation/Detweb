@@ -1,14 +1,16 @@
 /**
  * Public surface of the individual-id workflow.
  *
- * Wire `<IndividualIdHarness />` into a route, e.g.
+ * Wire `<IndividualIdTaskPage />` into the route, e.g.
  *
  *   path: '/surveys/:projectId/individual-id'
- *   element: <IndividualIdHarness />
+ *   element: <IndividualIdTaskPage />
  *
- * The harness reads `transectId`, `categoryId` and (optionally)
- * `annotationSetId` and `leniency` from the query string.
+ * The task page receives the claimed transect/category via navigation state
+ * (set by the Jobs page after claimIndividualIdTransect) and passes them as
+ * props to the harness.
  */
+export { IndividualIdTaskPage } from './IndividualIdTaskPage';
 export { IndividualIdHarness } from './IndividualIdHarness';
 export { IndividualIdMapPair } from './IndividualIdMapPair';
 export type { MatchCandidate, NeighbourPair, PairCompletionState } from './types';

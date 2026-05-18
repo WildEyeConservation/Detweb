@@ -125,6 +125,17 @@ interface Props {
    * panel rather than on the map.
    */
   onAddOov?: () => void;
+  /**
+   * If provided, the map opens at this zoom (centred on the image centre)
+   * instead of fitting the whole image. Lets the user's zoom carry across
+   * pairs. The parent then pans to the first candidate.
+   */
+  initialZoom?: number;
+  /**
+   * Fired on every moveend with the map's current zoom so the parent can
+   * remember it and seed the next pair's `initialZoom`.
+   */
+  onZoomChange?: (zoom: number) => void;
 }
 
 const TILE_SIZE = 256;
@@ -418,6 +429,8 @@ export function IndividualIdMap({
   previewTransform,
   otherImage,
   onAddOov,
+  initialZoom,
+  onZoomChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<maplibregl.Map | null>(null);
@@ -437,6 +450,10 @@ export function IndividualIdMap({
   const changeLabelRef = useRef(onMarkerChangeLabel);
   const toggleObscuredRef = useRef(onMarkerToggleObscured);
   const addOovRef = useRef(onAddOov);
+  const zoomChangeRef = useRef(onZoomChange);
+  useEffect(() => {
+    zoomChangeRef.current = onZoomChange;
+  }, [onZoomChange]);
   useEffect(() => {
     dragRef.current = onMarkerDrag;
   }, [onMarkerDrag]);
@@ -533,9 +550,14 @@ export function IndividualIdMap({
     if (!data || !mk || !m) return;
     const el = ensurePopupEl();
     if (!el) return;
-    // Action buttons (Change Label, Delete) only show in interactive mode
-    // for non-shadow markers — shadows don't yet exist in the DB.
-    const showActions = mode === 'interactive' && data.kind !== 'shadow';
+    // Change Label + Delete only show for non-shadow markers — those rows
+    // exist in the DB. The obscured toggle also shows on shadows: there it
+    // records an in-memory "create it obscured" intent rather than a live
+    // DB write, so the user can flag an obscured animal before accepting.
+    const interactive = mode === 'interactive';
+    const isShadow = data.kind === 'shadow';
+    const showFullActions = interactive && !isShadow;
+    const showObscureToggle = interactive;
     // Friendly label for the marker kind. "Proposed" matches how users
     // already refer to shadow markers; "primary"/"secondary" match the
     // identicon convention (only primaries show one).
@@ -545,6 +567,20 @@ export function IndividualIdMap({
         : data.kind === 'secondary'
         ? 'Secondary'
         : 'Proposed';
+    const btnStyle =
+      'margin-top:6px;color:#fff;border:none;border-radius:4px;' +
+      'padding:4px 8px;cursor:pointer;font-size:11px;width:100%;';
+    const changeLabelHtml = showFullActions
+      ? `<button data-action="change-label" style="${btnStyle}background:#5B6977;">Change Label</button>`
+      : '';
+    const obscureHtml = showObscureToggle
+      ? `<button data-action="toggle-obscured" style="${btnStyle}background:#5B6977;">${
+          data.obscured ? 'Mark as visible' : 'Mark as obscured'
+        }</button>`
+      : '';
+    const deleteHtml = showFullActions
+      ? `<button data-action="delete" style="${btnStyle}background:#d9534f;">Delete</button>`
+      : '';
     el.innerHTML = `
       <div style="font-weight:600">${escape(nameFor(data.identityKey))}</div>
       <div style="font-size:10px;opacity:0.7;text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">
@@ -555,55 +591,11 @@ export function IndividualIdMap({
           ? `<div style="font-size:10px;opacity:0.7;margin-top:3px;font-style:italic">Obscured — not visible in this image</div>`
           : ''
       }
-      ${
-        showActions
-          ? `<button data-action="change-label" style="
-                margin-top: 6px;
-                background: #5B6977;
-                color: #fff;
-                border: none;
-                border-radius: 4px;
-                padding: 4px 8px;
-                cursor: pointer;
-                font-size: 11px;
-                width: 100%;
-              ">Change Label</button>
-             <button data-action="toggle-obscured" style="
-                margin-top: 6px;
-                background: #5B6977;
-                color: #fff;
-                border: none;
-                border-radius: 4px;
-                padding: 4px 8px;
-                cursor: pointer;
-                font-size: 11px;
-                width: 100%;
-              ">${data.obscured ? 'Mark as visible' : 'Mark as obscured'}</button>
-             <button data-action="delete" style="
-                margin-top: 6px;
-                background: #d9534f;
-                color: #fff;
-                border: none;
-                border-radius: 4px;
-                padding: 4px 8px;
-                cursor: pointer;
-                font-size: 11px;
-                width: 100%;
-              ">Delete</button>`
-          : ''
-      }
+      ${changeLabelHtml}
+      ${obscureHtml}
+      ${deleteHtml}
     `;
-    if (showActions) {
-      const changeBtn = el.querySelector(
-        'button[data-action="change-label"]'
-      ) as HTMLButtonElement | null;
-      if (changeBtn) {
-        changeBtn.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          changeLabelRef.current?.(key);
-          hidePopup();
-        });
-      }
+    if (showObscureToggle) {
       const obscuredBtn = el.querySelector(
         'button[data-action="toggle-obscured"]'
       ) as HTMLButtonElement | null;
@@ -611,6 +603,18 @@ export function IndividualIdMap({
         obscuredBtn.addEventListener('click', (ev) => {
           ev.stopPropagation();
           toggleObscuredRef.current?.(key);
+          hidePopup();
+        });
+      }
+    }
+    if (showFullActions) {
+      const changeBtn = el.querySelector(
+        'button[data-action="change-label"]'
+      ) as HTMLButtonElement | null;
+      if (changeBtn) {
+        changeBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          changeLabelRef.current?.(key);
           hidePopup();
         });
       }
@@ -884,16 +888,28 @@ export function IndividualIdMap({
         },
       });
 
-      m.fitBounds(
-        [px2lngLat(0, image.height), px2lngLat(image.width, 0)],
-        { padding: 20, animate: false }
-      );
+      if (typeof initialZoom === 'number' && Number.isFinite(initialZoom)) {
+        // Carry the user's zoom across pairs. The parent then pans to the
+        // first candidate, so the image centre is only a placeholder.
+        m.jumpTo({
+          center: px2lngLat(image.width / 2, image.height / 2),
+          zoom: initialZoom,
+        });
+      } else {
+        m.fitBounds(
+          [px2lngLat(0, image.height), px2lngLat(image.width, 0)],
+          { padding: 20, animate: false }
+        );
+      }
       updateVisibleTiles(m);
       mapForPopupRef.current = m;
       setMap(m);
     });
 
-    const onMoveEnd = () => updateVisibleTiles(m);
+    const onMoveEnd = () => {
+      updateVisibleTiles(m);
+      zoomChangeRef.current?.(m.getZoom());
+    };
     m.on('moveend', onMoveEnd);
 
     // Reposition the popup as the map pans/zooms so it stays glued to its
@@ -1131,13 +1147,12 @@ export function IndividualIdMap({
         };
         el.addEventListener('pointerdown', blockNonPrimaryDrag);
         el.addEventListener('mousedown', blockNonPrimaryDrag);
-        // Right-click → same as Ctrl/⌘+click: request a manual link. The
-        // parent validates the gesture; the native context menu is always
-        // suppressed on markers either way.
+        // Suppress the native context menu on markers. Right-click is
+        // deliberately NOT a manual-link gesture (too easy to trigger by
+        // accident) — use Ctrl/⌘+click instead.
         el.addEventListener('contextmenu', (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
-          ctrlClickRef.current?.(data.candidateKey);
         });
         // Click → activate. We deliberately do NOT call stopPropagation on
         // mousedown — maplibregl needs to see the (left) pointer-down to
@@ -1183,6 +1198,9 @@ export function IndividualIdMap({
         });
         mk.setLngLat(px2lngLat(data.x, data.y));
         mk.addTo(map);
+        // Hide the popup the moment a drag begins so its pointer-events:auto
+        // surface can't intercept a fast drag that crosses over it.
+        mk.on('dragstart', () => hidePopup());
         mk.on('dragend', () => {
           const ll = mk!.getLngLat();
           const px = lngLat2px(ll.lng, ll.lat);

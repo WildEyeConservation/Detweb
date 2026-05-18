@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { GlobalContext, ProjectContext } from '../Context';
 import type { AnnotationType } from '../schemaTypes';
@@ -19,7 +18,7 @@ import { buildMatchCandidates } from './utils/munkres';
 import { buildNeighbourTransforms } from './utils/transforms';
 import { evaluatePairCompletion } from './utils/completion';
 import { isOov } from './utils/identity';
-import { buildLanes } from './utils/lanes';
+import { buildLanes, filterLanesToAttention } from './utils/lanes';
 import type {
   MatchCandidate,
   NeighbourPairWithMeta,
@@ -27,6 +26,7 @@ import type {
 } from './types';
 import { IndividualIdMapPair } from './IndividualIdMapPair';
 import { ProgressBar } from './components/ProgressBar';
+import { LoadingCard } from './components/LoadingCard';
 import { NavigateAwayDialog } from './components/NavigateAwayDialog';
 import { PairCompleteDialog } from './components/PairCompleteDialog';
 import { LinkAnnotationDialog } from './components/LinkAnnotationDialog';
@@ -94,12 +94,19 @@ type LinkActor = {
   imageId: string;
   existing: AnnotationType | null;
   candidatePos: { x: number; y: number } | null;
+  /**
+   * Only meaningful for a shadow actor (existing === null): the row created
+   * for it is stamped `obscured: true`. Ignored when `existing` is set —
+   * real annotations keep their own DB-backed obscured flag.
+   */
+  obscured?: boolean;
 };
 
 /**
  * Top-level "Individual ID" workflow.
  *
- * Reads `?transectId=…&categoryId=…&annotationSetId=…` from the URL.
+ * Receives transectId / categoryId / annotationSetId as props from its parent
+ * (IndividualIdTaskPage), which obtains them from the transect-claim lambda.
  *
  * Responsibilities:
  *   - Load all images / neighbours / annotations for the transect (one
@@ -116,19 +123,43 @@ type LinkActor = {
  * Two components total are exported from this directory: this Harness and
  * IndividualIdMapPair. Everything else is internal to the feature.
  */
-export function IndividualIdHarness() {
-  const [searchParams] = useSearchParams();
-  const transectId = searchParams.get('transectId') ?? undefined;
-  const categoryId = searchParams.get('categoryId') ?? undefined;
-  const annotationSetId =
-    searchParams.get('annotationSetId') ?? undefined;
-  // Leniency is state so the user can adjust it via the toolbar slider. The
-  // URL only seeds the initial value; later edits don't update the URL.
-  const [leniency, setLeniency] = useState<number>(() => {
-    const fromUrl = searchParams.get('leniency');
-    const parsed = fromUrl !== null ? Number(fromUrl) : NaN;
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_LENIENCY;
-  });
+export function IndividualIdHarness({
+  transectId,
+  categoryId,
+  annotationSetId,
+  leniency: leniencyProp,
+  onComplete,
+}: {
+  transectId: string;
+  categoryId: string;
+  annotationSetId?: string;
+  leniency?: number;
+  // Called when every pair in the transect is complete. The parent
+  // (IndividualIdTaskPage) wires this to the transect-complete lambda.
+  onComplete?: () => void;
+}) {
+  // Leniency is state so the user can adjust it via the toolbar slider; the
+  // prop only seeds the initial value.
+  const [leniency, setLeniency] = useState<number>(() =>
+    typeof leniencyProp === 'number' && leniencyProp >= 0
+      ? leniencyProp
+      : DEFAULT_LENIENCY
+  );
+
+  // Last map zoom the user was at. Survives pair changes (the harness stays
+  // mounted; IndividualIdMapPair is keyed per pair and remounts), so the
+  // next pair opens at the same zoom instead of refitting the whole image.
+  const rememberedZoomRef = useRef<number | null>(null);
+  const handleZoomChange = useCallback((z: number) => {
+    rememberedZoomRef.current = z;
+  }, []);
+
+  // Kept in a ref so the Phase-6 completion detector can fire it from an
+  // effect without a stale closure.
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   const { client } = useContext(GlobalContext)!;
   const projectCtx = useContext(ProjectContext);
@@ -228,6 +259,55 @@ export function IndividualIdHarness() {
     return out;
   }, [transect.data?.rawNeighbours, transect.data?.imagesById]);
 
+  // ---- TEMP DEBUG: transect data pipeline ----
+  // Logs counts at each stage so an empty "No registerable pairs" screen can
+  // be diagnosed: is the transect genuinely empty (no annotations — bad
+  // availability/fanout), or are annotations present but homography
+  // neighbours missing / not piped through?
+  useEffect(() => {
+    const d = transect.data;
+    const raw = d?.rawNeighbours ?? [];
+    const imagesById = d?.imagesById ?? {};
+    let noHomography = 0;
+    let missingImage = 0;
+    for (const n of raw) {
+      const tfs = buildNeighbourTransforms(n);
+      if (tfs.noHomography) {
+        noHomography++;
+        continue;
+      }
+      if (!imagesById[n.image1Id] || !imagesById[n.image2Id]) missingImage++;
+    }
+    console.log('[IndividualId][debug] transect pipeline', {
+      transectId,
+      categoryId,
+      annotationSetId,
+      isLoading: transect.isLoading,
+      isError: (transect as any).isError ?? false,
+      error: (transect as any).error?.message ?? null,
+      images: d?.images?.length ?? 0,
+      annotations: d?.annotations?.length ?? 0,
+      localAnnotations: localAnnotations.length,
+      imagesWithAnnotations: Object.keys(annotationsByImage).length,
+      rawNeighbours: raw.length,
+      neighboursNoHomography: noHomography,
+      neighboursMissingImage: missingImage,
+      pairs: pairs.length,
+      category: d?.category
+        ? { id: (d.category as any).id, name: (d.category as any).name }
+        : null,
+    });
+  }, [
+    transect.data,
+    transect.isLoading,
+    pairs,
+    annotationsByImage,
+    localAnnotations.length,
+    transectId,
+    categoryId,
+    annotationSetId,
+  ]);
+
   // ---- Build all pair-candidate lists in display order ----
   type PairView = {
     candidates: MatchCandidate[];
@@ -274,6 +354,21 @@ export function IndividualIdHarness() {
   // in two lanes; this records which one the user is navigating so "next"
   // stays on the expected camera instead of jumping rigs.
   const [activeLane, setActiveLane] = useState(0);
+
+  // "Simple view" (default on): collapse each lane to just the pairs that
+  // still need attention plus their 3 nearest neighbours, hiding the long
+  // runs of done pairs. The active pair is always kept so its marker stays
+  // visible. Everything downstream (render + lane-relative nav) runs off
+  // `visibleLanes`, so simple view transparently restricts navigation too.
+  const [simpleView, setSimpleView] = useState(true);
+  // Collapses the bottom chrome: the toolbar's secondary info and the whole
+  // progress bar, leaving just the clean top div.
+  const [toolbarCollapsed, setToolbarCollapsed] = useState(false);
+  const visibleLanes = useMemo(() => {
+    if (!simpleView) return lanes;
+    const states = pairViews.map((v) => v.completion);
+    return filterLanesToAttention(lanes, states, currentIndex, 3);
+  }, [simpleView, lanes, pairViews, currentIndex]);
   // After the first load, skip to the first incomplete (yellow) pair.
   //
   // We deliberately wait for the annotations sync to finish before
@@ -299,15 +394,36 @@ export function IndividualIdHarness() {
     setCurrentIndex(Math.max(0, firstIncomplete));
   }, [pairViews, transect.data?.annotations, localAnnotations.length]);
 
+  // When no pair is 'incomplete' anymore the transect is done. Fire once;
+  // the parent marks it complete server-side and returns to Jobs. Gated on
+  // initialisation so the brief pre-annotation-sync window (where every pair
+  // momentarily looks 'empty') cannot false-fire.
+  const completionFiredRef = useRef(false);
+  useEffect(() => {
+    if (completionFiredRef.current) return;
+    if (!initialisedRef.current) return;
+    if (transect.isLoading) return;
+    if (pairViews.length === 0) return;
+    const anyIncomplete = pairViews.some(
+      (v) => v.completion.status === 'incomplete'
+    );
+    if (!anyIncomplete) {
+      completionFiredRef.current = true;
+      onCompleteRef.current?.();
+    }
+  }, [pairViews, transect.isLoading]);
+
   // Keep `activeLane` pointing at a lane that actually contains the current
   // pair. The pair-complete popups move `currentIndex` directly with no lane
   // context; snap to a lane containing it so the arrows keep working.
   useEffect(() => {
-    if (!lanes.length) return;
-    if (lanes[activeLane]?.entries.includes(currentIndex)) return;
-    const li = lanes.findIndex((l) => l.entries.includes(currentIndex));
+    if (!visibleLanes.length) return;
+    if (visibleLanes[activeLane]?.entries.includes(currentIndex)) return;
+    const li = visibleLanes.findIndex((l) =>
+      l.entries.includes(currentIndex)
+    );
     setActiveLane(li >= 0 ? li : 0);
-  }, [currentIndex, lanes, activeLane]);
+  }, [currentIndex, visibleLanes, activeLane]);
 
   const [navAway, setNavAway] = useState<{
     show: boolean;
@@ -341,7 +457,7 @@ export function IndividualIdHarness() {
   // order — so navigation stays on one camera.
   const laneNav = useCallback(
     (delta: 1 | -1) => {
-      const lane = lanes[activeLane];
+      const lane = visibleLanes[activeLane];
       if (!lane) return;
       const pos = lane.entries.indexOf(currentIndex);
       if (pos === -1) return;
@@ -353,7 +469,7 @@ export function IndividualIdHarness() {
         activeLane
       );
     },
-    [lanes, activeLane, currentIndex, requestPair]
+    [visibleLanes, activeLane, currentIndex, requestPair]
   );
 
   const confirmNavAway = () => {
@@ -384,8 +500,19 @@ export function IndividualIdHarness() {
   const acceptCompletePopup = () => {
     if (completePopup.earlier !== undefined) {
       setCurrentIndex(completePopup.earlier);
-    } else if (currentIndex < pairViews.length - 1) {
-      setCurrentIndex(currentIndex + 1);
+    } else {
+      // Jump to the next pair that still needs work rather than the literal
+      // next one — completed/empty pairs in between would just make the user
+      // press Next again. Falls back to the immediate next pair only when
+      // nothing ahead is incomplete (transect effectively done).
+      const nextIncomplete = pairViews.findIndex(
+        (v, i) => i > currentIndex && v.completion.status === 'incomplete'
+      );
+      if (nextIncomplete !== -1) {
+        setCurrentIndex(nextIncomplete);
+      } else if (currentIndex < pairViews.length - 1) {
+        setCurrentIndex(currentIndex + 1);
+      }
     }
     setCompletePopup({ show: false });
   };
@@ -411,6 +538,14 @@ export function IndividualIdHarness() {
     (candidateKey: string) => {
       if (!currentPairKey) return;
       working.lockCandidate(currentPairKey, candidateKey);
+    },
+    [working, currentPairKey]
+  );
+
+  const handleUnlock = useCallback(
+    (candidateKey: string) => {
+      if (!currentPairKey) return;
+      working.unlockCandidate(currentPairKey, candidateKey);
     },
     [working, currentPairKey]
   );
@@ -759,6 +894,21 @@ export function IndividualIdHarness() {
     [localAnnotations, client, patchTransectCache]
   );
 
+  /**
+   * User clicked "Mark as obscured" on a *proposed* (shadow) marker — there's
+   * no DB row yet, so we only record the intent in working state. It rides
+   * along when the candidate is accepted and the row is created with
+   * `obscured: true`. Lets the user flag the obscured animal up front instead
+   * of accepting, panning back to the new marker, and toggling it after.
+   */
+  const handleSetProposedObscured = useCallback(
+    (candidateKey: string, side: 'A' | 'B', value: boolean) => {
+      if (!currentPairKey) return;
+      working.setCandidateObscured(currentPairKey, candidateKey, side, value);
+    },
+    [working, currentPairKey]
+  );
+
   // ---- Change-label flow ----
   // The marker popup's "Change Label" button asks the harness to open the
   // ChangeCategoryModal for a specific real annotation. The modal posts
@@ -987,6 +1137,7 @@ export function IndividualIdHarness() {
             source: 'individual-id',
             projectId: projectCtx?.project?.id,
             group,
+            ...(actor.obscured ? { obscured: true } : {}),
             createdAt: nowIso,
             updatedAt: nowIso,
           } as unknown as AnnotationType);
@@ -1077,6 +1228,7 @@ export function IndividualIdHarness() {
           imageId: currentPair.image1Id,
           existing: null,
           candidatePos: candidate.posA,
+          obscured: !!candidate.obscuredA,
         });
       }
       if (candidate.realB) {
@@ -1092,6 +1244,7 @@ export function IndividualIdHarness() {
           imageId: currentPair.image2Id,
           existing: null,
           candidatePos: candidate.posB,
+          obscured: !!candidate.obscuredB,
         });
       }
       if (actors.length === 0) return;
@@ -1159,7 +1312,7 @@ export function IndividualIdHarness() {
     );
   }
   if (transect.isLoading) {
-    return <div className='p-4 text-light'>Loading transect data…</div>;
+    return <LoadingCard progress={transect.progress} />;
   }
   if (transect.error) {
     return (
@@ -1197,26 +1350,36 @@ export function IndividualIdHarness() {
             onLeniencyChange={setLeniency}
             onDrag={handleDrag}
             onLock={handleLock}
+            onUnlock={handleUnlock}
             onAccept={handleAccept}
             onPlaceNew={handlePlaceNew}
             onDelete={handleDelete}
             onChangeLabel={handleChangeLabel}
             onToggleObscured={handleToggleObscured}
+            onSetProposedObscured={handleSetProposedObscured}
             onManualLinkRequest={requestManualLink}
             onAddOov={handlePlaceOov}
             onAllAccepted={handleAllAccepted}
             onRequestPrevPair={() => laneNav(-1)}
             onRequestNextPair={() => laneNav(1)}
+            collapsed={toolbarCollapsed}
+            onCollapsedChange={setToolbarCollapsed}
+            initialZoom={rememberedZoomRef.current ?? undefined}
+            onZoomChange={handleZoomChange}
           />
         )}
       </div>
-      <ProgressBar
-        states={completionStates}
-        lanes={lanes}
-        activeIndex={currentIndex}
-        activeLane={activeLane}
-        onJump={(i, lane) => requestPair(i, 'jump', lane)}
-      />
+      {!toolbarCollapsed && (
+        <ProgressBar
+          states={completionStates}
+          lanes={visibleLanes}
+          activeIndex={currentIndex}
+          activeLane={activeLane}
+          onJump={(i, lane) => requestPair(i, 'jump', lane)}
+          simpleView={simpleView}
+          onSimpleViewChange={setSimpleView}
+        />
+      )}
       <NavigateAwayDialog
         show={navAway.show}
         destination={navAway.direction}

@@ -18,7 +18,9 @@ interface TabProps {
 }
 
 interface TabsProps {
-  children: ReactElement<TabProps> | ReactElement<TabProps>[];
+  children:
+    | ReactElement<TabProps>
+    | (ReactElement<TabProps> | false | null | undefined)[];
   defaultTab?: number;
   onTabChange?: (tab: number) => void;
   className?: string;

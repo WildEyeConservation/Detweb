@@ -18,7 +18,8 @@ export type PretileWorkflow =
   | 'species-labelling'
   | 'false-negatives'
   | 'qc-review'
-  | 'homography';
+  | 'homography'
+  | 'individual-id';
 
 export type PretileManifest = {
   launchId: string;
@@ -40,6 +41,12 @@ export type EnqueuePretileInput = {
   refreshQueueUrl: string;
   sqsClient: SQSClient;
   s3Client: S3Client;
+  // When true, the manifest is still written to S3 (and returned) but the
+  // Project.pretileManifestS3Key pointer is NOT stamped. Used by the Individual
+  // ID workflow, whose own reconciler owns the project status flip so it can
+  // additionally wait for the transect-update fanout — preventing the generic
+  // reconcilePretileLaunches cron from flipping the project to `active` early.
+  skipProjectStamp?: boolean;
 };
 
 export type EnqueuePretileResult = {
@@ -117,6 +124,7 @@ export async function enqueuePretile(
     refreshQueueUrl,
     sqsClient,
     s3Client,
+    skipProjectStamp,
   } = input;
 
   const dedupedIds = Array.from(new Set(imageIds));
@@ -243,9 +251,11 @@ export async function enqueuePretile(
     })
   );
 
-  await executeGraphql(updateProjectMutation, {
-    input: { id: projectId, pretileManifestS3Key: manifestKey },
-  });
+  if (!skipProjectStamp) {
+    await executeGraphql(updateProjectMutation, {
+      input: { id: projectId, pretileManifestS3Key: manifestKey },
+    });
+  }
 
   // Fan out SQS sends for both queues in parallel. Each row produces a message
   // with the same shape regardless of which queue it goes to — the refresh

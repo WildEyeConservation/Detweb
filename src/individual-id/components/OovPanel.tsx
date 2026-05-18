@@ -24,16 +24,6 @@ const COLLAPSED_WIDTH = 38;
 const EXPANDED_WIDTH = 168;
 const AVATAR_SIZE = 20;
 
-/**
- * Side panel listing "out of view" annotations for one image of the pair.
- * OOV rows have no on-image position so they live in the panel rather than
- * on the map. Interaction matches a regular marker — click to activate,
- * Ctrl/right-click to manually link to a real annotation on the other image,
- * hover to reveal the action popup.
- *
- * The panel hides itself entirely when there are no OOV candidates on this
- * side, so it doesn't steal map width when unused.
- */
 export function OovPanel({
   side,
   candidates,
@@ -97,8 +87,6 @@ export function OovPanel({
             Out of view ({candidates.length})
           </span>
         )}
-        {/* Chevron points INTO the panel when expanded (collapse direction),
-            and OUT when collapsed (expand direction). */}
         {collapsed ? (
           isLeft ? (
             <ChevronRight size={18} strokeWidth={2.5} />
@@ -190,9 +178,9 @@ function CollapsedAvatar({
     }
     onActivate(candidate.pairKey);
   };
+  // Right-click suppressed: it's too easy to trigger by accident; use Ctrl/⌘+click to link.
   const handleContextMenu = (ev: React.MouseEvent) => {
     ev.preventDefault();
-    onCtrlClick(candidate.pairKey);
   };
   const ring = active
     ? '0 0 0 2px #ff8c1a'
@@ -258,7 +246,6 @@ function OovCard({
   const [hover, setHover] = useState(false);
   const showActions = hover;
 
-  // Status pill colour mirrors the map status rings.
   const statusColor =
     candidate.status === 'accepted'
       ? '#27ae60'
@@ -280,12 +267,11 @@ function OovCard({
     }
     onActivate(candidate.pairKey);
   };
+  // Right-click suppressed: it's too easy to trigger by accident; use Ctrl/⌘+click to link.
   const handleContextMenu = (ev: React.MouseEvent) => {
     ev.preventDefault();
-    onCtrlClick(candidate.pairKey);
   };
 
-  // Active wins over passive hover for the outline colour.
   const outline = active
     ? '2px solid #ff8c1a'
     : passiveHover

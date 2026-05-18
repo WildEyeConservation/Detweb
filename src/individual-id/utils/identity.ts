@@ -5,12 +5,7 @@ import {
 } from 'unique-names-generator';
 import type { AnnotationType } from '../../schemaTypes';
 
-/**
- * Deterministic two-word name (e.g. "Brave Sam") seeded by a candidate's
- * shared identity. Both sides of a linked pair share the same identityKey so
- * a hover on either side reveals the same name. Shared by the map popup and
- * the OOV side panel so the two stay consistent.
- */
+// Deterministic name seeded by identity key — stable across re-renders, consistent between map and OOV panel.
 export function nameFor(identityKey: string): string {
   return uniqueNamesGenerator({
     dictionaries: [adjectives, names],
@@ -20,16 +15,7 @@ export function nameFor(identityKey: string): string {
   });
 }
 
-/**
- * Whether an annotation is "out of view" (the animal is known to be on this
- * point but isn't visible in this image due to plane yaw/roll). OOV rows
- * carry no meaningful on-image position and are rendered in the side panel
- * instead of on the map.
- *
- * Reads via a cast because `oov` is a freshly-added schema field — the
- * generated `AnnotationType` won't include it until the backend is deployed
- * and types are regenerated. The cast is harmless once the field lands.
- */
+// Cast works around `oov` not yet appearing in the generated AnnotationType.
 export function isOov(
   a: AnnotationType | { oov?: boolean | null } | null | undefined
 ): boolean {
