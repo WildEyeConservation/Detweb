@@ -1198,6 +1198,9 @@ export function IndividualIdMap({
         });
         mk.setLngLat(px2lngLat(data.x, data.y));
         mk.addTo(map);
+        // Hide the popup the moment a drag begins so its pointer-events:auto
+        // surface can't intercept a fast drag that crosses over it.
+        mk.on('dragstart', () => hidePopup());
         mk.on('dragend', () => {
           const ll = mk!.getLngLat();
           const px = lngLat2px(ll.lng, ll.lat);

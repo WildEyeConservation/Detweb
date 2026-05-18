@@ -146,6 +146,13 @@ type LaunchIndividualIdPayload = {
   // Distinct image IDs that have at least one annotation of the chosen
   // category. Computed client-side from the full annotation scan.
   annotatedImageIds: string[];
+  // Transects the client (running the same Munkres/completion logic as the
+  // harness) found to still have linking work. When present we only create
+  // availability rows for these — already-finished transects are skipped so
+  // users are never handed a transect with nothing to do. Omitted when the
+  // project has no transects yet (the lambda detects/creates them and a
+  // fresh project has no completed work to skip).
+  incompleteTransectIds?: string[];
   payloadS3Key?: string;
 };
 
@@ -379,7 +386,25 @@ async function handleLaunch(
     };
   }
 
-  const transectCount = workTransectIds.length;
+  // Restrict to the transects the client found still-incomplete, so a job
+  // never includes transects whose linking is already done. The array is only
+  // sent when transects already existed (see payload type); when absent we
+  // launch every registerable transect (fresh project, nothing completed).
+  let effectiveTransectIds = workTransectIds;
+  if (Array.isArray(payload.incompleteTransectIds)) {
+    const allow = new Set(payload.incompleteTransectIds);
+    effectiveTransectIds = workTransectIds.filter((id) => allow.has(id));
+    if (effectiveTransectIds.length === 0) {
+      await setProjectStatus(projectId, 'active');
+      return {
+        jobId: null,
+        transectCount: 0,
+        message: 'All transects for this category are already complete',
+      };
+    }
+  }
+
+  const transectCount = effectiveTransectIds.length;
   const jobId = randomUUID();
   await executeGraphql(createIndividualIdJobMutation, {
     input: {
@@ -396,10 +421,10 @@ async function handleLaunch(
     },
   });
 
-  // Availability rows (only the transects with real work).
+  // Availability rows (only the transects with real, still-incomplete work).
   const rowLimit = pLimit(15);
   await Promise.all(
-    workTransectIds.map((transectId) =>
+    effectiveTransectIds.map((transectId) =>
       rowLimit(() =>
         executeGraphql(createIndividualIdTransectMutation, {
           input: {
@@ -597,6 +622,9 @@ function parsePayload(request: unknown): LaunchIndividualIdPayload {
     categoryId: parsed.categoryId,
     categoryName: parsed.categoryName,
     annotatedImageIds: parsed.annotatedImageIds,
+    ...(Array.isArray(parsed.incompleteTransectIds)
+      ? { incompleteTransectIds: parsed.incompleteTransectIds }
+      : {}),
   };
 }
 
@@ -617,6 +645,9 @@ async function readPayloadFromS3(
     categoryId: parsed.categoryId,
     categoryName: parsed.categoryName,
     annotatedImageIds: parsed.annotatedImageIds ?? [],
+    ...(Array.isArray(parsed.incompleteTransectIds)
+      ? { incompleteTransectIds: parsed.incompleteTransectIds }
+      : {}),
   };
 }
 

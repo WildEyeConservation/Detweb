@@ -6,6 +6,12 @@ import { GlobalContext, UserContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
 import { DataClient } from '../../amplify/shared/data-schema.generated';
 import { logAdminAction } from '../utils/adminActionLogger';
+import type {
+  AnnotationType,
+  ImageNeighbourType,
+  ImageType,
+} from '../schemaTypes';
+import { findIncompleteTransectIds } from '../individual-id/utils/transectCompletion';
 
 // AppSync rejects very large mutation arguments; above this the payload is
 // staged in S3 and only a reference is sent (mirrors FalseNegatives).
@@ -19,6 +25,24 @@ type LaunchHandler = {
 };
 
 type CategoryOption = { id: string; name: string };
+
+type AnnotationRow = {
+  id: string;
+  categoryId: string;
+  imageId: string;
+  x: number;
+  y: number;
+  objectId: string | null;
+  oov: boolean | null;
+};
+
+type ImageWithNeighbours = Pick<
+  ImageType,
+  'id' | 'width' | 'height' | 'transectId'
+> & {
+  leftNeighbours?: ImageNeighbourType[] | null;
+  rightNeighbours?: ImageNeighbourType[] | null;
+};
 
 export default function IndividualId({
   project,
@@ -39,12 +63,19 @@ export default function IndividualId({
   const { user } = useContext(UserContext)!;
 
   const [categories, setCategories] = useState<CategoryOption[]>([]);
-  const [allAnnotations, setAllAnnotations] = useState<
-    Array<{ categoryId: string; imageId: string }>
-  >([]);
+  const [allAnnotations, setAllAnnotations] = useState<AnnotationRow[]>([]);
+  const [projectImages, setProjectImages] = useState<ImageWithNeighbours[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+  // Transects (for the selected label) that still have linking work, computed
+  // with the same Munkres/completion logic the harness uses. `null` until
+  // computed or when the project has no transects yet (nothing could be
+  // complete, so the gate doesn't apply and the lambda detects transects).
+  const [incompleteTransectIds, setIncompleteTransectIds] = useState<
+    string[] | null
+  >(null);
+  const [analyzing, setAnalyzing] = useState(false);
 
   // Categories that actually have annotations, with per-category image counts.
   const availableCategories = useMemo(() => {
@@ -71,13 +102,116 @@ export default function IndividualId({
     return Array.from(ids);
   }, [allAnnotations, selectedCategoryId]);
 
+  // Project images keyed by id, plus the transect grouping and the de-duped,
+  // skip-filtered neighbour list — the inputs the harness's completion logic
+  // needs. Derived once from the project image load; category-independent.
+  const { imagesById, imageIdsByTransect, rawNeighbours } = useMemo(() => {
+    const byId: Record<string, ImageType> = {};
+    const byTransect = new Map<string, Set<string>>();
+    for (const img of projectImages) {
+      byId[img.id] = img as unknown as ImageType;
+      if (img.transectId) {
+        let set = byTransect.get(img.transectId);
+        if (!set) {
+          set = new Set<string>();
+          byTransect.set(img.transectId, set);
+        }
+        set.add(img.id);
+      }
+    }
+    const seen = new Set<string>();
+    const neighbours: ImageNeighbourType[] = [];
+    for (const img of projectImages) {
+      for (const n of [
+        ...(img.leftNeighbours ?? []),
+        ...(img.rightNeighbours ?? []),
+      ]) {
+        if (n.skipped) continue;
+        if (!byId[n.image1Id] || !byId[n.image2Id]) continue;
+        const k = `${n.image1Id}__${n.image2Id}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        neighbours.push(n);
+      }
+    }
+    return {
+      imagesById: byId,
+      imageIdsByTransect: byTransect,
+      rawNeighbours: neighbours,
+    };
+  }, [projectImages]);
+
+  // Transects only exist once a prior workflow (or a previous Individual ID
+  // launch) has created them. Without them no individual-id linking can have
+  // happened, so the "already complete" gate doesn't apply — the launch
+  // lambda detects and creates transects itself.
+  const transectsExist = imageIdsByTransect.size > 0;
+
+  // Recompute which transects still have work whenever the label changes.
+  // Deferred to a macrotask so the "Checking…" status can paint before the
+  // (potentially heavy) Munkres sweep blocks the thread.
+  useEffect(() => {
+    if (loading || !selectedCategoryId) {
+      setIncompleteTransectIds(null);
+      setAnalyzing(false);
+      return;
+    }
+    if (!transectsExist) {
+      setIncompleteTransectIds(null);
+      setAnalyzing(false);
+      return;
+    }
+    setAnalyzing(true);
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      const annotationsByImage: Record<string, AnnotationType[]> = {};
+      for (const a of allAnnotations) {
+        if (a.categoryId !== selectedCategoryId) continue;
+        (annotationsByImage[a.imageId] ??= []).push(
+          a as unknown as AnnotationType
+        );
+      }
+      const ids = findIncompleteTransectIds({
+        imagesById,
+        imageIdsByTransect,
+        rawNeighbours,
+        annotationsByImage,
+        categoryId: selectedCategoryId,
+      });
+      if (cancelled) return;
+      setIncompleteTransectIds(ids);
+      setAnalyzing(false);
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    loading,
+    selectedCategoryId,
+    transectsExist,
+    allAnnotations,
+    imagesById,
+    imageIdsByTransect,
+    rawNeighbours,
+  ]);
+
+  // No transect has outstanding work for this label — launching would create
+  // a job whose every transect is already done.
+  const noWork =
+    transectsExist &&
+    !analyzing &&
+    incompleteTransectIds !== null &&
+    incompleteTransectIds.length === 0;
+
   useEffect(() => {
     let mounted = true;
     async function loadData() {
       setLoading(true);
       setLoadingProgress(0);
       try {
-        const [cats, annotations] = await Promise.all([
+        const [cats, annotations, images] = await Promise.all([
           fetchAllPaginatedResults(
             client.models.Category.categoriesByAnnotationSetId,
             {
@@ -85,13 +219,15 @@ export default function IndividualId({
               selectionSet: ['id', 'name'] as const,
             }
           ),
-          fetchAnnotationImageIds(client, annotationSet.id, (count) => {
+          fetchSetAnnotations(client, annotationSet.id, (count) => {
             if (mounted) setLoadingProgress(count);
           }),
+          fetchProjectImages(client, project.id),
         ]);
         if (!mounted) return;
         setCategories(cats.map((c) => ({ id: c.id, name: c.name })));
         setAllAnnotations(annotations);
+        setProjectImages(images);
       } catch (err) {
         console.error('Failed to load Individual ID data', err);
       }
@@ -101,20 +237,37 @@ export default function IndividualId({
     return () => {
       mounted = false;
     };
-  }, [client, annotationSet.id]);
+  }, [client, annotationSet.id, project.id]);
 
   useEffect(() => {
-    setLaunchDisabled(loading || !selectedCategoryId || launching);
-  }, [loading, selectedCategoryId, launching, setLaunchDisabled]);
+    setLaunchDisabled(
+      loading || analyzing || !selectedCategoryId || launching || noWork
+    );
+  }, [
+    loading,
+    analyzing,
+    selectedCategoryId,
+    launching,
+    noWork,
+    setLaunchDisabled,
+  ]);
 
   const selectedCategoryIdRef = useRef(selectedCategoryId);
   const selectedImageIdsRef = useRef(selectedImageIds);
+  const transectsExistRef = useRef(transectsExist);
+  const incompleteTransectIdsRef = useRef(incompleteTransectIds);
   useEffect(() => {
     selectedCategoryIdRef.current = selectedCategoryId;
   }, [selectedCategoryId]);
   useEffect(() => {
     selectedImageIdsRef.current = selectedImageIds;
   }, [selectedImageIds]);
+  useEffect(() => {
+    transectsExistRef.current = transectsExist;
+  }, [transectsExist]);
+  useEffect(() => {
+    incompleteTransectIdsRef.current = incompleteTransectIds;
+  }, [incompleteTransectIds]);
 
   useEffect(() => {
     setIndividualIdLaunchHandler({
@@ -127,18 +280,36 @@ export default function IndividualId({
           onProgress('No label selected.');
           return;
         }
+
+        // Only launch transects that still have linking work. When transects
+        // already exist we send the explicit incomplete set so the lambda
+        // skips already-finished ones; if none remain, abort before launching.
+        const transectsExist = transectsExistRef.current;
+        const incomplete = incompleteTransectIdsRef.current;
+        if (transectsExist && incomplete !== null && incomplete.length === 0) {
+          onProgress(
+            'All transects for this label are already complete — nothing to launch.'
+          );
+          return;
+        }
+
         onLaunchConfirmed();
         onProgress('Launching Individual ID...');
 
         const categoryName =
           categories.find((c) => c.id === categoryId)?.name ?? undefined;
-        const payload = {
+        const payload: Record<string, unknown> = {
           projectId: project.id,
           annotationSetId: annotationSet.id,
           categoryId,
           categoryName,
           annotatedImageIds: selectedImageIdsRef.current,
         };
+        // Omitted when transects don't exist yet: the lambda detects/creates
+        // them, and a fresh project has no completed work to skip.
+        if (transectsExist && incomplete && incomplete.length > 0) {
+          payload.incompleteTransectIds = incomplete;
+        }
 
         onProgress('Submitting Individual ID request...');
         await sendLaunchIndividualIdRequest(client, payload);
@@ -223,12 +394,30 @@ export default function IndividualId({
                     Images with <strong>{selectedCategory.name}</strong>{' '}
                     annotations: <strong>{selectedCategory.imageCount}</strong>
                   </div>
-                  <div className='text-muted mt-1'>
-                    Transects containing these images will be made available as
-                    Individual ID jobs once tiling completes.
-                  </div>
+                  {analyzing ? (
+                    <div className='text-muted mt-1'>
+                      Checking which transects still need identification…
+                    </div>
+                  ) : transectsExist && incompleteTransectIds !== null ? (
+                    <div className='text-muted mt-1'>
+                      Transects with outstanding work:{' '}
+                      <strong>{incompleteTransectIds.length}</strong>
+                    </div>
+                  ) : (
+                    <div className='text-muted mt-1'>
+                      Transects containing these images will be made available
+                      as Individual ID jobs once tiling completes.
+                    </div>
+                  )}
                 </div>
               </div>
+            )}
+
+            {noWork && (
+              <Alert variant='warning' className='mb-0'>
+                Every transect with <strong>{selectedCategory?.name}</strong>{' '}
+                annotations has already been fully identified
+              </Alert>
             )}
           </>
         )}
@@ -237,12 +426,12 @@ export default function IndividualId({
   );
 }
 
-async function fetchAnnotationImageIds(
+async function fetchSetAnnotations(
   client: DataClient,
   annotationSetId: string,
   onProgress?: (count: number) => void
-): Promise<Array<{ categoryId: string; imageId: string }>> {
-  const allItems: Array<{ categoryId: string; imageId: string }> = [];
+): Promise<AnnotationRow[]> {
+  const allItems: AnnotationRow[] = [];
   let nextToken: string | null | undefined = undefined;
   let lastReported = 0;
 
@@ -251,13 +440,29 @@ async function fetchAnnotationImageIds(
       await client.models.Annotation.annotationsByAnnotationSetId(
         { setId: annotationSetId },
         {
-          selectionSet: ['categoryId', 'imageId'] as const,
+          selectionSet: [
+            'id',
+            'categoryId',
+            'imageId',
+            'x',
+            'y',
+            'objectId',
+            'oov',
+          ] as const,
           limit: 10000,
           nextToken,
         }
       );
     for (const item of data || []) {
-      allItems.push({ categoryId: item.categoryId, imageId: item.imageId });
+      allItems.push({
+        id: item.id,
+        categoryId: item.categoryId,
+        imageId: item.imageId,
+        x: item.x,
+        y: item.y,
+        objectId: (item as { objectId?: string | null }).objectId ?? null,
+        oov: (item as { oov?: boolean | null }).oov ?? null,
+      });
     }
     const currentThousand = Math.floor(allItems.length / 1000);
     if (onProgress && currentThousand > lastReported) {
@@ -268,6 +473,30 @@ async function fetchAnnotationImageIds(
   } while (nextToken);
 
   return allItems;
+}
+
+// Project images plus their neighbour edges, mirroring useTransectData's
+// selection set but project-wide (the modal can't scope to one transect yet).
+async function fetchProjectImages(
+  client: DataClient,
+  projectId: string
+): Promise<ImageWithNeighbours[]> {
+  const images = await fetchAllPaginatedResults<ImageWithNeighbours>(
+    client.models.Image.imagesByProjectId,
+    {
+      projectId,
+      limit: 10000,
+      selectionSet: [
+        'id',
+        'width',
+        'height',
+        'transectId',
+        'leftNeighbours.*',
+        'rightNeighbours.*',
+      ],
+    }
+  );
+  return images;
 }
 
 async function sendLaunchIndividualIdRequest(
