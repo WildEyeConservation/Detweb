@@ -22,6 +22,12 @@ interface CandidateOverride {
   posB?: { x: number; y: number };
   status?: 'pending' | 'locked' | 'accepted';
   /**
+   * "Mark as obscured" intent for a proposed (shadow) side, set before the
+   * annotation exists. Applied to the row created at accept time.
+   */
+  obscuredA?: boolean;
+  obscuredB?: boolean;
+  /**
    * When true, the user has rejected this candidate entirely on this pair.
    * It will be filtered out at merge time.
    */
@@ -45,6 +51,16 @@ export interface PairWorkingState {
     candidateKey: CandidateKey,
     side: 'A' | 'B',
     pos: { x: number; y: number }
+  ) => void;
+  /**
+   * Flag/unflag a proposed (shadow) side as obscured in memory. No DB write —
+   * the flag is consumed when the candidate is accepted and its row created.
+   */
+  setCandidateObscured: (
+    pairKey: PairKey,
+    candidateKey: CandidateKey,
+    side: 'A' | 'B',
+    value: boolean
   ) => void;
   /** Lock the candidate (first space press) — no DB write yet. */
   lockCandidate: (pairKey: PairKey, candidateKey: CandidateKey) => void;
@@ -117,6 +133,8 @@ export function usePairWorkingState(): PairWorkingState {
             posA: ov.posA ?? c.posA,
             posB: ov.posB ?? c.posB,
             status: ov.status ?? c.status,
+            obscuredA: ov.obscuredA ?? c.obscuredA,
+            obscuredB: ov.obscuredB ?? c.obscuredB,
           });
         }
       }
@@ -131,6 +149,17 @@ export function usePairWorkingState(): PairWorkingState {
         updateCandidate(pk, ck, (prev) => ({
           ...prev,
           ...(side === 'A' ? { posA: pos } : { posB: pos }),
+        }));
+      },
+      [updateCandidate]
+    );
+
+  const setCandidateObscured: PairWorkingState['setCandidateObscured'] =
+    useCallback(
+      (pk, ck, side, value) => {
+        updateCandidate(pk, ck, (prev) => ({
+          ...prev,
+          ...(side === 'A' ? { obscuredA: value } : { obscuredB: value }),
         }));
       },
       [updateCandidate]
@@ -169,6 +198,7 @@ export function usePairWorkingState(): PairWorkingState {
     if (!pair || pair.size === 0) return false;
     for (const ov of pair.values()) {
       if (ov.posA || ov.posB) return true;
+      if (ov.obscuredA || ov.obscuredB) return true;
       if (ov.status && ov.status !== 'pending' && ov.status !== 'accepted') return true;
     }
     return false;
@@ -179,6 +209,7 @@ export function usePairWorkingState(): PairWorkingState {
       version,
       mergeCandidates,
       setCandidatePosition,
+      setCandidateObscured,
       lockCandidate,
       acceptCandidate,
       unlockCandidate,
@@ -190,6 +221,7 @@ export function usePairWorkingState(): PairWorkingState {
       version,
       mergeCandidates,
       setCandidatePosition,
+      setCandidateObscured,
       lockCandidate,
       acceptCandidate,
       unlockCandidate,

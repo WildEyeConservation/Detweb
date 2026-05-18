@@ -28,7 +28,7 @@ const AVATAR_SIZE = 20;
  * Side panel listing "out of view" annotations for one image of the pair.
  * OOV rows have no on-image position so they live in the panel rather than
  * on the map. Interaction matches a regular marker — click to activate,
- * Ctrl/right-click to manually link to a real annotation on the other image,
+ * Ctrl/⌘+click to manually link to a real annotation on the other image,
  * hover to reveal the action popup.
  *
  * The panel hides itself entirely when there are no OOV candidates on this
@@ -190,9 +190,11 @@ function CollapsedAvatar({
     }
     onActivate(candidate.pairKey);
   };
+  // Suppress the native context menu only. Right-click is deliberately NOT
+  // a manual-link gesture (too easy to trigger by accident) — use
+  // Ctrl/⌘+click instead.
   const handleContextMenu = (ev: React.MouseEvent) => {
     ev.preventDefault();
-    onCtrlClick(candidate.pairKey);
   };
   const ring = active
     ? '0 0 0 2px #ff8c1a'
@@ -280,9 +282,11 @@ function OovCard({
     }
     onActivate(candidate.pairKey);
   };
+  // Suppress the native context menu only. Right-click is deliberately NOT
+  // a manual-link gesture (too easy to trigger by accident) — use
+  // Ctrl/⌘+click instead.
   const handleContextMenu = (ev: React.MouseEvent) => {
     ev.preventDefault();
-    onCtrlClick(candidate.pairKey);
   };
 
   // Active wins over passive hover for the outline colour.

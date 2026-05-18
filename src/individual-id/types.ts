@@ -59,6 +59,15 @@ export interface MatchCandidate {
   /** True when side A is a Munkres-proposed shadow (no realA yet). */
   isShadowA: boolean;
   isShadowB: boolean;
+  /**
+   * In-memory "mark as obscured" intent for a proposed (shadow) side, set via
+   * the marker popup before the annotation exists in the DB. Carried through
+   * `usePairWorkingState` so it survives pair navigation, then written as
+   * `obscured: true` on the row created at accept time. Ignored for a side
+   * that already has a real annotation — those use the live DB toggle instead.
+   */
+  obscuredA?: boolean;
+  obscuredB?: boolean;
   status: CandidateStatus;
   /**
    * Real annotation that has no partner in the overlap region — its

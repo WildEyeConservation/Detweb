@@ -51,6 +51,12 @@ import { pretileImage } from './functions/pretileImage/resource';
 import { refreshTiles } from './functions/refreshTiles/resource';
 import { reconcilePretileLaunches } from './functions/reconcilePretileLaunches/resource';
 import { extendTileLifecycles } from './functions/extendTileLifecycles/resource';
+import { launchIndividualId } from './functions/launchIndividualId/resource';
+import { updateImageTransect } from './functions/updateImageTransect/resource';
+import { claimIndividualIdTransect } from './functions/claimIndividualIdTransect/resource';
+import { completeIndividualIdTransect } from './functions/completeIndividualIdTransect/resource';
+import { reconcileIndividualId } from './functions/reconcileIndividualId/resource';
+import { releaseIndividualIdTransects } from './functions/releaseIndividualIdTransects/resource';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -102,6 +108,12 @@ const backend = defineBackend({
   refreshTiles,
   reconcilePretileLaunches,
   extendTileLifecycles,
+  launchIndividualId,
+  updateImageTransect,
+  claimIndividualIdTransect,
+  completeIndividualIdTransect,
+  reconcileIndividualId,
+  releaseIndividualIdTransects,
 });
 
 const userPoolClient = backend.auth.resources.cfnResources.cfnUserPoolClient;
@@ -981,6 +993,7 @@ const launchLambdasUsingPretile = [
   backend.launchFalseNegatives,
   backend.launchQCReview,
   backend.launchHomography,
+  backend.launchIndividualId,
 ];
 
 for (const fn of launchLambdasUsingPretile) {
@@ -1114,6 +1127,61 @@ const registrationStreamMapping = new EventSourceMapping(
   }
 );
 registrationStreamMapping.node.addDependency(registrationStreamPolicy);
+
+// ── Individual ID workflow ──
+//
+// launchIndividualId fans out one message per image onto this queue so
+// updateImageTransect can stamp Image.transectId in small batches without
+// hitting a lambda timeout on surveys with hundreds of thousands of images.
+// reconcileIndividualId (cron 5m) flips the project back to `active` once the
+// fanout drains (IndividualIdJob.pendingImageUpdates === 0) and pretiling is
+// done; releaseIndividualIdTransects (cron 10m) frees transects whose assigned
+// user went inactive (>30m). Pretile SQS perms + env are granted via the
+// launchLambdasUsingPretile loop above.
+
+const individualIdStack = backend.createStack('DetwebIndividualId');
+
+const individualIdTransectUpdateDlq = new sqs.Queue(
+  individualIdStack,
+  'IndividualIdTransectUpdateDlq',
+  { retentionPeriod: Duration.days(14) }
+);
+
+const individualIdTransectUpdateQueue = new sqs.Queue(
+  individualIdStack,
+  'IndividualIdTransectUpdateQueue',
+  {
+    // Visibility comfortably above the updateImageTransect timeout (120s).
+    visibilityTimeout: Duration.seconds(180),
+    retentionPeriod: Duration.days(14),
+    deadLetterQueue: {
+      queue: individualIdTransectUpdateDlq,
+      maxReceiveCount: 5,
+    },
+  }
+);
+
+const updateImageTransectLambda =
+  backend.updateImageTransect.resources.lambda as lambda.Function;
+updateImageTransectLambda.addEventSource(
+  new SqsEventSource(individualIdTransectUpdateQueue, {
+    batchSize: 10,
+    reportBatchItemFailures: true,
+    maxConcurrency: 50,
+  })
+);
+
+// launchIndividualId writes image→transect messages onto the queue.
+backend.launchIndividualId.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['sqs:SendMessage', 'sqs:SendMessageBatch'],
+    resources: [individualIdTransectUpdateQueue.queueArn],
+  })
+);
+backend.launchIndividualId.addEnvironment(
+  'TRANSECT_UPDATE_QUEUE_URL',
+  individualIdTransectUpdateQueue.queueUrl
+);
 
 const generalBucketName = 'surveyscope';
 

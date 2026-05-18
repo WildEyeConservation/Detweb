@@ -18,6 +18,7 @@ import { SquareArrowOutUpRight, X, Play, Trash, Minimize2, Maximize2 } from 'luc
 import { Badge } from 'react-bootstrap';
 import localforage from 'localforage';
 import ProjectProgress from '../user/ProjectProgress.tsx';
+import IndividualIdProgress from '../individual-id/IndividualIdProgress.tsx';
 import { logAdminAction } from '../utils/adminActionLogger.ts';
 
 const PROJECT_SELECTION_SET = [
@@ -36,6 +37,8 @@ const PROJECT_SELECTION_SET = [
   'queues.url',
   'queues.name',
   'queues.tag',
+  'individualIdJobs.id',
+  'individualIdJobs.status',
   'imageSets.imageCount',
 ] as const;
 
@@ -223,6 +226,25 @@ export default function Surveys() {
     [projectQueries]
   );
 
+  // Projects with an in-flight Individual ID job (status 'active' or
+  // 'launching'). Used to lock the survey down like any other active job.
+  // Derived from the project's own selection set (individualIdJobs) — no
+  // per-project query needed.
+  const projectsWithIndividualIdJob = useMemo(
+    () =>
+      new Set(
+        projects
+          .filter((p) =>
+            ((p as any).individualIdJobs ?? []).some(
+              (j: { status?: string | null }) =>
+                j.status === 'active' || j.status === 'launching'
+            )
+          )
+          .map((p) => p.id)
+      ),
+    [projects]
+  );
+
   const organizationOptions = useMemo(
     () =>
       Array.from(
@@ -265,6 +287,7 @@ export default function Surveys() {
       cancelled = true;
     };
   }, [projectIdsKey]);
+
 
   async function deleteProject(projectId: string) {
     const project = projects.find((p) => p.id === projectId);
@@ -352,6 +375,35 @@ export default function Surveys() {
         return;
       }
 
+      // cancel an Individual ID job if one is in flight
+      try {
+        const { data: iidJobs } = await (
+          client.models as any
+        ).IndividualIdJob.individualIdJobsByProjectId(
+          { projectId: selectedProject!.id },
+          { selectionSet: ['id', 'status'] }
+        );
+        const iidJob = (iidJobs || []).find(
+          (j: any) => j.status === 'active' || j.status === 'launching'
+        );
+        if (iidJob) {
+          await (client.models as any).IndividualIdJob.update({
+            id: iidJob.id,
+            status: 'cancelled',
+          });
+          await logAdminAction(
+            client,
+            user.userId,
+            `Cancelled Individual ID job for project "${selectedProject!.name}"`,
+            selectedProject!.id,
+            selectedProject!.organizationId
+          );
+          return;
+        }
+      } catch (e) {
+        console.error('Failed to cancel Individual ID job', e);
+      }
+
       const job = selectedProject?.queues[0];
 
       if (!job?.url) {
@@ -412,8 +464,8 @@ export default function Surveys() {
       return b.name.localeCompare(a.name);
     }
     if (sortBy === 'activeJobs') {
-      const hasJobA = a.queues.length > 0 || a.annotationSets.some((set: { register?: boolean | null }) => set.register);
-      const hasJobB = b.queues.length > 0 || b.annotationSets.some((set: { register?: boolean | null }) => set.register);
+      const hasJobA = a.queues.length > 0 || a.annotationSets.some((set: { register?: boolean | null }) => set.register) || projectsWithIndividualIdJob.has(a.id);
+      const hasJobB = b.queues.length > 0 || b.annotationSets.some((set: { register?: boolean | null }) => set.register) || projectsWithIndividualIdJob.has(b.id);
       if (hasJobA !== hasJobB) return hasJobA ? -1 : 1;
       return new Date(b.createdAt ?? '').getTime() - new Date(a.createdAt ?? '').getTime();
     }
@@ -669,10 +721,14 @@ export default function Surveys() {
       project.status === 'updating' ||
       project.status === 'deleting';
 
-    const hasJobs =
+    const hasQueueOrRegisterJob =
       project.status !== 'launching' &&
       (project.queues.length > 0 ||
         project.annotationSets.some((set: { register?: boolean | null }) => set.register));
+    const hasIndividualIdJob = projectsWithIndividualIdJob.has(project.id);
+    // Combined signal used to lock the survey row down (disable Edit/Add/
+    // Delete, hide per-set actions) exactly like any other active job.
+    const hasJobs = hasQueueOrRegisterJob || hasIndividualIdJob;
 
     const showResumeButton =
       !task.projectId &&
@@ -740,7 +796,7 @@ export default function Surveys() {
         </div>,
         <div className={`d-flex flex-column flex-md-row ${columnGapClass}`}>
           {renderAnnotationSets(project, disabled, hasJobs)}
-          {hasJobs && (
+          {hasQueueOrRegisterJob && (
             <div
               className={`d-flex flex-row align-items-center ${gapClass} w-100`}
               style={{ maxWidth: '500px' }}
@@ -782,6 +838,37 @@ export default function Surveys() {
               </div>
             </div>
           )}
+          {project.status === 'active' && hasIndividualIdJob && (
+            <div
+              className={`d-flex flex-row align-items-center ${gapClass} w-100`}
+              style={{ maxWidth: '500px' }}
+            >
+              <div className='flex-grow-1'>
+                <IndividualIdProgress projectId={project.id} />
+              </div>
+              <div className={`d-flex ${gapClass} flex-wrap justify-content-end`}>
+                <Button
+                  size={compactMode ? 'sm' : undefined}
+                  className='flex align-items-center justify-content-center'
+                  variant='primary'
+                  onClick={() => navigate(`/jobs`)}
+                >
+                  <SquareArrowOutUpRight />
+                </Button>
+                <Button
+                  size={compactMode ? 'sm' : undefined}
+                  className='flex align-items-center justify-content-center'
+                  variant='danger'
+                  onClick={() => {
+                    setSelectedProject(project);
+                    showModal('deleteJob');
+                  }}
+                >
+                  <X />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>,
       ],
     };
@@ -795,10 +882,14 @@ export default function Surveys() {
       project.status === 'updating' ||
       project.status === 'deleting';
 
-    const hasJobs =
+    const hasQueueOrRegisterJob =
       project.status !== 'launching' &&
       (project.queues.length > 0 ||
         project.annotationSets.some((set: { register?: boolean | null }) => set.register));
+    const hasIndividualIdJob = projectsWithIndividualIdJob.has(project.id);
+    // Combined signal used to lock the survey row down (disable Edit/Add/
+    // Delete, hide per-set actions) exactly like any other active job.
+    const hasJobs = hasQueueOrRegisterJob || hasIndividualIdJob;
 
     const showResumeButton =
       !task.projectId &&
@@ -858,7 +949,7 @@ export default function Surveys() {
                 { wrap: true, size: 'sm' }
               )}
             </div>
-            {hasJobs && (
+            {hasQueueOrRegisterJob && (
               <div
                 className={`d-flex flex-row align-items-center gap-2 ${isMobile ? 'pt-3 border-top border-light' : ''
                   }`}
@@ -889,6 +980,37 @@ export default function Surveys() {
                     size='sm'
                     className='flex align-items-center justify-content-center'
                     disabled={!project.annotationSets.some((set: { register?: boolean | null }) => set.register) && (disabled || scanningProjects.has(project.id))}
+                    variant='danger'
+                    onClick={() => {
+                      setSelectedProject(project);
+                      showModal('deleteJob');
+                    }}
+                  >
+                    <X />
+                  </Button>
+                </div>
+              </div>
+            )}
+            {project.status === 'active' && hasIndividualIdJob && (
+              <div
+                className={`d-flex flex-row align-items-center gap-2 ${isMobile ? 'pt-3 border-top border-light' : ''
+                  }`}
+              >
+                <div className='flex-grow-1'>
+                  <IndividualIdProgress projectId={project.id} />
+                </div>
+                <div className='d-flex gap-2 flex-wrap justify-content-end'>
+                  <Button
+                    size='sm'
+                    className='flex align-items-center justify-content-center'
+                    variant='primary'
+                    onClick={() => navigate(`/jobs`)}
+                  >
+                    <SquareArrowOutUpRight />
+                  </Button>
+                  <Button
+                    size='sm'
+                    className='flex align-items-center justify-content-center'
                     variant='danger'
                     onClick={() => {
                       setSelectedProject(project);

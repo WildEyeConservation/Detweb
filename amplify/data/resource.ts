@@ -42,6 +42,12 @@ import { reconcilePretileLaunches } from '../functions/reconcilePretileLaunches/
 import { extendTileLifecycles } from '../functions/extendTileLifecycles/resource';
 import { pretileImage } from '../functions/pretileImage/resource';
 import { refreshTiles } from '../functions/refreshTiles/resource';
+import { launchIndividualId } from '../functions/launchIndividualId/resource';
+import { updateImageTransect } from '../functions/updateImageTransect/resource';
+import { claimIndividualIdTransect } from '../functions/claimIndividualIdTransect/resource';
+import { completeIndividualIdTransect } from '../functions/completeIndividualIdTransect/resource';
+import { reconcileIndividualId } from '../functions/reconcileIndividualId/resource';
+import { releaseIndividualIdTransects } from '../functions/releaseIndividualIdTransects/resource';
 import { generateTile } from '../storage/generateTile/resource';
 // import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
@@ -79,6 +85,7 @@ const schema = a
         status: a.string().default('active'),
         cameras: a.hasMany('Camera', 'projectId'),
         transects: a.hasMany('Transect', 'projectId'),
+        individualIdJobs: a.hasMany('IndividualIdJob', 'projectId'),
         strata: a.hasMany('Stratum', 'projectId'),
         jollyResultsMemberships: a.hasMany(
           'JollyResultsMembership',
@@ -695,6 +702,47 @@ const schema = a
       .secondaryIndexes((index) => [
         index('projectId').queryField('strataByProjectId'),
       ]),
+    IndividualIdJob: a
+      .model({
+        projectId: a.id().required(),
+        project: a.belongsTo('Project', 'projectId'),
+        annotationSetId: a.id().required(),
+        categoryId: a.id().required(),
+        name: a.string().required(),
+        // 'launching' | 'active' | 'completed'
+        status: a.string().default('launching'),
+        totalTransects: a.integer().default(0),
+        // ACID-decremented as transects are completed; 0 => job done.
+        remainingTransects: a.integer().default(0),
+        // ACID-decremented by the SQS fanout consumer; 0 => all images reassigned.
+        pendingImageUpdates: a.integer().default(0),
+        pretileManifestS3Key: a.string(),
+        group: a.string(),
+      })
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
+      .secondaryIndexes((index) => [
+        index('projectId').queryField('individualIdJobsByProjectId'),
+        index('annotationSetId').queryField('individualIdJobsByAnnotationSetId'),
+      ]),
+    IndividualIdTransect: a
+      .model({
+        jobId: a.id().required(),
+        projectId: a.id().required(),
+        annotationSetId: a.id().required(),
+        categoryId: a.id().required(),
+        transectId: a.id().required(),
+        // 'available' | 'assigned' | 'completed'
+        status: a.string().default('available'),
+        assignedUserId: a.string(),
+        assignedAt: a.string(),
+        lastActiveAt: a.string(),
+        group: a.string(),
+      })
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
+      .secondaryIndexes((index) => [
+        index('jobId').queryField('individualIdTransectsByJobId'),
+        index('projectId').queryField('individualIdTransectsByProjectId'),
+      ]),
     JollyResult: a
       .model({
         surveyId: a.id().required(),
@@ -1093,6 +1141,57 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(launchHomography)),
+    launchIndividualId: a
+      .mutation()
+      .arguments({
+        request: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(launchIndividualId)),
+    claimIndividualIdTransect: a
+      .mutation()
+      .arguments({
+        jobId: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(claimIndividualIdTransect)),
+    completeIndividualIdTransect: a
+      .mutation()
+      .arguments({
+        transectRowId: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(completeIndividualIdTransect)),
+    decrementIndividualIdImageUpdates: a
+      .mutation()
+      .arguments({ id: a.id().required(), count: a.integer().required() })
+      .returns(a.integer())
+      .handler(a.handler.custom({
+        entry: './decrementIndividualIdImageUpdates.js',
+        dataSource: a.ref('IndividualIdJob'),
+      }))
+      .authorization((allow) => [allow.authenticated()]),
+    decrementIndividualIdRemainingTransects: a
+      .mutation()
+      .arguments({ id: a.id().required() })
+      .returns(a.integer())
+      .handler(a.handler.custom({
+        entry: './decrementIndividualIdRemainingTransects.js',
+        dataSource: a.ref('IndividualIdJob'),
+      }))
+      .authorization((allow) => [allow.authenticated()]),
+    pingIndividualIdTransect: a
+      .mutation()
+      .arguments({ id: a.id().required() })
+      .returns(a.json())
+      .handler(a.handler.custom({
+        entry: './pingIndividualIdTransect.js',
+        dataSource: a.ref('IndividualIdTransect'),
+      }))
+      .authorization((allow) => [allow.authenticated()]),
     incrementQueueCount: a
       .mutation()
       .arguments({ id: a.id().required() })
@@ -1206,6 +1305,12 @@ const schema = a
     allow.resource(updateOrganizationMemberAdmin),
     allow.resource(deleteQueue),
     allow.resource(updateActiveOrganizations),
+    allow.resource(launchIndividualId),
+    allow.resource(updateImageTransect),
+    allow.resource(claimIndividualIdTransect),
+    allow.resource(completeIndividualIdTransect),
+    allow.resource(reconcileIndividualId),
+    allow.resource(releaseIndividualIdTransects),
   ]);
 
 export type ServerSchema = typeof schema;
@@ -1263,6 +1368,9 @@ export type RemoveUserFromOrganizationHandler = MutationHandler<{ organizationId
 export type UpdateOrganizationMemberAdminHandler = MutationHandler<{ organizationId: string; userId: string; isAdmin: boolean }>;
 export type DeleteQueueHandler = MutationHandler<{ queueId: string }>;
 export type UpdateActiveOrganizationsHandler = MutationHandler<{ activatedOrganizationIds: string[] }>;
+export type LaunchIndividualIdHandler = MutationHandler<{ request: string }>;
+export type ClaimIndividualIdTransectHandler = MutationHandler<{ jobId: string }>;
+export type CompleteIndividualIdTransectHandler = MutationHandler<{ transectRowId: string }>;
 
 export const data = defineData({
   schema,
