@@ -46,3 +46,37 @@ export function projectsInside(
   const [tx, ty] = tf([x, y]);
   return tx >= 0 && ty >= 0 && tx < w && ty < h;
 }
+
+function pointInPolygon(
+  px: number,
+  py: number,
+  poly: [number, number][]
+): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i];
+    const [xj, yj] = poly[j];
+    const intersect =
+      yi > py !== yj > py &&
+      px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// Point-in-polygon against the other image's projected footprint; the candidate point is never run through the homography, so an out-of-overlap point can't extrapolate to a false "inside".
+export function isInOverlap(
+  px: number,
+  py: number,
+  otherToThis: PixelTransform,
+  otherW: number,
+  otherH: number
+): boolean {
+  const quad: [number, number][] = [
+    otherToThis([0, 0]),
+    otherToThis([otherW, 0]),
+    otherToThis([otherW, otherH]),
+    otherToThis([0, otherH]),
+  ];
+  return pointInPolygon(px, py, quad);
+}
