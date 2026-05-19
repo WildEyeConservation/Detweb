@@ -1,5 +1,6 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Form } from 'react-bootstrap';
+import { LoadingProgressCard } from './LoadingProgressCard';
 import { uploadData } from 'aws-amplify/storage';
 import { Schema } from '../amplify/client-schema';
 import { GlobalContext, UserContext } from '../Context';
@@ -25,6 +26,26 @@ type LaunchHandler = {
 };
 
 type CategoryOption = { id: string; name: string };
+
+// Per-query load progress so the user sees each parallel fetch advance
+// independently rather than a single opaque "Loading annotations".
+type LoadStatus = {
+  categories: number;
+  categoriesDone: boolean;
+  annotations: number;
+  annotationsDone: boolean;
+  images: number;
+  imagesDone: boolean;
+};
+
+const INITIAL_LOAD_STATUS: LoadStatus = {
+  categories: 0,
+  categoriesDone: false,
+  annotations: 0,
+  annotationsDone: false,
+  images: 0,
+  imagesDone: false,
+};
 
 type AnnotationRow = {
   id: string;
@@ -66,7 +87,9 @@ export default function IndividualId({
   const [allAnnotations, setAllAnnotations] = useState<AnnotationRow[]>([]);
   const [projectImages, setProjectImages] = useState<ImageWithNeighbours[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadStatus, setLoadStatus] = useState<LoadStatus>(
+    INITIAL_LOAD_STATUS
+  );
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   // Transects (for the selected label) that still have linking work, computed
   // with the same Munkres/completion logic the harness uses. `null` until
@@ -209,20 +232,65 @@ export default function IndividualId({
     let mounted = true;
     async function loadData() {
       setLoading(true);
-      setLoadingProgress(0);
+      setLoadStatus(INITIAL_LOAD_STATUS);
       try {
+        const catsPromise = fetchAllPaginatedResults(
+          client.models.Category.categoriesByAnnotationSetId,
+          {
+            annotationSetId: annotationSet.id,
+            selectionSet: ['id', 'name'] as const,
+          },
+          (count) => {
+            if (mounted)
+              setLoadStatus((s) => ({ ...s, categories: count }));
+          }
+        ).then((r) => {
+          if (mounted)
+            setLoadStatus((s) => ({
+              ...s,
+              categories: r.length,
+              categoriesDone: true,
+            }));
+          return r;
+        });
+
+        const annotationsPromise = fetchSetAnnotations(
+          client,
+          annotationSet.id,
+          (count) => {
+            if (mounted)
+              setLoadStatus((s) => ({ ...s, annotations: count }));
+          }
+        ).then((r) => {
+          if (mounted)
+            setLoadStatus((s) => ({
+              ...s,
+              annotations: r.length,
+              annotationsDone: true,
+            }));
+          return r;
+        });
+
+        const imagesPromise = fetchProjectImages(
+          client,
+          project.id,
+          (count) => {
+            if (mounted) setLoadStatus((s) => ({ ...s, images: count }));
+          }
+        ).then((r) => {
+          if (mounted)
+            setLoadStatus((s) => ({
+              ...s,
+              images: r.length,
+              imagesDone: true,
+            }));
+          return r;
+        });
+
         const [cats, annotations, images] = await Promise.all([
-          fetchAllPaginatedResults(
-            client.models.Category.categoriesByAnnotationSetId,
-            {
-              annotationSetId: annotationSet.id,
-              selectionSet: ['id', 'name'] as const,
-            }
-          ),
-          fetchSetAnnotations(client, annotationSet.id, (count) => {
-            if (mounted) setLoadingProgress(count);
-          }),
-          fetchProjectImages(client, project.id),
+          catsPromise,
+          annotationsPromise,
+          imagesPromise,
         ]);
         if (!mounted) return;
         setCategories(cats.map((c) => ({ id: c.id, name: c.name })));
@@ -345,16 +413,26 @@ export default function IndividualId({
     <div className='px-3 pb-3 pt-1'>
       <div className='d-flex flex-column gap-3 mt-2'>
         {loading ? (
-          <p
-            className='text-muted mb-0 text-center'
-            style={{ fontSize: '12px' }}
-          >
-            Loading annotations
-            {loadingProgress > 0
-              ? ` (${loadingProgress.toLocaleString()} fetched)`
-              : ''}
-            ...
-          </p>
+          <LoadingProgressCard
+            title='Loading Individual ID data…'
+            rows={[
+              {
+                label: 'Labels',
+                count: loadStatus.categories,
+                done: loadStatus.categoriesDone,
+              },
+              {
+                label: 'Annotations',
+                count: loadStatus.annotations,
+                done: loadStatus.annotationsDone,
+              },
+              {
+                label: 'Images & neighbours',
+                count: loadStatus.images,
+                done: loadStatus.imagesDone,
+              },
+            ]}
+          />
         ) : availableCategories.length === 0 ? (
           <Alert variant='warning' className='mb-0'>
             No labels with annotations found for this annotation set.
@@ -479,7 +557,8 @@ async function fetchSetAnnotations(
 // selection set but project-wide (the modal can't scope to one transect yet).
 async function fetchProjectImages(
   client: DataClient,
-  projectId: string
+  projectId: string,
+  onProgress?: (count: number) => void
 ): Promise<ImageWithNeighbours[]> {
   const images = await fetchAllPaginatedResults<ImageWithNeighbours>(
     client.models.Image.imagesByProjectId,
@@ -494,7 +573,8 @@ async function fetchProjectImages(
         'leftNeighbours.*',
         'rightNeighbours.*',
       ],
-    }
+    },
+    onProgress
   );
   return images;
 }
