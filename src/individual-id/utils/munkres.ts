@@ -1,7 +1,7 @@
 import computeMunkres from 'munkres-js';
 import type { AnnotationType, ImageType } from '../../schemaTypes';
 import type { MatchCandidate, PixelTransform } from '../types';
-import { projectsInside } from './transforms';
+import { isInOverlap } from './transforms';
 import { isOov } from './identity';
 
 export interface BuildCandidatesInput {
@@ -100,11 +100,11 @@ export function buildMatchCandidates({
       const projected = forward([a.x, a.y]);
       for (let j = 0; j < B.length; j++) {
         const b = B[j];
-        if (a.objectId && b.objectId) {
-          cost[i][j] =
-            a.objectId === b.objectId ? HARD_FORCE : HARD_FORBID;
+        if (a.objectId && b.objectId && a.objectId === b.objectId) {
+          cost[i][j] = HARD_FORCE;
           continue;
         }
+        // Different objectIds intentionally fall through to the distance cost so a cross-chain match can be proposed (accepting merges the two chains).
         if (a.categoryId !== b.categoryId) {
           cost[i][j] = HARD_FORBID;
           continue;
@@ -141,10 +141,10 @@ export function buildMatchCandidates({
 
       if (a && !b) {
         // Out-of-overlap annotations become `informational` — visible on the map but excluded from completion.
-        const inside = projectsInside(
+        const inside = isInOverlap(
           a.x,
           a.y,
-          forward,
+          backward,
           imageB.width,
           imageB.height
         );
@@ -183,10 +183,10 @@ export function buildMatchCandidates({
       }
 
       if (!a && b) {
-        const inside = projectsInside(
+        const inside = isInOverlap(
           b.x,
           b.y,
-          backward,
+          forward,
           imageA.width,
           imageA.height
         );

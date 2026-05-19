@@ -28,149 +28,60 @@ interface Props {
   pair: NeighbourPair;
   imageA: ImageType;
   imageB: ImageType;
-  /** Candidates after merge with working state. */
   candidates: MatchCandidate[];
-  /** Used for marker color. */
   category: CategoryType | null;
-  /** Visibility / hotkey gate. Hotkeys disabled when false. */
+  /** Hotkeys are disabled when false. */
   visible: boolean;
 
-  // ---- callbacks the harness wires up ----
-  /** User dragged a marker. */
   onDrag: (
     candidateKey: string,
     side: 'A' | 'B',
     pos: { x: number; y: number }
   ) => void;
-  /**
-   * First space press on the active candidate. The harness should mark it
-   * `locked` in the working state. NO DB write.
-   */
+  /** First space press: mark `locked` in working state. No DB write. */
   onLock: (candidateKey: string) => void;
-  /**
-   * Revert a `locked` candidate back to `pending`. Fired when the user
-   * unfocuses (Escape / click empty map) a candidate that was locked but not
-   * yet accepted — a non-active candidate must never stay locked.
-   */
   onUnlock: (candidateKey: string) => void;
-  /**
-   * Second space press: harness should commit the link to the database
-   * (assign a shared objectId to both annotations, creating the shadow
-   * annotation if needed) AND mark the candidate `accepted` locally.
-   */
+  /** Second space press: commit the link and mark `accepted`. */
   onAccept: (candidateKey: string) => void;
-  /** User pressed Escape — clear "active" selection in this pair. */
   onUnfocus?: () => void;
-  /**
-   * User clicked on empty map area to place a brand-new annotation. The
-   * harness fires an immediate `Annotation.create` for the clicked side; the
-   * other side is left to Munkres (it will propose a shadow). The harness is
-   * given the pre-generated annotation `id` so this component can set it as
-   * the active candidate immediately (Munkres will key the resulting
-   * candidate by the same id, so activation survives the rebuild).
-   */
+  /** Harness pre-generates the id so the candidate survives the Munkres rebuild. */
   onPlaceNew?: (
     side: 'A' | 'B',
     pos: { x: number; y: number },
     newAnnotationId: string
   ) => void;
-  /**
-   * User clicked Delete on a marker's popup. Receives the real annotation's
-   * id (never a shadow). The harness fires `Annotation.delete`.
-   */
   onDelete?: (annotationId: string) => void;
-  /**
-   * User clicked Change Label on a marker's popup. Receives the real
-   * annotation's id and its current category id (never a shadow). The
-   * harness opens the ChangeCategoryModal and fires the eventual update.
-   */
   onChangeLabel?: (annotationId: string, currentCategoryId: string) => void;
-  /**
-   * User clicked "Mark as obscured" / "Mark as visible" on a marker's popup.
-   * Receives the real annotation's id (never a shadow). The harness toggles
-   * the annotation's `obscured` flag.
-   */
   onToggleObscured?: (annotationId: string) => void;
-  /**
-   * User clicked "Mark as obscured" / "Mark as visible" on a *proposed*
-   * (shadow) marker — no DB row exists yet. Args: the candidate's pairKey,
-   * which side the shadow is on, and the new obscured value. The harness
-   * stores it in working state and stamps it onto the row created at accept.
-   */
+  /** Obscured intent for a shadow side; stamped onto the row created at accept. */
   onSetProposedObscured?: (
     candidateKey: string,
     side: 'A' | 'B',
     value: boolean
   ) => void;
-  /**
-   * User ctrl+clicked a real marker on the other image while a candidate is
-   * active. Args: the active candidate's real annotation id (on the image
-   * opposite the click) and the ctrl-clicked real annotation id. The harness
-   * shows a confirm dialog, then commits the link.
-   */
+  /** Args: active candidate's real id opposite the click, then the ctrl-clicked real id. */
   onManualLinkRequest?: (
     activeAnnotationId: string,
     clickedAnnotationId: string
   ) => void;
-  /**
-   * The harness asks: are we done with this pair? Returns true iff every
-   * candidate is `accepted`.
-   */
   onAllAccepted?: () => void;
-  /**
-   * User clicked the "Add out-of-view" map control on side A or B. The harness
-   * creates an OOV annotation bound to that image; it surfaces as a card in
-   * the side panel.
-   */
   onAddOov?: (side: 'A' | 'B') => void;
-  /** User clicked Prev / Next pair — harness handles confirmation. */
   onRequestPrevPair: () => void;
   onRequestNextPair: () => void;
-  /**
-   * Munkres "leave unmatched" cost in image pixels. The toolbar surfaces a
-   * slider; the maps render a translucent ring around the active marker so
-   * the user can see exactly the radius within which a partner would be
-   * accepted.
-   */
   leniency: number;
   onLeniencyChange: (next: number) => void;
-  /**
-   * Collapses the secondary chrome: hides the accepted count + status hint in
-   * the toolbar AND the progress bar below it, leaving just the clean top
-   * div. State is owned by the harness because it also gates the progress bar.
-   */
+  /** Also gates the progress bar; owned by the harness. */
   collapsed: boolean;
   onCollapsedChange: (next: boolean) => void;
-  /**
-   * Zoom carried over from the previously-viewed pair. When set, both maps
-   * open at this zoom (centred on the first candidate) instead of fitting
-   * the whole image. Undefined on the very first pair.
-   */
+  /** Both maps open at this zoom instead of fit-to-image. Undefined on the first pair. */
   initialZoom?: number;
-  /** Reports the latest map zoom up so the harness can remember it. */
   onZoomChange?: (zoom: number) => void;
 }
 
 const DEFAULT_COLOR = '#3498db';
 
-/**
- * The two-map workspace.
- *
- * Concerns:
- *   - Render two MapLibre maps with marker overlays.
- *   - Manage which candidate is "active" (highlighted on both maps).
- *   - Implement the keyboard flow:
- *       Arrow Left/Right  → focus prev/next candidate (within this pair only).
- *       Space             → lock first, then accept (then advance focus).
- *       Escape            → unfocus.
- *       Ctrl + Arrow      → request prev/next PAIR (parent shows confirm).
- *   - Forward drags to `onDrag`. Never write to the database.
- *
- * Explicitly NOT this component's concern:
- *   - Knowing about other pairs.
- *   - Auto-jumping anywhere when the active candidate becomes accepted.
- *   - Persisting positions across mounts (harness owns that via working state).
- */
+// Two-map workspace: renders both maps + markers and the keyboard flow.
+// Never writes the DB and never persists across mounts — the harness owns both.
 export function IndividualIdMapPair(props: Props) {
   const {
     pair,
@@ -203,10 +114,7 @@ export function IndividualIdMapPair(props: Props) {
   } = props;
   const { client } = useContext(GlobalContext)!;
 
-  // ---- Active candidate management ----
-  // Default to the first non-accepted candidate when the pair changes. We do
-  // NOT auto-advance when a candidate becomes `accepted` — that's the user's
-  // job (second space press).
+  // Default to the first non-accepted candidate on pair change; never auto-advance on accept.
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const lastPairKeyRef = useRef<string>('');
   const pairKey = `${pair.image1Id}__${pair.image2Id}`;
@@ -217,8 +125,7 @@ export function IndividualIdMapPair(props: Props) {
       (c) => c.status !== 'accepted' && !c.informational
     );
     setActiveKey(firstPending?.pairKey ?? null);
-    // We intentionally only re-default when the pair changes, not when the
-    // candidates list mutates. Otherwise dragging could shift focus.
+    // Re-default only on pair change, not candidate mutation (else dragging shifts focus).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pairKey]);
 
@@ -229,18 +136,9 @@ export function IndividualIdMapPair(props: Props) {
     }
   }, [activeKey, candidates]);
 
-  // ---- Fire onAllAccepted after the pair transitions to fully accepted ----
-  // We watch `candidates` rather than firing synchronously inside Space's
-  // accept branch. By the time this effect runs, the harness has re-rendered
-  // with the post-accept state — so its `earliestEarlierIncomplete` value
-  // already reflects any new shadows the just-accepted match created on
-  // earlier pairs. Without this, accepting the *only* candidate on a pair
-  // would race the harness's recompute and the "earlier pair needs
-  // attention" branch would read stale (undefined) state.
-  //
-  // The `sawIncompleteRef` gate prevents the popup from firing when the
-  // user simply navigates to a pair that's already fully linked — we only
-  // want it on the user's own transition from incomplete → complete.
+  // Watch `candidates` post-render (not Space's accept branch) so the harness
+  // has recomputed before we fire — avoids a stale "earlier pair incomplete?"
+  // read. sawIncompleteRef limits firing to the user's own incomplete→complete.
   const sawIncompleteRef = useRef(false);
   useEffect(() => {
     sawIncompleteRef.current = false;
@@ -264,7 +162,6 @@ export function IndividualIdMapPair(props: Props) {
     [candidates, activeKey]
   );
 
-  // ---- Source keys for tile pyramid ----
   const [sourceKeys, setSourceKeys] = useState<
     [string | undefined, string | undefined]
   >([undefined, undefined]);
@@ -288,17 +185,9 @@ export function IndividualIdMapPair(props: Props) {
     };
   }, [imageA.id, imageB.id, client]);
 
-  // ---- Marker projection ----
   const color = category?.color || DEFAULT_COLOR;
 
-  /**
-   * Visual classification rules:
-   *   - shadow if there's no DB row on this side (isShadow{A,B}).
-   *   - secondary if the real annotation has an `objectId` that is NOT its
-   *     own id — i.e., it's been linked into another row's identity.
-   *   - primary otherwise (real with id===objectId, OR real with no objectId
-   *     yet — pending pairs share an identicon between sides until accept).
-   */
+  // secondary = real whose objectId points at another row's identity; primary otherwise.
   function classify(real: AnnotationType | undefined, isShadow: boolean): MarkerKind {
     if (isShadow || !real) return 'shadow';
     if (real.objectId && real.objectId !== real.id) return 'secondary';
@@ -345,7 +234,6 @@ export function IndividualIdMapPair(props: Props) {
     return out;
   }, [candidates, activeKey, color]);
 
-  // ---- Drag handlers ----
   const handleDragA = useCallback(
     (candidateKey: string, x: number, y: number) => {
       onDrag(candidateKey, 'A', { x, y });
@@ -359,11 +247,7 @@ export function IndividualIdMapPair(props: Props) {
     [onDrag]
   );
 
-  // ---- Map sync (pan + zoom via the homography) ----
-  // Each side reports its map instance + coord converters via onMapInstance.
-  // We keep them in refs and wire `move`/`zoom` listeners to project the
-  // source's centre through the appropriate transform and slave the other
-  // map. An `isSyncingRef` guard prevents a feedback loop.
+  // Slave the other map via the homography on move/zoom; isSyncingRef breaks the feedback loop.
   type MapHandle = {
     map: maplibregl.Map;
     px2lngLat: (x: number, y: number) => [number, number];
@@ -405,15 +289,12 @@ export function IndividualIdMapPair(props: Props) {
       if (!src || !tgt) return;
       const tf = transforms[srcIdx];
 
-      // Project the centre.
       const c = src.map.getCenter();
       const srcPx = src.lngLat2px(c.lng, c.lat);
       const tgtPx = tf([srcPx.x, srcPx.y]);
       const targetLngLat = tgt.px2lngLat(tgtPx[0], tgtPx[1]);
 
-      // Match zoom via the local-derivative scale of the homography (a few
-      // pixels around the centre) so a tighter view in A produces a tighter
-      // view in B even when the transform isn't uniform.
+      // Match zoom via the homography's local-derivative scale (handles non-uniform transforms).
       const probe = tf([srcPx.x + 100, srcPx.y]);
       const dx = probe[0] - tgtPx[0];
       const dy = probe[1] - tgtPx[1];
@@ -427,8 +308,7 @@ export function IndividualIdMapPair(props: Props) {
           zoom: targetZoom,
         });
       } finally {
-        // Release on next frame so target's `move`/`zoom` events don't
-        // re-enter the sync.
+        // Release next frame so the target's move/zoom doesn't re-enter sync.
         requestAnimationFrame(() => {
           isSyncingRef.current = false;
         });
@@ -445,10 +325,7 @@ export function IndividualIdMapPair(props: Props) {
     };
   }, [mapsTick, pair.forward, pair.backward]);
 
-  // Ease both maps so the given candidate is centred. Imperative so it can
-  // fire on gestures that don't change `activeKey` (e.g. Space-lock on the
-  // already-active marker) and on the very first Space activation, neither of
-  // which the activeKey-keyed effect below can see.
+  // Imperative pan so it can fire on gestures that don't change activeKey (Space-lock, first activation).
   const focusPanTimeoutRef = useRef<number | null>(null);
   const panToCandidate = useCallback(
     (key: string) => {
@@ -456,8 +333,7 @@ export function IndividualIdMapPair(props: Props) {
       if (!cand || cand.informational) return;
       const a = mapsRef.current[0];
       const b = mapsRef.current[1];
-      // Suppress map sync during the focused pan so map B doesn't
-      // mid-animation jumpTo a homography-projected centre based on map A.
+      // Suppress sync during the pan so B doesn't mid-animation jump off A's centre.
       isSyncingRef.current = true;
       try {
         if (a && cand.posA) {
@@ -486,19 +362,9 @@ export function IndividualIdMapPair(props: Props) {
     [candidates]
   );
 
-  // ---- Initial focus when a zoom is carried over ----
-  // With a remembered zoom the maps open zoomed-in on the image centre
-  // (not fit-to-image), so pan to the first candidate the moment both maps
-  // are ready. Without a remembered zoom we leave the fit-to-image framing
-  // untouched.
-  //
-  // Gated on the tile source keys being resolved: the maps are torn down and
-  // recreated when `sourceKeys` flips from [undefined, undefined] to the
-  // fetched keys. Panning the short-lived first instance *and* the rebuilt
-  // one is the double-pan the user sees — so we wait for the keys, which
-  // means only the final stable instance is ever panned. The instance ref
-  // additionally makes it idempotent across unrelated effect re-runs and
-  // robust to a StrictMode double-mount.
+  // With a carried-over zoom, pan to the first candidate once both maps are
+  // ready. Gated on sourceKeys (the maps rebuild when they resolve) so only
+  // the final stable instance is panned — avoids the double-pan; ref makes it idempotent.
   const focusedMapRef = useRef<maplibregl.Map | null>(null);
   useEffect(() => {
     if (initialZoom == null) return;
@@ -512,16 +378,10 @@ export function IndividualIdMapPair(props: Props) {
     panToCandidate(activeKey);
   }, [mapsTick, activeKey, initialZoom, sourceKeys, panToCandidate]);
 
-  // ---- Auto-focus on the active candidate when it advances ----
-  // After Space-accept (or arrow-key navigation), pan both maps so the new
-  // active marker is centred. We deliberately skip the FIRST activation on
-  // each pair — the initial framing (fit-to-image, or the zoom-carry pan
-  // above) should win when a pair first loads. Triggers only on
-  // transitions: prev → next, both non-null.
+  // Pan on active-candidate transitions; skip the first activation so initial framing wins.
   const prevActiveKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    // Reset when the pair changes — the first activation on the new pair
-    // shouldn't pan.
+    // First activation on a new pair shouldn't pan.
     prevActiveKeyRef.current = null;
   }, [pairKey]);
   useEffect(() => {
@@ -532,16 +392,11 @@ export function IndividualIdMapPair(props: Props) {
     if (prev === activeKey) return;
 
     panToCandidate(activeKey);
-    // candidates is intentionally omitted — we only want to pan on real
-    // active-key transitions, not on every Munkres rebuild that yields a
-    // new candidate object reference for the same pairKey.
+    // Pan only on real active-key transitions, not every Munkres rebuild.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKey]);
 
-  // ---- Hotkeys ----
-  // Informational candidates (annotations outside the partner image's
-  // overlap region) are skipped by every navigation gesture and by Space.
-  // The user can still hover them for the popup to delete or relabel.
+  // Informational candidates are skipped by navigation and Space (hover popup still works).
   const advanceFocus = useCallback(
     (direction: 1 | -1) => {
       const focusable = candidates.filter((c) => !c.informational);
@@ -549,8 +404,7 @@ export function IndividualIdMapPair(props: Props) {
       const currentIdx = activeKey
         ? focusable.findIndex((c) => c.pairKey === activeKey)
         : -1;
-      // After a final accept, currentIdx may be -1; start from the end if
-      // moving back, or the start if moving forward.
+      // currentIdx may be -1 after a final accept.
       let nextIdx: number;
       if (currentIdx === -1) {
         nextIdx = direction === 1 ? 0 : focusable.length - 1;
@@ -575,18 +429,12 @@ export function IndividualIdMapPair(props: Props) {
       }
       return;
     }
-    // If the active candidate is informational (e.g. focused via arrow keys
-    // before the filter was added, or via some other path), Space jumps
-    // focus to the next linkable candidate instead of being a no-op —
-    // otherwise the flow gets stuck.
+    // Informational can't be locked — Space skips ahead so the flow doesn't get stuck.
     if (activeCandidate.informational) {
       advanceFocus(1);
       return;
     }
-    // OOV candidates can't be locked/accepted via Space — they have no
-    // positional partner Munkres can confirm. The user must Ctrl/⌘+click
-    // a real annotation on the other image (or another OOV card) to link
-    // them. Pressing Space just skips ahead.
+    // OOV has no positional partner — Space skips; linking is via Ctrl/⌘+click.
     if (activeCandidate.oovSide) {
       advanceFocus(1);
       return;
@@ -598,12 +446,7 @@ export function IndividualIdMapPair(props: Props) {
     }
     if (activeCandidate.status === 'locked') {
       onAccept(activeCandidate.pairKey);
-      // Advance focus to the next non-accepted, non-informational candidate
-      // — staying on this pair. Only the harness decides when to leave it.
-      // We deliberately do NOT fire onAllAccepted from here — that's done
-      // by an effect below that watches `candidates` so the harness has
-      // had a chance to re-render with the post-accept state (otherwise
-      // the "earlier pair needs attention?" check reads stale data).
+      // Advance focus within this pair; onAllAccepted is fired by the effect, not here (stale-read race).
       const linkable = candidates.filter((c) => !c.informational);
       const remaining = linkable.filter(
         (c) => c.status !== 'accepted' && c.pairKey !== activeCandidate.pairKey
@@ -611,9 +454,7 @@ export function IndividualIdMapPair(props: Props) {
       if (remaining.length === 0) {
         setActiveKey(null);
       } else {
-        // Prefer the next one in list order after the current, looping
-        // back to the start if we've reached the end. Search the linkable
-        // list (informational candidates are skipped entirely).
+        // Next linkable after current, looping back to the start.
         const idx = linkable.findIndex(
           (c) => c.pairKey === activeCandidate.pairKey
         );
@@ -628,7 +469,6 @@ export function IndividualIdMapPair(props: Props) {
       return;
     }
     if (activeCandidate.status === 'accepted') {
-      // No-op: spacebar on an already accepted candidate just advances focus.
       advanceFocus(1);
     }
   }, [
@@ -668,12 +508,9 @@ export function IndividualIdMapPair(props: Props) {
     onRequestPrevPair,
   ]);
 
-  // ---- Click handlers ----
   const handleMarkerClick = useCallback(
     (candidateKey: string) => {
-      // Don't activate informational markers — they have no partner to
-      // lock/accept, so the orange ring would be misleading. The hover
-      // popup still lets the user delete or change the label.
+      // Don't activate informational markers — no partner to lock/accept.
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
       if (c?.informational) return;
       setActiveKey(candidateKey);
@@ -681,20 +518,9 @@ export function IndividualIdMapPair(props: Props) {
     [candidates]
   );
 
-  /**
-   * Click on empty map area:
-   *
-   *   - If a candidate is currently active, treat the click as a deselect.
-   *     Otherwise the user can't dismiss a selection without reaching for
-   *     Escape, and an accidental click while a shadow is selected would
-   *     fire a create at the click position (Munkres then re-pairs and the
-   *     old shadow appears to "become real and move").
-   *   - Only when nothing is active do we create a fresh annotation at the
-   *     click position. We pre-generate the id so we can immediately set
-   *     the resulting candidate as active — Munkres will key its rebuilt
-   *     candidate by the same id (no objectId yet → `makePairKey` falls
-   *     through to `id`).
-   */
+  // Empty-map click: deselect if a candidate is active (an accidental create
+  // would make the old shadow appear to "move"); otherwise create a new
+  // annotation, pre-generating the id so it survives the Munkres rebuild.
   const placeFromClick = useCallback(
     (clickedSide: 'A' | 'B', pos: { x: number; y: number }) => {
       if (activeKey) {
@@ -722,11 +548,7 @@ export function IndividualIdMapPair(props: Props) {
     [placeFromClick]
   );
 
-  // ---- Hover state for cross-map highlighting ----
-  // When the user hovers a marker on side A, side B should highlight the
-  // partner with a passive popup (and vice versa). We track which side
-  // initiated the hover so each map can decide between interactive (local)
-  // and passive (remote) popup behaviour.
+  // Track which side initiated the hover so the other map shows a passive popup.
   const [hover, setHover] = useState<{ side: 'A' | 'B'; key: string } | null>(
     null
   );
@@ -736,12 +558,9 @@ export function IndividualIdMapPair(props: Props) {
   const handleHoverB = useCallback((key: string | null) => {
     setHover(key ? { side: 'B', key } : null);
   }, []);
-  // The passive prop fed to each map: the hovered key, but only when the
-  // hover originated on the OTHER side.
   const passiveForA = hover && hover.side === 'B' ? hover.key : null;
   const passiveForB = hover && hover.side === 'A' ? hover.key : null;
 
-  // ---- Delete handlers (per side, look up the real annotation) ----
   const handleDeleteA = useCallback(
     (candidateKey: string) => {
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
@@ -776,8 +595,7 @@ export function IndividualIdMapPair(props: Props) {
     (candidateKey: string) => {
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
       if (!c) return;
-      // Real annotation → live DB toggle. Shadow → in-memory intent applied
-      // when the row is created at accept time.
+      // Real → live DB toggle; shadow → in-memory intent applied at accept.
       if (c.realA) onToggleObscured?.(c.realA.id);
       else onSetProposedObscured?.(c.pairKey, 'A', !c.obscuredA);
     },
@@ -793,20 +611,15 @@ export function IndividualIdMapPair(props: Props) {
     [candidates, onToggleObscured, onSetProposedObscured]
   );
 
-  // ---- Manual cross-image link (ctrl+click the other image's marker) ----
-  // When a candidate is active, ctrl+clicking a *real* marker on the OTHER
-  // image asks to link that annotation with the active candidate's real
-  // annotation on the image opposite the click. v1 only allows this when the
-  // active candidate's far side (the side being clicked toward) is a
-  // shadow/informational proposal — never silently breaking an existing
-  // real↔real link. Invalid ctrl+clicks are ignored (no activation).
+  // Ctrl+click a real marker on the other image to link it with the active
+  // candidate's real on the opposite side — only when that side is a
+  // shadow/informational proposal, never breaking an existing real↔real link.
   const handleCtrlClickA = useCallback(
     (candidateKey: string) => {
       if (!activeCandidate || activeCandidate.pairKey === candidateKey) return;
       const clicked = candidates.find((c) => c.pairKey === candidateKey);
       if (!clicked?.realA) return; // clicked a shadow, nothing to link
-      // Anchor = active candidate's real on the opposite image (B). Its A
-      // side must currently be a shadow/informational, not a real↔real.
+      // Anchor = active's real on B; A side must be a shadow/informational.
       if (!activeCandidate.realB) return;
       if (activeCandidate.realA && !activeCandidate.informational) return;
       onManualLinkRequest?.(activeCandidate.realB.id, clicked.realA.id);
@@ -825,11 +638,7 @@ export function IndividualIdMapPair(props: Props) {
     [activeCandidate, candidates, onManualLinkRequest]
   );
 
-  // OOV candidates split by side. The OOV row itself lives on `side` (its
-  // realA/realB on that side is the oov:true row); the partner, if any,
-  // lives on the OTHER side as a normal positioned annotation that the map
-  // still renders. So markers on a map can coexist with a panel card on the
-  // same side that lives in the opposite-side panel — there is no overlap.
+  // OOV candidates split by side; the partner (if any) renders normally on the other map.
   const oovCandidatesA = useMemo(
     () => candidates.filter((c) => c.oovSide === 'A'),
     [candidates]
@@ -839,9 +648,7 @@ export function IndividualIdMapPair(props: Props) {
     [candidates]
   );
 
-  // Panel cards reuse the map-side ctrl-click handlers — the geometry is
-  // identical (clicking a side-A card against a side-B active candidate is
-  // the same gesture as ctrl-clicking a side-A map marker).
+  // Panel cards reuse the map-side ctrl-click handlers (identical geometry).
   const handleCardDeleteA = useCallback(
     (candidateKey: string) => {
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
@@ -860,8 +667,6 @@ export function IndividualIdMapPair(props: Props) {
   const addOovA = useCallback(() => onAddOov?.('A'), [onAddOov]);
   const addOovB = useCallback(() => onAddOov?.('B'), [onAddOov]);
 
-  // Image-space coords of the active candidate on each side, fed to the
-  // maps so they can render a leniency-radius ring around the right marker.
   const activeAnchorA = activeCandidate?.posA ?? null;
   const activeAnchorB = activeCandidate?.posB ?? null;
 
@@ -901,8 +706,7 @@ export function IndividualIdMapPair(props: Props) {
             previewTransform={pair.backward}
             otherImage={imageB}
             initialZoom={initialZoom}
-            // Side A is the canonical tracked side — B stays synced to it
-            // via the homography, so one reporter is enough.
+            // Side A is canonical; B stays synced via the homography.
             onZoomChange={onZoomChange}
           />
         </div>
@@ -927,8 +731,7 @@ export function IndividualIdMapPair(props: Props) {
             // Side B's overlay traces image A's bounds projected onto B.
             previewTransform={pair.forward}
             otherImage={imageA}
-            // Same opening zoom so A and B start visually consistent; the
-            // homography sync reconciles any scale difference on first move.
+            // Same opening zoom; the homography sync reconciles scale on first move.
             initialZoom={initialZoom}
           />
         </div>
@@ -946,8 +749,7 @@ export function IndividualIdMapPair(props: Props) {
       </div>
       <PairToolbar
         active={activeCandidate}
-        // Toolbar counts exclude informational markers — they're visible
-        // but not part of the linking workflow.
+        // Counts exclude informational markers.
         candidatesCount={
           candidates.filter((c) => !c.informational).length
         }
@@ -1005,12 +807,9 @@ function PairToolbar({
     <div
       className='d-flex flex-row align-items-center justify-content-between gap-2 px-3 py-3'
       style={{
-        // Unified with the progress bar below — same background, no rounded
-        // corners, divider line provided by ProgressBar's top border.
         background: '#4E5D6C',
         color: '#f8f9fa',
         fontSize: 12,
-        // Containing block for the absolutely-centred pairing-radius group.
         position: 'relative',
       }}
     >
@@ -1064,9 +863,6 @@ function PairToolbar({
         className='d-flex flex-row gap-2 align-items-center'
         title='Munkres only proposes a match if the projected distance to a partner is below this many image pixels. The active marker shows a ring at this radius.'
         style={{
-          // Always horizontally centred in the toolbar, independent of the
-          // varying widths of the left/right groups (and whether the
-          // accepted-count / status text are shown).
           position: 'absolute',
           left: '50%',
           top: '50%',
@@ -1089,16 +885,30 @@ function PairToolbar({
           onChange={(e) => onLeniencyChange(parseInt(e.target.value, 10))}
           style={{ width: 140 }}
         />
-        <span
+        <input
+          type='number'
+          aria-label='Pairing radius in pixels'
+          min={0}
+          max={1000}
+          step={1}
+          value={leniency}
+          onChange={(e) => {
+            const n = parseInt(e.target.value, 10);
+            if (Number.isNaN(n)) return;
+            onLeniencyChange(Math.max(0, Math.min(1000, n)));
+          }}
           style={{
-            opacity: 0.85,
-            minWidth: 56,
-            textAlign: 'right',
+            width: 60,
+            background: '#3B4753',
+            color: '#f8f9fa',
+            border: '1px solid rgba(255, 255, 255, 0.25)',
+            borderRadius: 4,
+            fontSize: 12,
+            padding: '2px 4px',
             fontVariantNumeric: 'tabular-nums',
           }}
-        >
-          {leniency} px
-        </span>
+        />
+        <span style={{ opacity: 0.85, fontSize: 11 }}>px</span>
       </div>
       {!collapsed && (
         <span style={{ flex: 1, textAlign: 'right' }}>{status}</span>
