@@ -1270,7 +1270,7 @@ export default function UploadManager() {
       if (model === 'manual') {
         await client.models.Project.update({
           id: projectId,
-          status: 'active',
+          status: 'processing-registration',
         });
       }
 

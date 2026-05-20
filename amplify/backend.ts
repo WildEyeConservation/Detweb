@@ -1011,8 +1011,8 @@ for (const fn of launchLambdasUsingPretile) {
 // ── Registration neighbour bucket cleanup ──
 //
 // After LightGlue finishes processing the SQS queue, monitorModelProgress
-// (cron 30m) invokes registrationBucketCleanup once pairsProcessed catches up
-// to pairsCreated. That lambda picks the winning bucket per camera-pair and
+// (cron 15m) invokes registrationBucketCleanup once pendingCount reaches 0.
+// That lambda picks the winning bucket per camera-pair and
 // enqueues every losing-bucket neighbour to this queue; deleteRegistrationNeighbour
 // consumes the queue and deletes each ImageNeighbour row.
 //

@@ -4,7 +4,6 @@ import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 import {
   listProjects,
-  userProjectMembershipsByProjectId,
   imagesByProjectId,
 } from './graphql/queries';
 // Return key fields + `group` to avoid nested-resolver auth failures while
@@ -15,13 +14,15 @@ const updateProject = /* GraphQL */ `
   }
 `;
 
-const updateUserProjectMembership = /* GraphQL */ `
-  mutation UpdateUserProjectMembership($input: UpdateUserProjectMembershipInput!) {
-    updateUserProjectMembership(input: $input) { id group }
+// Membership cascade: same pattern launch handlers use. The custom Lambda
+// touches every UserProjectMembership / OrganizationMembership with full-scalar
+// returns so client subscriptions fire and the UI refreshes the project list.
+const updateProjectMembershipsMutation = /* GraphQL */ `
+  mutation UpdateProjectMemberships($projectId: String!) {
+    updateProjectMemberships(projectId: $projectId)
   }
 `;
 import type { GraphQLResult } from '@aws-amplify/api-graphql';
-import { UserProjectMembership } from './graphql/API';
 import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 
@@ -140,6 +141,15 @@ const createImageProcessedBy = /* GraphQL */ `mutation CreateImageProcessedBy(
     group
   }
 }
+`;
+
+const getRegistrationProgress = /* GraphQL */ `
+  query GetRegistrationProgress($projectId: ID!) {
+    getRegistrationProgress(projectId: $projectId) {
+      projectId
+      cleanupState
+    }
+  }
 `;
 
 const registrationProgressByCleanupState = /* GraphQL */ `
@@ -302,58 +312,56 @@ async function updateProgress(
     imagesWithDetails.every((image) => processedImageIds.has(image.id));
 
   if (allImagesProcessed) {
-    console.log(
-      `All images processed for project ${project.id}, updating status to "active"`
-    );
-    await client.graphql({
-      query: updateProject,
-      variables: {
-        input: {
-          id: project.id,
-          status: 'active',
-        },
-      },
-    });
-
-    const memberships = await fetchAllPages<
-      UserProjectMembership,
-      'userProjectMembershipsByProjectId'
-    >(
-      (nextToken) =>
-        client.graphql({
-          query: userProjectMembershipsByProjectId,
-          variables: {
-            projectId: project.id,
-            limit: 10000,
-            nextToken,
-          },
-        }) as Promise<
-          GraphQLResult<{
-            userProjectMembershipsByProjectId: PagedList<UserProjectMembership>;
-          }>
-        >,
-      'userProjectMembershipsByProjectId'
-    );
-
-    for (const membership of memberships) {
+    if (await isRegistrationDone(project.id)) {
+      await finalizeProjectActive(project);
+    } else {
+      console.log(
+        `All images processed for project ${project.id}; awaiting registration completion`
+      );
       await client.graphql({
-        query: updateUserProjectMembership,
+        query: updateProject,
         variables: {
-          input: {
-            id: membership.id,
-          },
+          input: { id: project.id, status: 'processing-registration' },
         },
       });
     }
-    console.log(
-      `Successfully updated project ${project.id} status to "active"`
-    );
   } else {
     console.log(
       `Project ${project.id} still has ${imagesWithDetails.length - processedImageIds.size
       } images to process`
     );
   }
+}
+
+// Missing row = no registration work was ever queued (single image, no
+// overlaps, etc.) — treat as done so those projects can still activate.
+async function isRegistrationDone(projectId: string): Promise<boolean> {
+  try {
+    const resp = (await client.graphql({
+      query: getRegistrationProgress,
+      variables: { projectId },
+    })) as GraphQLResult<{
+      getRegistrationProgress: { cleanupState?: string | null } | null;
+    }>;
+    const row = resp.data?.getRegistrationProgress;
+    return !row || row.cleanupState === 'done';
+  } catch (err) {
+    console.warn(`isRegistrationDone lookup failed for ${projectId}:`, err);
+    return false;
+  }
+}
+
+async function finalizeProjectActive(project: Project): Promise<void> {
+  await client.graphql({
+    query: updateProject,
+    variables: { input: { id: project.id, status: 'active' } },
+  });
+
+  await client.graphql({
+    query: updateProjectMembershipsMutation,
+    variables: { projectId: project.id },
+  });
+  console.log(`Successfully updated project ${project.id} status to "active"`);
 }
 
 export const handler: Handler = async (event, context) => {
@@ -487,6 +495,18 @@ export const handler: Handler = async (event, context) => {
       if (project.status?.includes('pointFinder')) {
         console.log(`Project ${project.id} is running pointFinder`);
         await updateProgress(project, projectImages, 'heatmap');
+      }
+
+      // Final gate before flipping the project to 'active'. Runs whether the
+      // primary model was scoutbot/MAD/heatmap or 'manual' (no model).
+      if (project.status?.includes('registration')) {
+        if (await isRegistrationDone(project.id)) {
+          await finalizeProjectActive(project);
+        } else {
+          console.log(
+            `Project ${project.id} still awaiting registration completion`
+          );
+        }
       }
     }
 
