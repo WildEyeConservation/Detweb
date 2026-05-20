@@ -28,6 +28,8 @@ import Testing from './Testing/Testing';
 import TestingSurveyDetail from './Testing/SurveyDetailPage';
 import { Registration } from './Registration';
 import HomographyTask from './homography/HomographyTask';
+import HomographyViewer from './homography/HomographyViewer';
+import { IndividualIdTaskPage } from './individual-id';
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import Admin from './Admin';
@@ -100,6 +102,10 @@ const router = createBrowserRouter([
         element: <ImageNeighbourViewer />,
       },
       {
+        path: 'homography-viewer',
+        element: <HomographyViewer />,
+      },
+      {
         path: 'surveys/:surveyId',
         element: <ProjectView />,
         children: [
@@ -114,6 +120,13 @@ const router = createBrowserRouter([
           {
             path: 'registration',
             element: <Registration />,
+          },
+          {
+            // Transect/category are claimed on the Jobs page and passed via
+            // navigation state (not the URL). Direct navigation bounces to
+            // /jobs.
+            path: 'individual-id',
+            element: <IndividualIdTaskPage />,
           },
           {
             path: 'homography/:queueId',

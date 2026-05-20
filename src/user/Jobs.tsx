@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { type GetQueueAttributesCommandInput } from '@aws-sdk/client-sqs';
 import { GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
 import ProjectProgress from './ProjectProgress';
+import IndividualIdProgress from '../individual-id/IndividualIdProgress';
 import { useOrg } from '../OrgContext';
 import { Page, PageHeader, Toolbar, ContentArea, Spacer } from '../ss/PageShell';
 
@@ -45,6 +46,16 @@ type JobRow =
       id: string;
       project: Project;
       setId: string;
+    }
+  | {
+      kind: 'individual-id';
+      id: string;
+      jobId: string;
+      projectId: string;
+      projectName: string;
+      organizationId: string;
+      organizationName: string;
+      name: string;
     };
 
 export default function Jobs() {
@@ -66,6 +77,16 @@ export default function Jobs() {
       id: string;
       projectId: string;
       register: boolean;
+    }[]
+  >([]);
+  const [individualIdJobs, setIndividualIdJobs] = useState<
+    {
+      jobId: string;
+      projectId: string;
+      projectName: string;
+      organizationId: string;
+      organizationName: string;
+      name: string;
     }[]
   >([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -145,6 +166,64 @@ export default function Jobs() {
       setDisplayProjects(validProjects);
       setIsLoading(false);
 
+      // Individual ID jobs live on their own table (no Queue, no register
+      // flag) so they are scanned separately. Projects still `launching` are
+      // excluded — the project only leaves `launching` once tiling + the
+      // transect-update fanout finish, which is exactly when the job becomes
+      // claimable.
+      const iidScanProjects = projectResults
+        .map((result) => (result as { data: Project | null }).data)
+        .filter(
+          (project): project is Project =>
+            project !== null && project.status !== 'launching'
+        );
+
+      async function getIndividualIdJobs() {
+        if (cancelled) return;
+        const entries: {
+          jobId: string;
+          projectId: string;
+          projectName: string;
+          organizationId: string;
+          organizationName: string;
+          name: string;
+        }[] = [];
+        await Promise.all(
+          iidScanProjects.map(async (project) => {
+            try {
+              const { data } = await (
+                client.models as any
+              ).IndividualIdJob.individualIdJobsByProjectId(
+                { projectId: project.id },
+                { selectionSet: ['id', 'name', 'status'] }
+              );
+              for (const job of data || []) {
+                if (job.status === 'active') {
+                  entries.push({
+                    jobId: job.id,
+                    projectId: project.id,
+                    projectName: project.name,
+                    organizationId: project.organization.id,
+                    organizationName: project.organization.name,
+                    name: job.name,
+                  });
+                }
+              }
+            } catch (e) {
+              console.warn(
+                'Failed to load Individual ID jobs',
+                project.id,
+                e
+              );
+            }
+          })
+        );
+        if (cancelled) return;
+        setIndividualIdJobs(entries);
+      }
+
+      getIndividualIdJobs();
+
       async function getJobsRemaining() {
         if (cancelled) return;
 
@@ -184,6 +263,8 @@ export default function Jobs() {
         );
 
         setRegistrationJobs(registrationJobs.filter((job) => job.register));
+
+        getIndividualIdJobs();
 
         const filteredProjects = validProjects.filter(
           (project) =>
@@ -271,6 +352,45 @@ export default function Jobs() {
     setTakingJob(false);
   }
 
+  // Individual ID is transect-locked, not SQS. The claim lambda atomically
+  // assigns one available transect to this user (or re-grants the one they
+  // already hold). The harness reads the claimed ids from navigation state.
+  async function handleTakeIndividualIdJob(job: {
+    jobId: string;
+    projectId: string;
+  }) {
+    setTakingJob(true);
+    try {
+      const res: any = await (client as any).mutations.claimIndividualIdTransect(
+        { jobId: job.jobId },
+        { retry: false }
+      );
+      const result =
+        typeof res?.data === 'string' ? JSON.parse(res.data) : res?.data;
+      if (!result || result.none || !result.transectId) {
+        alert(
+          result?.message ||
+            'No transects are available right now. Please try again later.'
+        );
+        setTakingJob(false);
+        return;
+      }
+      navigate(`/surveys/${job.projectId}/individual-id`, {
+        state: {
+          transectRowId: result.transectRowId,
+          transectId: result.transectId,
+          categoryId: result.categoryId,
+          annotationSetId: result.annotationSetId,
+        },
+      });
+    } catch (e) {
+      console.error('Failed to claim Individual ID transect', e);
+      alert('Failed to take job. Please try again.');
+    } finally {
+      setTakingJob(false);
+    }
+  }
+
   const typeLabelFor = (queue: Schema['Queue']['type']): string => {
     if (queue.tag === 'qc-review') return 'Review';
     if (queue.tag === 'homography') return 'Homography';
@@ -333,6 +453,31 @@ export default function Jobs() {
         };
       })
       .filter((row): row is JobRow => row !== null),
+    ...individualIdJobs
+      .filter((job) => {
+        const searchLower = search.toLowerCase();
+        const matchesOrganization =
+          !!currentOrg?.id && job.organizationId === currentOrg.id;
+        const matchesSearch =
+          searchLower === '' ||
+          job.projectName.toLowerCase().includes(searchLower) ||
+          job.organizationName.toLowerCase().includes(searchLower) ||
+          job.name.toLowerCase().includes(searchLower) ||
+          'individual id'.includes(searchLower);
+        return matchesOrganization && matchesSearch;
+      })
+      .map(
+        (job): JobRow => ({
+          kind: 'individual-id',
+          id: job.jobId,
+          jobId: job.jobId,
+          projectId: job.projectId,
+          projectName: job.projectName,
+          organizationId: job.organizationId,
+          organizationName: job.organizationName,
+          name: job.name,
+        })
+      ),
   ];
 
   const totalPages = Math.max(1, Math.ceil(rows.length / itemsPerPage));
@@ -453,6 +598,47 @@ export default function Jobs() {
                         size='sm'
                         variant='primary'
                         onClick={goToRegistration}
+                      >
+                        Take Job
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (row.kind === 'individual-id') {
+                const takeJob = () =>
+                  handleTakeIndividualIdJob({
+                    jobId: row.jobId,
+                    projectId: row.projectId,
+                  });
+                return (
+                  <div key={`iid-${row.id}`} className='ss-job-card'>
+                    <div className='ss-job-card__main'>
+                      <div className='ss-job-card__header'>
+                        <span
+                          className='ss-job-card__title'
+                          onClick={takeJob}
+                        >
+                          {row.name}
+                        </span>
+                        <span className='ss-status ss-status--info'>
+                          Individual ID
+                        </span>
+                      </div>
+                      <div className='ss-job-card__meta'>
+                        {row.organizationName}
+                      </div>
+                      <div className='ss-job-progress'>
+                        <IndividualIdProgress projectId={row.projectId} />
+                      </div>
+                    </div>
+                    <div className='ss-job-card__action'>
+                      <Button
+                        size='sm'
+                        variant='primary'
+                        disabled={takingJob}
+                        onClick={takeJob}
                       >
                         Take Job
                       </Button>

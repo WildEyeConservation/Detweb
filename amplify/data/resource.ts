@@ -35,12 +35,20 @@ import { updateActiveOrganizations } from '../functions/updateActiveOrganization
 import { launchQCReview } from '../functions/launchQCReview/resource';
 import { launchHomography } from '../functions/launchHomography/resource';
 import { reconcileHomographies } from '../functions/reconcileHomographies/resource';
+import { registrationBucketCleanup } from '../functions/registrationBucketCleanup/resource';
+import { processRegistrationStream } from '../functions/processRegistrationStream/resource';
+import { deleteRegistrationNeighbour } from '../functions/deleteRegistrationNeighbour/resource';
 import { reconcilePretileLaunches } from '../functions/reconcilePretileLaunches/resource';
 import { extendTileLifecycles } from '../functions/extendTileLifecycles/resource';
 import { pretileImage } from '../functions/pretileImage/resource';
 import { refreshTiles } from '../functions/refreshTiles/resource';
+import { launchIndividualId } from '../functions/launchIndividualId/resource';
+import { updateImageTransect } from '../functions/updateImageTransect/resource';
+import { claimIndividualIdTransect } from '../functions/claimIndividualIdTransect/resource';
+import { completeIndividualIdTransect } from '../functions/completeIndividualIdTransect/resource';
+import { reconcileIndividualId } from '../functions/reconcileIndividualId/resource';
+import { releaseIndividualIdTransects } from '../functions/releaseIndividualIdTransects/resource';
 import { generateTile } from '../storage/generateTile/resource';
-// import { consolidateUserStats } from '../functions/consolidateUserStats/resource';
 
 const schema = a
   .schema({
@@ -55,7 +63,6 @@ const schema = a
         organizationId: a.id().required(),
         organization: a.belongsTo('Organization', 'organizationId'),
         name: a.string().required(),
-        // tags for flags like 'legacy'
         tags: a.string().array(),
         images: a.hasMany('Image', 'projectId'),
         imageFiles: a.hasMany('ImageFile', 'projectId'),
@@ -76,6 +83,7 @@ const schema = a
         status: a.string().default('active'),
         cameras: a.hasMany('Camera', 'projectId'),
         transects: a.hasMany('Transect', 'projectId'),
+        individualIdJobs: a.hasMany('IndividualIdJob', 'projectId'),
         strata: a.hasMany('Stratum', 'projectId'),
         jollyResultsMemberships: a.hasMany(
           'JollyResultsMembership',
@@ -84,17 +92,11 @@ const schema = a
         cameraOverlaps: a.hasMany('CameraOverlap', 'projectId'),
         shapefileExclusions: a.hasMany('ShapefileExclusions', 'projectId'),
         adminActionLogs: a.hasMany('AdminActionLog', 'projectId'),
-        // Global tiled location set ID for the project (no belongsTo to avoid bidirectional requirement)
         tiledLocationSetId: a.id(),
-        // Points at an in-flight pretile launch manifest in the outputs bucket.
-        // Reconciler clears this once every image in the manifest has Image.tiledAt set.
         pretileManifestS3Key: a.string(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')]),
-    // .authorization(allow => [allow.groupDefinedIn('id').to(['read']),
-    // allow.group('orgadmin').to(['create', 'update', 'delete', 'read']),
-    // allow.custom()]),
     Category: a
       .model({
         projectId: a.id().required(),
@@ -113,7 +115,6 @@ const schema = a
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
-      // .authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
         index('annotationSetId').queryField('categoriesByAnnotationSetId'),
         index('projectId').queryField('categoriesByProjectId'),
@@ -148,20 +149,16 @@ const schema = a
         transect: a.belongsTo('Transect', 'transectId'),
         processedBy: a.hasMany('ImageProcessedBy', 'imageId'),
         group: a.string(),
-        // 64-bit perceptual hash (blockhash) of the image, as 16 hex chars.
-        // Used for stricter dedup beyond originalPath matching.
         phash: a.string(),
-        // Stamped by pretileImage worker when the slippy-map pyramid is fully generated.
         tiledAt: a.datetime(),
-        // sets: [ImageSet] @manyToMany(relationName: "ImageSetMembership")
-        //   leftNeighbours: [ImageNeighbour] @hasMany(indexName:"bySecondNeighbour",fields:["key"])
-        //   rightNeighbours: [ImageNeighbour] @hasMany(indexName:"byFirstNeighbour",fields:["key"])
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('imagesByProjectId'),
+        index('projectId')
+          .sortKeys(['transectId'])
+          .queryField('imagesByProjectIdAndTransectId'),
       ]),
-    // .authorization(allow => [allow.groupDefinedIn('projectId')]),
     ImageFile: a
       .model({
         projectId: a.id().required(),
@@ -172,20 +169,17 @@ const schema = a
         image: a.belongsTo('Image', 'imageId'),
         type: a.string().required(),
         group: a.string(),
-        // Add this line to define the reverse relationship
-        // .authorization(allow => [allow.groupDefinedIn('projectId')])
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('imageId').queryField('imagesByimageId'),
         index('path').queryField('imagesByPath'),
       ]),
-    // Tracks which models have processed each image
     ImageProcessedBy: a
       .model({
         imageId: a.id().required(),
         image: a.belongsTo('Image', 'imageId'),
-        source: a.string().required(), // e.g., 'scoutbotv3', 'mad-v2', 'pointfinder'
+        source: a.string().required(),
         projectId: a.id().required(),
         group: a.string(),
       })
@@ -220,7 +214,6 @@ const schema = a
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
-      // .authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('annotationSetsByProjectId'),
       ]),
@@ -238,6 +231,7 @@ const schema = a
         x: a.integer().required(),
         y: a.integer().required(),
         obscured: a.boolean(),
+        oov: a.boolean(),
         objectId: a.id(),
         object: a.belongsTo('Object', 'objectId'),
         reviewCatId: a.string(),
@@ -280,11 +274,7 @@ const schema = a
         category: a.belongsTo('Category', 'categoryId'),
         group: a.string(),
       })
-      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
-      // .authorization(allow => [allow.groupDefinedIn('projectId')])
-      .secondaryIndexes((index) => [
-        index('categoryId').queryField('objectsByCategoryId'),
-      ]),
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')]),
     Location: a
       .model({
         projectId: a.id().required(),
@@ -307,8 +297,6 @@ const schema = a
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
-      // .authorization(allow => [allow.groupDefinedIn('projectId')])
-
       .secondaryIndexes((index) => [
         index('imageId')
           .sortKeys(['confidence'])
@@ -335,7 +323,7 @@ const schema = a
         annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
         source: a.string(),
         createdAt: a.string().required(),
-        queueId: a.id(), // Queue ID for requeue detection (observedCount tracking)
+        queueId: a.id(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.owner(), allow.groupDefinedIn('group')])
@@ -360,7 +348,6 @@ const schema = a
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
-      // .authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('locationSetsByProjectId'),
       ]),
@@ -395,7 +382,6 @@ const schema = a
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
-      //.authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('imageSetsByProjectId'),
       ]),
@@ -411,44 +397,28 @@ const schema = a
         backupQueue: a.belongsTo('Queue', 'backupQueueId'),
         group: a.string(),
       })
-      // TODO: listen to own memberships only
       .authorization((allow) => [allow.group('sysadmin'), allow.authenticated().to(['listen']), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('userProjectMembershipsByProjectId'),
         index('userId').queryField('userProjectMembershipsByUserId'),
-        // index('queueId')  .queryField('userProjectMembershipsByQueueId')
       ]),
-    //   type ImageNeighbour
-    //   @model
-    //   @auth(
-    //   rules: [
-    //     {allow: public, provider: iam},
-    //     {allow: private, provider: iam},
-    //     { allow: groups, groups: ["admin"] }
-    //   ])
-    // {
-    //  image1key: String! @index(name:"byFirstNeighbour")
-    //  image1: Image @belongsTo (fields: ["image1key"])
-    //  image2key: String! @index(name:"bySecondNeighbour")
-    //  image2: Image @belongsTo (fields: ["image2key"])
-    //  homography: [Float]
-    // }
     ImageNeighbour: a
       .model({
         image1Id: a.id().required(),
         image1: a.belongsTo('Image', 'image1Id'),
         image2Id: a.id().required(),
         image2: a.belongsTo('Image', 'image2Id'),
+        projectId: a.id(),
         homography: a.float().array(),
         homographySource: a.string(),
-        // When true, this pair is intentionally skipped for registration
-        // (images are neighbours but don't need homography computed)
         skipped: a.boolean().default(false),
-        // Candidate correspondences written by the lightglue container when
-        // its automatic homography attempt fails.
         suggestedPoints1: a.float().array(),
         suggestedPoints2: a.float().array(),
         suggestedPointsKept: a.integer(),
+        cameraPairKey: a.string(),
+        bucketIndex: a.integer(),
+        registrationProcessedAt: a.datetime(),
+        registrationFailedAt: a.datetime(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
@@ -456,6 +426,41 @@ const schema = a
       .secondaryIndexes((index) => [
         index('image1Id').queryField('imageNeighboursByImage1key'),
         index('image2Id').queryField('imageNeighboursByImage2key'),
+        // Same-camera rows (null cameraPairKey) are intentionally not projected.
+        index('cameraPairKey')
+          .sortKeys(['bucketIndex'])
+          .queryField('imageNeighboursByCameraPairAndBucket'),
+      ]),
+    RegistrationProgress: a
+      .model({
+        projectId: a.id().required(),
+        pairsCreated: a.integer().default(0),
+        pairsProcessed: a.integer().default(0),
+        pendingCount: a.integer().default(0),
+        lastKickoffAt: a.datetime(),
+        lastChangeAt: a.datetime(),
+        cleanupState: a.string().default('pending'),
+        group: a.string(),
+      })
+      .identifier(['projectId'])
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
+      .secondaryIndexes((index) => [
+        index('cleanupState').queryField('registrationProgressByCleanupState'),
+      ]),
+    // bucketKey = "<cameraPairKey>#<bucketIndex>" — explicit field because DynamoDB PKs are 2-attribute max.
+    RegistrationBucketStat: a
+      .model({
+        projectId: a.id().required(),
+        bucketKey: a.string().required(),
+        cameraPairKey: a.string().required(),
+        bucketIndex: a.integer().required(),
+        successCount: a.integer().default(0),
+        group: a.string(),
+      })
+      .identifier(['projectId', 'bucketKey'])
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
+      .secondaryIndexes((index) => [
+        index('projectId').queryField('registrationBucketStatsByProjectId'),
       ]),
     Queue: a
       .model({
@@ -469,32 +474,22 @@ const schema = a
         url: a.url(),
         zoom: a.integer(),
         hidden: a.boolean().default(false),
-        // used in conjuction with the cleanupJobs function (every 15m) to determine if the queue is still active
         approximateSize: a.integer(),
         tag: a.string(),
         requeueAt: a.string(),
         updatedAt: a.string(),
-
-        // Track what was launched (for requeue detection)
         annotationSetId: a.id(),
         locationSetId: a.id(),
-        confidenceThreshold: a.float(),    // Lower confidence threshold (keep in mind for when users are queuing under upper threshold of 1)
-
-        // Progress tracking
+        confidenceThreshold: a.float(),
         launchedCount: a.integer(),
         observedCount: a.integer().default(0),
-
-        // S3 manifest for efficient lookup
         locationManifestS3Key: a.string(),
-
-        // Empty detection and requeue tracking
         emptyQueueTimestamp: a.string(),
         requeuesCompleted: a.integer().default(0),
         lastObservationAt: a.string(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
-      //.authorization(allow => [allow.groupDefinedIn('projectId')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('queuesByProjectId'),
       ]),
@@ -585,7 +580,6 @@ const schema = a
       .identifier(['testPresetId', 'locationId', 'annotationSetId'])
       .secondaryIndexes((index) => [
         index('testPresetId').queryField('locationsByTestPresetId'),
-        index('locationId').queryField('testPresetsByLocationId'),
       ]),
     TestResult: a
       .model({
@@ -607,7 +601,6 @@ const schema = a
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('userId').queryField('testResultsByUserId'),
-        index('testPresetId').queryField('testResultsByTestPresetId'),
       ]),
     TestResultCategoryCount: a
       .model({
@@ -619,15 +612,11 @@ const schema = a
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
-      .identifier(['testResultId', 'categoryName'])
-      .secondaryIndexes((index) => [
-        index('testResultId').queryField('categoryCountsByTestResultId'),
-      ]),
+      .identifier(['testResultId', 'categoryName']),
     Shapefile: a
       .model({
         projectId: a.id().required(),
         project: a.belongsTo('Project', 'projectId'),
-        //stores shape as poylgon to use with leaflet
         coordinates: a.float().array(),
         group: a.string(),
       })
@@ -640,7 +629,6 @@ const schema = a
       .model({
         projectId: a.id().required(),
         project: a.belongsTo('Project', 'projectId'),
-        // stores exclusion polygons as flattened lat,lng pairs
         coordinates: a.float().array(),
         group: a.string(),
       })
@@ -697,13 +685,51 @@ const schema = a
         transects: a.hasMany('Transect', 'stratumId'),
         area: a.float(),
         baselineLength: a.float(),
-        // store polygon coordinates as flattened [lat, lng, ...]
         coordinates: a.float().array(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
       .secondaryIndexes((index) => [
         index('projectId').queryField('strataByProjectId'),
+      ]),
+    IndividualIdJob: a
+      .model({
+        projectId: a.id().required(),
+        project: a.belongsTo('Project', 'projectId'),
+        annotationSetId: a.id().required(),
+        categoryId: a.id().required(),
+        name: a.string().required(),
+        status: a.string().default('launching'),
+        totalTransects: a.integer().default(0),
+        // ACID-decremented as transects are completed; 0 => job done.
+        remainingTransects: a.integer().default(0),
+        // ACID-decremented by the SQS fanout consumer; 0 => all images reassigned.
+        pendingImageUpdates: a.integer().default(0),
+        pretileManifestS3Key: a.string(),
+        group: a.string(),
+      })
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
+      .secondaryIndexes((index) => [
+        index('projectId').queryField('individualIdJobsByProjectId'),
+        index('annotationSetId').queryField('individualIdJobsByAnnotationSetId'),
+      ]),
+    IndividualIdTransect: a
+      .model({
+        jobId: a.id().required(),
+        projectId: a.id().required(),
+        annotationSetId: a.id().required(),
+        categoryId: a.id().required(),
+        transectId: a.id().required(),
+        status: a.string().default('available'),
+        assignedUserId: a.string(),
+        assignedAt: a.string(),
+        lastActiveAt: a.string(),
+        group: a.string(),
+      })
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group')])
+      .secondaryIndexes((index) => [
+        index('jobId').queryField('individualIdTransectsByJobId'),
+        index('projectId').queryField('individualIdTransectsByProjectId'),
       ]),
     JollyResult: a
       .model({
@@ -726,9 +752,7 @@ const schema = a
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group').to(['read', 'update'])])
       .secondaryIndexes((index) => [
         index('surveyId').queryField('jollyResultsBySurveyId'),
-        index('stratumId').queryField('jollyResultsByStratumId'),
       ]),
-    // Lambda-only: users will manage groups through dedicated authorized lambdas
     addUserToGroup: a
       .mutation()
       .arguments({
@@ -755,7 +779,6 @@ const schema = a
       .authorization((allow) => [allow.group('sysadmin')])
       .handler(a.handler.function(createGroup))
       .returns(a.json()),
-    //TODO: own validation
     listUsers: a
       .query()
       .arguments({
@@ -778,7 +801,6 @@ const schema = a
       .authorization((allow) => [allow.group('sysadmin')])
       .handler(a.handler.function(listGroupsForUser))
       .returns(a.json()),
-    // Organization management mutations
     createOrganizationMutation: a
       .mutation()
       .arguments({
@@ -833,8 +855,6 @@ const schema = a
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(deleteQueue))
       .returns(a.json()),
-    // Message publish mutation
-    // Message type that's used for this PubSub sample
     Message: a.customType({
       content: a.string().required(),
       channelName: a.string().required(),
@@ -852,62 +872,14 @@ const schema = a
       ]),
     receive: a
       .subscription()
-      // subscribes to the 'publish' mutation
       .for(a.ref('publish'))
       .arguments({ namePrefix: a.string() })
-      // subscription handler to set custom filters
       .handler(
         a.handler.custom({
           entry: './receive.js',
         })
       )
       .authorization((allow) => [allow.authenticated()]),
-    // Legacy function
-    // processImages: a
-    //   .mutation()
-    //   .arguments({
-    //     s3key: a.string().required(),
-    //     model: a.string().required(),
-    //     threshold: a.float(),
-    //   })
-    //   .handler(a.handler.function(processImages))
-    //   .returns(a.string())
-    //   .authorization((allow) => [allow.authenticated()]),
-    // CountType: a.customType({
-    //   count: a.integer().required(),
-    // }),
-    // Legacy function
-    // getImageCounts: a
-    //   .query()
-    //   .arguments({
-    //     imageSetId: a.string().required(),
-    //     nextToken: a.string(),
-    //   })
-    //   .returns(a.customType({ count: a.integer(), nextToken: a.string() }))
-    //   .authorization((allow) => [allow.authenticated()])
-    //   .handler(
-    //     a.handler.custom({
-    //       entry: './getImageCounts.js',
-    //       dataSource: a.ref('ImageSetMembership'),
-    //     })
-    //   ),
-    //.authorization(allow => [allow.authenticated()])
-
-    // registerImages: a
-    //   .mutation()
-    //   .arguments({
-    //     s3keys: a.string().array().array().required(),
-    //     model: a.string().required(),
-    //     threshold: a.float(),
-    //   }),
-    // decimateImageSets: a
-    //   .mutation()
-    //   .arguments({
-    //     imageSetIds: a.string().array().required(),
-    //     type: a.string().required(),
-    //     level: a.float(),
-    //   })
-
     Organization: a
       .model({
         name: a.string().required(),
@@ -948,7 +920,6 @@ const schema = a
       .secondaryIndexes((index) => [
         index('username').queryField('organizationInvitesByUsername'),
       ]),
-    // Handle registration through WildEye website for now
     OrganizationRegistration: a
       .model({
         organizationName: a.string().required(),
@@ -969,7 +940,6 @@ const schema = a
         group: a.string(),
       })
       .identifier(['surveyId', 'annotationSetId'])
-      // TODO: Rethink sharing permissions
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn("group")]),
     JollyResultsMembership: a
       .model({
@@ -981,7 +951,6 @@ const schema = a
         group: a.string(),
       })
       .identifier(['surveyId', 'annotationSetId', 'userId'])
-      // TODO: Rethink sharing permissions
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn("group")])
       .secondaryIndexes((index) => [
         index('surveyId')
@@ -1016,21 +985,17 @@ const schema = a
         index('projectId').queryField('adminActionLogsByProjectId'),
         index('userId').queryField('adminActionLogsByUserId'),
       ]),
-    // Tiling Task - tracks the whole launch process for tiled tasks
     TilingTask: a
       .model({
         projectId: a.id().required(),
         locationSetId: a.id().required(),
         locationSet: a.belongsTo('LocationSet', 'locationSetId'),
         annotationSetId: a.id().required(),
-        // 'pending' | 'processing' | 'completed' | 'failed'
         status: a.string().default('pending'),
-        // JSON string with queue options and other launch parameters
         launchConfig: a.string().required(),
         totalBatches: a.integer().default(0),
         completedBatches: a.integer().default(0),
         totalLocations: a.integer().default(0),
-        // S3 key for the merged output file with all created location IDs
         outputS3Key: a.string(),
         errorMessage: a.string(),
         batches: a.hasMany('TilingBatch', 'tilingTaskId'),
@@ -1041,17 +1006,13 @@ const schema = a
         index('status').queryField('tilingTasksByStatus'),
         index('projectId').queryField('tilingTasksByProjectId'),
       ]),
-    // Tiling Batch - tracks each batch's progress
     TilingBatch: a
       .model({
         tilingTaskId: a.id().required(),
         tilingTask: a.belongsTo('TilingTask', 'tilingTaskId'),
         batchIndex: a.integer().required(),
-        // 'pending' | 'processing' | 'completed' | 'failed'
         status: a.string().default('pending'),
-        // S3 key for input file containing location data to create
         inputS3Key: a.string().required(),
-        // S3 key for output file containing created location IDs
         outputS3Key: a.string(),
         locationCount: a.integer().default(0),
         createdCount: a.integer().default(0),
@@ -1076,10 +1037,8 @@ const schema = a
       .mutation()
       .arguments({
         projectId: a.string().required(),
-        //JSON stringified metadata
         metadata: a.string().required(),
         queueUrl: a.string().required(),
-        // Optional: batch of images to process (each as JSON string with id, originalPath, timestamp, cameraId)
         images: a.string().array(),
       })
       .returns(a.json())
@@ -1168,6 +1127,57 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(launchHomography)),
+    launchIndividualId: a
+      .mutation()
+      .arguments({
+        request: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(launchIndividualId)),
+    claimIndividualIdTransect: a
+      .mutation()
+      .arguments({
+        jobId: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(claimIndividualIdTransect)),
+    completeIndividualIdTransect: a
+      .mutation()
+      .arguments({
+        transectRowId: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(completeIndividualIdTransect)),
+    decrementIndividualIdImageUpdates: a
+      .mutation()
+      .arguments({ id: a.id().required(), count: a.integer().required() })
+      .returns(a.integer())
+      .handler(a.handler.custom({
+        entry: './decrementIndividualIdImageUpdates.js',
+        dataSource: a.ref('IndividualIdJob'),
+      }))
+      .authorization((allow) => [allow.authenticated()]),
+    decrementIndividualIdRemainingTransects: a
+      .mutation()
+      .arguments({ id: a.id().required() })
+      .returns(a.integer())
+      .handler(a.handler.custom({
+        entry: './decrementIndividualIdRemainingTransects.js',
+        dataSource: a.ref('IndividualIdJob'),
+      }))
+      .authorization((allow) => [allow.authenticated()]),
+    pingIndividualIdTransect: a
+      .mutation()
+      .arguments({ id: a.id().required() })
+      .returns(a.json())
+      .handler(a.handler.custom({
+        entry: './pingIndividualIdTransect.js',
+        dataSource: a.ref('IndividualIdTransect'),
+      }))
+      .authorization((allow) => [allow.authenticated()]),
     incrementQueueCount: a
       .mutation()
       .arguments({ id: a.id().required() })
@@ -1177,7 +1187,38 @@ const schema = a
         dataSource: a.ref('Queue'),
       }))
       .authorization((allow) => [allow.authenticated()]),
-    //TODO: Rethink sharing completely
+    incrementRegistrationProgress: a
+      .mutation()
+      .arguments({
+        projectId: a.id().required(),
+        pairsCreatedDelta: a.integer(),
+        pairsProcessedDelta: a.integer(),
+        pendingCountDelta: a.integer(),
+        kickoff: a.boolean(),
+        resetCleanupState: a.boolean(),
+        group: a.string(),
+      })
+      .returns(a.json())
+      .handler(a.handler.custom({
+        entry: './incrementRegistrationProgress.js',
+        dataSource: a.ref('RegistrationProgress'),
+      }))
+      .authorization((allow) => [allow.authenticated()]),
+    incrementRegistrationBucketStat: a
+      .mutation()
+      .arguments({
+        projectId: a.id().required(),
+        bucketKey: a.string().required(),
+        cameraPairKey: a.string().required(),
+        bucketIndex: a.integer().required(),
+        group: a.string(),
+      })
+      .returns(a.json())
+      .handler(a.handler.custom({
+        entry: './incrementRegistrationBucketStat.js',
+        dataSource: a.ref('RegistrationBucketStat'),
+      }))
+      .authorization((allow) => [allow.authenticated()]),
     getJwtSecret: a
       .mutation()
       .returns(a.string())
@@ -1203,7 +1244,7 @@ const schema = a
       .returns(a.string().array())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(generateTile)),
-    // Dummy table used to force full deployment instead of hotswapping resources
+    // Forces full deployment instead of hotswapping resources.
     // fixDeploymentTable: a
     //   .model({
     //     name: a.string().required(),
@@ -1227,6 +1268,9 @@ const schema = a
     allow.resource(launchQCReview),
     allow.resource(launchHomography),
     allow.resource(reconcileHomographies),
+    allow.resource(registrationBucketCleanup),
+    allow.resource(processRegistrationStream),
+    allow.resource(deleteRegistrationNeighbour),
     allow.resource(reconcilePretileLaunches),
     allow.resource(extendTileLifecycles),
     allow.resource(pretileImage),
@@ -1247,13 +1291,16 @@ const schema = a
     allow.resource(updateOrganizationMemberAdmin),
     allow.resource(deleteQueue),
     allow.resource(updateActiveOrganizations),
-    // allow.resource(consolidateUserStats),
+    allow.resource(launchIndividualId),
+    allow.resource(updateImageTransect),
+    allow.resource(claimIndividualIdTransect),
+    allow.resource(completeIndividualIdTransect),
+    allow.resource(reconcileIndividualId),
+    allow.resource(releaseIndividualIdTransects),
   ]);
 
 export type ServerSchema = typeof schema;
-// Do NOT re-export client Schema here; backend build shouldn't depend on generated frontend types.
 
-// Minimal, explicit server handler types to avoid indexing into ModelSchema
 interface LambdaContext {
   awsRequestId?: string;
   callbackWaitsForEmptyEventLoop: boolean;
@@ -1274,16 +1321,13 @@ type MutationHandler<Args, Result = unknown> = (
   context: LambdaContext
 ) => Promise<Result>;
 
-// User management -> shouldn't be able to call this from client
 export type AddUserToGroupHandler = MutationHandler<{ userId: string; groupName: string }>;
 export type RemoveUserFromGroupHandler = MutationHandler<{ userId: string; groupName: string }>;
 export type CreateGroupHandler = MutationHandler<{ groupName: string }>;
 
-// Rethink user listing
 export type ListUsersHandler = MutationHandler<{ nextToken?: string | null }>;
 export type ListGroupsForUserHandler = MutationHandler<{ userId: string; nextToken?: string | null }>;
 
-// Lambdas authorize user requests based on user groups (event.identity.groups)
 export type DeleteProjectInFullHandler = MutationHandler<{ projectId: string }>;
 export type GenerateSurveyResultsHandler = MutationHandler<{
   surveyId: string;
@@ -1294,17 +1338,15 @@ export type LaunchAnnotationSetHandler = MutationHandler<{ request: string }>;
 export type LaunchFalseNegativesHandler = MutationHandler<{ request: string }>;
 export type LaunchQCReviewHandler = MutationHandler<{ request: string }>;
 export type LaunchHomographyHandler = MutationHandler<{ request: string }>;
-export type ProcessImagesHandler = MutationHandler<{ s3key: string; model: string; threshold?: number | null }>; //legacy
+export type ProcessImagesHandler = MutationHandler<{ s3key: string; model: string; threshold?: number | null }>;
 export type UpdateProjectMembershipsHandler = MutationHandler<{ projectId: string }>;
 export type RunImageRegistrationHandler = MutationHandler<{ projectId: string; metadata: string; queueUrl: string; images?: string[] | null }>;
 export type RunScoutbotHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string }>;
 export type RunMadDetectorHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string }>;
 export type RunHeatmapperHandler = MutationHandler<{ projectId: string; images?: string[] | null }>;
 
-// TODO: Rethink sharing completely
 export type GetJwtSecretHandler = MutationHandler<Record<string, never>, string>;
 
-// Organization management
 export type CreateOrganizationHandler = MutationHandler<{ name: string; description?: string | null; adminEmail: string; registrationId?: string | null }>;
 export type InviteUserToOrganizationHandler = MutationHandler<{ organizationId: string; email: string }>;
 export type RespondToInviteHandler = MutationHandler<{ inviteId: string; accept: boolean }>;
@@ -1312,6 +1354,9 @@ export type RemoveUserFromOrganizationHandler = MutationHandler<{ organizationId
 export type UpdateOrganizationMemberAdminHandler = MutationHandler<{ organizationId: string; userId: string; isAdmin: boolean }>;
 export type DeleteQueueHandler = MutationHandler<{ queueId: string }>;
 export type UpdateActiveOrganizationsHandler = MutationHandler<{ activatedOrganizationIds: string[] }>;
+export type LaunchIndividualIdHandler = MutationHandler<{ request: string }>;
+export type ClaimIndividualIdTransectHandler = MutationHandler<{ jobId: string }>;
+export type CompleteIndividualIdTransectHandler = MutationHandler<{ transectRowId: string }>;
 
 export const data = defineData({
   schema,

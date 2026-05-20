@@ -1,5 +1,6 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Card, Form } from 'react-bootstrap';
+import { LoadingProgressCard } from './LoadingProgressCard';
 import { Schema } from '../amplify/client-schema';
 import { GlobalContext, UserContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
@@ -18,6 +19,22 @@ type CategoryOption = {
   id: string;
   name: string;
   shortcutKey?: string | null;
+};
+
+// Per-query load progress so labels and the (potentially large) annotation
+// fetch each show their own live count rather than one opaque status line.
+type LoadStatus = {
+  categories: number;
+  categoriesDone: boolean;
+  annotations: number;
+  annotationsDone: boolean;
+};
+
+const INITIAL_LOAD_STATUS: LoadStatus = {
+  categories: 0,
+  categoriesDone: false,
+  annotations: 0,
+  annotationsDone: false,
 };
 
 export default function QCReview({
@@ -44,7 +61,9 @@ export default function QCReview({
     Array<{ id: string; categoryId: string; reviewCatId: string | null; owner: string | null }>
   >([]);
   const [loading, setLoading] = useState(true);
-  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadStatus, setLoadStatus] = useState<LoadStatus>(
+    INITIAL_LOAD_STATUS
+  );
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
 
   // Launch settings
@@ -127,19 +146,46 @@ export default function QCReview({
     let mounted = true;
     async function loadData() {
       setLoading(true);
-      setLoadingProgress(0);
+      setLoadStatus(INITIAL_LOAD_STATUS);
       try {
+        const catsPromise = fetchAllPaginatedResults(
+          client.models.Category.categoriesByAnnotationSetId,
+          {
+            annotationSetId: annotationSet.id,
+            selectionSet: ['id', 'name', 'shortcutKey'] as const,
+          },
+          (count) => {
+            if (mounted) setLoadStatus((s) => ({ ...s, categories: count }));
+          }
+        ).then((r) => {
+          if (mounted)
+            setLoadStatus((s) => ({
+              ...s,
+              categories: r.length,
+              categoriesDone: true,
+            }));
+          return r;
+        });
+
+        const annotationsPromise = fetchAnnotationsByAnnotationSet(
+          client,
+          annotationSet.id,
+          (count) => {
+            if (mounted) setLoadStatus((s) => ({ ...s, annotations: count }));
+          }
+        ).then((r) => {
+          if (mounted)
+            setLoadStatus((s) => ({
+              ...s,
+              annotations: r.length,
+              annotationsDone: true,
+            }));
+          return r;
+        });
+
         const [cats, annotations] = await Promise.all([
-          fetchAllPaginatedResults(
-            client.models.Category.categoriesByAnnotationSetId,
-            {
-              annotationSetId: annotationSet.id,
-              selectionSet: ['id', 'name', 'shortcutKey'] as const,
-            }
-          ),
-          fetchAnnotationsByAnnotationSet(client, annotationSet.id, (count) => {
-            if (mounted) setLoadingProgress(count);
-          }),
+          catsPromise,
+          annotationsPromise,
         ]);
         if (!mounted) return;
         setCategories(
@@ -268,15 +314,21 @@ export default function QCReview({
 
   if (loading) {
     return (
-      <Card>
-        <Card.Body className='text-center text-muted'>
-          Loading annotations
-          {loadingProgress > 0
-            ? ` (${loadingProgress.toLocaleString()} fetched)`
-            : ''}
-          ...
-        </Card.Body>
-      </Card>
+      <LoadingProgressCard
+        title='Loading QC Review data…'
+        rows={[
+          {
+            label: 'Labels',
+            count: loadStatus.categories,
+            done: loadStatus.categoriesDone,
+          },
+          {
+            label: 'Annotations',
+            count: loadStatus.annotations,
+            done: loadStatus.annotationsDone,
+          },
+        ]}
+      />
     );
   }
 

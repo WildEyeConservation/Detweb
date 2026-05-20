@@ -1,0 +1,177 @@
+import { useCallback, useMemo, useRef, useState } from 'react';
+import type { MatchCandidate } from '../types';
+
+type PairKey = string;
+type CandidateKey = string;
+
+interface CandidateOverride {
+  posA?: { x: number; y: number };
+  posB?: { x: number; y: number };
+  status?: 'pending' | 'locked' | 'accepted';
+  obscuredA?: boolean;
+  obscuredB?: boolean;
+  rejected?: boolean;
+}
+
+export interface PairWorkingState {
+  version: number;
+  mergeCandidates: (pairKey: PairKey, fresh: MatchCandidate[]) => MatchCandidate[];
+  setCandidatePosition: (pairKey: PairKey, candidateKey: CandidateKey, side: 'A' | 'B', pos: { x: number; y: number }) => void;
+  setCandidateObscured: (pairKey: PairKey, candidateKey: CandidateKey, side: 'A' | 'B', value: boolean) => void;
+  lockCandidate: (pairKey: PairKey, candidateKey: CandidateKey) => void;
+  acceptCandidate: (pairKey: PairKey, candidateKey: CandidateKey) => void;
+  unlockCandidate: (pairKey: PairKey, candidateKey: CandidateKey) => void;
+  rejectCandidate: (pairKey: PairKey, candidateKey: CandidateKey) => void;
+  clearPair: (pairKey: PairKey) => void;
+  hasUnsavedWork: (pairKey: PairKey) => boolean;
+}
+
+export function makePairKey(imageAId: string, imageBId: string): PairKey {
+  return `${imageAId}__${imageBId}`;
+}
+
+export function usePairWorkingState(): PairWorkingState {
+  // Ref for synchronous reads in callbacks; state for triggering re-renders.
+  const storeRef = useRef<Map<PairKey, Map<CandidateKey, CandidateOverride>>>(
+    new Map()
+  );
+  const [version, bump] = useState(0);
+  const rerender = useCallback(() => bump((n) => n + 1), []);
+
+  const getPair = (pk: PairKey) => {
+    let m = storeRef.current.get(pk);
+    if (!m) {
+      m = new Map();
+      storeRef.current.set(pk, m);
+    }
+    return m;
+  };
+
+  const updateCandidate = useCallback(
+    (
+      pk: PairKey,
+      ck: CandidateKey,
+      mutator: (prev: CandidateOverride) => CandidateOverride
+    ) => {
+      const pair = getPair(pk);
+      const prev = pair.get(ck) ?? {};
+      pair.set(ck, mutator(prev));
+      rerender();
+    },
+    [rerender]
+  );
+
+  const mergeCandidates = useCallback(
+    (pk: PairKey, fresh: MatchCandidate[]): MatchCandidate[] => {
+      const pair = storeRef.current.get(pk);
+      if (!pair || pair.size === 0) return fresh;
+      const out: MatchCandidate[] = [];
+      for (const c of fresh) {
+        const ov = pair.get(c.pairKey);
+        if (ov?.rejected) continue;
+        if (!ov) {
+          out.push(c);
+        } else {
+          out.push({
+            ...c,
+            posA: ov.posA ?? c.posA,
+            posB: ov.posB ?? c.posB,
+            status: ov.status ?? c.status,
+            obscuredA: ov.obscuredA ?? c.obscuredA,
+            obscuredB: ov.obscuredB ?? c.obscuredB,
+          });
+        }
+      }
+      return out;
+    },
+    []
+  );
+
+  const setCandidatePosition: PairWorkingState['setCandidatePosition'] =
+    useCallback(
+      (pk, ck, side, pos) => {
+        updateCandidate(pk, ck, (prev) => ({
+          ...prev,
+          ...(side === 'A' ? { posA: pos } : { posB: pos }),
+        }));
+      },
+      [updateCandidate]
+    );
+
+  const setCandidateObscured: PairWorkingState['setCandidateObscured'] =
+    useCallback(
+      (pk, ck, side, value) => {
+        updateCandidate(pk, ck, (prev) => ({
+          ...prev,
+          ...(side === 'A' ? { obscuredA: value } : { obscuredB: value }),
+        }));
+      },
+      [updateCandidate]
+    );
+
+  const lockCandidate: PairWorkingState['lockCandidate'] = useCallback(
+    (pk, ck) => updateCandidate(pk, ck, (prev) => ({ ...prev, status: 'locked' })),
+    [updateCandidate]
+  );
+
+  const acceptCandidate: PairWorkingState['acceptCandidate'] = useCallback(
+    (pk, ck) => updateCandidate(pk, ck, (prev) => ({ ...prev, status: 'accepted' })),
+    [updateCandidate]
+  );
+
+  const unlockCandidate: PairWorkingState['unlockCandidate'] = useCallback(
+    (pk, ck) => updateCandidate(pk, ck, (prev) => ({ ...prev, status: 'pending' })),
+    [updateCandidate]
+  );
+
+  const rejectCandidate: PairWorkingState['rejectCandidate'] = useCallback(
+    (pk, ck) => updateCandidate(pk, ck, (prev) => ({ ...prev, rejected: true })),
+    [updateCandidate]
+  );
+
+  const clearPair: PairWorkingState['clearPair'] = useCallback(
+    (pk) => {
+      storeRef.current.delete(pk);
+      rerender();
+    },
+    [rerender]
+  );
+
+  const hasUnsavedWork: PairWorkingState['hasUnsavedWork'] = useCallback((pk) => {
+    const pair = storeRef.current.get(pk);
+    if (!pair || pair.size === 0) return false;
+    for (const ov of pair.values()) {
+      if (ov.posA || ov.posB) return true;
+      if (ov.obscuredA || ov.obscuredB) return true;
+      if (ov.status && ov.status !== 'pending' && ov.status !== 'accepted') return true;
+    }
+    return false;
+  }, []);
+
+  return useMemo(
+    () => ({
+      version,
+      mergeCandidates,
+      setCandidatePosition,
+      setCandidateObscured,
+      lockCandidate,
+      acceptCandidate,
+      unlockCandidate,
+      rejectCandidate,
+      clearPair,
+      hasUnsavedWork,
+    }),
+    [
+      version,
+      mergeCandidates,
+      setCandidatePosition,
+      setCandidateObscured,
+      lockCandidate,
+      acceptCandidate,
+      unlockCandidate,
+      rejectCandidate,
+      clearPair,
+      hasUnsavedWork,
+    ]
+  );
+}

@@ -1179,13 +1179,41 @@ export default function UploadManager() {
       for (const [, bucket] of allByCamera) {
         for (let idx = 0; idx < bucket.length; idx++) {
           if (!sessionIdsForReg.has(bucket[idx].id)) continue;
-          // immediate predecessor
+          // immediate same-camera predecessor
           if (idx > 0 && !sessionIdsForReg.has(bucket[idx - 1].id)) {
             boundaryIds.add(bucket[idx - 1].id);
           }
-          // immediate successor
+          // immediate same-camera successor
           if (idx < bucket.length - 1 && !sessionIdsForReg.has(bucket[idx + 1].id)) {
             boundaryIds.add(bucket[idx + 1].id);
+          }
+        }
+      }
+
+      // Cross-camera boundaries: for each session image, on every OTHER camera,
+      // include the temporally-nearest non-session image on each side. The
+      // lambda needs these to compute correct nearest-neighbour cross-camera
+      // pairs and to detect previously-stored edges that are now superseded by
+      // the incoming session image.
+      for (const sessionImg of sessionImages) {
+        const myCam = sessionImg.cameraId ?? null;
+        for (const [otherCam, otherBucket] of allByCamera) {
+          if (otherCam === myCam || otherBucket.length === 0) continue;
+          // Binary search for the insertion point of sessionImg.timestamp
+          let lo = 0;
+          let hi = otherBucket.length;
+          while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (otherBucket[mid].timestamp < sessionImg.timestamp) lo = mid + 1;
+            else hi = mid;
+          }
+          if (lo > 0) {
+            const before = otherBucket[lo - 1];
+            if (!sessionIdsForReg.has(before.id)) boundaryIds.add(before.id);
+          }
+          if (lo < otherBucket.length) {
+            const after = otherBucket[lo];
+            if (!sessionIdsForReg.has(after.id)) boundaryIds.add(after.id);
           }
         }
       }

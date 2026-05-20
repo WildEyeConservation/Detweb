@@ -179,7 +179,11 @@ export function FileUploadCore({
   // toUploadFiles / toUploadSize are derived later via useMemo so they
   // automatically reflect the latest existing-image and map-filter state.
   const [existingSurveyImages, setExistingSurveyImages] = useState<
-    { originalPath: string; latitude: number; longitude: number }[]
+    {
+      originalPath: string;
+      latitude: number;
+      longitude: number;
+    }[]
   >([]);
   const [loadingExistingImages, setLoadingExistingImages] = useState(
     !newProject
@@ -704,6 +708,7 @@ export function FileUploadCore({
       const mostCommonTimezone =
         timezones.length > 0 ? timezones[0] : undefined;
       setCommonTimezone(mostCommonTimezone);
+
     }
     if (imageFiles.length > 0) {
       getExistingFiles();
@@ -789,7 +794,11 @@ export function FileUploadCore({
           {
             projectId,
             limit: 10000,
-            selectionSet: ['originalPath', 'latitude', 'longitude'] as const,
+            selectionSet: [
+              'originalPath',
+              'latitude',
+              'longitude',
+            ] as const,
           } as any
         );
         if (!cancelled) {

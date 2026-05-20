@@ -271,7 +271,9 @@ export default function DensityMap({
       const group = (L as any).markerClusterGroup();
       annotations
         .filter(
-          (a) => categoryIds.length === 0 || categoryIds.includes(a.category.id)
+          (a) =>
+            a.category &&
+            (categoryIds.length === 0 || categoryIds.includes(a.category.id))
         )
         .forEach((a) => {
           const img = images.find((img) => img.id === a.imageId);
@@ -330,7 +332,9 @@ export default function DensityMap({
       if (!map) return;
       const latlngs = annotations
         .filter(
-          (a) => categoryIds.length === 0 || categoryIds.includes(a.category.id)
+          (a) =>
+            a.category &&
+            (categoryIds.length === 0 || categoryIds.includes(a.category.id))
         )
         .map((a) => {
           const img = images.find((img) => img.id === a.imageId);

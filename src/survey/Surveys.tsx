@@ -14,6 +14,7 @@ import { logAdminAction } from '../utils/adminActionLogger.ts';
 import { useOrg } from '../OrgContext.tsx';
 import { Page, PageHeader, Toolbar, ContentArea, Spacer } from '../ss/PageShell.tsx';
 import QueueProgress from '../user/QueueProgress.tsx';
+import IndividualIdProgress from '../individual-id/IndividualIdProgress.tsx';
 
 const PROJECT_SELECTION_SET = [
   'id',
@@ -37,6 +38,8 @@ const PROJECT_SELECTION_SET = [
   'queues.batchSize',
   'queues.requeuesCompleted',
   'queues.emptyQueueTimestamp',
+  'individualIdJobs.id',
+  'individualIdJobs.status',
   'imageSets.imageCount',
 ] as const;
 
@@ -198,6 +201,26 @@ export default function Surveys() {
     [projectQueries]
   );
 
+  // Projects with an in-flight Individual ID job (status 'active' or
+  // 'launching'). Used to lock the survey down like any other active job.
+  // Derived from the project's own selection set (individualIdJobs) — no
+  // per-project query needed.
+  const projectsWithIndividualIdJob = useMemo(
+    () =>
+      new Set(
+        projects
+          .filter((p) =>
+            ((p as any).individualIdJobs ?? []).some(
+              (j: { status?: string | null }) =>
+                j.status === 'active' || j.status === 'launching'
+            )
+          )
+          .map((p) => p.id)
+      ),
+    [projects]
+  );
+
+
   // Helper to optimistically update a single project in the React Query cache.
   const updateProjectInCache = (
     projectId: string,
@@ -268,6 +291,35 @@ export default function Surveys() {
         return;
       }
 
+      // cancel an Individual ID job if one is in flight
+      try {
+        const { data: iidJobs } = await (
+          client.models as any
+        ).IndividualIdJob.individualIdJobsByProjectId(
+          { projectId: selectedProject!.id },
+          { selectionSet: ['id', 'status'] }
+        );
+        const iidJob = (iidJobs || []).find(
+          (j: any) => j.status === 'active' || j.status === 'launching'
+        );
+        if (iidJob) {
+          await (client.models as any).IndividualIdJob.update({
+            id: iidJob.id,
+            status: 'cancelled',
+          });
+          await logAdminAction(
+            client,
+            user.userId,
+            `Cancelled Individual ID job for project "${selectedProject!.name}"`,
+            selectedProject!.id,
+            selectedProject!.organizationId
+          );
+          return;
+        }
+      } catch (e) {
+        console.error('Failed to cancel Individual ID job', e);
+      }
+
       const job = selectedProject?.queues[0];
 
       if (!job?.url) {
@@ -328,8 +380,8 @@ export default function Surveys() {
       return b.name.localeCompare(a.name);
     }
     if (sortBy === 'activeJobs') {
-      const hasJobA = a.queues.length > 0 || a.annotationSets.some((set: { register?: boolean | null }) => set.register);
-      const hasJobB = b.queues.length > 0 || b.annotationSets.some((set: { register?: boolean | null }) => set.register);
+      const hasJobA = a.queues.length > 0 || a.annotationSets.some((set: { register?: boolean | null }) => set.register) || projectsWithIndividualIdJob.has(a.id);
+      const hasJobB = b.queues.length > 0 || b.annotationSets.some((set: { register?: boolean | null }) => set.register) || projectsWithIndividualIdJob.has(b.id);
       if (hasJobA !== hasJobB) return hasJobA ? -1 : 1;
       return new Date(b.createdAt ?? '').getTime() - new Date(a.createdAt ?? '').getTime();
     }
@@ -442,6 +494,13 @@ export default function Surveys() {
     }
     const queue = project.queues?.[0];
     if (!queue?.url) {
+      if (projectsWithIndividualIdJob.has(project.id)) {
+        return (
+          <div className='ss-job-progress' style={{ minWidth: 180 }}>
+            <IndividualIdProgress projectId={project.id} />
+          </div>
+        );
+      }
       return <span style={{ color: 'var(--ss-text-dim)' }}>—</span>;
     }
     return (
@@ -581,7 +640,8 @@ export default function Surveys() {
                       (project.queues?.length ?? 0) > 0 ||
                       project.annotationSets.some(
                         (set: { register?: boolean | null }) => set.register
-                      );
+                      ) ||
+                      projectsWithIndividualIdJob.has(project.id);
                     const imageCount =
                       project.imageSets?.[0]?.imageCount ?? 0;
                     const setCount = project.annotationSets.length;

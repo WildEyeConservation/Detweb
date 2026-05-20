@@ -1,14 +1,3 @@
-/**
- * Targeted deduplication Lambda for homography queues.
- * Triggered by cleanupJobs when a homography queue is fully processed.
- *
- * Reads the queue manifest from S3 to identify which image pairs just had
- * homographies created, then only recalculates objectId for annotations on
- * those affected images. For each such annotation, projects its (x,y) through
- * homographies into all chronologically older neighbouring images. If visible
- * in any older neighbour the annotation is Secondary (objectId = null),
- * otherwise Primary (objectId = annotation.id).
- */
 import type { Handler } from 'aws-lambda';
 import { env } from '$amplify/env/reconcileHomographies';
 import { Amplify } from 'aws-amplify';
@@ -56,8 +45,6 @@ const s3Client = new S3Client({
   },
 });
 
-// ── Types ──
-
 type ImageMeta = {
   id: string;
   timestamp: number | null;
@@ -74,10 +61,10 @@ type AnnotationRecord = {
   objectId: string | null;
 };
 
-/** Homography that maps FROM the owning image TO the neighbour */
+// Homography maps FROM the owning image TO the neighbour.
 type NeighbourEdge = {
   neighbourId: string;
-  homography: number[]; // flat 9-element 3×3 matrix
+  homography: number[];
 };
 
 type ManifestItem = {
@@ -85,8 +72,6 @@ type ManifestItem = {
   image1Id: string;
   image2Id: string;
 };
-
-// ── GraphQL queries ──
 
 const getImageWithNeighboursQuery = /* GraphQL */ `
   query GetImage($id: ID!) {
@@ -159,8 +144,6 @@ const updateAnnotationMutation = /* GraphQL */ `
   }
 `;
 
-// ── Homography math ──
-
 function applyHomography(H: number[], x: number, y: number): [number, number] {
   const w = H[6] * x + H[7] * y + H[8];
   return [(H[0] * x + H[1] * y + H[2]) / w, (H[3] * x + H[4] * y + H[5]) / w];
@@ -183,8 +166,6 @@ function invertHomography(H: number[]): number[] {
     (a * e - b * d) * inv,
   ];
 }
-
-// ── S3 helpers ──
 
 async function downloadManifest(manifestS3Key: string): Promise<ManifestItem[]> {
   const bucketName = (env as any).OUTPUTS_BUCKET_NAME;
@@ -213,8 +194,6 @@ async function deleteManifest(manifestS3Key: string): Promise<void> {
   }
 }
 
-// ── Data fetching ──
-
 type ImageWithNeighbours = {
   id: string;
   timestamp: string | number | null;
@@ -237,11 +216,6 @@ type ImageWithNeighbours = {
   };
 };
 
-/**
- * Fetch affected images with their full neighbour lists (both directions),
- * build the neighbour graph for those images, and collect IDs of neighbours
- * whose metadata we still need.
- */
 async function fetchAffectedImagesAndGraph(
   affectedImageIds: Set<string>
 ): Promise<{
@@ -281,16 +255,14 @@ async function fetchAffectedImagesAndGraph(
 
         const edges: NeighbourEdge[] = [];
 
-        // leftNeighbours: ImageNeighbour(image1Id=this, image2Id=other, H maps other→this)
-        // Edge from this→other needs invertH
+        // leftNeighbours store H as other→this, so invert for this→other.
         for (const nb of item.leftNeighbours?.items ?? []) {
           if (nb.skipped || !nb.homography || nb.homography.length !== 9) continue;
           edges.push({ neighbourId: nb.image2Id, homography: invertHomography(nb.homography) });
           if (!affectedImageIds.has(nb.image2Id)) missingNeighbourIds.add(nb.image2Id);
         }
 
-        // rightNeighbours: ImageNeighbour(image1Id=other, image2Id=this, H maps this→other)
-        // Edge from this→other uses H directly
+        // rightNeighbours store H as this→other already.
         for (const nb of item.rightNeighbours?.items ?? []) {
           if (nb.skipped || !nb.homography || nb.homography.length !== 9) continue;
           edges.push({ neighbourId: nb.image1Id, homography: nb.homography });
@@ -305,11 +277,6 @@ async function fetchAffectedImagesAndGraph(
   return { images, graph, missingNeighbourIds };
 }
 
-/**
- * Fetch just metadata (no neighbours) for neighbour images that weren't
- * in the affected set. We need their dimensions and timestamps for bounds
- * checking and age comparison.
- */
 async function fetchNeighbourMetadata(
   neighbourIds: Set<string>,
   images: Map<string, ImageMeta>
@@ -352,10 +319,6 @@ async function fetchNeighbourMetadata(
   );
 }
 
-/**
- * Fetch annotations only for the affected images using the
- * annotationsByImageIdAndSetId GSI.
- */
 async function fetchAnnotationsForImages(
   setId: string,
   imageIds: Set<string>
@@ -412,8 +375,6 @@ async function fetchAnnotationsForImages(
   return annotations;
 }
 
-// ── Deduplication ──
-
 function isOlder(a: ImageMeta, b: ImageMeta): boolean {
   if (a.timestamp !== null && b.timestamp !== null) {
     if (a.timestamp !== b.timestamp) return a.timestamp < b.timestamp;
@@ -461,8 +422,6 @@ function deduplicate(
   return updates;
 }
 
-// ── Batch update ──
-
 async function batchUpdate(
   updates: Array<{ id: string; objectId: string | null }>
 ): Promise<void> {
@@ -490,8 +449,6 @@ async function batchUpdate(
   console.log(`Completed ${completed}/${updates.length} annotation updates`);
 }
 
-// ── Handler ──
-
 export const handler: Handler = async (event) => {
   try {
     const payload = typeof event === 'string' ? JSON.parse(event) : event;
@@ -509,7 +466,6 @@ export const handler: Handler = async (event) => {
 
     console.log('reconcileHomographies invoked', { annotationSetId, manifestS3Key });
 
-    // 1. Download the manifest to identify affected image pairs
     const manifestItems = await downloadManifest(manifestS3Key);
     const affectedImageIds = new Set<string>();
     for (const item of manifestItems) {
@@ -527,7 +483,6 @@ export const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ updated: 0 }) };
     }
 
-    // 2. Fetch affected images with their full neighbour graphs
     const { images, graph, missingNeighbourIds } =
       await fetchAffectedImagesAndGraph(affectedImageIds);
     console.log('Fetched affected images', {
@@ -535,13 +490,11 @@ export const handler: Handler = async (event) => {
       neighboursToFetch: missingNeighbourIds.size,
     });
 
-    // 3. Fetch metadata for neighbour images (for bounds/age checks)
     if (missingNeighbourIds.size > 0) {
       await fetchNeighbourMetadata(missingNeighbourIds, images);
       console.log('Fetched neighbour metadata', { total: images.size });
     }
 
-    // 4. Fetch annotations only on affected images
     const annotations = await fetchAnnotationsForImages(annotationSetId, affectedImageIds);
     console.log('Fetched annotations for affected images', { count: annotations.length });
 
@@ -551,7 +504,6 @@ export const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ updated: 0 }) };
     }
 
-    // 5. Run deduplication
     const updates = deduplicate(annotations, images, graph);
     console.log('Deduplication complete', {
       total: annotations.length,
@@ -560,12 +512,10 @@ export const handler: Handler = async (event) => {
       nowPrimary: updates.filter((u) => u.objectId !== null).length,
     });
 
-    // 6. Batch update changed annotations
     if (updates.length > 0) {
       await batchUpdate(updates);
     }
 
-    // 7. Clean up the manifest from S3
     await deleteManifest(manifestS3Key);
 
     return {

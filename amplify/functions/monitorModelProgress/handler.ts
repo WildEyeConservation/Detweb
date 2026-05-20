@@ -7,8 +7,8 @@ import {
   userProjectMembershipsByProjectId,
   imagesByProjectId,
 } from './graphql/queries';
-// Inline minimal mutations – return key fields + `group` to avoid nested-resolver
-// auth failures while still enabling subscription delivery via groupDefinedIn('group').
+// Return key fields + `group` to avoid nested-resolver auth failures while
+// keeping subscription delivery via groupDefinedIn('group') working.
 const updateProject = /* GraphQL */ `
   mutation UpdateProject($input: UpdateProjectInput!) {
     updateProject(input: $input) { id group }
@@ -98,7 +98,6 @@ interface ImageWithDetails {
 }
 
 
-// Custom query to fetch images with nested locations and processedBy records
 const imagesByProjectIdWithDetails = /* GraphQL */ `query ImagesByProjectIdWithDetails(
   $projectId: ID!
   $limit: Int
@@ -131,7 +130,6 @@ const imagesByProjectIdWithDetails = /* GraphQL */ `query ImagesByProjectIdWithD
 }
 `;
 
-// Mutation to create ImageProcessedBy record
 const createImageProcessedBy = /* GraphQL */ `mutation CreateImageProcessedBy(
   $input: CreateImageProcessedByInput!
 ) {
@@ -143,6 +141,61 @@ const createImageProcessedBy = /* GraphQL */ `mutation CreateImageProcessedBy(
   }
 }
 `;
+
+const registrationProgressByCleanupState = /* GraphQL */ `
+  query RegistrationProgressByCleanupState(
+    $cleanupState: String!
+    $limit: Int
+    $nextToken: String
+  ) {
+    registrationProgressByCleanupState(
+      cleanupState: $cleanupState
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        projectId
+        pairsCreated
+        pairsProcessed
+        pendingCount
+        lastKickoffAt
+        lastChangeAt
+        cleanupState
+        group
+      }
+      nextToken
+    }
+  }
+`;
+
+const updateRegistrationProgressStatus = /* GraphQL */ `
+  mutation UpdateRegistrationProgressStatus(
+    $projectId: ID!
+    $cleanupState: String!
+    $expected: String!
+  ) {
+    updateRegistrationProgress(
+      input: { projectId: $projectId, cleanupState: $cleanupState }
+      condition: { cleanupState: { eq: $expected } }
+    ) {
+      projectId
+      cleanupState
+    }
+  }
+`;
+
+interface RegistrationProgressRow {
+  projectId: string;
+  pairsCreated?: number | null;
+  pairsProcessed?: number | null;
+  pendingCount?: number | null;
+  lastKickoffAt?: string | null;
+  lastChangeAt?: string | null;
+  cleanupState?: string | null;
+  group?: string | null;
+}
+
+const STALE_PROGRESS_MS = 60 * 60 * 1000;
 
 // Helper function to handle pagination for GraphQL queries
 async function fetchAllPages<T, K extends string>(
@@ -161,7 +214,6 @@ async function fetchAllPages<T, K extends string>(
     allItems.push(...(items as T[]));
     nextToken = response.data?.[queryName]?.nextToken ?? undefined;
 
-    // Log progress at 1000 intervals if callback provided
     if (onProgress && allItems.length % 1000 === 0) {
       onProgress(allItems.length);
     }
@@ -178,8 +230,6 @@ async function updateProgress(
   projectImages: Image[],
   source: string
 ) {
-  // Optimized approach: Fetch images with nested locations and processedBy in selection set
-  // This avoids fetching all locations separately and just checks if at least one exists per image
   console.log(`Fetching images with processing status for project ${project.id} (source: ${source})`);
 
   const imagesWithDetails = await fetchAllPages<ImageWithDetails, 'imagesByProjectId'>(
@@ -204,15 +254,12 @@ async function updateProgress(
   const processedImageIds = new Set<string>();
   const imagesToUpdateProcessedBy: ImageWithDetails[] = [];
 
-  // Check each image for processing status
   for (const image of imagesWithDetails) {
     const hasLocation = (image.locations?.items?.length ?? 0) > 0;
     const hasProcessedByRecord = (image.processedBy?.items?.length ?? 0) > 0;
 
     if (hasLocation || hasProcessedByRecord) {
       processedImageIds.add(image.id);
-
-      // If it has a location but no processedBy record, we need to create one
       if (hasLocation && !hasProcessedByRecord) {
         imagesToUpdateProcessedBy.push(image);
       }
@@ -222,7 +269,6 @@ async function updateProgress(
   console.log(`Processed images: ${processedImageIds.size}/${imagesWithDetails.length}`);
   console.log(`Images needing processedBy record update: ${imagesToUpdateProcessedBy.length}`);
 
-  // Create processedBy records for images that have locations but no record
   if (imagesToUpdateProcessedBy.length > 0) {
     const BATCH_SIZE = 50;
     for (let i = 0; i < imagesToUpdateProcessedBy.length; i += BATCH_SIZE) {
@@ -252,11 +298,9 @@ async function updateProgress(
     }
   }
 
-  // Check if all images are processed
   const allImagesProcessed = imagesWithDetails.length > 0 &&
     imagesWithDetails.every((image) => processedImageIds.has(image.id));
 
-  // Update project status if all images are processed
   if (allImagesProcessed) {
     console.log(
       `All images processed for project ${project.id}, updating status to "active"`
@@ -271,7 +315,6 @@ async function updateProgress(
       },
     });
 
-    // Get all UserProjectMembership records for the project using indexed query
     const memberships = await fetchAllPages<
       UserProjectMembership,
       'userProjectMembershipsByProjectId'
@@ -292,7 +335,6 @@ async function updateProgress(
       'userProjectMembershipsByProjectId'
     );
 
-    // Dummy update the project memberships
     for (const membership of memberships) {
       await client.graphql({
         query: updateUserProjectMembership,
@@ -317,7 +359,6 @@ async function updateProgress(
 export const handler: Handler = async (event, context) => {
   console.log('Starting monitorModelProgress function execution');
   try {
-    // 1. List all projects with status "processing"
     console.log('Fetching projects with status "processing"');
     const processingProjects = await fetchAllPages<Project, 'listProjects'>(
       (nextToken) =>
@@ -340,7 +381,6 @@ export const handler: Handler = async (event, context) => {
       `Found ${processingProjects.length} projects in processing state`
     );
 
-    // Process each project
     for (const project of processingProjects) {
       console.log(`Processing project ${project.name} (${project.id})`);
 
@@ -350,7 +390,6 @@ export const handler: Handler = async (event, context) => {
         : [];
       const isLegacyProject = tags.includes('legacy');
 
-      // 2.1 List all images for the project
       console.log(`Fetching images for project ${project.id}`);
       const projectImages = await fetchAllPages<Image, 'imagesByProjectId'>(
         (nextToken) =>
@@ -448,6 +487,124 @@ export const handler: Handler = async (event, context) => {
       if (project.status?.includes('pointFinder')) {
         console.log(`Project ${project.id} is running pointFinder`);
         await updateProgress(project, projectImages, 'heatmap');
+      }
+    }
+
+    // Decoupled from project.status: registration runs alongside whatever
+    // other model the user picked at upload time.
+    console.log('Polling RegistrationProgress for projects ready for bucket cleanup');
+    const pendingProgress = await fetchAllPages<RegistrationProgressRow, 'registrationProgressByCleanupState'>(
+      (nextToken) =>
+        client.graphql({
+          query: registrationProgressByCleanupState,
+          variables: { cleanupState: 'pending', limit: 1000, nextToken },
+        }) as Promise<GraphQLResult<{ registrationProgressByCleanupState: PagedList<RegistrationProgressRow> }>>,
+      'registrationProgressByCleanupState'
+    );
+
+    console.log(`Found ${pendingProgress.length} project(s) with cleanupState='pending'`);
+
+    if (pendingProgress.length > 0) {
+      const lambdaClient = new LambdaClient({
+        region: env.AWS_REGION,
+        credentials: {
+          accessKeyId: env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+          sessionToken: env.AWS_SESSION_TOKEN,
+        },
+      });
+
+      const now = Date.now();
+      for (const row of pendingProgress) {
+        const pendingCount = row.pendingCount ?? 0;
+        const pairsCreated = row.pairsCreated ?? 0;
+        const pairsProcessed = row.pairsProcessed ?? 0;
+        const lastKickoffMs = row.lastKickoffAt
+          ? Date.parse(row.lastKickoffAt)
+          : NaN;
+        const lastChangeMs = row.lastChangeAt
+          ? Date.parse(row.lastChangeAt)
+          : NaN;
+
+        // Explicit guard against firing on a never-kicked-off project.
+        if (!Number.isFinite(lastKickoffMs)) {
+          console.log(
+            `Project ${row.projectId}: no lastKickoffAt; skipping`
+          );
+          continue;
+        }
+
+        const idleMs = Number.isFinite(lastChangeMs) ? now - lastChangeMs : Infinity;
+        const sinceKickoffMs = now - lastKickoffMs;
+        const isReady = pendingCount === 0;
+        const isStale =
+          pendingCount > 0 &&
+          idleMs >= STALE_PROGRESS_MS &&
+          sinceKickoffMs >= STALE_PROGRESS_MS;
+
+        if (!isReady && !isStale) {
+          console.log(
+            `Project ${row.projectId}: pendingCount=${pendingCount}, ` +
+              `pairsProcessed=${pairsProcessed}/${pairsCreated}; not ready ` +
+              `(idle ${Math.round(idleMs / 60000)}m, since kickoff ${Math.round(sinceKickoffMs / 60000)}m)`
+          );
+          continue;
+        }
+        if (isStale) {
+          console.warn(
+            `Project ${row.projectId}: STALE — pendingCount=${pendingCount} ` +
+              `but no progress for ${Math.round(idleMs / 60000)}m and last kickoff ` +
+              `${Math.round(sinceKickoffMs / 60000)}m ago. Firing cleanup anyway.`
+          );
+        }
+
+        // CAS pending -> in-progress. Concurrent monitor runs or a fresh
+        // runImageRegistration kickoff lose the race and are skipped here.
+        try {
+          await client.graphql({
+            query: updateRegistrationProgressStatus,
+            variables: {
+              projectId: row.projectId,
+              cleanupState: 'in-progress',
+              expected: 'pending',
+            },
+          });
+        } catch (e) {
+          console.log(
+            `Skipping ${row.projectId}: flip to in-progress failed (CAS lost or transient error):`,
+            e
+          );
+          continue;
+        }
+
+        try {
+          await lambdaClient.send(
+            new InvokeCommand({
+              FunctionName: env.REGISTRATION_BUCKET_CLEANUP_FUNCTION_NAME,
+              InvocationType: 'Event',
+              Payload: Buffer.from(JSON.stringify({ projectId: row.projectId })),
+            })
+          );
+          console.log(`Invoked registrationBucketCleanup for project ${row.projectId}`);
+        } catch (invokeErr) {
+          console.error(
+            `Failed to invoke registrationBucketCleanup for ${row.projectId}, rolling back state:`,
+            invokeErr
+          );
+          // Roll back so the next monitor pass retries.
+          try {
+            await client.graphql({
+              query: updateRegistrationProgressStatus,
+              variables: {
+                projectId: row.projectId,
+                cleanupState: 'pending',
+                expected: 'in-progress',
+              },
+            });
+          } catch (rollbackErr) {
+            console.error(`Rollback of state failed for ${row.projectId}:`, rollbackErr);
+          }
+        }
       }
     }
 

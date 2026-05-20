@@ -44,10 +44,19 @@ import { updateActiveOrganizations } from './functions/updateActiveOrganizations
 import { launchQCReview } from './functions/launchQCReview/resource';
 import { launchHomography } from './functions/launchHomography/resource';
 import { reconcileHomographies } from './functions/reconcileHomographies/resource';
+import { registrationBucketCleanup } from './functions/registrationBucketCleanup/resource';
+import { deleteRegistrationNeighbour } from './functions/deleteRegistrationNeighbour/resource';
+import { processRegistrationStream } from './functions/processRegistrationStream/resource';
 import { pretileImage } from './functions/pretileImage/resource';
 import { refreshTiles } from './functions/refreshTiles/resource';
 import { reconcilePretileLaunches } from './functions/reconcilePretileLaunches/resource';
 import { extendTileLifecycles } from './functions/extendTileLifecycles/resource';
+import { launchIndividualId } from './functions/launchIndividualId/resource';
+import { updateImageTransect } from './functions/updateImageTransect/resource';
+import { claimIndividualIdTransect } from './functions/claimIndividualIdTransect/resource';
+import { completeIndividualIdTransect } from './functions/completeIndividualIdTransect/resource';
+import { reconcileIndividualId } from './functions/reconcileIndividualId/resource';
+import { releaseIndividualIdTransects } from './functions/releaseIndividualIdTransects/resource';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -92,10 +101,19 @@ const backend = defineBackend({
   launchQCReview,
   launchHomography,
   reconcileHomographies,
+  registrationBucketCleanup,
+  deleteRegistrationNeighbour,
+  processRegistrationStream,
   pretileImage,
   refreshTiles,
   reconcilePretileLaunches,
   extendTileLifecycles,
+  launchIndividualId,
+  updateImageTransect,
+  claimIndividualIdTransect,
+  completeIndividualIdTransect,
+  reconcileIndividualId,
+  releaseIndividualIdTransects,
 });
 
 const userPoolClient = backend.auth.resources.cfnResources.cfnUserPoolClient;
@@ -975,6 +993,7 @@ const launchLambdasUsingPretile = [
   backend.launchFalseNegatives,
   backend.launchQCReview,
   backend.launchHomography,
+  backend.launchIndividualId,
 ];
 
 for (const fn of launchLambdasUsingPretile) {
@@ -988,6 +1007,181 @@ for (const fn of launchLambdasUsingPretile) {
   fn.addEnvironment('REFRESH_TILES_QUEUE_URL', refreshTilesQueue.queueUrl);
 }
 
+
+// ── Registration neighbour bucket cleanup ──
+//
+// After LightGlue finishes processing the SQS queue, monitorModelProgress
+// (cron 30m) invokes registrationBucketCleanup once pairsProcessed catches up
+// to pairsCreated. That lambda picks the winning bucket per camera-pair and
+// enqueues every losing-bucket neighbour to this queue; deleteRegistrationNeighbour
+// consumes the queue and deletes each ImageNeighbour row.
+//
+// Splitting cleanup into "enumerate" (cron-driven) + "delete" (SQS-driven)
+// keeps the 15-min Lambda timeout out of the critical path even when a survey
+// has hundreds of thousands of cross-camera pairs.
+
+const registrationStack = backend.createStack('DetwebRegistration');
+
+const registrationDeleteDlq = new sqs.Queue(
+  registrationStack,
+  'RegistrationDeleteDlq',
+  { retentionPeriod: Duration.days(14) }
+);
+
+const registrationDeleteQueue = new sqs.Queue(
+  registrationStack,
+  'RegistrationDeleteQueue',
+  {
+    // Visibility comfortably above the delete-neighbour lambda timeout (60s).
+    visibilityTimeout: Duration.seconds(120),
+    retentionPeriod: Duration.days(14),
+    deadLetterQueue: {
+      queue: registrationDeleteDlq,
+      maxReceiveCount: 5,
+    },
+  }
+);
+
+const deleteRegistrationNeighbourLambda =
+  backend.deleteRegistrationNeighbour.resources.lambda as lambda.Function;
+deleteRegistrationNeighbourLambda.addEventSource(
+  new SqsEventSource(registrationDeleteQueue, {
+    batchSize: 10,
+    reportBatchItemFailures: true,
+    maxConcurrency: 50,
+  })
+);
+
+// registrationBucketCleanup needs to write deletion messages onto the queue
+// and know its URL.
+backend.registrationBucketCleanup.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['sqs:SendMessage', 'sqs:SendMessageBatch'],
+    resources: [registrationDeleteQueue.queueArn],
+  })
+);
+backend.registrationBucketCleanup.addEnvironment(
+  'REGISTRATION_DELETE_QUEUE_URL',
+  registrationDeleteQueue.queueUrl
+);
+
+// monitorModelProgress invokes registrationBucketCleanup asynchronously
+// (InvocationType: 'Event'). Reuses the same Lambda-invoke pattern used for
+// runPointFinder above.
+backend.monitorModelProgress.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['lambda:InvokeFunction'],
+    resources: [backend.registrationBucketCleanup.resources.lambda.functionArn],
+  })
+);
+backend.monitorModelProgress.addEnvironment(
+  'REGISTRATION_BUCKET_CLEANUP_FUNCTION_NAME',
+  backend.registrationBucketCleanup.resources.lambda.functionName
+);
+
+// ── Registration progress stream consumer ──
+//
+// Listens to the ImageNeighbour DDB stream and maintains the per-project
+// pendingCount on RegistrationProgress. INSERT +1, MODIFY-with-tracking-
+// transition -1, REMOVE-of-untracked -1. Manual frontend homography saves
+// don't toggle processedAt/failedAt and so don't move the counter.
+//
+// monitorModelProgress reads pendingCount as the load-bearing gate (replacing
+// the old pairsProcessed >= pairsCreated check, which drifted on re-runs).
+
+const imageNeighbourTable = backend.data.resources.tables['ImageNeighbour'];
+
+const registrationStreamPolicy = new Policy(
+  Stack.of(imageNeighbourTable),
+  'RegistrationStreamConsumerPolicy',
+  {
+    statements: [
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: [
+          'dynamodb:DescribeStream',
+          'dynamodb:GetRecords',
+          'dynamodb:GetShardIterator',
+          'dynamodb:ListStreams',
+        ],
+        resources: ['*'],
+      }),
+    ],
+  }
+);
+backend.processRegistrationStream.resources.lambda.role?.attachInlinePolicy(
+  registrationStreamPolicy
+);
+
+const registrationStreamMapping = new EventSourceMapping(
+  Stack.of(imageNeighbourTable),
+  'ImageNeighbourStreamMapping',
+  {
+    target: backend.processRegistrationStream.resources.lambda,
+    eventSourceArn: imageNeighbourTable.tableStreamArn,
+    startingPosition: StartingPosition.LATEST,
+    // Modest batching keeps per-record error isolation predictable. The
+    // handler swallows per-record errors so a poison pill doesn't double-count
+    // its batch on retry.
+    batchSize: 25,
+  }
+);
+registrationStreamMapping.node.addDependency(registrationStreamPolicy);
+
+// ── Individual ID workflow ──
+//
+// launchIndividualId fans out one message per image onto this queue so
+// updateImageTransect can stamp Image.transectId in small batches without
+// hitting a lambda timeout on surveys with hundreds of thousands of images.
+// reconcileIndividualId (cron 5m) flips the project back to `active` once the
+// fanout drains (IndividualIdJob.pendingImageUpdates === 0) and pretiling is
+// done; releaseIndividualIdTransects (cron 10m) frees transects whose assigned
+// user went inactive (>30m). Pretile SQS perms + env are granted via the
+// launchLambdasUsingPretile loop above.
+
+const individualIdStack = backend.createStack('DetwebIndividualId');
+
+const individualIdTransectUpdateDlq = new sqs.Queue(
+  individualIdStack,
+  'IndividualIdTransectUpdateDlq',
+  { retentionPeriod: Duration.days(14) }
+);
+
+const individualIdTransectUpdateQueue = new sqs.Queue(
+  individualIdStack,
+  'IndividualIdTransectUpdateQueue',
+  {
+    // Visibility comfortably above the updateImageTransect timeout (120s).
+    visibilityTimeout: Duration.seconds(180),
+    retentionPeriod: Duration.days(14),
+    deadLetterQueue: {
+      queue: individualIdTransectUpdateDlq,
+      maxReceiveCount: 5,
+    },
+  }
+);
+
+const updateImageTransectLambda =
+  backend.updateImageTransect.resources.lambda as lambda.Function;
+updateImageTransectLambda.addEventSource(
+  new SqsEventSource(individualIdTransectUpdateQueue, {
+    batchSize: 10,
+    reportBatchItemFailures: true,
+    maxConcurrency: 50,
+  })
+);
+
+// launchIndividualId writes image→transect messages onto the queue.
+backend.launchIndividualId.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['sqs:SendMessage', 'sqs:SendMessageBatch'],
+    resources: [individualIdTransectUpdateQueue.queueArn],
+  })
+);
+backend.launchIndividualId.addEnvironment(
+  'TRANSECT_UPDATE_QUEUE_URL',
+  individualIdTransectUpdateQueue.queueUrl
+);
 
 const generalBucketName = 'surveyscope';
 

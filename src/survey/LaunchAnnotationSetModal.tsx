@@ -3,13 +3,14 @@ import { Modal, Body, Header, Footer, Title } from '../Modal';
 import { useState, useContext, useEffect } from 'react';
 import { Tabs, Tab } from '../Tabs';
 import { Schema } from '../amplify/client-schema';
-import { GlobalContext } from '../Context';
+import { GlobalContext, UserContext } from '../Context';
 import SpeciesLabelling from './SpeciesLabelling';
 import FalseNegatives from './FalseNegatives';
 import QCReview from './QCReview';
 import HomographyLaunch from './HomographyLaunch';
+import IndividualId from './IndividualId';
 
-type TaskType = 'species-labelling' | 'registration' | 'false-negatives' | 'homographies' | 'qc-review';
+type TaskType = 'species-labelling' | 'registration' | 'false-negatives' | 'homographies' | 'qc-review' | 'individual-id';
 
 type LaunchHandlerType = {
   execute: (
@@ -40,9 +41,23 @@ export default function LaunchAnnotationSetModal({
   const [falseNegativesLaunchHandler, setFalseNegativesLaunchHandler] = useState<LaunchHandlerType>(null);
   const [qcLaunchHandler, setQCLaunchHandler] = useState<LaunchHandlerType>(null);
   const [homographyLaunchHandler, setHomographyLaunchHandler] = useState<LaunchHandlerType>(null);
+  const [individualIdLaunchHandler, setIndividualIdLaunchHandler] = useState<LaunchHandlerType>(null);
 
   // set up queue creation helper
   const { client, showModal } = useContext(GlobalContext)! as any;
+  const { cognitoGroups } = useContext(UserContext)!;
+  const isSysadmin = cognitoGroups.includes('sysadmin');
+
+  // Task type for each tab, in render order. The Individual ID tab is only
+  // shown to sysadmins, so its presence shifts subsequent tab indices.
+  const tabTaskTypes: TaskType[] = [
+    'species-labelling',
+    'false-negatives',
+    'qc-review',
+    'homographies',
+    ...(isSysadmin ? (['individual-id'] as TaskType[]) : []),
+    'registration',
+  ];
 
   useEffect(() => {
     if (taskType === 'registration') {
@@ -105,6 +120,12 @@ export default function LaunchAnnotationSetModal({
             await homographyLaunchHandler.execute(setProgressMessage, () => {});
           }
           break;
+        case 'individual-id':
+          if (individualIdLaunchHandler) {
+            setProgressMessage('Initializing launch...');
+            await individualIdLaunchHandler.execute(setProgressMessage, () => {});
+          }
+          break;
         case 'registration':
           await createRegistrationTask();
           break;
@@ -129,23 +150,8 @@ export default function LaunchAnnotationSetModal({
           <Tabs
             onTabChange={(tab) => {
               if (launching) return;
-              switch (tab) {
-                case 0:
-                  setTaskType('species-labelling');
-                  break;
-                case 1:
-                  setTaskType('false-negatives');
-                  break;
-                case 2:
-                  setTaskType('qc-review');
-                  break;
-                case 3:
-                  setTaskType('homographies');
-                  break;
-                case 4:
-                  setTaskType('registration');
-                  break;
-              }
+              const next = tabTaskTypes[tab];
+              if (next) setTaskType(next);
             }}
             disableSwitching={launching}
           >
@@ -185,6 +191,19 @@ export default function LaunchAnnotationSetModal({
                 setHomographyLaunchHandler={setHomographyLaunchHandler as any}
               />
             </Tab>
+            {isSysadmin && (
+              <Tab label='Individual ID'>
+                <IndividualId
+                  project={project}
+                  annotationSet={annotationSet}
+                  launching={launching}
+                  setLaunchDisabled={setLaunchDisabled}
+                  setIndividualIdLaunchHandler={
+                    setIndividualIdLaunchHandler as any
+                  }
+                />
+              </Tab>
+            )}
             <Tab label='Registration'>
               <div className='p-3'>
                 <p className='m-0'>
@@ -211,7 +230,8 @@ export default function LaunchAnnotationSetModal({
               (taskType === 'species-labelling' && !speciesLaunchHandler) ||
               (taskType === 'false-negatives' && !falseNegativesLaunchHandler) ||
               (taskType === 'qc-review' && !qcLaunchHandler) ||
-              (taskType === 'homographies' && !homographyLaunchHandler)
+              (taskType === 'homographies' && !homographyLaunchHandler) ||
+              (taskType === 'individual-id' && !individualIdLaunchHandler)
             }
             onClick={handleSubmit}
           >

@@ -18,6 +18,8 @@ import { reconcileHomographies } from "../functions/reconcileHomographies/resour
 import { reconcilePretileLaunches } from "../functions/reconcilePretileLaunches/resource"
 import { pretileImage } from "../functions/pretileImage/resource"
 import { refreshTiles } from "../functions/refreshTiles/resource"
+import { launchIndividualId } from "../functions/launchIndividualId/resource"
+import { reconcileIndividualId } from "../functions/reconcileIndividualId/resource"
 
 export const outputBucket = defineStorage({
   name: "outputs",
@@ -43,6 +45,7 @@ export const outputBucket = defineStorage({
       allow.authenticated.to(['write', 'read']),
       allow.resource(launchAnnotationSet).to(['read', 'delete']),
       allow.resource(launchFalseNegatives).to(['read', 'delete']),
+      allow.resource(launchIndividualId).to(['read', 'delete']),
       allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ],
     // Tiling batch input files - location data to be created
@@ -61,7 +64,7 @@ export const outputBucket = defineStorage({
     // Queue manifests for requeue detection
     'queue-manifests/*': [
       allow.authenticated.to(['write', 'read']),
-      allow.resource(launchAnnotationSet).to(['write']),
+      allow.resource(launchAnnotationSet).to(['read', 'write']),
       allow.resource(launchQCReview).to(['write']),
       allow.resource(launchHomography).to(['read']),
       allow.resource(monitorTilingTasks).to(['write']),
@@ -76,7 +79,9 @@ export const outputBucket = defineStorage({
       allow.resource(launchFalseNegatives).to(['write']),
       allow.resource(launchQCReview).to(['write']),
       allow.resource(launchHomography).to(['write']),
+      allow.resource(launchIndividualId).to(['write']),
       allow.resource(reconcilePretileLaunches).to(['read', 'delete']),
+      allow.resource(reconcileIndividualId).to(['read', 'delete']),
       allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ],
     // QC review manifests for tracking sampled annotations

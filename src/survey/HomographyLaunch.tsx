@@ -1,6 +1,7 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Card, Form, Spinner } from 'react-bootstrap';
+import { Alert, Card, Form } from 'react-bootstrap';
 import Select from 'react-select';
+import { LoadingProgressCard } from './LoadingProgressCard';
 import { uploadData } from 'aws-amplify/storage';
 import { Schema } from '../amplify/client-schema';
 import { GlobalContext, UserContext } from '../Context';
@@ -51,6 +52,26 @@ type HomographyPairManifestItem = {
 };
 
 type PairInfo = { primaryId: string; secondaryId: string };
+
+// Per-query load progress so each fetch (labels → annotations → neighbours)
+// shows its own live count rather than one opaque status line.
+type LoadStatus = {
+  categories: number;
+  categoriesDone: boolean;
+  annotations: number;
+  annotationsDone: boolean;
+  neighbours: number;
+  neighboursDone: boolean;
+};
+
+const INITIAL_LOAD_STATUS: LoadStatus = {
+  categories: 0,
+  categoriesDone: false,
+  annotations: 0,
+  annotationsDone: false,
+  neighbours: 0,
+  neighboursDone: false,
+};
 
 // ── Pair calculation (pure computation, works from cached data) ──
 
@@ -107,7 +128,9 @@ export default function HomographyLaunch({
 
   // ── Up-front data loading state ──
   const [loading, setLoading] = useState(true);
-  const [loadingStatus, setLoadingStatus] = useState('');
+  const [loadStatus, setLoadStatus] = useState<LoadStatus>(
+    INITIAL_LOAD_STATUS
+  );
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // ── Cached data (populated once on mount) ──
@@ -130,7 +153,6 @@ export default function HomographyLaunch({
     async function loadAll() {
       try {
         // 1. Fetch categories for this annotation set
-        setLoadingStatus('Fetching categories...');
         const allCategories: Schema['Category']['type'][] = [];
         let nextToken: string | null | undefined = undefined;
         do {
@@ -141,6 +163,11 @@ export default function HomographyLaunch({
           });
           allCategories.push(...(result.data ?? []));
           nextToken = result.nextToken;
+          if (!cancelled)
+            setLoadStatus((s) => ({
+              ...s,
+              categories: allCategories.length,
+            }));
         } while (nextToken);
 
         if (cancelled) return;
@@ -148,19 +175,32 @@ export default function HomographyLaunch({
           .filter((c) => c.annotationSetId === annotationSet.id)
           .map((c) => ({ label: c.name, value: c.id }));
         setCategoryOptions(options);
+        setLoadStatus((s) => ({
+          ...s,
+          categories: options.length,
+          categoriesDone: true,
+        }));
 
         // 2. Fetch ALL annotations for the set (no category filter)
-        setLoadingStatus('Fetching annotations...');
         const annotations = await fetchAllPaginatedResults<AnnotationItem>(
           (client.models.Annotation as any).annotationsByAnnotationSetId,
           {
             setId: annotationSet.id,
             limit: 10000,
             selectionSet: ['id', 'imageId', 'categoryId'] as const,
+          },
+          (count) => {
+            if (!cancelled)
+              setLoadStatus((s) => ({ ...s, annotations: count }));
           }
         );
         if (cancelled) return;
         setAllAnnotations(annotations);
+        setLoadStatus((s) => ({
+          ...s,
+          annotations: annotations.length,
+          annotationsDone: true,
+        }));
 
         // 3. Determine unique image IDs that have annotations
         const annotatedImageIds = new Set<string>();
@@ -168,10 +208,10 @@ export default function HomographyLaunch({
 
         // 4. Fetch neighbours for all annotated images
         const totalImages = annotatedImageIds.size;
-        setLoadingStatus(`Fetching neighbours for ${totalImages.toLocaleString()} images...`);
-
         const neighbourCache = neighbourCacheRef.current;
         const uncachedImageIds = [...annotatedImageIds].filter((id) => !neighbourCache.has(id));
+        const cachedCount = totalImages - uncachedImageIds.length;
+        setLoadStatus((s) => ({ ...s, neighbours: cachedCount }));
 
         if (uncachedImageIds.length > 0) {
           const limit = pLimit(15);
@@ -194,9 +234,10 @@ export default function HomographyLaunch({
                 completed++;
                 if (completed % 50 === 0 || completed === uncachedImageIds.length) {
                   if (!cancelled) {
-                    setLoadingStatus(
-                      `Fetched neighbours for ${completed.toLocaleString()}/${totalImages.toLocaleString()} images...`
-                    );
+                    setLoadStatus((s) => ({
+                      ...s,
+                      neighbours: cachedCount + completed,
+                    }));
                   }
                 }
               })
@@ -205,7 +246,11 @@ export default function HomographyLaunch({
         }
 
         if (cancelled) return;
-        setLoadingStatus('');
+        setLoadStatus((s) => ({
+          ...s,
+          neighbours: totalImages,
+          neighboursDone: true,
+        }));
         setLoading(false);
       } catch (err: any) {
         console.error('Failed to load homography data', err);
@@ -392,12 +437,26 @@ export default function HomographyLaunch({
         </Card.Header>
         <Card.Body>
           {loading ? (
-            <div className='d-flex align-items-center gap-2 text-muted'>
-              <Spinner animation='border' size='sm' />
-              <span style={{ fontSize: '13px' }}>
-                {loadingStatus || 'Loading...'}
-              </span>
-            </div>
+            <LoadingProgressCard
+              title='Loading homography data…'
+              rows={[
+                {
+                  label: 'Labels',
+                  count: loadStatus.categories,
+                  done: loadStatus.categoriesDone,
+                },
+                {
+                  label: 'Annotations',
+                  count: loadStatus.annotations,
+                  done: loadStatus.annotationsDone,
+                },
+                {
+                  label: 'Image neighbours',
+                  count: loadStatus.neighbours,
+                  done: loadStatus.neighboursDone,
+                },
+              ]}
+            />
           ) : pairCount !== null ? (
             pairCount === 0 ? (
               <Alert variant='warning' className='mb-0'>
