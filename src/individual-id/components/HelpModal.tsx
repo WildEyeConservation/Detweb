@@ -147,7 +147,7 @@ export function HelpModal({ show, onHide }: Props) {
   return (
     <Modal show={show} onHide={onHide} size='lg' centered scrollable>
       <Modal.Header closeButton>
-        <Modal.Title>How individual ID works</Modal.Title>
+        <Modal.Title>How ChainLink works</Modal.Title>
       </Modal.Header>
       <Modal.Body>
         <p style={{ opacity: 0.85 }}>

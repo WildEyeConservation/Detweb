@@ -826,7 +826,7 @@ function PairToolbar({
             size='sm'
             variant='info'
             onClick={() => setHelpOpen(true)}
-            title='How individual ID works'
+            title='How ChainLink works'
           >
             <HelpCircle size={16} style={{ verticalAlign: 'middle' }} />
           </Button>
@@ -841,7 +841,7 @@ function PairToolbar({
         </Button>
         <Button
           onClick={onPrev}
-          title='Previous pair (Ctrl+←)'
+          title='Previous image pair (Ctrl+←)'
           size='sm'
         >
           ←
@@ -849,7 +849,7 @@ function PairToolbar({
         <Button
           size='sm'
           onClick={onNext}
-          title='Next pair (Ctrl+→)'
+          title='Next image pair (Ctrl+→)'
         >
           →
         </Button>

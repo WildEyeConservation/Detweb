@@ -362,7 +362,7 @@ export default function IndividualId({
         }
 
         onLaunchConfirmed();
-        onProgress('Launching Individual ID...');
+        onProgress('Launching ChainLink...');
 
         const categoryName =
           categories.find((c) => c.id === categoryId)?.name ?? undefined;
@@ -379,14 +379,14 @@ export default function IndividualId({
           payload.incompleteTransectIds = incomplete;
         }
 
-        onProgress('Submitting Individual ID request...');
+        onProgress('Submitting ChainLink request...');
         await sendLaunchIndividualIdRequest(client, payload);
-        onProgress('Individual ID launch submitted');
+        onProgress('ChainLink launch submitted');
 
         await logAdminAction(
           client,
           user.userId,
-          `Launched Individual ID for label "${categoryName ?? categoryId}" in annotation set "${annotationSet.name}"`,
+          `Launched ChainLink for label "${categoryName ?? categoryId}" in annotation set "${annotationSet.name}"`,
           project.id,
           (project as any).organizationId
         ).catch(console.error);
@@ -414,7 +414,7 @@ export default function IndividualId({
       <div className='d-flex flex-column gap-3 mt-2'>
         {loading ? (
           <LoadingProgressCard
-            title='Loading Individual ID data…'
+            title='Loading ChainLink data…'
             rows={[
               {
                 label: 'Labels',
@@ -484,7 +484,7 @@ export default function IndividualId({
                   ) : (
                     <div className='text-muted mt-1'>
                       Transects containing these images will be made available
-                      as Individual ID jobs once tiling completes.
+                      as ChainLink jobs once tiling completes.
                     </div>
                   )}
                 </div>

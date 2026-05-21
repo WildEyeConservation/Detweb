@@ -22,18 +22,18 @@ export function NavigateAwayDialog({
 }: Props) {
   const verb =
     destination === 'prev'
-      ? 'previous pair'
+      ? 'previous image pair'
       : destination === 'next'
-      ? 'next pair'
-      : 'another pair';
+      ? 'next image pair'
+      : 'another image pair';
   return (
     <Modal show={show} onHide={onCancel} centered>
       <Modal.Header closeButton>
-        <Modal.Title>Leave this pair?</Modal.Title>
+        <Modal.Title>Leave this image pair?</Modal.Title>
       </Modal.Header>
       <Modal.Body>
-        You have un-accepted matches on this pair. Your marker positions will
-        be remembered, but no links will be saved. Continue to the {verb}?
+        You have un-accepted matches on this image pair. Your marker positions
+        will be remembered, but no links will be saved. Continue to the {verb}?
       </Modal.Body>
       <Modal.Footer>
         <Button variant='secondary' onClick={onCancel}>
