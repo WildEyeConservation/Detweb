@@ -438,9 +438,33 @@ export function IndividualIdHarness({
       if (proposals.length === 0) {
         combined = munkres;
       } else {
-        const byKey = new Map<string, MatchCandidate>(
-          munkres.map((c) => [c.pairKey, c])
-        );
+        // Index Munkres candidates by pairKey, but drop any that
+        // reference a real annotation a chain proposal also incorporates
+        // under a different pairKey — otherwise the same animal would
+        // surface twice with two different jdenticon/nameFor names.
+        // Real-real Munkres matches (both sides positioned) are a strong
+        // signal and survive even when conflicting.
+        const chainRealIds = new Set<string>();
+        const chainPairKeys = new Set<string>();
+        for (const prop of proposals) {
+          if (prop.realA?.id) chainRealIds.add(prop.realA.id);
+          if (prop.realB?.id) chainRealIds.add(prop.realB.id);
+          chainPairKeys.add(prop.pairKey);
+        }
+        const byKey = new Map<string, MatchCandidate>();
+        for (const c of munkres) {
+          const aId = c.realA?.id;
+          const bId = c.realB?.id;
+          const conflicts =
+            (aId && chainRealIds.has(aId)) ||
+            (bId && chainRealIds.has(bId));
+          const isRealReal =
+            !!c.realA && !!c.realB && !c.isShadowA && !c.isShadowB;
+          if (conflicts && !chainPairKeys.has(c.pairKey) && !isRealReal) {
+            continue;
+          }
+          byKey.set(c.pairKey, c);
+        }
         for (const prop of proposals) {
           const existing = byKey.get(prop.pairKey);
           if (!existing) {

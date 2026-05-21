@@ -937,9 +937,8 @@ function PairToolbar({
         />
         <span style={{ opacity: 0.85, fontSize: 11 }}>px</span>
       </div>
-      {!collapsed && (
-        <span style={{ flex: 1, textAlign: 'right' }}>{status}</span>
-      )}
+      {/* Always render the spacer so Share/Save stay right-aligned when collapsed. */}
+      <span style={{ flex: 1, textAlign: 'right' }}>{!collapsed && status}</span>
       <Button
         size='sm'
         variant='outline-light'
