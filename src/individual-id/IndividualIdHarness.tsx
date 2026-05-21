@@ -1505,6 +1505,22 @@ export function IndividualIdHarness({
 
   const completionStates = pairViews.map((v) => v.completion);
 
+  // Build a single-pair link for the Share button. We can only construct it
+  // when we have a current pair AND a project to scope the URL to — the
+  // single-pair route is nested under /surveys/:surveyId.
+  const shareHref = (() => {
+    if (!currentPair || !projectCtx?.project?.id) return undefined;
+    const setId =
+      transect.data?.category?.annotationSetId ?? annotationSetId ?? '';
+    const params = new URLSearchParams({
+      image1Id: currentPair.image1Id,
+      image2Id: currentPair.image2Id,
+      categoryId,
+    });
+    if (setId) params.set('annotationSetId', setId);
+    return `/surveys/${projectCtx.project.id}/individual-id-pair?${params.toString()}`;
+  })();
+
   return (
     <div
       className='w-100 h-100 d-flex flex-column py-3'
@@ -1540,6 +1556,7 @@ export function IndividualIdHarness({
             onCollapsedChange={setToolbarCollapsed}
             initialZoom={rememberedZoomRef.current ?? undefined}
             onZoomChange={handleZoomChange}
+            shareHref={shareHref}
           />
         )}
       </div>

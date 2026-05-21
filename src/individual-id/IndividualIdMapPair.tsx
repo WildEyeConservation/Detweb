@@ -66,8 +66,10 @@ interface Props {
   ) => void;
   onAllAccepted?: () => void;
   onAddOov?: (side: 'A' | 'B') => void;
-  onRequestPrevPair: () => void;
-  onRequestNextPair: () => void;
+  /** Omit to hide the prev button + Ctrl+← shortcut (used by single-pair mode). */
+  onRequestPrevPair?: () => void;
+  /** Omit to hide the next button + Ctrl+→ shortcut (used by single-pair mode). */
+  onRequestNextPair?: () => void;
   leniency: number;
   onLeniencyChange: (next: number) => void;
   /** Also gates the progress bar; owned by the harness. */
@@ -76,6 +78,8 @@ interface Props {
   /** Both maps open at this zoom instead of fit-to-image. Undefined on the first pair. */
   initialZoom?: number;
   onZoomChange?: (zoom: number) => void;
+  /** Copied to the clipboard when the toolbar's Share button is clicked. */
+  shareHref?: string;
 }
 
 const DEFAULT_COLOR = '#3498db';
@@ -111,6 +115,7 @@ export function IndividualIdMapPair(props: Props) {
     onCollapsedChange,
     initialZoom,
     onZoomChange,
+    shareHref,
   } = props;
   const { client } = useContext(GlobalContext)!;
 
@@ -507,12 +512,18 @@ export function IndividualIdMapPair(props: Props) {
   useHotkeys('ArrowLeft', () => advanceFocus(-1), { enabled: visible }, [
     advanceFocus,
   ]);
-  useHotkeys('Ctrl+ArrowRight', onRequestNextPair, { enabled: visible }, [
-    onRequestNextPair,
-  ]);
-  useHotkeys('Ctrl+ArrowLeft', onRequestPrevPair, { enabled: visible }, [
-    onRequestPrevPair,
-  ]);
+  useHotkeys(
+    'Ctrl+ArrowRight',
+    () => onRequestNextPair?.(),
+    { enabled: visible && !!onRequestNextPair },
+    [onRequestNextPair]
+  );
+  useHotkeys(
+    'Ctrl+ArrowLeft',
+    () => onRequestPrevPair?.(),
+    { enabled: visible && !!onRequestPrevPair },
+    [onRequestPrevPair]
+  );
 
   const handleMarkerClick = useCallback(
     (candidateKey: string) => {
@@ -772,6 +783,7 @@ export function IndividualIdMapPair(props: Props) {
         onLeniencyChange={onLeniencyChange}
         collapsed={collapsed}
         onCollapsedChange={onCollapsedChange}
+        shareHref={shareHref}
       />
     </div>
   );
@@ -787,19 +799,22 @@ function PairToolbar({
   onLeniencyChange,
   collapsed,
   onCollapsedChange,
+  shareHref,
 }: {
   active: MatchCandidate | null;
   candidatesCount: number;
   acceptedCount: number;
-  onPrev: () => void;
-  onNext: () => void;
+  onPrev?: () => void;
+  onNext?: () => void;
   leniency: number;
   onLeniencyChange: (next: number) => void;
   collapsed: boolean;
   onCollapsedChange: (next: boolean) => void;
+  shareHref?: string;
 }) {
   const navigate = useNavigate();
   const [helpOpen, setHelpOpen] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
 
   const status = active
     ? active.status === 'pending'
@@ -847,20 +862,24 @@ function PairToolbar({
         >
           {collapsed ? '▴' : '▾'}
         </Button>
-        <Button
-          onClick={onPrev}
-          title='Previous image pair (Ctrl+←)'
-          size='sm'
-        >
-          ←
-        </Button>
-        <Button
-          size='sm'
-          onClick={onNext}
-          title='Next image pair (Ctrl+→)'
-        >
-          →
-        </Button>
+        {onPrev && (
+          <Button
+            onClick={onPrev}
+            title='Previous image pair (Ctrl+←)'
+            size='sm'
+          >
+            ←
+          </Button>
+        )}
+        {onNext && (
+          <Button
+            size='sm'
+            onClick={onNext}
+            title='Next image pair (Ctrl+→)'
+          >
+            →
+          </Button>
+        )}
         {!collapsed && (
           <span style={{ opacity: 0.85 }}>
             {acceptedCount} / {candidatesCount} accepted
@@ -921,6 +940,27 @@ function PairToolbar({
       {!collapsed && (
         <span style={{ flex: 1, textAlign: 'right' }}>{status}</span>
       )}
+      <Button
+        size='sm'
+        variant='outline-light'
+        onClick={async () => {
+          // shareHref is a route path; expand to an absolute URL so the
+          // clipboard payload is openable outside this tab.
+          const absolute = shareHref
+            ? new URL(shareHref, window.location.origin).toString()
+            : window.location.href;
+          try {
+            await navigator.clipboard.writeText(absolute);
+            setShareCopied(true);
+            window.setTimeout(() => setShareCopied(false), 1500);
+          } catch (err) {
+            console.error('Failed to copy share link', err);
+          }
+        }}
+        title={shareCopied ? 'Link copied' : 'Copy a link to this pair'}
+      >
+        {shareCopied ? 'Copied!' : 'Share'}
+      </Button>
       <Button
         size='sm'
         onClick={() => {

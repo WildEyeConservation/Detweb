@@ -21,7 +21,7 @@ import Surveys from './survey/Surveys.tsx';
 import Permissions from './Permissions.tsx';
 import Testing from './Testing/Testing';
 import { Registration } from './Registration';
-import { IndividualIdTaskPage } from './individual-id';
+import { IndividualIdPairTaskPage, IndividualIdTaskPage } from './individual-id';
 import HomographyTask from './homography/HomographyTask';
 import HomographyViewer from './homography/HomographyViewer';
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
@@ -120,6 +120,13 @@ const router = createBrowserRouter([
             // /jobs.
             path: 'individual-id',
             element: <IndividualIdTaskPage />,
+          },
+          {
+            // Single-pair workspace driven entirely by query params
+            // (image1Id, image2Id, categoryId, annotationSetId, optional
+            // prevHref/nextHref). Bookmarkable / shareable.
+            path: 'individual-id-pair',
+            element: <IndividualIdPairTaskPage />,
           },
           {
             path: 'homography/:queueId',

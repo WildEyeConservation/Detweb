@@ -13,4 +13,6 @@
 export { IndividualIdTaskPage } from './IndividualIdTaskPage';
 export { IndividualIdHarness } from './IndividualIdHarness';
 export { IndividualIdMapPair } from './IndividualIdMapPair';
+export { IndividualIdPairTaskPage } from './IndividualIdPairTaskPage';
+export { IndividualIdPairHarness } from './IndividualIdPairHarness';
 export type { MatchCandidate, NeighbourPair, PairCompletionState } from './types';
