@@ -91,6 +91,26 @@ export interface MatchCandidate {
    * objectId with a real annotation on the other image of this pair.
    */
   oovSide?: 'A' | 'B';
+  /**
+   * Side flagged as a proposed OOV by chain propagation — no DB row exists
+   * yet (distinct from `oovSide`, which references an existing OOV row).
+   * Materialised as an annotation with `oov: true` at accept time.
+   */
+  proposedOovA?: boolean;
+  proposedOovB?: boolean;
+}
+
+/**
+ * A composed homography path through the transect's neighbour graph,
+ * mapping pixel coordinates from `imageIds[0]` (source) to the last entry
+ * (target). Direct neighbours have `hops === 1`; `hops >= 2` are indirect
+ * paths used by the chain-propagation pass.
+ */
+export interface ChainedPath {
+  imageIds: string[];
+  hops: number;
+  forward: PixelTransform;
+  backward: PixelTransform;
 }
 
 export interface PairCompletionState {

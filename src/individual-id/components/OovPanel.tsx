@@ -47,6 +47,8 @@ export function OovPanel({
       style={{
         width: collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH,
         flexShrink: 0,
+        height: '100%',
+        minHeight: 0,
         background: '#4E5D6C',
         color: '#f8f9fa',
         borderRadius: 8,
@@ -166,6 +168,8 @@ function CollapsedAvatar({
 }) {
   const real = side === 'A' ? candidate.realA : candidate.realB;
   const isPrimary = !real?.objectId || real.objectId === real.id;
+  const isProposed =
+    side === 'A' ? !!candidate.proposedOovA : !!candidate.proposedOovB;
   const identiconSvg = useMemo(
     () => (isPrimary ? jdenticon.toSvg(candidate.pairKey, AVATAR_SIZE) : ''),
     [candidate.pairKey, isPrimary]
@@ -193,13 +197,22 @@ function CollapsedAvatar({
       onContextMenu={handleContextMenu}
       onMouseEnter={() => onHoverChange(candidate.pairKey)}
       onMouseLeave={() => onHoverChange(null)}
-      title={nameFor(candidate.pairKey)}
+      title={
+        isProposed
+          ? `${nameFor(candidate.pairKey)} (proposed)`
+          : nameFor(candidate.pairKey)
+      }
       style={{
         width: AVATAR_SIZE,
         height: AVATAR_SIZE,
         borderRadius: '50%',
         background: color,
-        border: '1px solid rgba(0,0,0,0.7)',
+        // White border + reduced opacity mirrors the positioned-shadow look
+        // on the map so proposed chains read as "tentative" at a glance.
+        border: isProposed
+          ? '1px solid #ffffff'
+          : '1px solid rgba(0,0,0,0.7)',
+        opacity: isProposed ? 0.75 : 1,
         boxShadow: ring,
         display: 'flex',
         alignItems: 'center',
@@ -239,25 +252,31 @@ function OovCard({
 }) {
   const real = side === 'A' ? candidate.realA : candidate.realB;
   const isPrimary = !real?.objectId || real.objectId === real.id;
+  const isProposed =
+    side === 'A' ? !!candidate.proposedOovA : !!candidate.proposedOovB;
   const identiconSvg = useMemo(
     () => (isPrimary ? jdenticon.toSvg(candidate.pairKey, 20) : ''),
     [candidate.pairKey, isPrimary]
   );
   const [hover, setHover] = useState(false);
-  const showActions = hover;
+  // Delete is only available for DB-backed OOVs — a chain proposal has no
+  // row to remove yet, and silently no-op'ing the button would be misleading.
+  const showActions = hover && !isProposed;
 
-  const statusColor =
-    candidate.status === 'accepted'
-      ? '#27ae60'
-      : candidate.status === 'locked'
-      ? '#f1c40f'
-      : '#888';
-  const statusLabel =
-    candidate.status === 'accepted'
-      ? 'Linked'
-      : candidate.status === 'pending'
-      ? 'Needs link'
-      : 'Locked';
+  const statusColor = isProposed
+    ? '#ffa500'
+    : candidate.status === 'accepted'
+    ? '#27ae60'
+    : candidate.status === 'locked'
+    ? '#f1c40f'
+    : '#888';
+  const statusLabel = isProposed
+    ? 'Proposed'
+    : candidate.status === 'accepted'
+    ? 'Linked'
+    : candidate.status === 'pending'
+    ? 'Needs link'
+    : 'Locked';
 
   const handleClick = (ev: React.MouseEvent) => {
     if ((ev.ctrlKey || ev.metaKey) && ev.button === 0) {
@@ -293,10 +312,15 @@ function OovCard({
       style={{
         width: '100%',
         background: '#5B6977',
-        border: '1px solid rgba(255,255,255,0.05)',
+        // Dashed white border on proposed cards mirrors the positioned-shadow
+        // border on the map; solid border for committed OOV rows.
+        border: isProposed
+          ? '1px dashed rgba(255,255,255,0.55)'
+          : '1px solid rgba(255,255,255,0.05)',
         borderRadius: 6,
         padding: 6,
         cursor: 'pointer',
+        opacity: isProposed ? 0.9 : 1,
         outline,
         outlineOffset: -1,
         display: 'flex',
