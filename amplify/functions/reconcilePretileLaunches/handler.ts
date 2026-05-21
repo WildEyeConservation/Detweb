@@ -157,43 +157,84 @@ async function loadManifest(key: string): Promise<PretileManifest | null> {
   }
 }
 
-async function allImagesTiled(
+type UntiledReason = 'missing' | 'no-tiledAt' | 'stale';
+
+type ImageStatusSummary = {
+  done: boolean;
+  total: number;
+  doneCount: number;
+  missingCount: number;
+  noTiledAtCount: number;
+  staleTiledAtCount: number;
+  sample: Array<{ id: string; reason: UntiledReason; tiledAt?: string | null }>;
+};
+
+async function inspectImageStatus(
   imageIds: string[],
-  manifestCreatedAt: string
-): Promise<boolean> {
-  if (imageIds.length === 0) return true;
+  manifestCreatedAt: string,
+  sampleSize = 20
+): Promise<ImageStatusSummary> {
+  const total = imageIds.length;
+  if (total === 0) {
+    return {
+      done: true,
+      total: 0,
+      doneCount: 0,
+      missingCount: 0,
+      noTiledAtCount: 0,
+      staleTiledAtCount: 0,
+      sample: [],
+    };
+  }
   // An image counts as "done for this launch" only if its tiledAt is AFTER
-  // the launch manifest was created. Otherwise a refresh-only launch (where
-  // every image already had a stale tiledAt set from a previous launch)
-  // would appear complete the instant the manifest was written, before the
-  // refresh workers actually touched the S3 tiles.
+  // the launch manifest was created. A tiledAt at/before manifestCreatedAt
+  // means the stamp is stale (left over from a previous launch); workers
+  // still need to touch the S3 tiles for this launch.
   const createdAtMs = Date.parse(manifestCreatedAt);
   const limit = pLimit(20);
-  let firstUntiled: string | null = null;
+  let doneCount = 0;
+  let missingCount = 0;
+  let noTiledAtCount = 0;
+  let staleTiledAtCount = 0;
+  const sample: ImageStatusSummary['sample'] = [];
   await Promise.all(
     imageIds.map((id) =>
       limit(async () => {
-        if (firstUntiled) return;
         const data = await executeGraphql<{
           getImage?: { tiledAt: string | null } | null;
         }>(getImageTiledAtQuery, { id });
         if (!data.getImage) {
-          firstUntiled = id;
+          missingCount++;
+          if (sample.length < sampleSize) sample.push({ id, reason: 'missing' });
           return;
         }
         const tiledAt = data.getImage.tiledAt;
         if (!tiledAt) {
-          firstUntiled = id;
+          noTiledAtCount++;
+          if (sample.length < sampleSize)
+            sample.push({ id, reason: 'no-tiledAt', tiledAt: null });
           return;
         }
         const tiledAtMs = Date.parse(tiledAt);
         if (!Number.isFinite(tiledAtMs) || tiledAtMs < createdAtMs) {
-          firstUntiled = id;
+          staleTiledAtCount++;
+          if (sample.length < sampleSize)
+            sample.push({ id, reason: 'stale', tiledAt });
+          return;
         }
+        doneCount++;
       })
     )
   );
-  return firstUntiled === null;
+  return {
+    done: missingCount + noTiledAtCount + staleTiledAtCount === 0,
+    total,
+    doneCount,
+    missingCount,
+    noTiledAtCount,
+    staleTiledAtCount,
+    sample,
+  };
 }
 
 async function completeLaunch(project: ProjectRow, manifestKey: string) {
@@ -258,8 +299,11 @@ export const handler: Handler = async () => {
           return { project: project.id, action: 'manifest-missing' };
         }
 
-        const done = await allImagesTiled(manifest.imageIds, manifest.createdAt);
-        if (done) {
+        const summary = await inspectImageStatus(
+          manifest.imageIds,
+          manifest.createdAt
+        );
+        if (summary.done) {
           await completeLaunch(project, project.pretileManifestS3Key);
           return {
             project: project.id,
@@ -271,7 +315,16 @@ export const handler: Handler = async () => {
         return {
           project: project.id,
           action: 'still-waiting',
+          launchId: manifest.launchId,
+          manifestCreatedAt: manifest.createdAt,
           imageCount: manifest.imageIds.length,
+          progress: {
+            done: summary.doneCount,
+            missing: summary.missingCount,
+            noTiledAt: summary.noTiledAtCount,
+            stale: summary.staleTiledAtCount,
+          },
+          untiledSample: summary.sample,
         };
       })
     )
