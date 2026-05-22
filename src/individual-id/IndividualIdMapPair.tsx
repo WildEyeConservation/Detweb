@@ -23,6 +23,7 @@ import { HelpCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { OovPanel } from './components/OovPanel';
 import { HelpModal } from './components/HelpModal';
+import { isOov } from './utils/identity';
 
 interface Props {
   pair: NeighbourPair;
@@ -38,10 +39,7 @@ interface Props {
     side: 'A' | 'B',
     pos: { x: number; y: number }
   ) => void;
-  /** First space press: mark `locked` in working state. No DB write. */
-  onLock: (candidateKey: string) => void;
-  onUnlock: (candidateKey: string) => void;
-  /** Second space press: commit the link and mark `accepted`. */
+  /** Space press: commit the link and mark `accepted`. */
   onAccept: (candidateKey: string) => void;
   onUnfocus?: () => void;
   /** Harness pre-generates the id so the candidate survives the Munkres rebuild. */
@@ -59,6 +57,14 @@ interface Props {
     side: 'A' | 'B',
     value: boolean
   ) => void;
+  /**
+   * User clicked "Move to OOV" on a shadow whose candidate has a real
+   * partner on the other side. Materialises a terminus OOV chain-linked to
+   * that partner so neighbouring pairs don't nag for further linking.
+   */
+  onMoveToOov?: (candidateKey: string, side: 'A' | 'B') => void;
+  /** Toggle `noPartnerExpected` from an OovPanel card. */
+  onToggleNoPartnerExpected?: (annotationId: string) => void;
   /** Args: active candidate's real id opposite the click, then the ctrl-clicked real id. */
   onManualLinkRequest?: (
     activeAnnotationId: string,
@@ -92,6 +98,7 @@ const NO_MARKERS: MapMarker[] = [];
 // Stable empty defaults so the optional props don't churn memo identities.
 const NO_FOREIGN: AnnotationType[] = [];
 const NO_COLORS: Record<string, string> = {};
+const NOOP_TOGGLE = (_id: string) => {};
 
 // Two-map workspace: renders both maps + markers and the keyboard flow.
 // Never writes the DB and never persists across mounts — the harness owns both.
@@ -104,8 +111,6 @@ export function IndividualIdMapPair(props: Props) {
     category,
     visible,
     onDrag,
-    onLock,
-    onUnlock,
     onAccept,
     onUnfocus,
     onPlaceNew,
@@ -113,6 +118,8 @@ export function IndividualIdMapPair(props: Props) {
     onChangeLabel,
     onToggleObscured,
     onSetProposedObscured,
+    onMoveToOov,
+    onToggleNoPartnerExpected,
     onManualLinkRequest,
     onAllAccepted,
     onRequestPrevPair,
@@ -213,6 +220,8 @@ export function IndividualIdMapPair(props: Props) {
     const out: MapMarker[] = [];
     for (const c of candidates) {
       if (!c.posA) continue;
+      const isShadow = !c.realA || c.isShadowA;
+      const partnerReal = c.realB && !isOov(c.realB) ? c.realB : null;
       out.push({
         candidateKey: c.pairKey,
         side: 'A',
@@ -224,6 +233,7 @@ export function IndividualIdMapPair(props: Props) {
         identityKey: c.pairKey,
         active: c.pairKey === activeKey,
         obscured: c.realA ? !!c.realA.obscured : !!c.obscuredA,
+        canMoveToOov: isShadow && !!partnerReal,
       });
     }
     // Informational markers for annotations belonging to other categories.
@@ -250,6 +260,8 @@ export function IndividualIdMapPair(props: Props) {
     const out: MapMarker[] = [];
     for (const c of candidates) {
       if (!c.posB) continue;
+      const isShadow = !c.realB || c.isShadowB;
+      const partnerReal = c.realA && !isOov(c.realA) ? c.realA : null;
       out.push({
         candidateKey: c.pairKey,
         side: 'B',
@@ -261,6 +273,7 @@ export function IndividualIdMapPair(props: Props) {
         identityKey: c.pairKey,
         active: c.pairKey === activeKey,
         obscured: c.realB ? !!c.realB.obscured : !!c.obscuredB,
+        canMoveToOov: isShadow && !!partnerReal,
       });
     }
     // Informational markers for annotations belonging to other categories.
@@ -467,7 +480,7 @@ export function IndividualIdMapPair(props: Props) {
       }
       return;
     }
-    // Informational can't be locked — Space skips ahead so the flow doesn't get stuck.
+    // Informational can't be linked — Space skips ahead so the flow doesn't get stuck.
     if (activeCandidate.informational) {
       advanceFocus(1);
       return;
@@ -484,11 +497,8 @@ export function IndividualIdMapPair(props: Props) {
       return;
     }
     if (activeCandidate.status === 'pending') {
-      onLock(activeCandidate.pairKey);
-      panToCandidate(activeCandidate.pairKey);
-      return;
-    }
-    if (activeCandidate.status === 'locked') {
+      // Experiment: skip the intermediate "lock" step — Space on a pending
+      // candidate accepts the link directly.
       onAccept(activeCandidate.pairKey);
       // Advance focus within this pair; onAllAccepted is fired by the effect, not here (stale-read race).
       const linkable = candidates.filter((c) => !c.informational);
@@ -518,7 +528,6 @@ export function IndividualIdMapPair(props: Props) {
   }, [
     activeCandidate,
     candidates,
-    onLock,
     onAccept,
     onAllAccepted,
     advanceFocus,
@@ -527,13 +536,10 @@ export function IndividualIdMapPair(props: Props) {
 
   const handleEscape = useCallback(() => {
     if (activeKey) {
-      if (activeCandidate?.status === 'locked') {
-        onUnlock(activeCandidate.pairKey);
-      }
       setActiveKey(null);
       onUnfocus?.();
     }
-  }, [activeKey, activeCandidate, onUnlock, onUnfocus]);
+  }, [activeKey, onUnfocus]);
 
   useHotkeys('Space', handleSpace, { enabled: visible, preventDefault: true }, [
     handleSpace,
@@ -590,13 +596,8 @@ export function IndividualIdMapPair(props: Props) {
 
   // Empty-map click places a new annotation and makes it the active marker
   // (the id is pre-generated so the candidate survives the Munkres rebuild).
-  // Any previously-active marker loses focus, and is unlocked if it was only
-  // locked — an unaccepted lock is working-state only.
   const placeFromClick = useCallback(
     (clickedSide: 'A' | 'B', pos: { x: number; y: number }) => {
-      if (activeCandidate?.status === 'locked') {
-        onUnlock(activeCandidate.pairKey);
-      }
       if (!category || !onPlaceNew) {
         // Can't create here — just drop focus off the active marker.
         if (activeKey) {
@@ -609,7 +610,7 @@ export function IndividualIdMapPair(props: Props) {
       onPlaceNew(clickedSide, pos, newId);
       setActiveKey(newId);
     },
-    [activeKey, activeCandidate, onUnlock, category, onPlaceNew, onUnfocus]
+    [activeKey, category, onPlaceNew, onUnfocus]
   );
 
   const handleMapClickA = useCallback(
@@ -714,6 +715,15 @@ export function IndividualIdMapPair(props: Props) {
     [candidates, onToggleObscured, onSetProposedObscured, foreignById]
   );
 
+  const handleMoveToOovA = useCallback(
+    (candidateKey: string) => onMoveToOov?.(candidateKey, 'A'),
+    [onMoveToOov]
+  );
+  const handleMoveToOovB = useCallback(
+    (candidateKey: string) => onMoveToOov?.(candidateKey, 'B'),
+    [onMoveToOov]
+  );
+
   // Ctrl+click a real marker on the other image to link it with the active
   // candidate's real on the opposite side — only when that side is a
   // shadow/informational proposal, never breaking an existing real↔real link.
@@ -788,6 +798,7 @@ export function IndividualIdMapPair(props: Props) {
           onCtrlClick={handleCtrlClickA}
           onHoverChange={handleHoverA}
           onDelete={handleCardDeleteA}
+          onToggleNoPartnerExpected={onToggleNoPartnerExpected ?? NOOP_TOGGLE}
         />
         <div style={{ flex: 1, minHeight: 0 }}>
           <IndividualIdMap
@@ -803,6 +814,7 @@ export function IndividualIdMapPair(props: Props) {
             onMarkerDelete={handleDeleteA}
             onMarkerChangeLabel={handleChangeLabelA}
             onMarkerToggleObscured={handleToggleObscuredA}
+            onMarkerMoveToOov={handleMoveToOovA}
             onMarkerCtrlClick={handleCtrlClickA}
             onAddOov={addOovA}
             leniency={leniency}
@@ -827,6 +839,7 @@ export function IndividualIdMapPair(props: Props) {
             onMarkerDelete={handleDeleteB}
             onMarkerChangeLabel={handleChangeLabelB}
             onMarkerToggleObscured={handleToggleObscuredB}
+            onMarkerMoveToOov={handleMoveToOovB}
             onMarkerCtrlClick={handleCtrlClickB}
             onAddOov={addOovB}
             leniency={leniency}
@@ -847,6 +860,7 @@ export function IndividualIdMapPair(props: Props) {
           onCtrlClick={handleCtrlClickB}
           onHoverChange={handleHoverB}
           onDelete={handleCardDeleteB}
+          onToggleNoPartnerExpected={onToggleNoPartnerExpected ?? NOOP_TOGGLE}
         />
       </div>
       <PairToolbar
@@ -901,9 +915,7 @@ function PairToolbar({
 
   const status = active
     ? active.status === 'pending'
-      ? 'Press Space to lock the active marker.'
-      : active.status === 'locked'
-      ? 'Press Space again to accept the link.'
+      ? 'Press Space to accept the link.'
       : 'Already linked. Use ←/→ to focus another candidate.'
     : candidatesCount === 0
     ? 'No matches in this pair.'

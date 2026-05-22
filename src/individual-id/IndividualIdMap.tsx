@@ -48,6 +48,12 @@ export interface MapMarker {
    * participates in candidates, accept or completion.
    */
   foreign?: boolean;
+  /**
+   * True when this marker is a shadow whose candidate has a real partner
+   * on the other image — i.e. the shadow can be converted to a terminus
+   * OOV chain-linked to that partner via the popup's "Move to OOV" action.
+   */
+  canMoveToOov?: boolean;
 }
 
 export type MapInstanceCallback = (
@@ -106,6 +112,13 @@ interface Props {
    * flag yet.
    */
   onMarkerToggleObscured?: (candidateKey: string) => void;
+  /**
+   * User clicked the "Move to OOV" button on a shadow's popup. The shadow
+   * is materialised as an OOV row chain-linked to the partner real on the
+   * other image, and stamped with `noPartnerExpected: true` so it doesn't
+   * nag neighbouring pairs for a partner.
+   */
+  onMarkerMoveToOov?: (candidateKey: string) => void;
   /**
    * Munkres "leave unmatched" cost in image pixels. Used to render a ring
    * around the active marker so the user can see exactly the radius within
@@ -341,7 +354,6 @@ function applyMarkerStyle(el: HTMLDivElement, m: MapMarker) {
 
   // Active and status are stacked as box-shadows so they compose:
   //   active           → orange ring 0-3px
-  //   locked           → yellow ring (3-6px when active, else 0-3px)
   //   accepted         → green  ring (3-6px when active, else 0-3px)
   //   neither          → subtle 1px outline so the marker stays visible
   //                      against bright tiles.
@@ -353,9 +365,7 @@ function applyMarkerStyle(el: HTMLDivElement, m: MapMarker) {
   } else {
     const shadows: string[] = [];
     if (m.active) shadows.push('0 0 0 3px #ff8c1a'); // orange
-    if (m.status === 'locked') {
-      shadows.push(m.active ? '0 0 0 6px #f1c40f' : '0 0 0 3px #f1c40f');
-    } else if (m.status === 'accepted') {
+    if (m.status === 'accepted') {
       shadows.push(m.active ? '0 0 0 6px #27ae60' : '0 0 0 3px #27ae60');
     } else if (!m.active) {
       shadows.push('0 0 0 1px rgba(0, 0, 0, 0.45)');
@@ -426,6 +436,7 @@ export function IndividualIdMap({
   onMarkerDelete,
   onMarkerChangeLabel,
   onMarkerToggleObscured,
+  onMarkerMoveToOov,
   leniency,
   leniencyAnchor,
   previewTransform,
@@ -453,6 +464,7 @@ export function IndividualIdMap({
   const deleteRef = useRef(onMarkerDelete);
   const changeLabelRef = useRef(onMarkerChangeLabel);
   const toggleObscuredRef = useRef(onMarkerToggleObscured);
+  const moveToOovRef = useRef(onMarkerMoveToOov);
   const addOovRef = useRef(onAddOov);
   useEffect(() => {
     dragRef.current = onMarkerDrag;
@@ -478,6 +490,9 @@ export function IndividualIdMap({
   useEffect(() => {
     toggleObscuredRef.current = onMarkerToggleObscured;
   }, [onMarkerToggleObscured]);
+  useEffect(() => {
+    moveToOovRef.current = onMarkerMoveToOov;
+  }, [onMarkerMoveToOov]);
   useEffect(() => {
     addOovRef.current = onAddOov;
   }, [onAddOov]);
@@ -581,6 +596,10 @@ export function IndividualIdMap({
     const deleteHtml = showFullActions
       ? `<button data-action="delete" style="${btnStyle}background:#d9534f;">Delete</button>`
       : '';
+    const moveToOovHtml =
+      interactive && isShadow && data.canMoveToOov
+        ? `<button data-action="move-to-oov" style="${btnStyle}background:#5B6977;">Move to OOV</button>`
+        : '';
     el.innerHTML = `
       <div style="font-weight:600">${escape(nameFor(data.identityKey))}</div>
       <div style="font-size:10px;opacity:0.7;text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">
@@ -593,6 +612,7 @@ export function IndividualIdMap({
       }
       ${changeLabelHtml}
       ${obscureHtml}
+      ${moveToOovHtml}
       ${deleteHtml}
     `;
     if (showObscureToggle) {
@@ -603,6 +623,18 @@ export function IndividualIdMap({
         obscuredBtn.addEventListener('click', (ev) => {
           ev.stopPropagation();
           toggleObscuredRef.current?.(key);
+          hidePopup();
+        });
+      }
+    }
+    if (moveToOovHtml) {
+      const moveBtn = el.querySelector(
+        'button[data-action="move-to-oov"]'
+      ) as HTMLButtonElement | null;
+      if (moveBtn) {
+        moveBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          moveToOovRef.current?.(key);
           hidePopup();
         });
       }

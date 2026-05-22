@@ -57,6 +57,8 @@ type LinkActor = {
   candidatePos: { x: number; y: number } | null;
   obscured?: boolean;
   oov?: boolean;
+  /** Stamp `noPartnerExpected: true` on a new OOV row. Ignored for existing. */
+  noPartnerExpected?: boolean;
 };
 
 interface Props {
@@ -249,22 +251,6 @@ export function IndividualIdPairHarness({
       }
     },
     [working, currentPairKey, candidates, persistAnnotationPosition]
-  );
-
-  const handleLock = useCallback(
-    (candidateKey: string) => {
-      if (!currentPairKey) return;
-      working.lockCandidate(currentPairKey, candidateKey);
-    },
-    [working, currentPairKey]
-  );
-
-  const handleUnlock = useCallback(
-    (candidateKey: string) => {
-      if (!currentPairKey) return;
-      working.unlockCandidate(currentPairKey, candidateKey);
-    },
-    [working, currentPairKey]
   );
 
   const handlePlaceNew = useCallback(
@@ -515,6 +501,45 @@ export function IndividualIdPairHarness({
     [working, currentPairKey]
   );
 
+  const handleToggleNoPartnerExpected = useCallback(
+    async (annotationId: string) => {
+      const current = localAnnotations.find((a) => a.id === annotationId);
+      if (!current) return;
+      const next = !(current as any).noPartnerExpected;
+      const apply = (a: AnnotationType): AnnotationType =>
+        a.id === annotationId
+          ? ({ ...a, noPartnerExpected: next } as AnnotationType)
+          : a;
+      const revert = (a: AnnotationType): AnnotationType =>
+        a.id === annotationId
+          ? ({
+              ...a,
+              noPartnerExpected: (current as any).noPartnerExpected,
+            } as AnnotationType)
+          : a;
+
+      setLocalAnnotations((prev) => prev.map(apply));
+      patchPairCache((old) => ({
+        ...old,
+        annotations: old.annotations.map(apply),
+      }));
+      try {
+        await client.models.Annotation.update({
+          id: annotationId,
+          noPartnerExpected: next,
+        } as any);
+      } catch (err) {
+        console.error('Failed to toggle noPartnerExpected', err);
+        setLocalAnnotations((prev) => prev.map(revert));
+        patchPairCache((old) => ({
+          ...old,
+          annotations: old.annotations.map(revert),
+        }));
+      }
+    },
+    [localAnnotations, client, patchPairCache]
+  );
+
   // ---- Change-label flow ----
   const allCategories: CategoryType[] =
     (projectCtx as any)?.categoriesHook?.data ?? [];
@@ -702,6 +727,7 @@ export function IndividualIdPairHarness({
             group,
             ...(actor.obscured ? { obscured: true } : {}),
             ...(actor.oov ? { oov: true } : {}),
+            ...(actor.noPartnerExpected ? { noPartnerExpected: true } : {}),
             createdAt: nowIso,
             updatedAt: nowIso,
           } as unknown as AnnotationType);
@@ -830,6 +856,35 @@ export function IndividualIdPairHarness({
     [localAnnotations, commitActorLink]
   );
 
+  const handleMoveToOov = useCallback(
+    async (candidateKey: string, oovSide: 'A' | 'B') => {
+      if (!pair || !currentPairKey) return;
+      const candidate = candidates.find((c) => c.pairKey === candidateKey);
+      if (!candidate) return;
+      const partner = oovSide === 'A' ? candidate.realB : candidate.realA;
+      if (!partner) return;
+      const oovImageId = oovSide === 'A' ? pair.image1Id : pair.image2Id;
+      const actors: LinkActor[] = [
+        {
+          id: partner.id,
+          imageId: partner.imageId,
+          existing: partner,
+          candidatePos: null,
+        },
+        {
+          id: crypto.randomUUID(),
+          imageId: oovImageId,
+          existing: null,
+          candidatePos: { x: 0, y: 0 },
+          oov: true,
+        },
+      ];
+      working.acceptCandidate(currentPairKey, candidateKey);
+      await commitActorLink(actors, candidate.categoryId);
+    },
+    [pair, candidates, working, currentPairKey, commitActorLink]
+  );
+
   const [pendingLink, setPendingLink] = useState<{
     active: string;
     clicked: string;
@@ -927,14 +982,14 @@ export function IndividualIdPairHarness({
           leniency={leniency}
           onLeniencyChange={setLeniency}
           onDrag={handleDrag}
-          onLock={handleLock}
-          onUnlock={handleUnlock}
           onAccept={handleAccept}
           onPlaceNew={handlePlaceNew}
           onDelete={handleDelete}
           onChangeLabel={handleChangeLabel}
           onToggleObscured={handleToggleObscured}
           onSetProposedObscured={handleSetProposedObscured}
+          onMoveToOov={handleMoveToOov}
+          onToggleNoPartnerExpected={handleToggleNoPartnerExpected}
           onManualLinkRequest={requestManualLink}
           onAddOov={handlePlaceOov}
           onRequestPrevPair={goPrev}

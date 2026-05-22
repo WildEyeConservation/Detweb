@@ -18,7 +18,7 @@ function DemoMarker({
   seed = 'detweb-primary',
 }: {
   kind: MarkerKind;
-  status?: 'pending' | 'locked' | 'accepted';
+  status?: 'pending' | 'accepted';
   active?: boolean;
   obscured?: boolean;
   color?: string;
@@ -27,9 +27,7 @@ function DemoMarker({
   const size = 20;
   const shadows: string[] = [];
   if (active) shadows.push('0 0 0 3px #ff8c1a');
-  if (status === 'locked') {
-    shadows.push(active ? '0 0 0 6px #f1c40f' : '0 0 0 3px #f1c40f');
-  } else if (status === 'accepted') {
+  if (status === 'accepted') {
     shadows.push(active ? '0 0 0 6px #27ae60' : '0 0 0 3px #27ae60');
   } else if (!active) {
     shadows.push('0 0 0 1px rgba(0, 0, 0, 0.45)');
@@ -210,13 +208,6 @@ export function HelpModal({ show, onHide }: Props) {
             manual links apply to it.
           </Row>
           <Row
-            demo={<DemoMarker kind='primary' active status='locked' />}
-            label='Locked'
-          >
-            Orange + yellow ring. You have locked the position; pressing Space
-            once more accepts the link.
-          </Row>
-          <Row
             demo={<DemoMarker kind='primary' status='accepted' />}
             label='Accepted'
           >
@@ -304,17 +295,13 @@ export function HelpModal({ show, onHide }: Props) {
           <ol style={{ opacity: 0.9, fontSize: 14, paddingLeft: 18 }}>
             <li className='mb-2'>
               Press <strong>Space</strong>. The next candidate becomes active
-              (orange) and both images pan to it.
-            </li>
-            <li className='mb-2'>
-              If a marker is already active, Space <strong>locks</strong> it
-              (yellow ring) and pans to it. Before locking, you can drag the
-              real marker and the proposed marker to line them up precisely.
+              (orange) and both images pan to it. Drag the real marker and
+              the proposed marker to line them up precisely.
             </li>
             <li className='mb-2'>
               Press <strong>Space</strong> again to{' '}
               <strong>accept</strong> the pair (green ring) — the two markers
-              are now linked.
+              are now linked, and focus advances to the next candidate.
             </li>
           </ol>
           <p style={{ opacity: 0.85, fontSize: 14, marginBottom: 0 }}>

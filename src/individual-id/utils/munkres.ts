@@ -253,6 +253,9 @@ export function buildMatchCandidates({
     } else {
       // OOV ↔ OOV bridges a multi-image gap; posA/posB stay null because
       // oovPartner.{x,y} are the (0,0) placeholder, not real coordinates.
+      // `noPartnerExpected` flags an OOV that terminates its chain — no
+      // partner is required, so we accept it as-is rather than nag every
+      // pair containing this image.
       candidates.push({
         pairKey,
         categoryId: o.categoryId,
@@ -262,7 +265,8 @@ export function buildMatchCandidates({
         posB: null,
         isShadowA: false,
         isShadowB: false,
-        status: oovPartner ? 'accepted' : 'pending',
+        status:
+          oovPartner || (o as any).noPartnerExpected ? 'accepted' : 'pending',
         oovSide: side,
       });
     }
