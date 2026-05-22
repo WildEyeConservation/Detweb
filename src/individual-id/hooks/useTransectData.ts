@@ -138,19 +138,47 @@ export function useTransectData(input: UseTransectDataInput) {
       }
 
       setProgress((p) => ({ ...p, phase: 'annotations' }));
-      const categoryAnnotations =
-        await fetchAllPaginatedResults<AnnotationType>(
-          client.models.Annotation.annotationsByCategoryId,
-          {
-            categoryId: categoryId!,
-            filter: { setId: { eq: setId } },
-            limit: 10000,
-          },
-          (n) => setProgress((p) => ({ ...p, annotations: n }))
+      // Load every category in the set, then every annotation in each. The
+      // workflow filters to `categoryId`, but the maps also render the other
+      // categories as read-only informational markers so the user can see
+      // which animals have already been marked.
+      const categoriesResp =
+        await client.models.Category.categoriesByAnnotationSetId(
+          { annotationSetId: setId },
+          { selectionSet: ['id'], limit: 1000 }
         );
-      const annotations = categoryAnnotations.filter((a) =>
-        imageIds.has(a.imageId)
+      const categoryIds = (
+        (categoriesResp.data ?? []) as Array<{ id?: string | null }>
+      )
+        .map((c) => c?.id)
+        .filter((id): id is string => !!id);
+      if (categoryId && !categoryIds.includes(categoryId)) {
+        categoryIds.push(categoryId);
+      }
+
+      const perCategoryCounts = new Array(categoryIds.length).fill(0);
+      const perCategory = await Promise.all(
+        categoryIds.map((cid, idx) =>
+          fetchAllPaginatedResults<AnnotationType>(
+            client.models.Annotation.annotationsByCategoryId,
+            {
+              categoryId: cid,
+              filter: { setId: { eq: setId } },
+              limit: 10000,
+            },
+            (n) => {
+              perCategoryCounts[idx] = n;
+              setProgress((p) => ({
+                ...p,
+                annotations: perCategoryCounts.reduce((s, c) => s + c, 0),
+              }));
+            }
+          )
+        )
       );
+      const annotations = perCategory
+        .flat()
+        .filter((a) => imageIds.has(a.imageId));
 
       const annotationsByImage: Record<string, AnnotationType[]> = {};
       for (const a of annotations) {

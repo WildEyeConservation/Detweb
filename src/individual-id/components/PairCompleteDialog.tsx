@@ -35,21 +35,21 @@ export function PairCompleteDialog({
   return (
     <Modal show={show} onHide={onStay} centered>
       <Modal.Header closeButton>
-        <Modal.Title>Pair complete</Modal.Title>
+        <Modal.Title>Image pair complete</Modal.Title>
       </Modal.Header>
       <Modal.Body>
         {goBack ? (
           <>
-            All annotations on this pair are now linked. New shadow markers
-            have appeared on pair{' '}
+            All annotations on this image pair are now linked. New shadow
+            markers have appeared on image pair{' '}
             <strong>{(earlierIncompleteIndex as number) + 1}</strong>, which
             you have already worked on. Would you like to go back and resolve
             it now?
           </>
         ) : (
           <>
-            All annotations on this pair are now linked, and no earlier pair
-            needs attention. Move on to the next pair?
+            All annotations on this image pair are now linked, and no earlier
+            image pair needs attention. Move on to the next image pair?
           </>
         )}
       </Modal.Body>
@@ -58,7 +58,7 @@ export function PairCompleteDialog({
           Stay here
         </Button>
         <Button variant='primary' onClick={onConfirm}>
-          {goBack ? 'Go back' : 'Next pair'}
+          {goBack ? 'Go back' : 'Next image pair'}
         </Button>
       </Modal.Footer>
     </Modal>

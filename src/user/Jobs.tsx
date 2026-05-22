@@ -669,7 +669,7 @@ export default function Jobs() {
                       marginBottom: '0px',
                     }}
                   >
-                    Type: Individual ID
+                    Type: ChainLink
                   </p>
                 </div>
               </div>

@@ -147,7 +147,7 @@ export function HelpModal({ show, onHide }: Props) {
   return (
     <Modal show={show} onHide={onHide} size='lg' centered scrollable>
       <Modal.Header closeButton>
-        <Modal.Title>How individual ID works</Modal.Title>
+        <Modal.Title>How ChainLink works</Modal.Title>
       </Modal.Header>
       <Modal.Body>
         <p style={{ opacity: 0.85 }}>
@@ -180,6 +180,27 @@ export function HelpModal({ show, onHide }: Props) {
             marker still sits at the object's real position on the map; toggle
             the flag from the marker's popup. This is <em>not</em> the same as
             out-of-view (explained below).
+          </Row>
+        </Section>
+
+        <Section title='Markers from other labels'>
+          <Row
+            demo={
+              <DemoMarker
+                kind='primary'
+                color='#E0A33D'
+                seed='other-label'
+              />
+            }
+            label='Informational marker'
+          >
+            A marker in a <em>different colour</em> belongs to another
+            label. It is shown only so you can see that animal is already
+            marked — it is <strong>not part of this task</strong> and is
+            ignored by linking, accepting and pair completion. You can still
+            drag it, or use its popup to change its label or delete it.
+            Changing its label to the label you are working on promotes it
+            into the workflow as a normal marker.
           </Row>
         </Section>
 

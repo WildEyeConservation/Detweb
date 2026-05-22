@@ -66,19 +66,32 @@ interface Props {
   ) => void;
   onAllAccepted?: () => void;
   onAddOov?: (side: 'A' | 'B') => void;
-  onRequestPrevPair: () => void;
-  onRequestNextPair: () => void;
+  /** Omit to hide the prev button + Ctrl+← shortcut (used by single-pair mode). */
+  onRequestPrevPair?: () => void;
+  /** Omit to hide the next button + Ctrl+→ shortcut (used by single-pair mode). */
+  onRequestNextPair?: () => void;
   leniency: number;
   onLeniencyChange: (next: number) => void;
   /** Also gates the progress bar; owned by the harness. */
   collapsed: boolean;
   onCollapsedChange: (next: boolean) => void;
-  /** Both maps open at this zoom instead of fit-to-image. Undefined on the first pair. */
-  initialZoom?: number;
-  onZoomChange?: (zoom: number) => void;
+  /** Copied to the clipboard when the toolbar's Share button is clicked. */
+  shareHref?: string;
+  /**
+   * Annotations from OTHER categories on these two images. Rendered as
+   * read-only informational markers — never candidates, never accepted.
+   */
+  foreignAnnotations?: AnnotationType[];
+  /** categoryId → marker colour, used to colour the informational markers. */
+  categoryColors?: Record<string, string>;
 }
 
 const DEFAULT_COLOR = '#3498db';
+// Stable empty list passed while Tab is held, so the maps clear their markers.
+const NO_MARKERS: MapMarker[] = [];
+// Stable empty defaults so the optional props don't churn memo identities.
+const NO_FOREIGN: AnnotationType[] = [];
+const NO_COLORS: Record<string, string> = {};
 
 // Two-map workspace: renders both maps + markers and the keyboard flow.
 // Never writes the DB and never persists across mounts — the harness owns both.
@@ -109,25 +122,16 @@ export function IndividualIdMapPair(props: Props) {
     onLeniencyChange,
     collapsed,
     onCollapsedChange,
-    initialZoom,
-    onZoomChange,
+    shareHref,
+    foreignAnnotations = NO_FOREIGN,
+    categoryColors = NO_COLORS,
   } = props;
   const { client } = useContext(GlobalContext)!;
 
-  // Default to the first non-accepted candidate on pair change; never auto-advance on accept.
+  // Nothing is focused on load — the user selects a candidate themselves
+  // (click a marker, arrow keys, or Space).
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const lastPairKeyRef = useRef<string>('');
   const pairKey = `${pair.image1Id}__${pair.image2Id}`;
-  useEffect(() => {
-    if (lastPairKeyRef.current === pairKey) return;
-    lastPairKeyRef.current = pairKey;
-    const firstPending = candidates.find(
-      (c) => c.status !== 'accepted' && !c.informational
-    );
-    setActiveKey(firstPending?.pairKey ?? null);
-    // Re-default only on pair change, not candidate mutation (else dragging shifts focus).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pairKey]);
 
   // If the active candidate disappears (e.g. rejected / removed), clear focus.
   useEffect(() => {
@@ -187,12 +191,23 @@ export function IndividualIdMapPair(props: Props) {
 
   const color = category?.color || DEFAULT_COLOR;
 
+  // Hold Tab to peek at the underlying images with every marker hidden.
+  const [markersHidden, setMarkersHidden] = useState(false);
+
   // secondary = real whose objectId points at another row's identity; primary otherwise.
   function classify(real: AnnotationType | undefined, isShadow: boolean): MarkerKind {
     if (isShadow || !real) return 'shadow';
     if (real.objectId && real.objectId !== real.id) return 'secondary';
     return 'primary';
   }
+
+  // Lookup for routing marker handlers — informational markers are keyed by
+  // their annotation id rather than a candidate pairKey.
+  const foreignById = useMemo(() => {
+    const m = new Map<string, AnnotationType>();
+    for (const a of foreignAnnotations) m.set(a.id, a);
+    return m;
+  }, [foreignAnnotations]);
 
   const markersA: MapMarker[] = useMemo(() => {
     const out: MapMarker[] = [];
@@ -211,8 +226,25 @@ export function IndividualIdMapPair(props: Props) {
         obscured: c.realA ? !!c.realA.obscured : !!c.obscuredA,
       });
     }
+    // Informational markers for annotations belonging to other categories.
+    for (const a of foreignAnnotations) {
+      if (a.imageId !== imageA.id) continue;
+      out.push({
+        candidateKey: a.id,
+        side: 'A',
+        x: a.x,
+        y: a.y,
+        color: categoryColors[a.categoryId] ?? DEFAULT_COLOR,
+        status: 'pending',
+        kind: classify(a, false),
+        identityKey: a.objectId ?? a.id,
+        active: false,
+        obscured: !!a.obscured,
+        foreign: true,
+      });
+    }
     return out;
-  }, [candidates, activeKey, color]);
+  }, [candidates, activeKey, color, foreignAnnotations, imageA.id, categoryColors]);
 
   const markersB: MapMarker[] = useMemo(() => {
     const out: MapMarker[] = [];
@@ -231,20 +263,42 @@ export function IndividualIdMapPair(props: Props) {
         obscured: c.realB ? !!c.realB.obscured : !!c.obscuredB,
       });
     }
+    // Informational markers for annotations belonging to other categories.
+    for (const a of foreignAnnotations) {
+      if (a.imageId !== imageB.id) continue;
+      out.push({
+        candidateKey: a.id,
+        side: 'B',
+        x: a.x,
+        y: a.y,
+        color: categoryColors[a.categoryId] ?? DEFAULT_COLOR,
+        status: 'pending',
+        kind: classify(a, false),
+        identityKey: a.objectId ?? a.id,
+        active: false,
+        obscured: !!a.obscured,
+        foreign: true,
+      });
+    }
     return out;
-  }, [candidates, activeKey, color]);
+  }, [candidates, activeKey, color, foreignAnnotations, imageB.id, categoryColors]);
 
+  // Dragging a marker also focuses it — acting on any marker moves the
+  // active state to that marker. Informational markers can't be focused, so
+  // dragging one only repositions it.
   const handleDragA = useCallback(
     (candidateKey: string, x: number, y: number) => {
+      if (!foreignById.has(candidateKey)) setActiveKey(candidateKey);
       onDrag(candidateKey, 'A', { x, y });
     },
-    [onDrag]
+    [onDrag, foreignById]
   );
   const handleDragB = useCallback(
     (candidateKey: string, x: number, y: number) => {
+      if (!foreignById.has(candidateKey)) setActiveKey(candidateKey);
       onDrag(candidateKey, 'B', { x, y });
     },
-    [onDrag]
+    [onDrag, foreignById]
   );
 
   // Slave the other map via the homography on move/zoom; isSyncingRef breaks the feedback loop.
@@ -362,22 +416,6 @@ export function IndividualIdMapPair(props: Props) {
     [candidates]
   );
 
-  // With a carried-over zoom, pan to the first candidate once both maps are
-  // ready. Gated on sourceKeys (the maps rebuild when they resolve) so only
-  // the final stable instance is panned — avoids the double-pan; ref makes it idempotent.
-  const focusedMapRef = useRef<maplibregl.Map | null>(null);
-  useEffect(() => {
-    if (initialZoom == null) return;
-    if (!activeKey) return;
-    if (!sourceKeys[0] || !sourceKeys[1]) return;
-    const a = mapsRef.current[0];
-    const b = mapsRef.current[1];
-    if (!a || !b) return;
-    if (focusedMapRef.current === a.map) return;
-    focusedMapRef.current = a.map;
-    panToCandidate(activeKey);
-  }, [mapsTick, activeKey, initialZoom, sourceKeys, panToCandidate]);
-
   // Pan on active-candidate transitions; skip the first activation so initial framing wins.
   const prevActiveKeyRef = useRef<string | null>(null);
   useEffect(() => {
@@ -434,8 +472,14 @@ export function IndividualIdMapPair(props: Props) {
       advanceFocus(1);
       return;
     }
-    // OOV has no positional partner — Space skips; linking is via Ctrl/⌘+click.
-    if (activeCandidate.oovSide) {
+    // Pure OOV (no chain extension, no positional partner) still needs a
+    // manual Ctrl/⌘+click link — Space skips ahead. An OOV with a chain
+    // extension (proposedOov on the other side) is acceptable below.
+    if (
+      activeCandidate.oovSide &&
+      !activeCandidate.proposedOovA &&
+      !activeCandidate.proposedOovB
+    ) {
       advanceFocus(1);
       return;
     }
@@ -501,37 +545,66 @@ export function IndividualIdMapPair(props: Props) {
   useHotkeys('ArrowLeft', () => advanceFocus(-1), { enabled: visible }, [
     advanceFocus,
   ]);
-  useHotkeys('Ctrl+ArrowRight', onRequestNextPair, { enabled: visible }, [
-    onRequestNextPair,
-  ]);
-  useHotkeys('Ctrl+ArrowLeft', onRequestPrevPair, { enabled: visible }, [
-    onRequestPrevPair,
-  ]);
+  useHotkeys(
+    'Ctrl+ArrowRight',
+    () => onRequestNextPair?.(),
+    { enabled: visible && !!onRequestNextPair },
+    [onRequestNextPair]
+  );
+  useHotkeys(
+    'Ctrl+ArrowLeft',
+    () => onRequestPrevPair?.(),
+    { enabled: visible && !!onRequestPrevPair },
+    [onRequestPrevPair]
+  );
+  // Hide markers while Tab is held; show them again on release.
+  useHotkeys(
+    'Tab',
+    (e) => setMarkersHidden(e.type === 'keydown'),
+    { enabled: visible, keydown: true, keyup: true, preventDefault: true },
+    []
+  );
+  // A keyup can be missed if focus leaves the window mid-hold, or if the
+  // pair stops being visible — reset so markers don't stay stuck hidden.
+  useEffect(() => {
+    if (!visible) {
+      setMarkersHidden(false);
+      return;
+    }
+    const reset = () => setMarkersHidden(false);
+    window.addEventListener('blur', reset);
+    return () => window.removeEventListener('blur', reset);
+  }, [visible]);
 
   const handleMarkerClick = useCallback(
     (candidateKey: string) => {
-      // Don't activate informational markers — no partner to lock/accept.
+      // Other-category markers aren't part of the workflow — not focusable.
+      if (foreignById.has(candidateKey)) return;
+      // Don't activate informational candidates — no partner to lock/accept.
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
       if (c?.informational) return;
       setActiveKey(candidateKey);
     },
-    [candidates]
+    [candidates, foreignById]
   );
 
-  // Empty-map click: deselect if a candidate is active (an accidental create
-  // would make the old shadow appear to "move"); otherwise create a new
-  // annotation, pre-generating the id so it survives the Munkres rebuild.
+  // Empty-map click places a new annotation and makes it the active marker
+  // (the id is pre-generated so the candidate survives the Munkres rebuild).
+  // Any previously-active marker loses focus, and is unlocked if it was only
+  // locked — an unaccepted lock is working-state only.
   const placeFromClick = useCallback(
     (clickedSide: 'A' | 'B', pos: { x: number; y: number }) => {
-      if (activeKey) {
-        if (activeCandidate?.status === 'locked') {
-          onUnlock(activeCandidate.pairKey);
+      if (activeCandidate?.status === 'locked') {
+        onUnlock(activeCandidate.pairKey);
+      }
+      if (!category || !onPlaceNew) {
+        // Can't create here — just drop focus off the active marker.
+        if (activeKey) {
+          setActiveKey(null);
+          onUnfocus?.();
         }
-        setActiveKey(null);
-        onUnfocus?.();
         return;
       }
-      if (!category || !onPlaceNew) return;
       const newId = crypto.randomUUID();
       onPlaceNew(clickedSide, pos, newId);
       setActiveKey(newId);
@@ -563,52 +636,82 @@ export function IndividualIdMapPair(props: Props) {
 
   const handleDeleteA = useCallback(
     (candidateKey: string) => {
+      const foreign = foreignById.get(candidateKey);
+      if (foreign) {
+        onDelete?.(foreign.id);
+        return;
+      }
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
       if (c?.realA) onDelete?.(c.realA.id);
     },
-    [candidates, onDelete]
+    [candidates, onDelete, foreignById]
   );
   const handleDeleteB = useCallback(
     (candidateKey: string) => {
+      const foreign = foreignById.get(candidateKey);
+      if (foreign) {
+        onDelete?.(foreign.id);
+        return;
+      }
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
       if (c?.realB) onDelete?.(c.realB.id);
     },
-    [candidates, onDelete]
+    [candidates, onDelete, foreignById]
   );
 
   const handleChangeLabelA = useCallback(
     (candidateKey: string) => {
+      const foreign = foreignById.get(candidateKey);
+      if (foreign) {
+        onChangeLabel?.(foreign.id, foreign.categoryId);
+        return;
+      }
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
       if (c?.realA) onChangeLabel?.(c.realA.id, c.realA.categoryId);
     },
-    [candidates, onChangeLabel]
+    [candidates, onChangeLabel, foreignById]
   );
   const handleChangeLabelB = useCallback(
     (candidateKey: string) => {
+      const foreign = foreignById.get(candidateKey);
+      if (foreign) {
+        onChangeLabel?.(foreign.id, foreign.categoryId);
+        return;
+      }
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
       if (c?.realB) onChangeLabel?.(c.realB.id, c.realB.categoryId);
     },
-    [candidates, onChangeLabel]
+    [candidates, onChangeLabel, foreignById]
   );
 
   const handleToggleObscuredA = useCallback(
     (candidateKey: string) => {
+      const foreign = foreignById.get(candidateKey);
+      if (foreign) {
+        onToggleObscured?.(foreign.id);
+        return;
+      }
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
       if (!c) return;
       // Real → live DB toggle; shadow → in-memory intent applied at accept.
       if (c.realA) onToggleObscured?.(c.realA.id);
       else onSetProposedObscured?.(c.pairKey, 'A', !c.obscuredA);
     },
-    [candidates, onToggleObscured, onSetProposedObscured]
+    [candidates, onToggleObscured, onSetProposedObscured, foreignById]
   );
   const handleToggleObscuredB = useCallback(
     (candidateKey: string) => {
+      const foreign = foreignById.get(candidateKey);
+      if (foreign) {
+        onToggleObscured?.(foreign.id);
+        return;
+      }
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
       if (!c) return;
       if (c.realB) onToggleObscured?.(c.realB.id);
       else onSetProposedObscured?.(c.pairKey, 'B', !c.obscuredB);
     },
-    [candidates, onToggleObscured, onSetProposedObscured]
+    [candidates, onToggleObscured, onSetProposedObscured, foreignById]
   );
 
   // Ctrl+click a real marker on the other image to link it with the active
@@ -638,13 +741,15 @@ export function IndividualIdMapPair(props: Props) {
     [activeCandidate, candidates, onManualLinkRequest]
   );
 
-  // OOV candidates split by side; the partner (if any) renders normally on the other map.
+  // OOV candidates split by side; the partner (if any) renders normally on
+  // the other map. Chain-proposed OOVs (no DB row yet) ride the same panel
+  // — the visual treatment of those cards differentiates them.
   const oovCandidatesA = useMemo(
-    () => candidates.filter((c) => c.oovSide === 'A'),
+    () => candidates.filter((c) => c.oovSide === 'A' || c.proposedOovA),
     [candidates]
   );
   const oovCandidatesB = useMemo(
-    () => candidates.filter((c) => c.oovSide === 'B'),
+    () => candidates.filter((c) => c.oovSide === 'B' || c.proposedOovB),
     [candidates]
   );
 
@@ -672,7 +777,7 @@ export function IndividualIdMapPair(props: Props) {
 
   return (
     <div className='w-100 h-100 d-flex flex-column gap-2'>
-      <div className='d-flex flex-row gap-2 w-100' style={{ flex: 1 }}>
+      <div className='d-flex flex-row gap-2 w-100' style={{ flex: 1, minHeight: 0 }}>
         <OovPanel
           side='A'
           candidates={oovCandidatesA}
@@ -688,7 +793,7 @@ export function IndividualIdMapPair(props: Props) {
           <IndividualIdMap
             image={imageA}
             sourceKey={sourceKeys[0]}
-            markers={markersA}
+            markers={markersHidden ? NO_MARKERS : markersA}
             onMarkerDrag={handleDragA}
             onMarkerClick={handleMarkerClick}
             onMapClick={handleMapClickA}
@@ -701,20 +806,18 @@ export function IndividualIdMapPair(props: Props) {
             onMarkerCtrlClick={handleCtrlClickA}
             onAddOov={addOovA}
             leniency={leniency}
-            leniencyAnchor={activeAnchorA}
+            // Tab-to-peek also clears the leniency ring + homography overlay.
+            leniencyAnchor={markersHidden ? null : activeAnchorA}
             // Side A's overlay traces image B's bounds projected onto A.
-            previewTransform={pair.backward}
+            previewTransform={markersHidden ? undefined : pair.backward}
             otherImage={imageB}
-            initialZoom={initialZoom}
-            // Side A is canonical; B stays synced via the homography.
-            onZoomChange={onZoomChange}
           />
         </div>
         <div style={{ flex: 1, minHeight: 0 }}>
           <IndividualIdMap
             image={imageB}
             sourceKey={sourceKeys[1]}
-            markers={markersB}
+            markers={markersHidden ? NO_MARKERS : markersB}
             onMarkerDrag={handleDragB}
             onMarkerClick={handleMarkerClick}
             onMapClick={handleMapClickB}
@@ -727,12 +830,11 @@ export function IndividualIdMapPair(props: Props) {
             onMarkerCtrlClick={handleCtrlClickB}
             onAddOov={addOovB}
             leniency={leniency}
-            leniencyAnchor={activeAnchorB}
+            // Tab-to-peek also clears the leniency ring + homography overlay.
+            leniencyAnchor={markersHidden ? null : activeAnchorB}
             // Side B's overlay traces image A's bounds projected onto B.
-            previewTransform={pair.forward}
+            previewTransform={markersHidden ? undefined : pair.forward}
             otherImage={imageA}
-            // Same opening zoom; the homography sync reconciles scale on first move.
-            initialZoom={initialZoom}
           />
         </div>
         <OovPanel
@@ -764,6 +866,7 @@ export function IndividualIdMapPair(props: Props) {
         onLeniencyChange={onLeniencyChange}
         collapsed={collapsed}
         onCollapsedChange={onCollapsedChange}
+        shareHref={shareHref}
       />
     </div>
   );
@@ -779,19 +882,22 @@ function PairToolbar({
   onLeniencyChange,
   collapsed,
   onCollapsedChange,
+  shareHref,
 }: {
   active: MatchCandidate | null;
   candidatesCount: number;
   acceptedCount: number;
-  onPrev: () => void;
-  onNext: () => void;
+  onPrev?: () => void;
+  onNext?: () => void;
   leniency: number;
   onLeniencyChange: (next: number) => void;
   collapsed: boolean;
   onCollapsedChange: (next: boolean) => void;
+  shareHref?: string;
 }) {
   const navigate = useNavigate();
   const [helpOpen, setHelpOpen] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
 
   const status = active
     ? active.status === 'pending'
@@ -826,7 +932,7 @@ function PairToolbar({
             size='sm'
             variant='info'
             onClick={() => setHelpOpen(true)}
-            title='How individual ID works'
+            title='How ChainLink works'
           >
             <HelpCircle size={16} style={{ verticalAlign: 'middle' }} />
           </Button>
@@ -839,20 +945,24 @@ function PairToolbar({
         >
           {collapsed ? '▴' : '▾'}
         </Button>
-        <Button
-          onClick={onPrev}
-          title='Previous pair (Ctrl+←)'
-          size='sm'
-        >
-          ←
-        </Button>
-        <Button
-          size='sm'
-          onClick={onNext}
-          title='Next pair (Ctrl+→)'
-        >
-          →
-        </Button>
+        {onPrev && (
+          <Button
+            onClick={onPrev}
+            title='Previous image pair (Ctrl+←)'
+            size='sm'
+          >
+            ←
+          </Button>
+        )}
+        {onNext && (
+          <Button
+            size='sm'
+            onClick={onNext}
+            title='Next image pair (Ctrl+→)'
+          >
+            →
+          </Button>
+        )}
         {!collapsed && (
           <span style={{ opacity: 0.85 }}>
             {acceptedCount} / {candidatesCount} accepted
@@ -910,9 +1020,29 @@ function PairToolbar({
         />
         <span style={{ opacity: 0.85, fontSize: 11 }}>px</span>
       </div>
-      {!collapsed && (
-        <span style={{ flex: 1, textAlign: 'right' }}>{status}</span>
-      )}
+      {/* Always render the spacer so Share/Save stay right-aligned when collapsed. */}
+      <span style={{ flex: 1, textAlign: 'right' }}>{!collapsed && status}</span>
+      <Button
+        size='sm'
+        variant='outline-light'
+        onClick={async () => {
+          // shareHref is a route path; expand to an absolute URL so the
+          // clipboard payload is openable outside this tab.
+          const absolute = shareHref
+            ? new URL(shareHref, window.location.origin).toString()
+            : window.location.href;
+          try {
+            await navigator.clipboard.writeText(absolute);
+            setShareCopied(true);
+            window.setTimeout(() => setShareCopied(false), 1500);
+          } catch (err) {
+            console.error('Failed to copy share link', err);
+          }
+        }}
+        title={shareCopied ? 'Link copied' : 'Copy a link to this pair'}
+      >
+        {shareCopied ? 'Copied!' : 'Share'}
+      </Button>
       <Button
         size='sm'
         onClick={() => {

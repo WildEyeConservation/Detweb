@@ -233,7 +233,10 @@ export function buildMatchCandidates({
   const pushOov = (o: AnnotationType, side: 'A' | 'B') => {
     const others = side === 'A' ? posAllB : posAllA;
     const partner = others.find((p) => sharesChain(p, o));
-    const pairKey = o.objectId ?? (partner && partner.objectId) ?? o.id;
+    const otherOov = side === 'A' ? oovB : oovA;
+    const oovPartner = otherOov.find((p) => sharesChain(p, o));
+    const pairKey =
+      o.objectId ?? partner?.objectId ?? oovPartner?.objectId ?? o.id;
     if (partner) {
       candidates.push({
         pairKey,
@@ -248,16 +251,18 @@ export function buildMatchCandidates({
         oovSide: side,
       });
     } else {
+      // OOV ↔ OOV bridges a multi-image gap; posA/posB stay null because
+      // oovPartner.{x,y} are the (0,0) placeholder, not real coordinates.
       candidates.push({
         pairKey,
         categoryId: o.categoryId,
-        realA: side === 'A' ? o : undefined,
-        realB: side === 'A' ? undefined : o,
+        realA: side === 'A' ? o : oovPartner,
+        realB: side === 'A' ? oovPartner : o,
         posA: null,
         posB: null,
         isShadowA: false,
         isShadowB: false,
-        status: 'pending',
+        status: oovPartner ? 'accepted' : 'pending',
         oovSide: side,
       });
     }

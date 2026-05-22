@@ -1,6 +1,7 @@
 import type { MatchCandidate, PairCompletionState } from '../types';
 
-// Informational candidates (project outside partner image) are excluded from totals.
+// Informational candidates (project outside partner image) are excluded
+// from totals. Chain-proposed candidates DO count — they're acceptable.
 export function evaluatePairCompletion(
   candidates: MatchCandidate[]
 ): PairCompletionState {

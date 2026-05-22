@@ -41,6 +41,13 @@ export interface MapMarker {
    * toggle label.
    */
   obscured: boolean;
+  /**
+   * True for an informational marker belonging to a *different* category
+   * than the workflow's. Rendered like a normal marker (own colour,
+   * identicon by kind) but with no workflow status ring — it never
+   * participates in candidates, accept or completion.
+   */
+  foreign?: boolean;
 }
 
 export type MapInstanceCallback = (
@@ -125,17 +132,6 @@ interface Props {
    * panel rather than on the map.
    */
   onAddOov?: () => void;
-  /**
-   * If provided, the map opens at this zoom (centred on the image centre)
-   * instead of fitting the whole image. Lets the user's zoom carry across
-   * pairs. The parent then pans to the first candidate.
-   */
-  initialZoom?: number;
-  /**
-   * Fired on every moveend with the map's current zoom so the parent can
-   * remember it and seed the next pair's `initialZoom`.
-   */
-  onZoomChange?: (zoom: number) => void;
 }
 
 const TILE_SIZE = 256;
@@ -350,16 +346,22 @@ function applyMarkerStyle(el: HTMLDivElement, m: MapMarker) {
   //   neither          → subtle 1px outline so the marker stays visible
   //                      against bright tiles.
   // box-shadow stacks first-on-top, so put the inner ring first.
-  const shadows: string[] = [];
-  if (m.active) shadows.push('0 0 0 3px #ff8c1a'); // orange
-  if (m.status === 'locked') {
-    shadows.push(m.active ? '0 0 0 6px #f1c40f' : '0 0 0 3px #f1c40f');
-  } else if (m.status === 'accepted') {
-    shadows.push(m.active ? '0 0 0 6px #27ae60' : '0 0 0 3px #27ae60');
-  } else if (!m.active) {
-    shadows.push('0 0 0 1px rgba(0, 0, 0, 0.45)');
+  if (m.foreign) {
+    // Informational marker from another category — no workflow status ring,
+    // just the subtle outline so it stays legible over bright tiles.
+    el.style.boxShadow = '0 0 0 1px rgba(0, 0, 0, 0.45)';
+  } else {
+    const shadows: string[] = [];
+    if (m.active) shadows.push('0 0 0 3px #ff8c1a'); // orange
+    if (m.status === 'locked') {
+      shadows.push(m.active ? '0 0 0 6px #f1c40f' : '0 0 0 3px #f1c40f');
+    } else if (m.status === 'accepted') {
+      shadows.push(m.active ? '0 0 0 6px #27ae60' : '0 0 0 3px #27ae60');
+    } else if (!m.active) {
+      shadows.push('0 0 0 1px rgba(0, 0, 0, 0.45)');
+    }
+    el.style.boxShadow = shadows.join(', ');
   }
-  el.style.boxShadow = shadows.join(', ');
 
   // Identicon for primary markers only.
   if (m.kind === 'primary') {
@@ -429,8 +431,6 @@ export function IndividualIdMap({
   previewTransform,
   otherImage,
   onAddOov,
-  initialZoom,
-  onZoomChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<maplibregl.Map | null>(null);
@@ -438,6 +438,10 @@ export function IndividualIdMap({
   const loadedTilesRef = useRef<Set<string>>(new Set());
   const blobUrlsRef = useRef<string[]>([]);
   const markerRefs = useRef<Map<string, maplibregl.Marker>>(new Map());
+  // maplibre emits a map `click` right after a marker `dragend` when the
+  // focus-pan displaced the marker off the cursor — timestamp the drag-end
+  // so the map-click handler can swallow that bogus click.
+  const lastMarkerDragEndRef = useRef(0);
 
   // Latest callback refs so persistent marker handlers always invoke the
   // freshest closures without needing to be re-bound.
@@ -450,10 +454,6 @@ export function IndividualIdMap({
   const changeLabelRef = useRef(onMarkerChangeLabel);
   const toggleObscuredRef = useRef(onMarkerToggleObscured);
   const addOovRef = useRef(onAddOov);
-  const zoomChangeRef = useRef(onZoomChange);
-  useEffect(() => {
-    zoomChangeRef.current = onZoomChange;
-  }, [onZoomChange]);
   useEffect(() => {
     dragRef.current = onMarkerDrag;
   }, [onMarkerDrag]);
@@ -888,19 +888,10 @@ export function IndividualIdMap({
         },
       });
 
-      if (typeof initialZoom === 'number' && Number.isFinite(initialZoom)) {
-        // Carry the user's zoom across pairs. The parent then pans to the
-        // first candidate, so the image centre is only a placeholder.
-        m.jumpTo({
-          center: px2lngLat(image.width / 2, image.height / 2),
-          zoom: initialZoom,
-        });
-      } else {
-        m.fitBounds(
-          [px2lngLat(0, image.height), px2lngLat(image.width, 0)],
-          { padding: 20, animate: false }
-        );
-      }
+      m.fitBounds(
+        [px2lngLat(0, image.height), px2lngLat(image.width, 0)],
+        { padding: 20, animate: false }
+      );
       updateVisibleTiles(m);
       mapForPopupRef.current = m;
       setMap(m);
@@ -908,7 +899,6 @@ export function IndividualIdMap({
 
     const onMoveEnd = () => {
       updateVisibleTiles(m);
-      zoomChangeRef.current?.(m.getZoom());
     };
     m.on('moveend', onMoveEnd);
 
@@ -931,6 +921,10 @@ export function IndividualIdMap({
     // don't bubble to the canvas). Convert to image-space and clamp to bounds
     // before firing onMapClick.
     const handleMapClick = (e: maplibregl.MapMouseEvent) => {
+      // Swallow the synthetic click maplibre fires straight after a marker
+      // drag-end (the focus-pan moved the marker off the cursor, so the
+      // click lands on the canvas rather than being absorbed by the marker).
+      if (Date.now() - lastMarkerDragEndRef.current < 250) return;
       const { x, y } = lngLat2px(e.lngLat.lng, e.lngLat.lat);
       if (x < 0 || y < 0 || x >= image.width || y >= image.height) return;
       mapClickRef.current?.(x, y);
@@ -1201,7 +1195,39 @@ export function IndividualIdMap({
         // Hide the popup the moment a drag begins so its pointer-events:auto
         // surface can't intercept a fast drag that crosses over it.
         mk.on('dragstart', () => hidePopup());
+        // Keep the leniency ring glued to the marker while it's dragged —
+        // posA/posB (and thus `leniencyAnchor`) only commit on dragend, so
+        // without this the ring would lag a drag of the active marker.
+        mk.on('drag', () => {
+          const mm = markersRef.current.find(
+            (x) => x.candidateKey === data.candidateKey
+          );
+          if (!mm?.active) return;
+          try {
+            const src = map.getSource(LENIENCY_SOURCE) as
+              | maplibregl.GeoJSONSource
+              | undefined;
+            if (!src) return;
+            const ll = mk!.getLngLat();
+            src.setData({
+              type: 'FeatureCollection',
+              features: [
+                {
+                  type: 'Feature',
+                  properties: {},
+                  geometry: {
+                    type: 'Point',
+                    coordinates: [ll.lng, ll.lat],
+                  },
+                },
+              ],
+            });
+          } catch {
+            /* map removed mid-drag; ignore */
+          }
+        });
         mk.on('dragend', () => {
+          lastMarkerDragEndRef.current = Date.now();
           const ll = mk!.getLngLat();
           const px = lngLat2px(ll.lng, ll.lat);
           // Annotation x/y are integers in the schema. Round at the drag
