@@ -83,6 +83,8 @@ interface Props {
 }
 
 const DEFAULT_COLOR = '#3498db';
+// Stable empty list passed while Tab is held, so the maps clear their markers.
+const NO_MARKERS: MapMarker[] = [];
 
 // Two-map workspace: renders both maps + markers and the keyboard flow.
 // Never writes the DB and never persists across mounts — the harness owns both.
@@ -191,6 +193,9 @@ export function IndividualIdMapPair(props: Props) {
   }, [imageA.id, imageB.id, client]);
 
   const color = category?.color || DEFAULT_COLOR;
+
+  // Hold Tab to peek at the underlying images with every marker hidden.
+  const [markersHidden, setMarkersHidden] = useState(false);
 
   // secondary = real whose objectId points at another row's identity; primary otherwise.
   function classify(real: AnnotationType | undefined, isShadow: boolean): MarkerKind {
@@ -524,6 +529,24 @@ export function IndividualIdMapPair(props: Props) {
     { enabled: visible && !!onRequestPrevPair },
     [onRequestPrevPair]
   );
+  // Hide markers while Tab is held; show them again on release.
+  useHotkeys(
+    'Tab',
+    (e) => setMarkersHidden(e.type === 'keydown'),
+    { enabled: visible, keydown: true, keyup: true, preventDefault: true },
+    []
+  );
+  // A keyup can be missed if focus leaves the window mid-hold, or if the
+  // pair stops being visible — reset so markers don't stay stuck hidden.
+  useEffect(() => {
+    if (!visible) {
+      setMarkersHidden(false);
+      return;
+    }
+    const reset = () => setMarkersHidden(false);
+    window.addEventListener('blur', reset);
+    return () => window.removeEventListener('blur', reset);
+  }, [visible]);
 
   const handleMarkerClick = useCallback(
     (candidateKey: string) => {
@@ -707,7 +730,7 @@ export function IndividualIdMapPair(props: Props) {
           <IndividualIdMap
             image={imageA}
             sourceKey={sourceKeys[0]}
-            markers={markersA}
+            markers={markersHidden ? NO_MARKERS : markersA}
             onMarkerDrag={handleDragA}
             onMarkerClick={handleMarkerClick}
             onMapClick={handleMapClickA}
@@ -720,9 +743,10 @@ export function IndividualIdMapPair(props: Props) {
             onMarkerCtrlClick={handleCtrlClickA}
             onAddOov={addOovA}
             leniency={leniency}
-            leniencyAnchor={activeAnchorA}
+            // Tab-to-peek also clears the leniency ring + homography overlay.
+            leniencyAnchor={markersHidden ? null : activeAnchorA}
             // Side A's overlay traces image B's bounds projected onto A.
-            previewTransform={pair.backward}
+            previewTransform={markersHidden ? undefined : pair.backward}
             otherImage={imageB}
             initialZoom={initialZoom}
             // Side A is canonical; B stays synced via the homography.
@@ -733,7 +757,7 @@ export function IndividualIdMapPair(props: Props) {
           <IndividualIdMap
             image={imageB}
             sourceKey={sourceKeys[1]}
-            markers={markersB}
+            markers={markersHidden ? NO_MARKERS : markersB}
             onMarkerDrag={handleDragB}
             onMarkerClick={handleMarkerClick}
             onMapClick={handleMapClickB}
@@ -746,9 +770,10 @@ export function IndividualIdMapPair(props: Props) {
             onMarkerCtrlClick={handleCtrlClickB}
             onAddOov={addOovB}
             leniency={leniency}
-            leniencyAnchor={activeAnchorB}
+            // Tab-to-peek also clears the leniency ring + homography overlay.
+            leniencyAnchor={markersHidden ? null : activeAnchorB}
             // Side B's overlay traces image A's bounds projected onto B.
-            previewTransform={pair.forward}
+            previewTransform={markersHidden ? undefined : pair.forward}
             otherImage={imageA}
             // Same opening zoom; the homography sync reconciles scale on first move.
             initialZoom={initialZoom}
