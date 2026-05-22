@@ -187,6 +187,45 @@ export function IndividualIdPairHarness({
   ]);
 
   // ---- The map-pair callbacks (mirror IndividualIdHarness) ----
+  // Persist a dragged real annotation's new position straight to the DB
+  // (optimistic local + cache update, rolled back on failure).
+  const persistAnnotationPosition = useCallback(
+    async (annotationId: string, pos: { x: number; y: number }) => {
+      const current = localAnnotations.find((a) => a.id === annotationId);
+      if (!current) return;
+      const x = Math.round(pos.x);
+      const y = Math.round(pos.y);
+      if (current.x === x && current.y === y) return;
+
+      const apply = (a: AnnotationType): AnnotationType =>
+        a.id === annotationId ? { ...a, x, y } : a;
+      const revert = (a: AnnotationType): AnnotationType =>
+        a.id === annotationId ? { ...a, x: current.x, y: current.y } : a;
+
+      setLocalAnnotations((prev) => prev.map(apply));
+      patchPairCache((old) => ({
+        ...old,
+        annotations: old.annotations.map(apply),
+      }));
+
+      try {
+        await client.models.Annotation.update({
+          id: annotationId,
+          x,
+          y,
+        } as any);
+      } catch (err) {
+        console.error('Failed to update annotation position', err);
+        setLocalAnnotations((prev) => prev.map(revert));
+        patchPairCache((old) => ({
+          ...old,
+          annotations: old.annotations.map(revert),
+        }));
+      }
+    },
+    [localAnnotations, client, patchPairCache]
+  );
+
   const handleDrag = useCallback(
     (
       candidateKey: string,
@@ -194,9 +233,17 @@ export function IndividualIdPairHarness({
       pos: { x: number; y: number }
     ) => {
       if (!currentPairKey) return;
-      working.setCandidatePosition(currentPairKey, candidateKey, side, pos);
+      // A real annotation persists its new x/y immediately; a shadow /
+      // proposed marker keeps its drag in working state until accept.
+      const candidate = candidates.find((c) => c.pairKey === candidateKey);
+      const real = side === 'A' ? candidate?.realA : candidate?.realB;
+      if (real) {
+        persistAnnotationPosition(real.id, pos);
+      } else {
+        working.setCandidatePosition(currentPairKey, candidateKey, side, pos);
+      }
     },
-    [working, currentPairKey]
+    [working, currentPairKey, candidates, persistAnnotationPosition]
   );
 
   const handleLock = useCallback(

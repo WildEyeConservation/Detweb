@@ -154,14 +154,6 @@ export function IndividualIdHarness({
       : DEFAULT_LENIENCY
   );
 
-  // Last map zoom the user was at. Survives pair changes (the harness stays
-  // mounted; IndividualIdMapPair is keyed per pair and remounts), so the
-  // next pair opens at the same zoom instead of refitting the whole image.
-  const rememberedZoomRef = useRef<number | null>(null);
-  const handleZoomChange = useCallback((z: number) => {
-    rememberedZoomRef.current = z;
-  }, []);
-
   // Kept in a ref so the Phase-6 completion detector can fire it from an
   // effect without a stale closure.
   const onCompleteRef = useRef(onComplete);
@@ -595,6 +587,54 @@ export function IndividualIdHarness({
   const currentView = pairViews[currentIndex];
   const currentPairKey = currentView?.pairKeyStr;
 
+  // Persist a dragged real annotation's new position straight to the DB
+  // (optimistic local + cache update, rolled back on failure).
+  const persistAnnotationPosition = useCallback(
+    async (annotationId: string, pos: { x: number; y: number }) => {
+      const current = localAnnotations.find((a) => a.id === annotationId);
+      if (!current) return;
+      const x = Math.round(pos.x);
+      const y = Math.round(pos.y);
+      if (current.x === x && current.y === y) return;
+
+      const apply = (a: AnnotationType): AnnotationType =>
+        a.id === annotationId ? { ...a, x, y } : a;
+      const revert = (a: AnnotationType): AnnotationType =>
+        a.id === annotationId ? { ...a, x: current.x, y: current.y } : a;
+
+      setLocalAnnotations((prev) => prev.map(apply));
+      patchTransectCache((old) => {
+        const annotations = old.annotations.map(apply);
+        return {
+          ...old,
+          annotations,
+          annotationsByImage: indexByImage(annotations),
+        };
+      });
+
+      try {
+        await client.models.Annotation.update({
+          id: annotationId,
+          x,
+          y,
+        } as any);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to update annotation position', err);
+        setLocalAnnotations((prev) => prev.map(revert));
+        patchTransectCache((old) => {
+          const annotations = old.annotations.map(revert);
+          return {
+            ...old,
+            annotations,
+            annotationsByImage: indexByImage(annotations),
+          };
+        });
+      }
+    },
+    [localAnnotations, client, patchTransectCache]
+  );
+
   const handleDrag = useCallback(
     (
       candidateKey: string,
@@ -602,9 +642,19 @@ export function IndividualIdHarness({
       pos: { x: number; y: number }
     ) => {
       if (!currentPairKey) return;
-      working.setCandidatePosition(currentPairKey, candidateKey, side, pos);
+      // A real annotation persists its new x/y immediately; a shadow /
+      // proposed marker keeps its drag in working state until accept.
+      const candidate = currentView?.candidates.find(
+        (c) => c.pairKey === candidateKey
+      );
+      const real = side === 'A' ? candidate?.realA : candidate?.realB;
+      if (real) {
+        persistAnnotationPosition(real.id, pos);
+      } else {
+        working.setCandidatePosition(currentPairKey, candidateKey, side, pos);
+      }
     },
-    [working, currentPairKey]
+    [working, currentPairKey, currentView, persistAnnotationPosition]
   );
 
   const handleLock = useCallback(
@@ -1473,8 +1523,6 @@ export function IndividualIdHarness({
             onRequestNextPair={() => laneNav(1)}
             collapsed={toolbarCollapsed}
             onCollapsedChange={setToolbarCollapsed}
-            initialZoom={rememberedZoomRef.current ?? undefined}
-            onZoomChange={handleZoomChange}
             shareHref={shareHref}
           />
         )}

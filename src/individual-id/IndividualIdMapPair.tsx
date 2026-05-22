@@ -75,9 +75,6 @@ interface Props {
   /** Also gates the progress bar; owned by the harness. */
   collapsed: boolean;
   onCollapsedChange: (next: boolean) => void;
-  /** Both maps open at this zoom instead of fit-to-image. Undefined on the first pair. */
-  initialZoom?: number;
-  onZoomChange?: (zoom: number) => void;
   /** Copied to the clipboard when the toolbar's Share button is clicked. */
   shareHref?: string;
 }
@@ -115,26 +112,14 @@ export function IndividualIdMapPair(props: Props) {
     onLeniencyChange,
     collapsed,
     onCollapsedChange,
-    initialZoom,
-    onZoomChange,
     shareHref,
   } = props;
   const { client } = useContext(GlobalContext)!;
 
-  // Default to the first non-accepted candidate on pair change; never auto-advance on accept.
+  // Nothing is focused on load — the user selects a candidate themselves
+  // (click a marker, arrow keys, or Space).
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const lastPairKeyRef = useRef<string>('');
   const pairKey = `${pair.image1Id}__${pair.image2Id}`;
-  useEffect(() => {
-    if (lastPairKeyRef.current === pairKey) return;
-    lastPairKeyRef.current = pairKey;
-    const firstPending = candidates.find(
-      (c) => c.status !== 'accepted' && !c.informational
-    );
-    setActiveKey(firstPending?.pairKey ?? null);
-    // Re-default only on pair change, not candidate mutation (else dragging shifts focus).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pairKey]);
 
   // If the active candidate disappears (e.g. rejected / removed), clear focus.
   useEffect(() => {
@@ -244,14 +229,18 @@ export function IndividualIdMapPair(props: Props) {
     return out;
   }, [candidates, activeKey, color]);
 
+  // Dragging a marker also focuses it — acting on any marker moves the
+  // active state to that marker.
   const handleDragA = useCallback(
     (candidateKey: string, x: number, y: number) => {
+      setActiveKey(candidateKey);
       onDrag(candidateKey, 'A', { x, y });
     },
     [onDrag]
   );
   const handleDragB = useCallback(
     (candidateKey: string, x: number, y: number) => {
+      setActiveKey(candidateKey);
       onDrag(candidateKey, 'B', { x, y });
     },
     [onDrag]
@@ -371,22 +360,6 @@ export function IndividualIdMapPair(props: Props) {
     },
     [candidates]
   );
-
-  // With a carried-over zoom, pan to the first candidate once both maps are
-  // ready. Gated on sourceKeys (the maps rebuild when they resolve) so only
-  // the final stable instance is panned — avoids the double-pan; ref makes it idempotent.
-  const focusedMapRef = useRef<maplibregl.Map | null>(null);
-  useEffect(() => {
-    if (initialZoom == null) return;
-    if (!activeKey) return;
-    if (!sourceKeys[0] || !sourceKeys[1]) return;
-    const a = mapsRef.current[0];
-    const b = mapsRef.current[1];
-    if (!a || !b) return;
-    if (focusedMapRef.current === a.map) return;
-    focusedMapRef.current = a.map;
-    panToCandidate(activeKey);
-  }, [mapsTick, activeKey, initialZoom, sourceKeys, panToCandidate]);
 
   // Pan on active-candidate transitions; skip the first activation so initial framing wins.
   const prevActiveKeyRef = useRef<string | null>(null);
@@ -558,20 +531,23 @@ export function IndividualIdMapPair(props: Props) {
     [candidates]
   );
 
-  // Empty-map click: deselect if a candidate is active (an accidental create
-  // would make the old shadow appear to "move"); otherwise create a new
-  // annotation, pre-generating the id so it survives the Munkres rebuild.
+  // Empty-map click places a new annotation and makes it the active marker
+  // (the id is pre-generated so the candidate survives the Munkres rebuild).
+  // Any previously-active marker loses focus, and is unlocked if it was only
+  // locked — an unaccepted lock is working-state only.
   const placeFromClick = useCallback(
     (clickedSide: 'A' | 'B', pos: { x: number; y: number }) => {
-      if (activeKey) {
-        if (activeCandidate?.status === 'locked') {
-          onUnlock(activeCandidate.pairKey);
+      if (activeCandidate?.status === 'locked') {
+        onUnlock(activeCandidate.pairKey);
+      }
+      if (!category || !onPlaceNew) {
+        // Can't create here — just drop focus off the active marker.
+        if (activeKey) {
+          setActiveKey(null);
+          onUnfocus?.();
         }
-        setActiveKey(null);
-        onUnfocus?.();
         return;
       }
-      if (!category || !onPlaceNew) return;
       const newId = crypto.randomUUID();
       onPlaceNew(clickedSide, pos, newId);
       setActiveKey(newId);
@@ -748,9 +724,6 @@ export function IndividualIdMapPair(props: Props) {
             // Side A's overlay traces image B's bounds projected onto A.
             previewTransform={markersHidden ? undefined : pair.backward}
             otherImage={imageB}
-            initialZoom={initialZoom}
-            // Side A is canonical; B stays synced via the homography.
-            onZoomChange={onZoomChange}
           />
         </div>
         <div style={{ flex: 1, minHeight: 0 }}>
@@ -775,8 +748,6 @@ export function IndividualIdMapPair(props: Props) {
             // Side B's overlay traces image A's bounds projected onto B.
             previewTransform={markersHidden ? undefined : pair.forward}
             otherImage={imageA}
-            // Same opening zoom; the homography sync reconciles scale on first move.
-            initialZoom={initialZoom}
           />
         </div>
         <OovPanel
