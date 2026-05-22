@@ -16,10 +16,7 @@ import {
 } from './hooks/usePairWorkingState';
 import { buildMatchCandidates } from './utils/munkres';
 import { buildNeighbourTransforms } from './utils/transforms';
-import {
-  buildChainedTransforms,
-  DEFAULT_CHAIN_RADIUS,
-} from './utils/chainedTransforms';
+import { buildChainedTransforms } from './utils/chainedTransforms';
 import { buildChainProposals } from './utils/chainPropagation';
 import { evaluatePairCompletion } from './utils/completion';
 import { isOov } from './utils/identity';
@@ -279,80 +276,6 @@ export function IndividualIdHarness({
     [transect.data?.rawNeighbours]
   );
 
-  // TEMP DEBUG: report chain-transform graph size + hop distribution so we
-  // can sanity-check the BFS on real transects.
-  useEffect(() => {
-    if (!chainedTransforms.size) return;
-    let totalEntries = 0;
-    let maxHops = 0;
-    const histogram = new Map<number, number>();
-    for (const reached of chainedTransforms.values()) {
-      totalEntries += reached.size;
-      for (const p of reached.values()) {
-        if (p.hops > maxHops) maxHops = p.hops;
-        histogram.set(p.hops, (histogram.get(p.hops) ?? 0) + 1);
-      }
-    }
-    console.log('[IndividualId][debug] chained transforms', {
-      sources: chainedTransforms.size,
-      totalReachableEntries: totalEntries,
-      radius: DEFAULT_CHAIN_RADIUS,
-      maxHops,
-      hopHistogram: Object.fromEntries(
-        Array.from(histogram.entries()).sort((a, b) => a[0] - b[0])
-      ),
-    });
-  }, [chainedTransforms]);
-
-  // ---- TEMP DEBUG: transect data pipeline ----
-  // Logs counts at each stage so an empty "No registerable pairs" screen can
-  // be diagnosed: is the transect genuinely empty (no annotations — bad
-  // availability/fanout), or are annotations present but homography
-  // neighbours missing / not piped through?
-  useEffect(() => {
-    const d = transect.data;
-    const raw = d?.rawNeighbours ?? [];
-    const imagesById = d?.imagesById ?? {};
-    let noHomography = 0;
-    let missingImage = 0;
-    for (const n of raw) {
-      const tfs = buildNeighbourTransforms(n);
-      if (tfs.noHomography) {
-        noHomography++;
-        continue;
-      }
-      if (!imagesById[n.image1Id] || !imagesById[n.image2Id]) missingImage++;
-    }
-    console.log('[IndividualId][debug] transect pipeline', {
-      transectId,
-      categoryId,
-      annotationSetId,
-      isLoading: transect.isLoading,
-      isError: (transect as any).isError ?? false,
-      error: (transect as any).error?.message ?? null,
-      images: d?.images?.length ?? 0,
-      annotations: d?.annotations?.length ?? 0,
-      localAnnotations: localAnnotations.length,
-      imagesWithAnnotations: Object.keys(annotationsByImage).length,
-      rawNeighbours: raw.length,
-      neighboursNoHomography: noHomography,
-      neighboursMissingImage: missingImage,
-      pairs: pairs.length,
-      category: d?.category
-        ? { id: (d.category as any).id, name: (d.category as any).name }
-        : null,
-    });
-  }, [
-    transect.data,
-    transect.isLoading,
-    pairs,
-    annotationsByImage,
-    localAnnotations.length,
-    transectId,
-    categoryId,
-    annotationSetId,
-  ]);
-
   // ---- Build all pair-candidate lists in display order ----
   type PairView = {
     candidates: MatchCandidate[];
@@ -382,34 +305,6 @@ export function IndividualIdHarness({
       transect.data?.imagesById,
     ]
   );
-
-  // TEMP DEBUG: chain proposals — pair count + total candidates + a
-  // breakdown of first/middle/last/anchor candidates so the propagation
-  // pass can be sanity-checked on real transects.
-  useEffect(() => {
-    if (!chainProposalsByPair.size) return;
-    let totalCandidates = 0;
-    let firstEdges = 0;
-    let middleEdges = 0;
-    let anchorEdges = 0;
-    for (const list of chainProposalsByPair.values()) {
-      totalCandidates += list.length;
-      for (const c of list) {
-        const aSide = !!c.proposedOovA;
-        const bSide = !!c.proposedOovB;
-        if (aSide && bSide) middleEdges++;
-        else if (c.realA || c.realB) firstEdges++;
-        else anchorEdges++;
-      }
-    }
-    console.log('[IndividualId][debug] chain proposals', {
-      pairsWithProposals: chainProposalsByPair.size,
-      totalCandidates,
-      firstEdges,
-      middleEdges,
-      anchorEdges,
-    });
-  }, [chainProposalsByPair]);
 
   const pairViews: PairView[] = useMemo(() => {
     return pairs.map((p) => {
