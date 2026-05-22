@@ -47,9 +47,11 @@ export interface PairData {
 /**
  * Loads everything needed to edit a single image pair: both images (with
  * their neighbour rows), the active category, every annotation on those two
- * images for the chosen category/set, and the chain members of any chain that
- * extends beyond the pair — so accepting / deleting links can re-root the
- * full chain rather than silently leaving stragglers on other images.
+ * images in the set (all categories — the workflow filters to the chosen
+ * one, the maps show the rest as informational markers), and the chain
+ * members of any chain that extends beyond the pair — so accepting /
+ * deleting links can re-root the full chain rather than silently leaving
+ * stragglers on other images.
  */
 export function usePairData(input: UsePairDataInput) {
   const { client } = useContext(GlobalContext)!;
@@ -159,9 +161,9 @@ export function usePairData(input: UsePairDataInput) {
           { imageId: img2.id, setId: { eq: annotationSetId! }, limit: 1000 }
         ),
       ]);
-      const pairAnnotations = [...annsA, ...annsB].filter(
-        (a) => a.categoryId === categoryId
-      );
+      // Keep every category — the workflow filters to `categoryId`, but the
+      // maps also show the other categories as informational markers.
+      const pairAnnotations = [...annsA, ...annsB];
       setProgress((p) => ({ ...p, annotations: pairAnnotations.length }));
 
       // Chain expansion: every chain root referenced by a pair-local

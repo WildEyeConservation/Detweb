@@ -77,11 +77,21 @@ interface Props {
   onCollapsedChange: (next: boolean) => void;
   /** Copied to the clipboard when the toolbar's Share button is clicked. */
   shareHref?: string;
+  /**
+   * Annotations from OTHER categories on these two images. Rendered as
+   * read-only informational markers — never candidates, never accepted.
+   */
+  foreignAnnotations?: AnnotationType[];
+  /** categoryId → marker colour, used to colour the informational markers. */
+  categoryColors?: Record<string, string>;
 }
 
 const DEFAULT_COLOR = '#3498db';
 // Stable empty list passed while Tab is held, so the maps clear their markers.
 const NO_MARKERS: MapMarker[] = [];
+// Stable empty defaults so the optional props don't churn memo identities.
+const NO_FOREIGN: AnnotationType[] = [];
+const NO_COLORS: Record<string, string> = {};
 
 // Two-map workspace: renders both maps + markers and the keyboard flow.
 // Never writes the DB and never persists across mounts — the harness owns both.
@@ -113,6 +123,8 @@ export function IndividualIdMapPair(props: Props) {
     collapsed,
     onCollapsedChange,
     shareHref,
+    foreignAnnotations = NO_FOREIGN,
+    categoryColors = NO_COLORS,
   } = props;
   const { client } = useContext(GlobalContext)!;
 
@@ -189,6 +201,14 @@ export function IndividualIdMapPair(props: Props) {
     return 'primary';
   }
 
+  // Lookup for routing marker handlers — informational markers are keyed by
+  // their annotation id rather than a candidate pairKey.
+  const foreignById = useMemo(() => {
+    const m = new Map<string, AnnotationType>();
+    for (const a of foreignAnnotations) m.set(a.id, a);
+    return m;
+  }, [foreignAnnotations]);
+
   const markersA: MapMarker[] = useMemo(() => {
     const out: MapMarker[] = [];
     for (const c of candidates) {
@@ -206,8 +226,25 @@ export function IndividualIdMapPair(props: Props) {
         obscured: c.realA ? !!c.realA.obscured : !!c.obscuredA,
       });
     }
+    // Informational markers for annotations belonging to other categories.
+    for (const a of foreignAnnotations) {
+      if (a.imageId !== imageA.id) continue;
+      out.push({
+        candidateKey: a.id,
+        side: 'A',
+        x: a.x,
+        y: a.y,
+        color: categoryColors[a.categoryId] ?? DEFAULT_COLOR,
+        status: 'pending',
+        kind: classify(a, false),
+        identityKey: a.objectId ?? a.id,
+        active: false,
+        obscured: !!a.obscured,
+        foreign: true,
+      });
+    }
     return out;
-  }, [candidates, activeKey, color]);
+  }, [candidates, activeKey, color, foreignAnnotations, imageA.id, categoryColors]);
 
   const markersB: MapMarker[] = useMemo(() => {
     const out: MapMarker[] = [];
@@ -226,24 +263,42 @@ export function IndividualIdMapPair(props: Props) {
         obscured: c.realB ? !!c.realB.obscured : !!c.obscuredB,
       });
     }
+    // Informational markers for annotations belonging to other categories.
+    for (const a of foreignAnnotations) {
+      if (a.imageId !== imageB.id) continue;
+      out.push({
+        candidateKey: a.id,
+        side: 'B',
+        x: a.x,
+        y: a.y,
+        color: categoryColors[a.categoryId] ?? DEFAULT_COLOR,
+        status: 'pending',
+        kind: classify(a, false),
+        identityKey: a.objectId ?? a.id,
+        active: false,
+        obscured: !!a.obscured,
+        foreign: true,
+      });
+    }
     return out;
-  }, [candidates, activeKey, color]);
+  }, [candidates, activeKey, color, foreignAnnotations, imageB.id, categoryColors]);
 
   // Dragging a marker also focuses it — acting on any marker moves the
-  // active state to that marker.
+  // active state to that marker. Informational markers can't be focused, so
+  // dragging one only repositions it.
   const handleDragA = useCallback(
     (candidateKey: string, x: number, y: number) => {
-      setActiveKey(candidateKey);
+      if (!foreignById.has(candidateKey)) setActiveKey(candidateKey);
       onDrag(candidateKey, 'A', { x, y });
     },
-    [onDrag]
+    [onDrag, foreignById]
   );
   const handleDragB = useCallback(
     (candidateKey: string, x: number, y: number) => {
-      setActiveKey(candidateKey);
+      if (!foreignById.has(candidateKey)) setActiveKey(candidateKey);
       onDrag(candidateKey, 'B', { x, y });
     },
-    [onDrag]
+    [onDrag, foreignById]
   );
 
   // Slave the other map via the homography on move/zoom; isSyncingRef breaks the feedback loop.
@@ -523,12 +578,14 @@ export function IndividualIdMapPair(props: Props) {
 
   const handleMarkerClick = useCallback(
     (candidateKey: string) => {
-      // Don't activate informational markers — no partner to lock/accept.
+      // Other-category markers aren't part of the workflow — not focusable.
+      if (foreignById.has(candidateKey)) return;
+      // Don't activate informational candidates — no partner to lock/accept.
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
       if (c?.informational) return;
       setActiveKey(candidateKey);
     },
-    [candidates]
+    [candidates, foreignById]
   );
 
   // Empty-map click places a new annotation and makes it the active marker
@@ -579,52 +636,82 @@ export function IndividualIdMapPair(props: Props) {
 
   const handleDeleteA = useCallback(
     (candidateKey: string) => {
+      const foreign = foreignById.get(candidateKey);
+      if (foreign) {
+        onDelete?.(foreign.id);
+        return;
+      }
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
       if (c?.realA) onDelete?.(c.realA.id);
     },
-    [candidates, onDelete]
+    [candidates, onDelete, foreignById]
   );
   const handleDeleteB = useCallback(
     (candidateKey: string) => {
+      const foreign = foreignById.get(candidateKey);
+      if (foreign) {
+        onDelete?.(foreign.id);
+        return;
+      }
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
       if (c?.realB) onDelete?.(c.realB.id);
     },
-    [candidates, onDelete]
+    [candidates, onDelete, foreignById]
   );
 
   const handleChangeLabelA = useCallback(
     (candidateKey: string) => {
+      const foreign = foreignById.get(candidateKey);
+      if (foreign) {
+        onChangeLabel?.(foreign.id, foreign.categoryId);
+        return;
+      }
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
       if (c?.realA) onChangeLabel?.(c.realA.id, c.realA.categoryId);
     },
-    [candidates, onChangeLabel]
+    [candidates, onChangeLabel, foreignById]
   );
   const handleChangeLabelB = useCallback(
     (candidateKey: string) => {
+      const foreign = foreignById.get(candidateKey);
+      if (foreign) {
+        onChangeLabel?.(foreign.id, foreign.categoryId);
+        return;
+      }
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
       if (c?.realB) onChangeLabel?.(c.realB.id, c.realB.categoryId);
     },
-    [candidates, onChangeLabel]
+    [candidates, onChangeLabel, foreignById]
   );
 
   const handleToggleObscuredA = useCallback(
     (candidateKey: string) => {
+      const foreign = foreignById.get(candidateKey);
+      if (foreign) {
+        onToggleObscured?.(foreign.id);
+        return;
+      }
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
       if (!c) return;
       // Real → live DB toggle; shadow → in-memory intent applied at accept.
       if (c.realA) onToggleObscured?.(c.realA.id);
       else onSetProposedObscured?.(c.pairKey, 'A', !c.obscuredA);
     },
-    [candidates, onToggleObscured, onSetProposedObscured]
+    [candidates, onToggleObscured, onSetProposedObscured, foreignById]
   );
   const handleToggleObscuredB = useCallback(
     (candidateKey: string) => {
+      const foreign = foreignById.get(candidateKey);
+      if (foreign) {
+        onToggleObscured?.(foreign.id);
+        return;
+      }
       const c = candidates.find((cc) => cc.pairKey === candidateKey);
       if (!c) return;
       if (c.realB) onToggleObscured?.(c.realB.id);
       else onSetProposedObscured?.(c.pairKey, 'B', !c.obscuredB);
     },
-    [candidates, onToggleObscured, onSetProposedObscured]
+    [candidates, onToggleObscured, onSetProposedObscured, foreignById]
   );
 
   // Ctrl+click a real marker on the other image to link it with the active

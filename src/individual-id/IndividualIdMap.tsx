@@ -41,6 +41,13 @@ export interface MapMarker {
    * toggle label.
    */
   obscured: boolean;
+  /**
+   * True for an informational marker belonging to a *different* category
+   * than the workflow's. Rendered like a normal marker (own colour,
+   * identicon by kind) but with no workflow status ring — it never
+   * participates in candidates, accept or completion.
+   */
+  foreign?: boolean;
 }
 
 export type MapInstanceCallback = (
@@ -339,16 +346,22 @@ function applyMarkerStyle(el: HTMLDivElement, m: MapMarker) {
   //   neither          → subtle 1px outline so the marker stays visible
   //                      against bright tiles.
   // box-shadow stacks first-on-top, so put the inner ring first.
-  const shadows: string[] = [];
-  if (m.active) shadows.push('0 0 0 3px #ff8c1a'); // orange
-  if (m.status === 'locked') {
-    shadows.push(m.active ? '0 0 0 6px #f1c40f' : '0 0 0 3px #f1c40f');
-  } else if (m.status === 'accepted') {
-    shadows.push(m.active ? '0 0 0 6px #27ae60' : '0 0 0 3px #27ae60');
-  } else if (!m.active) {
-    shadows.push('0 0 0 1px rgba(0, 0, 0, 0.45)');
+  if (m.foreign) {
+    // Informational marker from another category — no workflow status ring,
+    // just the subtle outline so it stays legible over bright tiles.
+    el.style.boxShadow = '0 0 0 1px rgba(0, 0, 0, 0.45)';
+  } else {
+    const shadows: string[] = [];
+    if (m.active) shadows.push('0 0 0 3px #ff8c1a'); // orange
+    if (m.status === 'locked') {
+      shadows.push(m.active ? '0 0 0 6px #f1c40f' : '0 0 0 3px #f1c40f');
+    } else if (m.status === 'accepted') {
+      shadows.push(m.active ? '0 0 0 6px #27ae60' : '0 0 0 3px #27ae60');
+    } else if (!m.active) {
+      shadows.push('0 0 0 1px rgba(0, 0, 0, 0.45)');
+    }
+    el.style.boxShadow = shadows.join(', ');
   }
-  el.style.boxShadow = shadows.join(', ');
 
   // Identicon for primary markers only.
   if (m.kind === 'primary') {

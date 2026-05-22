@@ -233,10 +233,15 @@ export function IndividualIdPairHarness({
       pos: { x: number; y: number }
     ) => {
       if (!currentPairKey) return;
+      const candidate = candidates.find((c) => c.pairKey === candidateKey);
+      if (!candidate) {
+        // Informational (other-category) marker — keyed by annotation id.
+        persistAnnotationPosition(candidateKey, pos);
+        return;
+      }
       // A real annotation persists its new x/y immediately; a shadow /
       // proposed marker keeps its drag in working state until accept.
-      const candidate = candidates.find((c) => c.pairKey === candidateKey);
-      const real = side === 'A' ? candidate?.realA : candidate?.realB;
+      const real = side === 'A' ? candidate.realA : candidate.realB;
       if (real) {
         persistAnnotationPosition(real.id, pos);
       } else {
@@ -520,6 +525,31 @@ export function IndividualIdPairHarness({
       ),
     [allCategories, annotationSetId]
   );
+
+  // categoryId → marker colour for the informational (other-category)
+  // markers drawn on the maps.
+  const categoryColors = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const c of setCategories) {
+      const col = (c as any).color;
+      if (c.id && col) m[c.id] = col;
+    }
+    return m;
+  }, [setCategories]);
+
+  // Annotations on the pair's two images that belong to OTHER categories —
+  // rendered as read-only informational markers. OOV rows are excluded
+  // since they have no on-image position.
+  const foreignAnnotations = useMemo(() => {
+    if (!pair) return [];
+    return localAnnotations.filter(
+      (a) =>
+        a.categoryId !== categoryId &&
+        !isOov(a) &&
+        (a.imageId === pair.image1Id || a.imageId === pair.image2Id)
+    );
+  }, [localAnnotations, pair, categoryId]);
+
   const [labelChange, setLabelChange] = useState<{
     annotationId: string;
     currentCategoryId: string;
@@ -891,6 +921,8 @@ export function IndividualIdPairHarness({
           imageB={pair.imageB}
           candidates={candidates}
           category={pairData.data?.category ?? null}
+          foreignAnnotations={foreignAnnotations}
+          categoryColors={categoryColors}
           visible
           leniency={leniency}
           onLeniencyChange={setLeniency}
@@ -920,27 +952,17 @@ export function IndividualIdPairHarness({
         onSelectCategory={handleApplyLabelChange}
         warning={(() => {
           const count = labelChange?.chainIds.length ?? 1;
-          if (count <= 1) {
+          if (count > 1) {
             return (
               <>
-                <strong>Heads up:</strong> this workspace is filtered to a
-                single label, so changing this annotation's label will remove
-                it from the current view. The annotation itself is preserved
-                — switch to the new label to see it again.
-              </>
-            );
-          }
-          return (
-            <>
               <strong>Heads up:</strong> this annotation is linked to{' '}
               {count - 1} other{count - 1 === 1 ? '' : 's'} of the same
               individual. Changing the label will update{' '}
               <strong>all {count}</strong> of them so the chain stays
-              consistent. They'll disappear from this view (filtered to a
-              single label) but the annotations themselves are preserved —
-              switch to the new label to find them.
+              consistent.
             </>
-          );
+            );
+          }
         })()}
       />
       <LinkAnnotationDialog

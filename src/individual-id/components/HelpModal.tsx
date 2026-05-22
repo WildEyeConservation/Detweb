@@ -183,6 +183,27 @@ export function HelpModal({ show, onHide }: Props) {
           </Row>
         </Section>
 
+        <Section title='Markers from other labels'>
+          <Row
+            demo={
+              <DemoMarker
+                kind='primary'
+                color='#E0A33D'
+                seed='other-label'
+              />
+            }
+            label='Informational marker'
+          >
+            A marker in a <em>different colour</em> belongs to another
+            label. It is shown only so you can see that animal is already
+            marked — it is <strong>not part of this task</strong> and is
+            ignored by linking, accepting and pair completion. You can still
+            drag it, or use its popup to change its label or delete it.
+            Changing its label to the label you are working on promotes it
+            into the workflow as a normal marker.
+          </Row>
+        </Section>
+
         <Section title='Selection & status'>
           <Row demo={<DemoMarker kind='primary' active />} label='Selected'>
             Orange border — this is the active marker. Keyboard actions and
