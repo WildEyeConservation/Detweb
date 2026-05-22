@@ -7,7 +7,7 @@ type CandidateKey = string;
 interface CandidateOverride {
   posA?: { x: number; y: number };
   posB?: { x: number; y: number };
-  status?: 'pending' | 'locked' | 'accepted';
+  status?: 'pending' | 'accepted';
   obscuredA?: boolean;
   obscuredB?: boolean;
   rejected?: boolean;
@@ -18,9 +18,7 @@ export interface PairWorkingState {
   mergeCandidates: (pairKey: PairKey, fresh: MatchCandidate[]) => MatchCandidate[];
   setCandidatePosition: (pairKey: PairKey, candidateKey: CandidateKey, side: 'A' | 'B', pos: { x: number; y: number }) => void;
   setCandidateObscured: (pairKey: PairKey, candidateKey: CandidateKey, side: 'A' | 'B', value: boolean) => void;
-  lockCandidate: (pairKey: PairKey, candidateKey: CandidateKey) => void;
   acceptCandidate: (pairKey: PairKey, candidateKey: CandidateKey) => void;
-  unlockCandidate: (pairKey: PairKey, candidateKey: CandidateKey) => void;
   rejectCandidate: (pairKey: PairKey, candidateKey: CandidateKey) => void;
   clearPair: (pairKey: PairKey) => void;
   hasUnsavedWork: (pairKey: PairKey) => boolean;
@@ -109,18 +107,8 @@ export function usePairWorkingState(): PairWorkingState {
       [updateCandidate]
     );
 
-  const lockCandidate: PairWorkingState['lockCandidate'] = useCallback(
-    (pk, ck) => updateCandidate(pk, ck, (prev) => ({ ...prev, status: 'locked' })),
-    [updateCandidate]
-  );
-
   const acceptCandidate: PairWorkingState['acceptCandidate'] = useCallback(
     (pk, ck) => updateCandidate(pk, ck, (prev) => ({ ...prev, status: 'accepted' })),
-    [updateCandidate]
-  );
-
-  const unlockCandidate: PairWorkingState['unlockCandidate'] = useCallback(
-    (pk, ck) => updateCandidate(pk, ck, (prev) => ({ ...prev, status: 'pending' })),
     [updateCandidate]
   );
 
@@ -143,7 +131,6 @@ export function usePairWorkingState(): PairWorkingState {
     for (const ov of pair.values()) {
       if (ov.posA || ov.posB) return true;
       if (ov.obscuredA || ov.obscuredB) return true;
-      if (ov.status && ov.status !== 'pending' && ov.status !== 'accepted') return true;
     }
     return false;
   }, []);
@@ -154,9 +141,7 @@ export function usePairWorkingState(): PairWorkingState {
       mergeCandidates,
       setCandidatePosition,
       setCandidateObscured,
-      lockCandidate,
       acceptCandidate,
-      unlockCandidate,
       rejectCandidate,
       clearPair,
       hasUnsavedWork,
@@ -166,9 +151,7 @@ export function usePairWorkingState(): PairWorkingState {
       mergeCandidates,
       setCandidatePosition,
       setCandidateObscured,
-      lockCandidate,
       acceptCandidate,
-      unlockCandidate,
       rejectCandidate,
       clearPair,
       hasUnsavedWork,

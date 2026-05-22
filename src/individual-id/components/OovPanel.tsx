@@ -18,6 +18,8 @@ interface Props {
   onHoverChange: (candidateKey: string | null) => void;
   /** Delete the OOV row underlying this card. */
   onDelete: (candidateKey: string) => void;
+  /** Toggle the `noPartnerExpected` flag on the OOV row. */
+  onToggleNoPartnerExpected: (annotationId: string) => void;
 }
 
 const COLLAPSED_WIDTH = 38;
@@ -34,6 +36,7 @@ export function OovPanel({
   onCtrlClick,
   onHoverChange,
   onDelete,
+  onToggleNoPartnerExpected,
 }: Props) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -139,6 +142,7 @@ export function OovPanel({
               onCtrlClick={onCtrlClick}
               onHoverChange={onHoverChange}
               onDelete={onDelete}
+              onToggleNoPartnerExpected={onToggleNoPartnerExpected}
             />
           )
         )}
@@ -238,6 +242,7 @@ function OovCard({
   onCtrlClick,
   onHoverChange,
   onDelete,
+  onToggleNoPartnerExpected,
 }: {
   candidate: MatchCandidate;
   side: 'A' | 'B';
@@ -249,6 +254,7 @@ function OovCard({
   onCtrlClick: (key: string) => void;
   onHoverChange: (key: string | null) => void;
   onDelete: (key: string) => void;
+  onToggleNoPartnerExpected: (annotationId: string) => void;
 }) {
   const real = side === 'A' ? candidate.realA : candidate.realB;
   const isPrimary = !real?.objectId || real.objectId === real.id;
@@ -263,20 +269,24 @@ function OovCard({
   // row to remove yet, and silently no-op'ing the button would be misleading.
   const showActions = hover && !isProposed;
 
+  // Terminus: accepted via `noPartnerExpected` rather than a real partner.
+  // Other side of the candidate is empty (no `realA`/`realB` opposite).
+  const otherSideReal = side === 'A' ? candidate.realB : candidate.realA;
+  const isTerminus =
+    candidate.status === 'accepted' && !otherSideReal && !isProposed;
+
   const statusColor = isProposed
     ? '#ffa500'
     : candidate.status === 'accepted'
     ? '#27ae60'
-    : candidate.status === 'locked'
-    ? '#f1c40f'
     : '#888';
   const statusLabel = isProposed
     ? 'Proposed'
+    : isTerminus
+    ? 'No link required'
     : candidate.status === 'accepted'
     ? 'Linked'
-    : candidate.status === 'pending'
-    ? 'Needs link'
-    : 'Locked';
+    : 'Needs link';
 
   const handleClick = (ev: React.MouseEvent) => {
     if ((ev.ctrlKey || ev.metaKey) && ev.button === 0) {
@@ -383,6 +393,36 @@ function OovCard({
       >
         {statusLabel}
       </div>
+      {/* Terminus toggle: only meaningful for partnerless DB OOVs. A
+          partnered OOV is already accepted via its link, so the flag is
+          moot; a chain-proposed OOV has no DB row to update yet. */}
+      {!isProposed && !otherSideReal && real && (
+        <button
+          type='button'
+          onClick={(ev) => {
+            ev.stopPropagation();
+            onToggleNoPartnerExpected(real.id);
+          }}
+          title={
+            isTerminus
+              ? 'Allow this OOV to require a partner on neighbour pairs again'
+              : 'Mark this OOV as a chain terminus — no partner expected on any neighbour'
+          }
+          style={{
+            background: '#ff8c1a',
+            color: '#fff',
+            border: '1px solid #ff8c1a',
+            borderRadius: 4,
+            padding: '2px 6px',
+            fontSize: 10,
+            fontWeight: 600,
+            cursor: 'pointer',
+            alignSelf: 'flex-start',
+          }}
+        >
+          {isTerminus ? 'Require link' : 'No link required'}
+        </button>
+      )}
       {showActions && (
         <button
           type='button'

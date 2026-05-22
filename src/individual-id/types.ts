@@ -31,10 +31,9 @@ export interface NeighbourPair {
  * Status of a single annotation candidate inside a pair.
  *
  * `pending`  — proposed by Munkres or moved by the user, NOT committed yet.
- * `locked`   — user pressed space once: position is frozen for this candidate.
- * `accepted` — user pressed space twice: objectId written to DB on both sides.
+ * `accepted` — user pressed Space: objectId written to DB on both sides.
  */
-export type CandidateStatus = 'pending' | 'locked' | 'accepted';
+export type CandidateStatus = 'pending' | 'accepted';
 
 /**
  * A single match candidate inside a pair: zero, one, or two real annotations
