@@ -16,8 +16,6 @@ import {
 } from './hooks/usePairWorkingState';
 import { buildMatchCandidates } from './utils/munkres';
 import { buildNeighbourTransforms } from './utils/transforms';
-import { buildChainedTransforms } from './utils/chainedTransforms';
-import { buildChainProposals } from './utils/chainPropagation';
 import { evaluatePairCompletion } from './utils/completion';
 import { isOov } from './utils/identity';
 import { buildLanes, filterLanesToAttention } from './utils/lanes';
@@ -104,8 +102,8 @@ type LinkActor = {
   obscured?: boolean;
   /**
    * Materialise the new row as an OOV annotation (oov: true, placeholder
-   * coords). Used when the side is a chain-proposed OOV. Ignored when
-   * `existing` is set.
+   * coords). Used by "Move to OOV" on a shadow whose partner sits on the
+   * other side. Ignored when `existing` is set.
    */
   oov?: boolean;
   /**
@@ -265,15 +263,6 @@ export function IndividualIdHarness({
     return out;
   }, [transect.data?.rawNeighbours, transect.data?.imagesById]);
 
-  // Chain-propagation transforms — every image's reachable indirect neighbours
-  // up to DEFAULT_CHAIN_RADIUS hops, with composed homographies. Consumed
-  // by `buildChainProposals` below; memoised on rawNeighbours so it only
-  // rebuilds when the graph actually changes.
-  const chainedTransforms = useMemo(
-    () => buildChainedTransforms(transect.data?.rawNeighbours ?? []),
-    [transect.data?.rawNeighbours]
-  );
-
   // ---- Build all pair-candidate lists in display order ----
   type PairView = {
     candidates: MatchCandidate[];
@@ -281,33 +270,10 @@ export function IndividualIdHarness({
     pairKeyStr: string;
   };
 
-  // Chain proposals across the whole transect — per-pair candidates derived
-  // by walking the chained-transform graph from every real annotation. The
-  // pairViews memo splices these in alongside Munkres output.
-  const chainProposalsByPair = useMemo(
-    () =>
-      buildChainProposals({
-        pairs,
-        annotationsByImage,
-        imagesById: transect.data?.imagesById ?? {},
-        chainedTransforms,
-        leniency,
-        categoryId,
-      }),
-    [
-      pairs,
-      annotationsByImage,
-      chainedTransforms,
-      leniency,
-      categoryId,
-      transect.data?.imagesById,
-    ]
-  );
-
   const pairViews: PairView[] = useMemo(() => {
     return pairs.map((p) => {
       const pairKey = makePairKey(p.image1Id, p.image2Id);
-      const munkres = buildMatchCandidates({
+      const fresh = buildMatchCandidates({
         annotationsA: annotationsByImage[p.image1Id] ?? [],
         annotationsB: annotationsByImage[p.image2Id] ?? [],
         imageA: p.imageA,
@@ -317,81 +283,7 @@ export function IndividualIdHarness({
         leniency,
         categoryFilter: categoryId,
       });
-
-      // Splice chain proposals in:
-      //   - informational Munkres candidate at the same pairKey → replace
-      //     (the chain now bridges the gap that produced the marker).
-      //   - pending OOV Munkres candidate at the same pairKey → enrich
-      //     with the chain's `proposedOov*` flag so the OOV row gains a
-      //     proposed continuation on the other side.
-      //   - any other non-informational Munkres candidate → keep (hop-1
-      //     fact; chain proposal yields).
-      const proposals = chainProposalsByPair.get(pairKey) ?? [];
-      let combined: MatchCandidate[];
-      if (proposals.length === 0) {
-        combined = munkres;
-      } else {
-        // Index Munkres candidates by pairKey, but drop any that
-        // reference a real annotation a chain proposal also incorporates
-        // under a different pairKey — otherwise the same animal would
-        // surface twice with two different jdenticon/nameFor names.
-        // Real-real Munkres matches (both sides positioned) are a strong
-        // signal and survive even when conflicting.
-        const chainRealIds = new Set<string>();
-        const chainPairKeys = new Set<string>();
-        for (const prop of proposals) {
-          if (prop.realA?.id) chainRealIds.add(prop.realA.id);
-          if (prop.realB?.id) chainRealIds.add(prop.realB.id);
-          chainPairKeys.add(prop.pairKey);
-        }
-        const byKey = new Map<string, MatchCandidate>();
-        for (const c of munkres) {
-          const aId = c.realA?.id;
-          const bId = c.realB?.id;
-          const conflicts =
-            (aId && chainRealIds.has(aId)) ||
-            (bId && chainRealIds.has(bId));
-          const isRealReal =
-            !!c.realA && !!c.realB && !c.isShadowA && !c.isShadowB;
-          if (conflicts && !chainPairKeys.has(c.pairKey) && !isRealReal) {
-            continue;
-          }
-          byKey.set(c.pairKey, c);
-        }
-        for (const prop of proposals) {
-          const existing = byKey.get(prop.pairKey);
-          if (!existing) {
-            byKey.set(prop.pairKey, prop);
-            continue;
-          }
-          if (existing.status === 'accepted') continue;
-          if (existing.informational) {
-            byKey.set(prop.pairKey, prop);
-            continue;
-          }
-          if (existing.oovSide) {
-            // Enrich the pending OOV with the chain extension flag and
-            // any positional info from the chain (e.g. last-edge anchor
-            // shadow when the OOV sits opposite an anchor).
-            byKey.set(prop.pairKey, {
-              ...existing,
-              proposedOovA: existing.proposedOovA || prop.proposedOovA,
-              proposedOovB: existing.proposedOovB || prop.proposedOovB,
-              posA: existing.posA ?? prop.posA,
-              posB: existing.posB ?? prop.posB,
-              isShadowA: existing.isShadowA || prop.isShadowA,
-              isShadowB: existing.isShadowB || prop.isShadowB,
-              realA: existing.realA ?? prop.realA,
-              realB: existing.realB ?? prop.realB,
-            });
-            continue;
-          }
-          // Non-OOV, non-informational Munkres candidate wins.
-        }
-        combined = Array.from(byKey.values());
-      }
-
-      const merged = working.mergeCandidates(pairKey, combined);
+      const merged = working.mergeCandidates(pairKey, fresh);
       return {
         candidates: merged,
         completion: evaluatePairCompletion(merged),
@@ -400,20 +292,12 @@ export function IndividualIdHarness({
     });
     // working.version increments on every override mutation so this memo
     // recomputes when the user drags / locks / accepts.
-  }, [
-    pairs,
-    annotationsByImage,
-    leniency,
-    categoryId,
-    working,
-    working.version,
-    chainProposalsByPair,
-  ]);
+  }, [pairs, annotationsByImage, leniency, categoryId, working, working.version]);
 
-  // ---- Per-camera lanes for the progress bar ----
-  // Pure presentation grouping over the flat `pairs` array. Same-camera
-  // pairs sit in their camera's lane; cross-camera pairs appear in both
-  // lanes (one logical pair shown twice). Single camera → one lane.
+  // ---- Progress-bar rows ----
+  // Pure presentation grouping over the flat `pairs` array: one row per
+  // camera, plus a dedicated overlap row for cross-camera pairs between two
+  // cameras. Single camera with no overlaps → one row.
   const lanes = useMemo(
     () => buildLanes(pairs, transect.data?.cameraNamesById ?? {}),
     [pairs, transect.data?.cameraNamesById]
@@ -1417,23 +1301,12 @@ export function IndividualIdHarness({
       if (!candidate) return;
 
       const actors: LinkActor[] = [];
-      // Side A: existing real wins; otherwise a chain-proposed OOV
-      // materialises with placeholder coords; otherwise a Munkres-shadow
-      // position materialises as a real annotation.
       if (candidate.realA) {
         actors.push({
           id: candidate.realA.id,
           imageId: candidate.realA.imageId,
           existing: candidate.realA,
           candidatePos: candidate.posA ?? null,
-        });
-      } else if (candidate.proposedOovA) {
-        actors.push({
-          id: crypto.randomUUID(),
-          imageId: currentPair.image1Id,
-          existing: null,
-          candidatePos: { x: 0, y: 0 },
-          oov: true,
         });
       } else if (candidate.posA) {
         actors.push({
@@ -1450,14 +1323,6 @@ export function IndividualIdHarness({
           imageId: candidate.realB.imageId,
           existing: candidate.realB,
           candidatePos: candidate.posB ?? null,
-        });
-      } else if (candidate.proposedOovB) {
-        actors.push({
-          id: crypto.randomUUID(),
-          imageId: currentPair.image2Id,
-          existing: null,
-          candidatePos: { x: 0, y: 0 },
-          oov: true,
         });
       } else if (candidate.posB) {
         actors.push({

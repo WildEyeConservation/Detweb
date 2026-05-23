@@ -485,14 +485,8 @@ export function IndividualIdMapPair(props: Props) {
       advanceFocus(1);
       return;
     }
-    // Pure OOV (no chain extension, no positional partner) still needs a
-    // manual Ctrl/⌘+click link — Space skips ahead. An OOV with a chain
-    // extension (proposedOov on the other side) is acceptable below.
-    if (
-      activeCandidate.oovSide &&
-      !activeCandidate.proposedOovA &&
-      !activeCandidate.proposedOovB
-    ) {
+    // OOV has no positional partner — Space skips; linking is via Ctrl/⌘+click.
+    if (activeCandidate.oovSide) {
       advanceFocus(1);
       return;
     }
@@ -751,15 +745,13 @@ export function IndividualIdMapPair(props: Props) {
     [activeCandidate, candidates, onManualLinkRequest]
   );
 
-  // OOV candidates split by side; the partner (if any) renders normally on
-  // the other map. Chain-proposed OOVs (no DB row yet) ride the same panel
-  // — the visual treatment of those cards differentiates them.
+  // OOV candidates split by side; the partner (if any) renders normally on the other map.
   const oovCandidatesA = useMemo(
-    () => candidates.filter((c) => c.oovSide === 'A' || c.proposedOovA),
+    () => candidates.filter((c) => c.oovSide === 'A'),
     [candidates]
   );
   const oovCandidatesB = useMemo(
-    () => candidates.filter((c) => c.oovSide === 'B' || c.proposedOovB),
+    () => candidates.filter((c) => c.oovSide === 'B'),
     [candidates]
   );
 
@@ -787,7 +779,7 @@ export function IndividualIdMapPair(props: Props) {
 
   return (
     <div className='w-100 h-100 d-flex flex-column gap-2'>
-      <div className='d-flex flex-row gap-2 w-100' style={{ flex: 1, minHeight: 0 }}>
+      <div className='d-flex flex-row gap-2 w-100' style={{ flex: 1 }}>
         <OovPanel
           side='A'
           candidates={oovCandidatesA}

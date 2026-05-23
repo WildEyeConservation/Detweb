@@ -792,14 +792,6 @@ export function IndividualIdPairHarness({
           existing: candidate.realA,
           candidatePos: candidate.posA ?? null,
         });
-      } else if (candidate.proposedOovA) {
-        actors.push({
-          id: crypto.randomUUID(),
-          imageId: pair.image1Id,
-          existing: null,
-          candidatePos: { x: 0, y: 0 },
-          oov: true,
-        });
       } else if (candidate.posA) {
         actors.push({
           id: crypto.randomUUID(),
@@ -815,14 +807,6 @@ export function IndividualIdPairHarness({
           imageId: candidate.realB.imageId,
           existing: candidate.realB,
           candidatePos: candidate.posB ?? null,
-        });
-      } else if (candidate.proposedOovB) {
-        actors.push({
-          id: crypto.randomUUID(),
-          imageId: pair.image2Id,
-          existing: null,
-          candidatePos: { x: 0, y: 0 },
-          oov: true,
         });
       } else if (candidate.posB) {
         actors.push({
