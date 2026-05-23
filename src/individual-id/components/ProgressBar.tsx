@@ -8,8 +8,9 @@ interface Props {
   /** Completion state for each pair, in flat (global) display order. */
   states: PairCompletionState[];
   /**
-   * Per-camera lanes. `entries` index into `states`. Cross-camera pairs
-   * appear in two lanes; clicking either jumps to the same flat index.
+   * Stacked rows: one per camera, plus a dedicated overlap row for every
+   * pair of cameras that share cross-camera pairs. `entries` index into
+   * `states`; clicking a slot jumps to that flat index.
    */
   lanes: Lane[];
   /** Flat index of the pair currently being worked on. */
@@ -41,8 +42,7 @@ const PADDING_X = 12;
  *
  * `activeLocal` is the position of the globally-active pair within THIS
  * lane's entries, or -1 if it isn't in this lane. The white marker is drawn
- * whenever it is present, so a shared cross-camera pair lights up in both
- * lanes regardless of which one the arrows are following.
+ * whenever it is present.
  */
 function LaneBar({
   states,
@@ -174,12 +174,12 @@ function LaneBar({
 }
 
 /**
- * Multi-camera progress bar. Renders one {@link LaneBar} per camera lane,
- * stacked. Same-camera pairs sit in their camera's lane; cross-camera pairs
- * appear in both lanes but are one logical pair. The lane the prev/next
- * arrows follow (`activeLane`) is highlighted; the others are dimmed.
+ * Multi-camera progress bar. Renders one {@link LaneBar} per row, stacked.
+ * Same-camera pairs sit in their camera's row; cross-camera pairs get their
+ * own overlap row (italic label) between the two camera rows they join. The
+ * row the prev/next arrows follow (`activeLane`) is highlighted; others dim.
  *
- * A single lane renders exactly like the original single-bar progress bar.
+ * A single row renders exactly like the original single-bar progress bar.
  */
 export function ProgressBar({
   states,
@@ -264,7 +264,7 @@ export function ProgressBar({
           );
           return (
             <div
-              key={lane.cameraId || `lane-${laneIdx}`}
+              key={lane.key}
               style={{
                 borderLeft: multi
                   ? `3px solid ${
@@ -278,7 +278,13 @@ export function ProgressBar({
                   className='d-flex flex-row align-items-center px-3'
                   style={{ fontSize: 11, opacity: 0.85, gap: 6 }}
                 >
-                  <span style={{ fontWeight: isActiveLane ? 600 : 400 }}>
+                  <span
+                    style={{
+                      fontWeight: isActiveLane ? 600 : 400,
+                      fontStyle:
+                        lane.kind === 'overlap' ? 'italic' : 'normal',
+                    }}
+                  >
                     {lane.label}
                   </span>
                   <span style={{ opacity: 0.6 }}>

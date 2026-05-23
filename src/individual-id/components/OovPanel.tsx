@@ -50,8 +50,6 @@ export function OovPanel({
       style={{
         width: collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH,
         flexShrink: 0,
-        height: '100%',
-        minHeight: 0,
         background: '#4E5D6C',
         color: '#f8f9fa',
         borderRadius: 8,
@@ -172,8 +170,6 @@ function CollapsedAvatar({
 }) {
   const real = side === 'A' ? candidate.realA : candidate.realB;
   const isPrimary = !real?.objectId || real.objectId === real.id;
-  const isProposed =
-    side === 'A' ? !!candidate.proposedOovA : !!candidate.proposedOovB;
   const identiconSvg = useMemo(
     () => (isPrimary ? jdenticon.toSvg(candidate.pairKey, AVATAR_SIZE) : ''),
     [candidate.pairKey, isPrimary]
@@ -201,22 +197,13 @@ function CollapsedAvatar({
       onContextMenu={handleContextMenu}
       onMouseEnter={() => onHoverChange(candidate.pairKey)}
       onMouseLeave={() => onHoverChange(null)}
-      title={
-        isProposed
-          ? `${nameFor(candidate.pairKey)} (proposed)`
-          : nameFor(candidate.pairKey)
-      }
+      title={nameFor(candidate.pairKey)}
       style={{
         width: AVATAR_SIZE,
         height: AVATAR_SIZE,
         borderRadius: '50%',
         background: color,
-        // White border + reduced opacity mirrors the positioned-shadow look
-        // on the map so proposed chains read as "tentative" at a glance.
-        border: isProposed
-          ? '1px solid #ffffff'
-          : '1px solid rgba(0,0,0,0.7)',
-        opacity: isProposed ? 0.75 : 1,
+        border: '1px solid rgba(0,0,0,0.7)',
         boxShadow: ring,
         display: 'flex',
         alignItems: 'center',
@@ -258,31 +245,21 @@ function OovCard({
 }) {
   const real = side === 'A' ? candidate.realA : candidate.realB;
   const isPrimary = !real?.objectId || real.objectId === real.id;
-  const isProposed =
-    side === 'A' ? !!candidate.proposedOovA : !!candidate.proposedOovB;
   const identiconSvg = useMemo(
     () => (isPrimary ? jdenticon.toSvg(candidate.pairKey, 20) : ''),
     [candidate.pairKey, isPrimary]
   );
   const [hover, setHover] = useState(false);
-  // Delete is only available for DB-backed OOVs — a chain proposal has no
-  // row to remove yet, and silently no-op'ing the button would be misleading.
-  const showActions = hover && !isProposed;
+  const showActions = hover;
 
   // Terminus: accepted via `noPartnerExpected` rather than a real partner.
   // Other side of the candidate is empty (no `realA`/`realB` opposite).
   const otherSideReal = side === 'A' ? candidate.realB : candidate.realA;
-  const isTerminus =
-    candidate.status === 'accepted' && !otherSideReal && !isProposed;
+  const isTerminus = candidate.status === 'accepted' && !otherSideReal;
 
-  const statusColor = isProposed
-    ? '#ffa500'
-    : candidate.status === 'accepted'
-    ? '#27ae60'
-    : '#888';
-  const statusLabel = isProposed
-    ? 'Proposed'
-    : isTerminus
+  const statusColor =
+    candidate.status === 'accepted' ? '#27ae60' : '#888';
+  const statusLabel = isTerminus
     ? 'No link required'
     : candidate.status === 'accepted'
     ? 'Linked'
@@ -322,15 +299,10 @@ function OovCard({
       style={{
         width: '100%',
         background: '#5B6977',
-        // Dashed white border on proposed cards mirrors the positioned-shadow
-        // border on the map; solid border for committed OOV rows.
-        border: isProposed
-          ? '1px dashed rgba(255,255,255,0.55)'
-          : '1px solid rgba(255,255,255,0.05)',
+        border: '1px solid rgba(255,255,255,0.05)',
         borderRadius: 6,
         padding: 6,
         cursor: 'pointer',
-        opacity: isProposed ? 0.9 : 1,
         outline,
         outlineOffset: -1,
         display: 'flex',
@@ -395,8 +367,8 @@ function OovCard({
       </div>
       {/* Terminus toggle: only meaningful for partnerless DB OOVs. A
           partnered OOV is already accepted via its link, so the flag is
-          moot; a chain-proposed OOV has no DB row to update yet. */}
-      {!isProposed && !otherSideReal && real && (
+          moot. */}
+      {!otherSideReal && real && (
         <button
           type='button'
           onClick={(ev) => {

@@ -233,10 +233,7 @@ export function buildMatchCandidates({
   const pushOov = (o: AnnotationType, side: 'A' | 'B') => {
     const others = side === 'A' ? posAllB : posAllA;
     const partner = others.find((p) => sharesChain(p, o));
-    const otherOov = side === 'A' ? oovB : oovA;
-    const oovPartner = otherOov.find((p) => sharesChain(p, o));
-    const pairKey =
-      o.objectId ?? partner?.objectId ?? oovPartner?.objectId ?? o.id;
+    const pairKey = o.objectId ?? (partner && partner.objectId) ?? o.id;
     if (partner) {
       candidates.push({
         pairKey,
@@ -251,22 +248,19 @@ export function buildMatchCandidates({
         oovSide: side,
       });
     } else {
-      // OOV ↔ OOV bridges a multi-image gap; posA/posB stay null because
-      // oovPartner.{x,y} are the (0,0) placeholder, not real coordinates.
       // `noPartnerExpected` flags an OOV that terminates its chain — no
       // partner is required, so we accept it as-is rather than nag every
       // pair containing this image.
       candidates.push({
         pairKey,
         categoryId: o.categoryId,
-        realA: side === 'A' ? o : oovPartner,
-        realB: side === 'A' ? oovPartner : o,
+        realA: side === 'A' ? o : undefined,
+        realB: side === 'A' ? undefined : o,
         posA: null,
         posB: null,
         isShadowA: false,
         isShadowB: false,
-        status:
-          oovPartner || (o as any).noPartnerExpected ? 'accepted' : 'pending',
+        status: (o as any).noPartnerExpected ? 'accepted' : 'pending',
         oovSide: side,
       });
     }
