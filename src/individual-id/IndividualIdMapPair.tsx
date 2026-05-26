@@ -100,6 +100,24 @@ interface Props {
 const DEFAULT_COLOR = '#3498db';
 // Stable empty list passed while Tab is held, so the maps clear their markers.
 const NO_MARKERS: MapMarker[] = [];
+
+// Image-pixel squared distance between two candidates. Uses whichever sides
+// both have positions on (separate coordinate spaces, so we never mix A and
+// B); returns Infinity when no side has both — those sort last for "nearest".
+function candidateDistanceSq(a: MatchCandidate, b: MatchCandidate): number {
+  let best = Infinity;
+  if (a.posA && b.posA) {
+    const dx = a.posA.x - b.posA.x;
+    const dy = a.posA.y - b.posA.y;
+    best = Math.min(best, dx * dx + dy * dy);
+  }
+  if (a.posB && b.posB) {
+    const dx = a.posB.x - b.posB.x;
+    const dy = a.posB.y - b.posB.y;
+    best = Math.min(best, dx * dx + dy * dy);
+  }
+  return best;
+}
 // Stable empty defaults so the optional props don't churn memo identities.
 const NO_FOREIGN: AnnotationType[] = [];
 const NO_COLORS: Record<string, string> = {};
@@ -406,6 +424,24 @@ export function IndividualIdMapPair(props: Props) {
       if (!cand || cand.informational) return;
       const a = mapsRef.current[0];
       const b = mapsRef.current[1];
+
+      // Only pan when the candidate sits outside the current viewport on at
+      // least one map. Re-centring on every focus change is disruptive when
+      // the user is working a cluster of nearby annotations (the new marker
+      // is already on screen). A candidate far away — typically a different
+      // herd — fails this check and the pan fires as before.
+      const aOutside =
+        !!(a && cand.posA &&
+          !a.map
+            .getBounds()
+            .contains(a.px2lngLat(cand.posA.x, cand.posA.y)));
+      const bOutside =
+        !!(b && cand.posB &&
+          !b.map
+            .getBounds()
+            .contains(b.px2lngLat(cand.posB.x, cand.posB.y)));
+      if (!aOutside && !bOutside) return;
+
       // Suppress sync during the pan so B doesn't mid-animation jump off A's centre.
       isSyncingRef.current = true;
       try {
@@ -508,17 +544,20 @@ export function IndividualIdMapPair(props: Props) {
       if (remaining.length === 0) {
         setActiveKey(null);
       } else {
-        // Next linkable after current, looping back to the start.
-        const idx = linkable.findIndex(
-          (c) => c.pairKey === activeCandidate.pairKey
-        );
-        const after = linkable
-          .slice(idx + 1)
-          .find((c) => c.status !== 'accepted');
-        const before = linkable
-          .slice(0, idx)
-          .find((c) => c.status !== 'accepted');
-        setActiveKey((after ?? before)?.pairKey ?? null);
+        // Pick the spatially nearest remaining linkable to the just-accepted
+        // candidate. Working through a cluster of animals stays local instead
+        // of hopping to whatever was next in Munkres' array order, which often
+        // sits far away on the image.
+        let nearest = remaining[0];
+        let bestSq = candidateDistanceSq(activeCandidate, nearest);
+        for (let i = 1; i < remaining.length; i++) {
+          const d = candidateDistanceSq(activeCandidate, remaining[i]);
+          if (d < bestSq) {
+            bestSq = d;
+            nearest = remaining[i];
+          }
+        }
+        setActiveKey(nearest.pairKey);
       }
       return;
     }
