@@ -192,7 +192,7 @@ export default function LaunchAnnotationSetModal({
               />
             </Tab>
             {isSysadmin && (
-              <Tab label='ChainLink'>
+              <Tab label='ChainLinker'>
                 <IndividualId
                   project={project}
                   annotationSet={annotationSet}

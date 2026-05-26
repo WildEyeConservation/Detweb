@@ -3,7 +3,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as jdenticon from 'jdenticon';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { RotateCw, Layers, Copy, Check, EyeOff, UserPlus } from 'lucide-react';
+import { RotateCw, Layers, Copy, Check, EyeOff } from 'lucide-react';
 import { getTileBlob } from '../StorageLayer';
 import type { ImageType } from '../schemaTypes';
 import type { CandidateStatus, PixelTransform } from './types';
@@ -115,8 +115,8 @@ interface Props {
   /**
    * User clicked the "Move to OOV" button on a shadow's popup. The shadow
    * is materialised as an OOV row chain-linked to the partner real on the
-   * other image, and stamped with `noPartnerExpected: true` so it doesn't
-   * nag neighbouring pairs for a partner.
+   * other image. Munkres ignores OOVs, so the new row never proposes
+   * shadows on neighbour pairs.
    */
   onMarkerMoveToOov?: (candidateKey: string) => void;
   /**
@@ -139,12 +139,6 @@ interface Props {
   previewTransform?: PixelTransform;
   /** The OTHER image of the pair, whose bounds the overlay traces. */
   otherImage?: ImageType;
-  /**
-   * User clicked the "Add out-of-view" control on this map. The harness
-   * creates an OOV annotation bound to this image — surfaced in the side
-   * panel rather than on the map.
-   */
-  onAddOov?: () => void;
 }
 
 const TILE_SIZE = 256;
@@ -244,39 +238,6 @@ class HomographyControl implements maplibregl.IControl {
   }
 }
 
-/**
- * Adds an "out of view" annotation for THIS image — used when the user can
- * tell from neighbouring images that an animal must be present here even
- * though it isn't visible. The handler is read lazily through a ref so the
- * latest closure is invoked even though the control itself is instantiated
- * once at map init.
- */
-class AddOovControl implements maplibregl.IControl {
-  private container?: HTMLDivElement;
-  constructor(private getHandler: () => (() => void) | undefined) {}
-  onAdd() {
-    const c = document.createElement('div');
-    c.className = 'maplibregl-ctrl maplibregl-ctrl-group';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'maplibregl-ctrl-icon';
-    btn.title = 'Add out-of-view annotation';
-    btn.style.display = 'flex';
-    btn.style.alignItems = 'center';
-    btn.style.justifyContent = 'center';
-    btn.innerHTML = renderToStaticMarkup(
-      <UserPlus size={16} color='#333' strokeWidth={2.5} />
-    );
-    btn.onclick = () => this.getHandler()?.();
-    c.appendChild(btn);
-    this.container = c;
-    return c;
-  }
-  onRemove() {
-    this.container?.parentNode?.removeChild(this.container);
-    this.container = undefined;
-  }
-}
 
 function getScale(width: number, height: number) {
   return 0.1 / Math.max(width, height);
@@ -441,7 +402,6 @@ export function IndividualIdMap({
   leniencyAnchor,
   previewTransform,
   otherImage,
-  onAddOov,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<maplibregl.Map | null>(null);
@@ -465,7 +425,6 @@ export function IndividualIdMap({
   const changeLabelRef = useRef(onMarkerChangeLabel);
   const toggleObscuredRef = useRef(onMarkerToggleObscured);
   const moveToOovRef = useRef(onMarkerMoveToOov);
-  const addOovRef = useRef(onAddOov);
   useEffect(() => {
     dragRef.current = onMarkerDrag;
   }, [onMarkerDrag]);
@@ -493,9 +452,6 @@ export function IndividualIdMap({
   useEffect(() => {
     moveToOovRef.current = onMarkerMoveToOov;
   }, [onMarkerMoveToOov]);
-  useEffect(() => {
-    addOovRef.current = onAddOov;
-  }, [onAddOov]);
 
   // ---- Popup state ----
   // One popup div per map, repositioned and recontentated per hover. We use
@@ -859,10 +815,6 @@ export function IndividualIdMap({
     );
     m.addControl(new RotateControl(), 'top-left');
     m.addControl(new HomographyControl(), 'top-left');
-    m.addControl(
-      new AddOovControl(() => addOovRef.current),
-      'top-left'
-    );
 
     m.on('load', () => {
       // Homography preview: outline + grid showing where the *other*

@@ -232,7 +232,6 @@ const schema = a
         y: a.integer().required(),
         obscured: a.boolean(),
         oov: a.boolean(),
-        noPartnerExpected: a.boolean(),
         objectId: a.id(),
         object: a.belongsTo('Object', 'objectId'),
         reviewCatId: a.string(),

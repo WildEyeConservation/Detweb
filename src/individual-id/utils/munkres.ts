@@ -230,43 +230,33 @@ export function buildMatchCandidates({
     (!!p.objectId && (p.objectId === o.objectId || p.objectId === o.id)) ||
     (!!o.objectId && o.objectId === p.id);
 
-  const pushOov = (o: AnnotationType, side: 'A' | 'B') => {
+  // OOV ↔ partner record. Every OOV in the new model is created via the
+  // "Move to OOV" action, so it always has a real partner on the other side
+  // (chain-linked via shared objectId). We surface it as an `accepted`
+  // candidate so the OovPanel can list it as a record of "this animal is
+  // hidden here". Orphan OOVs (no partner on the other side) are silently
+  // ignored — they don't drive attention and shouldn't exist in the new
+  // model anyway.
+  const recordPartneredOov = (o: AnnotationType, side: 'A' | 'B') => {
     const others = side === 'A' ? posAllB : posAllA;
     const partner = others.find((p) => sharesChain(p, o));
-    const pairKey = o.objectId ?? (partner && partner.objectId) ?? o.id;
-    if (partner) {
-      candidates.push({
-        pairKey,
-        categoryId: o.categoryId,
-        realA: side === 'A' ? o : partner,
-        realB: side === 'A' ? partner : o,
-        posA: side === 'A' ? null : { x: partner.x, y: partner.y },
-        posB: side === 'A' ? { x: partner.x, y: partner.y } : null,
-        isShadowA: false,
-        isShadowB: false,
-        status: 'accepted',
-        oovSide: side,
-      });
-    } else {
-      // `noPartnerExpected` flags an OOV that terminates its chain — no
-      // partner is required, so we accept it as-is rather than nag every
-      // pair containing this image.
-      candidates.push({
-        pairKey,
-        categoryId: o.categoryId,
-        realA: side === 'A' ? o : undefined,
-        realB: side === 'A' ? undefined : o,
-        posA: null,
-        posB: null,
-        isShadowA: false,
-        isShadowB: false,
-        status: (o as any).noPartnerExpected ? 'accepted' : 'pending',
-        oovSide: side,
-      });
-    }
+    if (!partner) return;
+    const pairKey = o.objectId ?? partner.objectId ?? o.id;
+    candidates.push({
+      pairKey,
+      categoryId: o.categoryId,
+      realA: side === 'A' ? o : partner,
+      realB: side === 'A' ? partner : o,
+      posA: side === 'A' ? null : { x: partner.x, y: partner.y },
+      posB: side === 'A' ? { x: partner.x, y: partner.y } : null,
+      isShadowA: false,
+      isShadowB: false,
+      status: 'accepted',
+      oovSide: side,
+    });
   };
-  for (const o of oovA) pushOov(o, 'A');
-  for (const o of oovB) pushOov(o, 'B');
+  for (const o of oovA) recordPartneredOov(o, 'A');
+  for (const o of oovB) recordPartneredOov(o, 'B');
 
   return candidates;
 }

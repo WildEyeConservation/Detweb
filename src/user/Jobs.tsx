@@ -669,7 +669,7 @@ export default function Jobs() {
                       marginBottom: '0px',
                     }}
                   >
-                    Type: ChainLink
+                    Type: ChainLinker
                   </p>
                 </div>
               </div>

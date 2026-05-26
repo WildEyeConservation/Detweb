@@ -1,6 +1,6 @@
 import { Modal, Button } from 'react-bootstrap';
 import * as jdenticon from 'jdenticon';
-import { EyeOff, Layers, UserPlus } from 'lucide-react';
+import { EyeOff, Layers } from 'lucide-react';
 import type { MarkerKind } from '../IndividualIdMap';
 
 interface Props {
@@ -145,7 +145,7 @@ export function HelpModal({ show, onHide }: Props) {
   return (
     <Modal show={show} onHide={onHide} size='lg' centered scrollable>
       <Modal.Header closeButton>
-        <Modal.Title>How ChainLink works</Modal.Title>
+        <Modal.Title>How ChainLinker works</Modal.Title>
       </Modal.Header>
       <Modal.Body>
         <p style={{ opacity: 0.85 }}>
@@ -241,53 +241,27 @@ export function HelpModal({ show, onHide }: Props) {
               </div>
             </div>
           </div>
-          <div className='d-flex flex-row align-items-center gap-3 mb-3'>
-            <div
-              style={{
-                width: 52,
-                height: 52,
-                borderRadius: 6,
-                background: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <UserPlus size={20} color='#333' strokeWidth={2.5} />
-            </div>
-            <div>
-              <strong>Add out-of-view annotation</strong>
-              <div style={{ opacity: 0.85, fontSize: 13 }}>
-                Adds an out-of-view (OOV) marker for this image. The zoom and
-                rotate controls do the obvious thing and need no explanation.
-              </div>
-            </div>
-          </div>
+          <p style={{ opacity: 0.85, fontSize: 13 }}>
+            The zoom and rotate controls do the obvious thing and need no
+            explanation.
+          </p>
         </Section>
 
         <Section title='Out-of-view annotations'>
           <p style={{ opacity: 0.85, fontSize: 14 }}>
             Out-of-view (OOV) is the <em>opposite</em> of obscured: the object
             is <strong>not in this frame at all</strong>. The same animal was
-            captured in the images before and after this one, but plane roll
-            (or similar camera geometry) means it physically falls outside this
-            frame.
-          </p>
-          <p style={{ opacity: 0.85, fontSize: 14 }}>
-            Without a placeholder here, the identity chain linking those
-            sightings breaks and the animal could be counted more than once.
-            Adding an OOV annotation bridges that gap, so the primary →
-            secondary chain stays connected through this image and the object
-            is still counted only once across the sequence.
+            captured in nearby images, but plane roll (or similar camera
+            geometry) means it physically falls outside this frame.
           </p>
           <p style={{ opacity: 0.85, fontSize: 14, marginBottom: 0 }}>
-            Add one with the{' '}
-            <UserPlus size={14} style={{ verticalAlign: 'text-bottom' }} />{' '}
-            control. Because an OOV annotation has no position on the image it
-            never appears on the map — it is listed in the{' '}
-            <strong>side panel for that image</strong>, where you can select,
-            link or delete it just like a map marker.
+            To create one, hover a proposed (white-bordered) marker whose
+            partner exists on the other image, then choose{' '}
+            <strong>Move to OOV</strong> from its popup. The proposed marker
+            is converted into an OOV linked to its partner. Because OOVs have
+            no position they don't show on the map — they appear as cards in
+            the <strong>side panel for that image</strong>, where you can
+            still delete one if you change your mind.
           </p>
         </Section>
 
@@ -331,6 +305,22 @@ export function HelpModal({ show, onHide }: Props) {
             Once every marker pair on the current images is accepted, a dialog
             appears offering to jump to the next pair that needs attention — or
             you can choose to stay on the current pair.
+          </p>
+        </Section>
+
+        <Section title='Reunion review'>
+          <p style={{ opacity: 0.85, fontSize: 14 }}>
+            When every direct image pair is finished, the system scans for{' '}
+            <strong>reunions</strong>: image pairs further along the transect
+            where an animal you were tracking may have reappeared after going
+            out of view. If any are found a dialog appears (you can't skip it)
+            and you're taken through them just like normal pairs — with an
+            orange banner at the top so you know which phase you're in.
+          </p>
+          <p style={{ opacity: 0.85, fontSize: 14, marginBottom: 0 }}>
+            Finishing a reunion round may merge chains and expose new
+            reunions, so the system re-checks each time. Only when nothing
+            new is found does the transect actually complete.
           </p>
         </Section>
 

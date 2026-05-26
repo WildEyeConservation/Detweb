@@ -8,7 +8,11 @@ import {
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { GlobalContext, ProjectContext } from '../Context';
-import type { AnnotationType } from '../schemaTypes';
+import type {
+  AnnotationType,
+  ImageNeighbourType,
+  ImageType,
+} from '../schemaTypes';
 import { useTransectData, type TransectData } from './hooks/useTransectData';
 import {
   makePairKey,
@@ -19,6 +23,10 @@ import { buildNeighbourTransforms } from './utils/transforms';
 import { evaluatePairCompletion } from './utils/completion';
 import { isOov } from './utils/identity';
 import { buildLanes, filterLanesToAttention } from './utils/lanes';
+import {
+  findReunions,
+  type ReunionCandidate,
+} from './utils/reunionSearch';
 import type {
   MatchCandidate,
   NeighbourPairWithMeta,
@@ -29,9 +37,18 @@ import { ProgressBar } from './components/ProgressBar';
 import { LoadingCard } from './components/LoadingCard';
 import { NavigateAwayDialog } from './components/NavigateAwayDialog';
 import { PairCompleteDialog } from './components/PairCompleteDialog';
+import { ReunionDialog } from './components/ReunionDialog';
 import { LinkAnnotationDialog } from './components/LinkAnnotationDialog';
+import { DeleteAnnotationDialog } from './components/DeleteAnnotationDialog';
 import ChangeCategoryModal from '../ChangeCategoryModal';
 import type { CategoryType } from '../schemaTypes';
+
+/**
+ * BFS hop budget for reunion search. We walk the neighbour graph this far
+ * from every chain endpoint at transect-completion time to find images
+ * where an out-of-view animal may have reappeared.
+ */
+const REUNION_MAX_HOPS = 15;
 
 /**
  * Default Munkres "leave unmatched" cost in image pixels. Anything at a
@@ -64,6 +81,29 @@ function indexByImage(
   const out: Record<string, AnnotationType[]> = {};
   for (const a of annotations) (out[a.imageId] ??= []).push(a);
   return out;
+}
+
+/**
+ * Ids of every annotation in the chain containing `annotationId` (including
+ * itself). A "chain" is the set of annotations sharing an objectId — i.e. all
+ * sightings of one individual. Used by both delete (scope choice) and
+ * change-label (propagation).
+ */
+function buildChainIdsFor(
+  annotations: AnnotationType[],
+  annotationId: string
+): string[] {
+  const ids = new Set<string>([annotationId]);
+  const target = annotations.find((a) => a.id === annotationId);
+  const chainKey = target?.objectId;
+  if (chainKey) {
+    for (const a of annotations) {
+      if (a.objectId === chainKey || a.id === chainKey) {
+        ids.add(a.id);
+      }
+    }
+  }
+  return Array.from(ids);
 }
 
 function isOlder(
@@ -106,12 +146,6 @@ type LinkActor = {
    * other side. Ignored when `existing` is set.
    */
   oov?: boolean;
-  /**
-   * Stamp `noPartnerExpected: true` on the new row. Only meaningful when
-   * `oov: true` and the OOV is being created as a terminus (no partner is
-   * expected on any neighbour pair). Ignored when `existing` is set.
-   */
-  noPartnerExpected?: boolean;
 };
 
 /**
@@ -215,8 +249,8 @@ export function IndividualIdHarness({
 
   // ---- Re-derive transforms from raw neighbours ----
   // Functions cannot survive React Query's localStorage persister, so we
-  // rebuild them fresh from `rawNeighbours` on every reload. `pairs` is
-  // ephemeral (not cached) by virtue of being a useMemo result.
+  // rebuild them fresh from `rawNeighbours` on every reload. `directPairs`
+  // is ephemeral (not cached) by virtue of being a useMemo result.
   //
   // We also normalise orientation here: imageA is always the chronologically
   // older image (and image1Id its id), imageB always the newer. The progress
@@ -225,7 +259,11 @@ export function IndividualIdHarness({
   // (handleAccept, etc.) only ever sees A < B. If we'd swap, the homography
   // transforms swap with us — the pre-swap "forward" mapped image1→image2,
   // which becomes "backward" in the new A/B framing.
-  const pairs: NeighbourPairWithMeta[] = useMemo(() => {
+  //
+  // The harness later swaps `directPairs` out for a synthetic reunion-pair
+  // set (`pairs = reunionMode?.pairs ?? directPairs`) so the same render
+  // tree drives the reunion-review phase.
+  const directPairs: NeighbourPairWithMeta[] = useMemo(() => {
     const raw = transect.data?.rawNeighbours ?? [];
     const imagesById = transect.data?.imagesById ?? {};
     const out: NeighbourPairWithMeta[] = [];
@@ -262,6 +300,64 @@ export function IndividualIdHarness({
     });
     return out;
   }, [transect.data?.rawNeighbours, transect.data?.imagesById]);
+
+  // ---- Reunion-review phase ----
+  // When every direct pair is complete, `findReunions` walks each chain
+  // endpoint's neighbourhood and surfaces any image pairs (hops >= 2)
+  // where the animal may have come back into view. The user is then
+  // forced through those synthetic pairs before the transect completes;
+  // when they finish a round, we search again (chains may have merged
+  // and exposed new endpoints). `reviewedReunionsRef` prevents loops on
+  // pairs the user already saw without taking action.
+  const [reunionMode, setReunionMode] = useState<{
+    pairs: NeighbourPairWithMeta[];
+  } | null>(null);
+  const [pendingReunionDialog, setPendingReunionDialog] = useState<{
+    pairs: NeighbourPairWithMeta[];
+  } | null>(null);
+  const reviewedReunionsRef = useRef<Set<string>>(new Set());
+
+  // Fabricate a `NeighbourPairWithMeta` from a `ReunionCandidate`. There's
+  // no DB `ImageNeighbour` row backing a synthetic pair, but nothing
+  // downstream of `pairs` actually reads `rawNeighbour`, so a typed stub
+  // is enough to satisfy the interface. The composed forward/backward
+  // already maps imageA (older) → imageB (newer) in pixel space because
+  // `findReunions` normalised orientation when it produced the candidate.
+  const synthesiseReunionPair = useCallback(
+    (
+      c: ReunionCandidate,
+      imagesById: Record<string, ImageType>
+    ): NeighbourPairWithMeta | null => {
+      const imageA = imagesById[c.imageAId];
+      const imageB = imagesById[c.imageBId];
+      if (!imageA || !imageB) return null;
+      return {
+        image1Id: c.imageAId,
+        image2Id: c.imageBId,
+        forward: c.forward,
+        backward: c.backward,
+        noHomography: false,
+        skipped: false,
+        imageA,
+        imageB,
+        rawNeighbour: {
+          id: `reunion:${c.imageAId}|${c.imageBId}`,
+          image1Id: c.imageAId,
+          image2Id: c.imageBId,
+        } as unknown as ImageNeighbourType,
+      };
+    },
+    []
+  );
+
+  // Active pair set: reunion pairs when reviewing reunions, otherwise the
+  // direct neighbours. Memoised so the reference is stable across renders
+  // — `pairViews` / `lanes` / `currentPair` consumers downstream all key
+  // off this one value.
+  const pairs: NeighbourPairWithMeta[] = useMemo(
+    () => reunionMode?.pairs ?? directPairs,
+    [reunionMode, directPairs]
+  );
 
   // ---- Build all pair-candidate lists in display order ----
   type PairView = {
@@ -349,24 +445,88 @@ export function IndividualIdHarness({
     setCurrentIndex(Math.max(0, firstIncomplete));
   }, [pairViews, transect.data?.annotations, localAnnotations.length]);
 
-  // When no pair is 'incomplete' anymore the transect is done. Fire once;
-  // the parent marks it complete server-side and returns to Jobs. Gated on
-  // initialisation so the brief pre-annotation-sync window (where every pair
-  // momentarily looks 'empty') cannot false-fire.
+  // When no pair is 'incomplete' anymore we either enter reunion review
+  // or fire `onComplete` (the parent marks the transect complete server-
+  // side and returns to Jobs). Fixpoint loop: after every reunion round
+  // the user finishes we re-run `findReunions`; chain merges may have
+  // exposed new endpoints, surfacing more pairs to review. Only when a
+  // round produces zero *unseen* candidates does the transect finish.
+  //
+  // Gated on `initialisedRef` so the brief pre-annotation-sync window
+  // (every pair momentarily 'empty') cannot false-fire.
   const completionFiredRef = useRef(false);
   useEffect(() => {
     if (completionFiredRef.current) return;
     if (!initialisedRef.current) return;
     if (transect.isLoading) return;
-    if (pairViews.length === 0) return;
+    if (pendingReunionDialog) return;
+    if (pairViews.length === 0) {
+      // In reunion mode this means every synthetic pair failed to
+      // synthesise (no matching images) — degenerate; finish.
+      if (reunionMode) {
+        completionFiredRef.current = true;
+        onCompleteRef.current?.();
+      }
+      return;
+    }
     const anyIncomplete = pairViews.some(
       (v) => v.completion.status === 'incomplete'
     );
-    if (!anyIncomplete) {
+    if (anyIncomplete) return;
+
+    const imagesById = transect.data?.imagesById ?? {};
+    const candidates = findReunions({
+      annotations: localAnnotations,
+      rawNeighbours: transect.data?.rawNeighbours ?? [],
+      imagesById,
+      categoryId: categoryId ?? '',
+      leniency,
+      maxHops: REUNION_MAX_HOPS,
+    });
+    // Skip pairs the user has already been shown — prevents an infinite
+    // loop when a user reviews a pair without making changes (no chain
+    // merge ⇒ same candidates re-appear on the next search).
+    const fresh = candidates.filter(
+      (c) =>
+        !reviewedReunionsRef.current.has(`${c.imageAId}|${c.imageBId}`)
+    );
+    const newPairs = fresh
+      .map((c) => synthesiseReunionPair(c, imagesById))
+      .filter((p): p is NeighbourPairWithMeta => p !== null);
+
+    if (newPairs.length === 0) {
       completionFiredRef.current = true;
       onCompleteRef.current?.();
+      return;
     }
-  }, [pairViews, transect.isLoading]);
+    setPendingReunionDialog({ pairs: newPairs });
+  }, [
+    pairViews,
+    transect.isLoading,
+    transect.data?.imagesById,
+    transect.data?.rawNeighbours,
+    localAnnotations,
+    categoryId,
+    leniency,
+    reunionMode,
+    pendingReunionDialog,
+    synthesiseReunionPair,
+  ]);
+
+  // The reunion dialog has no skip button — confirmation always enters
+  // review mode. The image pairs are stamped into `reviewedReunionsRef`
+  // here so the user only sees each one once per session, even if they
+  // walk away without changing anything.
+  const confirmReunionDialog = useCallback(() => {
+    if (!pendingReunionDialog) return;
+    for (const p of pendingReunionDialog.pairs) {
+      reviewedReunionsRef.current.add(`${p.image1Id}|${p.image2Id}`);
+    }
+    setReunionMode({ pairs: pendingReunionDialog.pairs });
+    setPendingReunionDialog(null);
+    setCurrentIndex(0);
+    setActiveLane(0);
+  }, [pendingReunionDialog]);
 
   // Keep `activeLane` pointing at a lane that actually contains the current
   // pair. The pair-complete popups move `currentIndex` directly with no lane
@@ -636,144 +796,75 @@ export function IndividualIdHarness({
     ]
   );
 
-  /**
-   * User clicked the "Add out-of-view" control on a map. Creates an OOV
-   * annotation for THAT map's image (the one the user judges is missing the
-   * animal that breaks the chain). It gets the active category, a placeholder
-   * x/y of 0,0 (never rendered on the map — it lives in the side panel), and
-   * `oov: true`. Once created, Munkres flags every pair containing this
-   * image as needing attention until the user links the OOV on each side.
-   */
-  const handlePlaceOov = useCallback(
-    async (side: 'A' | 'B') => {
-      if (!currentPair || !categoryId) return;
-      const setId =
-        transect.data?.category?.annotationSetId ?? annotationSetId ?? '';
-      if (!setId) return;
-      const group = (projectCtx?.project as any)?.organizationId ?? undefined;
-      const nowIso = new Date().toISOString();
-      const newId = crypto.randomUUID();
-      const imageId =
-        side === 'A' ? currentPair.image1Id : currentPair.image2Id;
-      const dbInput = {
-        id: newId,
-        imageId,
-        setId,
-        categoryId,
-        x: 0,
-        y: 0,
-        oov: true,
-        source: 'individual-id',
-        projectId: projectCtx?.project?.id,
-        group,
-      };
-      const localRow = {
-        ...dbInput,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      } as unknown as AnnotationType;
-
-      setLocalAnnotations((prev) => [...prev, localRow]);
-      patchTransectCache((old) => {
-        const annotations = [...old.annotations, localRow];
-        return {
-          ...old,
-          annotations,
-          annotationsByImage: indexByImage(annotations),
-        };
-      });
-
-      try {
-        await client.models.Annotation.create(dbInput as any);
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to create OOV annotation', err);
-        setLocalAnnotations((prev) => prev.filter((a) => a.id !== newId));
-        patchTransectCache((old) => {
-          const annotations = old.annotations.filter((a) => a.id !== newId);
-          return {
-            ...old,
-            annotations,
-            annotationsByImage: indexByImage(annotations),
-          };
-        });
-      }
-    },
-    [
-      currentPair,
-      categoryId,
-      transect.data?.category?.annotationSetId,
-      annotationSetId,
-      projectCtx?.project?.id,
-      projectCtx?.project,
-      client,
-      patchTransectCache,
-    ]
-  );
+  // Deferred until the user confirms scope. null means no dialog open.
+  const [deleteRequest, setDeleteRequest] = useState<{
+    annotationId: string;
+    chainIds: string[];
+  } | null>(null);
 
   /**
-   * User clicked Delete in a marker's popup. Fires `Annotation.delete` and
-   * optimistically removes from `localAnnotations` so Munkres rebuilds
-   * without it on the next render. We deliberately don't cascade to a
-   * partner annotation — if the deleted row was a primary, the secondary's
-   * objectId now points at nothing, but Munkres will treat it as unmatched
-   * and propose a fresh shadow on this side. The user can re-pair if they
-   * want.
+   * Performs the actual annotation deletion. Optimistic local + cache
+   * update, rolled back on DB failure. Accepts either a single id (the
+   * regular path or "Delete this one" from the chain dialog) or a list of
+   * ids (the chain-wide path from the same dialog).
+   *
+   * OOV re-rooting (chronologically splitting the chain at the deleted OOV)
+   * only applies to single-row deletes — a chain-wide delete by definition
+   * leaves nothing to re-root onto.
    */
-  const handleDelete = useCallback(
-    async (annotationId: string) => {
+  const executeDelete = useCallback(
+    async (ids: string[], scope: 'single' | 'chain') => {
+      if (ids.length === 0) return;
       const before = localAnnotations;
-      const target = localAnnotations.find((a) => a.id === annotationId);
+      const idSet = new Set(ids);
 
-      // OOV deletion: the OOV is almost always a secondary bridging the
-      // chain across an image where the animal isn't visible. Deleting it
-      // should un-bridge — annotations OLDER than the OOV keep their
-      // existing identity, while annotations NEWER than the OOV form their
-      // own chain rooted at the chronologically nearest survivor (the one
-      // on the image immediately after the OOV). The older segment and the
-      // newer segment end up independent, exactly as if the OOV had never
-      // been inserted.
-      //
-      // For a non-OOV deletion the existing convention is to leave
-      // secondaries orphaned and let Munkres re-propose — keep that.
       const reRootUpdates: Array<{
         id: string;
         patch: Partial<AnnotationType>;
       }> = [];
-      if (target && isOov(target)) {
-        const chainKey = target.objectId ?? target.id;
-        const chainMembers = localAnnotations.filter(
-          (a) =>
-            a.id !== annotationId &&
-            (a.objectId === chainKey || a.id === chainKey)
-        );
-        const imagesById = transect.data?.imagesById ?? {};
-        const ageOf = (imageId: string) => {
-          const img: any = imagesById[imageId];
-          return {
-            timestamp: (img?.timestamp ?? null) as number | null,
-            originalPath: (img?.originalPath ?? null) as string | null,
+      if (scope === 'single' && ids.length === 1) {
+        const annotationId = ids[0];
+        const target = localAnnotations.find((a) => a.id === annotationId);
+        if (target && isOov(target)) {
+          // OOV deletion: the OOV is almost always a secondary bridging the
+          // chain across an image where the animal isn't visible. Deleting
+          // it should un-bridge — annotations OLDER than the OOV keep their
+          // existing identity, while annotations NEWER than the OOV form
+          // their own chain rooted at the chronologically nearest survivor.
+          // The older and newer segments end up independent, exactly as if
+          // the OOV had never been inserted.
+          const chainKey = target.objectId ?? target.id;
+          const chainMembers = localAnnotations.filter(
+            (a) =>
+              a.id !== annotationId &&
+              (a.objectId === chainKey || a.id === chainKey)
+          );
+          const imagesById = transect.data?.imagesById ?? {};
+          const ageOf = (imageId: string) => {
+            const img: any = imagesById[imageId];
+            return {
+              timestamp: (img?.timestamp ?? null) as number | null,
+              originalPath: (img?.originalPath ?? null) as string | null,
+            };
           };
-        };
-        const oovAge = ageOf(target.imageId);
-        const newer = chainMembers.filter((a) =>
-          isOlder(oovAge, ageOf(a.imageId))
-        );
-        if (newer.length > 0) {
-          // Chronologically nearest survivor (= oldest of the newer set)
-          // becomes the new primary.
-          let nearest = newer[0];
-          for (let i = 1; i < newer.length; i++) {
-            if (isOlder(ageOf(newer[i].imageId), ageOf(nearest.imageId))) {
-              nearest = newer[i];
+          const oovAge = ageOf(target.imageId);
+          const newer = chainMembers.filter((a) =>
+            isOlder(oovAge, ageOf(a.imageId))
+          );
+          if (newer.length > 0) {
+            let nearest = newer[0];
+            for (let i = 1; i < newer.length; i++) {
+              if (isOlder(ageOf(newer[i].imageId), ageOf(nearest.imageId))) {
+                nearest = newer[i];
+              }
             }
-          }
-          for (const a of newer) {
-            if (a.objectId !== nearest.id) {
-              reRootUpdates.push({
-                id: a.id,
-                patch: { objectId: nearest.id },
-              });
+            for (const a of newer) {
+              if (a.objectId !== nearest.id) {
+                reRootUpdates.push({
+                  id: a.id,
+                  patch: { objectId: nearest.id },
+                });
+              }
             }
           }
         }
@@ -782,7 +873,7 @@ export function IndividualIdHarness({
       const applyDeleteAndReRoot = (
         prev: AnnotationType[]
       ): AnnotationType[] => {
-        let next = prev.filter((a) => a.id !== annotationId);
+        let next = prev.filter((a) => !idSet.has(a.id));
         if (reRootUpdates.length > 0) {
           const patchById = new Map(
             reRootUpdates.map((u) => [u.id, u.patch])
@@ -794,9 +885,7 @@ export function IndividualIdHarness({
         return next;
       };
 
-      // Optimistic in-memory removal + re-root.
       setLocalAnnotations(applyDeleteAndReRoot);
-      // Persisted cache removal — so the deletion survives a reload.
       patchTransectCache((old) => {
         const annotations = applyDeleteAndReRoot(old.annotations);
         return {
@@ -807,11 +896,11 @@ export function IndividualIdHarness({
       });
 
       try {
-        const result: any = await client.models.Annotation.delete({
-          id: annotationId,
-        } as any);
-        // Re-root patches run in parallel with the delete — failure of any
-        // single update is logged but doesn't abort the others.
+        const results: any[] = await Promise.all(
+          ids.map((id) =>
+            client.models.Annotation.delete({ id } as any)
+          )
+        );
         await Promise.all(
           reRootUpdates.map((u) =>
             client.models.Annotation.update({
@@ -821,20 +910,20 @@ export function IndividualIdHarness({
           )
         );
         // AppSync returns `data: null` (with no errors) when an owner/group
-        // auth filter blocks the mutation. The user won't see the row in
-        // the UI either way (the cache is updated), but on next reload the
-        // server will re-emit it. Surface this in the console so we notice.
-        if (result && result.data == null && !result.errors?.length) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            'Annotation.delete returned null — likely an authorization issue (you may not own this row).',
-            { id: annotationId }
-          );
+        // auth filter blocks the mutation. Surface so we notice.
+        for (let i = 0; i < results.length; i++) {
+          const result = results[i];
+          if (result && result.data == null && !result.errors?.length) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              'Annotation.delete returned null — likely an authorization issue (you may not own this row).',
+              { id: ids[i] }
+            );
+          }
         }
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.error('Failed to delete annotation', err);
-        // Roll back local state and the cache.
+        console.error('Failed to delete annotation(s)', err);
         setLocalAnnotations(before);
         patchTransectCache((old) => ({
           ...old,
@@ -845,6 +934,32 @@ export function IndividualIdHarness({
     },
     [client, localAnnotations, patchTransectCache, transect.data?.imagesById]
   );
+
+  /**
+   * Entry point from the marker popup's Delete button. If the annotation is
+   * linked to other sightings of the same individual we open a dialog to
+   * let the user choose scope (this one vs entire chain); a solo annotation
+   * deletes immediately with no confirmation.
+   */
+  const handleDelete = useCallback(
+    (annotationId: string) => {
+      const chainIds = buildChainIdsFor(localAnnotations, annotationId);
+      if (chainIds.length <= 1) {
+        void executeDelete([annotationId], 'single');
+      } else {
+        setDeleteRequest({ annotationId, chainIds });
+      }
+    },
+    [localAnnotations, executeDelete]
+  );
+
+  const confirmDeleteScope = (scope: 'single' | 'chain') => {
+    if (!deleteRequest) return;
+    const ids =
+      scope === 'single' ? [deleteRequest.annotationId] : deleteRequest.chainIds;
+    void executeDelete(ids, scope);
+    setDeleteRequest(null);
+  };
 
   /**
    * User clicked "Mark as obscured" / "Mark as visible" in a marker's popup.
@@ -882,62 +997,6 @@ export function IndividualIdHarness({
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('Failed to toggle annotation obscured', err);
-        setLocalAnnotations((prev) => prev.map(revert));
-        patchTransectCache((old) => {
-          const annotations = old.annotations.map(revert);
-          return {
-            ...old,
-            annotations,
-            annotationsByImage: indexByImage(annotations),
-          };
-        });
-      }
-    },
-    [localAnnotations, client, patchTransectCache]
-  );
-
-  /**
-   * Toggles an OOV's `noPartnerExpected` flag. Called from the OovPanel
-   * card when the user confirms (or revokes the confirmation) that the
-   * animal is genuinely absent from neighbouring images, so the chain
-   * shouldn't keep nagging for a partner.
-   */
-  const handleToggleNoPartnerExpected = useCallback(
-    async (annotationId: string) => {
-      const current = localAnnotations.find((a) => a.id === annotationId);
-      if (!current) return;
-      const next = !(current as any).noPartnerExpected;
-
-      const apply = (a: AnnotationType): AnnotationType =>
-        a.id === annotationId
-          ? ({ ...a, noPartnerExpected: next } as AnnotationType)
-          : a;
-      const revert = (a: AnnotationType): AnnotationType =>
-        a.id === annotationId
-          ? ({
-              ...a,
-              noPartnerExpected: (current as any).noPartnerExpected,
-            } as AnnotationType)
-          : a;
-
-      setLocalAnnotations((prev) => prev.map(apply));
-      patchTransectCache((old) => {
-        const annotations = old.annotations.map(apply);
-        return {
-          ...old,
-          annotations,
-          annotationsByImage: indexByImage(annotations),
-        };
-      });
-
-      try {
-        await client.models.Annotation.update({
-          id: annotationId,
-          noPartnerExpected: next,
-        } as any);
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to toggle noPartnerExpected', err);
         setLocalAnnotations((prev) => prev.map(revert));
         patchTransectCache((old) => {
           const annotations = old.annotations.map(revert);
@@ -1026,19 +1085,8 @@ export function IndividualIdHarness({
    * are assumed to stay within a transect.
    */
   const buildChainIds = useCallback(
-    (annotationId: string): string[] => {
-      const ids = new Set<string>([annotationId]);
-      const target = localAnnotations.find((a) => a.id === annotationId);
-      const chainKey = target?.objectId;
-      if (chainKey) {
-        for (const a of localAnnotations) {
-          if (a.objectId === chainKey || a.id === chainKey) {
-            ids.add(a.id);
-          }
-        }
-      }
-      return Array.from(ids);
-    },
+    (annotationId: string): string[] =>
+      buildChainIdsFor(localAnnotations, annotationId),
     [localAnnotations]
   );
 
@@ -1223,7 +1271,6 @@ export function IndividualIdHarness({
             group,
             ...(actor.obscured ? { obscured: true } : {}),
             ...(actor.oov ? { oov: true } : {}),
-            ...(actor.noPartnerExpected ? { noPartnerExpected: true } : {}),
             createdAt: nowIso,
             updatedAt: nowIso,
           } as unknown as AnnotationType);
@@ -1368,10 +1415,9 @@ export function IndividualIdHarness({
   /**
    * User clicked "Move to OOV" on a shadow whose candidate has a real
    * partner on the other side. Materialises a new OOV row on this side
-   * chain-linked to the partner via shared objectId. The OOV is created
-   * *without* `noPartnerExpected` — neighbouring pairs still pull it in
-   * as a candidate, and the user can mark the chain as terminus from the
-   * OovPanel card later if they confirm no partner ever appears.
+   * chain-linked to the partner via shared objectId. Munkres ignores OOVs,
+   * so the new row never proposes shadows on neighbour pairs — it sits as
+   * a record in the OovPanel until deleted.
    */
   const handleMoveToOov = useCallback(
     async (candidateKey: string, oovSide: 'A' | 'B') => {
@@ -1460,7 +1506,12 @@ export function IndividualIdHarness({
   // Build a single-pair link for the Share button. We can only construct it
   // when we have a current pair AND a project to scope the URL to — the
   // single-pair route is nested under /surveys/:surveyId.
+  //
+  // Suppressed in reunion mode: synthetic pairs have no DB neighbour row,
+  // so the single-pair harness can't load one. Same for the homography
+  // editor below.
   const shareHref = (() => {
+    if (reunionMode) return undefined;
     if (!currentPair || !projectCtx?.project?.id) return undefined;
     const setId =
       transect.data?.category?.annotationSetId ?? annotationSetId ?? '';
@@ -1473,11 +1524,46 @@ export function IndividualIdHarness({
     return `/surveys/${projectCtx.project.id}/individual-id-pair?${params.toString()}`;
   })();
 
+  // Single-pair homography editor link. No backHref — the editor falls back
+  // to navigate(-1), which restores location.state on the transect route
+  // (IndividualIdTaskPage relies on it; a URL push would bounce to /jobs).
+  const editHomographyHref = (() => {
+    if (reunionMode) return undefined;
+    if (!currentPair || !projectCtx?.project?.id) return undefined;
+    const setId =
+      transect.data?.category?.annotationSetId ?? annotationSetId ?? '';
+    const params = new URLSearchParams({
+      image1Id: currentPair.image1Id,
+      image2Id: currentPair.image2Id,
+    });
+    if (setId) params.set('annotationSetId', setId);
+    return `/surveys/${projectCtx.project.id}/homography-edit?${params.toString()}`;
+  })();
+
   return (
     <div
       className='w-100 h-100 d-flex flex-column py-3'
       style={{ minHeight: 0 }}
     >
+      {reunionMode && (
+        <div
+          style={{
+            padding: '6px 12px',
+            margin: '0 12px 8px',
+            background: '#ff8c1a',
+            color: '#fff',
+            borderRadius: 6,
+            fontSize: 13,
+            fontWeight: 600,
+            textAlign: 'center',
+            flexShrink: 0,
+          }}
+        >
+          Reviewing reunions — {pairs.length}{' '}
+          {pairs.length === 1 ? 'image pair' : 'image pairs'} where chains
+          may rejoin
+        </div>
+      )}
       <div style={{ flex: 1, minHeight: 0 }}>
         {currentPair && currentView && (
           <IndividualIdMapPair
@@ -1500,15 +1586,14 @@ export function IndividualIdHarness({
             onToggleObscured={handleToggleObscured}
             onSetProposedObscured={handleSetProposedObscured}
             onMoveToOov={handleMoveToOov}
-            onToggleNoPartnerExpected={handleToggleNoPartnerExpected}
             onManualLinkRequest={requestManualLink}
-            onAddOov={handlePlaceOov}
             onAllAccepted={handleAllAccepted}
             onRequestPrevPair={() => laneNav(-1)}
             onRequestNextPair={() => laneNav(1)}
             collapsed={toolbarCollapsed}
             onCollapsedChange={setToolbarCollapsed}
             shareHref={shareHref}
+            editHomographyHref={editHomographyHref}
           />
         )}
       </div>
@@ -1535,6 +1620,11 @@ export function IndividualIdHarness({
         onConfirm={acceptCompletePopup}
         onStay={() => setCompletePopup({ show: false })}
       />
+      <ReunionDialog
+        show={!!pendingReunionDialog}
+        count={pendingReunionDialog?.pairs.length ?? 0}
+        onConfirm={confirmReunionDialog}
+      />
       <ChangeCategoryModal
         show={labelChange !== null}
         onClose={() => setLabelChange(null)}
@@ -1559,6 +1649,13 @@ export function IndividualIdHarness({
         show={pendingLink !== null}
         onConfirm={confirmManualLink}
         onCancel={cancelManualLink}
+      />
+      <DeleteAnnotationDialog
+        show={deleteRequest !== null}
+        chainSize={deleteRequest?.chainIds.length ?? 0}
+        onDeleteOne={() => confirmDeleteScope('single')}
+        onDeleteChain={() => confirmDeleteScope('chain')}
+        onCancel={() => setDeleteRequest(null)}
       />
     </div>
   );

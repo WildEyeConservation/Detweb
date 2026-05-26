@@ -71,7 +71,7 @@ export default function IndividualIdProgress({
 
   if (loading && !stats) return <Spinner />;
   if (!stats || stats.total <= 0) {
-    return <p className='mb-0'>ChainLink job</p>;
+    return <p className='mb-0'>ChainLinker job</p>;
   }
 
   const completed = Math.max(0, stats.total - stats.remaining);

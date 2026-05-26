@@ -31,6 +31,17 @@ type Props = {
   onPointsChange?: (points: { p1: Point[]; p2: Point[] }) => void;
   /** Whether this pair has already been saved */
   isSaved?: boolean;
+  /**
+   * If provided, a "View saved homography (red)" toggle appears next to the
+   * Preview switch. When the toggle is on, these transforms draw a red
+   * outline+grid overlay on each map showing the homography currently
+   * stored in the DB. Pure visual reference — never affects map sync or
+   * the live (cyan) preview. Toggle is hidden if this prop is omitted.
+   */
+  savedTransforms?: [
+    (c: [number, number]) => [number, number],
+    (c: [number, number]) => [number, number],
+  ] | null;
 };
 
 export function HomographyWorkbench({
@@ -45,7 +56,9 @@ export function HomographyWorkbench({
   initialPoints,
   onPointsChange,
   isSaved = false,
+  savedTransforms,
 }: Props) {
+  const [showSavedHomography, setShowSavedHomography] = useState(false);
   const [points, setPoints] = useState<{ p1: Point[]; p2: Point[] }>(
     initialPoints ?? { p1: [], p2: [] }
   );
@@ -227,6 +240,15 @@ export function HomographyWorkbench({
               onChange={(e) => setPreviewHomography(e.target.checked)}
               disabled={!canPreview}
             />
+            {savedTransforms && (
+              <Form.Check
+                type='switch'
+                id='view-saved-homography'
+                label='View saved homography (red)'
+                checked={showSavedHomography}
+                onChange={(e) => setShowSavedHomography(e.target.checked)}
+              />
+            )}
             <div className='d-flex align-items-center gap-1 border-start ps-3 border-secondary'>
               <Button
                 size='sm'
@@ -262,6 +284,7 @@ export function HomographyWorkbench({
           points={[points1, points2]}
           setPoints={[setPoints1, setPoints2]}
           previewTransforms={previewTransforms}
+          savedTransforms={showSavedHomography ? savedTransforms : null}
           onAction={recordAction}
           annotationSetId={annotationSetId}
         />

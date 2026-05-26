@@ -88,6 +88,12 @@ type Props = {
   onContextMenu?: (pointIndex: number, screenPos: { x: number; y: number }) => void;
   onAction?: () => void;
   previewTransform?: (c: [number, number]) => [number, number];
+  /**
+   * Optional second overlay drawn in red, independent of `previewTransform`.
+   * Used by the homography editor to display the homography currently saved
+   * in the DB as a reference. Purely visual — never feeds map sync.
+   */
+  savedTransform?: (c: [number, number]) => [number, number];
   otherImage?: ImageType;
   onMapInstance?: (map: maplibregl.Map | null, px2lngLat: (x: number, y: number) => [number, number], lngLat2px: (lng: number, lat: number) => { x: number; y: number }) => void;
   menuItems?: MapLibreMenuItem[];
@@ -96,6 +102,9 @@ type Props = {
 const SOURCE_PREVIEW = 'preview';
 const LAYER_OUTLINE = 'preview-outline';
 const LAYER_GRID = 'preview-grid';
+const SOURCE_SAVED = 'saved-preview';
+const LAYER_SAVED_OUTLINE = 'saved-preview-outline';
+const LAYER_SAVED_GRID = 'saved-preview-grid';
 
 export function MapLibreImageViewer({
   image,
@@ -107,6 +116,7 @@ export function MapLibreImageViewer({
   onContextMenu,
   onAction,
   previewTransform,
+  savedTransform,
   otherImage,
   onMapInstance,
   menuItems,
@@ -305,6 +315,39 @@ export function MapLibreImageViewer({
         },
       });
 
+      // Second overlay (red) — displays the saved-in-DB homography for
+      // reference when the editor toggle is on. Same shape as the cyan
+      // preview but driven by `savedTransform` instead of the user's
+      // current points.
+      m.addSource(SOURCE_SAVED, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+
+      m.addLayer({
+        id: LAYER_SAVED_GRID,
+        type: 'line',
+        source: SOURCE_SAVED,
+        filter: ['==', ['get', 'type'], 'grid'],
+        paint: {
+          'line-color': '#ff3b30',
+          'line-width': 1,
+          'line-opacity': 0.4,
+        },
+      });
+
+      m.addLayer({
+        id: LAYER_SAVED_OUTLINE,
+        type: 'line',
+        source: SOURCE_SAVED,
+        filter: ['==', ['get', 'type'], 'outline'],
+        paint: {
+          'line-color': '#ff3b30',
+          'line-width': 3,
+          'line-dasharray': [2, 1],
+        },
+      });
+
       m.fitBounds(
         [px2lngLat(0, image.height), px2lngLat(image.width, 0)],
         { padding: 20, animate: false }
@@ -416,6 +459,76 @@ export function MapLibreImageViewer({
 
     source.setData({ type: 'FeatureCollection', features });
   }, [map, previewTransform, otherImage, px2lngLat]);
+
+  // Update saved-homography preview GeoJSON (red overlay). Same shape as
+  // above, separate source so the two overlays can be shown together.
+  useEffect(() => {
+    if (!map) return;
+    const source = map.getSource(SOURCE_SAVED) as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    if (!source) return;
+
+    if (!savedTransform || !otherImage) {
+      source.setData({ type: 'FeatureCollection', features: [] });
+      return;
+    }
+
+    const w = otherImage.width;
+    const h = otherImage.height;
+    const GRID_DIVISIONS = 8;
+    const GRID_SAMPLES = 30;
+
+    const features: any[] = [];
+
+    const corners: [number, number][] = [
+      [0, 0],
+      [w, 0],
+      [w, h],
+      [0, h],
+      [0, 0],
+    ];
+    features.push({
+      type: 'Feature',
+      properties: { type: 'outline' },
+      geometry: {
+        type: 'LineString',
+        coordinates: corners.map((c) => px2lngLat(...savedTransform(c))),
+      },
+    });
+
+    for (let i = 0; i <= GRID_DIVISIONS; i++) {
+      const x = (w * i) / GRID_DIVISIONS;
+      const vLine: [number, number][] = [];
+      for (let j = 0; j <= GRID_SAMPLES; j++) {
+        vLine.push(savedTransform([x, (h * j) / GRID_SAMPLES]));
+      }
+      features.push({
+        type: 'Feature',
+        properties: { type: 'grid' },
+        geometry: {
+          type: 'LineString',
+          coordinates: vLine.map((c) => px2lngLat(...c)),
+        },
+      });
+
+      const y = (h * i) / GRID_DIVISIONS;
+      const hLine: [number, number][] = [];
+      for (let j = 0; j <= GRID_SAMPLES; j++) {
+        hLine.push(savedTransform([(w * j) / GRID_SAMPLES, y]));
+      }
+      features.push({
+        type: 'Feature',
+        properties: { type: 'grid' },
+        geometry: {
+          type: 'LineString',
+          coordinates: hLine.map((c) => px2lngLat(...c)),
+        },
+      });
+    }
+
+    source.setData({ type: 'FeatureCollection', features });
+  }, [map, savedTransform, otherImage, px2lngLat]);
 
   // Click to add points
   useEffect(() => {

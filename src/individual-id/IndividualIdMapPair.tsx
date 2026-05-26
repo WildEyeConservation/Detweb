@@ -63,15 +63,12 @@ interface Props {
    * that partner so neighbouring pairs don't nag for further linking.
    */
   onMoveToOov?: (candidateKey: string, side: 'A' | 'B') => void;
-  /** Toggle `noPartnerExpected` from an OovPanel card. */
-  onToggleNoPartnerExpected?: (annotationId: string) => void;
   /** Args: active candidate's real id opposite the click, then the ctrl-clicked real id. */
   onManualLinkRequest?: (
     activeAnnotationId: string,
     clickedAnnotationId: string
   ) => void;
   onAllAccepted?: () => void;
-  onAddOov?: (side: 'A' | 'B') => void;
   /** Omit to hide the prev button + Ctrl+← shortcut (used by single-pair mode). */
   onRequestPrevPair?: () => void;
   /** Omit to hide the next button + Ctrl+→ shortcut (used by single-pair mode). */
@@ -84,6 +81,11 @@ interface Props {
   /** Copied to the clipboard when the toolbar's Share button is clicked. */
   shareHref?: string;
   /**
+   * When set, the toolbar shows an "Edit homography" button that navigates
+   * to this URL. Omit to hide the button.
+   */
+  editHomographyHref?: string;
+  /**
    * Annotations from OTHER categories on these two images. Rendered as
    * read-only informational markers — never candidates, never accepted.
    */
@@ -95,10 +97,27 @@ interface Props {
 const DEFAULT_COLOR = '#3498db';
 // Stable empty list passed while Tab is held, so the maps clear their markers.
 const NO_MARKERS: MapMarker[] = [];
+
+// Image-pixel squared distance between two candidates. Uses whichever sides
+// both have positions on (separate coordinate spaces, so we never mix A and
+// B); returns Infinity when no side has both — those sort last for "nearest".
+function candidateDistanceSq(a: MatchCandidate, b: MatchCandidate): number {
+  let best = Infinity;
+  if (a.posA && b.posA) {
+    const dx = a.posA.x - b.posA.x;
+    const dy = a.posA.y - b.posA.y;
+    best = Math.min(best, dx * dx + dy * dy);
+  }
+  if (a.posB && b.posB) {
+    const dx = a.posB.x - b.posB.x;
+    const dy = a.posB.y - b.posB.y;
+    best = Math.min(best, dx * dx + dy * dy);
+  }
+  return best;
+}
 // Stable empty defaults so the optional props don't churn memo identities.
 const NO_FOREIGN: AnnotationType[] = [];
 const NO_COLORS: Record<string, string> = {};
-const NOOP_TOGGLE = (_id: string) => {};
 
 // Two-map workspace: renders both maps + markers and the keyboard flow.
 // Never writes the DB and never persists across mounts — the harness owns both.
@@ -119,17 +138,16 @@ export function IndividualIdMapPair(props: Props) {
     onToggleObscured,
     onSetProposedObscured,
     onMoveToOov,
-    onToggleNoPartnerExpected,
     onManualLinkRequest,
     onAllAccepted,
     onRequestPrevPair,
     onRequestNextPair,
-    onAddOov,
     leniency,
     onLeniencyChange,
     collapsed,
     onCollapsedChange,
     shareHref,
+    editHomographyHref,
     foreignAnnotations = NO_FOREIGN,
     categoryColors = NO_COLORS,
   } = props;
@@ -400,6 +418,24 @@ export function IndividualIdMapPair(props: Props) {
       if (!cand || cand.informational) return;
       const a = mapsRef.current[0];
       const b = mapsRef.current[1];
+
+      // Only pan when the candidate sits outside the current viewport on at
+      // least one map. Re-centring on every focus change is disruptive when
+      // the user is working a cluster of nearby annotations (the new marker
+      // is already on screen). A candidate far away — typically a different
+      // herd — fails this check and the pan fires as before.
+      const aOutside =
+        !!(a && cand.posA &&
+          !a.map
+            .getBounds()
+            .contains(a.px2lngLat(cand.posA.x, cand.posA.y)));
+      const bOutside =
+        !!(b && cand.posB &&
+          !b.map
+            .getBounds()
+            .contains(b.px2lngLat(cand.posB.x, cand.posB.y)));
+      if (!aOutside && !bOutside) return;
+
       // Suppress sync during the pan so B doesn't mid-animation jump off A's centre.
       isSyncingRef.current = true;
       try {
@@ -502,17 +538,20 @@ export function IndividualIdMapPair(props: Props) {
       if (remaining.length === 0) {
         setActiveKey(null);
       } else {
-        // Next linkable after current, looping back to the start.
-        const idx = linkable.findIndex(
-          (c) => c.pairKey === activeCandidate.pairKey
-        );
-        const after = linkable
-          .slice(idx + 1)
-          .find((c) => c.status !== 'accepted');
-        const before = linkable
-          .slice(0, idx)
-          .find((c) => c.status !== 'accepted');
-        setActiveKey((after ?? before)?.pairKey ?? null);
+        // Pick the spatially nearest remaining linkable to the just-accepted
+        // candidate. Working through a cluster of animals stays local instead
+        // of hopping to whatever was next in Munkres' array order, which often
+        // sits far away on the image.
+        let nearest = remaining[0];
+        let bestSq = candidateDistanceSq(activeCandidate, nearest);
+        for (let i = 1; i < remaining.length; i++) {
+          const d = candidateDistanceSq(activeCandidate, remaining[i]);
+          if (d < bestSq) {
+            bestSq = d;
+            nearest = remaining[i];
+          }
+        }
+        setActiveKey(nearest.pairKey);
       }
       return;
     }
@@ -771,9 +810,6 @@ export function IndividualIdMapPair(props: Props) {
     [candidates, onDelete]
   );
 
-  const addOovA = useCallback(() => onAddOov?.('A'), [onAddOov]);
-  const addOovB = useCallback(() => onAddOov?.('B'), [onAddOov]);
-
   const activeAnchorA = activeCandidate?.posA ?? null;
   const activeAnchorB = activeCandidate?.posB ?? null;
 
@@ -790,7 +826,6 @@ export function IndividualIdMapPair(props: Props) {
           onCtrlClick={handleCtrlClickA}
           onHoverChange={handleHoverA}
           onDelete={handleCardDeleteA}
-          onToggleNoPartnerExpected={onToggleNoPartnerExpected ?? NOOP_TOGGLE}
         />
         <div style={{ flex: 1, minHeight: 0 }}>
           <IndividualIdMap
@@ -808,7 +843,6 @@ export function IndividualIdMapPair(props: Props) {
             onMarkerToggleObscured={handleToggleObscuredA}
             onMarkerMoveToOov={handleMoveToOovA}
             onMarkerCtrlClick={handleCtrlClickA}
-            onAddOov={addOovA}
             leniency={leniency}
             // Tab-to-peek also clears the leniency ring + homography overlay.
             leniencyAnchor={markersHidden ? null : activeAnchorA}
@@ -833,7 +867,6 @@ export function IndividualIdMapPair(props: Props) {
             onMarkerToggleObscured={handleToggleObscuredB}
             onMarkerMoveToOov={handleMoveToOovB}
             onMarkerCtrlClick={handleCtrlClickB}
-            onAddOov={addOovB}
             leniency={leniency}
             // Tab-to-peek also clears the leniency ring + homography overlay.
             leniencyAnchor={markersHidden ? null : activeAnchorB}
@@ -852,7 +885,6 @@ export function IndividualIdMapPair(props: Props) {
           onCtrlClick={handleCtrlClickB}
           onHoverChange={handleHoverB}
           onDelete={handleCardDeleteB}
-          onToggleNoPartnerExpected={onToggleNoPartnerExpected ?? NOOP_TOGGLE}
         />
       </div>
       <PairToolbar
@@ -873,6 +905,7 @@ export function IndividualIdMapPair(props: Props) {
         collapsed={collapsed}
         onCollapsedChange={onCollapsedChange}
         shareHref={shareHref}
+        editHomographyHref={editHomographyHref}
       />
     </div>
   );
@@ -889,6 +922,7 @@ function PairToolbar({
   collapsed,
   onCollapsedChange,
   shareHref,
+  editHomographyHref,
 }: {
   active: MatchCandidate | null;
   candidatesCount: number;
@@ -900,6 +934,7 @@ function PairToolbar({
   collapsed: boolean;
   onCollapsedChange: (next: boolean) => void;
   shareHref?: string;
+  editHomographyHref?: string;
 }) {
   const navigate = useNavigate();
   const [helpOpen, setHelpOpen] = useState(false);
@@ -936,7 +971,7 @@ function PairToolbar({
             size='sm'
             variant='info'
             onClick={() => setHelpOpen(true)}
-            title='How ChainLink works'
+            title='How ChainLinker works'
           >
             <HelpCircle size={16} style={{ verticalAlign: 'middle' }} />
           </Button>
@@ -1026,6 +1061,16 @@ function PairToolbar({
       </div>
       {/* Always render the spacer so Share/Save stay right-aligned when collapsed. */}
       <span style={{ flex: 1, textAlign: 'right' }}>{!collapsed && status}</span>
+      {editHomographyHref && (
+        <Button
+          size='sm'
+          variant='outline-light'
+          onClick={() => navigate(editHomographyHref)}
+          title='Edit the homography for this image pair'
+        >
+          Edit homography
+        </Button>
+      )}
       <Button
         size='sm'
         variant='outline-light'
