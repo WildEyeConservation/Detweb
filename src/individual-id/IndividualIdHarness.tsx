@@ -1473,6 +1473,21 @@ export function IndividualIdHarness({
     return `/surveys/${projectCtx.project.id}/individual-id-pair?${params.toString()}`;
   })();
 
+  // Single-pair homography editor link. No backHref — the editor falls back
+  // to navigate(-1), which restores location.state on the transect route
+  // (IndividualIdTaskPage relies on it; a URL push would bounce to /jobs).
+  const editHomographyHref = (() => {
+    if (!currentPair || !projectCtx?.project?.id) return undefined;
+    const setId =
+      transect.data?.category?.annotationSetId ?? annotationSetId ?? '';
+    const params = new URLSearchParams({
+      image1Id: currentPair.image1Id,
+      image2Id: currentPair.image2Id,
+    });
+    if (setId) params.set('annotationSetId', setId);
+    return `/surveys/${projectCtx.project.id}/homography-edit?${params.toString()}`;
+  })();
+
   return (
     <div
       className='w-100 h-100 d-flex flex-column py-3'
@@ -1509,6 +1524,7 @@ export function IndividualIdHarness({
             collapsed={toolbarCollapsed}
             onCollapsedChange={setToolbarCollapsed}
             shareHref={shareHref}
+            editHomographyHref={editHomographyHref}
           />
         )}
       </div>

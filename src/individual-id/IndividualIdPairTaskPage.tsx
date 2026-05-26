@@ -37,6 +37,16 @@ export function IndividualIdPairTaskPage() {
     return qs ? `${pathname}?${qs}` : pathname;
   }, [pathname, search]);
 
+  // Link to the standalone homography editor for this pair. No backHref —
+  // the editor falls back to navigate(-1), which keeps the original URL
+  // (with prevHref/nextHref intact) rather than the stripped share URL.
+  const editHomographyHref = useMemo(() => {
+    if (!surveyId || !image1Id || !image2Id) return undefined;
+    const params = new URLSearchParams({ image1Id, image2Id });
+    if (annotationSetId) params.set('annotationSetId', annotationSetId);
+    return `/surveys/${surveyId}/homography-edit?${params.toString()}`;
+  }, [surveyId, image1Id, image2Id, annotationSetId]);
+
   if (!image1Id || !image2Id || !categoryId || !annotationSetId) {
     return (
       <div className='p-4 text-light'>
@@ -58,6 +68,7 @@ export function IndividualIdPairTaskPage() {
       prevHref={prevHref}
       nextHref={nextHref}
       shareHref={shareHref}
+      editHomographyHref={editHomographyHref}
     />
   );
 }

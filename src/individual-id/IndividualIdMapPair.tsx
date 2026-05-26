@@ -84,6 +84,11 @@ interface Props {
   /** Copied to the clipboard when the toolbar's Share button is clicked. */
   shareHref?: string;
   /**
+   * When set, the toolbar shows an "Edit homography" button that navigates
+   * to this URL. Omit to hide the button.
+   */
+  editHomographyHref?: string;
+  /**
    * Annotations from OTHER categories on these two images. Rendered as
    * read-only informational markers — never candidates, never accepted.
    */
@@ -130,6 +135,7 @@ export function IndividualIdMapPair(props: Props) {
     collapsed,
     onCollapsedChange,
     shareHref,
+    editHomographyHref,
     foreignAnnotations = NO_FOREIGN,
     categoryColors = NO_COLORS,
   } = props;
@@ -873,6 +879,7 @@ export function IndividualIdMapPair(props: Props) {
         collapsed={collapsed}
         onCollapsedChange={onCollapsedChange}
         shareHref={shareHref}
+        editHomographyHref={editHomographyHref}
       />
     </div>
   );
@@ -889,6 +896,7 @@ function PairToolbar({
   collapsed,
   onCollapsedChange,
   shareHref,
+  editHomographyHref,
 }: {
   active: MatchCandidate | null;
   candidatesCount: number;
@@ -900,6 +908,7 @@ function PairToolbar({
   collapsed: boolean;
   onCollapsedChange: (next: boolean) => void;
   shareHref?: string;
+  editHomographyHref?: string;
 }) {
   const navigate = useNavigate();
   const [helpOpen, setHelpOpen] = useState(false);
@@ -1026,6 +1035,16 @@ function PairToolbar({
       </div>
       {/* Always render the spacer so Share/Save stay right-aligned when collapsed. */}
       <span style={{ flex: 1, textAlign: 'right' }}>{!collapsed && status}</span>
+      {editHomographyHref && (
+        <Button
+          size='sm'
+          variant='outline-light'
+          onClick={() => navigate(editHomographyHref)}
+          title='Edit the homography for this image pair'
+        >
+          Edit homography
+        </Button>
+      )}
       <Button
         size='sm'
         variant='outline-light'

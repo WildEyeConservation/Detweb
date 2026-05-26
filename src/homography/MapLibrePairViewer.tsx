@@ -17,6 +17,15 @@ type Props = {
     (c: [number, number]) => [number, number],
     (c: [number, number]) => [number, number],
   ] | null;
+  /**
+   * Optional independent overlay (red) drawn on each map showing the
+   * homography currently saved in the DB. Purely visual — never used for
+   * map sync.
+   */
+  savedTransforms?: [
+    (c: [number, number]) => [number, number],
+    (c: [number, number]) => [number, number],
+  ] | null;
   onAction: () => void;
   annotationSetId?: string;
 };
@@ -151,6 +160,7 @@ export function MapLibrePairViewer({
   points,
   setPoints,
   previewTransforms,
+  savedTransforms,
   onAction,
   annotationSetId: annotationSetIdProp,
 }: Props) {
@@ -424,6 +434,7 @@ export function MapLibrePairViewer({
             onHoverPoint={setHoveredIndex}
             onContextMenu={contextMenuHandlers[i]}
             previewTransform={previewTransforms?.[1 - i]}
+            savedTransform={savedTransforms?.[1 - i]}
             otherImage={images[1 - i]}
             onMapInstance={i === 0 ? onMapInstance0 : onMapInstance1}
             menuItems={buildMenuItems(image, i)}

@@ -72,6 +72,8 @@ interface Props {
   nextHref?: string;
   /** Copyable single-pair link displayed in the toolbar's Share button. */
   shareHref?: string;
+  /** When set, the toolbar's "Edit homography" button navigates here. */
+  editHomographyHref?: string;
 }
 
 /**
@@ -89,6 +91,7 @@ export function IndividualIdPairHarness({
   prevHref,
   nextHref,
   shareHref,
+  editHomographyHref,
 }: Props) {
   const [leniency, setLeniency] = useState<number>(DEFAULT_LENIENCY);
   const navigate = useNavigate();
@@ -981,6 +984,7 @@ export function IndividualIdPairHarness({
           collapsed={toolbarCollapsed}
           onCollapsedChange={setToolbarCollapsed}
           shareHref={shareHref}
+          editHomographyHref={editHomographyHref}
         />
       </div>
       <ChangeCategoryModal

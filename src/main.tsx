@@ -24,6 +24,7 @@ import { Registration } from './Registration';
 import { IndividualIdPairTaskPage, IndividualIdTaskPage } from './individual-id';
 import HomographyTask from './homography/HomographyTask';
 import HomographyViewer from './homography/HomographyViewer';
+import HomographyEditPage from './homography/HomographyEditPage';
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import Admin from './Admin';
@@ -131,6 +132,13 @@ const router = createBrowserRouter([
           {
             path: 'homography/:queueId',
             element: <HomographyTask />,
+          },
+          {
+            // Standalone single-pair homography editor. Required query params
+            // (image1Id, image2Id); optional annotationSetId, backHref.
+            // Linked from the Individual-ID toolbar for ad-hoc fixes.
+            path: 'homography-edit',
+            element: <HomographyEditPage />,
           },
           {
             path: 'quickTest',

@@ -9,9 +9,9 @@ import {
   solveHomography,
 } from './ManualHomographyEditor';
 
-const SUGGESTED_POINT_ID_PREFIX = 'suggested-';
+export const SUGGESTED_POINT_ID_PREFIX = 'suggested-';
 
-function flatToPoints(flat: (number | null | undefined)[] | null | undefined): Point[] {
+export function flatToPoints(flat: (number | null | undefined)[] | null | undefined): Point[] {
   if (!flat || flat.length < 2) return [];
   const out: Point[] = [];
   for (let i = 0; i + 1 < flat.length; i += 2) {
@@ -23,7 +23,7 @@ function flatToPoints(flat: (number | null | undefined)[] | null | undefined): P
   return out;
 }
 
-function countSuggestedPointsKept(points: { p1: Point[]; p2: Point[] }): number {
+export function countSuggestedPointsKept(points: { p1: Point[]; p2: Point[] }): number {
   const n = Math.min(points.p1.length, points.p2.length);
   let kept = 0;
   for (let i = 0; i < n; i++) {
@@ -76,15 +76,17 @@ type Props = {
   isSaved?: boolean;
 };
 
-type NeighbourRecord = {
+export type NeighbourRecord = {
   image1Id: string;
   image2Id: string;
   isForward: boolean;
   suggestedPoints1: (number | null | undefined)[] | null | undefined;
   suggestedPoints2: (number | null | undefined)[] | null | undefined;
+  /** Stored 3x3 homography in row-major order, image1→image2. */
+  homography: (number | null | undefined)[] | null | undefined;
 };
 
-async function resolveNeighbourDirection(
+export async function resolveNeighbourDirection(
   client: any,
   primaryId: string,
   secondaryId: string
@@ -100,6 +102,7 @@ async function resolveNeighbourDirection(
       isForward: true,
       suggestedPoints1: fwdResp.data.suggestedPoints1,
       suggestedPoints2: fwdResp.data.suggestedPoints2,
+      homography: fwdResp.data.homography,
     };
   }
   const revResp = await client.models.ImageNeighbour.get({
@@ -113,6 +116,7 @@ async function resolveNeighbourDirection(
       isForward: false,
       suggestedPoints1: revResp.data.suggestedPoints1,
       suggestedPoints2: revResp.data.suggestedPoints2,
+      homography: revResp.data.homography,
     };
   }
   throw new Error(
