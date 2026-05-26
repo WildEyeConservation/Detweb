@@ -48,7 +48,7 @@ import type { CategoryType } from '../schemaTypes';
  * from every chain endpoint at transect-completion time to find images
  * where an out-of-view animal may have reappeared.
  */
-const REUNION_MAX_HOPS = 15;
+const REUNION_MAX_HOPS = 20;
 
 /**
  * Default Munkres "leave unmatched" cost in image pixels. Anything at a
@@ -609,8 +609,18 @@ export function IndividualIdHarness({
   }, [pairViews, currentIndex]);
 
   const handleAllAccepted = useCallback(() => {
+    // Suppress the "Stay / Next pair" popup when no other pair in the
+    // active set is still incomplete. There's nothing to navigate to —
+    // and the completion effect will take over (open ReunionDialog or
+    // fire onComplete) on the next render. Without this guard the stale
+    // popup stacks on top of ReunionDialog, since onComplete no longer
+    // navigates away immediately.
+    const anyOtherIncomplete = pairViews.some(
+      (v, i) => i !== currentIndex && v.completion.status === 'incomplete'
+    );
+    if (!anyOtherIncomplete) return;
     setCompletePopup({ show: true, earlier: earliestEarlierIncomplete });
-  }, [earliestEarlierIncomplete]);
+  }, [earliestEarlierIncomplete, pairViews, currentIndex]);
 
   const acceptCompletePopup = () => {
     if (completePopup.earlier !== undefined) {
