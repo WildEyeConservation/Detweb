@@ -57,8 +57,6 @@ type LinkActor = {
   candidatePos: { x: number; y: number } | null;
   obscured?: boolean;
   oov?: boolean;
-  /** Stamp `noPartnerExpected: true` on a new OOV row. Ignored for existing. */
-  noPartnerExpected?: boolean;
 };
 
 interface Props {
@@ -311,57 +309,6 @@ export function IndividualIdPairHarness({
     ]
   );
 
-  const handlePlaceOov = useCallback(
-    async (side: 'A' | 'B') => {
-      if (!pair) return;
-      const group = (projectCtx?.project as any)?.organizationId ?? undefined;
-      const nowIso = new Date().toISOString();
-      const newId = crypto.randomUUID();
-      const imageId = side === 'A' ? pair.image1Id : pair.image2Id;
-      const dbInput = {
-        id: newId,
-        imageId,
-        setId: annotationSetId,
-        categoryId,
-        x: 0,
-        y: 0,
-        oov: true,
-        source: 'individual-id',
-        projectId: projectCtx?.project?.id,
-        group,
-      };
-      const localRow = {
-        ...dbInput,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      } as unknown as AnnotationType;
-      setLocalAnnotations((prev) => [...prev, localRow]);
-      patchPairCache((old) => ({
-        ...old,
-        annotations: [...old.annotations, localRow],
-      }));
-      try {
-        await client.models.Annotation.create(dbInput as any);
-      } catch (err) {
-        console.error('Failed to create OOV annotation', err);
-        setLocalAnnotations((prev) => prev.filter((a) => a.id !== newId));
-        patchPairCache((old) => ({
-          ...old,
-          annotations: old.annotations.filter((a) => a.id !== newId),
-        }));
-      }
-    },
-    [
-      pair,
-      annotationSetId,
-      categoryId,
-      projectCtx?.project?.id,
-      projectCtx?.project,
-      client,
-      patchPairCache,
-    ]
-  );
-
   const handleDelete = useCallback(
     async (annotationId: string) => {
       const before = localAnnotations;
@@ -502,45 +449,6 @@ export function IndividualIdPairHarness({
       working.setCandidateObscured(currentPairKey, candidateKey, side, value);
     },
     [working, currentPairKey]
-  );
-
-  const handleToggleNoPartnerExpected = useCallback(
-    async (annotationId: string) => {
-      const current = localAnnotations.find((a) => a.id === annotationId);
-      if (!current) return;
-      const next = !(current as any).noPartnerExpected;
-      const apply = (a: AnnotationType): AnnotationType =>
-        a.id === annotationId
-          ? ({ ...a, noPartnerExpected: next } as AnnotationType)
-          : a;
-      const revert = (a: AnnotationType): AnnotationType =>
-        a.id === annotationId
-          ? ({
-              ...a,
-              noPartnerExpected: (current as any).noPartnerExpected,
-            } as AnnotationType)
-          : a;
-
-      setLocalAnnotations((prev) => prev.map(apply));
-      patchPairCache((old) => ({
-        ...old,
-        annotations: old.annotations.map(apply),
-      }));
-      try {
-        await client.models.Annotation.update({
-          id: annotationId,
-          noPartnerExpected: next,
-        } as any);
-      } catch (err) {
-        console.error('Failed to toggle noPartnerExpected', err);
-        setLocalAnnotations((prev) => prev.map(revert));
-        patchPairCache((old) => ({
-          ...old,
-          annotations: old.annotations.map(revert),
-        }));
-      }
-    },
-    [localAnnotations, client, patchPairCache]
   );
 
   // ---- Change-label flow ----
@@ -730,7 +638,6 @@ export function IndividualIdPairHarness({
             group,
             ...(actor.obscured ? { obscured: true } : {}),
             ...(actor.oov ? { oov: true } : {}),
-            ...(actor.noPartnerExpected ? { noPartnerExpected: true } : {}),
             createdAt: nowIso,
             updatedAt: nowIso,
           } as unknown as AnnotationType);
@@ -976,9 +883,7 @@ export function IndividualIdPairHarness({
           onToggleObscured={handleToggleObscured}
           onSetProposedObscured={handleSetProposedObscured}
           onMoveToOov={handleMoveToOov}
-          onToggleNoPartnerExpected={handleToggleNoPartnerExpected}
           onManualLinkRequest={requestManualLink}
-          onAddOov={handlePlaceOov}
           onRequestPrevPair={goPrev}
           onRequestNextPair={goNext}
           collapsed={toolbarCollapsed}

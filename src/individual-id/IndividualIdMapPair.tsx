@@ -63,15 +63,12 @@ interface Props {
    * that partner so neighbouring pairs don't nag for further linking.
    */
   onMoveToOov?: (candidateKey: string, side: 'A' | 'B') => void;
-  /** Toggle `noPartnerExpected` from an OovPanel card. */
-  onToggleNoPartnerExpected?: (annotationId: string) => void;
   /** Args: active candidate's real id opposite the click, then the ctrl-clicked real id. */
   onManualLinkRequest?: (
     activeAnnotationId: string,
     clickedAnnotationId: string
   ) => void;
   onAllAccepted?: () => void;
-  onAddOov?: (side: 'A' | 'B') => void;
   /** Omit to hide the prev button + Ctrl+← shortcut (used by single-pair mode). */
   onRequestPrevPair?: () => void;
   /** Omit to hide the next button + Ctrl+→ shortcut (used by single-pair mode). */
@@ -121,7 +118,6 @@ function candidateDistanceSq(a: MatchCandidate, b: MatchCandidate): number {
 // Stable empty defaults so the optional props don't churn memo identities.
 const NO_FOREIGN: AnnotationType[] = [];
 const NO_COLORS: Record<string, string> = {};
-const NOOP_TOGGLE = (_id: string) => {};
 
 // Two-map workspace: renders both maps + markers and the keyboard flow.
 // Never writes the DB and never persists across mounts — the harness owns both.
@@ -142,12 +138,10 @@ export function IndividualIdMapPair(props: Props) {
     onToggleObscured,
     onSetProposedObscured,
     onMoveToOov,
-    onToggleNoPartnerExpected,
     onManualLinkRequest,
     onAllAccepted,
     onRequestPrevPair,
     onRequestNextPair,
-    onAddOov,
     leniency,
     onLeniencyChange,
     collapsed,
@@ -816,9 +810,6 @@ export function IndividualIdMapPair(props: Props) {
     [candidates, onDelete]
   );
 
-  const addOovA = useCallback(() => onAddOov?.('A'), [onAddOov]);
-  const addOovB = useCallback(() => onAddOov?.('B'), [onAddOov]);
-
   const activeAnchorA = activeCandidate?.posA ?? null;
   const activeAnchorB = activeCandidate?.posB ?? null;
 
@@ -835,7 +826,6 @@ export function IndividualIdMapPair(props: Props) {
           onCtrlClick={handleCtrlClickA}
           onHoverChange={handleHoverA}
           onDelete={handleCardDeleteA}
-          onToggleNoPartnerExpected={onToggleNoPartnerExpected ?? NOOP_TOGGLE}
         />
         <div style={{ flex: 1, minHeight: 0 }}>
           <IndividualIdMap
@@ -853,7 +843,6 @@ export function IndividualIdMapPair(props: Props) {
             onMarkerToggleObscured={handleToggleObscuredA}
             onMarkerMoveToOov={handleMoveToOovA}
             onMarkerCtrlClick={handleCtrlClickA}
-            onAddOov={addOovA}
             leniency={leniency}
             // Tab-to-peek also clears the leniency ring + homography overlay.
             leniencyAnchor={markersHidden ? null : activeAnchorA}
@@ -878,7 +867,6 @@ export function IndividualIdMapPair(props: Props) {
             onMarkerToggleObscured={handleToggleObscuredB}
             onMarkerMoveToOov={handleMoveToOovB}
             onMarkerCtrlClick={handleCtrlClickB}
-            onAddOov={addOovB}
             leniency={leniency}
             // Tab-to-peek also clears the leniency ring + homography overlay.
             leniencyAnchor={markersHidden ? null : activeAnchorB}
@@ -897,7 +885,6 @@ export function IndividualIdMapPair(props: Props) {
           onCtrlClick={handleCtrlClickB}
           onHoverChange={handleHoverB}
           onDelete={handleCardDeleteB}
-          onToggleNoPartnerExpected={onToggleNoPartnerExpected ?? NOOP_TOGGLE}
         />
       </div>
       <PairToolbar

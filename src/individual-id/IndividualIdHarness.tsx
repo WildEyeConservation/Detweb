@@ -130,12 +130,6 @@ type LinkActor = {
    * other side. Ignored when `existing` is set.
    */
   oov?: boolean;
-  /**
-   * Stamp `noPartnerExpected: true` on the new row. Only meaningful when
-   * `oov: true` and the OOV is being created as a terminus (no partner is
-   * expected on any neighbour pair). Ignored when `existing` is set.
-   */
-  noPartnerExpected?: boolean;
 };
 
 /**
@@ -660,81 +654,6 @@ export function IndividualIdHarness({
     ]
   );
 
-  /**
-   * User clicked the "Add out-of-view" control on a map. Creates an OOV
-   * annotation for THAT map's image (the one the user judges is missing the
-   * animal that breaks the chain). It gets the active category, a placeholder
-   * x/y of 0,0 (never rendered on the map — it lives in the side panel), and
-   * `oov: true`. Once created, Munkres flags every pair containing this
-   * image as needing attention until the user links the OOV on each side.
-   */
-  const handlePlaceOov = useCallback(
-    async (side: 'A' | 'B') => {
-      if (!currentPair || !categoryId) return;
-      const setId =
-        transect.data?.category?.annotationSetId ?? annotationSetId ?? '';
-      if (!setId) return;
-      const group = (projectCtx?.project as any)?.organizationId ?? undefined;
-      const nowIso = new Date().toISOString();
-      const newId = crypto.randomUUID();
-      const imageId =
-        side === 'A' ? currentPair.image1Id : currentPair.image2Id;
-      const dbInput = {
-        id: newId,
-        imageId,
-        setId,
-        categoryId,
-        x: 0,
-        y: 0,
-        oov: true,
-        source: 'individual-id',
-        projectId: projectCtx?.project?.id,
-        group,
-      };
-      const localRow = {
-        ...dbInput,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      } as unknown as AnnotationType;
-
-      setLocalAnnotations((prev) => [...prev, localRow]);
-      patchTransectCache((old) => {
-        const annotations = [...old.annotations, localRow];
-        return {
-          ...old,
-          annotations,
-          annotationsByImage: indexByImage(annotations),
-        };
-      });
-
-      try {
-        await client.models.Annotation.create(dbInput as any);
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to create OOV annotation', err);
-        setLocalAnnotations((prev) => prev.filter((a) => a.id !== newId));
-        patchTransectCache((old) => {
-          const annotations = old.annotations.filter((a) => a.id !== newId);
-          return {
-            ...old,
-            annotations,
-            annotationsByImage: indexByImage(annotations),
-          };
-        });
-      }
-    },
-    [
-      currentPair,
-      categoryId,
-      transect.data?.category?.annotationSetId,
-      annotationSetId,
-      projectCtx?.project?.id,
-      projectCtx?.project,
-      client,
-      patchTransectCache,
-    ]
-  );
-
   // Deferred until the user confirms scope. null means no dialog open.
   const [deleteRequest, setDeleteRequest] = useState<{
     annotationId: string;
@@ -936,62 +855,6 @@ export function IndividualIdHarness({
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('Failed to toggle annotation obscured', err);
-        setLocalAnnotations((prev) => prev.map(revert));
-        patchTransectCache((old) => {
-          const annotations = old.annotations.map(revert);
-          return {
-            ...old,
-            annotations,
-            annotationsByImage: indexByImage(annotations),
-          };
-        });
-      }
-    },
-    [localAnnotations, client, patchTransectCache]
-  );
-
-  /**
-   * Toggles an OOV's `noPartnerExpected` flag. Called from the OovPanel
-   * card when the user confirms (or revokes the confirmation) that the
-   * animal is genuinely absent from neighbouring images, so the chain
-   * shouldn't keep nagging for a partner.
-   */
-  const handleToggleNoPartnerExpected = useCallback(
-    async (annotationId: string) => {
-      const current = localAnnotations.find((a) => a.id === annotationId);
-      if (!current) return;
-      const next = !(current as any).noPartnerExpected;
-
-      const apply = (a: AnnotationType): AnnotationType =>
-        a.id === annotationId
-          ? ({ ...a, noPartnerExpected: next } as AnnotationType)
-          : a;
-      const revert = (a: AnnotationType): AnnotationType =>
-        a.id === annotationId
-          ? ({
-              ...a,
-              noPartnerExpected: (current as any).noPartnerExpected,
-            } as AnnotationType)
-          : a;
-
-      setLocalAnnotations((prev) => prev.map(apply));
-      patchTransectCache((old) => {
-        const annotations = old.annotations.map(apply);
-        return {
-          ...old,
-          annotations,
-          annotationsByImage: indexByImage(annotations),
-        };
-      });
-
-      try {
-        await client.models.Annotation.update({
-          id: annotationId,
-          noPartnerExpected: next,
-        } as any);
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to toggle noPartnerExpected', err);
         setLocalAnnotations((prev) => prev.map(revert));
         patchTransectCache((old) => {
           const annotations = old.annotations.map(revert);
@@ -1266,7 +1129,6 @@ export function IndividualIdHarness({
             group,
             ...(actor.obscured ? { obscured: true } : {}),
             ...(actor.oov ? { oov: true } : {}),
-            ...(actor.noPartnerExpected ? { noPartnerExpected: true } : {}),
             createdAt: nowIso,
             updatedAt: nowIso,
           } as unknown as AnnotationType);
@@ -1411,10 +1273,9 @@ export function IndividualIdHarness({
   /**
    * User clicked "Move to OOV" on a shadow whose candidate has a real
    * partner on the other side. Materialises a new OOV row on this side
-   * chain-linked to the partner via shared objectId. The OOV is created
-   * *without* `noPartnerExpected` — neighbouring pairs still pull it in
-   * as a candidate, and the user can mark the chain as terminus from the
-   * OovPanel card later if they confirm no partner ever appears.
+   * chain-linked to the partner via shared objectId. Munkres ignores OOVs,
+   * so the new row never proposes shadows on neighbour pairs — it sits as
+   * a record in the OovPanel until deleted.
    */
   const handleMoveToOov = useCallback(
     async (candidateKey: string, oovSide: 'A' | 'B') => {
@@ -1558,9 +1419,7 @@ export function IndividualIdHarness({
             onToggleObscured={handleToggleObscured}
             onSetProposedObscured={handleSetProposedObscured}
             onMoveToOov={handleMoveToOov}
-            onToggleNoPartnerExpected={handleToggleNoPartnerExpected}
             onManualLinkRequest={requestManualLink}
-            onAddOov={handlePlaceOov}
             onAllAccepted={handleAllAccepted}
             onRequestPrevPair={() => laneNav(-1)}
             onRequestNextPair={() => laneNav(1)}
