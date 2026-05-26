@@ -30,6 +30,7 @@ import { LoadingCard } from './components/LoadingCard';
 import { NavigateAwayDialog } from './components/NavigateAwayDialog';
 import { PairCompleteDialog } from './components/PairCompleteDialog';
 import { LinkAnnotationDialog } from './components/LinkAnnotationDialog';
+import { DeleteAnnotationDialog } from './components/DeleteAnnotationDialog';
 import ChangeCategoryModal from '../ChangeCategoryModal';
 import type { CategoryType } from '../schemaTypes';
 
@@ -64,6 +65,29 @@ function indexByImage(
   const out: Record<string, AnnotationType[]> = {};
   for (const a of annotations) (out[a.imageId] ??= []).push(a);
   return out;
+}
+
+/**
+ * Ids of every annotation in the chain containing `annotationId` (including
+ * itself). A "chain" is the set of annotations sharing an objectId — i.e. all
+ * sightings of one individual. Used by both delete (scope choice) and
+ * change-label (propagation).
+ */
+function buildChainIdsFor(
+  annotations: AnnotationType[],
+  annotationId: string
+): string[] {
+  const ids = new Set<string>([annotationId]);
+  const target = annotations.find((a) => a.id === annotationId);
+  const chainKey = target?.objectId;
+  if (chainKey) {
+    for (const a of annotations) {
+      if (a.objectId === chainKey || a.id === chainKey) {
+        ids.add(a.id);
+      }
+    }
+  }
+  return Array.from(ids);
 }
 
 function isOlder(
@@ -711,69 +735,75 @@ export function IndividualIdHarness({
     ]
   );
 
-  /**
-   * User clicked Delete in a marker's popup. Fires `Annotation.delete` and
-   * optimistically removes from `localAnnotations` so Munkres rebuilds
-   * without it on the next render. We deliberately don't cascade to a
-   * partner annotation — if the deleted row was a primary, the secondary's
-   * objectId now points at nothing, but Munkres will treat it as unmatched
-   * and propose a fresh shadow on this side. The user can re-pair if they
-   * want.
-   */
-  const handleDelete = useCallback(
-    async (annotationId: string) => {
-      const before = localAnnotations;
-      const target = localAnnotations.find((a) => a.id === annotationId);
+  // Deferred until the user confirms scope. null means no dialog open.
+  const [deleteRequest, setDeleteRequest] = useState<{
+    annotationId: string;
+    chainIds: string[];
+  } | null>(null);
 
-      // OOV deletion: the OOV is almost always a secondary bridging the
-      // chain across an image where the animal isn't visible. Deleting it
-      // should un-bridge — annotations OLDER than the OOV keep their
-      // existing identity, while annotations NEWER than the OOV form their
-      // own chain rooted at the chronologically nearest survivor (the one
-      // on the image immediately after the OOV). The older segment and the
-      // newer segment end up independent, exactly as if the OOV had never
-      // been inserted.
-      //
-      // For a non-OOV deletion the existing convention is to leave
-      // secondaries orphaned and let Munkres re-propose — keep that.
+  /**
+   * Performs the actual annotation deletion. Optimistic local + cache
+   * update, rolled back on DB failure. Accepts either a single id (the
+   * regular path or "Delete this one" from the chain dialog) or a list of
+   * ids (the chain-wide path from the same dialog).
+   *
+   * OOV re-rooting (chronologically splitting the chain at the deleted OOV)
+   * only applies to single-row deletes — a chain-wide delete by definition
+   * leaves nothing to re-root onto.
+   */
+  const executeDelete = useCallback(
+    async (ids: string[], scope: 'single' | 'chain') => {
+      if (ids.length === 0) return;
+      const before = localAnnotations;
+      const idSet = new Set(ids);
+
       const reRootUpdates: Array<{
         id: string;
         patch: Partial<AnnotationType>;
       }> = [];
-      if (target && isOov(target)) {
-        const chainKey = target.objectId ?? target.id;
-        const chainMembers = localAnnotations.filter(
-          (a) =>
-            a.id !== annotationId &&
-            (a.objectId === chainKey || a.id === chainKey)
-        );
-        const imagesById = transect.data?.imagesById ?? {};
-        const ageOf = (imageId: string) => {
-          const img: any = imagesById[imageId];
-          return {
-            timestamp: (img?.timestamp ?? null) as number | null,
-            originalPath: (img?.originalPath ?? null) as string | null,
+      if (scope === 'single' && ids.length === 1) {
+        const annotationId = ids[0];
+        const target = localAnnotations.find((a) => a.id === annotationId);
+        if (target && isOov(target)) {
+          // OOV deletion: the OOV is almost always a secondary bridging the
+          // chain across an image where the animal isn't visible. Deleting
+          // it should un-bridge — annotations OLDER than the OOV keep their
+          // existing identity, while annotations NEWER than the OOV form
+          // their own chain rooted at the chronologically nearest survivor.
+          // The older and newer segments end up independent, exactly as if
+          // the OOV had never been inserted.
+          const chainKey = target.objectId ?? target.id;
+          const chainMembers = localAnnotations.filter(
+            (a) =>
+              a.id !== annotationId &&
+              (a.objectId === chainKey || a.id === chainKey)
+          );
+          const imagesById = transect.data?.imagesById ?? {};
+          const ageOf = (imageId: string) => {
+            const img: any = imagesById[imageId];
+            return {
+              timestamp: (img?.timestamp ?? null) as number | null,
+              originalPath: (img?.originalPath ?? null) as string | null,
+            };
           };
-        };
-        const oovAge = ageOf(target.imageId);
-        const newer = chainMembers.filter((a) =>
-          isOlder(oovAge, ageOf(a.imageId))
-        );
-        if (newer.length > 0) {
-          // Chronologically nearest survivor (= oldest of the newer set)
-          // becomes the new primary.
-          let nearest = newer[0];
-          for (let i = 1; i < newer.length; i++) {
-            if (isOlder(ageOf(newer[i].imageId), ageOf(nearest.imageId))) {
-              nearest = newer[i];
+          const oovAge = ageOf(target.imageId);
+          const newer = chainMembers.filter((a) =>
+            isOlder(oovAge, ageOf(a.imageId))
+          );
+          if (newer.length > 0) {
+            let nearest = newer[0];
+            for (let i = 1; i < newer.length; i++) {
+              if (isOlder(ageOf(newer[i].imageId), ageOf(nearest.imageId))) {
+                nearest = newer[i];
+              }
             }
-          }
-          for (const a of newer) {
-            if (a.objectId !== nearest.id) {
-              reRootUpdates.push({
-                id: a.id,
-                patch: { objectId: nearest.id },
-              });
+            for (const a of newer) {
+              if (a.objectId !== nearest.id) {
+                reRootUpdates.push({
+                  id: a.id,
+                  patch: { objectId: nearest.id },
+                });
+              }
             }
           }
         }
@@ -782,7 +812,7 @@ export function IndividualIdHarness({
       const applyDeleteAndReRoot = (
         prev: AnnotationType[]
       ): AnnotationType[] => {
-        let next = prev.filter((a) => a.id !== annotationId);
+        let next = prev.filter((a) => !idSet.has(a.id));
         if (reRootUpdates.length > 0) {
           const patchById = new Map(
             reRootUpdates.map((u) => [u.id, u.patch])
@@ -794,9 +824,7 @@ export function IndividualIdHarness({
         return next;
       };
 
-      // Optimistic in-memory removal + re-root.
       setLocalAnnotations(applyDeleteAndReRoot);
-      // Persisted cache removal — so the deletion survives a reload.
       patchTransectCache((old) => {
         const annotations = applyDeleteAndReRoot(old.annotations);
         return {
@@ -807,11 +835,11 @@ export function IndividualIdHarness({
       });
 
       try {
-        const result: any = await client.models.Annotation.delete({
-          id: annotationId,
-        } as any);
-        // Re-root patches run in parallel with the delete — failure of any
-        // single update is logged but doesn't abort the others.
+        const results: any[] = await Promise.all(
+          ids.map((id) =>
+            client.models.Annotation.delete({ id } as any)
+          )
+        );
         await Promise.all(
           reRootUpdates.map((u) =>
             client.models.Annotation.update({
@@ -821,20 +849,20 @@ export function IndividualIdHarness({
           )
         );
         // AppSync returns `data: null` (with no errors) when an owner/group
-        // auth filter blocks the mutation. The user won't see the row in
-        // the UI either way (the cache is updated), but on next reload the
-        // server will re-emit it. Surface this in the console so we notice.
-        if (result && result.data == null && !result.errors?.length) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            'Annotation.delete returned null — likely an authorization issue (you may not own this row).',
-            { id: annotationId }
-          );
+        // auth filter blocks the mutation. Surface so we notice.
+        for (let i = 0; i < results.length; i++) {
+          const result = results[i];
+          if (result && result.data == null && !result.errors?.length) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              'Annotation.delete returned null — likely an authorization issue (you may not own this row).',
+              { id: ids[i] }
+            );
+          }
         }
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.error('Failed to delete annotation', err);
-        // Roll back local state and the cache.
+        console.error('Failed to delete annotation(s)', err);
         setLocalAnnotations(before);
         patchTransectCache((old) => ({
           ...old,
@@ -845,6 +873,32 @@ export function IndividualIdHarness({
     },
     [client, localAnnotations, patchTransectCache, transect.data?.imagesById]
   );
+
+  /**
+   * Entry point from the marker popup's Delete button. If the annotation is
+   * linked to other sightings of the same individual we open a dialog to
+   * let the user choose scope (this one vs entire chain); a solo annotation
+   * deletes immediately with no confirmation.
+   */
+  const handleDelete = useCallback(
+    (annotationId: string) => {
+      const chainIds = buildChainIdsFor(localAnnotations, annotationId);
+      if (chainIds.length <= 1) {
+        void executeDelete([annotationId], 'single');
+      } else {
+        setDeleteRequest({ annotationId, chainIds });
+      }
+    },
+    [localAnnotations, executeDelete]
+  );
+
+  const confirmDeleteScope = (scope: 'single' | 'chain') => {
+    if (!deleteRequest) return;
+    const ids =
+      scope === 'single' ? [deleteRequest.annotationId] : deleteRequest.chainIds;
+    void executeDelete(ids, scope);
+    setDeleteRequest(null);
+  };
 
   /**
    * User clicked "Mark as obscured" / "Mark as visible" in a marker's popup.
@@ -1026,19 +1080,8 @@ export function IndividualIdHarness({
    * are assumed to stay within a transect.
    */
   const buildChainIds = useCallback(
-    (annotationId: string): string[] => {
-      const ids = new Set<string>([annotationId]);
-      const target = localAnnotations.find((a) => a.id === annotationId);
-      const chainKey = target?.objectId;
-      if (chainKey) {
-        for (const a of localAnnotations) {
-          if (a.objectId === chainKey || a.id === chainKey) {
-            ids.add(a.id);
-          }
-        }
-      }
-      return Array.from(ids);
-    },
+    (annotationId: string): string[] =>
+      buildChainIdsFor(localAnnotations, annotationId),
     [localAnnotations]
   );
 
@@ -1575,6 +1618,13 @@ export function IndividualIdHarness({
         show={pendingLink !== null}
         onConfirm={confirmManualLink}
         onCancel={cancelManualLink}
+      />
+      <DeleteAnnotationDialog
+        show={deleteRequest !== null}
+        chainSize={deleteRequest?.chainIds.length ?? 0}
+        onDeleteOne={() => confirmDeleteScope('single')}
+        onDeleteChain={() => confirmDeleteScope('chain')}
+        onCancel={() => setDeleteRequest(null)}
       />
     </div>
   );
