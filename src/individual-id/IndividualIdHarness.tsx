@@ -8,7 +8,11 @@ import {
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { GlobalContext, ProjectContext } from '../Context';
-import type { AnnotationType } from '../schemaTypes';
+import type {
+  AnnotationType,
+  ImageNeighbourType,
+  ImageType,
+} from '../schemaTypes';
 import { useTransectData, type TransectData } from './hooks/useTransectData';
 import {
   makePairKey,
@@ -19,6 +23,10 @@ import { buildNeighbourTransforms } from './utils/transforms';
 import { evaluatePairCompletion } from './utils/completion';
 import { isOov } from './utils/identity';
 import { buildLanes, filterLanesToAttention } from './utils/lanes';
+import {
+  findReunions,
+  type ReunionCandidate,
+} from './utils/reunionSearch';
 import type {
   MatchCandidate,
   NeighbourPairWithMeta,
@@ -29,10 +37,18 @@ import { ProgressBar } from './components/ProgressBar';
 import { LoadingCard } from './components/LoadingCard';
 import { NavigateAwayDialog } from './components/NavigateAwayDialog';
 import { PairCompleteDialog } from './components/PairCompleteDialog';
+import { ReunionDialog } from './components/ReunionDialog';
 import { LinkAnnotationDialog } from './components/LinkAnnotationDialog';
 import { DeleteAnnotationDialog } from './components/DeleteAnnotationDialog';
 import ChangeCategoryModal from '../ChangeCategoryModal';
 import type { CategoryType } from '../schemaTypes';
+
+/**
+ * BFS hop budget for reunion search. We walk the neighbour graph this far
+ * from every chain endpoint at transect-completion time to find images
+ * where an out-of-view animal may have reappeared.
+ */
+const REUNION_MAX_HOPS = 15;
 
 /**
  * Default Munkres "leave unmatched" cost in image pixels. Anything at a
@@ -233,8 +249,8 @@ export function IndividualIdHarness({
 
   // ---- Re-derive transforms from raw neighbours ----
   // Functions cannot survive React Query's localStorage persister, so we
-  // rebuild them fresh from `rawNeighbours` on every reload. `pairs` is
-  // ephemeral (not cached) by virtue of being a useMemo result.
+  // rebuild them fresh from `rawNeighbours` on every reload. `directPairs`
+  // is ephemeral (not cached) by virtue of being a useMemo result.
   //
   // We also normalise orientation here: imageA is always the chronologically
   // older image (and image1Id its id), imageB always the newer. The progress
@@ -243,7 +259,11 @@ export function IndividualIdHarness({
   // (handleAccept, etc.) only ever sees A < B. If we'd swap, the homography
   // transforms swap with us — the pre-swap "forward" mapped image1→image2,
   // which becomes "backward" in the new A/B framing.
-  const pairs: NeighbourPairWithMeta[] = useMemo(() => {
+  //
+  // The harness later swaps `directPairs` out for a synthetic reunion-pair
+  // set (`pairs = reunionMode?.pairs ?? directPairs`) so the same render
+  // tree drives the reunion-review phase.
+  const directPairs: NeighbourPairWithMeta[] = useMemo(() => {
     const raw = transect.data?.rawNeighbours ?? [];
     const imagesById = transect.data?.imagesById ?? {};
     const out: NeighbourPairWithMeta[] = [];
@@ -280,6 +300,64 @@ export function IndividualIdHarness({
     });
     return out;
   }, [transect.data?.rawNeighbours, transect.data?.imagesById]);
+
+  // ---- Reunion-review phase ----
+  // When every direct pair is complete, `findReunions` walks each chain
+  // endpoint's neighbourhood and surfaces any image pairs (hops >= 2)
+  // where the animal may have come back into view. The user is then
+  // forced through those synthetic pairs before the transect completes;
+  // when they finish a round, we search again (chains may have merged
+  // and exposed new endpoints). `reviewedReunionsRef` prevents loops on
+  // pairs the user already saw without taking action.
+  const [reunionMode, setReunionMode] = useState<{
+    pairs: NeighbourPairWithMeta[];
+  } | null>(null);
+  const [pendingReunionDialog, setPendingReunionDialog] = useState<{
+    pairs: NeighbourPairWithMeta[];
+  } | null>(null);
+  const reviewedReunionsRef = useRef<Set<string>>(new Set());
+
+  // Fabricate a `NeighbourPairWithMeta` from a `ReunionCandidate`. There's
+  // no DB `ImageNeighbour` row backing a synthetic pair, but nothing
+  // downstream of `pairs` actually reads `rawNeighbour`, so a typed stub
+  // is enough to satisfy the interface. The composed forward/backward
+  // already maps imageA (older) → imageB (newer) in pixel space because
+  // `findReunions` normalised orientation when it produced the candidate.
+  const synthesiseReunionPair = useCallback(
+    (
+      c: ReunionCandidate,
+      imagesById: Record<string, ImageType>
+    ): NeighbourPairWithMeta | null => {
+      const imageA = imagesById[c.imageAId];
+      const imageB = imagesById[c.imageBId];
+      if (!imageA || !imageB) return null;
+      return {
+        image1Id: c.imageAId,
+        image2Id: c.imageBId,
+        forward: c.forward,
+        backward: c.backward,
+        noHomography: false,
+        skipped: false,
+        imageA,
+        imageB,
+        rawNeighbour: {
+          id: `reunion:${c.imageAId}|${c.imageBId}`,
+          image1Id: c.imageAId,
+          image2Id: c.imageBId,
+        } as unknown as ImageNeighbourType,
+      };
+    },
+    []
+  );
+
+  // Active pair set: reunion pairs when reviewing reunions, otherwise the
+  // direct neighbours. Memoised so the reference is stable across renders
+  // — `pairViews` / `lanes` / `currentPair` consumers downstream all key
+  // off this one value.
+  const pairs: NeighbourPairWithMeta[] = useMemo(
+    () => reunionMode?.pairs ?? directPairs,
+    [reunionMode, directPairs]
+  );
 
   // ---- Build all pair-candidate lists in display order ----
   type PairView = {
@@ -367,24 +445,88 @@ export function IndividualIdHarness({
     setCurrentIndex(Math.max(0, firstIncomplete));
   }, [pairViews, transect.data?.annotations, localAnnotations.length]);
 
-  // When no pair is 'incomplete' anymore the transect is done. Fire once;
-  // the parent marks it complete server-side and returns to Jobs. Gated on
-  // initialisation so the brief pre-annotation-sync window (where every pair
-  // momentarily looks 'empty') cannot false-fire.
+  // When no pair is 'incomplete' anymore we either enter reunion review
+  // or fire `onComplete` (the parent marks the transect complete server-
+  // side and returns to Jobs). Fixpoint loop: after every reunion round
+  // the user finishes we re-run `findReunions`; chain merges may have
+  // exposed new endpoints, surfacing more pairs to review. Only when a
+  // round produces zero *unseen* candidates does the transect finish.
+  //
+  // Gated on `initialisedRef` so the brief pre-annotation-sync window
+  // (every pair momentarily 'empty') cannot false-fire.
   const completionFiredRef = useRef(false);
   useEffect(() => {
     if (completionFiredRef.current) return;
     if (!initialisedRef.current) return;
     if (transect.isLoading) return;
-    if (pairViews.length === 0) return;
+    if (pendingReunionDialog) return;
+    if (pairViews.length === 0) {
+      // In reunion mode this means every synthetic pair failed to
+      // synthesise (no matching images) — degenerate; finish.
+      if (reunionMode) {
+        completionFiredRef.current = true;
+        onCompleteRef.current?.();
+      }
+      return;
+    }
     const anyIncomplete = pairViews.some(
       (v) => v.completion.status === 'incomplete'
     );
-    if (!anyIncomplete) {
+    if (anyIncomplete) return;
+
+    const imagesById = transect.data?.imagesById ?? {};
+    const candidates = findReunions({
+      annotations: localAnnotations,
+      rawNeighbours: transect.data?.rawNeighbours ?? [],
+      imagesById,
+      categoryId: categoryId ?? '',
+      leniency,
+      maxHops: REUNION_MAX_HOPS,
+    });
+    // Skip pairs the user has already been shown — prevents an infinite
+    // loop when a user reviews a pair without making changes (no chain
+    // merge ⇒ same candidates re-appear on the next search).
+    const fresh = candidates.filter(
+      (c) =>
+        !reviewedReunionsRef.current.has(`${c.imageAId}|${c.imageBId}`)
+    );
+    const newPairs = fresh
+      .map((c) => synthesiseReunionPair(c, imagesById))
+      .filter((p): p is NeighbourPairWithMeta => p !== null);
+
+    if (newPairs.length === 0) {
       completionFiredRef.current = true;
       onCompleteRef.current?.();
+      return;
     }
-  }, [pairViews, transect.isLoading]);
+    setPendingReunionDialog({ pairs: newPairs });
+  }, [
+    pairViews,
+    transect.isLoading,
+    transect.data?.imagesById,
+    transect.data?.rawNeighbours,
+    localAnnotations,
+    categoryId,
+    leniency,
+    reunionMode,
+    pendingReunionDialog,
+    synthesiseReunionPair,
+  ]);
+
+  // The reunion dialog has no skip button — confirmation always enters
+  // review mode. The image pairs are stamped into `reviewedReunionsRef`
+  // here so the user only sees each one once per session, even if they
+  // walk away without changing anything.
+  const confirmReunionDialog = useCallback(() => {
+    if (!pendingReunionDialog) return;
+    for (const p of pendingReunionDialog.pairs) {
+      reviewedReunionsRef.current.add(`${p.image1Id}|${p.image2Id}`);
+    }
+    setReunionMode({ pairs: pendingReunionDialog.pairs });
+    setPendingReunionDialog(null);
+    setCurrentIndex(0);
+    setActiveLane(0);
+  }, [pendingReunionDialog]);
 
   // Keep `activeLane` pointing at a lane that actually contains the current
   // pair. The pair-complete popups move `currentIndex` directly with no lane
@@ -1364,7 +1506,12 @@ export function IndividualIdHarness({
   // Build a single-pair link for the Share button. We can only construct it
   // when we have a current pair AND a project to scope the URL to — the
   // single-pair route is nested under /surveys/:surveyId.
+  //
+  // Suppressed in reunion mode: synthetic pairs have no DB neighbour row,
+  // so the single-pair harness can't load one. Same for the homography
+  // editor below.
   const shareHref = (() => {
+    if (reunionMode) return undefined;
     if (!currentPair || !projectCtx?.project?.id) return undefined;
     const setId =
       transect.data?.category?.annotationSetId ?? annotationSetId ?? '';
@@ -1381,6 +1528,7 @@ export function IndividualIdHarness({
   // to navigate(-1), which restores location.state on the transect route
   // (IndividualIdTaskPage relies on it; a URL push would bounce to /jobs).
   const editHomographyHref = (() => {
+    if (reunionMode) return undefined;
     if (!currentPair || !projectCtx?.project?.id) return undefined;
     const setId =
       transect.data?.category?.annotationSetId ?? annotationSetId ?? '';
@@ -1397,6 +1545,25 @@ export function IndividualIdHarness({
       className='w-100 h-100 d-flex flex-column py-3'
       style={{ minHeight: 0 }}
     >
+      {reunionMode && (
+        <div
+          style={{
+            padding: '6px 12px',
+            margin: '0 12px 8px',
+            background: '#ff8c1a',
+            color: '#fff',
+            borderRadius: 6,
+            fontSize: 13,
+            fontWeight: 600,
+            textAlign: 'center',
+            flexShrink: 0,
+          }}
+        >
+          Reviewing reunions — {pairs.length}{' '}
+          {pairs.length === 1 ? 'image pair' : 'image pairs'} where chains
+          may rejoin
+        </div>
+      )}
       <div style={{ flex: 1, minHeight: 0 }}>
         {currentPair && currentView && (
           <IndividualIdMapPair
@@ -1452,6 +1619,11 @@ export function IndividualIdHarness({
         earlierIncompleteIndex={completePopup.earlier}
         onConfirm={acceptCompletePopup}
         onStay={() => setCompletePopup({ show: false })}
+      />
+      <ReunionDialog
+        show={!!pendingReunionDialog}
+        count={pendingReunionDialog?.pairs.length ?? 0}
+        onConfirm={confirmReunionDialog}
       />
       <ChangeCategoryModal
         show={labelChange !== null}

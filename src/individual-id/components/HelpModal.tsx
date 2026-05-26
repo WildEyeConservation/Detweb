@@ -308,6 +308,22 @@ export function HelpModal({ show, onHide }: Props) {
           </p>
         </Section>
 
+        <Section title='Reunion review'>
+          <p style={{ opacity: 0.85, fontSize: 14 }}>
+            When every direct image pair is finished, the system scans for{' '}
+            <strong>reunions</strong>: image pairs further along the transect
+            where an animal you were tracking may have reappeared after going
+            out of view. If any are found a dialog appears (you can't skip it)
+            and you're taken through them just like normal pairs — with an
+            orange banner at the top so you know which phase you're in.
+          </p>
+          <p style={{ opacity: 0.85, fontSize: 14, marginBottom: 0 }}>
+            Finishing a reunion round may merge chains and expose new
+            reunions, so the system re-checks each time. Only when nothing
+            new is found does the transect actually complete.
+          </p>
+        </Section>
+
         <Section title='Working alongside others'>
           <p style={{ opacity: 0.85, fontSize: 14, marginBottom: 0 }}>
             Concurrency is handled by isolating transects. The transect you are
