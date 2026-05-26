@@ -303,7 +303,7 @@ async function handleLaunch(
     const stratumData = await executeGraphql<{
       createStratum?: { id: string };
     }>(createStratumMutation, {
-      input: { projectId, name: 'ChainLink', group: organizationId },
+      input: { projectId, name: 'ChainLinker', group: organizationId },
     });
     const stratumId = stratumData.createStratum?.id;
     if (!stratumId) throw new Error('Failed to create stratum');
@@ -412,7 +412,7 @@ async function handleLaunch(
       projectId,
       annotationSetId,
       categoryId,
-      name: categoryName || 'ChainLink',
+      name: categoryName || 'ChainLinker',
       status: 'launching',
       totalTransects: transectCount,
       remainingTransects: transectCount,

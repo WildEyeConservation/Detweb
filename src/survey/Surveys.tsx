@@ -394,7 +394,7 @@ export default function Surveys() {
           await logAdminAction(
             client,
             user.userId,
-            `Cancelled ChainLink job for project "${selectedProject!.name}"`,
+            `Cancelled ChainLinker job for project "${selectedProject!.name}"`,
             selectedProject!.id,
             selectedProject!.organizationId
           );

@@ -945,7 +945,7 @@ function PairToolbar({
             size='sm'
             variant='info'
             onClick={() => setHelpOpen(true)}
-            title='How ChainLink works'
+            title='How ChainLinker works'
           >
             <HelpCircle size={16} style={{ verticalAlign: 'middle' }} />
           </Button>
