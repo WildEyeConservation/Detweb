@@ -22,6 +22,7 @@ import Permissions from './Permissions.tsx';
 import Testing from './Testing/Testing';
 import { Registration } from './Registration';
 import { IndividualIdPairTaskPage, IndividualIdTaskPage } from './individual-id';
+import { ChainReviewTaskPage, ChainViewerPage } from './chain-viewer';
 import HomographyTask from './homography/HomographyTask';
 import HomographyViewer from './homography/HomographyViewer';
 import HomographyEditPage from './homography/HomographyEditPage';
@@ -173,6 +174,14 @@ const router = createBrowserRouter([
           {
             path: 'registration',
             element: <Registration showAnnotationSetDropdown={false} />,
+          },
+          {
+            path: 'chain-viewer',
+            element: <ChainViewerPage />,
+          },
+          {
+            path: 'chain-review/:primaryId',
+            element: <ChainReviewTaskPage />,
           },
         ],
       },
