@@ -171,17 +171,22 @@ type LinkActor = {
  */
 export function IndividualIdHarness({
   transectId,
+  chainObjectId,
   categoryId,
   annotationSetId,
   leniency: leniencyProp,
   onComplete,
 }: {
-  transectId: string;
+  /** Provide either `transectId` (normal workflow) or `chainObjectId` (chain-review mode). */
+  transectId?: string;
+  /** When set, the harness loads only the chain's neighbourhood instead of a transect. */
+  chainObjectId?: string;
   categoryId: string;
   annotationSetId?: string;
   leniency?: number;
   // Called when every pair in the transect is complete. The parent
   // (IndividualIdTaskPage) wires this to the transect-complete lambda.
+  // Chain-review mode leaves this unset — there's no transect to close.
   onComplete?: () => void;
 }) {
   // Leniency is state so the user can adjust it via the toolbar slider; the
@@ -202,7 +207,12 @@ export function IndividualIdHarness({
   const { client } = useContext(GlobalContext)!;
   const projectCtx = useContext(ProjectContext);
   const queryClient = useQueryClient();
-  const transect = useTransectData({ transectId, categoryId, annotationSetId });
+  const transect = useTransectData({
+    transectId,
+    chainObjectId,
+    categoryId,
+    annotationSetId,
+  });
   const working = usePairWorkingState();
 
   /**
@@ -221,7 +231,8 @@ export function IndividualIdHarness({
         {
           predicate: (q) =>
             Array.isArray(q.queryKey) &&
-            q.queryKey[0] === 'individual-id-transect',
+            (q.queryKey[0] === 'individual-id-transect' ||
+              q.queryKey[0] === 'individual-id-chain'),
         },
         (old) => (old ? mutate(old) : old)
       );
@@ -350,13 +361,53 @@ export function IndividualIdHarness({
     []
   );
 
-  // Active pair set: reunion pairs when reviewing reunions, otherwise the
-  // direct neighbours. Memoised so the reference is stable across renders
-  // — `pairViews` / `lanes` / `currentPair` consumers downstream all key
-  // off this one value.
+  // Chain-review mode: continuously recompute reunion candidates from the
+  // live annotation state and append them to the direct pairs. Unlike the
+  // transect path, we don't gate on "all direct pairs complete" or use a
+  // pending dialog — the user sees direct + synthetic in one unified pair
+  // list from the first render. As they place new annotations the
+  // `findReunions` BFS re-runs (via this memo's deps), so newly-exposed
+  // chain endpoints surface their own synthetic pairs without needing a
+  // round-completion event.
+  const chainSyntheticPairs: NeighbourPairWithMeta[] = useMemo(() => {
+    if (!chainObjectId) return [];
+    const imagesById = transect.data?.imagesById ?? {};
+    if (!Object.keys(imagesById).length) return [];
+    const candidates = findReunions({
+      annotations: localAnnotations,
+      rawNeighbours: transect.data?.rawNeighbours ?? [],
+      imagesById,
+      categoryId: categoryId ?? '',
+      leniency,
+      maxHops: REUNION_MAX_HOPS,
+    });
+    return candidates
+      .map((c) => synthesiseReunionPair(c, imagesById))
+      .filter((p): p is NeighbourPairWithMeta => p !== null);
+  }, [
+    chainObjectId,
+    transect.data?.imagesById,
+    transect.data?.rawNeighbours,
+    localAnnotations,
+    categoryId,
+    leniency,
+    synthesiseReunionPair,
+  ]);
+
+  // Active pair set:
+  //   - Chain mode → direct pairs + synthetic pairs from the start, no
+  //     phase transition. The synthetic list recomputes continuously.
+  //   - Transect mode → reunion pairs when reviewing reunions, otherwise
+  //     the direct neighbours. Same phased behaviour as before.
+  // Memoised so the reference is stable across renders — `pairViews` /
+  // `lanes` / `currentPair` consumers downstream all key off this one
+  // value.
   const pairs: NeighbourPairWithMeta[] = useMemo(
-    () => reunionMode?.pairs ?? directPairs,
-    [reunionMode, directPairs]
+    () =>
+      chainObjectId
+        ? [...directPairs, ...chainSyntheticPairs]
+        : reunionMode?.pairs ?? directPairs,
+    [chainObjectId, directPairs, chainSyntheticPairs, reunionMode]
   );
 
   // ---- Build all pair-candidate lists in display order ----
@@ -456,6 +507,10 @@ export function IndividualIdHarness({
   // (every pair momentarily 'empty') cannot false-fire.
   const completionFiredRef = useRef(false);
   useEffect(() => {
+    // Chain-review mode has no completion phase: synthetic pairs are
+    // already inlined into `pairs`, there's no transect to close, and
+    // the user just leaves when satisfied. Skip the entire detector.
+    if (chainObjectId) return;
     if (completionFiredRef.current) return;
     if (!initialisedRef.current) return;
     if (transect.isLoading) return;
@@ -501,6 +556,7 @@ export function IndividualIdHarness({
     }
     setPendingReunionDialog({ pairs: newPairs });
   }, [
+    chainObjectId,
     pairViews,
     transect.isLoading,
     transect.data?.imagesById,
@@ -1486,7 +1542,7 @@ export function IndividualIdHarness({
   const cancelManualLink = () => setPendingLink(null);
 
   // ---- Render states ----
-  if (!transectId || !categoryId) {
+  if ((!transectId && !chainObjectId) || !categoryId) {
     return (
       <div className='p-4 text-light'>
         Missing <code>transectId</code> or <code>categoryId</code> in the URL.

@@ -11,6 +11,8 @@ export interface ChainAnnotation {
   objectId: string | null;
   categoryId: string;
   obscured: boolean;
+  /** True for "out of view" rows — animal is on this image but not visible (placeholder x/y). */
+  oov: boolean;
   /** Image capture time (epoch seconds). Used to order annotations within a chain. */
   imageTimestamp: number | null;
 }

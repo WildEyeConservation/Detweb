@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ExternalLink, EyeOff, RotateCw } from 'lucide-react';
+import { Eye, ExternalLink, EyeOff, RotateCw, ScanEye } from 'lucide-react';
 import { CHAIN_TILE_SIZE, fetchCenteredCrop } from './utils/tileCrop';
 import type { AnnotationImageMeta, ChainAnnotation } from './types';
 
@@ -14,6 +14,8 @@ interface Props {
   onRotate: () => void;
   /** Target for the "open image" button — uses the ImageLoader route. */
   openImageHref: string;
+  /** Toggle `obscured` on the annotation; persists to the DB. */
+  onToggleObscured: () => void;
 }
 
 /**
@@ -38,12 +40,21 @@ export function ChainTile({
   rotation,
   onRotate,
   openImageHref,
+  onToggleObscured,
 }: Props) {
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const objectUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // OOV rows mark "animal known to be in this image but not visible".
+    // The (x, y) on the row is placeholder data — fetching a tile centred
+    // there would render meaningless pixels, so we skip the fetch and let
+    // the OOV placeholder render instead.
+    if (annotation.oov) {
+      setImgSrc(null);
+      return;
+    }
     if (!meta || !meta.sourceKey) {
       setImgSrc(null);
       return;
@@ -111,7 +122,29 @@ export function ChainTile({
       }}
       className='chain-viewer-tile'
     >
-      {imgSrc ? (
+      {annotation.oov ? (
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            color: '#bcccdc',
+            fontSize: 12,
+            textAlign: 'center',
+            padding: 12,
+          }}
+        >
+          <ScanEye size={36} strokeWidth={1.5} opacity={0.6} />
+          <div style={{ fontWeight: 600 }}>Out of view</div>
+          <div style={{ opacity: 0.7, fontSize: 11 }}>
+            Animal is on this image but not visible.
+          </div>
+        </div>
+      ) : imgSrc ? (
         <img
           src={imgSrc}
           alt={`Annotation ${annotation.id}`}
@@ -141,14 +174,41 @@ export function ChainTile({
           {error ? 'Tile unavailable' : 'Loading…'}
         </div>
       )}
-      {annotation.obscured && (
+      {annotation.oov ? (
         <div
           className='chain-viewer-obscured-badge'
-          title='Annotation marked as obscured'
+          title='Out of view — animal known to be in this image but not visible'
         >
-          <EyeOff size={11} strokeWidth={2.5} />
-          <span>Obscured</span>
+          <ScanEye size={11} strokeWidth={2.5} />
+          <span>OOV</span>
         </div>
+      ) : (
+        <button
+          type='button'
+          className={
+            'chain-viewer-obscured-toggle ' +
+            (annotation.obscured
+              ? 'chain-viewer-obscured-toggle--active'
+              : 'chain-viewer-obscured-toggle--inactive')
+          }
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleObscured();
+          }}
+          title={
+            annotation.obscured
+              ? 'Marked as obscured — click to remove'
+              : 'Click to mark as obscured'
+          }
+          aria-pressed={annotation.obscured}
+        >
+          {annotation.obscured ? (
+            <EyeOff size={11} strokeWidth={2.5} />
+          ) : (
+            <Eye size={11} strokeWidth={2.5} />
+          )}
+          <span>{annotation.obscured ? 'Obscured' : 'Visible'}</span>
+        </button>
       )}
       <button
         type='button'

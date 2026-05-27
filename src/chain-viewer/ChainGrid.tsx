@@ -13,6 +13,8 @@ interface Props {
   onRotateKey: (key: string) => void;
   /** Builds the ImageLoader URL for a given annotation. */
   openImageHrefFor: (annotation: Chain['annotations'][number]) => string;
+  /** Toggles `obscured` on an annotation. */
+  onToggleObscured: (annotationId: string) => void;
 }
 
 /**
@@ -40,6 +42,7 @@ export function ChainGrid({
   cameraRotations,
   onRotateKey,
   openImageHrefFor,
+  onToggleObscured,
 }: Props) {
   const gridTemplateColumns =
     columns === null
@@ -68,6 +71,7 @@ export function ChainGrid({
             rotation={rotation}
             onRotate={() => onRotateKey(rotKey)}
             openImageHref={openImageHrefFor(a)}
+            onToggleObscured={() => onToggleObscured(a.id)}
           />
         );
       })}

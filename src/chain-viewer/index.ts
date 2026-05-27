@@ -3,3 +3,4 @@
  * into the route at `/surveys/:surveyId/set/:annotationSetId/chain-viewer`.
  */
 export { ChainViewerPage } from './ChainViewerPage';
+export { ChainReviewTaskPage } from './ChainReviewTaskPage';

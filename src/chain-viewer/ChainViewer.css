@@ -40,6 +40,48 @@
   pointer-events: none;
 }
 
+.chain-viewer-obscured-toggle {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+
+.chain-viewer-obscured-toggle--active {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.chain-viewer-obscured-toggle--active:hover {
+  background: rgba(0, 0, 0, 0.9);
+}
+
+.chain-viewer-obscured-toggle--inactive {
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+}
+
+.chain-viewer-tile:hover .chain-viewer-obscured-toggle--inactive,
+.chain-viewer-tile:focus-within .chain-viewer-obscured-toggle--inactive {
+  opacity: 1;
+}
+
+.chain-viewer-obscured-toggle--inactive:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+
 .chain-viewer-tile-action {
   position: absolute;
   right: 6px;

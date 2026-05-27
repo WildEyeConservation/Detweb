@@ -2,7 +2,14 @@ import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Button, Card, Form, Spinner } from 'react-bootstrap';
 import Select, { type SingleValue } from 'react-select';
-import { Check, ChevronLeft, ChevronRight, Copy, PanelBottom } from 'lucide-react';
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Link2,
+  PanelBottom,
+} from 'lucide-react';
 import { GlobalContext, ProjectContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
 import { ChainGrid } from './ChainGrid';
@@ -62,6 +69,50 @@ export function ChainViewerHarness({ annotationSetId }: Props) {
     });
   }, []);
 
+  /**
+   * Toggle an annotation's `obscured` flag. Optimistic — flips local state
+   * immediately so the badge reacts, persists to the DB in the background,
+   * and reverts on failure. We read the current value from the live
+   * `annotations` closure (not from inside `setAnnotations`) because the
+   * updater isn't guaranteed to run synchronously, and reading the captured
+   * `prev` after-the-fact races with subsequent clicks. Mirrors the
+   * pattern in `IndividualIdHarness.handleToggleObscured`.
+   *
+   * AppSync may return errors in the response payload without throwing, so
+   * we surface those explicitly to drive the revert path.
+   */
+  const toggleObscured = useCallback(
+    async (annotationId: string) => {
+      const current = annotations.find((a) => a.id === annotationId);
+      if (!current) return;
+      const desired = !current.obscured;
+      const apply = (list: ChainAnnotation[]) =>
+        list.map((a) =>
+          a.id === annotationId ? { ...a, obscured: desired } : a
+        );
+      const revert = (list: ChainAnnotation[]) =>
+        list.map((a) =>
+          a.id === annotationId ? { ...a, obscured: current.obscured } : a
+        );
+      setAnnotations(apply);
+      try {
+        const response = await (client.models.Annotation.update as any)({
+          id: annotationId,
+          obscured: desired,
+        });
+        if (response?.errors?.length) {
+          throw new Error(
+            response.errors.map((e: any) => e.message).join('; ')
+          );
+        }
+      } catch (err) {
+        console.error('Failed to toggle obscured flag', err);
+        setAnnotations(revert);
+      }
+    },
+    [annotations, client]
+  );
+
   // ---- Bulk fetch all annotations for the set on mount ----
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +134,7 @@ export function ChainViewerHarness({ annotationSetId }: Props) {
               'objectId',
               'categoryId',
               'obscured',
+              'oov',
               'image.timestamp',
             ] as const,
             limit: 10000,
@@ -101,6 +153,7 @@ export function ChainViewerHarness({ annotationSetId }: Props) {
             objectId: a.objectId ?? null,
             categoryId: a.categoryId,
             obscured: !!a.obscured,
+            oov: !!a.oov,
             imageTimestamp:
               typeof a.image?.timestamp === 'number' ? a.image.timestamp : null,
           }))
@@ -314,16 +367,6 @@ export function ChainViewerHarness({ annotationSetId }: Props) {
             </Card.Header>
             {showFilters && (
               <Card.Body className='d-flex flex-column gap-2'>
-                {filtersBlocked && (
-                  <div className='d-flex align-items-center gap-2 text-muted' style={{ fontSize: 13 }}>
-                    <Spinner animation='border' size='sm' />
-                    <span>
-                      {fetchStatus === 'error'
-                        ? `Failed: ${fetchError}`
-                        : `Loading annotations… (${fetchCount})`}
-                    </span>
-                  </div>
-                )}
                 <div className='w-100'>
                   <Form.Label>Label</Form.Label>
                   <Select
@@ -395,20 +438,38 @@ export function ChainViewerHarness({ annotationSetId }: Props) {
                       {currentChain.annotations.length === 1 ? '' : 's'}
                     </div>
                   </div>
-                  <Button
-                    variant={shareCopied ? 'success' : 'outline-light'}
-                    size='sm'
-                    title={shareCopied ? 'Copied!' : 'Copy link to this chain'}
-                    onClick={() => {
-                      navigator.clipboard.writeText(window.location.href);
-                      setShareCopied(true);
-                      window.setTimeout(() => setShareCopied(false), 1500);
-                    }}
-                    className='d-flex align-items-center gap-1'
-                  >
-                    {shareCopied ? <Check size={14} /> : <Copy size={14} />}
-                    {shareCopied ? 'Copied' : 'Share'}
-                  </Button>
+                  <div className='d-flex align-items-center gap-2'>
+                    <Button
+                      variant='outline-light'
+                      size='sm'
+                      title='Re-link this chain in the ChainLinker workflow'
+                      onClick={() =>
+                        window.open(
+                          `/surveys/${surveyId}/set/${annotationSetId}/chain-review/${currentChain.primaryId}`,
+                          '_blank',
+                          'noopener,noreferrer'
+                        )
+                      }
+                      className='d-flex align-items-center gap-1'
+                    >
+                      <Link2 size={14} />
+                      Review in ChainLinker
+                    </Button>
+                    <Button
+                      variant={shareCopied ? 'success' : 'outline-light'}
+                      size='sm'
+                      title={shareCopied ? 'Copied!' : 'Copy link to this chain'}
+                      onClick={() => {
+                        navigator.clipboard.writeText(window.location.href);
+                        setShareCopied(true);
+                        window.setTimeout(() => setShareCopied(false), 1500);
+                      }}
+                      className='d-flex align-items-center gap-1'
+                    >
+                      {shareCopied ? <Check size={14} /> : <Copy size={14} />}
+                      {shareCopied ? 'Copied' : 'Share'}
+                    </Button>
+                  </div>
                 </div>
                 <div
                   className='chain-viewer-grid-scroll'
@@ -428,6 +489,7 @@ export function ChainViewerHarness({ annotationSetId }: Props) {
                     columns={columns}
                     cameraRotations={cameraRotations}
                     onRotateKey={rotateByKey}
+                    onToggleObscured={toggleObscured}
                     openImageHrefFor={(a) =>
                       `/surveys/${surveyId}/image/${a.imageId}/${annotationSetId}`
                     }
