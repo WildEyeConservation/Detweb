@@ -3,7 +3,7 @@ import { Modal, Body, Header, Footer, Title } from './Modal';
 import { useNavigate } from 'react-router-dom';
 import { fetchAllPaginatedResults } from './utils.tsx';
 import exportFromJSON from 'export-from-json';
-import { GlobalContext } from './Context.tsx';
+import { GlobalContext, UserContext } from './Context.tsx';
 import { useContext, useState, useEffect, useMemo } from 'react';
 import { useUsers } from './apiInterface';
 import GenerateJollyResults from './GenerateJollyResults.tsx';
@@ -22,6 +22,8 @@ export default function AnnotationSetResults({
 }) {
   const navigate = useNavigate();
   const { client, showModal } = useContext(GlobalContext)!;
+  const { cognitoGroups } = useContext(UserContext)!;
+  const isSysadmin = cognitoGroups.includes('sysadmin');
   const [loading, setLoading] = useState(false);
   const [exportStatus, setExportStatus] = useState('');
   const { users } = useUsers();
@@ -246,6 +248,26 @@ export default function AnnotationSetResults({
                 Download
               </Button>
             </div>
+            {isSysadmin && (
+              <div>
+                <h5 className='mb-0'>Chain Viewer</h5>
+                <span className='text-muted' style={{ fontSize: '14px' }}>
+                  Inspect linked-individual chains: every primary annotation
+                  and all its linked sightings across neighbour images.
+                </span>
+                <Button
+                  className='d-block mt-1'
+                  variant='primary'
+                  onClick={() =>
+                    navigate(
+                      `/surveys/${surveyId}/set/${annotationSet.id}/chain-viewer`
+                    )
+                  }
+                >
+                  Open Chain Viewer
+                </Button>
+              </div>
+            )}
             <div>
               <h5 className='mb-0'>Jolly II</h5>
               <span className='text-muted' style={{ fontSize: '14px' }}>
