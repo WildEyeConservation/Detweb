@@ -9,10 +9,11 @@ import {
   CircleMarker,
   useMap,
   Popup,
+  Polygon,
 } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
 import L from 'leaflet';
-import { Button, Spinner, Alert, ProgressBar, Badge } from 'react-bootstrap';
+import { Button, Spinner, Alert, ProgressBar, Badge, Form } from 'react-bootstrap';
 import { fetchAllPaginatedResults } from '../utils';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
@@ -78,6 +79,11 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
     null
   );
   const [popupImage, setPopupImage] = useState<ImageData | null>(null);
+  const [shapefileCoords, setShapefileCoords] = useState<
+    [number, number][] | null
+  >(null);
+  const [showShapefile, setShowShapefile] = useState(true);
+  const [loadingShapefile, setLoadingShapefile] = useState(false);
   const featureGroupRef = useRef<L.FeatureGroup>(null);
   const isActiveRef = useRef(true);
 
@@ -152,6 +158,78 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
       isActiveRef.current = false;
     };
   }, [fetchImages]);
+
+  // Load the project's saved shapefile, if any
+  useEffect(() => {
+    let cancelled = false;
+    async function loadShapefile() {
+      setLoadingShapefile(true);
+      try {
+        const result = await (
+          client.models.Shapefile.shapefilesByProjectId as any
+        )({ projectId });
+        const data = (result?.data ?? []) as Array<{
+          coordinates: (number | null)[] | null;
+        }>;
+        if (data.length > 0 && data[0].coordinates) {
+          const flat = data[0].coordinates.filter(
+            (n): n is number => typeof n === 'number' && Number.isFinite(n)
+          );
+          const coords: [number, number][] = [];
+          for (let i = 0; i + 1 < flat.length; i += 2) {
+            coords.push([flat[i], flat[i + 1]]);
+          }
+          if (!cancelled) {
+            setShapefileCoords(coords.length >= 3 ? coords : null);
+          }
+        } else if (!cancelled) {
+          setShapefileCoords(null);
+        }
+      } catch (err) {
+        console.error('Failed to load shapefile:', err);
+        if (!cancelled) setShapefileCoords(null);
+      } finally {
+        if (!cancelled) setLoadingShapefile(false);
+      }
+    }
+    loadShapefile();
+    return () => {
+      cancelled = true;
+    };
+  }, [client, projectId]);
+
+  // Ray-casting point-in-polygon over [lat, lng] ring
+  const pointInPolygon = useCallback(
+    (lat: number, lng: number, polygon: [number, number][]) => {
+      let inside = false;
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i][0];
+        const yi = polygon[i][1];
+        const xj = polygon[j][0];
+        const yj = polygon[j][1];
+        if (
+          yi > lng !== yj > lng &&
+          lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi
+        ) {
+          inside = !inside;
+        }
+      }
+      return inside;
+    },
+    []
+  );
+
+  // Select images outside the loaded shapefile
+  const selectOutsideShapefile = useCallback(() => {
+    if (!shapefileCoords || shapefileCoords.length < 3) return;
+    const newSelected = new Set<string>();
+    for (const img of images) {
+      if (!pointInPolygon(img.latitude, img.longitude, shapefileCoords)) {
+        newSelected.add(img.id);
+      }
+    }
+    setSelectedIds(newSelected);
+  }, [images, shapefileCoords, pointInPolygon]);
 
   // Handle polygon selection
   const onPolygonCreated = useCallback(
@@ -734,6 +812,40 @@ This action cannot be undone.`;
           </div>
         </div>
 
+        {/* Shapefile controls */}
+        {(loadingShapefile || shapefileCoords) && (
+          <div className='d-flex align-items-center gap-2 flex-wrap'>
+            {loadingShapefile && (
+              <span className='text-muted small d-flex align-items-center gap-1'>
+                <Spinner animation='border' size='sm' />
+                Loading shapefile...
+              </span>
+            )}
+            {shapefileCoords && (
+              <>
+                <Badge bg='warning' text='dark'>
+                  Shapefile loaded ({shapefileCoords.length} pts)
+                </Badge>
+                <Form.Check
+                  type='switch'
+                  id='toggle-shapefile-overlay'
+                  label='Show on map'
+                  checked={showShapefile}
+                  onChange={(e) => setShowShapefile(e.target.checked)}
+                />
+                <Button
+                  size='sm'
+                  variant='outline-warning'
+                  onClick={selectOutsideShapefile}
+                  disabled={loading || deleting || images.length === 0}
+                >
+                  Select Outside Shapefile
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Loading status */}
         {loadingStatus && !error && (
           <div className='text-muted small'>{loadingStatus}</div>
@@ -819,6 +931,20 @@ This action cannot be undone.`;
               />
 
               {images.length > 0 && <FitBoundsToImages images={images} />}
+
+              {/* Shapefile boundary overlay */}
+              {showShapefile && shapefileCoords && shapefileCoords.length >= 3 && (
+                <Polygon
+                  positions={shapefileCoords}
+                  pathOptions={{
+                    color: '#fd7e14',
+                    weight: 2,
+                    opacity: 1,
+                    fill: false,
+                    interactive: false,
+                  }}
+                />
+              )}
 
               {/* Feature group for polygon drawing */}
               <FeatureGroup ref={featureGroupRef}>
