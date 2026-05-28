@@ -38,6 +38,7 @@ import { LoadingCard } from './components/LoadingCard';
 import { NavigateAwayDialog } from './components/NavigateAwayDialog';
 import { PairCompleteDialog } from './components/PairCompleteDialog';
 import { ReunionDialog } from './components/ReunionDialog';
+import { TransectCompleteDialog } from './components/TransectCompleteDialog';
 import { LinkAnnotationDialog } from './components/LinkAnnotationDialog';
 import { DeleteAnnotationDialog } from './components/DeleteAnnotationDialog';
 import ChangeCategoryModal from '../ChangeCategoryModal';
@@ -326,6 +327,10 @@ export function IndividualIdHarness({
   const [pendingReunionDialog, setPendingReunionDialog] = useState<{
     pairs: NeighbourPairWithMeta[];
   } | null>(null);
+  // Final "you're done" gate — set when the completion detector decides
+  // the transect is closed. Confirmation fires `onComplete`; the parent
+  // navigates the user back to Jobs.
+  const [showTransectComplete, setShowTransectComplete] = useState(false);
   const reviewedReunionsRef = useRef<Set<string>>(new Set());
 
   // Fabricate a `NeighbourPairWithMeta` from a `ReunionCandidate`. There's
@@ -520,7 +525,7 @@ export function IndividualIdHarness({
       // synthesise (no matching images) — degenerate; finish.
       if (reunionMode) {
         completionFiredRef.current = true;
-        onCompleteRef.current?.();
+        setShowTransectComplete(true);
       }
       return;
     }
@@ -549,12 +554,39 @@ export function IndividualIdHarness({
       .map((c) => synthesiseReunionPair(c, imagesById))
       .filter((p): p is NeighbourPairWithMeta => p !== null);
 
-    if (newPairs.length === 0) {
+    // `findReunions` only checks "is there a cross-chain annotation near
+    // the endpoint projection?" — but the full Munkres assignment on the
+    // synthetic pair can still come out all-accepted (a same-objectId
+    // annotation outbidding the cross-chain one) or all-informational.
+    // Pre-run Munkres so the dialog count is what the user will actually
+    // have to action; mark drops as reviewed so we don't re-evaluate them.
+    const actionable: NeighbourPairWithMeta[] = [];
+    for (const p of newPairs) {
+      const pairKey = makePairKey(p.image1Id, p.image2Id);
+      const built = buildMatchCandidates({
+        annotationsA: annotationsByImage[p.image1Id] ?? [],
+        annotationsB: annotationsByImage[p.image2Id] ?? [],
+        imageA: p.imageA,
+        imageB: p.imageB,
+        forward: p.forward,
+        backward: p.backward,
+        leniency,
+        categoryFilter: categoryId,
+      });
+      const merged = working.mergeCandidates(pairKey, built);
+      if (evaluatePairCompletion(merged).status === 'incomplete') {
+        actionable.push(p);
+      } else {
+        reviewedReunionsRef.current.add(`${p.image1Id}|${p.image2Id}`);
+      }
+    }
+
+    if (actionable.length === 0) {
       completionFiredRef.current = true;
-      onCompleteRef.current?.();
+      setShowTransectComplete(true);
       return;
     }
-    setPendingReunionDialog({ pairs: newPairs });
+    setPendingReunionDialog({ pairs: actionable });
   }, [
     chainObjectId,
     pairViews,
@@ -562,11 +594,13 @@ export function IndividualIdHarness({
     transect.data?.imagesById,
     transect.data?.rawNeighbours,
     localAnnotations,
+    annotationsByImage,
     categoryId,
     leniency,
     reunionMode,
     pendingReunionDialog,
     synthesiseReunionPair,
+    working,
   ]);
 
   // The reunion dialog has no skip button — confirmation always enters
@@ -1690,6 +1724,13 @@ export function IndividualIdHarness({
         show={!!pendingReunionDialog}
         count={pendingReunionDialog?.pairs.length ?? 0}
         onConfirm={confirmReunionDialog}
+      />
+      <TransectCompleteDialog
+        show={showTransectComplete}
+        onConfirm={() => {
+          setShowTransectComplete(false);
+          onCompleteRef.current?.();
+        }}
       />
       <ChangeCategoryModal
         show={labelChange !== null}
