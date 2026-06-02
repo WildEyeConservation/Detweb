@@ -1,7 +1,7 @@
 import computeMunkres from 'munkres-js';
 import type { AnnotationType, ImageType } from '../../schemaTypes';
 import type { MatchCandidate, PixelTransform } from '../types';
-import { isInOverlap } from './transforms';
+import { isInOverlap, projectsInside } from './transforms';
 import { isOov } from './identity';
 
 export interface BuildCandidatesInput {
@@ -141,13 +141,14 @@ export function buildMatchCandidates({
 
       if (a && !b) {
         // Out-of-overlap annotations become `informational` — visible on the map but excluded from completion.
-        const inside = isInOverlap(
-          a.x,
-          a.y,
-          backward,
-          imageB.width,
-          imageB.height
-        );
+        // Two guards, both required: the polygon test stops a far-away point
+        // from extrapolating back to a false "inside", and the forward-
+        // projection bounds check stops a chained (reunion) homography whose
+        // wrapped footprint quad gives a false polygon "inside" from placing
+        // a shadow off the target image.
+        const inside =
+          isInOverlap(a.x, a.y, backward, imageB.width, imageB.height) &&
+          projectsInside(a.x, a.y, forward, imageB.width, imageB.height);
         const pairKey = makePairKey(a);
         if (inside) {
           const projected = forward([a.x, a.y]);
@@ -183,13 +184,9 @@ export function buildMatchCandidates({
       }
 
       if (!a && b) {
-        const inside = isInOverlap(
-          b.x,
-          b.y,
-          forward,
-          imageA.width,
-          imageA.height
-        );
+        const inside =
+          isInOverlap(b.x, b.y, forward, imageA.width, imageA.height) &&
+          projectsInside(b.x, b.y, backward, imageA.width, imageA.height);
         const pairKey = makePairKey(undefined, b);
         if (inside) {
           const projected = backward([b.x, b.y]);

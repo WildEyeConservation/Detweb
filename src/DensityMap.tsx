@@ -1,11 +1,7 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
-import { MapContainer, TileLayer, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import 'leaflet.markercluster';
-import 'leaflet.markercluster/dist/MarkerCluster.css';
-import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
-import 'leaflet.heat';
+import { useState, useEffect, useContext, useRef, useMemo } from 'react';
+import maplibregl, { type StyleSpecification } from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { useQueries } from '@tanstack/react-query';
 import { fetchAllPaginatedResults } from './utils';
 import { GlobalContext } from './Context';
 import ImageViewerModal from './ImageViewerModal';
@@ -15,112 +11,247 @@ import {
   adjectives,
   names,
 } from 'unique-names-generator';
-import { Spinner } from 'react-bootstrap';
+import { Spinner, Form } from 'react-bootstrap';
 
-export default function DensityMap({
-  annotationSetId,
-  surveyId,
-  categoryIds = [],
-  selectedUserIds = [],
-  primaryOnly = false,
-  editable = false,
-  dropFalseNegatives = false,
-}: {
-  annotationSetId: string;
+/**
+ * A single (survey, annotation set) pair whose annotations should be plotted.
+ * Multiple sources can share a survey (only images/strata for that survey are
+ * fetched once) or differ entirely (data is overlaid on the same map).
+ */
+export interface DensitySource {
   surveyId: string;
+  annotationSetId: string;
+}
+
+interface DensityMapProps {
+  /** Multi-source mode: every (survey, set) pair is overlaid on the map. */
+  sources?: DensitySource[];
+  /** Legacy single-source props (used by JollyResults). */
+  surveyId?: string;
+  annotationSetId?: string;
+  /** Filter annotations by category id (within a single set) ... */
   categoryIds?: string[];
+  /** ... and/or by category name (generalises across surveys). */
+  categoryNames?: string[];
   selectedUserIds?: string[];
+  /** Filter to annotations/images whose image belongs to these transects. */
+  transectIds?: string[];
   primaryOnly?: boolean;
   editable?: boolean;
   dropFalseNegatives?: boolean;
-}) {
+  /** Annotation set used when opening the image/annotation viewer. */
+  primaryAnnotationSetId?: string;
+  /**
+   * Reports the transects discovered in the loaded images (with the same
+   * per-survey "Transect N" numbering the map uses) so a parent can render a
+   * transect filter that stays consistent with the map's labels/colours.
+   */
+  onTransectsLoaded?: (
+    transects: { id: string; surveyId: string; number: number }[]
+  ) => void;
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const SRC_ANNOTATIONS = 'annotations';
+const SRC_IMAGES = 'images';
+const SRC_STRATA = 'strata';
+const SRC_EXCLUSIONS = 'exclusions';
+
+const LYR_HEATMAP = 'annotations-heat';
+const LYR_CLUSTERS = 'annotations-clusters';
+const LYR_CLUSTER_COUNT = 'annotations-cluster-count';
+const LYR_POINTS = 'annotations-points';
+const LYR_IMAGES = 'images-points';
+const LYR_STRATA_LINE = 'strata-line';
+const LYR_EXCLUSIONS_FILL = 'exclusions-fill';
+const LYR_EXCLUSIONS_LINE = 'exclusions-line';
+
+const TRANSECT_COLORS = [
+  '#FF5733', '#33FF57', '#3357FF', '#F333FF', '#33FFF8',
+  '#FFA833', '#8B33FF', '#FF3380', '#33FF8B', '#FFD133',
+];
+
+// OpenStreetMap raster basemap. Glyphs are needed for the cluster-count labels
+// and reuse the same endpoint as the rest of the app's MapLibre views.
+const BASE_STYLE: StyleSpecification = {
+  version: 8,
+  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: [
+        'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      ],
+      tileSize: 256,
+      // OSM only serves tiles up to z19; beyond that MapLibre overzooms
+      // (upscales the z19 tile) instead of requesting non-existent tiles,
+      // which would 400 and surface as a (header-less) CORS error.
+      maxzoom: 19,
+      attribution: '&copy; OpenStreetMap contributors',
+    },
+  },
+  layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
+};
+
+type FeatureCollection = {
+  type: 'FeatureCollection';
+  features: any[];
+};
+
+const EMPTY_FC: FeatureCollection = { type: 'FeatureCollection', features: [] };
+
+// If contains "::", the userId is the part before it; otherwise the whole field.
+function extractUserIdFromOwner(
+  owner: string | null | undefined
+): string | null {
+  if (!owner) return null;
+  return owner.includes('::') ? owner.split('::')[0] : owner;
+}
+
+// Cheap deterministic hash so co-located annotations spread out slightly.
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h << 5) - h + s.charCodeAt(i);
+    h |= 0;
+  }
+  return Math.abs(h);
+}
+
+function isValidLatLng(lat: number, lng: number): boolean {
+  return (
+    lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 &&
+    !isNaN(lat) && !isNaN(lng)
+  );
+}
+
+// Convert a flat [lat, lng, lat, lng, ...] array into a closed GeoJSON ring.
+function coordsToRing(coords: number[] | null | undefined): number[][] | null {
+  if (!coords || coords.length < 6) return null;
+  const ring: number[][] = [];
+  for (let i = 0; i + 1 < coords.length; i += 2) {
+    ring.push([coords[i + 1], coords[i]]); // [lng, lat]
+  }
+  if (ring.length < 3) return null;
+  const [fx, fy] = ring[0];
+  const [lx, ly] = ring[ring.length - 1];
+  if (fx !== lx || fy !== ly) ring.push([fx, fy]);
+  return ring;
+}
+
+export default function DensityMap({
+  sources,
+  surveyId,
+  annotationSetId,
+  categoryIds = [],
+  categoryNames = [],
+  selectedUserIds = [],
+  transectIds = [],
+  primaryOnly = false,
+  editable = false,
+  dropFalseNegatives = false,
+  primaryAnnotationSetId,
+  onTransectsLoaded,
+}: DensityMapProps) {
   const { client } = useContext(GlobalContext)!;
-  const [rawAnnotations, setRawAnnotations] = useState<any[]>([]);
-  const [annotations, setAnnotations] = useState<any[]>([]);
-  const [images, setImages] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  // Layer visibility states
+
+  // Normalise the legacy single-source props into the `sources` shape.
+  const effectiveSources = useMemo<DensitySource[]>(() => {
+    if (sources && sources.length) return sources;
+    if (surveyId && annotationSetId) return [{ surveyId, annotationSetId }];
+    return [];
+  }, [sources, surveyId, annotationSetId]);
+
+  const primarySetId =
+    primaryAnnotationSetId ??
+    annotationSetId ??
+    effectiveSources[0]?.annotationSetId ??
+    '';
+
+  // Stable, de-duplicated keys for the query arrays below. Sorting keeps the
+  // key (and therefore the query order) stable regardless of selection order.
+  const uniqueSurveyIds = useMemo(
+    () => Array.from(new Set(effectiveSources.map((s) => s.surveyId))).sort(),
+    [effectiveSources]
+  );
+  const uniqueSetSources = useMemo(() => {
+    const seen = new Map<string, DensitySource>();
+    for (const s of effectiveSources) seen.set(s.annotationSetId, s);
+    return Array.from(seen.values()).sort((a, b) =>
+      a.annotationSetId.localeCompare(b.annotationSetId)
+    );
+  }, [effectiveSources]);
+
+  // Layer visibility
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showClusters, setShowClusters] = useState(true);
   const [showImages, setShowImages] = useState(false);
   const [showStrata, setShowStrata] = useState(true);
-  // Add state for strata
-  const [strata, setStrata] = useState<any[]>([]);
-  // Add state for shapefile exclusions
-  const [shapefileExclusions, setShapefileExclusions] = useState<any[]>([]);
-  // add zoom level state
-  const [zoomLevel, setZoomLevel] = useState(2);
-  // add map center state
-  const [mapCenter, setMapCenter] = useState<[number, number]>([0, 0]);
-  // Add ref for map instance
-  const mapRef = useRef<L.Map | null>(null);
-  // Track if we've already fitted the map bounds
-  const [hasFittedBounds, setHasFittedBounds] = useState(false);
+
   // Viewer modal state
   const [viewerImageId, setViewerImageId] = useState<string | null>(null);
+  const [viewerSetId, setViewerSetId] = useState<string>(primarySetId);
   const [viewerOpen, setViewerOpen] = useState(false);
 
-  // Jitter duplicate coordinates slightly so overlapping markers are visible
-  const adjustedPositions = React.useMemo(() => {
-    const byCoordKey: Record<string, any[]> = {};
-    const adjusted: Record<string, { latitude: number; longitude: number }> =
-      {};
-    const keyFor = (lat: number, lng: number) => `${lat},${lng}`;
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
 
-    images.forEach((img) => {
-      if (img.latitude != null && img.longitude != null) {
-        const key = keyFor(img.latitude, img.longitude);
-        (byCoordKey[key] = byCoordKey[key] || []).push(img);
-      }
-    });
+  // -----------------------------------------------------------------------
+  // Data fetching — one cached query per survey (images + strata + exclusions)
+  // and one per annotation set. Adding/removing a survey or set therefore only
+  // triggers the new query; everything else is served from the react-query
+  // cache, which is exactly what we want when the user tweaks the selection.
+  // -----------------------------------------------------------------------
+  const surveyQueries = useQueries({
+    queries: uniqueSurveyIds.map((sid) => ({
+      queryKey: ['densitymap', 'survey-geo', sid],
+      staleTime: 30 * 60 * 1000,
+      queryFn: async () => {
+        const [images, strata, exclusions] = await Promise.all([
+          fetchAllPaginatedResults(client.models.Image.imagesByProjectId, {
+            projectId: sid,
+            limit: 10000,
+            selectionSet: ['id', 'latitude', 'longitude', 'transectId', 'timestamp'],
+          }),
+          fetchAllPaginatedResults(client.models.Stratum.strataByProjectId, {
+            projectId: sid,
+            limit: 10000,
+            selectionSet: ['id', 'name', 'coordinates'],
+          }),
+          fetchAllPaginatedResults(
+            client.models.ShapefileExclusions.shapefileExclusionsByProjectId,
+            {
+              projectId: sid,
+              limit: 10000,
+              selectionSet: ['id', 'coordinates'],
+            }
+          ),
+        ]);
+        return { surveyId: sid, images, strata, exclusions };
+      },
+    })),
+  });
 
-    Object.values(byCoordKey).forEach((group) => {
-      if (group.length === 1) {
-        const img = group[0];
-        adjusted[img.id] = { latitude: img.latitude, longitude: img.longitude };
-        return;
-      }
-
-      // Spread duplicates around a small circle (~5m radius)
-      group.forEach((img, index) => {
-        const latRad = (img.latitude * Math.PI) / 180;
-        const radiusDeg = 0.00005; // ~5.5m in latitude
-        const angle = (2 * Math.PI * index) / group.length;
-        const dLat = radiusDeg * Math.sin(angle);
-        const dLng =
-          (radiusDeg * Math.cos(angle)) / Math.max(Math.cos(latRad), 1e-6);
-        adjusted[img.id] = {
-          latitude: img.latitude + dLat,
-          longitude: img.longitude + dLng,
-        };
-      });
-    });
-
-    return adjusted;
-  }, [images]);
-
-  const openViewer = (imageId: string) => {
-    // Exit fullscreen if currently active when opening image viewer
-    if (document.fullscreenElement) {
-      document.exitFullscreen?.();
-    }
-    setViewerImageId(imageId);
-    setViewerOpen(true);
-  };
-
-  // Fetch data only when core dependencies change
-  useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      const [anns, imgs, str, exclusions] = await Promise.all([
-        fetchAllPaginatedResults(
+  const annotationQueries = useQueries({
+    queries: uniqueSetSources.map(({ surveyId: sid, annotationSetId: setId }) => ({
+      queryKey: ['densitymap', 'annotations', setId],
+      staleTime: 30 * 60 * 1000,
+      queryFn: async () => {
+        const annotations = await fetchAllPaginatedResults(
           client.models.Annotation.annotationsByAnnotationSetId,
           {
-            setId: annotationSetId,
+            setId,
             limit: 10000,
             selectionSet: [
               'id',
               'imageId',
+              'setId',
               'category.name',
               'category.id',
               'objectId',
@@ -128,637 +259,673 @@ export default function DensityMap({
               'owner',
             ],
           } as any
-        ),
-        fetchAllPaginatedResults(client.models.Image.imagesByProjectId, {
-          projectId: surveyId,
-          limit: 10000,
-          selectionSet: [
-            'id',
-            'latitude',
-            'longitude',
-            'transectId',
-            'timestamp',
-          ],
-        }),
-        fetchAllPaginatedResults(client.models.Stratum.strataByProjectId, {
-          projectId: surveyId,
-          limit: 10000,
-          selectionSet: ['id', 'name', 'coordinates'],
-        }),
-        fetchAllPaginatedResults(
-          client.models.ShapefileExclusions.shapefileExclusionsByProjectId,
-          {
-            projectId: surveyId,
-            limit: 10000,
-            selectionSet: ['id', 'coordinates'],
-          }
-        ),
-      ]);
+        );
+        return { surveyId: sid, annotationSetId: setId, annotations };
+      },
+    })),
+  });
 
-      // Store raw annotations without filtering
-      setRawAnnotations(anns);
-      setImages(imgs.sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0)));
-      // Add setting strata state
-      setStrata(str);
-      // Add setting shapefile exclusions state
-      setShapefileExclusions(exclusions);
-      setLoading(false);
+  const loading =
+    surveyQueries.some((q) => q.isLoading) ||
+    annotationQueries.some((q) => q.isLoading);
+  const fetching =
+    surveyQueries.some((q) => q.isFetching) ||
+    annotationQueries.some((q) => q.isFetching);
+
+  // Signatures used to memoise the (expensive) GeoJSON builds: recompute only
+  // when the underlying data actually changes, not on every render.
+  const surveyDataSig = surveyQueries
+    .map((q) => (q.data ? `${q.data.surveyId}:${q.data.images.length}` : ''))
+    .join('|');
+  const annotationDataSig = annotationQueries
+    .map((q) =>
+      q.data ? `${q.data.annotationSetId}:${q.data.annotations.length}` : ''
+    )
+    .join('|');
+
+  // imageId -> { lat, lng, transectId, surveyId, timestamp }
+  const imageById = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        lat: number;
+        lng: number;
+        transectId: string | null;
+        surveyId: string;
+        timestamp: number;
+      }
+    >();
+    for (const q of surveyQueries) {
+      if (!q.data) continue;
+      for (const img of q.data.images as any[]) {
+        if (img.latitude == null || img.longitude == null) continue;
+        map.set(img.id, {
+          lat: img.latitude,
+          lng: img.longitude,
+          transectId: img.transectId ?? null,
+          surveyId: q.data.surveyId,
+          timestamp: img.timestamp ?? 0,
+        });
+      }
     }
-    loadData();
-  }, [client, annotationSetId, surveyId]);
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surveyDataSig]);
 
-  // Helper to extract userId from owner field
-  // If contains "::", take the part before it; otherwise the whole field is the userId
-  const extractUserIdFromOwner = (owner: string | null | undefined): string | null => {
-    if (!owner) return null;
-    if (owner.includes('::')) {
-      return owner.split('::')[0];
+  // Ordered list of image ids (by capture time) for in-modal navigation.
+  const orderedImageIds = useMemo(
+    () =>
+      Array.from(imageById.entries())
+        .sort((a, b) => a[1].timestamp - b[1].timestamp)
+        .map(([id]) => id),
+    [imageById]
+  );
+
+  // Transects discovered in the images, numbered per survey in image-appearance
+  // order (matching the image-layer colouring). Derived from *all* images so the
+  // filter options stay stable regardless of the active transect selection.
+  const transectInfo = useMemo(() => {
+    const lookup = new Map<string, { number: number; color: string }>();
+    const flat: {
+      id: string;
+      surveyId: string;
+      number: number;
+      color: string;
+    }[] = [];
+    for (const q of surveyQueries) {
+      if (!q.data) continue;
+      let next = 0;
+      for (const img of q.data.images as any[]) {
+        if (img.latitude == null || img.longitude == null) continue;
+        const t = img.transectId;
+        if (!t || lookup.has(t)) continue;
+        const color = TRANSECT_COLORS[next % TRANSECT_COLORS.length];
+        lookup.set(t, { number: next + 1, color });
+        flat.push({ id: t, surveyId: q.data.surveyId, number: next + 1, color });
+        next++;
+      }
     }
-    return owner;
-  };
+    return { lookup, flat };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surveyDataSig]);
 
-  // Filter annotations when primaryOnly, rawAnnotations, or selectedUserIds change
+  // Report the transect list upward so a parent can render a consistent filter.
   useEffect(() => {
-    let filteredAnnotations = primaryOnly
-      ? rawAnnotations.filter(
-        (a) =>
-          a.id === a.objectId &&
-          (!dropFalseNegatives || !a.source.includes('false-negative'))
-      )
-      : rawAnnotations;
+    onTransectsLoaded?.(
+      transectInfo.flat.map(({ id, surveyId: sid, number }) => ({
+        id,
+        surveyId: sid,
+        number,
+      }))
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transectInfo]);
 
-    // Filter by user if users are selected
-    if (selectedUserIds.length > 0) {
-      const userIdSet = new Set(selectedUserIds);
-      filteredAnnotations = filteredAnnotations.filter((a) => {
-        const userId = extractUserIdFromOwner(a.owner);
-        return userId && userIdSet.has(userId);
-      });
+  // Extracted dependency keys (keeps the useMemo dep array statically checkable).
+  const selectedUserKey = selectedUserIds.join(',');
+  const categoryIdKey = categoryIds.join(',');
+  const categoryNameKey = categoryNames.join(',');
+  const transectKey = transectIds.join(',');
+
+  // Annotation points GeoJSON, joined to image coordinates and filtered.
+  const annotationsFC = useMemo<FeatureCollection>(() => {
+    const userIdSet = new Set(selectedUserIds);
+    const catIdSet = new Set(categoryIds);
+    const catNameSet = new Set(categoryNames);
+    const transectIdSet = new Set(transectIds);
+    const hasCatFilter = catIdSet.size > 0 || catNameSet.size > 0;
+    const features: any[] = [];
+
+    for (const q of annotationQueries) {
+      if (!q.data) continue;
+      for (const a of q.data.annotations as any[]) {
+        if (
+          primaryOnly &&
+          !(
+            a.id === a.objectId &&
+            (!dropFalseNegatives || !(a.source ?? '').includes('false-negative'))
+          )
+        ) {
+          continue;
+        }
+        if (userIdSet.size) {
+          const uid = extractUserIdFromOwner(a.owner);
+          if (!uid || !userIdSet.has(uid)) continue;
+        }
+        if (!a.category) continue;
+        if (
+          hasCatFilter &&
+          !catIdSet.has(a.category.id) &&
+          !catNameSet.has(a.category.name)
+        ) {
+          continue;
+        }
+        const img = imageById.get(a.imageId);
+        if (!img) continue;
+        if (
+          transectIdSet.size &&
+          (!img.transectId || !transectIdSet.has(img.transectId))
+        ) {
+          continue;
+        }
+
+        // Small deterministic jitter (~3m) so co-located sightings separate.
+        const h = hashString(a.id);
+        const radius = 0.00003;
+        const angle = ((h % 360) * Math.PI) / 180;
+        const dLat = radius * Math.sin(angle);
+        const dLng =
+          (radius * Math.cos(angle)) /
+          Math.max(Math.cos((img.lat * Math.PI) / 180), 1e-6);
+
+        features.push({
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [img.lng + dLng, img.lat + dLat],
+          },
+          properties: {
+            id: a.id,
+            imageId: a.imageId,
+            setId: a.setId ?? q.data.annotationSetId,
+            categoryName: a.category.name,
+          },
+        });
+      }
     }
+    return { type: 'FeatureCollection', features };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    annotationDataSig,
+    imageById,
+    primaryOnly,
+    dropFalseNegatives,
+    selectedUserKey,
+    categoryIdKey,
+    categoryNameKey,
+    transectKey,
+  ]);
 
-    // add a name to each annotation
-    filteredAnnotations.forEach((a) => {
-      a.name = uniqueNamesGenerator({
-        dictionaries: [adjectives, names],
-        seed: a.id,
-        style: 'capital',
-        separator: ' ',
+  // Image points GeoJSON, coloured by transect (per survey) and transect-filtered.
+  const imagesFC = useMemo<FeatureCollection>(() => {
+    const transectIdSet = new Set(transectIds);
+    const features: any[] = [];
+    for (const q of surveyQueries) {
+      if (!q.data) continue;
+      for (const img of q.data.images as any[]) {
+        if (img.latitude == null || img.longitude == null) continue;
+        const t = img.transectId;
+        if (transectIdSet.size && (!t || !transectIdSet.has(t))) continue;
+        const info = t ? transectInfo.lookup.get(t) : undefined;
+        features.push({
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [img.longitude, img.latitude],
+          },
+          properties: {
+            imageId: img.id,
+            color: info?.color ?? '#999999',
+            transect: info?.number ?? 0,
+          },
+        });
+      }
+    }
+    return { type: 'FeatureCollection', features };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surveyDataSig, transectInfo, transectKey]);
+
+  const strataFC = useMemo<FeatureCollection>(() => {
+    const features: any[] = [];
+    for (const q of surveyQueries) {
+      if (!q.data) continue;
+      for (const s of q.data.strata as any[]) {
+        const ring = coordsToRing(s.coordinates);
+        if (!ring) continue;
+        features.push({
+          type: 'Feature',
+          geometry: { type: 'Polygon', coordinates: [ring] },
+          properties: { name: s.name ?? 'Stratum' },
+        });
+      }
+    }
+    return { type: 'FeatureCollection', features };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surveyDataSig]);
+
+  const exclusionsFC = useMemo<FeatureCollection>(() => {
+    const features: any[] = [];
+    for (const q of surveyQueries) {
+      if (!q.data) continue;
+      for (const e of q.data.exclusions as any[]) {
+        const ring = coordsToRing(e.coordinates);
+        if (!ring) continue;
+        features.push({
+          type: 'Feature',
+          geometry: { type: 'Polygon', coordinates: [ring] },
+          properties: {},
+        });
+      }
+    }
+    return { type: 'FeatureCollection', features };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surveyDataSig]);
+
+  // -----------------------------------------------------------------------
+  // Refs so the (one-time) map event handlers always read current values.
+  // -----------------------------------------------------------------------
+  const openViewer = (imageId: string, setId?: string) => {
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    setViewerImageId(imageId);
+    setViewerSetId(setId || primarySetId);
+    setViewerOpen(true);
+  };
+  const openViewerRef = useRef(openViewer);
+  openViewerRef.current = openViewer;
+
+  // -----------------------------------------------------------------------
+  // Map initialisation (once)
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+
+    const map = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: BASE_STYLE,
+      center: [0, 0],
+      zoom: 1,
+      attributionControl: { compact: true },
+    });
+    mapRef.current = map;
+
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    map.addControl(new maplibregl.FullscreenControl(), 'top-right');
+    map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+
+    map.on('load', () => {
+      // Sources (start empty; data is pushed via setData below).
+      map.addSource(SRC_ANNOTATIONS, {
+        type: 'geojson',
+        data: EMPTY_FC as any,
+        cluster: true,
+        clusterMaxZoom: 16,
+        clusterRadius: 50,
       });
+      map.addSource(SRC_IMAGES, { type: 'geojson', data: EMPTY_FC as any });
+      map.addSource(SRC_STRATA, { type: 'geojson', data: EMPTY_FC as any });
+      map.addSource(SRC_EXCLUSIONS, { type: 'geojson', data: EMPTY_FC as any });
+
+      // Polygons (drawn underneath the points).
+      map.addLayer({
+        id: LYR_EXCLUSIONS_FILL,
+        type: 'fill',
+        source: SRC_EXCLUSIONS,
+        paint: { 'fill-color': '#FF0000', 'fill-opacity': 0.3 },
+      });
+      map.addLayer({
+        id: LYR_EXCLUSIONS_LINE,
+        type: 'line',
+        source: SRC_EXCLUSIONS,
+        paint: { 'line-color': '#FF0000', 'line-width': 2 },
+      });
+      map.addLayer({
+        id: LYR_STRATA_LINE,
+        type: 'line',
+        source: SRC_STRATA,
+        paint: { 'line-color': '#3357FF', 'line-width': 2 },
+      });
+
+      // Image markers, coloured by transect.
+      map.addLayer({
+        id: LYR_IMAGES,
+        type: 'circle',
+        source: SRC_IMAGES,
+        layout: { visibility: 'none' },
+        paint: {
+          'circle-radius': 4,
+          'circle-color': ['get', 'color'],
+          'circle-stroke-width': 1,
+          'circle-stroke-color': '#ffffff',
+          'circle-opacity': 0.8,
+        },
+      });
+
+      // Heatmap (reads the clustered source; weight by cluster size).
+      map.addLayer({
+        id: LYR_HEATMAP,
+        type: 'heatmap',
+        source: SRC_ANNOTATIONS,
+        layout: { visibility: 'none' },
+        paint: {
+          'heatmap-weight': [
+            'case',
+            ['has', 'point_count'],
+            ['min', ['/', ['get', 'point_count'], 50], 5],
+            1,
+          ],
+          'heatmap-radius': 20,
+          'heatmap-opacity': 0.7,
+        },
+      });
+
+      // Clusters
+      map.addLayer({
+        id: LYR_CLUSTERS,
+        type: 'circle',
+        source: SRC_ANNOTATIONS,
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-color': [
+            'step', ['get', 'point_count'],
+            '#51bbd6', 100, '#f1f075', 750, '#f28cb1',
+          ],
+          'circle-radius': [
+            'step', ['get', 'point_count'],
+            15, 100, 20, 750, 25,
+          ],
+          'circle-opacity': 0.85,
+        },
+      });
+      map.addLayer({
+        id: LYR_CLUSTER_COUNT,
+        type: 'symbol',
+        source: SRC_ANNOTATIONS,
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': ['get', 'point_count_abbreviated'],
+          'text-size': 12,
+        },
+        paint: { 'text-color': '#000000' },
+      });
+      // Individual sightings
+      map.addLayer({
+        id: LYR_POINTS,
+        type: 'circle',
+        source: SRC_ANNOTATIONS,
+        filter: ['!', ['has', 'point_count']],
+        paint: {
+          'circle-color': '#ff8c00',
+          'circle-radius': 5,
+          'circle-stroke-width': 1,
+          'circle-stroke-color': '#ffffff',
+        },
+      });
+
+      // ---- Interactions -------------------------------------------------
+      // Click a cluster -> zoom to its expansion.
+      map.on('click', LYR_CLUSTERS, (e) => {
+        const feature = e.features?.[0];
+        if (!feature) return;
+        const clusterId = feature.properties?.cluster_id;
+        const src = map.getSource(SRC_ANNOTATIONS) as maplibregl.GeoJSONSource;
+        src.getClusterExpansionZoom(clusterId).then((zoom) => {
+          map.easeTo({
+            center: (feature.geometry as any).coordinates,
+            zoom,
+          });
+        });
+      });
+
+      const pointPopup = (
+        coordinates: [number, number],
+        title: string,
+        rows: string,
+        imageId: string,
+        setId: string
+      ) => {
+        const node = document.createElement('div');
+        node.innerHTML = `<div style="min-width:160px;color:#000">
+            <div style="font-weight:600;margin-bottom:4px">${title}</div>
+            ${rows}
+            <button class="btn btn-sm btn-primary mt-2" type="button">View Image</button>
+          </div>`;
+        const btn = node.querySelector('button');
+        btn?.addEventListener('click', () => openViewerRef.current(imageId, setId));
+        new maplibregl.Popup({ closeButton: true })
+          .setLngLat(coordinates)
+          .setDOMContent(node)
+          .addTo(map);
+      };
+
+      map.on('click', LYR_POINTS, (e) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        const p = f.properties as any;
+        const name = uniqueNamesGenerator({
+          dictionaries: [adjectives, names],
+          seed: p.id,
+          style: 'capital',
+          separator: ' ',
+        });
+        pointPopup(
+          (f.geometry as any).coordinates.slice(),
+          name,
+          `<div><strong>Label:</strong> ${p.categoryName ?? ''}</div>`,
+          p.imageId,
+          p.setId
+        );
+      });
+
+      map.on('click', LYR_IMAGES, (e) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        const p = f.properties as any;
+        const [lng, lat] = (f.geometry as any).coordinates;
+        pointPopup(
+          [lng, lat],
+          `Transect ${p.transect}`,
+          `<div><strong>Coordinates:</strong> ${lat.toFixed(4)}, ${lng.toFixed(4)}</div>`,
+          p.imageId,
+          ''
+        );
+      });
+
+      map.on('click', LYR_STRATA_LINE, (e) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        new maplibregl.Popup()
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<div style="color:#000"><strong>Stratum:</strong> ${
+              (f.properties as any)?.name ?? ''
+            }</div>`
+          )
+          .addTo(map);
+      });
+
+      for (const lyr of [LYR_CLUSTERS, LYR_POINTS, LYR_IMAGES, LYR_STRATA_LINE]) {
+        map.on('mouseenter', lyr, () => {
+          map.getCanvas().style.cursor = 'pointer';
+        });
+        map.on('mouseleave', lyr, () => {
+          map.getCanvas().style.cursor = '';
+        });
+      }
+
+      setMapLoaded(true);
     });
 
-    setAnnotations(filteredAnnotations);
-  }, [rawAnnotations, primaryOnly, dropFalseNegatives, selectedUserIds]);
-
-  // Fit map to image points on initial load
-  useEffect(() => {
-    if (images.length > 0 && !hasFittedBounds) {
-      // Use a timeout to ensure map is fully rendered
-      const timeoutId = setTimeout(() => {
-        if (mapRef.current) {
-          try {
-            const points = images
-              .filter((img) => img.latitude != null && img.longitude != null)
-              .map((img) => [img.latitude, img.longitude] as [number, number])
-              .filter(([lat, lng]) => {
-                // Filter out invalid coordinates
-                return (
-                  lat >= -90 &&
-                  lat <= 90 &&
-                  lng >= -180 &&
-                  lng <= 180 &&
-                  !isNaN(lat) &&
-                  !isNaN(lng)
-                );
-              });
-
-            if (points.length > 0) {
-              const bounds = L.latLngBounds(points);
-              console.log(
-                'Fitting map bounds to',
-                points.length,
-                'points:',
-                bounds
-              );
-
-              // Add some padding to the bounds
-              mapRef.current.fitBounds(bounds, { padding: [20, 20] });
-              setHasFittedBounds(true);
-            } else {
-              console.warn('No valid points found for fitting bounds');
-            }
-          } catch (error) {
-            console.error('Error fitting map bounds:', error);
-          }
-        } else {
-          console.warn('Map reference not available for fitting bounds');
-        }
-      }, 100); // Small delay to ensure map is rendered
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [images, hasFittedBounds]);
-
-  // Reset fit bounds flag when survey changes
-  useEffect(() => {
-    setHasFittedBounds(false);
-  }, [surveyId]);
-
-  // imperatively add clustered markers to the map
-  const ClusteredMarkers: React.FC = () => {
-    const map = useMap();
-    useEffect(() => {
-      if (!map) return;
-      const group = (L as any).markerClusterGroup();
-      annotations
-        .filter(
-          (a) =>
-            a.category &&
-            (categoryIds.length === 0 || categoryIds.includes(a.category.id))
-        )
-        .forEach((a) => {
-          const img = images.find((img) => img.id === a.imageId);
-          if (!img || img.latitude == null || img.longitude == null) return;
-          const pos = adjustedPositions[img.id] || {
-            latitude: img.latitude,
-            longitude: img.longitude,
-          };
-          const marker = L.circleMarker([pos.latitude, pos.longitude], {
-            color: 'orange',
-            radius: 5,
-          });
-          const popupHtml = `
-            <div>
-              <div><strong>Name:</strong> ${a.name}</div>
-              <div><strong>Label:</strong> ${a.category.name}</div>
-              <div style="margin-top:6px;"><button class="btn btn-sm btn-primary view-image-btn" data-imageid="${img.id}">View Image</button></div>
-            </div>`;
-          marker.bindPopup(popupHtml);
-          marker.on('popupopen', () => {
-            const popupEl = (marker as any).getPopup()?.getElement?.();
-            const btn: HTMLElement | null =
-              popupEl?.querySelector('.view-image-btn') ?? null;
-            if (btn) {
-              const handler = (ev: Event) => {
-                ev.preventDefault();
-                ev.stopPropagation();
-                openViewer(img.id);
-              };
-              (btn as any).__detwebHandler = handler;
-              btn.addEventListener('click', handler);
-            }
-          });
-          marker.on('popupclose', () => {
-            const popupEl = (marker as any).getPopup()?.getElement?.();
-            const btn: HTMLElement | null =
-              popupEl?.querySelector('.view-image-btn') ?? null;
-            if (btn && (btn as any).__detwebHandler) {
-              btn.removeEventListener('click', (btn as any).__detwebHandler);
-              delete (btn as any).__detwebHandler;
-            }
-          });
-          group.addLayer(marker);
-        });
-      map.addLayer(group);
-      return () => {
-        map.removeLayer(group);
-      };
-    }, [map, annotations, images, categoryIds]);
-    return null;
-  };
-
-  const HeatmapLayer: React.FC = () => {
-    const map = useMap();
-    useEffect(() => {
-      if (!map) return;
-      const latlngs = annotations
-        .filter(
-          (a) =>
-            a.category &&
-            (categoryIds.length === 0 || categoryIds.includes(a.category.id))
-        )
-        .map((a) => {
-          const img = images.find((img) => img.id === a.imageId);
-          if (!img || img.latitude == null || img.longitude == null)
-            return null;
-          const pos = adjustedPositions[img.id] || {
-            latitude: img.latitude,
-            longitude: img.longitude,
-          };
-          return [pos.latitude, pos.longitude] as [number, number];
-        })
-        .filter((x): x is [number, number] => x !== null);
-      const heat = (L as any).heatLayer(latlngs, {
-        radius: 25,
-        blur: 15,
-        maxZoom: 17,
-      });
-      map.addLayer(heat);
-      return () => {
-        map.removeLayer(heat);
-      };
-    }, [map, annotations, images, categoryIds]);
-    return null;
-  };
-
-  // Add ImagesLayer to render image markers color-coded by transect
-  const ImagesLayer: React.FC = () => {
-    const map = useMap();
-    useEffect(() => {
-      if (!map) return;
-
-      // Create a color palette for different transects
-      const colors = [
-        '#FF5733',
-        '#33FF57',
-        '#3357FF',
-        '#F333FF',
-        '#33FFF8',
-        '#FFA833',
-        '#8B33FF',
-        '#FF3380',
-        '#33FF8B',
-      ];
-
-      // Get unique transect IDs in order of first appearance in sorted images
-      const uniqueTransectIds: string[] = [];
-      const seenTransects = new Set<string>();
-
-      images.forEach((img) => {
-        const transectId = img.transectId || 'No Transect';
-        if (!seenTransects.has(transectId)) {
-          seenTransects.add(transectId);
-          uniqueTransectIds.push(transectId);
-        }
-      });
-
-      // Create mappings for colors and numbers
-      const transectColors = new Map();
-      const transectNumbers = new Map();
-
-      uniqueTransectIds.forEach((transectId, index) => {
-        const colorIndex = index % colors.length;
-        transectColors.set(transectId, colors[colorIndex]);
-        transectNumbers.set(transectId, index + 1); // 1-based numbering
-      });
-
-      // Group images by transect
-      const transectMap = new Map();
-      images.forEach((img) => {
-        const transectId = img.transectId || 'No Transect';
-        if (!transectMap.has(transectId)) {
-          transectMap.set(transectId, []);
-        }
-        transectMap.get(transectId).push(img);
-      });
-
-      const group = L.layerGroup();
-
-      images.forEach((img) => {
-        if (!img || img.latitude == null || img.longitude == null) return;
-
-        const transectId = img.transectId || 'No Transect';
-        const color = transectColors.get(transectId) || '#999999';
-        const pos = adjustedPositions[img.id] || {
-          latitude: img.latitude,
-          longitude: img.longitude,
-        };
-
-        const marker = L.circleMarker([pos.latitude, pos.longitude], {
-          color: color,
-          fillColor: color,
-          fillOpacity: 0.7,
-          radius: 6,
-          weight: 2,
-        });
-
-        const transectNumber = transectNumbers.get(transectId) || 0;
-
-        const popupHtml = `
-          <div>
-            <strong>Transect:</strong> ${transectNumber}<br/>
-            <strong>Coordinates:</strong> ${pos.latitude.toFixed(
-          4
-        )}, ${pos.longitude.toFixed(4)}
-            <div style="margin-top:6px;"><button class="btn btn-sm btn-primary view-image-btn" data-imageid="${img.id
-          }">View Image</button></div>
-          </div>`;
-        marker.bindPopup(popupHtml);
-        marker.on('popupopen', () => {
-          const popupEl = (marker as any).getPopup()?.getElement?.();
-          const btn: HTMLElement | null =
-            popupEl?.querySelector('.view-image-btn') ?? null;
-          if (btn) {
-            const handler = (ev: Event) => {
-              ev.preventDefault();
-              ev.stopPropagation();
-              openViewer(img.id);
-            };
-            (btn as any).__detwebHandler = handler;
-            btn.addEventListener('click', handler);
-          }
-        });
-        marker.on('popupclose', () => {
-          const popupEl = (marker as any).getPopup()?.getElement?.();
-          const btn: HTMLElement | null =
-            popupEl?.querySelector('.view-image-btn') ?? null;
-          if (btn && (btn as any).__detwebHandler) {
-            btn.removeEventListener('click', (btn as any).__detwebHandler);
-            delete (btn as any).__detwebHandler;
-          }
-        });
-
-        group.addLayer(marker);
-      });
-
-      map.addLayer(group);
-      return () => {
-        map.removeLayer(group);
-      };
-    }, [map, images]);
-    return null;
-  };
-
-  // Add StrataLayer to render stratum boundaries and shapefile exclusions
-  const StrataLayer: React.FC = () => {
-    const map = useMap();
-    useEffect(() => {
-      if (!map) return;
-      // define a color palette for strata boundaries
-      const colors = [
-        '#FF5733',
-        '#33FF57',
-        '#3357FF',
-        '#F333FF',
-        '#FF33A8',
-        '#33FFF8',
-      ];
-      const group = L.layerGroup();
-
-      // Render strata
-      strata.forEach((s, idx) => {
-        const coords = s.coordinates;
-        if (!coords || coords.length < 4) return;
-        const latlngs: [number, number][] = [];
-        for (let i = 0; i < coords.length; i += 2) {
-          latlngs.push([coords[i], coords[i + 1]]);
-        }
-        // pick color based on stratum index
-        const color = colors[idx % colors.length];
-        const polygon = L.polygon(latlngs, { color, fillOpacity: 0 });
-        polygon.bindPopup(`<div><strong>Stratum:</strong> ${s.name}</div>`);
-        group.addLayer(polygon);
-      });
-
-      // Render shapefile exclusions
-      shapefileExclusions.forEach((exclusion) => {
-        const coords = exclusion.coordinates;
-        if (!coords || coords.length < 4) return;
-        const latlngs: [number, number][] = [];
-        for (let i = 0; i < coords.length; i += 2) {
-          latlngs.push([coords[i], coords[i + 1]]);
-        }
-        // Use red color for exclusions to distinguish from strata
-        const polygon = L.polygon(latlngs, {
-          color: '#FF0000',
-          fillColor: '#FF0000',
-          fillOpacity: 0.3,
-          weight: 2,
-        });
-        polygon.bindPopup(`<div><strong>Exclusion Zone</strong></div>`);
-        group.addLayer(polygon);
-      });
-
-      map.addLayer(group);
-      return () => {
-        map.removeLayer(group);
-      };
-    }, [map, strata, shapefileExclusions]);
-    return null;
-  };
-
-  // handle loading and render main map
-  if (loading) {
-    return (
-      <div className='d-flex flex-row align-items-center justify-content-center h-100 w-100'>
-        <Spinner size='sm' />
-        <span className='ms-2'>Loading...</span>
-      </div>
-    );
-  }
-
-  // Add mapKey to force remount on category change without refetching data
-  const mapKey = categoryIds.length > 0 ? categoryIds.join(',') : 'all';
-
-  // Add MapEvents to capture zoom and move changes
-  const MapEvents: React.FC = () => {
-    const map = useMap();
-    useEffect(() => {
-      const onZoomEnd = () => setZoomLevel(map.getZoom());
-      const onMoveEnd = () => {
-        const center = map.getCenter();
-        setMapCenter([center.lat, center.lng]);
-      };
-      map.on('zoomend', onZoomEnd);
-      map.on('moveend', onMoveEnd);
-      // call invalidateSize immediately and on container resize to avoid cutoff
-      map.invalidateSize();
-      const container = map.getContainer();
-      const resizeObserver = new ResizeObserver(() => map.invalidateSize());
-      resizeObserver.observe(container);
-      return () => {
-        map.off('zoomend', onZoomEnd);
-        map.off('moveend', onMoveEnd);
-        resizeObserver.disconnect();
-      };
-    }, [map]);
-    return null;
-  };
-
-  // Add LayerControl to manage layer visibility
-  const LayerControl: React.FC<{
-    showClusters: boolean;
-    setShowClusters: (show: boolean) => void;
-    showHeatmap: boolean;
-    setShowHeatmap: (show: boolean) => void;
-    showImages: boolean;
-    setShowImages: (show: boolean) => void;
-    showStrata: boolean;
-    setShowStrata: (show: boolean) => void;
-  }> = ({
-    showClusters,
-    setShowClusters,
-    showHeatmap,
-    setShowHeatmap,
-    showImages,
-    setShowImages,
-    showStrata,
-    setShowStrata,
-  }) => {
-      const map = useMap();
-      useEffect(() => {
-        const control = (L as any).control({ position: 'topleft' });
-        control.onAdd = () => {
-          const container = L.DomUtil.create(
-            'div',
-            'leaflet-control-layers leaflet-control'
-          );
-          container.style.backgroundColor = 'white';
-          container.style.padding = '10px';
-          container.style.borderRadius = '5px';
-          container.style.boxShadow = '0 1px 5px rgba(0,0,0,0.4)';
-          container.style.maxWidth = '200px';
-
-          const title = L.DomUtil.create('div', '', container);
-          title.innerHTML = '<strong>Layers</strong>';
-          title.style.marginBottom = '8px';
-          title.style.fontSize = '12px';
-          title.style.color = 'black';
-
-          const createCheckbox = (
-            label: string,
-            checked: boolean,
-            onChange: (checked: boolean) => void
-          ) => {
-            const div = L.DomUtil.create('div', '', container);
-            div.style.marginBottom = '5px';
-            div.style.display = 'flex';
-            div.style.alignItems = 'center';
-
-            const checkbox = L.DomUtil.create(
-              'input',
-              '',
-              div
-            ) as HTMLInputElement;
-            checkbox.type = 'checkbox';
-            checkbox.checked = checked;
-            checkbox.id = `layer-${label.toLowerCase()}`;
-            checkbox.style.marginRight = '5px';
-
-            const labelEl = L.DomUtil.create(
-              'label',
-              '',
-              div
-            ) as HTMLLabelElement;
-            labelEl.htmlFor = checkbox.id;
-            labelEl.innerHTML = label;
-            labelEl.style.fontSize = '12px';
-            labelEl.style.cursor = 'pointer';
-            labelEl.style.color = 'black';
-            labelEl.style.marginBottom = '0';
-
-            L.DomEvent.on(checkbox, 'change', () => onChange(checkbox.checked));
-          };
-
-          createCheckbox('Clusters', showClusters, setShowClusters);
-          createCheckbox('Heatmap', showHeatmap, setShowHeatmap);
-          createCheckbox('Images', showImages, setShowImages);
-          createCheckbox('Strata', showStrata, setShowStrata);
-
-          return container;
-        };
-        control.addTo(map);
-        return () => {
-          control.remove();
-        };
-      }, [
-        map,
-        showClusters,
-        showHeatmap,
-        showImages,
-        showStrata,
-        setShowClusters,
-        setShowHeatmap,
-        setShowImages,
-        setShowStrata,
-      ]);
-      return null;
+    return () => {
+      setMapLoaded(false);
+      map.remove();
+      mapRef.current = null;
     };
+  }, []);
 
-  // Add FullscreenControl to toggle map fullscreen
-  const FullscreenControl: React.FC = () => {
-    const map = useMap();
-    useEffect(() => {
-      const control = (L as any).control({ position: 'topright' });
-      control.onAdd = () => {
-        const container = L.DomUtil.create(
-          'div',
-          'leaflet-bar leaflet-control leaflet-control-custom'
-        );
-        container.style.backgroundColor = 'white';
-        const button = L.DomUtil.create(
-          'button',
-          'btn text-black',
-          container
-        ) as HTMLButtonElement;
-        button.innerHTML = '⛶';
-        button.style.cursor = 'pointer';
-        button.style.color = 'black';
-        L.DomEvent.on(button, 'click', () => {
-          const mapContainer = map.getContainer();
-          if (!document.fullscreenElement) {
-            mapContainer.requestFullscreen?.();
-          } else {
-            document.exitFullscreen?.();
-          }
-        });
-        return container;
-      };
-      control.addTo(map);
-      return () => {
-        control.remove();
-      };
-    }, [map]);
-    return null;
-  };
+  // -----------------------------------------------------------------------
+  // Push data into the sources whenever it changes.
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    if (!mapLoaded) return;
+    (mapRef.current?.getSource(SRC_ANNOTATIONS) as maplibregl.GeoJSONSource)?.setData(
+      annotationsFC as any
+    );
+  }, [mapLoaded, annotationsFC]);
+
+  useEffect(() => {
+    if (!mapLoaded) return;
+    (mapRef.current?.getSource(SRC_IMAGES) as maplibregl.GeoJSONSource)?.setData(
+      imagesFC as any
+    );
+  }, [mapLoaded, imagesFC]);
+
+  useEffect(() => {
+    if (!mapLoaded) return;
+    (mapRef.current?.getSource(SRC_STRATA) as maplibregl.GeoJSONSource)?.setData(
+      strataFC as any
+    );
+  }, [mapLoaded, strataFC]);
+
+  useEffect(() => {
+    if (!mapLoaded) return;
+    (mapRef.current?.getSource(SRC_EXCLUSIONS) as maplibregl.GeoJSONSource)?.setData(
+      exclusionsFC as any
+    );
+  }, [mapLoaded, exclusionsFC]);
+
+  // -----------------------------------------------------------------------
+  // Layer visibility toggles.
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    if (!mapLoaded) return;
+    const map = mapRef.current!;
+    const set = (id: string, visible: boolean) =>
+      map.getLayer(id) &&
+      map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
+    set(LYR_CLUSTERS, showClusters);
+    set(LYR_CLUSTER_COUNT, showClusters);
+    set(LYR_POINTS, showClusters);
+    set(LYR_HEATMAP, showHeatmap);
+    set(LYR_IMAGES, showImages);
+    set(LYR_STRATA_LINE, showStrata);
+    set(LYR_EXCLUSIONS_FILL, showStrata);
+    set(LYR_EXCLUSIONS_LINE, showStrata);
+  }, [mapLoaded, showClusters, showHeatmap, showImages, showStrata]);
+
+  // -----------------------------------------------------------------------
+  // Fit bounds to the data whenever the displayed extent changes.
+  // -----------------------------------------------------------------------
+  const boundsKey = useMemo(() => {
+    let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+    const consume = (fc: FeatureCollection) => {
+      for (const f of fc.features) {
+        if (f.geometry.type !== 'Point') continue;
+        const [lng, lat] = f.geometry.coordinates;
+        if (!isValidLatLng(lat, lng)) continue;
+        if (lng < minLng) minLng = lng;
+        if (lat < minLat) minLat = lat;
+        if (lng > maxLng) maxLng = lng;
+        if (lat > maxLat) maxLat = lat;
+      }
+    };
+    consume(imagesFC.features.length ? imagesFC : annotationsFC);
+    if (minLng === Infinity) return null;
+    return [minLng, minLat, maxLng, maxLat] as [number, number, number, number];
+  }, [imagesFC, annotationsFC]);
+
+  const lastFitRef = useRef<string>('');
+  useEffect(() => {
+    if (!mapLoaded || !boundsKey) return;
+    const key = boundsKey.join(',');
+    if (key === lastFitRef.current) return;
+    lastFitRef.current = key;
+    mapRef.current!.fitBounds(
+      [
+        [boundsKey[0], boundsKey[1]],
+        [boundsKey[2], boundsKey[3]],
+      ],
+      { padding: 40, maxZoom: 16, duration: 0 }
+    );
+  }, [mapLoaded, boundsKey]);
 
   return (
-    <div className='w-100 h-100'>
-      <MapContainer
-        ref={mapRef}
-        key={mapKey}
-        style={{ height: '100%', width: '100%', position: 'relative' }}
-        center={mapCenter}
-        zoom={zoomLevel}
+    <div className='w-100 h-100' style={{ position: 'relative', minHeight: 0 }}>
+      <div
+        ref={mapContainerRef}
+        style={{ height: '100%', width: '100%', position: 'absolute', inset: 0 }}
+      />
+
+      {/* Layer toggles */}
+      <div
+        className='position-absolute bg-white rounded shadow-sm p-2'
+        style={{ top: 10, left: 10, zIndex: 1, minWidth: 140, color: '#000' }}
       >
-        <TileLayer
-          attribution='&copy; OpenStreetMap contributors'
-          url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-          crossOrigin='anonymous'
+        <div className='fw-bold mb-1' style={{ fontSize: 12 }}>
+          Layers
+        </div>
+        <Form.Check
+          type='checkbox'
+          id='dm-clusters'
+          label='Sightings'
+          checked={showClusters}
+          onChange={(e) => setShowClusters(e.target.checked)}
+          style={{ fontSize: 13 }}
         />
-        <MapEvents />
-        {showStrata && <StrataLayer />}
-        {showClusters && <ClusteredMarkers />}
-        {showHeatmap && <HeatmapLayer />}
-        {showImages && <ImagesLayer />}
-        <LayerControl
-          showClusters={showClusters}
-          setShowClusters={setShowClusters}
-          showHeatmap={showHeatmap}
-          setShowHeatmap={setShowHeatmap}
-          showImages={showImages}
-          setShowImages={setShowImages}
-          showStrata={showStrata}
-          setShowStrata={setShowStrata}
+        <Form.Check
+          type='checkbox'
+          id='dm-heatmap'
+          label='Heatmap'
+          checked={showHeatmap}
+          onChange={(e) => setShowHeatmap(e.target.checked)}
+          style={{ fontSize: 13 }}
         />
-        <FullscreenControl />
-      </MapContainer>
+        <Form.Check
+          type='checkbox'
+          id='dm-images'
+          label='Images'
+          checked={showImages}
+          onChange={(e) => setShowImages(e.target.checked)}
+          style={{ fontSize: 13 }}
+        />
+        <Form.Check
+          type='checkbox'
+          id='dm-strata'
+          label='Strata'
+          checked={showStrata}
+          onChange={(e) => setShowStrata(e.target.checked)}
+          style={{ fontSize: 13 }}
+        />
+      </div>
+
+      {/* Loading / status overlay */}
+      {(loading || fetching) && (
+        <div
+          className='position-absolute bg-white rounded shadow-sm px-2 py-1 d-flex align-items-center'
+          style={{ top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 1 }}
+        >
+          <Spinner size='sm' />
+          <span className='ms-2' style={{ fontSize: 13, color: '#000' }}>
+            {loading ? 'Loading map data…' : 'Updating…'}
+          </span>
+        </div>
+      )}
+
+      {!loading && effectiveSources.length === 0 && (
+        <div
+          className='position-absolute bg-white rounded shadow-sm px-3 py-2'
+          style={{ top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 1, color: '#000' }}
+        >
+          Select an annotation set to begin.
+        </div>
+      )}
+
       {editable ? (
         <AnnotationViewerModal
           show={viewerOpen}
           onClose={() => setViewerOpen(false)}
           imageId={viewerImageId}
-          imageIds={images.map((img) => img.id)}
-          annotationSetId={annotationSetId}
-          onNavigate={openViewer}
+          imageIds={orderedImageIds}
+          annotationSetId={viewerSetId || primarySetId}
+          onNavigate={(id) => openViewer(id, viewerSetId)}
         />
       ) : (
         <ImageViewerModal
           show={viewerOpen}
           onClose={() => setViewerOpen(false)}
           imageId={viewerImageId}
-          imageIds={images.map((img) => img.id)}
-          annotationSetId={annotationSetId}
-          onNavigate={openViewer}
+          imageIds={orderedImageIds}
+          annotationSetId={viewerSetId || primarySetId}
+          onNavigate={(id) => openViewer(id, viewerSetId)}
           categoryIds={categoryIds}
         />
       )}
