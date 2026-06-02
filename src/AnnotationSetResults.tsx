@@ -102,6 +102,7 @@ export default function AnnotationSetResults({
               'image.timestamp',
               'image.latitude',
               'image.longitude',
+              'image.transectId',
             ] as const,
             limit: 10000,
           },
@@ -142,6 +143,7 @@ export default function AnnotationSetResults({
           return {
             category: anno.category?.name || 'Unknown',
             image: anno.image.originalPath || 'Unknown',
+            transect: anno.image.transectId || 'Unknown',
             timestamp: anno.image.timestamp,
             latitude: anno.image.latitude,
             longitude: anno.image.longitude,
