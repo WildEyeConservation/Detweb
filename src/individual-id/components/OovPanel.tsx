@@ -47,6 +47,8 @@ export function OovPanel({
       style={{
         width: collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH,
         flexShrink: 0,
+        minHeight: 0,
+        alignSelf: 'stretch',
         background: '#4E5D6C',
         color: '#f8f9fa',
         borderRadius: 8,

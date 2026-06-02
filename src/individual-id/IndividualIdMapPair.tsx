@@ -815,7 +815,7 @@ export function IndividualIdMapPair(props: Props) {
 
   return (
     <div className='w-100 h-100 d-flex flex-column gap-2'>
-      <div className='d-flex flex-row gap-2 w-100' style={{ flex: 1 }}>
+      <div className='d-flex flex-row gap-2 w-100' style={{ flex: 1, minHeight: 0 }}>
         <OovPanel
           side='A'
           candidates={oovCandidatesA}
