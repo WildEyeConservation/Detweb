@@ -693,15 +693,80 @@ export function IndividualIdHarness({
   const [completePopup, setCompletePopup] = useState<{
     show: boolean;
     earlier?: number;
+    target?: number;
+    lane?: number;
   }>({ show: false });
 
-  // Find the earliest earlier pair that is still incomplete.
-  const earliestEarlierIncomplete = useMemo(() => {
-    for (let i = 0; i < currentIndex; i++) {
-      if (pairViews[i]?.completion.status === 'incomplete') return i;
+  const laneContainingPair = useCallback(
+    (pairIndex: number) => {
+      const laneIndex = lanes.findIndex((l) => l.entries.includes(pairIndex));
+      return laneIndex >= 0 ? laneIndex : activeLane;
+    },
+    [lanes, activeLane]
+  );
+
+  const completeNavigationTarget = useMemo(() => {
+    const incomplete = (idx: number) =>
+      idx !== currentIndex &&
+      pairViews[idx]?.completion.status === 'incomplete';
+
+    const lane = lanes[activeLane];
+    if (lane) {
+      const pos = lane.entries.indexOf(currentIndex);
+      if (pos !== -1) {
+        const earlierInLane = lane.entries
+          .slice(0, pos)
+          .find((idx) => incomplete(idx));
+        if (earlierInLane !== undefined) {
+          return {
+            target: earlierInLane,
+            lane: activeLane,
+            earlier: earlierInLane,
+          };
+        }
+
+        const laterInLane = lane.entries
+          .slice(pos + 1)
+          .find((idx) => incomplete(idx));
+        if (laterInLane !== undefined) {
+          return { target: laterInLane, lane: activeLane };
+        }
+      }
+
+      const anyInLane = lane.entries.find((idx) => incomplete(idx));
+      if (anyInLane !== undefined) {
+        return {
+          target: anyInLane,
+          lane: activeLane,
+          earlier: anyInLane < currentIndex ? anyInLane : undefined,
+        };
+      }
     }
+
+    for (let i = 0; i < currentIndex; i++) {
+      if (incomplete(i)) {
+        return { target: i, lane: laneContainingPair(i), earlier: i };
+      }
+    }
+
+    const nextGlobal = pairViews.findIndex(
+      (_, i) => i > currentIndex && incomplete(i)
+    );
+    if (nextGlobal !== -1) {
+      return { target: nextGlobal, lane: laneContainingPair(nextGlobal) };
+    }
+
+    const anyGlobal = pairViews.findIndex((_, i) => incomplete(i));
+    if (anyGlobal !== -1) {
+      return {
+        target: anyGlobal,
+        lane: laneContainingPair(anyGlobal),
+        earlier: anyGlobal < currentIndex ? anyGlobal : undefined,
+      };
+    }
+
     return undefined;
-  }, [pairViews, currentIndex]);
+  }, [activeLane, currentIndex, lanes, laneContainingPair, pairViews]);
 
   const handleAllAccepted = useCallback(() => {
     // Suppress the "Stay / Next pair" popup when no other pair in the
@@ -710,29 +775,21 @@ export function IndividualIdHarness({
     // fire onComplete) on the next render. Without this guard the stale
     // popup stacks on top of ReunionDialog, since onComplete no longer
     // navigates away immediately.
-    const anyOtherIncomplete = pairViews.some(
-      (v, i) => i !== currentIndex && v.completion.status === 'incomplete'
-    );
-    if (!anyOtherIncomplete) return;
-    setCompletePopup({ show: true, earlier: earliestEarlierIncomplete });
-  }, [earliestEarlierIncomplete, pairViews, currentIndex]);
+    if (!completeNavigationTarget) return;
+    setCompletePopup({
+      show: true,
+      target: completeNavigationTarget.target,
+      lane: completeNavigationTarget.lane,
+      earlier: completeNavigationTarget.earlier,
+    });
+  }, [completeNavigationTarget]);
 
   const acceptCompletePopup = () => {
-    if (completePopup.earlier !== undefined) {
-      setCurrentIndex(completePopup.earlier);
-    } else {
-      // Jump to the next pair that still needs work rather than the literal
-      // next one — completed/empty pairs in between would just make the user
-      // press Next again. Falls back to the immediate next pair only when
-      // nothing ahead is incomplete (transect effectively done).
-      const nextIncomplete = pairViews.findIndex(
-        (v, i) => i > currentIndex && v.completion.status === 'incomplete'
+    if (completePopup.target !== undefined) {
+      setCurrentIndex(completePopup.target);
+      setActiveLane(
+        completePopup.lane ?? laneContainingPair(completePopup.target)
       );
-      if (nextIncomplete !== -1) {
-        setCurrentIndex(nextIncomplete);
-      } else if (currentIndex < pairViews.length - 1) {
-        setCurrentIndex(currentIndex + 1);
-      }
     }
     setCompletePopup({ show: false });
   };
