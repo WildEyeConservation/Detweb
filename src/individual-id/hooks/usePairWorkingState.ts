@@ -70,11 +70,19 @@ export function usePairWorkingState(): PairWorkingState {
         if (!ov) {
           out.push(c);
         } else {
+          const posA =
+            c.realA && !c.isShadowA ? c.posA : ov.posA ?? c.posA;
+          const posB =
+            c.realB && !c.isShadowB ? c.posB : ov.posB ?? c.posB;
+          const status =
+            c.realA && c.realB && c.status !== 'accepted'
+              ? c.status
+              : ov.status ?? c.status;
           out.push({
             ...c,
-            posA: ov.posA ?? c.posA,
-            posB: ov.posB ?? c.posB,
-            status: ov.status ?? c.status,
+            posA,
+            posB,
+            status,
             obscuredA: ov.obscuredA ?? c.obscuredA,
             obscuredB: ov.obscuredB ?? c.obscuredB,
           });

@@ -17,10 +17,15 @@ import {
 import { buildMatchCandidates } from './utils/munkres';
 import { buildNeighbourTransforms } from './utils/transforms';
 import { isOov } from './utils/identity';
+import {
+  buildChainSplitPlan,
+  type ChainSplitPlan,
+} from './utils/chains';
 import type { MatchCandidate, NeighbourPairWithMeta } from './types';
 import { IndividualIdMapPair } from './IndividualIdMapPair';
 import { LoadingCard } from './components/LoadingCard';
 import { LinkAnnotationDialog } from './components/LinkAnnotationDialog';
+import { SplitChainDialog } from './components/SplitChainDialog';
 import ChangeCategoryModal from '../ChangeCategoryModal';
 
 const DEFAULT_LENIENCY = 40;
@@ -318,11 +323,8 @@ export function IndividualIdPairHarness({
       // bridges newer annotations to an older chain re-anchors the newer
       // segment to its own oldest survivor so the chains end up split, not
       // dangling.
-      const imagesById: Record<string, any> = {};
-      if (pair) {
-        imagesById[pair.image1Id] = pair.imageA;
-        imagesById[pair.image2Id] = pair.imageB;
-      }
+      const imagesById: Record<string, any> =
+        pairData.data?.imagesById ?? {};
       const ageOf = (imageId: string) => {
         const img: any = imagesById[imageId];
         return {
@@ -408,7 +410,7 @@ export function IndividualIdPairHarness({
         patchPairCache((old) => ({ ...old, annotations: before }));
       }
     },
-    [client, localAnnotations, patchPairCache, pair]
+    [client, localAnnotations, pairData.data?.imagesById, patchPairCache]
   );
 
   const handleToggleObscured = useCallback(
@@ -491,6 +493,10 @@ export function IndividualIdPairHarness({
     currentCategoryId: string;
     chainIds: string[];
   } | null>(null);
+  const [splitRequest, setSplitRequest] = useState<{
+    annotationId: string;
+    plan: ChainSplitPlan;
+  } | null>(null);
 
   const buildChainIds = useCallback(
     (annotationId: string): string[] => {
@@ -519,6 +525,73 @@ export function IndividualIdPairHarness({
     },
     [buildChainIds]
   );
+
+  const buildSplitPlan = useCallback(
+    (annotationId: string) => {
+      const imagesById = pairData.data?.imagesById ?? {};
+      return buildChainSplitPlan(localAnnotations, annotationId, (imageId) => {
+        const img: any = imagesById[imageId];
+        return {
+          timestamp: (img?.timestamp ?? null) as number | null,
+          originalPath: (img?.originalPath ?? null) as string | null,
+        };
+      });
+    },
+    [localAnnotations, pairData.data?.imagesById]
+  );
+
+  const canSplitChain = useCallback(
+    (annotationId: string) => buildSplitPlan(annotationId) !== null,
+    [buildSplitPlan]
+  );
+
+  const handleSplitChain = useCallback(
+    (annotationId: string) => {
+      const plan = buildSplitPlan(annotationId);
+      if (!plan) return;
+      setSplitRequest({ annotationId, plan });
+    },
+    [buildSplitPlan]
+  );
+
+  const executeSplitChain = useCallback(
+    async (annotationId: string) => {
+      const plan = buildSplitPlan(annotationId);
+      if (!plan) return;
+
+      const before = localAnnotations;
+      const patchById = new Map(plan.updates.map((u) => [u.id, u.patch]));
+      const applySplit = (prev: AnnotationType[]): AnnotationType[] =>
+        prev.map((a) =>
+          patchById.has(a.id) ? { ...a, ...patchById.get(a.id)! } : a
+        );
+
+      setLocalAnnotations(applySplit);
+      patchPairCache((old) => ({
+        ...old,
+        annotations: applySplit(old.annotations),
+      }));
+
+      try {
+        await Promise.all(
+          plan.updates.map((u) =>
+            client.models.Annotation.update({ id: u.id, ...u.patch } as any)
+          )
+        );
+      } catch (err) {
+        console.error('Failed to split individual-id chain', err);
+        setLocalAnnotations(before);
+        patchPairCache((old) => ({ ...old, annotations: before }));
+      }
+    },
+    [buildSplitPlan, client, localAnnotations, patchPairCache]
+  );
+
+  const confirmSplitChain = () => {
+    if (!splitRequest) return;
+    void executeSplitChain(splitRequest.annotationId);
+    setSplitRequest(null);
+  };
 
   const handleApplyLabelChange = useCallback(
     async (newCategoryId: string) => {
@@ -566,11 +639,8 @@ export function IndividualIdPairHarness({
       if (actors.length === 0) return;
       const nowIso = new Date().toISOString();
       const group = (projectCtx?.project as any)?.organizationId ?? undefined;
-      const imagesById: Record<string, any> = {};
-      if (pair) {
-        imagesById[pair.image1Id] = pair.imageA;
-        imagesById[pair.image2Id] = pair.imageB;
-      }
+      const imagesById: Record<string, any> =
+        pairData.data?.imagesById ?? {};
       const ageOf = (imageId: string) => {
         const img: any = imagesById[imageId];
         return {
@@ -679,8 +749,8 @@ export function IndividualIdPairHarness({
       }
     },
     [
-      pair,
       annotationSetId,
+      pairData.data?.imagesById,
       projectCtx?.project?.id,
       projectCtx?.project,
       localAnnotations,
@@ -879,6 +949,8 @@ export function IndividualIdPairHarness({
           onAccept={handleAccept}
           onPlaceNew={handlePlaceNew}
           onDelete={handleDelete}
+          onSplitChain={handleSplitChain}
+          canSplitChain={canSplitChain}
           onChangeLabel={handleChangeLabel}
           onToggleObscured={handleToggleObscured}
           onSetProposedObscured={handleSetProposedObscured}
@@ -917,6 +989,13 @@ export function IndividualIdPairHarness({
         show={pendingLink !== null}
         onConfirm={confirmManualLink}
         onCancel={cancelManualLink}
+      />
+      <SplitChainDialog
+        show={splitRequest !== null}
+        splitCount={splitRequest?.plan.splitCount ?? 0}
+        retainedCount={splitRequest?.plan.retainedCount ?? 0}
+        onConfirm={confirmSplitChain}
+        onCancel={() => setSplitRequest(null)}
       />
     </div>
   );

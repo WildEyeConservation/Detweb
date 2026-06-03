@@ -24,6 +24,10 @@ import { evaluatePairCompletion } from './utils/completion';
 import { isOov } from './utils/identity';
 import { buildLanes, filterLanesToAttention } from './utils/lanes';
 import {
+  buildChainSplitPlan,
+  type ChainSplitPlan,
+} from './utils/chains';
+import {
   findReunions,
   type ReunionCandidate,
 } from './utils/reunionSearch';
@@ -41,6 +45,7 @@ import { ReunionDialog } from './components/ReunionDialog';
 import { TransectCompleteDialog } from './components/TransectCompleteDialog';
 import { LinkAnnotationDialog } from './components/LinkAnnotationDialog';
 import { DeleteAnnotationDialog } from './components/DeleteAnnotationDialog';
+import { SplitChainDialog } from './components/SplitChainDialog';
 import ChangeCategoryModal from '../ChangeCategoryModal';
 import type { CategoryType } from '../schemaTypes';
 
@@ -901,6 +906,10 @@ export function IndividualIdHarness({
     annotationId: string;
     chainIds: string[];
   } | null>(null);
+  const [splitRequest, setSplitRequest] = useState<{
+    annotationId: string;
+    plan: ChainSplitPlan;
+  } | null>(null);
 
   /**
    * Performs the actual annotation deletion. Optimistic local + cache
@@ -1059,6 +1068,82 @@ export function IndividualIdHarness({
       scope === 'single' ? [deleteRequest.annotationId] : deleteRequest.chainIds;
     void executeDelete(ids, scope);
     setDeleteRequest(null);
+  };
+
+  const buildSplitPlan = useCallback(
+    (annotationId: string) => {
+      const imagesById = transect.data?.imagesById ?? {};
+      return buildChainSplitPlan(localAnnotations, annotationId, (imageId) => {
+        const img: any = imagesById[imageId];
+        return {
+          timestamp: (img?.timestamp ?? null) as number | null,
+          originalPath: (img?.originalPath ?? null) as string | null,
+        };
+      });
+    },
+    [localAnnotations, transect.data?.imagesById]
+  );
+
+  const canSplitChain = useCallback(
+    (annotationId: string) => buildSplitPlan(annotationId) !== null,
+    [buildSplitPlan]
+  );
+
+  const handleSplitChain = useCallback(
+    (annotationId: string) => {
+      const plan = buildSplitPlan(annotationId);
+      if (!plan) return;
+      setSplitRequest({ annotationId, plan });
+    },
+    [buildSplitPlan]
+  );
+
+  const executeSplitChain = useCallback(
+    async (annotationId: string) => {
+      const plan = buildSplitPlan(annotationId);
+      if (!plan) return;
+
+      const before = localAnnotations;
+      const patchById = new Map(plan.updates.map((u) => [u.id, u.patch]));
+      const applySplit = (prev: AnnotationType[]): AnnotationType[] =>
+        prev.map((a) =>
+          patchById.has(a.id) ? { ...a, ...patchById.get(a.id)! } : a
+        );
+
+      setLocalAnnotations(applySplit);
+      patchTransectCache((old) => {
+        const annotations = applySplit(old.annotations);
+        return {
+          ...old,
+          annotations,
+          annotationsByImage: indexByImage(annotations),
+        };
+      });
+
+      try {
+        await Promise.all(
+          plan.updates.map((u) =>
+            client.models.Annotation.update({ id: u.id, ...u.patch } as any)
+          )
+        );
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to split individual-id chain', err);
+        setLocalAnnotations(before);
+        patchTransectCache((old) => ({
+          ...old,
+          annotations: before,
+          annotationsByImage: indexByImage(before),
+        }));
+      }
+    },
+    [buildSplitPlan, client, localAnnotations, patchTransectCache]
+  );
+
+  const confirmSplitChain = () => {
+    if (!splitRequest) return;
+    void executeSplitChain(splitRequest.annotationId);
+    setSplitRequest(null);
   };
 
   /**
@@ -1682,6 +1767,8 @@ export function IndividualIdHarness({
             onAccept={handleAccept}
             onPlaceNew={handlePlaceNew}
             onDelete={handleDelete}
+            onSplitChain={handleSplitChain}
+            canSplitChain={canSplitChain}
             onChangeLabel={handleChangeLabel}
             onToggleObscured={handleToggleObscured}
             onSetProposedObscured={handleSetProposedObscured}
@@ -1763,6 +1850,13 @@ export function IndividualIdHarness({
         onDeleteOne={() => confirmDeleteScope('single')}
         onDeleteChain={() => confirmDeleteScope('chain')}
         onCancel={() => setDeleteRequest(null)}
+      />
+      <SplitChainDialog
+        show={splitRequest !== null}
+        splitCount={splitRequest?.plan.splitCount ?? 0}
+        retainedCount={splitRequest?.plan.retainedCount ?? 0}
+        onConfirm={confirmSplitChain}
+        onCancel={() => setSplitRequest(null)}
       />
     </div>
   );
