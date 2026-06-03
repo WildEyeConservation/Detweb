@@ -40,6 +40,7 @@ export interface PairData {
   category: CategoryType | null;
   imageA: ImageType;
   imageB: ImageType;
+  imagesById: Record<string, ImageType>;
   neighbour: ImageNeighbourType | null;
   annotations: AnnotationType[];
 }
@@ -217,12 +218,45 @@ export function usePairData(input: UsePairDataInput) {
       }
 
       const annotations = [...pairAnnotations, ...chainExtras];
+      const imagesById: Record<string, ImageType> = {
+        [img1.id]: img1 as unknown as ImageType,
+        [img2.id]: img2 as unknown as ImageType,
+      };
+      const extraImageIds = Array.from(
+        new Set(
+          annotations
+            .map((a) => a.imageId)
+            .filter((id) => id !== img1.id && id !== img2.id)
+        )
+      );
+      const extraImages = await Promise.all(
+        extraImageIds.map(async (id) => {
+          const resp = await (client.models.Image as any).get(
+            { id },
+            {
+              selectionSet: [
+                'id',
+                'width',
+                'height',
+                'originalPath',
+                'timestamp',
+                'cameraId',
+              ],
+            }
+          );
+          return (resp?.data ?? null) as ImageType | null;
+        })
+      );
+      for (const img of extraImages) {
+        if (img) imagesById[img.id] = img;
+      }
       setProgress({ phase: 'done', annotations: annotations.length });
 
       return {
         category,
         imageA: img1 as unknown as ImageType,
         imageB: img2 as unknown as ImageType,
+        imagesById,
         neighbour,
         annotations,
       };

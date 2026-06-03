@@ -24,6 +24,10 @@ import { evaluatePairCompletion } from './utils/completion';
 import { isOov } from './utils/identity';
 import { buildLanes, filterLanesToAttention } from './utils/lanes';
 import {
+  buildChainSplitPlan,
+  type ChainSplitPlan,
+} from './utils/chains';
+import {
   findReunions,
   type ReunionCandidate,
 } from './utils/reunionSearch';
@@ -41,6 +45,7 @@ import { ReunionDialog } from './components/ReunionDialog';
 import { TransectCompleteDialog } from './components/TransectCompleteDialog';
 import { LinkAnnotationDialog } from './components/LinkAnnotationDialog';
 import { DeleteAnnotationDialog } from './components/DeleteAnnotationDialog';
+import { SplitChainDialog } from './components/SplitChainDialog';
 import ChangeCategoryModal from '../ChangeCategoryModal';
 import type { CategoryType } from '../schemaTypes';
 
@@ -688,15 +693,80 @@ export function IndividualIdHarness({
   const [completePopup, setCompletePopup] = useState<{
     show: boolean;
     earlier?: number;
+    target?: number;
+    lane?: number;
   }>({ show: false });
 
-  // Find the earliest earlier pair that is still incomplete.
-  const earliestEarlierIncomplete = useMemo(() => {
-    for (let i = 0; i < currentIndex; i++) {
-      if (pairViews[i]?.completion.status === 'incomplete') return i;
+  const laneContainingPair = useCallback(
+    (pairIndex: number) => {
+      const laneIndex = lanes.findIndex((l) => l.entries.includes(pairIndex));
+      return laneIndex >= 0 ? laneIndex : activeLane;
+    },
+    [lanes, activeLane]
+  );
+
+  const completeNavigationTarget = useMemo(() => {
+    const incomplete = (idx: number) =>
+      idx !== currentIndex &&
+      pairViews[idx]?.completion.status === 'incomplete';
+
+    const lane = lanes[activeLane];
+    if (lane) {
+      const pos = lane.entries.indexOf(currentIndex);
+      if (pos !== -1) {
+        const earlierInLane = lane.entries
+          .slice(0, pos)
+          .find((idx) => incomplete(idx));
+        if (earlierInLane !== undefined) {
+          return {
+            target: earlierInLane,
+            lane: activeLane,
+            earlier: earlierInLane,
+          };
+        }
+
+        const laterInLane = lane.entries
+          .slice(pos + 1)
+          .find((idx) => incomplete(idx));
+        if (laterInLane !== undefined) {
+          return { target: laterInLane, lane: activeLane };
+        }
+      }
+
+      const anyInLane = lane.entries.find((idx) => incomplete(idx));
+      if (anyInLane !== undefined) {
+        return {
+          target: anyInLane,
+          lane: activeLane,
+          earlier: anyInLane < currentIndex ? anyInLane : undefined,
+        };
+      }
     }
+
+    for (let i = 0; i < currentIndex; i++) {
+      if (incomplete(i)) {
+        return { target: i, lane: laneContainingPair(i), earlier: i };
+      }
+    }
+
+    const nextGlobal = pairViews.findIndex(
+      (_, i) => i > currentIndex && incomplete(i)
+    );
+    if (nextGlobal !== -1) {
+      return { target: nextGlobal, lane: laneContainingPair(nextGlobal) };
+    }
+
+    const anyGlobal = pairViews.findIndex((_, i) => incomplete(i));
+    if (anyGlobal !== -1) {
+      return {
+        target: anyGlobal,
+        lane: laneContainingPair(anyGlobal),
+        earlier: anyGlobal < currentIndex ? anyGlobal : undefined,
+      };
+    }
+
     return undefined;
-  }, [pairViews, currentIndex]);
+  }, [activeLane, currentIndex, lanes, laneContainingPair, pairViews]);
 
   const handleAllAccepted = useCallback(() => {
     // Suppress the "Stay / Next pair" popup when no other pair in the
@@ -705,29 +775,21 @@ export function IndividualIdHarness({
     // fire onComplete) on the next render. Without this guard the stale
     // popup stacks on top of ReunionDialog, since onComplete no longer
     // navigates away immediately.
-    const anyOtherIncomplete = pairViews.some(
-      (v, i) => i !== currentIndex && v.completion.status === 'incomplete'
-    );
-    if (!anyOtherIncomplete) return;
-    setCompletePopup({ show: true, earlier: earliestEarlierIncomplete });
-  }, [earliestEarlierIncomplete, pairViews, currentIndex]);
+    if (!completeNavigationTarget) return;
+    setCompletePopup({
+      show: true,
+      target: completeNavigationTarget.target,
+      lane: completeNavigationTarget.lane,
+      earlier: completeNavigationTarget.earlier,
+    });
+  }, [completeNavigationTarget]);
 
   const acceptCompletePopup = () => {
-    if (completePopup.earlier !== undefined) {
-      setCurrentIndex(completePopup.earlier);
-    } else {
-      // Jump to the next pair that still needs work rather than the literal
-      // next one — completed/empty pairs in between would just make the user
-      // press Next again. Falls back to the immediate next pair only when
-      // nothing ahead is incomplete (transect effectively done).
-      const nextIncomplete = pairViews.findIndex(
-        (v, i) => i > currentIndex && v.completion.status === 'incomplete'
+    if (completePopup.target !== undefined) {
+      setCurrentIndex(completePopup.target);
+      setActiveLane(
+        completePopup.lane ?? laneContainingPair(completePopup.target)
       );
-      if (nextIncomplete !== -1) {
-        setCurrentIndex(nextIncomplete);
-      } else if (currentIndex < pairViews.length - 1) {
-        setCurrentIndex(currentIndex + 1);
-      }
     }
     setCompletePopup({ show: false });
   };
@@ -901,6 +963,10 @@ export function IndividualIdHarness({
     annotationId: string;
     chainIds: string[];
   } | null>(null);
+  const [splitRequest, setSplitRequest] = useState<{
+    annotationId: string;
+    plan: ChainSplitPlan;
+  } | null>(null);
 
   /**
    * Performs the actual annotation deletion. Optimistic local + cache
@@ -1059,6 +1125,82 @@ export function IndividualIdHarness({
       scope === 'single' ? [deleteRequest.annotationId] : deleteRequest.chainIds;
     void executeDelete(ids, scope);
     setDeleteRequest(null);
+  };
+
+  const buildSplitPlan = useCallback(
+    (annotationId: string) => {
+      const imagesById = transect.data?.imagesById ?? {};
+      return buildChainSplitPlan(localAnnotations, annotationId, (imageId) => {
+        const img: any = imagesById[imageId];
+        return {
+          timestamp: (img?.timestamp ?? null) as number | null,
+          originalPath: (img?.originalPath ?? null) as string | null,
+        };
+      });
+    },
+    [localAnnotations, transect.data?.imagesById]
+  );
+
+  const canSplitChain = useCallback(
+    (annotationId: string) => buildSplitPlan(annotationId) !== null,
+    [buildSplitPlan]
+  );
+
+  const handleSplitChain = useCallback(
+    (annotationId: string) => {
+      const plan = buildSplitPlan(annotationId);
+      if (!plan) return;
+      setSplitRequest({ annotationId, plan });
+    },
+    [buildSplitPlan]
+  );
+
+  const executeSplitChain = useCallback(
+    async (annotationId: string) => {
+      const plan = buildSplitPlan(annotationId);
+      if (!plan) return;
+
+      const before = localAnnotations;
+      const patchById = new Map(plan.updates.map((u) => [u.id, u.patch]));
+      const applySplit = (prev: AnnotationType[]): AnnotationType[] =>
+        prev.map((a) =>
+          patchById.has(a.id) ? { ...a, ...patchById.get(a.id)! } : a
+        );
+
+      setLocalAnnotations(applySplit);
+      patchTransectCache((old) => {
+        const annotations = applySplit(old.annotations);
+        return {
+          ...old,
+          annotations,
+          annotationsByImage: indexByImage(annotations),
+        };
+      });
+
+      try {
+        await Promise.all(
+          plan.updates.map((u) =>
+            client.models.Annotation.update({ id: u.id, ...u.patch } as any)
+          )
+        );
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to split individual-id chain', err);
+        setLocalAnnotations(before);
+        patchTransectCache((old) => ({
+          ...old,
+          annotations: before,
+          annotationsByImage: indexByImage(before),
+        }));
+      }
+    },
+    [buildSplitPlan, client, localAnnotations, patchTransectCache]
+  );
+
+  const confirmSplitChain = () => {
+    if (!splitRequest) return;
+    void executeSplitChain(splitRequest.annotationId);
+    setSplitRequest(null);
   };
 
   /**
@@ -1682,6 +1824,8 @@ export function IndividualIdHarness({
             onAccept={handleAccept}
             onPlaceNew={handlePlaceNew}
             onDelete={handleDelete}
+            onSplitChain={handleSplitChain}
+            canSplitChain={canSplitChain}
             onChangeLabel={handleChangeLabel}
             onToggleObscured={handleToggleObscured}
             onSetProposedObscured={handleSetProposedObscured}
@@ -1763,6 +1907,13 @@ export function IndividualIdHarness({
         onDeleteOne={() => confirmDeleteScope('single')}
         onDeleteChain={() => confirmDeleteScope('chain')}
         onCancel={() => setDeleteRequest(null)}
+      />
+      <SplitChainDialog
+        show={splitRequest !== null}
+        splitCount={splitRequest?.plan.splitCount ?? 0}
+        retainedCount={splitRequest?.plan.retainedCount ?? 0}
+        onConfirm={confirmSplitChain}
+        onCancel={() => setSplitRequest(null)}
       />
     </div>
   );

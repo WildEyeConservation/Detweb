@@ -54,6 +54,7 @@ export interface MapMarker {
    * OOV chain-linked to that partner via the popup's "Move to OOV" action.
    */
   canMoveToOov?: boolean;
+  canSplitChain?: boolean;
 }
 
 export type MapInstanceCallback = (
@@ -119,6 +120,7 @@ interface Props {
    * shadows on neighbour pairs.
    */
   onMarkerMoveToOov?: (candidateKey: string) => void;
+  onMarkerSplitChain?: (candidateKey: string) => void;
   /**
    * Munkres "leave unmatched" cost in image pixels. Used to render a ring
    * around the active marker so the user can see exactly the radius within
@@ -398,6 +400,7 @@ export function IndividualIdMap({
   onMarkerChangeLabel,
   onMarkerToggleObscured,
   onMarkerMoveToOov,
+  onMarkerSplitChain,
   leniency,
   leniencyAnchor,
   previewTransform,
@@ -425,6 +428,7 @@ export function IndividualIdMap({
   const changeLabelRef = useRef(onMarkerChangeLabel);
   const toggleObscuredRef = useRef(onMarkerToggleObscured);
   const moveToOovRef = useRef(onMarkerMoveToOov);
+  const splitChainRef = useRef(onMarkerSplitChain);
   useEffect(() => {
     dragRef.current = onMarkerDrag;
   }, [onMarkerDrag]);
@@ -452,6 +456,9 @@ export function IndividualIdMap({
   useEffect(() => {
     moveToOovRef.current = onMarkerMoveToOov;
   }, [onMarkerMoveToOov]);
+  useEffect(() => {
+    splitChainRef.current = onMarkerSplitChain;
+  }, [onMarkerSplitChain]);
 
   // ---- Popup state ----
   // One popup div per map, repositioned and recontentated per hover. We use
@@ -556,6 +563,10 @@ export function IndividualIdMap({
       interactive && isShadow && data.canMoveToOov
         ? `<button data-action="move-to-oov" style="${btnStyle}background:#5B6977;">Move to OOV</button>`
         : '';
+    const splitChainHtml =
+      showFullActions && data.canSplitChain
+        ? `<button data-action="split-chain" style="${btnStyle}background:#a16207;">Split chain from here</button>`
+        : '';
     el.innerHTML = `
       <div style="font-weight:600">${escape(nameFor(data.identityKey))}</div>
       <div style="font-size:10px;opacity:0.7;text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">
@@ -569,6 +580,7 @@ export function IndividualIdMap({
       ${changeLabelHtml}
       ${obscureHtml}
       ${moveToOovHtml}
+      ${splitChainHtml}
       ${deleteHtml}
     `;
     if (showObscureToggle) {
@@ -603,6 +615,16 @@ export function IndividualIdMap({
         changeBtn.addEventListener('click', (ev) => {
           ev.stopPropagation();
           changeLabelRef.current?.(key);
+          hidePopup();
+        });
+      }
+      const splitBtn = el.querySelector(
+        'button[data-action="split-chain"]'
+      ) as HTMLButtonElement | null;
+      if (splitBtn) {
+        splitBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          splitChainRef.current?.(key);
           hidePopup();
         });
       }

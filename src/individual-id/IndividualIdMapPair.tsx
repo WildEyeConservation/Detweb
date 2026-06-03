@@ -49,6 +49,8 @@ interface Props {
     newAnnotationId: string
   ) => void;
   onDelete?: (annotationId: string) => void;
+  onSplitChain?: (annotationId: string) => void;
+  canSplitChain?: (annotationId: string) => boolean;
   onChangeLabel?: (annotationId: string, currentCategoryId: string) => void;
   onToggleObscured?: (annotationId: string) => void;
   /** Obscured intent for a shadow side; stamped onto the row created at accept. */
@@ -134,6 +136,8 @@ export function IndividualIdMapPair(props: Props) {
     onUnfocus,
     onPlaceNew,
     onDelete,
+    onSplitChain,
+    canSplitChain,
     onChangeLabel,
     onToggleObscured,
     onSetProposedObscured,
@@ -252,6 +256,7 @@ export function IndividualIdMapPair(props: Props) {
         active: c.pairKey === activeKey,
         obscured: c.realA ? !!c.realA.obscured : !!c.obscuredA,
         canMoveToOov: isShadow && !!partnerReal,
+        canSplitChain: c.realA ? canSplitChain?.(c.realA.id) ?? false : false,
       });
     }
     // Informational markers for annotations belonging to other categories.
@@ -269,10 +274,19 @@ export function IndividualIdMapPair(props: Props) {
         active: false,
         obscured: !!a.obscured,
         foreign: true,
+        canSplitChain: false,
       });
     }
     return out;
-  }, [candidates, activeKey, color, foreignAnnotations, imageA.id, categoryColors]);
+  }, [
+    candidates,
+    activeKey,
+    color,
+    foreignAnnotations,
+    imageA.id,
+    categoryColors,
+    canSplitChain,
+  ]);
 
   const markersB: MapMarker[] = useMemo(() => {
     const out: MapMarker[] = [];
@@ -292,6 +306,7 @@ export function IndividualIdMapPair(props: Props) {
         active: c.pairKey === activeKey,
         obscured: c.realB ? !!c.realB.obscured : !!c.obscuredB,
         canMoveToOov: isShadow && !!partnerReal,
+        canSplitChain: c.realB ? canSplitChain?.(c.realB.id) ?? false : false,
       });
     }
     // Informational markers for annotations belonging to other categories.
@@ -309,10 +324,19 @@ export function IndividualIdMapPair(props: Props) {
         active: false,
         obscured: !!a.obscured,
         foreign: true,
+        canSplitChain: false,
       });
     }
     return out;
-  }, [candidates, activeKey, color, foreignAnnotations, imageB.id, categoryColors]);
+  }, [
+    candidates,
+    activeKey,
+    color,
+    foreignAnnotations,
+    imageB.id,
+    categoryColors,
+    canSplitChain,
+  ]);
 
   // Dragging a marker also focuses it — acting on any marker moves the
   // active state to that marker. Informational markers can't be focused, so
@@ -693,6 +717,23 @@ export function IndividualIdMapPair(props: Props) {
     [candidates, onDelete, foreignById]
   );
 
+  const handleSplitChainA = useCallback(
+    (candidateKey: string) => {
+      if (foreignById.has(candidateKey)) return;
+      const c = candidates.find((cc) => cc.pairKey === candidateKey);
+      if (c?.realA) onSplitChain?.(c.realA.id);
+    },
+    [candidates, onSplitChain, foreignById]
+  );
+  const handleSplitChainB = useCallback(
+    (candidateKey: string) => {
+      if (foreignById.has(candidateKey)) return;
+      const c = candidates.find((cc) => cc.pairKey === candidateKey);
+      if (c?.realB) onSplitChain?.(c.realB.id);
+    },
+    [candidates, onSplitChain, foreignById]
+  );
+
   const handleChangeLabelA = useCallback(
     (candidateKey: string) => {
       const foreign = foreignById.get(candidateKey);
@@ -839,6 +880,7 @@ export function IndividualIdMapPair(props: Props) {
             passiveHoverKey={passiveForA}
             onHoverChange={handleHoverA}
             onMarkerDelete={handleDeleteA}
+            onMarkerSplitChain={handleSplitChainA}
             onMarkerChangeLabel={handleChangeLabelA}
             onMarkerToggleObscured={handleToggleObscuredA}
             onMarkerMoveToOov={handleMoveToOovA}
@@ -863,6 +905,7 @@ export function IndividualIdMapPair(props: Props) {
             passiveHoverKey={passiveForB}
             onHoverChange={handleHoverB}
             onMarkerDelete={handleDeleteB}
+            onMarkerSplitChain={handleSplitChainB}
             onMarkerChangeLabel={handleChangeLabelB}
             onMarkerToggleObscured={handleToggleObscuredB}
             onMarkerMoveToOov={handleMoveToOovB}
