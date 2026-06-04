@@ -416,7 +416,10 @@ export function ChainViewerHarness({ annotationSetId }: Props) {
             {fetchStatus !== 'done' ? (
               <div className='d-flex align-items-center justify-content-center text-muted' style={{ minHeight: 400 }}>
                 {fetchStatus === 'error' ? (
-                  <span>Failed to load annotations.</span>
+                  <span>
+                    Failed to load annotations
+                    {fetchError ? `: ${fetchError}` : '.'}
+                  </span>
                 ) : (
                   <span>
                     <Spinner animation='border' size='sm' className='me-2' />

@@ -962,6 +962,11 @@ export function IndividualIdPairHarness({
           onCollapsedChange={setToolbarCollapsed}
           shareHref={shareHref}
           editHomographyHref={editHomographyHref}
+          chainViewerBaseHref={
+            projectCtx?.project?.id
+              ? `/surveys/${projectCtx.project.id}/set/${annotationSetId}/chain-viewer`
+              : undefined
+          }
         />
       </div>
       <ChangeCategoryModal

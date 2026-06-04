@@ -87,6 +87,8 @@ interface Props {
    * to this URL. Omit to hide the button.
    */
   editHomographyHref?: string;
+  /** Base path for Chain Viewer links, without the `?chain=` query. */
+  chainViewerBaseHref?: string;
   /**
    * Annotations from OTHER categories on these two images. Rendered as
    * read-only informational markers — never candidates, never accepted.
@@ -152,6 +154,7 @@ export function IndividualIdMapPair(props: Props) {
     onCollapsedChange,
     shareHref,
     editHomographyHref,
+    chainViewerBaseHref,
     foreignAnnotations = NO_FOREIGN,
     categoryColors = NO_COLORS,
   } = props;
@@ -230,6 +233,16 @@ export function IndividualIdMapPair(props: Props) {
     return 'primary';
   }
 
+  const chainViewerHrefFor = useCallback(
+    (annotation: AnnotationType | null | undefined) => {
+      if (!annotation || !chainViewerBaseHref) return undefined;
+      const chainId = annotation.objectId ?? annotation.id;
+      const params = new URLSearchParams({ chain: chainId });
+      return `${chainViewerBaseHref}?${params.toString()}`;
+    },
+    [chainViewerBaseHref]
+  );
+
   // Lookup for routing marker handlers — informational markers are keyed by
   // their annotation id rather than a candidate pairKey.
   const foreignById = useMemo(() => {
@@ -244,6 +257,7 @@ export function IndividualIdMapPair(props: Props) {
       if (!c.posA) continue;
       const isShadow = !c.realA || c.isShadowA;
       const partnerReal = c.realB && !isOov(c.realB) ? c.realB : null;
+      const chainAnnotation = c.realA ?? partnerReal;
       out.push({
         candidateKey: c.pairKey,
         side: 'A',
@@ -257,6 +271,7 @@ export function IndividualIdMapPair(props: Props) {
         obscured: c.realA ? !!c.realA.obscured : !!c.obscuredA,
         canMoveToOov: isShadow && !!partnerReal,
         canSplitChain: c.realA ? canSplitChain?.(c.realA.id) ?? false : false,
+        chainViewerHref: chainViewerHrefFor(chainAnnotation),
       });
     }
     // Informational markers for annotations belonging to other categories.
@@ -275,6 +290,7 @@ export function IndividualIdMapPair(props: Props) {
         obscured: !!a.obscured,
         foreign: true,
         canSplitChain: false,
+        chainViewerHref: chainViewerHrefFor(a),
       });
     }
     return out;
@@ -286,6 +302,7 @@ export function IndividualIdMapPair(props: Props) {
     imageA.id,
     categoryColors,
     canSplitChain,
+    chainViewerHrefFor,
   ]);
 
   const markersB: MapMarker[] = useMemo(() => {
@@ -294,6 +311,7 @@ export function IndividualIdMapPair(props: Props) {
       if (!c.posB) continue;
       const isShadow = !c.realB || c.isShadowB;
       const partnerReal = c.realA && !isOov(c.realA) ? c.realA : null;
+      const chainAnnotation = c.realB ?? partnerReal;
       out.push({
         candidateKey: c.pairKey,
         side: 'B',
@@ -307,6 +325,7 @@ export function IndividualIdMapPair(props: Props) {
         obscured: c.realB ? !!c.realB.obscured : !!c.obscuredB,
         canMoveToOov: isShadow && !!partnerReal,
         canSplitChain: c.realB ? canSplitChain?.(c.realB.id) ?? false : false,
+        chainViewerHref: chainViewerHrefFor(chainAnnotation),
       });
     }
     // Informational markers for annotations belonging to other categories.
@@ -325,6 +344,7 @@ export function IndividualIdMapPair(props: Props) {
         obscured: !!a.obscured,
         foreign: true,
         canSplitChain: false,
+        chainViewerHref: chainViewerHrefFor(a),
       });
     }
     return out;
@@ -336,6 +356,7 @@ export function IndividualIdMapPair(props: Props) {
     imageB.id,
     categoryColors,
     canSplitChain,
+    chainViewerHrefFor,
   ]);
 
   // Dragging a marker also focuses it — acting on any marker moves the

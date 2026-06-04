@@ -55,6 +55,11 @@ export interface MapMarker {
    */
   canMoveToOov?: boolean;
   canSplitChain?: boolean;
+  /**
+   * Deep link to the chain viewer for the real annotation represented by this
+   * marker, or for a shadow marker's real partner when available.
+   */
+  chainViewerHref?: string;
 }
 
 export type MapInstanceCallback = (
@@ -567,6 +572,10 @@ export function IndividualIdMap({
       showFullActions && data.canSplitChain
         ? `<button data-action="split-chain" style="${btnStyle}background:#a16207;">Split chain from here</button>`
         : '';
+    const viewChainHtml =
+      interactive && data.chainViewerHref
+        ? `<button data-action="view-chain" style="${btnStyle}background:#2f80ed;">View Chain</button>`
+        : '';
     el.innerHTML = `
       <div style="font-weight:600">${escape(nameFor(data.identityKey))}</div>
       <div style="font-size:10px;opacity:0.7;text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">
@@ -579,10 +588,23 @@ export function IndividualIdMap({
       }
       ${changeLabelHtml}
       ${obscureHtml}
+      ${viewChainHtml}
       ${moveToOovHtml}
       ${splitChainHtml}
       ${deleteHtml}
     `;
+    if (viewChainHtml && data.chainViewerHref) {
+      const viewChainBtn = el.querySelector(
+        'button[data-action="view-chain"]'
+      ) as HTMLButtonElement | null;
+      if (viewChainBtn) {
+        viewChainBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          window.open(data.chainViewerHref, '_blank', 'noopener,noreferrer');
+          hidePopup();
+        });
+      }
+    }
     if (showObscureToggle) {
       const obscuredBtn = el.querySelector(
         'button[data-action="toggle-obscured"]'

@@ -1782,6 +1782,14 @@ export function IndividualIdHarness({
     return `/surveys/${projectCtx.project.id}/homography-edit?${params.toString()}`;
   })();
 
+  const chainViewerBaseHref = (() => {
+    if (!projectCtx?.project?.id) return undefined;
+    const setId =
+      transect.data?.category?.annotationSetId ?? annotationSetId ?? '';
+    if (!setId) return undefined;
+    return `/surveys/${projectCtx.project.id}/set/${setId}/chain-viewer`;
+  })();
+
   return (
     <div
       className='w-100 h-100 d-flex flex-column py-3'
@@ -1838,6 +1846,7 @@ export function IndividualIdHarness({
             onCollapsedChange={setToolbarCollapsed}
             shareHref={shareHref}
             editHomographyHref={editHomographyHref}
+            chainViewerBaseHref={chainViewerBaseHref}
           />
         )}
       </div>
