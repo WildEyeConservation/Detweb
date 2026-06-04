@@ -88,18 +88,60 @@ export function buildMatchCandidates({
 
   const candidates: MatchCandidate[] = [];
 
-  if (A.length + B.length > 0) {
+  const acceptedA = new Set<string>();
+  const acceptedB = new Set<string>();
+  const byObjectId = (list: AnnotationType[]) => {
+    const out = new Map<string, AnnotationType[]>();
+    for (const ann of list) {
+      if (!ann.objectId) continue;
+      const group = out.get(ann.objectId);
+      if (group) group.push(ann);
+      else out.set(ann.objectId, [ann]);
+    }
+    return out;
+  };
+
+  // Exact one-to-one links are already solved. Keeping them in the Hungarian
+  // matrix makes the common "large herd, mostly linked" case pay cubic cost
+  // for work that HARD_FORCE would deterministically choose anyway.
+  const objectA = byObjectId(A);
+  const objectB = byObjectId(B);
+  for (const [objectId, annsA] of objectA) {
+    const bs = objectB.get(objectId);
+    if (!bs || annsA.length !== 1 || bs.length !== 1) continue;
+    const a = annsA[0];
+    const b = bs[0];
+    acceptedA.add(a.id);
+    acceptedB.add(b.id);
+    const pairKey = makePairKey(a, b);
+    candidates.push({
+      pairKey,
+      categoryId: a.categoryId,
+      realA: a,
+      realB: b,
+      posA: { x: a.x, y: a.y },
+      posB: { x: b.x, y: b.y },
+      isShadowA: false,
+      isShadowB: false,
+      status: 'accepted',
+    });
+  }
+
+  const assignA = acceptedA.size ? A.filter((a) => !acceptedA.has(a.id)) : A;
+  const assignB = acceptedB.size ? B.filter((b) => !acceptedB.has(b.id)) : B;
+
+  if (assignA.length + assignB.length > 0) {
     // Pad to a square matrix; pad rows/cols represent "leave unmatched" at cost = leniency.
-    const N = A.length + B.length;
+    const N = assignA.length + assignB.length;
     const cost: number[][] = Array.from({ length: N }, () =>
       Array<number>(N).fill(leniency)
     );
 
-    for (let i = 0; i < A.length; i++) {
-      const a = A[i];
+    for (let i = 0; i < assignA.length; i++) {
+      const a = assignA[i];
       const projected = forward([a.x, a.y]);
-      for (let j = 0; j < B.length; j++) {
-        const b = B[j];
+      for (let j = 0; j < assignB.length; j++) {
+        const b = assignB[j];
         if (a.objectId && b.objectId && a.objectId === b.objectId) {
           cost[i][j] = HARD_FORCE;
           continue;
@@ -119,8 +161,8 @@ export function buildMatchCandidates({
     const assignment = computeMunkres(cost) as [number, number][];
 
     for (const [ai, bj] of assignment) {
-      const a = A[ai];
-      const b = B[bj];
+      const a = assignA[ai];
+      const b = assignB[bj];
 
       if (a && b) {
         const pairKey = makePairKey(a, b);

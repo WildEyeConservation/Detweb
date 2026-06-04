@@ -190,7 +190,6 @@ export function IndividualIdPairHarness({
     leniency,
     categoryId,
     working,
-    working.version,
     currentPairKey,
   ]);
 
@@ -721,12 +720,12 @@ export function IndividualIdPairHarness({
       }
 
       const applyToList = (prev: AnnotationType[]): AnnotationType[] => {
-        let next = prev.slice();
-        for (const u of updates) {
-          next = next.map((a) => (a.id === u.id ? { ...a, ...u.patch } : a));
-        }
-        next = next.concat(newRows);
-        return next;
+        const patchById = new Map(updates.map((u) => [u.id, u.patch]));
+        const next = prev.map((a) => {
+          const patch = patchById.get(a.id);
+          return patch ? { ...a, ...patch } : a;
+        });
+        return next.concat(newRows);
       };
       setLocalAnnotations(applyToList);
       patchPairCache((old) => ({

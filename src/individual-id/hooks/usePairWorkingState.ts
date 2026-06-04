@@ -15,6 +15,7 @@ interface CandidateOverride {
 
 export interface PairWorkingState {
   version: number;
+  getPairVersion: (pairKey: PairKey) => number;
   mergeCandidates: (pairKey: PairKey, fresh: MatchCandidate[]) => MatchCandidate[];
   setCandidatePosition: (pairKey: PairKey, candidateKey: CandidateKey, side: 'A' | 'B', pos: { x: number; y: number }) => void;
   setCandidateObscured: (pairKey: PairKey, candidateKey: CandidateKey, side: 'A' | 'B', value: boolean) => void;
@@ -33,6 +34,7 @@ export function usePairWorkingState(): PairWorkingState {
   const storeRef = useRef<Map<PairKey, Map<CandidateKey, CandidateOverride>>>(
     new Map()
   );
+  const pairVersionsRef = useRef<Map<PairKey, number>>(new Map());
   const [version, bump] = useState(0);
   const rerender = useCallback(() => bump((n) => n + 1), []);
 
@@ -54,9 +56,18 @@ export function usePairWorkingState(): PairWorkingState {
       const pair = getPair(pk);
       const prev = pair.get(ck) ?? {};
       pair.set(ck, mutator(prev));
+      pairVersionsRef.current.set(
+        pk,
+        (pairVersionsRef.current.get(pk) ?? 0) + 1
+      );
       rerender();
     },
     [rerender]
+  );
+
+  const getPairVersion: PairWorkingState['getPairVersion'] = useCallback(
+    (pk) => pairVersionsRef.current.get(pk) ?? 0,
+    []
   );
 
   const mergeCandidates = useCallback(
@@ -74,10 +85,7 @@ export function usePairWorkingState(): PairWorkingState {
             c.realA && !c.isShadowA ? c.posA : ov.posA ?? c.posA;
           const posB =
             c.realB && !c.isShadowB ? c.posB : ov.posB ?? c.posB;
-          const status =
-            c.realA && c.realB && c.status !== 'accepted'
-              ? c.status
-              : ov.status ?? c.status;
+          const status = ov.status ?? c.status;
           out.push({
             ...c,
             posA,
@@ -128,6 +136,7 @@ export function usePairWorkingState(): PairWorkingState {
   const clearPair: PairWorkingState['clearPair'] = useCallback(
     (pk) => {
       storeRef.current.delete(pk);
+      pairVersionsRef.current.delete(pk);
       rerender();
     },
     [rerender]
@@ -146,6 +155,7 @@ export function usePairWorkingState(): PairWorkingState {
   return useMemo(
     () => ({
       version,
+      getPairVersion,
       mergeCandidates,
       setCandidatePosition,
       setCandidateObscured,
@@ -156,6 +166,7 @@ export function usePairWorkingState(): PairWorkingState {
     }),
     [
       version,
+      getPairVersion,
       mergeCandidates,
       setCandidatePosition,
       setCandidateObscured,

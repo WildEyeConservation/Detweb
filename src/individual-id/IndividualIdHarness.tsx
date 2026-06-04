@@ -112,6 +112,18 @@ function buildChainIdsFor(
   return Array.from(ids);
 }
 
+function annotationSignature(annotations: AnnotationType[] | undefined): string {
+  if (!annotations?.length) return '';
+  return annotations
+    .map(
+      (a) =>
+        `${a.id}:${a.categoryId}:${a.x}:${a.y}:${a.objectId ?? ''}:${
+          a.obscured ? 1 : 0
+        }:${isOov(a) ? 1 : 0}`
+    )
+    .join('|');
+}
+
 function isOlder(
   a: { timestamp?: number | null; originalPath?: string | null },
   b: { timestamp?: number | null; originalPath?: string | null }
@@ -263,6 +275,14 @@ export function IndividualIdHarness({
     for (const a of localAnnotations) (out[a.imageId] ??= []).push(a);
     return out;
   }, [localAnnotations]);
+
+  const annotationSignaturesByImage = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const [imageId, annotations] of Object.entries(annotationsByImage)) {
+      out[imageId] = annotationSignature(annotations);
+    }
+    return out;
+  }, [annotationsByImage]);
 
   // ---- Re-derive transforms from raw neighbours ----
   // Functions cannot survive React Query's localStorage persister, so we
@@ -426,10 +446,31 @@ export function IndividualIdHarness({
     completion: PairCompletionState;
     pairKeyStr: string;
   };
+  type PairViewCacheEntry = {
+    cacheKey: string;
+    pair: NeighbourPairWithMeta;
+    view: PairView;
+  };
+  const pairViewCacheRef = useRef<Map<string, PairViewCacheEntry>>(new Map());
 
   const pairViews: PairView[] = useMemo(() => {
-    return pairs.map((p) => {
+    const cache = pairViewCacheRef.current;
+    const livePairKeys = new Set<string>();
+    const views = pairs.map((p) => {
       const pairKey = makePairKey(p.image1Id, p.image2Id);
+      livePairKeys.add(pairKey);
+      const cacheKey = [
+        pairKey,
+        leniency,
+        categoryId ?? '',
+        annotationSignaturesByImage[p.image1Id] ?? '',
+        annotationSignaturesByImage[p.image2Id] ?? '',
+        working.getPairVersion(pairKey),
+      ].join('\x1f');
+      const cached = cache.get(pairKey);
+      if (cached?.cacheKey === cacheKey && cached.pair === p) {
+        return cached.view;
+      }
       const fresh = buildMatchCandidates({
         annotationsA: annotationsByImage[p.image1Id] ?? [],
         annotationsB: annotationsByImage[p.image2Id] ?? [],
@@ -441,15 +482,28 @@ export function IndividualIdHarness({
         categoryFilter: categoryId,
       });
       const merged = working.mergeCandidates(pairKey, fresh);
-      return {
+      const view = {
         candidates: merged,
         completion: evaluatePairCompletion(merged),
         pairKeyStr: pairKey,
       };
+      cache.set(pairKey, { cacheKey, pair: p, view });
+      return view;
     });
-    // working.version increments on every override mutation so this memo
-    // recomputes when the user drags / locks / accepts.
-  }, [pairs, annotationsByImage, leniency, categoryId, working, working.version]);
+    for (const pairKey of cache.keys()) {
+      if (!livePairKeys.has(pairKey)) cache.delete(pairKey);
+    }
+    return views;
+    // `working` changes on every override mutation so this memo recomputes,
+    // while the cache only rebuilds the pair whose per-pair version changed.
+  }, [
+    pairs,
+    annotationsByImage,
+    annotationSignaturesByImage,
+    leniency,
+    categoryId,
+    working,
+  ]);
 
   // ---- Progress-bar rows ----
   // Pure presentation grouping over the flat `pairs` array: one row per
@@ -1530,12 +1584,12 @@ export function IndividualIdHarness({
       // Optimistic local merge so the next Munkres run treats this as
       // already linked, mirrored into the persisted cache.
       const applyToList = (prev: AnnotationType[]): AnnotationType[] => {
-        let next = prev.slice();
-        for (const u of updates) {
-          next = next.map((a) => (a.id === u.id ? { ...a, ...u.patch } : a));
-        }
-        next = next.concat(newRows);
-        return next;
+        const patchById = new Map(updates.map((u) => [u.id, u.patch]));
+        const next = prev.map((a) => {
+          const patch = patchById.get(a.id);
+          return patch ? { ...a, ...patch } : a;
+        });
+        return next.concat(newRows);
       };
       setLocalAnnotations(applyToList);
       patchTransectCache((old) => {
