@@ -37,7 +37,7 @@ function passesCategory(
 }
 
 // Prefer existing ObjectIds so identicons stay stable across re-renders.
-function makePairKey(a?: AnnotationType, b?: AnnotationType): string {
+function makeIdentityKey(a?: AnnotationType, b?: AnnotationType): string {
   return (
     a?.objectId ??
     b?.objectId ??
@@ -45,6 +45,21 @@ function makePairKey(a?: AnnotationType, b?: AnnotationType): string {
     b?.id ??
     `pair-${crypto.randomUUID()}`
   );
+}
+
+function makeCandidateKeys(a?: AnnotationType, b?: AnnotationType) {
+  const identityKey = makeIdentityKey(a, b);
+  const hasLinkedIdentity = !!a?.objectId || !!b?.objectId;
+  return {
+    identityKey,
+    // Keep unlinked one-sided candidates keyed by their annotation id so the
+    // pre-created "new annotation" id can still be focused immediately. Once
+    // a chain identity exists, include row ids as a defensive guard against
+    // already-corrupt data with duplicate same-image chain members.
+    pairKey: hasLinkedIdentity
+      ? `${identityKey}::${a?.id ?? 'shadow-a'}::${b?.id ?? 'shadow-b'}`
+      : identityKey,
+  };
 }
 
 export function buildMatchCandidates({
@@ -88,18 +103,60 @@ export function buildMatchCandidates({
 
   const candidates: MatchCandidate[] = [];
 
-  if (A.length + B.length > 0) {
+  const acceptedA = new Set<string>();
+  const acceptedB = new Set<string>();
+  const byObjectId = (list: AnnotationType[]) => {
+    const out = new Map<string, AnnotationType[]>();
+    for (const ann of list) {
+      if (!ann.objectId) continue;
+      const group = out.get(ann.objectId);
+      if (group) group.push(ann);
+      else out.set(ann.objectId, [ann]);
+    }
+    return out;
+  };
+
+  // Exact one-to-one links are already solved. Keeping them in the Hungarian
+  // matrix makes the common "large herd, mostly linked" case pay cubic cost
+  // for work that HARD_FORCE would deterministically choose anyway.
+  const objectA = byObjectId(A);
+  const objectB = byObjectId(B);
+  for (const [objectId, annsA] of objectA) {
+    const bs = objectB.get(objectId);
+    if (!bs || annsA.length !== 1 || bs.length !== 1) continue;
+    const a = annsA[0];
+    const b = bs[0];
+    acceptedA.add(a.id);
+    acceptedB.add(b.id);
+    const keys = makeCandidateKeys(a, b);
+    candidates.push({
+      ...keys,
+      categoryId: a.categoryId,
+      realA: a,
+      realB: b,
+      posA: { x: a.x, y: a.y },
+      posB: { x: b.x, y: b.y },
+      isShadowA: false,
+      isShadowB: false,
+      status: 'accepted',
+    });
+  }
+
+  const assignA = acceptedA.size ? A.filter((a) => !acceptedA.has(a.id)) : A;
+  const assignB = acceptedB.size ? B.filter((b) => !acceptedB.has(b.id)) : B;
+
+  if (assignA.length + assignB.length > 0) {
     // Pad to a square matrix; pad rows/cols represent "leave unmatched" at cost = leniency.
-    const N = A.length + B.length;
+    const N = assignA.length + assignB.length;
     const cost: number[][] = Array.from({ length: N }, () =>
       Array<number>(N).fill(leniency)
     );
 
-    for (let i = 0; i < A.length; i++) {
-      const a = A[i];
+    for (let i = 0; i < assignA.length; i++) {
+      const a = assignA[i];
       const projected = forward([a.x, a.y]);
-      for (let j = 0; j < B.length; j++) {
-        const b = B[j];
+      for (let j = 0; j < assignB.length; j++) {
+        const b = assignB[j];
         if (a.objectId && b.objectId && a.objectId === b.objectId) {
           cost[i][j] = HARD_FORCE;
           continue;
@@ -119,13 +176,13 @@ export function buildMatchCandidates({
     const assignment = computeMunkres(cost) as [number, number][];
 
     for (const [ai, bj] of assignment) {
-      const a = A[ai];
-      const b = B[bj];
+      const a = assignA[ai];
+      const b = assignB[bj];
 
       if (a && b) {
-        const pairKey = makePairKey(a, b);
+        const keys = makeCandidateKeys(a, b);
         candidates.push({
-          pairKey,
+          ...keys,
           categoryId: a.categoryId,
           realA: a,
           realB: b,
@@ -149,11 +206,11 @@ export function buildMatchCandidates({
         const inside =
           isInOverlap(a.x, a.y, backward, imageB.width, imageB.height) &&
           projectsInside(a.x, a.y, forward, imageB.width, imageB.height);
-        const pairKey = makePairKey(a);
+        const keys = makeCandidateKeys(a);
         if (inside) {
           const projected = forward([a.x, a.y]);
           candidates.push({
-            pairKey,
+            ...keys,
             categoryId: a.categoryId,
             realA: a,
             realB: undefined,
@@ -168,7 +225,7 @@ export function buildMatchCandidates({
           });
         } else {
           candidates.push({
-            pairKey,
+            ...keys,
             categoryId: a.categoryId,
             realA: a,
             realB: undefined,
@@ -187,11 +244,11 @@ export function buildMatchCandidates({
         const inside =
           isInOverlap(b.x, b.y, forward, imageA.width, imageA.height) &&
           projectsInside(b.x, b.y, backward, imageA.width, imageA.height);
-        const pairKey = makePairKey(undefined, b);
+        const keys = makeCandidateKeys(undefined, b);
         if (inside) {
           const projected = backward([b.x, b.y]);
           candidates.push({
-            pairKey,
+            ...keys,
             categoryId: b.categoryId,
             realA: undefined,
             realB: b,
@@ -206,7 +263,7 @@ export function buildMatchCandidates({
           });
         } else {
           candidates.push({
-            pairKey,
+            ...keys,
             categoryId: b.categoryId,
             realA: undefined,
             realB: b,
@@ -238,9 +295,12 @@ export function buildMatchCandidates({
     const others = side === 'A' ? posAllB : posAllA;
     const partner = others.find((p) => sharesChain(p, o));
     if (!partner) return;
-    const pairKey = o.objectId ?? partner.objectId ?? o.id;
+    const keys =
+      side === 'A'
+        ? makeCandidateKeys(o, partner)
+        : makeCandidateKeys(partner, o);
     candidates.push({
-      pairKey,
+      ...keys,
       categoryId: o.categoryId,
       realA: side === 'A' ? o : partner,
       realB: side === 'A' ? partner : o,

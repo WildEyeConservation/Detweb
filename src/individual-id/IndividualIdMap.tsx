@@ -55,6 +55,12 @@ export interface MapMarker {
    */
   canMoveToOov?: boolean;
   canSplitChain?: boolean;
+  duplicateChainMember?: boolean;
+  /**
+   * Deep link to the chain viewer for the real annotation represented by this
+   * marker, or for a shadow marker's real partner when available.
+   */
+  chainViewerHref?: string;
 }
 
 export type MapInstanceCallback = (
@@ -305,9 +311,12 @@ function applyMarkerStyle(el: HTMLDivElement, m: MapMarker) {
   // element's transform to position it on the map; overwriting it would
   // park every marker at (0,0) until the next map render tick.
 
-  // Border varies by kind. White for shadows (so they stand apart from the
-  // image), dark grey for real annotations.
-  if (m.kind === 'shadow') {
+  // Border varies by kind. White for shadows, red for corrupt duplicate
+  // same-image chain members, dark grey for normal real annotations.
+  if (m.duplicateChainMember) {
+    el.style.border = '3px solid #dc2626';
+    el.style.opacity = '1';
+  } else if (m.kind === 'shadow') {
     el.style.border = '2px solid #ffffff';
     el.style.opacity = '0.75';
   } else {
@@ -567,11 +576,20 @@ export function IndividualIdMap({
       showFullActions && data.canSplitChain
         ? `<button data-action="split-chain" style="${btnStyle}background:#a16207;">Split chain from here</button>`
         : '';
+    const viewChainHtml =
+      interactive && data.chainViewerHref
+        ? `<button data-action="view-chain" style="${btnStyle}background:#2f80ed;">View Chain</button>`
+        : '';
     el.innerHTML = `
       <div style="font-weight:600">${escape(nameFor(data.identityKey))}</div>
       <div style="font-size:10px;opacity:0.7;text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">
         ${kindLabel}
       </div>
+      ${
+        data.duplicateChainMember
+          ? `<div style="font-size:10px;color:#dc2626;margin-top:3px;font-weight:700">Duplicate chain member on this image</div>`
+          : ''
+      }
       ${
         data.obscured
           ? `<div style="font-size:10px;opacity:0.7;margin-top:3px;font-style:italic">Obscured — not visible in this image</div>`
@@ -579,10 +597,23 @@ export function IndividualIdMap({
       }
       ${changeLabelHtml}
       ${obscureHtml}
+      ${viewChainHtml}
       ${moveToOovHtml}
       ${splitChainHtml}
       ${deleteHtml}
     `;
+    if (viewChainHtml && data.chainViewerHref) {
+      const viewChainBtn = el.querySelector(
+        'button[data-action="view-chain"]'
+      ) as HTMLButtonElement | null;
+      if (viewChainBtn) {
+        viewChainBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          window.open(data.chainViewerHref, '_blank', 'noopener,noreferrer');
+          hidePopup();
+        });
+      }
+    }
     if (showObscureToggle) {
       const obscuredBtn = el.querySelector(
         'button[data-action="toggle-obscured"]'

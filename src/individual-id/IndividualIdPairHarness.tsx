@@ -19,6 +19,8 @@ import { buildNeighbourTransforms } from './utils/transforms';
 import { isOov } from './utils/identity';
 import {
   buildChainSplitPlan,
+  findDuplicateSameImageChainAnnotationIds,
+  findSameImageAnnotationConflicts,
   type ChainSplitPlan,
 } from './utils/chains';
 import type { MatchCandidate, NeighbourPairWithMeta } from './types';
@@ -190,7 +192,6 @@ export function IndividualIdPairHarness({
     leniency,
     categoryId,
     working,
-    working.version,
     currentPairKey,
   ]);
 
@@ -488,6 +489,11 @@ export function IndividualIdPairHarness({
     );
   }, [localAnnotations, pair, categoryId]);
 
+  const duplicateAnnotationIds = useMemo(
+    () => findDuplicateSameImageChainAnnotationIds(localAnnotations),
+    [localAnnotations]
+  );
+
   const [labelChange, setLabelChange] = useState<{
     annotationId: string;
     currentCategoryId: string;
@@ -636,7 +642,7 @@ export function IndividualIdPairHarness({
 
   const commitActorLink = useCallback(
     async (actors: LinkActor[], cat: string) => {
-      if (actors.length === 0) return;
+      if (actors.length === 0) return false;
       const nowIso = new Date().toISOString();
       const group = (projectCtx?.project as any)?.organizationId ?? undefined;
       const imagesById: Record<string, any> =
@@ -662,6 +668,29 @@ export function IndividualIdPairHarness({
             seenIds.add(a.id);
           }
         }
+      }
+
+      const sameImageConflicts = findSameImageAnnotationConflicts([
+        ...actors.map((a) => ({ id: a.id, imageId: a.imageId })),
+        ...chainOnly.map((a) => ({ id: a.id, imageId: a.imageId })),
+      ]);
+      if (sameImageConflicts.length > 0) {
+        const details = sameImageConflicts
+          .map(
+            (c) =>
+              `${c.imageId}: ${c.annotationIds
+                .map((id) => id.slice(0, 8))
+                .join(', ')}`
+          )
+          .join('; ');
+        window.alert(
+          `Cannot link these annotations: that would put multiple annotations from the same image in one chain (${details}).`
+        );
+        console.warn(
+          'Refusing individual-id chain merge with duplicate image members',
+          sameImageConflicts
+        );
+        return false;
       }
 
       const all = [
@@ -721,12 +750,12 @@ export function IndividualIdPairHarness({
       }
 
       const applyToList = (prev: AnnotationType[]): AnnotationType[] => {
-        let next = prev.slice();
-        for (const u of updates) {
-          next = next.map((a) => (a.id === u.id ? { ...a, ...u.patch } : a));
-        }
-        next = next.concat(newRows);
-        return next;
+        const patchById = new Map(updates.map((u) => [u.id, u.patch]));
+        const next = prev.map((a) => {
+          const patch = patchById.get(a.id);
+          return patch ? { ...a, ...patch } : a;
+        });
+        return next.concat(newRows);
       };
       setLocalAnnotations(applyToList);
       patchPairCache((old) => ({
@@ -747,6 +776,7 @@ export function IndividualIdPairHarness({
       } catch (err) {
         console.error('Failed to commit individual-id link', err);
       }
+      return true;
     },
     [
       annotationSetId,
@@ -798,8 +828,8 @@ export function IndividualIdPairHarness({
         });
       }
       if (actors.length === 0) return;
-      working.acceptCandidate(currentPairKey, candidateKey);
-      await commitActorLink(actors, candidate.categoryId);
+      const committed = await commitActorLink(actors, candidate.categoryId);
+      if (committed) working.acceptCandidate(currentPairKey, candidateKey);
     },
     [pair, candidates, working, currentPairKey, commitActorLink]
   );
@@ -843,8 +873,8 @@ export function IndividualIdPairHarness({
           oov: true,
         },
       ];
-      working.acceptCandidate(currentPairKey, candidateKey);
-      await commitActorLink(actors, candidate.categoryId);
+      const committed = await commitActorLink(actors, candidate.categoryId);
+      if (committed) working.acceptCandidate(currentPairKey, candidateKey);
     },
     [pair, candidates, working, currentPairKey, commitActorLink]
   );
@@ -942,6 +972,7 @@ export function IndividualIdPairHarness({
           category={pairData.data?.category ?? null}
           foreignAnnotations={foreignAnnotations}
           categoryColors={categoryColors}
+          duplicateAnnotationIds={duplicateAnnotationIds}
           visible
           leniency={leniency}
           onLeniencyChange={setLeniency}
@@ -962,6 +993,11 @@ export function IndividualIdPairHarness({
           onCollapsedChange={setToolbarCollapsed}
           shareHref={shareHref}
           editHomographyHref={editHomographyHref}
+          chainViewerBaseHref={
+            projectCtx?.project?.id
+              ? `/surveys/${projectCtx.project.id}/set/${annotationSetId}/chain-viewer`
+              : undefined
+          }
         />
       </div>
       <ChangeCategoryModal

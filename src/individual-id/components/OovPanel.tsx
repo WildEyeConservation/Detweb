@@ -169,8 +169,8 @@ function CollapsedAvatar({
   const real = side === 'A' ? candidate.realA : candidate.realB;
   const isPrimary = !real?.objectId || real.objectId === real.id;
   const identiconSvg = useMemo(
-    () => (isPrimary ? jdenticon.toSvg(candidate.pairKey, AVATAR_SIZE) : ''),
-    [candidate.pairKey, isPrimary]
+    () => (isPrimary ? jdenticon.toSvg(candidate.identityKey, AVATAR_SIZE) : ''),
+    [candidate.identityKey, isPrimary]
   );
   const handleClick = (ev: React.MouseEvent) => {
     if ((ev.ctrlKey || ev.metaKey) && ev.button === 0) {
@@ -195,7 +195,7 @@ function CollapsedAvatar({
       onContextMenu={handleContextMenu}
       onMouseEnter={() => onHoverChange(candidate.pairKey)}
       onMouseLeave={() => onHoverChange(null)}
-      title={nameFor(candidate.pairKey)}
+      title={nameFor(candidate.identityKey)}
       style={{
         width: AVATAR_SIZE,
         height: AVATAR_SIZE,
@@ -242,8 +242,8 @@ function OovCard({
   const real = side === 'A' ? candidate.realA : candidate.realB;
   const isPrimary = !real?.objectId || real.objectId === real.id;
   const identiconSvg = useMemo(
-    () => (isPrimary ? jdenticon.toSvg(candidate.pairKey, 20) : ''),
-    [candidate.pairKey, isPrimary]
+    () => (isPrimary ? jdenticon.toSvg(candidate.identityKey, 20) : ''),
+    [candidate.identityKey, isPrimary]
   );
   const [hover, setHover] = useState(false);
   const showActions = hover;
@@ -328,7 +328,7 @@ function OovCard({
               textOverflow: 'ellipsis',
             }}
           >
-            {nameFor(candidate.pairKey)}
+            {nameFor(candidate.identityKey)}
           </div>
           {category && (
             <div

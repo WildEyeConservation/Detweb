@@ -87,6 +87,8 @@ interface Props {
    * to this URL. Omit to hide the button.
    */
   editHomographyHref?: string;
+  /** Base path for Chain Viewer links, without the `?chain=` query. */
+  chainViewerBaseHref?: string;
   /**
    * Annotations from OTHER categories on these two images. Rendered as
    * read-only informational markers — never candidates, never accepted.
@@ -94,6 +96,8 @@ interface Props {
   foreignAnnotations?: AnnotationType[];
   /** categoryId → marker colour, used to colour the informational markers. */
   categoryColors?: Record<string, string>;
+  /** Real annotation ids that violate the one-chain-member-per-image invariant. */
+  duplicateAnnotationIds?: Set<string>;
 }
 
 const DEFAULT_COLOR = '#3498db';
@@ -120,6 +124,7 @@ function candidateDistanceSq(a: MatchCandidate, b: MatchCandidate): number {
 // Stable empty defaults so the optional props don't churn memo identities.
 const NO_FOREIGN: AnnotationType[] = [];
 const NO_COLORS: Record<string, string> = {};
+const NO_DUPLICATES = new Set<string>();
 
 // Two-map workspace: renders both maps + markers and the keyboard flow.
 // Never writes the DB and never persists across mounts — the harness owns both.
@@ -152,8 +157,10 @@ export function IndividualIdMapPair(props: Props) {
     onCollapsedChange,
     shareHref,
     editHomographyHref,
+    chainViewerBaseHref,
     foreignAnnotations = NO_FOREIGN,
     categoryColors = NO_COLORS,
+    duplicateAnnotationIds = NO_DUPLICATES,
   } = props;
   const { client } = useContext(GlobalContext)!;
 
@@ -230,6 +237,16 @@ export function IndividualIdMapPair(props: Props) {
     return 'primary';
   }
 
+  const chainViewerHrefFor = useCallback(
+    (annotation: AnnotationType | null | undefined) => {
+      if (!annotation || !chainViewerBaseHref) return undefined;
+      const chainId = annotation.objectId ?? annotation.id;
+      const params = new URLSearchParams({ chain: chainId });
+      return `${chainViewerBaseHref}?${params.toString()}`;
+    },
+    [chainViewerBaseHref]
+  );
+
   // Lookup for routing marker handlers — informational markers are keyed by
   // their annotation id rather than a candidate pairKey.
   const foreignById = useMemo(() => {
@@ -244,6 +261,7 @@ export function IndividualIdMapPair(props: Props) {
       if (!c.posA) continue;
       const isShadow = !c.realA || c.isShadowA;
       const partnerReal = c.realB && !isOov(c.realB) ? c.realB : null;
+      const chainAnnotation = c.realA ?? partnerReal;
       out.push({
         candidateKey: c.pairKey,
         side: 'A',
@@ -252,11 +270,15 @@ export function IndividualIdMapPair(props: Props) {
         color,
         status: c.status,
         kind: classify(c.realA, c.isShadowA),
-        identityKey: c.pairKey,
+        identityKey: c.identityKey,
         active: c.pairKey === activeKey,
         obscured: c.realA ? !!c.realA.obscured : !!c.obscuredA,
         canMoveToOov: isShadow && !!partnerReal,
         canSplitChain: c.realA ? canSplitChain?.(c.realA.id) ?? false : false,
+        duplicateChainMember: c.realA
+          ? duplicateAnnotationIds.has(c.realA.id)
+          : false,
+        chainViewerHref: chainViewerHrefFor(chainAnnotation),
       });
     }
     // Informational markers for annotations belonging to other categories.
@@ -275,6 +297,8 @@ export function IndividualIdMapPair(props: Props) {
         obscured: !!a.obscured,
         foreign: true,
         canSplitChain: false,
+        duplicateChainMember: duplicateAnnotationIds.has(a.id),
+        chainViewerHref: chainViewerHrefFor(a),
       });
     }
     return out;
@@ -286,6 +310,8 @@ export function IndividualIdMapPair(props: Props) {
     imageA.id,
     categoryColors,
     canSplitChain,
+    duplicateAnnotationIds,
+    chainViewerHrefFor,
   ]);
 
   const markersB: MapMarker[] = useMemo(() => {
@@ -294,6 +320,7 @@ export function IndividualIdMapPair(props: Props) {
       if (!c.posB) continue;
       const isShadow = !c.realB || c.isShadowB;
       const partnerReal = c.realA && !isOov(c.realA) ? c.realA : null;
+      const chainAnnotation = c.realB ?? partnerReal;
       out.push({
         candidateKey: c.pairKey,
         side: 'B',
@@ -302,11 +329,15 @@ export function IndividualIdMapPair(props: Props) {
         color,
         status: c.status,
         kind: classify(c.realB, c.isShadowB),
-        identityKey: c.pairKey,
+        identityKey: c.identityKey,
         active: c.pairKey === activeKey,
         obscured: c.realB ? !!c.realB.obscured : !!c.obscuredB,
         canMoveToOov: isShadow && !!partnerReal,
         canSplitChain: c.realB ? canSplitChain?.(c.realB.id) ?? false : false,
+        duplicateChainMember: c.realB
+          ? duplicateAnnotationIds.has(c.realB.id)
+          : false,
+        chainViewerHref: chainViewerHrefFor(chainAnnotation),
       });
     }
     // Informational markers for annotations belonging to other categories.
@@ -325,6 +356,8 @@ export function IndividualIdMapPair(props: Props) {
         obscured: !!a.obscured,
         foreign: true,
         canSplitChain: false,
+        duplicateChainMember: duplicateAnnotationIds.has(a.id),
+        chainViewerHref: chainViewerHrefFor(a),
       });
     }
     return out;
@@ -336,6 +369,8 @@ export function IndividualIdMapPair(props: Props) {
     imageB.id,
     categoryColors,
     canSplitChain,
+    duplicateAnnotationIds,
+    chainViewerHrefFor,
   ]);
 
   // Dragging a marker also focuses it — acting on any marker moves the

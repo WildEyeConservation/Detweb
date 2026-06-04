@@ -13,6 +13,45 @@ export interface ChainSplitPlan {
   updates: Array<{ id: string; patch: Partial<AnnotationType> }>;
 }
 
+export interface SameImageAnnotationConflict {
+  imageId: string;
+  annotationIds: string[];
+}
+
+export function findSameImageAnnotationConflicts(
+  annotations: Array<{ id: string; imageId: string }>
+): SameImageAnnotationConflict[] {
+  const byImage = new Map<string, string[]>();
+  for (const annotation of annotations) {
+    const ids = byImage.get(annotation.imageId);
+    if (ids) ids.push(annotation.id);
+    else byImage.set(annotation.imageId, [annotation.id]);
+  }
+  return Array.from(byImage.entries())
+    .filter(([, annotationIds]) => annotationIds.length > 1)
+    .map(([imageId, annotationIds]) => ({ imageId, annotationIds }));
+}
+
+export function findDuplicateSameImageChainAnnotationIds(
+  annotations: AnnotationType[]
+): Set<string> {
+  const byChainAndImage = new Map<string, AnnotationType[]>();
+  for (const annotation of annotations) {
+    const chainKey = annotation.objectId ?? annotation.id;
+    const key = `${chainKey}\x1f${annotation.imageId}`;
+    const group = byChainAndImage.get(key);
+    if (group) group.push(annotation);
+    else byChainAndImage.set(key, [annotation]);
+  }
+
+  const duplicateIds = new Set<string>();
+  for (const group of byChainAndImage.values()) {
+    if (group.length <= 1) continue;
+    for (const annotation of group) duplicateIds.add(annotation.id);
+  }
+  return duplicateIds;
+}
+
 function isOlder(a: ImageAge, b: ImageAge): boolean {
   const at = a.timestamp ?? null;
   const bt = b.timestamp ?? null;
