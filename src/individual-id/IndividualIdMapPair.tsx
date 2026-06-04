@@ -96,6 +96,8 @@ interface Props {
   foreignAnnotations?: AnnotationType[];
   /** categoryId → marker colour, used to colour the informational markers. */
   categoryColors?: Record<string, string>;
+  /** Real annotation ids that violate the one-chain-member-per-image invariant. */
+  duplicateAnnotationIds?: Set<string>;
 }
 
 const DEFAULT_COLOR = '#3498db';
@@ -122,6 +124,7 @@ function candidateDistanceSq(a: MatchCandidate, b: MatchCandidate): number {
 // Stable empty defaults so the optional props don't churn memo identities.
 const NO_FOREIGN: AnnotationType[] = [];
 const NO_COLORS: Record<string, string> = {};
+const NO_DUPLICATES = new Set<string>();
 
 // Two-map workspace: renders both maps + markers and the keyboard flow.
 // Never writes the DB and never persists across mounts — the harness owns both.
@@ -157,6 +160,7 @@ export function IndividualIdMapPair(props: Props) {
     chainViewerBaseHref,
     foreignAnnotations = NO_FOREIGN,
     categoryColors = NO_COLORS,
+    duplicateAnnotationIds = NO_DUPLICATES,
   } = props;
   const { client } = useContext(GlobalContext)!;
 
@@ -266,11 +270,14 @@ export function IndividualIdMapPair(props: Props) {
         color,
         status: c.status,
         kind: classify(c.realA, c.isShadowA),
-        identityKey: c.pairKey,
+        identityKey: c.identityKey,
         active: c.pairKey === activeKey,
         obscured: c.realA ? !!c.realA.obscured : !!c.obscuredA,
         canMoveToOov: isShadow && !!partnerReal,
         canSplitChain: c.realA ? canSplitChain?.(c.realA.id) ?? false : false,
+        duplicateChainMember: c.realA
+          ? duplicateAnnotationIds.has(c.realA.id)
+          : false,
         chainViewerHref: chainViewerHrefFor(chainAnnotation),
       });
     }
@@ -290,6 +297,7 @@ export function IndividualIdMapPair(props: Props) {
         obscured: !!a.obscured,
         foreign: true,
         canSplitChain: false,
+        duplicateChainMember: duplicateAnnotationIds.has(a.id),
         chainViewerHref: chainViewerHrefFor(a),
       });
     }
@@ -302,6 +310,7 @@ export function IndividualIdMapPair(props: Props) {
     imageA.id,
     categoryColors,
     canSplitChain,
+    duplicateAnnotationIds,
     chainViewerHrefFor,
   ]);
 
@@ -320,11 +329,14 @@ export function IndividualIdMapPair(props: Props) {
         color,
         status: c.status,
         kind: classify(c.realB, c.isShadowB),
-        identityKey: c.pairKey,
+        identityKey: c.identityKey,
         active: c.pairKey === activeKey,
         obscured: c.realB ? !!c.realB.obscured : !!c.obscuredB,
         canMoveToOov: isShadow && !!partnerReal,
         canSplitChain: c.realB ? canSplitChain?.(c.realB.id) ?? false : false,
+        duplicateChainMember: c.realB
+          ? duplicateAnnotationIds.has(c.realB.id)
+          : false,
         chainViewerHref: chainViewerHrefFor(chainAnnotation),
       });
     }
@@ -344,6 +356,7 @@ export function IndividualIdMapPair(props: Props) {
         obscured: !!a.obscured,
         foreign: true,
         canSplitChain: false,
+        duplicateChainMember: duplicateAnnotationIds.has(a.id),
         chainViewerHref: chainViewerHrefFor(a),
       });
     }
@@ -356,6 +369,7 @@ export function IndividualIdMapPair(props: Props) {
     imageB.id,
     categoryColors,
     canSplitChain,
+    duplicateAnnotationIds,
     chainViewerHrefFor,
   ]);
 

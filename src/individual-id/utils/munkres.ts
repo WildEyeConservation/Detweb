@@ -37,7 +37,7 @@ function passesCategory(
 }
 
 // Prefer existing ObjectIds so identicons stay stable across re-renders.
-function makePairKey(a?: AnnotationType, b?: AnnotationType): string {
+function makeIdentityKey(a?: AnnotationType, b?: AnnotationType): string {
   return (
     a?.objectId ??
     b?.objectId ??
@@ -45,6 +45,21 @@ function makePairKey(a?: AnnotationType, b?: AnnotationType): string {
     b?.id ??
     `pair-${crypto.randomUUID()}`
   );
+}
+
+function makeCandidateKeys(a?: AnnotationType, b?: AnnotationType) {
+  const identityKey = makeIdentityKey(a, b);
+  const hasLinkedIdentity = !!a?.objectId || !!b?.objectId;
+  return {
+    identityKey,
+    // Keep unlinked one-sided candidates keyed by their annotation id so the
+    // pre-created "new annotation" id can still be focused immediately. Once
+    // a chain identity exists, include row ids as a defensive guard against
+    // already-corrupt data with duplicate same-image chain members.
+    pairKey: hasLinkedIdentity
+      ? `${identityKey}::${a?.id ?? 'shadow-a'}::${b?.id ?? 'shadow-b'}`
+      : identityKey,
+  };
 }
 
 export function buildMatchCandidates({
@@ -113,9 +128,9 @@ export function buildMatchCandidates({
     const b = bs[0];
     acceptedA.add(a.id);
     acceptedB.add(b.id);
-    const pairKey = makePairKey(a, b);
+    const keys = makeCandidateKeys(a, b);
     candidates.push({
-      pairKey,
+      ...keys,
       categoryId: a.categoryId,
       realA: a,
       realB: b,
@@ -165,9 +180,9 @@ export function buildMatchCandidates({
       const b = assignB[bj];
 
       if (a && b) {
-        const pairKey = makePairKey(a, b);
+        const keys = makeCandidateKeys(a, b);
         candidates.push({
-          pairKey,
+          ...keys,
           categoryId: a.categoryId,
           realA: a,
           realB: b,
@@ -191,11 +206,11 @@ export function buildMatchCandidates({
         const inside =
           isInOverlap(a.x, a.y, backward, imageB.width, imageB.height) &&
           projectsInside(a.x, a.y, forward, imageB.width, imageB.height);
-        const pairKey = makePairKey(a);
+        const keys = makeCandidateKeys(a);
         if (inside) {
           const projected = forward([a.x, a.y]);
           candidates.push({
-            pairKey,
+            ...keys,
             categoryId: a.categoryId,
             realA: a,
             realB: undefined,
@@ -210,7 +225,7 @@ export function buildMatchCandidates({
           });
         } else {
           candidates.push({
-            pairKey,
+            ...keys,
             categoryId: a.categoryId,
             realA: a,
             realB: undefined,
@@ -229,11 +244,11 @@ export function buildMatchCandidates({
         const inside =
           isInOverlap(b.x, b.y, forward, imageA.width, imageA.height) &&
           projectsInside(b.x, b.y, backward, imageA.width, imageA.height);
-        const pairKey = makePairKey(undefined, b);
+        const keys = makeCandidateKeys(undefined, b);
         if (inside) {
           const projected = backward([b.x, b.y]);
           candidates.push({
-            pairKey,
+            ...keys,
             categoryId: b.categoryId,
             realA: undefined,
             realB: b,
@@ -248,7 +263,7 @@ export function buildMatchCandidates({
           });
         } else {
           candidates.push({
-            pairKey,
+            ...keys,
             categoryId: b.categoryId,
             realA: undefined,
             realB: b,
@@ -280,9 +295,12 @@ export function buildMatchCandidates({
     const others = side === 'A' ? posAllB : posAllA;
     const partner = others.find((p) => sharesChain(p, o));
     if (!partner) return;
-    const pairKey = o.objectId ?? partner.objectId ?? o.id;
+    const keys =
+      side === 'A'
+        ? makeCandidateKeys(o, partner)
+        : makeCandidateKeys(partner, o);
     candidates.push({
-      pairKey,
+      ...keys,
       categoryId: o.categoryId,
       realA: side === 'A' ? o : partner,
       realB: side === 'A' ? partner : o,

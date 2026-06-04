@@ -25,6 +25,8 @@ import { isOov } from './utils/identity';
 import { buildLanes, filterLanesToAttention } from './utils/lanes';
 import {
   buildChainSplitPlan,
+  findDuplicateSameImageChainAnnotationIds,
+  findSameImageAnnotationConflicts,
   type ChainSplitPlan,
 } from './utils/chains';
 import {
@@ -1366,6 +1368,11 @@ export function IndividualIdHarness({
     );
   }, [localAnnotations, currentPair, categoryId]);
 
+  const duplicateAnnotationIds = useMemo(
+    () => findDuplicateSameImageChainAnnotationIds(localAnnotations),
+    [localAnnotations]
+  );
+
   const [labelChange, setLabelChange] = useState<{
     annotationId: string;
     currentCategoryId: string;
@@ -1488,7 +1495,7 @@ export function IndividualIdHarness({
       actors: LinkActor[],
       categoryId: string
     ) => {
-      if (actors.length === 0) return;
+      if (actors.length === 0) return false;
       const nowIso = new Date().toISOString();
       const setId =
         transect.data?.category?.annotationSetId ?? annotationSetId ?? '';
@@ -1518,6 +1525,29 @@ export function IndividualIdHarness({
             seenIds.add(a.id);
           }
         }
+      }
+
+      const sameImageConflicts = findSameImageAnnotationConflicts([
+        ...actors.map((a) => ({ id: a.id, imageId: a.imageId })),
+        ...chainOnly.map((a) => ({ id: a.id, imageId: a.imageId })),
+      ]);
+      if (sameImageConflicts.length > 0) {
+        const details = sameImageConflicts
+          .map(
+            (c) =>
+              `${c.imageId}: ${c.annotationIds
+                .map((id) => id.slice(0, 8))
+                .join(', ')}`
+          )
+          .join('; ');
+        window.alert(
+          `Cannot link these annotations: that would put multiple annotations from the same image in one chain (${details}).`
+        );
+        console.warn(
+          'Refusing individual-id chain merge with duplicate image members',
+          sameImageConflicts
+        );
+        return false;
       }
 
       // Chronologically oldest member of the merged set is the chain root.
@@ -1617,6 +1647,7 @@ export function IndividualIdHarness({
         // eslint-disable-next-line no-console
         console.error('Failed to commit individual-id link', err);
       }
+      return true;
     },
     [
       transect.data?.category?.annotationSetId,
@@ -1678,8 +1709,8 @@ export function IndividualIdHarness({
       }
       if (actors.length === 0) return;
 
-      working.acceptCandidate(currentPairKey, candidateKey);
-      await commitActorLink(actors, candidate.categoryId);
+      const committed = await commitActorLink(actors, candidate.categoryId);
+      if (committed) working.acceptCandidate(currentPairKey, candidateKey);
     },
     [currentPair, currentPairKey, currentView, working, commitActorLink]
   );
@@ -1741,8 +1772,8 @@ export function IndividualIdHarness({
           oov: true,
         },
       ];
-      working.acceptCandidate(currentPairKey, candidateKey);
-      await commitActorLink(actors, candidate.categoryId);
+      const committed = await commitActorLink(actors, candidate.categoryId);
+      if (committed) working.acceptCandidate(currentPairKey, candidateKey);
     },
     [currentPair, currentView, currentPairKey, working, commitActorLink]
   );
@@ -1879,6 +1910,7 @@ export function IndividualIdHarness({
             category={transect.data?.category ?? null}
             foreignAnnotations={foreignAnnotations}
             categoryColors={categoryColors}
+            duplicateAnnotationIds={duplicateAnnotationIds}
             visible
             leniency={leniency}
             onLeniencyChange={setLeniency}

@@ -37,12 +37,13 @@ export type CandidateStatus = 'pending' | 'accepted';
 
 /**
  * A single match candidate inside a pair: zero, one, or two real annotations
- * plus optional shadow positions on each side. Identified by `pairKey` which
- * is the same on both sides (used as the working `objectId`).
+ * plus optional shadow positions on each side.
  */
 export interface MatchCandidate {
-  /** Stable id used as `proposedObjectId` and eventually as the linked `objectId`. */
+  /** Stable unique id for UI state, marker refs and working-state overrides. */
   pairKey: string;
+  /** Stable identity id for the animal name/avatar; shared by same-chain candidates. */
+  identityKey: string;
   /** The category every annotation in this candidate must share. */
   categoryId: string;
   /** Real annotation in image1, if any. */
