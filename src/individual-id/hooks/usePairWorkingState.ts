@@ -13,6 +13,15 @@ interface CandidateOverride {
   rejected?: boolean;
 }
 
+function canCarryAcceptedStatus(candidate: MatchCandidate): boolean {
+  return (
+    !!candidate.realA &&
+    !!candidate.realB &&
+    !candidate.isShadowA &&
+    !candidate.isShadowB
+  );
+}
+
 export interface PairWorkingState {
   version: number;
   getPairVersion: (pairKey: PairKey) => number;
@@ -85,7 +94,10 @@ export function usePairWorkingState(): PairWorkingState {
             c.realA && !c.isShadowA ? c.posA : ov.posA ?? c.posA;
           const posB =
             c.realB && !c.isShadowB ? c.posB : ov.posB ?? c.posB;
-          const status = ov.status ?? c.status;
+          const status =
+            ov.status === 'accepted' && !canCarryAcceptedStatus(c)
+              ? c.status
+              : ov.status ?? c.status;
           out.push({
             ...c,
             posA,
