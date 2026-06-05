@@ -493,6 +493,12 @@ export function IndividualIdPairHarness({
     () => findDuplicateSameImageChainAnnotationIds(localAnnotations),
     [localAnnotations]
   );
+  const [conflictHighlightAnnotationIds, setConflictHighlightAnnotationIds] =
+    useState<Set<string>>(() => new Set<string>());
+  const clearConflictHighlights = useCallback(
+    () => setConflictHighlightAnnotationIds(new Set<string>()),
+    []
+  );
 
   const [labelChange, setLabelChange] = useState<{
     annotationId: string;
@@ -675,6 +681,9 @@ export function IndividualIdPairHarness({
         ...chainOnly.map((a) => ({ id: a.id, imageId: a.imageId })),
       ]);
       if (sameImageConflicts.length > 0) {
+        setConflictHighlightAnnotationIds(
+          new Set(sameImageConflicts.flatMap((c) => c.annotationIds))
+        );
         const details = sameImageConflicts
           .map(
             (c) =>
@@ -686,12 +695,9 @@ export function IndividualIdPairHarness({
         window.alert(
           `Cannot link these annotations: that would put multiple annotations from the same image in one chain (${details}).`
         );
-        console.warn(
-          'Refusing individual-id chain merge with duplicate image members',
-          sameImageConflicts
-        );
         return false;
       }
+      setConflictHighlightAnnotationIds(new Set<string>());
 
       const all = [
         ...actors.map((a) => ({ id: a.id, age: ageOf(a.imageId) })),
@@ -791,9 +797,9 @@ export function IndividualIdPairHarness({
 
   const handleAccept = useCallback(
     async (candidateKey: string) => {
-      if (!pair) return;
+      if (!pair) return false;
       const candidate = candidates.find((c) => c.pairKey === candidateKey);
-      if (!candidate) return;
+      if (!candidate) return false;
       const actors: LinkActor[] = [];
       if (candidate.realA) {
         actors.push({
@@ -827,9 +833,13 @@ export function IndividualIdPairHarness({
           obscured: !!candidate.obscuredB,
         });
       }
-      if (actors.length === 0) return;
+      if (actors.length === 0) return false;
       const committed = await commitActorLink(actors, candidate.categoryId);
-      if (committed) working.acceptCandidate(currentPairKey, candidateKey);
+      if (committed) {
+        working.acceptCandidate(currentPairKey, candidateKey);
+        return true;
+      }
+      return false;
     },
     [pair, candidates, working, currentPairKey, commitActorLink]
   );
@@ -973,6 +983,8 @@ export function IndividualIdPairHarness({
           foreignAnnotations={foreignAnnotations}
           categoryColors={categoryColors}
           duplicateAnnotationIds={duplicateAnnotationIds}
+          conflictHighlightAnnotationIds={conflictHighlightAnnotationIds}
+          onClearConflictHighlights={clearConflictHighlights}
           visible
           leniency={leniency}
           onLeniencyChange={setLeniency}

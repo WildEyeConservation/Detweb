@@ -39,8 +39,8 @@ interface Props {
     side: 'A' | 'B',
     pos: { x: number; y: number }
   ) => void;
-  /** Space press: commit the link and mark `accepted`. */
-  onAccept: (candidateKey: string) => void;
+  /** Space press: commit the link and mark `accepted` when allowed. */
+  onAccept: (candidateKey: string) => boolean | Promise<boolean>;
   onUnfocus?: () => void;
   /** Harness pre-generates the id so the candidate survives the Munkres rebuild. */
   onPlaceNew?: (
@@ -98,6 +98,10 @@ interface Props {
   categoryColors?: Record<string, string>;
   /** Real annotation ids that violate the one-chain-member-per-image invariant. */
   duplicateAnnotationIds?: Set<string>;
+  /** Real annotation ids from the last blocked chain-merge conflict. */
+  conflictHighlightAnnotationIds?: Set<string>;
+  /** Clears temporary conflict highlighting, normally on Escape. */
+  onClearConflictHighlights?: () => void;
 }
 
 const DEFAULT_COLOR = '#3498db';
@@ -124,7 +128,8 @@ function candidateDistanceSq(a: MatchCandidate, b: MatchCandidate): number {
 // Stable empty defaults so the optional props don't churn memo identities.
 const NO_FOREIGN: AnnotationType[] = [];
 const NO_COLORS: Record<string, string> = {};
-const NO_DUPLICATES = new Set<string>();
+const NO_DUPLICATES: Set<string> = new Set();
+const NO_CONFLICT_HIGHLIGHTS: Set<string> = new Set();
 
 // Two-map workspace: renders both maps + markers and the keyboard flow.
 // Never writes the DB and never persists across mounts — the harness owns both.
@@ -161,6 +166,8 @@ export function IndividualIdMapPair(props: Props) {
     foreignAnnotations = NO_FOREIGN,
     categoryColors = NO_COLORS,
     duplicateAnnotationIds = NO_DUPLICATES,
+    conflictHighlightAnnotationIds = NO_CONFLICT_HIGHLIGHTS,
+    onClearConflictHighlights,
   } = props;
   const { client } = useContext(GlobalContext)!;
 
@@ -278,6 +285,9 @@ export function IndividualIdMapPair(props: Props) {
         duplicateChainMember: c.realA
           ? duplicateAnnotationIds.has(c.realA.id)
           : false,
+        conflictHighlight: c.realA
+          ? conflictHighlightAnnotationIds.has(c.realA.id)
+          : false,
         chainViewerHref: chainViewerHrefFor(chainAnnotation),
       });
     }
@@ -298,6 +308,7 @@ export function IndividualIdMapPair(props: Props) {
         foreign: true,
         canSplitChain: false,
         duplicateChainMember: duplicateAnnotationIds.has(a.id),
+        conflictHighlight: conflictHighlightAnnotationIds.has(a.id),
         chainViewerHref: chainViewerHrefFor(a),
       });
     }
@@ -311,6 +322,7 @@ export function IndividualIdMapPair(props: Props) {
     categoryColors,
     canSplitChain,
     duplicateAnnotationIds,
+    conflictHighlightAnnotationIds,
     chainViewerHrefFor,
   ]);
 
@@ -337,6 +349,9 @@ export function IndividualIdMapPair(props: Props) {
         duplicateChainMember: c.realB
           ? duplicateAnnotationIds.has(c.realB.id)
           : false,
+        conflictHighlight: c.realB
+          ? conflictHighlightAnnotationIds.has(c.realB.id)
+          : false,
         chainViewerHref: chainViewerHrefFor(chainAnnotation),
       });
     }
@@ -357,6 +372,7 @@ export function IndividualIdMapPair(props: Props) {
         foreign: true,
         canSplitChain: false,
         duplicateChainMember: duplicateAnnotationIds.has(a.id),
+        conflictHighlight: conflictHighlightAnnotationIds.has(a.id),
         chainViewerHref: chainViewerHrefFor(a),
       });
     }
@@ -370,6 +386,7 @@ export function IndividualIdMapPair(props: Props) {
     categoryColors,
     canSplitChain,
     duplicateAnnotationIds,
+    conflictHighlightAnnotationIds,
     chainViewerHrefFor,
   ]);
 
@@ -563,7 +580,7 @@ export function IndividualIdMapPair(props: Props) {
     [activeKey, candidates]
   );
 
-  const handleSpace = useCallback(() => {
+  const handleSpace = useCallback(async () => {
     if (!activeCandidate) {
       // Nothing focused → focus the first non-accepted, non-informational.
       const next = candidates.find(
@@ -588,7 +605,8 @@ export function IndividualIdMapPair(props: Props) {
     if (activeCandidate.status === 'pending') {
       // Experiment: skip the intermediate "lock" step — Space on a pending
       // candidate accepts the link directly.
-      onAccept(activeCandidate.pairKey);
+      const accepted = await onAccept(activeCandidate.pairKey);
+      if (!accepted) return;
       // Advance focus within this pair; onAllAccepted is fired by the effect, not here (stale-read race).
       const linkable = candidates.filter((c) => !c.informational);
       const remaining = linkable.filter(
@@ -627,11 +645,19 @@ export function IndividualIdMapPair(props: Props) {
   ]);
 
   const handleEscape = useCallback(() => {
+    if (conflictHighlightAnnotationIds.size > 0) {
+      onClearConflictHighlights?.();
+    }
     if (activeKey) {
       setActiveKey(null);
       onUnfocus?.();
     }
-  }, [activeKey, onUnfocus]);
+  }, [
+    activeKey,
+    onUnfocus,
+    conflictHighlightAnnotationIds,
+    onClearConflictHighlights,
+  ]);
 
   useHotkeys('Space', handleSpace, { enabled: visible, preventDefault: true }, [
     handleSpace,

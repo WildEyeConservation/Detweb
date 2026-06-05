@@ -56,6 +56,7 @@ export interface MapMarker {
   canMoveToOov?: boolean;
   canSplitChain?: boolean;
   duplicateChainMember?: boolean;
+  conflictHighlight?: boolean;
   /**
    * Deep link to the chain viewer for the real annotation represented by this
    * marker, or for a shadow marker's real partner when available.
@@ -311,9 +312,13 @@ function applyMarkerStyle(el: HTMLDivElement, m: MapMarker) {
   // element's transform to position it on the map; overwriting it would
   // park every marker at (0,0) until the next map render tick.
 
-  // Border varies by kind. White for shadows, red for corrupt duplicate
-  // same-image chain members, dark grey for normal real annotations.
-  if (m.duplicateChainMember) {
+  // Border varies by kind. Purple for the temporary failed-merge conflict
+  // inspection state, red for corrupt duplicate same-image chain members,
+  // white for shadows, dark grey for normal real annotations.
+  if (m.conflictHighlight) {
+    el.style.border = '3px solid #a855f7';
+    el.style.opacity = '1';
+  } else if (m.duplicateChainMember) {
     el.style.border = '3px solid #dc2626';
     el.style.opacity = '1';
   } else if (m.kind === 'shadow') {
@@ -585,6 +590,11 @@ export function IndividualIdMap({
       <div style="font-size:10px;opacity:0.7;text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">
         ${kindLabel}
       </div>
+      ${
+        data.conflictHighlight
+          ? `<div style="font-size:10px;color:#7e22ce;margin-top:3px;font-weight:700">Blocked merge conflict</div>`
+          : ''
+      }
       ${
         data.duplicateChainMember
           ? `<div style="font-size:10px;color:#dc2626;margin-top:3px;font-weight:700">Duplicate chain member on this image</div>`
