@@ -23,6 +23,101 @@ interface Props {
 
 const DEFAULT_COLOR = '#ff8c1a';
 
+type ImageFileRow = {
+  key?: string | null;
+  path?: string | null;
+  type?: string | null;
+};
+
+type ChainAnnotationRow = {
+  id: string;
+  x: number;
+  y: number;
+  imageId: string;
+  objectId?: string | null;
+  categoryId: string;
+  obscured?: boolean | null;
+  oov?: boolean | null;
+  image?: {
+    timestamp?: number | null;
+  } | null;
+};
+
+type ChainImageRow = {
+  width: number;
+  height: number;
+  originalPath?: string | null;
+  cameraId?: string | null;
+  cameraSerial?: string | null;
+  camera?: {
+    name?: string | null;
+  } | null;
+};
+
+type GraphQLResponse<T> = {
+  data?: T | null;
+  errors?: { message?: string | null }[] | null;
+};
+
+type UpdateAnnotationObscured = (input: {
+  id: string;
+  obscured: boolean;
+}) => Promise<GraphQLResponse<unknown>>;
+
+type GetChainImage = (
+  input: { id: string },
+  options: { selectionSet: readonly string[] }
+) => Promise<GraphQLResponse<ChainImageRow>>;
+
+type ListImageFilesByImageId = (
+  input: { imageId: string },
+  options: { selectionSet: readonly string[] }
+) => Promise<{ data?: ImageFileRow[] | null }>;
+
+function normalizeImagePath(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value.replace(/\\/g, '/').replace(/^images\//, '');
+}
+
+function isJpegFile(file: ImageFileRow): boolean {
+  const type = file.type?.toLowerCase() ?? '';
+  const key = normalizeImagePath(file.key);
+  const path = normalizeImagePath(file.path);
+  return (
+    type === 'image/jpeg' ||
+    type === 'image/jpg' ||
+    !!key?.match(/\.jpe?g$/i) ||
+    !!path?.match(/\.jpe?g$/i)
+  );
+}
+
+function imageFileMatchesOriginalPath(
+  file: ImageFileRow,
+  originalPath: string | null | undefined
+): boolean {
+  const original = normalizeImagePath(originalPath);
+  if (!original) return false;
+  const key = normalizeImagePath(file.key);
+  const path = normalizeImagePath(file.path);
+  return (
+    key === original ||
+    path === original ||
+    !!key?.endsWith(`/${original}`) ||
+    !!path?.endsWith(`/${original}`)
+  );
+}
+
+function selectSourceKeyForImage(
+  files: ImageFileRow[],
+  originalPath: string | null | undefined
+): string | null {
+  const jpgs = files.filter(isJpegFile);
+  const exact = jpgs.find((file) =>
+    imageFileMatchesOriginalPath(file, originalPath)
+  );
+  return exact?.key ?? jpgs[0]?.key ?? null;
+}
+
 /**
  * Main view for the chain viewer. Owns:
  *   - The bulk annotation fetch (paginated, with a streaming progress count).
@@ -96,13 +191,17 @@ export function ChainViewerHarness({ annotationSetId }: Props) {
         );
       setAnnotations(apply);
       try {
-        const response = await (client.models.Annotation.update as any)({
+        const updateAnnotation = client.models.Annotation
+          .update as unknown as UpdateAnnotationObscured;
+        const response = await updateAnnotation({
           id: annotationId,
           obscured: desired,
         });
         if (response?.errors?.length) {
           throw new Error(
-            response.errors.map((e: any) => e.message).join('; ')
+            response.errors
+              .map((e) => e.message ?? 'Unknown GraphQL error')
+              .join('; ')
           );
         }
       } catch (err) {
@@ -145,7 +244,7 @@ export function ChainViewerHarness({ annotationSetId }: Props) {
         );
         if (cancelled) return;
         setAnnotations(
-          (data as any[]).map((a) => ({
+          (data as ChainAnnotationRow[]).map((a) => ({
             id: a.id,
             x: a.x,
             y: a.y,
@@ -243,14 +342,18 @@ export function ChainViewerHarness({ annotationSetId }: Props) {
       // De-dupe image fetches: many annotations in a chain often share the
       // same image, so we only hit the API once per imageId.
       const uniqueImageIds = Array.from(new Set(needed.map((a) => a.imageId)));
-      const imageById = new Map<string, any>();
+      const imageById = new Map<string, ChainImageRow | null>();
       const sourceKeyById = new Map<string, string | null>();
 
       await Promise.all(
         uniqueImageIds.map(async (imageId) => {
           try {
+            const getImage = client.models.Image
+              .get as unknown as GetChainImage;
+            const listImageFilesByImageId = client.models.ImageFile
+              .imagesByimageId as unknown as ListImageFilesByImageId;
             const [imgResp, fileResp] = await Promise.all([
-              (client.models.Image.get as any)(
+              getImage(
                 { id: imageId },
                 {
                   selectionSet: [
@@ -264,13 +367,17 @@ export function ChainViewerHarness({ annotationSetId }: Props) {
                   ] as const,
                 }
               ),
-              (client.models.ImageFile as any).imagesByimageId({ imageId }),
+              listImageFilesByImageId(
+                { imageId },
+                { selectionSet: ['key', 'path', 'type'] as const }
+              ),
             ]);
-            imageById.set(imageId, imgResp?.data ?? null);
-            const jpg = (fileResp?.data ?? []).find(
-              (f: any) => f.type === 'image/jpeg'
+            const image = imgResp?.data ?? null;
+            imageById.set(imageId, image);
+            sourceKeyById.set(
+              imageId,
+              selectSourceKeyForImage(fileResp?.data ?? [], image?.originalPath)
             );
-            sourceKeyById.set(imageId, jpg?.key ?? null);
           } catch (err) {
             console.error('Failed to fetch image meta', imageId, err);
             imageById.set(imageId, null);
