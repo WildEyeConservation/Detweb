@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Lane } from '../individual-id/utils/lanes';
+import { disjoint } from './utils/herdRuns';
 
 interface Props {
   /**
@@ -29,12 +30,6 @@ const PALETTE = [
   '#f7dc6f',
   '#dc7633',
 ];
-
-function disjoint(a: Set<string>, b: Set<string>): boolean {
-  const [small, big] = a.size <= b.size ? [a, b] : [b, a];
-  for (const x of small) if (big.has(x)) return false;
-  return true;
-}
 
 /**
  * Walk a lane's pairs in order; start a new colour run whenever a pair shares

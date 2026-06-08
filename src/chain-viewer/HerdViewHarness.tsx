@@ -5,7 +5,8 @@ import Select, { type SingleValue } from 'react-select';
 import { GlobalContext, ProjectContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
 import { buildNeighbourTransforms } from '../individual-id/utils/transforms';
-import { buildLanes } from '../individual-id/utils/lanes';
+import type { Lane } from '../individual-id/utils/lanes';
+import { buildHerdRuns } from './utils/herdRuns';
 import type { NeighbourPairWithMeta } from '../individual-id/types';
 import type { ImageType } from '../schemaTypes';
 import { useHerdData } from './hooks/useHerdData';
@@ -210,70 +211,95 @@ export function HerdViewHarness({ annotationSetId }: Props) {
     return out;
   }, [herd.data?.rawNeighbours, herd.data?.imagesById]);
 
-  // Keep only pairs with at least one animal, and record each pair's chain set.
+  // Keep only pairs where the SAME chain appears in both images — i.e. the
+  // herd is actually visible in the overlap of both linked frames. Pairs
+  // annotated on only one side (or with disjoint animals) are skipped.
   const { pairs, chainSets } = useMemo(() => {
     const ps: NeighbourPairWithMeta[] = [];
     const cs: Set<string>[] = [];
     for (const p of directPairs) {
       const aAnns = annotationsByImage[p.image1Id] ?? [];
       const bAnns = annotationsByImage[p.image2Id] ?? [];
-      if (aAnns.length === 0 && bAnns.length === 0) continue;
-      const set = new Set<string>();
-      for (const a of aAnns) set.add(a.objectId ?? a.id);
-      for (const a of bAnns) set.add(a.objectId ?? a.id);
+      const aSet = new Set<string>();
+      for (const a of aAnns) aSet.add(a.objectId ?? a.id);
+      const bSet = new Set<string>();
+      for (const a of bAnns) bSet.add(a.objectId ?? a.id);
+      let shared = false;
+      for (const id of aSet) {
+        if (bSet.has(id)) {
+          shared = true;
+          break;
+        }
+      }
+      if (!shared) continue;
       ps.push(p);
-      cs.push(set);
+      cs.push(new Set<string>([...aSet, ...bSet]));
     }
     return { pairs: ps, chainSets: cs };
   }, [directPairs, annotationsByImage]);
 
-  const lanes = useMemo(
-    () => buildLanes(pairs, herd.data?.cameraNamesById ?? {}),
-    [pairs, herd.data?.cameraNamesById]
+  // ---- Single timestamp-ordered lane + herd-run grouping ----
+  // Every animal-pair lives in one time-ordered lane; "herd runs" (maximal
+  // contiguous chain-sharing stretches) replace the old per-camera/overlap
+  // lanes, so navigation follows a herd across consecutive frames and cameras.
+  const { runIdByIndex, runStarts } = useMemo(
+    () => buildHerdRuns(chainSets),
+    [chainSets]
   );
 
-  // ---- Lane-aware navigation ----
+  const navLane: Lane = useMemo(
+    () => ({
+      key: 'all',
+      kind: 'camera',
+      label: '',
+      entries: pairs.map((_, i) => i),
+      timestamps: pairs.map((p) => p.imageA.timestamp ?? 0),
+    }),
+    [pairs]
+  );
+
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [activeLane, setActiveLane] = useState(0);
   const [navCollapsed, setNavCollapsed] = useState(false);
 
   useEffect(() => {
     if (currentIndex >= pairs.length) setCurrentIndex(0);
   }, [pairs.length, currentIndex]);
 
-  useEffect(() => {
-    if (!lanes.length) return;
-    if (lanes[activeLane]?.entries.includes(currentIndex)) return;
-    const li = lanes.findIndex((l) => l.entries.includes(currentIndex));
-    setActiveLane(li >= 0 ? li : 0);
-  }, [currentIndex, lanes, activeLane]);
-
-  const requestPair = useCallback(
-    (target: number, lane: number) => {
+  const goTo = useCallback(
+    (target: number) => {
       if (target < 0 || target >= pairs.length) return;
       setCurrentIndex(target);
-      setActiveLane(lane);
     },
     [pairs.length]
   );
 
-  const laneNav = useCallback(
-    (delta: 1 | -1) => {
-      const lane = lanes[activeLane];
-      if (!lane) return;
-      const pos = lane.entries.indexOf(currentIndex);
-      if (pos === -1) return;
-      const next = pos + delta;
-      if (next < 0 || next >= lane.entries.length) return;
-      requestPair(lane.entries[next], activeLane);
-    },
-    [lanes, activeLane, currentIndex, requestPair]
+  // Frame step: walk the single time-ordered sequence one pair at a time.
+  const stepFrame = useCallback(
+    (delta: 1 | -1) => goTo(currentIndex + delta),
+    [goTo, currentIndex]
   );
 
-  const lanePos = lanes[activeLane]?.entries.indexOf(currentIndex) ?? -1;
-  const laneLen = lanes[activeLane]?.entries.length ?? 0;
-  const hasPrev = lanePos > 0;
-  const hasNext = lanePos >= 0 && lanePos < laneLen - 1;
+  // Herd jump: next → start of the following run; prev → start of the current
+  // run, or the previous run's start when already at a run boundary.
+  const jumpHerd = useCallback(
+    (dir: 1 | -1) => {
+      const run = runIdByIndex[currentIndex] ?? 0;
+      if (dir === 1) {
+        if (run + 1 < runStarts.length) goTo(runStarts[run + 1]);
+      } else {
+        const start = runStarts[run] ?? 0;
+        if (currentIndex > start) goTo(start);
+        else if (run > 0) goTo(runStarts[run - 1]);
+      }
+    },
+    [runIdByIndex, runStarts, currentIndex, goTo]
+  );
+
+  const currentRun = runIdByIndex[currentIndex] ?? 0;
+  const hasPrev = currentIndex > 0;
+  const hasNext = currentIndex < pairs.length - 1;
+  const hasPrevHerd = currentRun > 0 || currentIndex > (runStarts[currentRun] ?? 0);
+  const hasNextHerd = currentRun + 1 < runStarts.length;
 
   // ---- Obscured toggle (optimistic, reverts on failure). ----
   const toggleObscured = useCallback(
@@ -363,7 +389,8 @@ export function HerdViewHarness({ annotationSetId }: Props) {
         </div>
         {!loading && pairs.length > 0 && (
           <div style={{ fontSize: 13, opacity: 0.85 }}>
-            Pair {currentIndex + 1} of {pairs.length}
+            Pair {currentIndex + 1} of {pairs.length} · Herd {currentRun + 1} of{' '}
+            {runStarts.length}
           </div>
         )}
       </div>
@@ -406,8 +433,10 @@ export function HerdViewHarness({ annotationSetId }: Props) {
                 categoryColors={categoryColors}
                 onToggleObscured={toggleObscured}
                 onViewChainTiles={onViewChainTiles}
-                onRequestPrevPair={hasPrev ? () => laneNav(-1) : undefined}
-                onRequestNextPair={hasNext ? () => laneNav(1) : undefined}
+                onRequestPrevPair={hasPrev ? () => stepFrame(-1) : undefined}
+                onRequestNextPair={hasNext ? () => stepFrame(1) : undefined}
+                onRequestPrevHerd={hasPrevHerd ? () => jumpHerd(-1) : undefined}
+                onRequestNextHerd={hasNextHerd ? () => jumpHerd(1) : undefined}
                 collapsed={navCollapsed}
                 onCollapsedChange={setNavCollapsed}
               />
@@ -416,10 +445,10 @@ export function HerdViewHarness({ annotationSetId }: Props) {
           {!navCollapsed && (
             <HerdNavBar
               chainSets={chainSets}
-              lanes={lanes}
+              lanes={[navLane]}
               activeIndex={currentIndex}
-              activeLane={activeLane}
-              onJump={(i, lane) => requestPair(i, lane)}
+              activeLane={0}
+              onJump={(i) => goTo(i)}
             />
           )}
         </>

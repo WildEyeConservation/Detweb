@@ -1,7 +1,12 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { Button } from 'react-bootstrap';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import { GlobalContext } from '../Context';
 import {
@@ -37,8 +42,12 @@ interface Props {
   categoryColors: Record<string, string>;
   onToggleObscured: (annotationId: string) => void;
   onViewChainTiles: (annotationId: string) => void;
+  /** Step one frame (pair) back / forward along the time-ordered sequence. */
   onRequestPrevPair?: () => void;
   onRequestNextPair?: () => void;
+  /** Jump to the previous / next herd sighting (chain-sharing run). */
+  onRequestPrevHerd?: () => void;
+  onRequestNextHerd?: () => void;
   /** When set, the toolbar shows a button toggling the nav-bar lanes. */
   collapsed?: boolean;
   onCollapsedChange?: (next: boolean) => void;
@@ -67,6 +76,8 @@ export function HerdMapPair({
   onViewChainTiles,
   onRequestPrevPair,
   onRequestNextPair,
+  onRequestPrevHerd,
+  onRequestNextHerd,
   collapsed,
   onCollapsedChange,
 }: Props) {
@@ -223,6 +234,19 @@ export function HerdMapPair({
   useHotkeys('ArrowRight', () => onRequestNextPair?.(), { enabled: !!onRequestNextPair }, [
     onRequestNextPair,
   ]);
+  // Shift+Arrow jumps between herd sightings (chain-sharing runs).
+  useHotkeys(
+    'shift+ArrowLeft',
+    () => onRequestPrevHerd?.(),
+    { enabled: !!onRequestPrevHerd },
+    [onRequestPrevHerd]
+  );
+  useHotkeys(
+    'shift+ArrowRight',
+    () => onRequestNextHerd?.(),
+    { enabled: !!onRequestNextHerd },
+    [onRequestNextHerd]
+  );
 
   // Hold Tab to temporarily hide the annotation markers on both maps (so the
   // underlying imagery / location boxes can be inspected). Tab is intercepted
@@ -312,6 +336,17 @@ export function HerdMapPair({
       >
         <Button
           size='sm'
+          variant='outline-light'
+          onClick={onRequestPrevHerd}
+          disabled={!onRequestPrevHerd}
+          title='Previous herd (Shift+←)'
+          className='d-inline-flex align-items-center justify-content-center gap-1'
+          style={{ minWidth: 120 }}
+        >
+          <ChevronsLeft size={16} /> Prev herd
+        </Button>
+        <Button
+          size='sm'
           onClick={onRequestPrevPair}
           disabled={!onRequestPrevPair}
           title='Previous pair (←)'
@@ -330,12 +365,23 @@ export function HerdMapPair({
         >
           Next <ChevronRight size={16} />
         </Button>
+        <Button
+          size='sm'
+          variant='outline-light'
+          onClick={onRequestNextHerd}
+          disabled={!onRequestNextHerd}
+          title='Next herd (Shift+→)'
+          className='d-inline-flex align-items-center justify-content-center gap-1'
+          style={{ minWidth: 120 }}
+        >
+          Next herd <ChevronsRight size={16} />
+        </Button>
         {onCollapsedChange && (
           <Button
             size='sm'
             variant='outline-light'
             onClick={() => onCollapsedChange(!collapsed)}
-            title={collapsed ? 'Show lanes' : 'Hide lanes'}
+            title={collapsed ? 'Show timeline' : 'Hide timeline'}
             style={{ position: 'absolute', left: 12 }}
           >
             {collapsed ? '▴' : '▾'}
