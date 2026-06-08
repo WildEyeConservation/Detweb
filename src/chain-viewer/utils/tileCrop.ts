@@ -13,12 +13,41 @@ function getMaxZ(width: number, height: number): number {
   return Math.max(0, Math.ceil(Math.log2(Math.max(width, height) / TILE_SIZE)));
 }
 
+export interface CropZoomRange {
+  /** Highest slippy level — 1:1 with the original image (tightest crop). */
+  maxZ: number;
+  /**
+   * Number of whole zoom-out steps available from maxZ. Each step drops to the
+   * next lower slippy level, doubling the field of view (and halving detail).
+   * Bounded so every level still fully covers a CROP_SIZE window — no partial /
+   * out-of-bounds tiles to fetch.
+   */
+  maxSteps: number;
+}
+
+/**
+ * Available centred-crop zoom levels for an image. The tightest level (maxZ)
+ * frames the annotation at native resolution; each zoom-out step pulls
+ * lower-detail tiles that show 2× more of the surrounding image.
+ */
+export function getCropZoomRange(width: number, height: number): CropZoomRange {
+  const maxZ = getMaxZ(width, height);
+  const minDim = Math.min(width, height);
+  const maxSteps = Math.max(
+    0,
+    Math.min(maxZ, Math.floor(Math.log2(minDim / CROP_SIZE)))
+  );
+  return { maxZ, maxSteps };
+}
+
 interface CropParams {
   sourceKey: string;
   imageWidth: number;
   imageHeight: number;
   x: number;
   y: number;
+  /** Slippy level to crop from. Defaults to maxZ (tightest, 1:1 with source). */
+  zoom?: number;
 }
 
 interface CropResult {
@@ -42,18 +71,27 @@ interface CropResult {
 export async function fetchCenteredCrop(params: CropParams): Promise<CropResult> {
   const { sourceKey, imageWidth, imageHeight, x, y } = params;
   const maxZ = getMaxZ(imageWidth, imageHeight);
+  const z = Math.max(0, Math.min(params.zoom ?? maxZ, maxZ));
+
+  // Project the annotation and image extent into this level's pyramid pixels.
+  // scale = 1 at maxZ, halves for each level down (lower detail, wider view).
+  const scale = Math.pow(2, z - maxZ);
+  const px = x * scale;
+  const py = y * scale;
+  const renderedW = imageWidth * scale;
+  const renderedH = imageHeight * scale;
 
   const half = CROP_SIZE / 2;
-  let left = Math.round(x - half);
-  let top = Math.round(y - half);
-  // Clamp window inside image bounds when image is at least CROP_SIZE.
-  if (imageWidth >= CROP_SIZE) {
-    left = Math.max(0, Math.min(left, imageWidth - CROP_SIZE));
+  let left = Math.round(px - half);
+  let top = Math.round(py - half);
+  // Clamp window inside the rendered image when it's at least CROP_SIZE.
+  if (renderedW >= CROP_SIZE) {
+    left = Math.max(0, Math.min(left, Math.floor(renderedW) - CROP_SIZE));
   } else {
     left = 0;
   }
-  if (imageHeight >= CROP_SIZE) {
-    top = Math.max(0, Math.min(top, imageHeight - CROP_SIZE));
+  if (renderedH >= CROP_SIZE) {
+    top = Math.max(0, Math.min(top, Math.floor(renderedH) - CROP_SIZE));
   } else {
     top = 0;
   }
@@ -82,7 +120,7 @@ export async function fetchCenteredCrop(params: CropParams): Promise<CropResult>
   }>[] = [];
   for (let row = minRow; row <= maxRow; row++) {
     for (let col = minCol; col <= maxCol; col++) {
-      const path = `slippymaps/${sourceKey}/${maxZ}/${row}/${col}.png`;
+      const path = `slippymaps/${sourceKey}/${z}/${row}/${col}.png`;
       tilePromises.push(
         getTileBlob(path).then(
           (blob) =>
@@ -119,8 +157,8 @@ export async function fetchCenteredCrop(params: CropParams): Promise<CropResult>
 
   return {
     canvas,
-    markerX: x - left,
-    markerY: y - top,
+    markerX: px - left,
+    markerY: py - top,
   };
 }
 

@@ -1,4 +1,5 @@
 import { ChainTile } from './ChainTile';
+import { rotationKeyFor } from './utils/rotationKey';
 import type { AnnotationImageMeta, Chain } from './types';
 
 interface Props {
@@ -11,20 +12,13 @@ interface Props {
   /** Rotation steps (mod 4) keyed by camera (or per-image fallback). */
   cameraRotations: Map<string, number>;
   onRotateKey: (key: string) => void;
+  /** Zoom-out steps keyed by annotation id (per-tile, survives navigation). */
+  tileZoom: Map<string, number>;
+  onZoomChange: (annotationId: string, next: number) => void;
   /** Builds the ImageLoader URL for a given annotation. */
   openImageHrefFor: (annotation: Chain['annotations'][number]) => string;
   /** Toggles `obscured` on an annotation. */
   onToggleObscured: (annotationId: string) => void;
-}
-
-/**
- * Per-camera rotation key for a tile. Falls back to a per-image key when the
- * image has no associated Camera row — keeps each unrelated image rotating
- * independently rather than lumping all camera-less images into one bucket.
- */
-function rotationKeyFor(meta: AnnotationImageMeta | undefined, imageId: string): string {
-  if (meta?.cameraId) return `cam:${meta.cameraId}`;
-  return `img:${imageId}`;
 }
 
 /**
@@ -41,6 +35,8 @@ export function ChainGrid({
   columns,
   cameraRotations,
   onRotateKey,
+  tileZoom,
+  onZoomChange,
   openImageHrefFor,
   onToggleObscured,
 }: Props) {
@@ -70,6 +66,8 @@ export function ChainGrid({
             categoryColor={categoryColor}
             rotation={rotation}
             onRotate={() => onRotateKey(rotKey)}
+            zoomOut={tileZoom.get(a.id) ?? 0}
+            onZoomChange={(next) => onZoomChange(a.id, next)}
             openImageHref={openImageHrefFor(a)}
             onToggleObscured={() => onToggleObscured(a.id)}
           />

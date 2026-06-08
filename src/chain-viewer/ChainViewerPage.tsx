@@ -1,10 +1,12 @@
 import { useContext } from 'react';
 import { useParams } from 'react-router-dom';
 import { UserContext } from '../Context';
-import { ChainViewerHarness } from './ChainViewerHarness';
+import { HerdViewHarness } from './HerdViewHarness';
 
 /**
  * Route element for `/surveys/:surveyId/set/:annotationSetId/chain-viewer`.
+ * Defaults to the herd view (a stripped-down ChainLinker for walking neighbour
+ * pairs that contain animals); per-chain tiles open as a modal from a marker.
  * Gates access to sysadmins — the workflow is experimental and not yet ready
  * for general orgadmin use.
  */
@@ -28,5 +30,5 @@ export function ChainViewerPage() {
     );
   }
 
-  return <ChainViewerHarness annotationSetId={annotationSetId} />;
+  return <HerdViewHarness annotationSetId={annotationSetId} />;
 }

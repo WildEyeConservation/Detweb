@@ -1,0 +1,439 @@
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { Spinner } from 'react-bootstrap';
+import Select, { type SingleValue } from 'react-select';
+import { GlobalContext, ProjectContext } from '../Context';
+import { fetchAllPaginatedResults } from '../utils';
+import { buildNeighbourTransforms } from '../individual-id/utils/transforms';
+import { buildLanes } from '../individual-id/utils/lanes';
+import type { NeighbourPairWithMeta } from '../individual-id/types';
+import type { ImageType } from '../schemaTypes';
+import { useHerdData } from './hooks/useHerdData';
+import { HerdMapPair } from './HerdMapPair';
+import { HerdNavBar } from './HerdNavBar';
+import { ChainTilesModal } from './components/ChainTilesModal';
+import type { ChainAnnotation } from './types';
+import './ChainViewer.css';
+
+interface Props {
+  annotationSetId: string;
+}
+
+type ChainAnnotationRow = {
+  id: string;
+  x: number;
+  y: number;
+  imageId: string;
+  objectId?: string | null;
+  categoryId: string;
+  obscured?: boolean | null;
+  oov?: boolean | null;
+  image?: { timestamp?: number | null } | null;
+};
+
+type GraphQLResponse = {
+  errors?: { message?: string | null }[] | null;
+};
+
+type UpdateAnnotationObscured = (input: {
+  id: string;
+  obscured: boolean;
+}) => Promise<GraphQLResponse>;
+
+/** Chronological order, mirroring the ChainLinker (older image owns identity). */
+function isOlder(a: ImageType | undefined, b: ImageType | undefined): boolean {
+  const at = a?.timestamp ?? null;
+  const bt = b?.timestamp ?? null;
+  if (at !== null && bt !== null) {
+    if (at !== bt) return at < bt;
+  } else {
+    return false;
+  }
+  if (a?.originalPath && b?.originalPath) {
+    return a.originalPath < b.originalPath;
+  }
+  return false;
+}
+
+/**
+ * Default Chain Viewer content: a stripped-down ChainLinker that walks the
+ * survey's neighbour pairs that contain animals. Two linked maps, lane-aware
+ * navigation, a chain-grouped nav bar, and per-marker obscured / view-chain-
+ * tiles actions. No matching, linking or auto-pan.
+ */
+export function HerdViewHarness({ annotationSetId }: Props) {
+  const { client } = useContext(GlobalContext)!;
+  const {
+    categoriesHook: { data: categories },
+    project,
+  } = useContext(ProjectContext)!;
+  const { surveyId } = useParams();
+  const [searchParams] = useSearchParams();
+
+  const herd = useHerdData();
+
+  // ---- Bulk fetch all annotations for the set (live, mutable). ----
+  const [annotations, setAnnotations] = useState<ChainAnnotation[]>([]);
+  const [fetchStatus, setFetchStatus] = useState<
+    'idle' | 'loading' | 'done' | 'error'
+  >('idle');
+  const [fetchCount, setFetchCount] = useState(0);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setFetchStatus('loading');
+    setFetchCount(0);
+    setFetchError(null);
+
+    (async () => {
+      try {
+        const data = await fetchAllPaginatedResults(
+          client.models.Annotation.annotationsByAnnotationSetId,
+          {
+            setId: annotationSetId,
+            selectionSet: [
+              'id',
+              'x',
+              'y',
+              'imageId',
+              'objectId',
+              'categoryId',
+              'obscured',
+              'oov',
+              'image.timestamp',
+            ] as const,
+            limit: 10000,
+          },
+          (steps) => {
+            if (!cancelled) setFetchCount(steps);
+          }
+        );
+        if (cancelled) return;
+        setAnnotations(
+          (data as ChainAnnotationRow[]).map((a) => ({
+            id: a.id,
+            x: a.x,
+            y: a.y,
+            imageId: a.imageId,
+            objectId: a.objectId ?? null,
+            categoryId: a.categoryId,
+            obscured: !!a.obscured,
+            oov: !!a.oov,
+            imageTimestamp:
+              typeof a.image?.timestamp === 'number' ? a.image.timestamp : null,
+          }))
+        );
+        setFetchStatus('done');
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Herd view annotation fetch failed', err);
+        setFetchError(err instanceof Error ? err.message : String(err));
+        setFetchStatus('error');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, annotationSetId]);
+
+  // ---- Category filter ----
+  const [selectedCategory, setSelectedCategory] = useState<{
+    label: string;
+    value: string;
+  } | null>(null);
+
+  const categoryOptions = useMemo(
+    () =>
+      (categories ?? [])
+        .filter((c) => c.annotationSetId === annotationSetId)
+        .map((c) => ({ label: c.name, value: c.id }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [categories, annotationSetId]
+  );
+
+  const categoryColors = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const c of categories ?? []) {
+      if (c.id && c.color) m[c.id] = c.color;
+    }
+    return m;
+  }, [categories]);
+
+  const visibleAnnotations = useMemo(
+    () =>
+      selectedCategory
+        ? annotations.filter((a) => a.categoryId === selectedCategory.value)
+        : annotations,
+    [annotations, selectedCategory]
+  );
+
+  const annotationsByImage = useMemo(() => {
+    const out: Record<string, ChainAnnotation[]> = {};
+    for (const a of visibleAnnotations) (out[a.imageId] ??= []).push(a);
+    return out;
+  }, [visibleAnnotations]);
+
+  // ---- Pairs (older→newer, homography only), oriented + sorted. ----
+  const directPairs: NeighbourPairWithMeta[] = useMemo(() => {
+    const raw = herd.data?.rawNeighbours ?? [];
+    const imagesById = herd.data?.imagesById ?? {};
+    const out: NeighbourPairWithMeta[] = [];
+    for (const n of raw) {
+      const tfs = buildNeighbourTransforms(n);
+      if (tfs.noHomography) continue;
+      const img1 = imagesById[n.image1Id];
+      const img2 = imagesById[n.image2Id];
+      if (!img1 || !img2) continue;
+      const swap = isOlder(img2, img1);
+      const imageA = swap ? img2 : img1;
+      const imageB = swap ? img1 : img2;
+      out.push({
+        image1Id: imageA.id,
+        image2Id: imageB.id,
+        forward: swap ? tfs.backward : tfs.forward,
+        backward: swap ? tfs.forward : tfs.backward,
+        noHomography: false,
+        skipped: false,
+        imageA,
+        imageB,
+        rawNeighbour: n,
+      });
+    }
+    out.sort((p, q) => {
+      const at = p.imageA.timestamp ?? 0;
+      const bt = q.imageA.timestamp ?? 0;
+      if (at !== bt) return at - bt;
+      return (p.imageB.timestamp ?? 0) - (q.imageB.timestamp ?? 0);
+    });
+    return out;
+  }, [herd.data?.rawNeighbours, herd.data?.imagesById]);
+
+  // Keep only pairs with at least one animal, and record each pair's chain set.
+  const { pairs, chainSets } = useMemo(() => {
+    const ps: NeighbourPairWithMeta[] = [];
+    const cs: Set<string>[] = [];
+    for (const p of directPairs) {
+      const aAnns = annotationsByImage[p.image1Id] ?? [];
+      const bAnns = annotationsByImage[p.image2Id] ?? [];
+      if (aAnns.length === 0 && bAnns.length === 0) continue;
+      const set = new Set<string>();
+      for (const a of aAnns) set.add(a.objectId ?? a.id);
+      for (const a of bAnns) set.add(a.objectId ?? a.id);
+      ps.push(p);
+      cs.push(set);
+    }
+    return { pairs: ps, chainSets: cs };
+  }, [directPairs, annotationsByImage]);
+
+  const lanes = useMemo(
+    () => buildLanes(pairs, herd.data?.cameraNamesById ?? {}),
+    [pairs, herd.data?.cameraNamesById]
+  );
+
+  // ---- Lane-aware navigation ----
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [activeLane, setActiveLane] = useState(0);
+  const [navCollapsed, setNavCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (currentIndex >= pairs.length) setCurrentIndex(0);
+  }, [pairs.length, currentIndex]);
+
+  useEffect(() => {
+    if (!lanes.length) return;
+    if (lanes[activeLane]?.entries.includes(currentIndex)) return;
+    const li = lanes.findIndex((l) => l.entries.includes(currentIndex));
+    setActiveLane(li >= 0 ? li : 0);
+  }, [currentIndex, lanes, activeLane]);
+
+  const requestPair = useCallback(
+    (target: number, lane: number) => {
+      if (target < 0 || target >= pairs.length) return;
+      setCurrentIndex(target);
+      setActiveLane(lane);
+    },
+    [pairs.length]
+  );
+
+  const laneNav = useCallback(
+    (delta: 1 | -1) => {
+      const lane = lanes[activeLane];
+      if (!lane) return;
+      const pos = lane.entries.indexOf(currentIndex);
+      if (pos === -1) return;
+      const next = pos + delta;
+      if (next < 0 || next >= lane.entries.length) return;
+      requestPair(lane.entries[next], activeLane);
+    },
+    [lanes, activeLane, currentIndex, requestPair]
+  );
+
+  const lanePos = lanes[activeLane]?.entries.indexOf(currentIndex) ?? -1;
+  const laneLen = lanes[activeLane]?.entries.length ?? 0;
+  const hasPrev = lanePos > 0;
+  const hasNext = lanePos >= 0 && lanePos < laneLen - 1;
+
+  // ---- Obscured toggle (optimistic, reverts on failure). ----
+  const toggleObscured = useCallback(
+    async (annotationId: string) => {
+      const current = annotations.find((a) => a.id === annotationId);
+      if (!current) return;
+      const desired = !current.obscured;
+      const apply = (list: ChainAnnotation[]) =>
+        list.map((a) =>
+          a.id === annotationId ? { ...a, obscured: desired } : a
+        );
+      const revert = (list: ChainAnnotation[]) =>
+        list.map((a) =>
+          a.id === annotationId ? { ...a, obscured: current.obscured } : a
+        );
+      setAnnotations(apply);
+      try {
+        const updateAnnotation = client.models.Annotation
+          .update as unknown as UpdateAnnotationObscured;
+        const response = await updateAnnotation({
+          id: annotationId,
+          obscured: desired,
+        });
+        if (response?.errors?.length) {
+          throw new Error(
+            response.errors
+              .map((e) => e.message ?? 'Unknown GraphQL error')
+              .join('; ')
+          );
+        }
+      } catch (err) {
+        console.error('Failed to toggle obscured flag', err);
+        setAnnotations(revert);
+      }
+    },
+    [annotations, client]
+  );
+
+  // ---- Chain-tiles modal ----
+  const [tilesChainId, setTilesChainId] = useState<string | null>(null);
+  const onViewChainTiles = useCallback(
+    (annotationId: string) => {
+      const a = annotations.find((x) => x.id === annotationId);
+      if (a) setTilesChainId(a.objectId ?? a.id);
+    },
+    [annotations]
+  );
+  // Preserve old `?chain=<id>` share links — open the tiles modal directly.
+  useEffect(() => {
+    const chainParam = searchParams.get('chain');
+    if (chainParam) setTilesChainId(chainParam);
+    // Run once on mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const openImageHrefFor = useCallback(
+    (a: ChainAnnotation) =>
+      `/surveys/${surveyId}/image/${a.imageId}/${annotationSetId}`,
+    [surveyId, annotationSetId]
+  );
+
+  const currentPair = pairs[currentIndex];
+  const loading = fetchStatus !== 'done' || herd.isLoading;
+
+  return (
+    <div
+      className='w-100 h-100 d-flex flex-column'
+      style={{ minHeight: 0, paddingTop: 12, paddingBottom: 12 }}
+    >
+      <div
+        className='d-flex flex-row align-items-center gap-3 px-3 py-2'
+        style={{ flexShrink: 0, background: '#4E5D6C', color: '#f8f9fa' }}
+      >
+        <div style={{ fontWeight: 600 }}>{project.name}</div>
+        <div style={{ width: 220 }}>
+          <Select
+            value={selectedCategory}
+            onChange={(v: SingleValue<{ label: string; value: string }>) =>
+              setSelectedCategory(v)
+            }
+            isClearable
+            options={categoryOptions}
+            className='text-black'
+            placeholder='All labels'
+            isDisabled={loading}
+          />
+        </div>
+        {!loading && pairs.length > 0 && (
+          <div style={{ fontSize: 13, opacity: 0.85 }}>
+            Pair {currentIndex + 1} of {pairs.length}
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <div
+          className='d-flex align-items-center justify-content-center text-muted'
+          style={{ flex: 1 }}
+        >
+          {fetchStatus === 'error' ? (
+            <span>
+              Failed to load annotations{fetchError ? `: ${fetchError}` : '.'}
+            </span>
+          ) : (
+            <span>
+              <Spinner animation='border' size='sm' className='me-2' />
+              Loading{' '}
+              {fetchStatus !== 'done'
+                ? `annotations… (${fetchCount} fetched)`
+                : `images… (${herd.progress.images} fetched)`}
+            </span>
+          )}
+        </div>
+      ) : pairs.length === 0 ? (
+        <div
+          className='d-flex align-items-center justify-content-center text-muted'
+          style={{ flex: 1 }}
+        >
+          <span>No image pairs with animals to review.</span>
+        </div>
+      ) : (
+        <>
+          <div className='mt-2' style={{ flex: 1, minHeight: 0 }}>
+            {currentPair && (
+              <HerdMapPair
+                key={`${currentPair.image1Id}__${currentPair.image2Id}`}
+                pair={currentPair}
+                annotationsA={annotationsByImage[currentPair.image1Id] ?? []}
+                annotationsB={annotationsByImage[currentPair.image2Id] ?? []}
+                categoryColors={categoryColors}
+                onToggleObscured={toggleObscured}
+                onViewChainTiles={onViewChainTiles}
+                onRequestPrevPair={hasPrev ? () => laneNav(-1) : undefined}
+                onRequestNextPair={hasNext ? () => laneNav(1) : undefined}
+                collapsed={navCollapsed}
+                onCollapsedChange={setNavCollapsed}
+              />
+            )}
+          </div>
+          {!navCollapsed && (
+            <HerdNavBar
+              chainSets={chainSets}
+              lanes={lanes}
+              activeIndex={currentIndex}
+              activeLane={activeLane}
+              onJump={(i, lane) => requestPair(i, lane)}
+            />
+          )}
+        </>
+      )}
+
+      <ChainTilesModal
+        show={tilesChainId !== null}
+        onHide={() => setTilesChainId(null)}
+        chainId={tilesChainId}
+        annotations={annotations}
+        categoryColors={categoryColors}
+        onToggleObscured={toggleObscured}
+        openImageHrefFor={openImageHrefFor}
+      />
+    </div>
+  );
+}

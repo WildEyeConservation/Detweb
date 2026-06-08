@@ -8,6 +8,10 @@ import { getTileBlob } from '../StorageLayer';
 import type { ImageType } from '../schemaTypes';
 import type { CandidateStatus, PixelTransform } from './types';
 import { nameFor } from './utils/identity';
+import {
+  MapLocationOverlay,
+  type LocationSourceConfig,
+} from './MapLocationOverlay';
 
 /**
  * Visual classification of a marker.
@@ -129,6 +133,24 @@ interface Props {
   onMarkerMoveToOov?: (candidateKey: string) => void;
   onMarkerSplitChain?: (candidateKey: string) => void;
   /**
+   * User clicked "View chain tiles" in the popup. Only wired in the herd view,
+   * where it opens the chain-tiles modal in place of the URL-based "View
+   * Chain" action. Requires `simplifiedActions` to surface the button.
+   */
+  onMarkerViewChainTiles?: (candidateKey: string) => void;
+  /**
+   * Strip the popup down to the herd-view action set: the obscured toggle plus
+   * "View chain tiles". Hides Change Label / Delete / Split chain / Move to OOV
+   * and the URL-based "View Chain". Defaults to the full ChainLinker popup.
+   */
+  simplifiedActions?: boolean;
+  /**
+   * Whether markers can be dragged to reposition the annotation. Defaults to
+   * true (ChainLinker). The herd view passes false — positions are read-only
+   * there, only the obscured flag is editable.
+   */
+  markersDraggable?: boolean;
+  /**
    * Munkres "leave unmatched" cost in image pixels. Used to render a ring
    * around the active marker so the user can see exactly the radius within
    * which a partner annotation would be paired.
@@ -148,6 +170,18 @@ interface Props {
   previewTransform?: PixelTransform;
   /** The OTHER image of the pair, whose bounds the overlay traces. */
   otherImage?: ImageType;
+  /**
+   * When provided, renders a top-right checkbox control to toggle detection
+   * location boxes (per source) drawn on this map's image. Omitted by callers
+   * that don't want the overlay (e.g. the ChainLinker).
+   */
+  locationSources?: LocationSourceConfig[];
+  /**
+   * When true, hides this map's annotation markers only — location boxes, the
+   * homography preview and the image tiles stay visible. Driven by the herd
+   * view's "hold Tab to peek" gesture.
+   */
+  markersHidden?: boolean;
 }
 
 const TILE_SIZE = 256;
@@ -415,10 +449,15 @@ export function IndividualIdMap({
   onMarkerToggleObscured,
   onMarkerMoveToOov,
   onMarkerSplitChain,
+  onMarkerViewChainTiles,
+  simplifiedActions,
+  markersDraggable,
   leniency,
   leniencyAnchor,
   previewTransform,
   otherImage,
+  locationSources,
+  markersHidden,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<maplibregl.Map | null>(null);
@@ -443,6 +482,9 @@ export function IndividualIdMap({
   const toggleObscuredRef = useRef(onMarkerToggleObscured);
   const moveToOovRef = useRef(onMarkerMoveToOov);
   const splitChainRef = useRef(onMarkerSplitChain);
+  const viewChainTilesRef = useRef(onMarkerViewChainTiles);
+  const simplifiedActionsRef = useRef(simplifiedActions);
+  const markersDraggableRef = useRef(markersDraggable);
   useEffect(() => {
     dragRef.current = onMarkerDrag;
   }, [onMarkerDrag]);
@@ -473,6 +515,15 @@ export function IndividualIdMap({
   useEffect(() => {
     splitChainRef.current = onMarkerSplitChain;
   }, [onMarkerSplitChain]);
+  useEffect(() => {
+    viewChainTilesRef.current = onMarkerViewChainTiles;
+  }, [onMarkerViewChainTiles]);
+  useEffect(() => {
+    simplifiedActionsRef.current = simplifiedActions;
+  }, [simplifiedActions]);
+  useEffect(() => {
+    markersDraggableRef.current = markersDraggable;
+  }, [markersDraggable]);
 
   // ---- Popup state ----
   // One popup div per map, repositioned and recontentated per hover. We use
@@ -507,7 +558,7 @@ export function IndividualIdMap({
     div.style.cssText = `
       position: absolute;
       transform: translate(-50%, -100%);
-      margin-top: -14px;
+      margin-top: -4px;
       background: #ffffff;
       color: #1f2933;
       padding: 6px 8px;
@@ -548,7 +599,8 @@ export function IndividualIdMap({
     // DB write, so the user can flag an obscured animal before accepting.
     const interactive = mode === 'interactive';
     const isShadow = data.kind === 'shadow';
-    const showFullActions = interactive && !isShadow;
+    const simplified = !!simplifiedActionsRef.current;
+    const showFullActions = interactive && !isShadow && !simplified;
     const showObscureToggle = interactive;
     // Friendly label for the marker kind. "Proposed" matches how users
     // already refer to shadow markers; "primary"/"secondary" match the
@@ -582,8 +634,12 @@ export function IndividualIdMap({
         ? `<button data-action="split-chain" style="${btnStyle}background:#a16207;">Split chain from here</button>`
         : '';
     const viewChainHtml =
-      interactive && data.chainViewerHref
+      interactive && !simplified && data.chainViewerHref
         ? `<button data-action="view-chain" style="${btnStyle}background:#2f80ed;">View Chain</button>`
+        : '';
+    const viewChainTilesHtml =
+      interactive && simplified && viewChainTilesRef.current
+        ? `<button data-action="view-chain-tiles" style="${btnStyle}background:#2f80ed;">View chain tiles</button>`
         : '';
     el.innerHTML = `
       <div style="font-weight:600">${escape(nameFor(data.identityKey))}</div>
@@ -607,11 +663,24 @@ export function IndividualIdMap({
       }
       ${changeLabelHtml}
       ${obscureHtml}
+      ${viewChainTilesHtml}
       ${viewChainHtml}
       ${moveToOovHtml}
       ${splitChainHtml}
       ${deleteHtml}
     `;
+    if (viewChainTilesHtml) {
+      const viewTilesBtn = el.querySelector(
+        'button[data-action="view-chain-tiles"]'
+      ) as HTMLButtonElement | null;
+      if (viewTilesBtn) {
+        viewTilesBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          viewChainTilesRef.current?.(key);
+          hidePopup();
+        });
+      }
+    }
     if (viewChainHtml && data.chainViewerHref) {
       const viewChainBtn = el.querySelector(
         'button[data-action="view-chain"]'
@@ -1232,7 +1301,7 @@ export function IndividualIdMap({
         });
         mk = new maplibregl.Marker({
           element: el,
-          draggable: true,
+          draggable: markersDraggableRef.current !== false,
           // Anchor the centre of `el` on the lng/lat — maplibregl computes
           // and sets the `transform` accordingly. Don't overwrite it.
           anchor: 'center',
@@ -1300,6 +1369,16 @@ export function IndividualIdMap({
       }
     }
   }, [map, markers, px2lngLat, lngLat2px]);
+
+  // Hold-Tab "peek": hide only the annotation markers. Re-applied after every
+  // marker rebuild (depends on `markers`) so freshly created markers respect
+  // the current hidden state. Touches marker DOM only — overlay layers and
+  // tiles are left alone.
+  useEffect(() => {
+    for (const mk of markerRefs.current.values()) {
+      mk.getElement().style.visibility = markersHidden ? 'hidden' : '';
+    }
+  }, [markersHidden, markers, map]);
 
   // Image filename pill — top-centered, click-to-copy. Mirrors the pattern
   // in MapLibreImageViewer so the two map experiences feel the same.
@@ -1371,6 +1450,14 @@ export function IndividualIdMap({
           </span>
         </button>
       </div>
+      {locationSources && locationSources.length > 0 && (
+        <MapLocationOverlay
+          map={map}
+          imageId={image.id}
+          px2lngLat={px2lngLat}
+          sources={locationSources}
+        />
+      )}
     </div>
   );
 }
