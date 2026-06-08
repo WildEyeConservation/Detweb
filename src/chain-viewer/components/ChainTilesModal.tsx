@@ -1,0 +1,193 @@
+import { useCallback, useMemo, useState } from 'react';
+import { Modal } from 'react-bootstrap';
+import { Check, Copy, LayoutGrid, Square } from 'lucide-react';
+import { ChainGrid } from '../ChainGrid';
+import { ChainTilePaginator } from './ChainTilePaginator';
+import { buildChains } from '../utils/chainBuilder';
+import { useChainTileMeta } from '../hooks/useChainTileMeta';
+import { nameFor } from '../../individual-id/utils/identity';
+import type { ChainAnnotation } from '../types';
+
+const DEFAULT_COLOR = '#ff8c1a';
+
+type TileView = 'grid' | 'paginator';
+
+interface Props {
+  show: boolean;
+  onHide: () => void;
+  /** Chain key (objectId ?? id) of the annotation whose tiles to show. */
+  chainId: string | null;
+  /** Live set annotations — the chain's members are derived from these. */
+  annotations: ChainAnnotation[];
+  categoryColors: Record<string, string>;
+  onToggleObscured: (annotationId: string) => void;
+  openImageHrefFor: (annotation: ChainAnnotation) => string;
+}
+
+/**
+ * Per-annotation popup showing the chain's tiles, reusing the same tile grid
+ * the original Chain Viewer rendered. Launched from a marker's "View chain
+ * tiles" action in the herd view.
+ */
+export function ChainTilesModal({
+  show,
+  onHide,
+  chainId,
+  annotations,
+  categoryColors,
+  onToggleObscured,
+  openImageHrefFor,
+}: Props) {
+  const chain = useMemo(() => {
+    if (!show || !chainId) return null;
+    const members = annotations.filter(
+      (a) => (a.objectId ?? a.id) === chainId
+    );
+    return buildChains(members)[0] ?? null;
+  }, [show, chainId, annotations]);
+
+  const { metaByAnnotationId, loading } = useChainTileMeta(chain);
+
+  const [cameraRotations, setCameraRotations] = useState<Map<string, number>>(
+    () => new Map()
+  );
+  const rotateByKey = useCallback((key: string) => {
+    setCameraRotations((prev) => {
+      const next = new Map(prev);
+      next.set(key, ((prev.get(key) ?? 0) + 1) % 4);
+      return next;
+    });
+  }, []);
+
+  // Per-tile zoom-out steps, keyed by annotation id. Lifted here (rather than
+  // held inside ChainTile) so a tile's zoom survives paginator navigation and
+  // grid/paginator view switches, which remount the tile.
+  const [tileZoom, setTileZoom] = useState<Map<string, number>>(
+    () => new Map()
+  );
+  const setZoomFor = useCallback((annotationId: string, next: number) => {
+    setTileZoom((prev) => {
+      const updated = new Map(prev);
+      updated.set(annotationId, next);
+      return updated;
+    });
+  }, []);
+
+  const categoryColor = chain
+    ? categoryColors[chain.categoryId] || DEFAULT_COLOR
+    : DEFAULT_COLOR;
+
+  const [view, setView] = useState<TileView>('grid');
+
+  const [copied, setCopied] = useState(false);
+  const copyId = useCallback(() => {
+    if (!chain) return;
+    navigator.clipboard.writeText(chain.primaryId);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  }, [chain]);
+
+  return (
+    <Modal show={show} onHide={onHide} size='lg' centered scrollable>
+      <Modal.Header closeButton>
+        <Modal.Title className='flex-grow-1 d-flex flex-column'>
+          <span style={{ fontSize: 16 }}>Chain tiles</span>
+          {chain && (
+            <span
+              className='d-flex align-items-center gap-2'
+              style={{ fontSize: 13 }}
+            >
+              <span style={{ fontWeight: 600 }}>{nameFor(chain.primaryId)}</span>
+              <button
+                type='button'
+                onClick={copyId}
+                title={copied ? 'Copied!' : 'Copy chain id'}
+                className='d-inline-flex align-items-center'
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  padding: 0,
+                  cursor: 'pointer',
+                  color: copied ? '#2e7d32' : '#ff8c1a',
+                }}
+              >
+                {copied ? (
+                  <Check size={14} strokeWidth={2.5} />
+                ) : (
+                  <Copy size={14} strokeWidth={2.5} />
+                )}
+              </button>
+              <span className='text-muted'>
+                · {chain.annotations.length} sighting
+                {chain.annotations.length === 1 ? '' : 's'}
+              </span>
+            </span>
+          )}
+        </Modal.Title>
+        {chain && (
+          <div
+            className='chain-viewer-view-toggle align-self-center'
+            role='group'
+            aria-label='Tile view'
+          >
+            <button
+              type='button'
+              className={view === 'grid' ? 'active' : ''}
+              onClick={() => setView('grid')}
+              aria-pressed={view === 'grid'}
+              title='Grid view — all tiles at once'
+            >
+              <LayoutGrid size={14} strokeWidth={2.5} />
+              <span>Grid</span>
+            </button>
+            <button
+              type='button'
+              className={view === 'paginator' ? 'active' : ''}
+              onClick={() => setView('paginator')}
+              aria-pressed={view === 'paginator'}
+              title='Paginator view — one tile at a time'
+            >
+              <Square size={14} strokeWidth={2.5} />
+              <span>Paginator</span>
+            </button>
+          </div>
+        )}
+      </Modal.Header>
+      <Modal.Body style={{ maxHeight: '70vh' }}>
+        {chain ? (
+          view === 'grid' ? (
+            <ChainGrid
+              chain={chain}
+              metaByAnnotationId={metaByAnnotationId}
+              metaLoading={loading}
+              categoryColor={categoryColor}
+              columns={null}
+              cameraRotations={cameraRotations}
+              onRotateKey={rotateByKey}
+              tileZoom={tileZoom}
+              onZoomChange={setZoomFor}
+              onToggleObscured={onToggleObscured}
+              openImageHrefFor={openImageHrefFor}
+            />
+          ) : (
+            <ChainTilePaginator
+              key={chain.primaryId}
+              chain={chain}
+              metaByAnnotationId={metaByAnnotationId}
+              metaLoading={loading}
+              categoryColor={categoryColor}
+              cameraRotations={cameraRotations}
+              onRotateKey={rotateByKey}
+              tileZoom={tileZoom}
+              onZoomChange={setZoomFor}
+              onToggleObscured={onToggleObscured}
+              openImageHrefFor={openImageHrefFor}
+            />
+          )
+        ) : (
+          <div className='text-muted text-center p-4'>No chain selected.</div>
+        )}
+      </Modal.Body>
+    </Modal>
+  );
+}

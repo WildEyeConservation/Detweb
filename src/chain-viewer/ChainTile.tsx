@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { Eye, ExternalLink, EyeOff, RotateCw, ScanEye } from 'lucide-react';
-import { CHAIN_TILE_SIZE, fetchCenteredCrop } from './utils/tileCrop';
+import {
+  Eye,
+  ExternalLink,
+  EyeOff,
+  RotateCw,
+  ScanEye,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
+import {
+  CHAIN_TILE_SIZE,
+  fetchCenteredCrop,
+  getCropZoomRange,
+} from './utils/tileCrop';
 import type { AnnotationImageMeta, ChainAnnotation } from './types';
 
 interface Props {
@@ -12,6 +24,14 @@ interface Props {
   /** Rotation in 90° steps. 0 = no rotation, 1 = -90°, 2 = -180°, 3 = -270°. */
   rotation: number;
   onRotate: () => void;
+  /**
+   * Zoom-out steps from the tightest crop (0 = native resolution). Each step
+   * loads a lower slippy level showing more of the image. Controlled by the
+   * parent (keyed per annotation) so it survives navigation / remounts.
+   */
+  zoomOut: number;
+  /** Request a new zoom-out step for this tile. */
+  onZoomChange: (next: number) => void;
   /** Target for the "open image" button — uses the ImageLoader route. */
   openImageHref: string;
   /** Toggle `obscured` on the annotation; persists to the DB. */
@@ -39,12 +59,17 @@ export function ChainTile({
   categoryColor,
   rotation,
   onRotate,
+  zoomOut,
+  onZoomChange,
   openImageHref,
   onToggleObscured,
 }: Props) {
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const objectUrlRef = useRef<string | null>(null);
+
+  const maxZoomOut = meta ? getCropZoomRange(meta.width, meta.height).maxSteps : 0;
+  const effectiveZoomOut = Math.min(zoomOut, maxZoomOut);
 
   useEffect(() => {
     // OOV rows mark "animal known to be in this image but not visible".
@@ -61,13 +86,14 @@ export function ChainTile({
     }
     let cancelled = false;
     setError(null);
-    setImgSrc(null);
+    const { maxZ } = getCropZoomRange(meta.width, meta.height);
     fetchCenteredCrop({
       sourceKey: meta.sourceKey,
       imageWidth: meta.width,
       imageHeight: meta.height,
       x: annotation.x,
       y: annotation.y,
+      zoom: maxZ - effectiveZoomOut,
     })
       .then(({ canvas, markerX, markerY }) => {
         if (cancelled) return;
@@ -97,7 +123,15 @@ export function ChainTile({
     return () => {
       cancelled = true;
     };
-  }, [annotation.id, annotation.x, annotation.y, meta, categoryColor]);
+  }, [
+    annotation.id,
+    annotation.x,
+    annotation.y,
+    annotation.oov,
+    meta,
+    categoryColor,
+    effectiveZoomOut,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -194,6 +228,7 @@ export function ChainTile({
           onClick={(e) => {
             e.stopPropagation();
             onToggleObscured();
+            e.currentTarget.blur();
           }}
           title={
             annotation.obscured
@@ -210,12 +245,45 @@ export function ChainTile({
           <span>{annotation.obscured ? 'Obscured' : 'Visible'}</span>
         </button>
       )}
+      {!annotation.oov && maxZoomOut > 0 && (
+        <>
+          <button
+            type='button'
+            className='chain-viewer-tile-zoom chain-viewer-tile-zoom-1'
+            onClick={(e) => {
+              e.stopPropagation();
+              onZoomChange(Math.max(0, effectiveZoomOut - 1));
+              e.currentTarget.blur();
+            }}
+            disabled={effectiveZoomOut <= 0}
+            title='Zoom in (this tile only)'
+            aria-label='Zoom in'
+          >
+            <ZoomIn size={14} strokeWidth={2.5} />
+          </button>
+          <button
+            type='button'
+            className='chain-viewer-tile-zoom chain-viewer-tile-zoom-2'
+            onClick={(e) => {
+              e.stopPropagation();
+              onZoomChange(Math.min(maxZoomOut, effectiveZoomOut + 1));
+              e.currentTarget.blur();
+            }}
+            disabled={effectiveZoomOut >= maxZoomOut}
+            title='Zoom out (this tile only)'
+            aria-label='Zoom out'
+          >
+            <ZoomOut size={14} strokeWidth={2.5} />
+          </button>
+        </>
+      )}
       <button
         type='button'
         className='chain-viewer-tile-action chain-viewer-tile-action-1'
         onClick={(e) => {
           e.stopPropagation();
           onRotate();
+          e.currentTarget.blur();
         }}
         title='Rotate tile (and all tiles from this camera) 90°'
         aria-label='Rotate 90 degrees'
@@ -227,7 +295,10 @@ export function ChainTile({
         href={openImageHref}
         target='_blank'
         rel='noopener noreferrer'
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          e.currentTarget.blur();
+        }}
         title='Open image in a new tab'
         aria-label='Open image in a new tab'
       >
