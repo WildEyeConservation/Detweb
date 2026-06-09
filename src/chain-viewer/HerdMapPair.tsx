@@ -42,6 +42,7 @@ interface Props {
   categoryColors: Record<string, string>;
   onToggleObscured: (annotationId: string) => void;
   onViewChainTiles: (annotationId: string) => void;
+  onChangeLabel: (annotationId: string) => void;
   /** Step one frame (pair) back / forward along the time-ordered sequence. */
   onRequestPrevPair?: () => void;
   onRequestNextPair?: () => void;
@@ -74,6 +75,7 @@ export function HerdMapPair({
   categoryColors,
   onToggleObscured,
   onViewChainTiles,
+  onChangeLabel,
   onRequestPrevPair,
   onRequestNextPair,
   onRequestPrevHerd,
@@ -302,6 +304,7 @@ export function HerdMapPair({
             onHoverChange={handleHover}
             onMarkerToggleObscured={onToggleObscured}
             onMarkerViewChainTiles={onViewChainTiles}
+            onMarkerChangeLabel={onChangeLabel}
             simplifiedActions
             markersDraggable={false}
             previewTransform={pair.backward}
@@ -321,6 +324,7 @@ export function HerdMapPair({
             onHoverChange={handleHover}
             onMarkerToggleObscured={onToggleObscured}
             onMarkerViewChainTiles={onViewChainTiles}
+            onMarkerChangeLabel={onChangeLabel}
             simplifiedActions
             markersDraggable={false}
             previewTransform={pair.forward}

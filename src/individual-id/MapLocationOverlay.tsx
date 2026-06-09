@@ -176,7 +176,14 @@ export function MapLocationOverlay({ map, imageId, px2lngLat, sources }: Props) 
   // Rebuild the rectangle features whenever the enabled set or data changes.
   useEffect(() => {
     if (!map) return;
-    const src = map.getSource(SRC_ID) as maplibregl.GeoJSONSource | undefined;
+    let src: maplibregl.GeoJSONSource | undefined;
+    try {
+      src = map.getSource(SRC_ID) as maplibregl.GeoJSONSource | undefined;
+    } catch {
+      // React can run this effect while a just-unmounted MapLibre instance is
+      // still in state. At that point map.getSource throws because style is gone.
+      return;
+    }
     if (!src) return;
     const features: Feature<Polygon | Point>[] = [];
     for (const cfg of sources) {

@@ -139,9 +139,10 @@ interface Props {
    */
   onMarkerViewChainTiles?: (candidateKey: string) => void;
   /**
-   * Strip the popup down to the herd-view action set: the obscured toggle plus
-   * "View chain tiles". Hides Change Label / Delete / Split chain / Move to OOV
-   * and the URL-based "View Chain". Defaults to the full ChainLinker popup.
+   * Strip the popup down to the herd-view action set: Change Label, the
+   * obscured toggle and "View chain tiles". Hides Delete / Split chain / Move
+   * to OOV and the URL-based "View Chain". Defaults to the full ChainLinker
+   * popup.
    */
   simplifiedActions?: boolean;
   /**
@@ -601,6 +602,8 @@ export function IndividualIdMap({
     const isShadow = data.kind === 'shadow';
     const simplified = !!simplifiedActionsRef.current;
     const showFullActions = interactive && !isShadow && !simplified;
+    const showChangeLabel =
+      interactive && !isShadow && (!simplified || !!changeLabelRef.current);
     const showObscureToggle = interactive;
     // Friendly label for the marker kind. "Proposed" matches how users
     // already refer to shadow markers; "primary"/"secondary" match the
@@ -614,7 +617,7 @@ export function IndividualIdMap({
     const btnStyle =
       'margin-top:6px;color:#fff;border:none;border-radius:4px;' +
       'padding:4px 8px;cursor:pointer;font-size:11px;width:100%;';
-    const changeLabelHtml = showFullActions
+    const changeLabelHtml = showChangeLabel
       ? `<button data-action="change-label" style="${btnStyle}background:#5B6977;">Change Label</button>`
       : '';
     const obscureHtml = showObscureToggle
@@ -717,7 +720,7 @@ export function IndividualIdMap({
         });
       }
     }
-    if (showFullActions) {
+    if (showChangeLabel) {
       const changeBtn = el.querySelector(
         'button[data-action="change-label"]'
       ) as HTMLButtonElement | null;
@@ -728,6 +731,8 @@ export function IndividualIdMap({
           hidePopup();
         });
       }
+    }
+    if (showFullActions) {
       const splitBtn = el.querySelector(
         'button[data-action="split-chain"]'
       ) as HTMLButtonElement | null;

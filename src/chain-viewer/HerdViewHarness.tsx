@@ -1,6 +1,6 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
-import { Spinner } from 'react-bootstrap';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Button, Spinner } from 'react-bootstrap';
 import Select, { type SingleValue } from 'react-select';
 import { GlobalContext, ProjectContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
@@ -8,11 +8,12 @@ import { buildNeighbourTransforms } from '../individual-id/utils/transforms';
 import type { Lane } from '../individual-id/utils/lanes';
 import { buildHerdRuns } from './utils/herdRuns';
 import type { NeighbourPairWithMeta } from '../individual-id/types';
-import type { ImageType } from '../schemaTypes';
+import type { CategoryType, ImageType } from '../schemaTypes';
 import { useHerdData } from './hooks/useHerdData';
 import { HerdMapPair } from './HerdMapPair';
 import { HerdNavBar } from './HerdNavBar';
 import { ChainTilesModal } from './components/ChainTilesModal';
+import ChangeCategoryModal from '../ChangeCategoryModal';
 import type { ChainAnnotation } from './types';
 import './ChainViewer.css';
 
@@ -39,6 +40,11 @@ type GraphQLResponse = {
 type UpdateAnnotationObscured = (input: {
   id: string;
   obscured: boolean;
+}) => Promise<GraphQLResponse>;
+
+type UpdateAnnotationCategory = (input: {
+  id: string;
+  categoryId: string;
 }) => Promise<GraphQLResponse>;
 
 /** Chronological order, mirroring the ChainLinker (older image owns identity). */
@@ -69,7 +75,9 @@ export function HerdViewHarness({ annotationSetId }: Props) {
     project,
   } = useContext(ProjectContext)!;
   const { surveyId } = useParams();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const chainParam = searchParams.get('chain');
 
   const herd = useHerdData();
 
@@ -145,22 +153,29 @@ export function HerdViewHarness({ annotationSetId }: Props) {
     value: string;
   } | null>(null);
 
-  const categoryOptions = useMemo(
+  const setCategories = useMemo(
     () =>
       (categories ?? [])
         .filter((c) => c.annotationSetId === annotationSetId)
+        .sort((a, b) => a.name.localeCompare(b.name)) as CategoryType[],
+    [categories, annotationSetId]
+  );
+
+  const categoryOptions = useMemo(
+    () =>
+      setCategories
         .map((c) => ({ label: c.name, value: c.id }))
         .sort((a, b) => a.label.localeCompare(b.label)),
-    [categories, annotationSetId]
+    [setCategories]
   );
 
   const categoryColors = useMemo(() => {
     const m: Record<string, string> = {};
-    for (const c of categories ?? []) {
+    for (const c of setCategories) {
       if (c.id && c.color) m[c.id] = c.color;
     }
     return m;
-  }, [categories]);
+  }, [setCategories]);
 
   const visibleAnnotations = useMemo(
     () =>
@@ -260,6 +275,7 @@ export function HerdViewHarness({ annotationSetId }: Props) {
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [navCollapsed, setNavCollapsed] = useState(false);
+  const initialChainParamHandledRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (currentIndex >= pairs.length) setCurrentIndex(0);
@@ -338,6 +354,87 @@ export function HerdViewHarness({ annotationSetId }: Props) {
     [annotations, client]
   );
 
+  // ---- Change label (chain-wide, optimistic, reverts on failure). ----
+  const [labelChange, setLabelChange] = useState<{
+    annotationId: string;
+    currentCategoryId: string;
+    chainIds: string[];
+  } | null>(null);
+
+  const buildChainIds = useCallback(
+    (annotationId: string): string[] => {
+      const ids = new Set<string>([annotationId]);
+      const target = annotations.find((a) => a.id === annotationId);
+      const chainKey = target?.objectId;
+      if (chainKey) {
+        for (const a of annotations) {
+          if (a.objectId === chainKey || a.id === chainKey) ids.add(a.id);
+        }
+      }
+      return Array.from(ids);
+    },
+    [annotations]
+  );
+
+  const handleChangeLabel = useCallback(
+    (annotationId: string) => {
+      const current = annotations.find((a) => a.id === annotationId);
+      if (!current) return;
+      setLabelChange({
+        annotationId,
+        currentCategoryId: current.categoryId,
+        chainIds: buildChainIds(annotationId),
+      });
+    },
+    [annotations, buildChainIds]
+  );
+
+  const applyLabelChange = useCallback(
+    async (newCategoryId: string) => {
+      const target = labelChange;
+      if (!target) return;
+
+      const ids = new Set(target.chainIds);
+      const beforeMap = new Map<string, ChainAnnotation>();
+      for (const aid of ids) {
+        const a = annotations.find((x) => x.id === aid);
+        if (a) beforeMap.set(aid, a);
+      }
+
+      const apply = (list: ChainAnnotation[]) =>
+        list.map((a) =>
+          ids.has(a.id) ? { ...a, categoryId: newCategoryId } : a
+        );
+      const rollback = (list: ChainAnnotation[]) =>
+        list.map((a) => beforeMap.get(a.id) ?? a);
+
+      setAnnotations(apply);
+      setLabelChange(null);
+
+      try {
+        const updateAnnotation = client.models.Annotation
+          .update as unknown as UpdateAnnotationCategory;
+        const responses = await Promise.all(
+          Array.from(ids).map((aid) =>
+            updateAnnotation({ id: aid, categoryId: newCategoryId })
+          )
+        );
+        const errors = responses.flatMap((response) => response?.errors ?? []);
+        if (errors.length) {
+          throw new Error(
+            errors
+              .map((e) => e.message ?? 'Unknown GraphQL error')
+              .join('; ')
+          );
+        }
+      } catch (err) {
+        console.error('Failed to update annotation labels', err);
+        setAnnotations(rollback);
+      }
+    },
+    [annotations, client, labelChange]
+  );
+
   // ---- Chain-tiles modal ----
   const [tilesChainId, setTilesChainId] = useState<string | null>(null);
   const onViewChainTiles = useCallback(
@@ -347,13 +444,32 @@ export function HerdViewHarness({ annotationSetId }: Props) {
     },
     [annotations]
   );
-  // Preserve old `?chain=<id>` share links — open the tiles modal directly.
+  // Preserve old `?chain=<id>` share links: open the modal and position the
+  // maps at the first pair of the herd run containing that chain.
   useEffect(() => {
-    const chainParam = searchParams.get('chain');
     if (chainParam) setTilesChainId(chainParam);
-    // Run once on mount only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [chainParam]);
+
+  useEffect(() => {
+    if (!chainParam) return;
+    if (fetchStatus !== 'done' || herd.isLoading || pairs.length === 0) return;
+    if (initialChainParamHandledRef.current === chainParam) return;
+
+    const containingIndex = chainSets.findIndex((set) => set.has(chainParam));
+    if (containingIndex < 0) return;
+
+    const runId = runIdByIndex[containingIndex] ?? 0;
+    setCurrentIndex(runStarts[runId] ?? containingIndex);
+    initialChainParamHandledRef.current = chainParam;
+  }, [
+    chainParam,
+    chainSets,
+    fetchStatus,
+    herd.isLoading,
+    pairs.length,
+    runIdByIndex,
+    runStarts,
+  ]);
 
   const openImageHrefFor = useCallback(
     (a: ChainAnnotation) =>
@@ -393,6 +509,13 @@ export function HerdViewHarness({ annotationSetId }: Props) {
             {runStarts.length}
           </div>
         )}
+        <Button
+          variant='primary'
+          className='ms-auto'
+          onClick={() => navigate('/jobs')}
+        >
+          Save &amp; Exit
+        </Button>
       </div>
 
       {loading ? (
@@ -433,6 +556,7 @@ export function HerdViewHarness({ annotationSetId }: Props) {
                 categoryColors={categoryColors}
                 onToggleObscured={toggleObscured}
                 onViewChainTiles={onViewChainTiles}
+                onChangeLabel={handleChangeLabel}
                 onRequestPrevPair={hasPrev ? () => stepFrame(-1) : undefined}
                 onRequestNextPair={hasNext ? () => stepFrame(1) : undefined}
                 onRequestPrevHerd={hasPrevHerd ? () => jumpHerd(-1) : undefined}
@@ -462,6 +586,20 @@ export function HerdViewHarness({ annotationSetId }: Props) {
         categoryColors={categoryColors}
         onToggleObscured={toggleObscured}
         openImageHrefFor={openImageHrefFor}
+      />
+      <ChangeCategoryModal
+        show={labelChange !== null}
+        onClose={() => setLabelChange(null)}
+        categories={setCategories}
+        currentCategoryId={labelChange?.currentCategoryId}
+        onSelectCategory={applyLabelChange}
+        warning={
+          labelChange
+            ? `${labelChange.chainIds.length} annotation${
+                labelChange.chainIds.length === 1 ? '' : 's'
+              } in this chain will be relabelled.`
+            : undefined
+        }
       />
     </div>
   );
