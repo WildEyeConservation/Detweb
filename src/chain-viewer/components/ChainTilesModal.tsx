@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Modal } from 'react-bootstrap';
-import { Check, Copy, LayoutGrid, Square } from 'lucide-react';
+import { Check, Copy, LayoutGrid, Share2, Square } from 'lucide-react';
 import { ChainGrid } from '../ChainGrid';
 import { ChainTilePaginator } from './ChainTilePaginator';
 import { buildChains } from '../utils/chainBuilder';
@@ -86,6 +86,15 @@ export function ChainTilesModal({
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1500);
   }, [chain]);
+  const [shareCopied, setShareCopied] = useState(false);
+  const shareChain = useCallback(() => {
+    if (!chain) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('chain', chain.primaryId);
+    navigator.clipboard.writeText(url.toString());
+    setShareCopied(true);
+    window.setTimeout(() => setShareCopied(false), 1500);
+  }, [chain]);
 
   return (
     <Modal show={show} onHide={onHide} size='lg' centered scrollable>
@@ -125,11 +134,35 @@ export function ChainTilesModal({
           )}
         </Modal.Title>
         {chain && (
-          <div
-            className='chain-viewer-view-toggle align-self-center'
-            role='group'
-            aria-label='Tile view'
-          >
+          <div className='d-flex align-items-center gap-2 align-self-center'>
+            <button
+              type='button'
+              onClick={shareChain}
+              title={shareCopied ? 'Copied!' : 'Copy share link'}
+              className='d-inline-flex align-items-center gap-1'
+              style={{
+                border: 'none',
+                background: 'transparent',
+                padding: 0,
+                whiteSpace: 'nowrap',
+                color: shareCopied ? '#2e7d32' : '#ff8c1a',
+                cursor: 'pointer',
+                fontSize: 13,
+                textDecoration: shareCopied ? 'none' : 'underline',
+              }}
+            >
+              {shareCopied ? (
+                <Check size={14} strokeWidth={2.5} />
+              ) : (
+                <Share2 size={14} strokeWidth={2.5} />
+              )}
+              <span>{shareCopied ? 'Copied' : 'Share'}</span>
+            </button>
+            <div
+              className='chain-viewer-view-toggle'
+              role='group'
+              aria-label='Tile view'
+            >
             <button
               type='button'
               className={view === 'grid' ? 'active' : ''}
@@ -150,6 +183,7 @@ export function ChainTilesModal({
               <Square size={14} strokeWidth={2.5} />
               <span>Paginator</span>
             </button>
+            </div>
           </div>
         )}
       </Modal.Header>
