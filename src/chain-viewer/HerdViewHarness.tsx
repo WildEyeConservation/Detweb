@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
-import { Spinner } from 'react-bootstrap';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Button, Spinner } from 'react-bootstrap';
 import Select, { type SingleValue } from 'react-select';
 import { GlobalContext, ProjectContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
@@ -75,6 +75,7 @@ export function HerdViewHarness({ annotationSetId }: Props) {
     project,
   } = useContext(ProjectContext)!;
   const { surveyId } = useParams();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const chainParam = searchParams.get('chain');
 
@@ -508,6 +509,13 @@ export function HerdViewHarness({ annotationSetId }: Props) {
             {runStarts.length}
           </div>
         )}
+        <Button
+          variant='primary'
+          className='ms-auto'
+          onClick={() => navigate('/jobs')}
+        >
+          Save &amp; Exit
+        </Button>
       </div>
 
       {loading ? (
