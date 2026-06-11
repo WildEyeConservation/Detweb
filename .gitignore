@@ -24,6 +24,10 @@ dist-ssr
 *.sln
 *.sw?
 
+# Python
+__pycache__/
+*.pyc
+
 # amplify
 amplify_outputs*
 amplifyconfiguration*
