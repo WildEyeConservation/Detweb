@@ -1639,20 +1639,27 @@ export function IndividualIdHarness({
 
       // Fire writes (non-blocking). Strip createdAt/updatedAt — Amplify
       // auto-manages those and CreateAnnotationInput rejects them.
-      try {
-        await Promise.all([
-          ...updates.map((u) =>
-            client.models.Annotation.update({ id: u.id, ...u.patch } as any)
-          ),
-          ...newRows.map((row) => {
-            const { createdAt: _c, updatedAt: _u, ...dbInput } = row as any;
-            return client.models.Annotation.create(dbInput as any);
-          }),
-        ]);
-      } catch (err) {
+      //
+      // We deliberately do NOT await the round-trip: the optimistic local
+      // update above is the session source of truth, and callers use the
+      // return value only to advance focus to the next marker. Awaiting
+      // AppSync here stalled that advance by a visible ~1s and — because the
+      // accepted candidate's pairKey changes once it gains an objectId — gave
+      // the stale-activeKey cleanup time to fire, which reset the pan baseline
+      // and suppressed the pan to the next marker. Failures only log; there's
+      // no rollback to sequence.
+      void Promise.all([
+        ...updates.map((u) =>
+          client.models.Annotation.update({ id: u.id, ...u.patch } as any)
+        ),
+        ...newRows.map((row) => {
+          const { createdAt: _c, updatedAt: _u, ...dbInput } = row as any;
+          return client.models.Annotation.create(dbInput as any);
+        }),
+      ]).catch((err) => {
         // eslint-disable-next-line no-console
         console.error('Failed to commit individual-id link', err);
-      }
+      });
       return true;
     },
     [
