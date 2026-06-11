@@ -629,6 +629,14 @@ export function IndividualIdMapPair(props: Props) {
           }
         }
         setActiveKey(nearest.pairKey);
+        // Pan explicitly instead of leaning on the active-key effect. The
+        // just-accepted candidate's pairKey changes the moment its link is
+        // written (it gains an objectId), so `activeKey` briefly points at a
+        // stale key and the cleanup effect nulls it — which makes the pan
+        // effect treat this as an initial activation and skip panning. The
+        // viewport check inside panToCandidate still suppresses the pan when
+        // `nearest` is already on screen.
+        panToCandidate(nearest.pairKey);
       }
       return;
     }
