@@ -28,13 +28,13 @@ BOX_SIZE = int(os.environ.get('STORMFLY_BOX_SIZE', '64'))
 
 sqs = boto3.client('sqs', region_name=REGION)
 s3 = boto3.client('s3', region_name=REGION)
-credentials = boto3.Session().get_credentials().get_frozen_credentials()
+# ECS task-role credentials rotate every few hours; passing the refreshable
+# botocore credentials object (instead of a frozen snapshot) makes AWS4Auth
+# re-read keys on every request, so long-lived workers keep signing correctly.
 auth = AWS4Auth(
-    credentials.access_key,
-    credentials.secret_key,
-    REGION,
-    'appsync',
-    session_token=credentials.token,
+    region=REGION,
+    service='appsync',
+    refreshable_credentials=boto3.Session().get_credentials(),
 )
 client = Client(
     transport=RequestsHTTPTransport(
@@ -157,6 +157,20 @@ def main():
                 )
             except Exception as error:
                 print(f'Error processing Stormfly message: {error}', flush=True)
+                # Release the message immediately so retries (and eventual DLQ
+                # redrive) happen promptly instead of after the full 30-minute
+                # visibility timeout.
+                try:
+                    sqs.change_message_visibility(
+                        QueueUrl=QUEUE_URL,
+                        ReceiptHandle=message['ReceiptHandle'],
+                        VisibilityTimeout=0,
+                    )
+                except ClientError as visibility_error:
+                    print(
+                        f'Failed to reset message visibility: {visibility_error}',
+                        flush=True,
+                    )
         if 'Messages' not in response:
             time.sleep(5)
 
