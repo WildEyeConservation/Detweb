@@ -1434,6 +1434,66 @@ export default function UploadManager() {
         });
       }
 
+      if (model === 'stormfly-testing') {
+        const stormflySetName = `${projectId}_stormfly-testing`;
+        let locationSet =
+          (await findLocationSetByName(stormflySetName))?.id ?? null;
+        if (!locationSet) {
+          const { data: createdLocationSet } =
+            await client.models.LocationSet.create({
+              name: stormflySetName,
+              projectId,
+              group: organizationId,
+            });
+          locationSet = createdLocationSet?.id ?? null;
+        }
+
+        if (!locationSet) {
+          console.error('Failed to create Stormfly location set');
+          alert('Something went wrong, please try again.');
+          return;
+        }
+
+        const processedRecords = await fetchAllPaginatedResults(
+          client.models.ImageProcessedBy.processedByProjectIdAndSource,
+          {
+            projectId,
+            source: { eq: 'stormfly-testing' },
+            selectionSet: ['imageId'],
+            limit: 10000,
+          }
+        );
+        const processedImageIds = new Set(
+          (processedRecords as { imageId: string }[]).map(
+            (record) => record.imageId
+          )
+        );
+        const unprocessedImages = allProjectImages.filter(
+          (image) => !processedImageIds.has(image.id)
+        );
+
+        for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
+          const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
+          const batchStrings = batch.map(
+            (image) => `${image.id}---${makeKey(image.originalPath)}`
+          );
+
+          client.mutations.runStormflyDetector({
+            projectId,
+            images: batchStrings,
+            setId: locationSet,
+            bucket: backend.storage.buckets[1].bucket_name,
+            queueUrl: backend.custom.stormflyDetectorTaskQueueUrl,
+          }, { retry: false });
+        }
+
+        // TESTING ONLY: Stormfly is not approved as a production model yet.
+        await client.models.Project.update({
+          id: projectId,
+          status: 'processing-stormfly-testing',
+        });
+      }
+
       // Persist phash dupes detected during this session to AdminActionLog
       // so admins can audit what was skipped. The list is truncated to keep
       // the message under DynamoDB's per-item limit; the count prefix is

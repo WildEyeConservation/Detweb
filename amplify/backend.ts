@@ -26,6 +26,7 @@ import { runPointFinder } from './functions/runPointFinder/resource';
 import { runImageRegistration } from './functions/runImageRegistration/resource';
 import { runScoutbot } from './functions/runScoutbot/resource';
 import { runMadDetector } from './functions/runMadDetector/resource';
+import { runStormflyDetector } from './functions/runStormflyDetector/resource';
 import { launchAnnotationSet } from './functions/launchAnnotationSet/resource';
 import { launchFalseNegatives } from './functions/launchFalseNegatives/resource';
 import { requeueProjectQueues } from './functions/requeueProjectQueues/resource';
@@ -82,6 +83,7 @@ const backend = defineBackend({
   runImageRegistration,
   runScoutbot,
   runMadDetector,
+  runStormflyDetector,
   cleanupJobs,
   launchAnnotationSet,
   launchFalseNegatives,
@@ -350,6 +352,8 @@ const enableScoutbot =
   (process.env.AMPLIFY_ENABLE_ECS_SCOUTBOT ?? 'true').toLowerCase() === 'true';
 const enableMadDetector =
   (process.env.AMPLIFY_ENABLE_ECS_MAD ?? 'true').toLowerCase() === 'true';
+const enableStormflyDetector =
+  (process.env.AMPLIFY_ENABLE_ECS_STORMFLY ?? 'true').toLowerCase() === 'true';
 
 // Base VPC that hosts the EC2 queue processor.
 const vpc = new ec2.Vpc(customStack, 'my-cdk-vpc');
@@ -363,6 +367,7 @@ let pointFinderQueueUrl: string | undefined;
 let lightglueQueueUrl: string | undefined;
 let scoutbotQueueUrl: string | undefined;
 let madDetectorQueueUrl: string | undefined;
+let stormflyDetectorQueueUrl: string | undefined;
 
 if (enableEcs) {
   // Provision ECS auto-processors when the feature flags are enabled.
@@ -530,6 +535,46 @@ if (enableEcs) {
 
     madDetectorQueueUrl = madDetectorAutoProcessor.queue.queueUrl;
   }
+
+  if (enableStormflyDetector) {
+    const stormflyDetectorAutoProcessor = new AutoProcessor(
+      ecsStack,
+      'StormflyDetectorAutoProcessor',
+      {
+        vpc: ecsvpc,
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.G4DN,
+          ec2.InstanceSize.XLARGE
+        ),
+        ecsImage: ecs.ContainerImage.fromAsset('containerImages/stormflyDetector'),
+        ecsTaskRole,
+        memoryLimitMiB: 1024 * 12,
+        gpuCount: 1,
+        environment: {
+          API_ENDPOINT: backend.data.graphqlUrl,
+          STORMFLY_MODEL_S3:
+            process.env.STORMFLY_MODEL_S3 ?? 's3://surveyscope/testing/stormfly.onnx',
+          STORMFLY_THRESHOLD: process.env.STORMFLY_THRESHOLD ?? '0.30',
+          // Stormfly emits points, while Detweb annotation tasks use rectangular
+          // location bounds. Wrap each point in a testing-only fixed-size box.
+          STORMFLY_BOX_SIZE: process.env.STORMFLY_BOX_SIZE ?? '64',
+        },
+        machineImage: ecs.EcsOptimizedImage.amazonLinux2(
+          ecs.AmiHardwareType.GPU
+        ),
+        rootVolumeSize: 100,
+        // Stormfly processes large aerial images sequentially within each message,
+        // so scale more aggressively than the shared detector default.
+        messagesPerTask: 10,
+        maxTasks: 10,
+      }
+    );
+
+    stormflyDetectorAutoProcessor.asg.role.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppSyncInvokeFullAccess')
+    );
+    stormflyDetectorQueueUrl = stormflyDetectorAutoProcessor.queue.queueUrl;
+  }
 }
 
 //const devRole = iam.Role.fromRoleArn(scope, "DevRole", devUserArn);
@@ -612,6 +657,12 @@ backend.runScoutbot.resources.lambda.addToRolePolicy(
   })
 );
 backend.runMadDetector.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes', 'sqs:GetQueueUrl'],
+    resources: ['*'],
+  })
+);
+backend.runStormflyDetector.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes', 'sqs:GetQueueUrl'],
     resources: ['*'],
@@ -1191,6 +1242,7 @@ backend.addOutput({
     lightglueTaskQueueUrl: lightglueQueueUrl ?? '',
     scoutbotTaskQueueUrl: scoutbotQueueUrl ?? '',
     madDetectorTaskQueueUrl: madDetectorQueueUrl ?? '',
+    stormflyDetectorTaskQueueUrl: stormflyDetectorQueueUrl ?? '',
     processTaskQueueUrl: processor.queue.queueUrl,
     pointFinderTaskQueueUrl: pointFinderQueueUrl ?? '',
     generalBucketName: generalBucketName,

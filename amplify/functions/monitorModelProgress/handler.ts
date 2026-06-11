@@ -426,6 +426,11 @@ export const handler: Handler = async (event, context) => {
         await updateProgress(project, projectImages, 'mad-v2');
       }
 
+      if (project.status?.includes('stormfly-testing')) {
+        console.log(`Project ${project.id} is running Stormfly (testing model)`);
+        await updateProgress(project, projectImages, 'stormfly-testing');
+      }
+
       if (project.status?.includes('heatmap-busy')) {
         console.log(`Project ${project.id} is running heatmapper`);
 
@@ -498,7 +503,7 @@ export const handler: Handler = async (event, context) => {
       }
 
       // Final gate before flipping the project to 'active'. Runs whether the
-      // primary model was scoutbot/MAD/heatmap or 'manual' (no model).
+      // primary model was scoutbot/MAD/Stormfly/heatmap or 'manual' (no model).
       if (project.status?.includes('registration')) {
         if (await isRegistrationDone(project.id)) {
           await finalizeProjectActive(project);

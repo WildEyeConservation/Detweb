@@ -8,6 +8,9 @@ import { useLaunchTask } from '../useLaunchTask';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
 import { logAdminAction } from '../utils/adminActionLogger';
 
+const defaultLowerConfidence = (modelValue?: string) =>
+  modelValue === 'stormfly-testing' ? 0.3 : 0.6;
+
 export default function SpeciesLabelling({
   project,
   annotationSet,
@@ -145,6 +148,14 @@ export default function SpeciesLabelling({
             options.push({ label: 'MAD AI', value: 'mad' });
           }
         }
+        if (n.includes('stormfly-testing')) {
+          if (!options.some((o) => o.value === 'stormfly-testing')) {
+            options.push({
+              label: 'Stormfly (testing model)',
+              value: 'stormfly-testing',
+            });
+          }
+        }
         if (n.includes('elephant-detection-nadir')) {
           if (!options.some((o) => o.value === 'elephant-detection-nadir')) {
             options.push({
@@ -156,6 +167,7 @@ export default function SpeciesLabelling({
       }
       if (options.length === 1) {
         setModel(options[0]);
+        setLowerLimit(defaultLowerConfidence(options[0].value));
       }
       setModelOptions(options);
       setLoadingLocationSets(false);
@@ -531,7 +543,11 @@ export default function SpeciesLabelling({
             <Form.Label className='mb-0'>Model</Form.Label>
             <Select
               value={model as any}
-              onChange={(m) => setModel(m as any)}
+              onChange={(m) => {
+                const selectedModel = m ?? undefined;
+                setModel(selectedModel);
+                setLowerLimit(defaultLowerConfidence(selectedModel?.value));
+              }}
               options={modelOptions}
               placeholder='Select a model'
               className='text-black'
