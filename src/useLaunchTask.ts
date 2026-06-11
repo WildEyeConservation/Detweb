@@ -8,6 +8,8 @@ import type {
 import type { DataClient } from '../amplify/shared/data-schema.generated';
 import { fetchAllPaginatedResults } from './utils';
 
+const LEGACY_STORMFLY_BOX_SIZE = 64;
+
 // Types for options and function arguments
 export type LaunchTaskOptions = {
   taskTag: string;
@@ -65,14 +67,27 @@ export function useLaunchTask(
     width: number;
     height: number;
     imageId: string;
+    source: string;
   };
 
   type AnnotationPoint = { x: number; y: number; imageId: string };
 
+  type LocationQueryResult = {
+    locations: LocationWithConfidence[];
+    queriedCount: number;
+    invalidCounts: {
+      confidence: number;
+      dimensions: number;
+      imageId: number;
+      coordinates: number;
+    };
+    recoveredLegacyStormflyCount: number;
+  };
+
   async function queryLocations(
     locationSetId: string,
     onProgress?: (message: string) => void
-  ): Promise<LocationWithConfidence[]> {
+  ): Promise<LocationQueryResult> {
     onProgress?.('Querying locations...');
     const allLocations = await fetchAllPaginatedResults(
       client.models.Location.locationsBySetIdAndConfidence,
@@ -81,20 +96,85 @@ export function useLaunchTask(
         confidence: { between: [options.lowerLimit, options.upperLimit] },
         sortDirection: 'DESC',
         limit: 10000,
-        selectionSet: ['id', 'x', 'y', 'width', 'height', 'confidence', 'imageId'] as const,
+        selectionSet: [
+          'id',
+          'x',
+          'y',
+          'width',
+          'height',
+          'confidence',
+          'imageId',
+          'source',
+        ] as const,
       }
     );
-    return allLocations
-      .filter(loc => loc.x !== 0 && loc.y !== 0 && (loc.width ?? 0) !== 0 && (loc.height ?? 0) !== 0 && (loc.confidence ?? 0) !== 0)
-      .map(loc => ({
+    const invalidCounts = {
+      confidence: 0,
+      dimensions: 0,
+      imageId: 0,
+      coordinates: 0,
+    };
+    let recoveredLegacyStormflyCount = 0;
+    const locations: LocationWithConfidence[] = [];
+
+    for (const loc of allLocations) {
+      const confidence = loc.confidence ?? 0;
+      const hasCoordinates =
+        Number.isFinite(loc.x) && Number.isFinite(loc.y);
+      const hasImageId = !!loc.imageId;
+      const isLegacyStormflyLocation =
+        loc.source === 'stormfly-testing' &&
+        ((loc.width ?? 0) <= 0 || (loc.height ?? 0) <= 0);
+      const width = isLegacyStormflyLocation
+        ? LEGACY_STORMFLY_BOX_SIZE
+        : (loc.width ?? 0);
+      const height = isLegacyStormflyLocation
+        ? LEGACY_STORMFLY_BOX_SIZE
+        : (loc.height ?? 0);
+
+      if (confidence <= 0) invalidCounts.confidence += 1;
+      if (!hasCoordinates) invalidCounts.coordinates += 1;
+      if (!hasImageId) invalidCounts.imageId += 1;
+      if (width <= 0 || height <= 0) invalidCounts.dimensions += 1;
+
+      if (
+        confidence <= 0 ||
+        !hasCoordinates ||
+        !hasImageId ||
+        width <= 0 ||
+        height <= 0
+      ) {
+        continue;
+      }
+
+      if (isLegacyStormflyLocation) {
+        recoveredLegacyStormflyCount += 1;
+      }
+      locations.push({
         id: loc.id,
-        confidence: loc.confidence!,
+        confidence,
         x: loc.x,
         y: loc.y,
-        width: loc.width!,
-        height: loc.height!,
+        width,
+        height,
         imageId: loc.imageId!,
-      }));
+        source: loc.source,
+      });
+    }
+    const invalidCount = allLocations.length - locations.length;
+    onProgress?.(
+      `Location set returned ${locations.length} valid locations in confidence range` +
+        (recoveredLegacyStormflyCount > 0
+          ? ` (${recoveredLegacyStormflyCount} legacy Stormfly points assigned ${LEGACY_STORMFLY_BOX_SIZE}px boxes)`
+          : '') +
+        (invalidCount > 0 ? ` (${invalidCount} invalid locations ignored)` : '')
+    );
+    return {
+      locations,
+      queriedCount: allLocations.length,
+      invalidCounts,
+      recoveredLegacyStormflyCount,
+    };
   }
 
   async function queryObservations(
@@ -216,31 +296,65 @@ export function useLaunchTask(
           ? await queryAnnotations(options.annotationSetId, onProgress)
           : [];
 
+        const locationQueryResults = await Promise.all(
+          selectedTasks.map((task) => queryLocations(task, onProgress))
+        );
+        const queriedLocationCount = locationQueryResults.reduce(
+          (total, result) => total + result.queriedCount,
+          0
+        );
+        const invalidLocationCounts = locationQueryResults.reduce(
+          (totals, result) => ({
+            confidence:
+              totals.confidence + result.invalidCounts.confidence,
+            dimensions:
+              totals.dimensions + result.invalidCounts.dimensions,
+            imageId: totals.imageId + result.invalidCounts.imageId,
+            coordinates:
+              totals.coordinates + result.invalidCounts.coordinates,
+          }),
+          { confidence: 0, dimensions: 0, imageId: 0, coordinates: 0 }
+        );
+        const validLocations = locationQueryResults.flatMap(
+          (result) => result.locations
+        );
+
         // Collect locations from all sets, filter observed, and sort by confidence (descending)
-        let allLocationsWithConfidence = (
-          await Promise.all(
-            selectedTasks.map((task) => queryLocations(task, onProgress))
-          )
-        )
-          .flat()
-          .filter((l) => !allSeenLocations.has(l.id));
+        let allLocationsWithConfidence = validLocations.filter(
+          (location) => !allSeenLocations.has(location.id)
+        );
+        const observedLocationCount =
+          validLocations.length - allLocationsWithConfidence.length;
+        if (options.filterObserved) {
+          onProgress?.(
+            `Filtered out ${observedLocationCount} observed locations, ${allLocationsWithConfidence.length} remaining`
+          );
+        }
 
         // Filter by launchImageIds if provided (dev feature for re-launching specific images)
+        let imageFilteredLocationCount = 0;
         if (launchImageIds && launchImageIds.length > 0) {
           const allowedImageIds = new Set(launchImageIds);
+          const beforeImageFilter = allLocationsWithConfidence.length;
           allLocationsWithConfidence = allLocationsWithConfidence.filter(
             (l) => allowedImageIds.has(l.imageId)
           );
+          imageFilteredLocationCount =
+            beforeImageFilter - allLocationsWithConfidence.length;
           onProgress?.(`Filtered to ${allLocationsWithConfidence.length} locations matching ${launchImageIds.length} image IDs`);
         }
 
         // Filter out locations that already have annotations within their bounds
+        let annotatedLocationCount = 0;
         if (options.skipLocationWithAnnotations && allAnnotations.length > 0) {
+          const beforeAnnotationFilter = allLocationsWithConfidence.length;
           allLocationsWithConfidence = filterLocationsWithAnnotations(
             allLocationsWithConfidence,
             allAnnotations,
             onProgress
           );
+          annotatedLocationCount =
+            beforeAnnotationFilter - allLocationsWithConfidence.length;
         }
 
         // Sort by confidence (descending) - High confidence first
@@ -265,10 +379,39 @@ export function useLaunchTask(
         onProgress?.(`Found ${allLocationIds.length} locations to launch`);
 
         if (allLocationIds.length === 0) {
-          if (options.filterObserved) {
-            alert('No unobserved locations to launch');
+          if (queriedLocationCount === 0) {
+            alert(
+              `No locations matched the confidence range ${options.lowerLimit} to ${options.upperLimit}.`
+            );
           } else {
-            alert('No locations to launch');
+            const exclusions = [
+              invalidLocationCounts.confidence > 0
+                ? `${invalidLocationCounts.confidence} without valid confidence`
+                : null,
+              invalidLocationCounts.dimensions > 0
+                ? `${invalidLocationCounts.dimensions} without dimensions`
+                : null,
+              invalidLocationCounts.imageId > 0
+                ? `${invalidLocationCounts.imageId} without an image`
+                : null,
+              invalidLocationCounts.coordinates > 0
+                ? `${invalidLocationCounts.coordinates} without coordinates`
+                : null,
+              observedLocationCount > 0
+                ? `${observedLocationCount} observed`
+                : null,
+              imageFilteredLocationCount > 0
+                ? `${imageFilteredLocationCount} outside the selected images`
+                : null,
+              annotatedLocationCount > 0
+                ? `${annotatedLocationCount} with existing annotations`
+                : null,
+            ].filter((reason): reason is string => reason !== null);
+            alert(
+              `No locations remain to launch after filtering${
+                exclusions.length > 0 ? `: ${exclusions.join(', ')}` : '.'
+              }`
+            );
           }
           return;
         }

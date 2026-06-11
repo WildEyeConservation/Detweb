@@ -17,6 +17,7 @@ import { deleteProject } from '../functions/deleteProject/resource';
 import { generateSurveyResults } from '../functions/generateSurveyResults/resource';
 import { getJwtSecret } from '../functions/getJwtSecret/resource';
 import { runMadDetector } from '../functions/runMadDetector/resource';
+import { runStormflyDetector } from '../functions/runStormflyDetector/resource';
 import { launchAnnotationSet } from '../functions/launchAnnotationSet/resource';
 import { launchFalseNegatives } from '../functions/launchFalseNegatives/resource';
 import { requeueProjectQueues } from '../functions/requeueProjectQueues/resource';
@@ -1068,6 +1069,18 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(runMadDetector)),
+    runStormflyDetector: a
+      .mutation()
+      .arguments({
+        projectId: a.string().required(),
+        bucket: a.string().required(),
+        queueUrl: a.string().required(),
+        images: a.string().array(),
+        setId: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(runStormflyDetector)),
     runHeatmapper: a
       .mutation()
       .arguments({
@@ -1263,6 +1276,7 @@ const schema = a
     allow.resource(runHeatmapper),
     allow.resource(runPointFinder),
     allow.resource(runMadDetector),
+    allow.resource(runStormflyDetector),
     allow.resource(launchAnnotationSet),
     allow.resource(launchFalseNegatives),
     allow.resource(launchQCReview),
@@ -1343,6 +1357,7 @@ export type UpdateProjectMembershipsHandler = MutationHandler<{ projectId: strin
 export type RunImageRegistrationHandler = MutationHandler<{ projectId: string; metadata: string; queueUrl: string; images?: string[] | null }>;
 export type RunScoutbotHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string }>;
 export type RunMadDetectorHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string }>;
+export type RunStormflyDetectorHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string }>;
 export type RunHeatmapperHandler = MutationHandler<{ projectId: string; images?: string[] | null }>;
 
 export type GetJwtSecretHandler = MutationHandler<Record<string, never>, string>;

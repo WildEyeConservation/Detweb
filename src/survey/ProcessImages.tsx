@@ -111,7 +111,9 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
     const locationSetName =
       model.value === 'heatmap'
         ? `${projectId}_elephant-detection-nadir`
-        : `${projectId}_scoutbot`;
+        : model.value === 'scoutbotv3'
+          ? `${projectId}_scoutbot`
+          : `${projectId}_${model.value}`;
     let locationSet =
       (await findLocationSetByName(locationSetName)) ??
       null;
@@ -214,6 +216,28 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
           });
         }
         break;
+      case 'stormfly-testing':
+        for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
+          const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
+          const batchStrings = batch.map(
+            (image) => `${image.id}---${makeKey(image.originalPath)}`
+          );
+
+          // The generated client schema is refreshed during deployment.
+          client.mutations.runStormflyDetector({
+            projectId,
+            images: batchStrings,
+            setId: locationSet.id,
+            bucket: backend.storage.buckets[1].bucket_name,
+            queueUrl: backend.custom.stormflyDetectorTaskQueueUrl,
+          }, { retry: false });
+        }
+
+        await client.models.Project.update({
+          id: projectId,
+          status: 'processing-stormfly-testing',
+        });
+        break;
     }
 
     client.mutations.updateProjectMemberships({
@@ -238,6 +262,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
               { label: 'ScoutBot', value: 'scoutbotv3' },
               { label: 'Elephant Detection Nadir', value: 'heatmap' },
               { label: 'MAD', value: 'mad' },
+              { label: 'Stormfly (testing model)', value: 'stormfly-testing' },
             ]}
             placeholder='Select a model'
             className='text-black'
