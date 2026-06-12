@@ -57,9 +57,12 @@ type AnnotationRow = {
   oov: boolean | null;
 };
 
+// timestamp/originalPath drive the reunion search's chronological endpoint
+// ordering — without them every image falls back to id order and the
+// launch-time check could disagree with the harness.
 type ImageWithNeighbours = Pick<
   ImageType,
-  'id' | 'width' | 'height' | 'transectId'
+  'id' | 'width' | 'height' | 'transectId' | 'timestamp' | 'originalPath'
 > & {
   leftNeighbours?: ImageNeighbourType[] | null;
   rightNeighbours?: ImageNeighbourType[] | null;
@@ -188,9 +191,11 @@ export default function IndividualId({
     let cancelled = false;
     const timer = setTimeout(() => {
       if (cancelled) return;
+      // Deliberately unfiltered by category: direct-pair evaluation filters
+      // internally, and the reunion search needs every annotation so chain
+      // membership matches what the harness sees at runtime.
       const annotationsByImage: Record<string, AnnotationType[]> = {};
       for (const a of allAnnotations) {
-        if (a.categoryId !== selectedCategoryId) continue;
         (annotationsByImage[a.imageId] ??= []).push(
           a as unknown as AnnotationType
         );
@@ -570,6 +575,8 @@ async function fetchProjectImages(
         'width',
         'height',
         'transectId',
+        'timestamp',
+        'originalPath',
         'leftNeighbours.*',
         'rightNeighbours.*',
       ],
