@@ -38,3 +38,6 @@ amplify/shared/data-schema.generated.ts
 scripts/
 .claude/settings.local.json
 src/DevActions.tsx
+
+# Scoutbot model weights (~440 MB) - restore from S3, see containerImages/scoutbot/README.md
+containerImages/scoutbot/models/
