@@ -33,6 +33,16 @@ Dockerfile); the `.pt` files have `known_hash=None` upstream. They were
 recovered from the pooch cache (`/root/.cache/pooch/`) of the last deployed
 container image.
 
+## Pinned dependencies
+
+`constraints.txt` pins every Python package to the versions captured from the
+known-good production image. This matters for the GPU stack in particular:
+the GPU hosts' NVIDIA driver supports CUDA 12.6 at most, and an unconstrained
+build pulls a torch wheel built for a newer CUDA, which crashes at runtime
+with "The NVIDIA driver on your system is too old". Keep torch at 2.7.0
+(cu126 build) and onnxruntime-gpu at 1.22.0 unless the host driver is
+upgraded.
+
 ## Restoring `models/`
 
 `models/` is gitignored (~440 MB) and is not part of this repository. The

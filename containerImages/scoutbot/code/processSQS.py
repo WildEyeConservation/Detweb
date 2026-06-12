@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from boto3 import Session as AWSSession
 from gql import gql
 from gql.client import Client
@@ -112,6 +113,11 @@ def main():
     queue_url = os.environ['QUEUE_URL']
     s3_client = boto3.client('s3', os.environ['REGION'])
 
+    # Fail fast if CUDA is unavailable, rather than consuming messages we can't process
+    if not torch.cuda.is_available():
+        logging.error('CUDA is not available. Exiting so ECS can replace this task.')
+        sys.exit(1)
+
     # Create queues for inter-process communication
     input_queue = Queue(maxsize=5)  # Adjust capacity as needed
     output_queue = Queue()
@@ -124,6 +130,13 @@ def main():
 
     try:
         while True:
+            # Fail fast if either child process has died so ECS replaces the task
+            if not scoutbot_process.is_alive() or not output_process.is_alive():
+                logging.error(f'Child process died (scoutbot exitcode={scoutbot_process.exitcode}, output exitcode={output_process.exitcode}). Exiting.')
+                scoutbot_process.terminate()
+                output_process.terminate()
+                sys.exit(1)
+
             response = sqs.receive_message(
                 QueueUrl=queue_url,
                 AttributeNames=['SentTimestamp'],
@@ -153,8 +166,10 @@ def main():
     except KeyboardInterrupt:
         print("Shutting down...")
     finally:
-        # Signal the scoutbot process to stop
-        input_queue.put(None)
+        # Signal the scoutbot process to stop (skip if it already died, so we don't
+        # block forever on a full queue)
+        if scoutbot_process.is_alive():
+            input_queue.put(None)
         scoutbot_process.join()
         output_process.join()
 
