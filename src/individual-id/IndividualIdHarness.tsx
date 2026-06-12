@@ -346,19 +346,24 @@ export function IndividualIdHarness({
   // where the animal may have come back into view. The user is then
   // forced through those synthetic pairs before the transect completes;
   // when they finish a round, we search again (chains may have merged
-  // and exposed new endpoints). `reviewedReunionsRef` prevents loops on
-  // pairs the user already saw without taking action.
+  // and exposed new endpoints). `reviewedReunionsRef` records, per image
+  // pair, the pending candidate keys that were on screen when the user
+  // confirmed the dialog — a pair only re-surfaces in a later round when
+  // merges have produced pendings the user has NOT seen, so unchanged
+  // pairs can't loop but new possible links still come back for review.
   const [reunionMode, setReunionMode] = useState<{
     pairs: NeighbourPairWithMeta[];
   } | null>(null);
   const [pendingReunionDialog, setPendingReunionDialog] = useState<{
     pairs: NeighbourPairWithMeta[];
+    /** reviewKey (imageA|imageB) → pending candidate keys shown this round. */
+    pendingKeysByPair: Map<string, Set<string>>;
   } | null>(null);
   // Final "you're done" gate — set when the completion detector decides
   // the transect is closed. Confirmation fires `onComplete`; the parent
   // navigates the user back to Jobs.
   const [showTransectComplete, setShowTransectComplete] = useState(false);
-  const reviewedReunionsRef = useRef<Set<string>>(new Set());
+  const reviewedReunionsRef = useRef<Map<string, Set<string>>>(new Map());
 
   // Fabricate a `NeighbourPairWithMeta` from a `ReunionCandidate`. There's
   // no DB `ImageNeighbour` row backing a synthetic pair, but nothing
@@ -604,25 +609,25 @@ export function IndividualIdHarness({
       leniency,
       maxHops: REUNION_MAX_HOPS,
     });
-    // Skip pairs the user has already been shown — prevents an infinite
-    // loop when a user reviews a pair without making changes (no chain
-    // merge ⇒ same candidates re-appear on the next search).
-    const fresh = candidates.filter(
-      (c) =>
-        !reviewedReunionsRef.current.has(`${c.imageAId}|${c.imageBId}`)
-    );
-    const newPairs = fresh
-      .map((c) => synthesiseReunionPair(c, imagesById))
-      .filter((p): p is NeighbourPairWithMeta => p !== null);
-
     // `findReunions` only checks "is there a cross-chain annotation near
     // the endpoint projection?" — but the full Munkres assignment on the
     // synthetic pair can still come out all-accepted (a same-objectId
     // annotation outbidding the cross-chain one) or all-informational.
     // Pre-run Munkres so the dialog count is what the user will actually
-    // have to action; mark drops as reviewed so we don't re-evaluate them.
+    // have to action.
+    //
+    // Already-reviewed pairs are skipped by PENDING-CANDIDATE comparison,
+    // not by image pair: a round's chain merges can mint brand-new pending
+    // candidates on a pair the user already walked through, and those must
+    // come back for review. (Merges also rewrite objectIds, which are part
+    // of candidate keys, so a merge touching a reviewed pair makes its
+    // pendings look new and re-surfaces it — conservative in the right
+    // direction, since the merge changed the context of the decision.)
     const actionable: NeighbourPairWithMeta[] = [];
-    for (const p of newPairs) {
+    const pendingKeysByPair = new Map<string, Set<string>>();
+    for (const c of candidates) {
+      const p = synthesiseReunionPair(c, imagesById);
+      if (!p) continue;
       const pairKey = makePairKey(p.image1Id, p.image2Id);
       const built = buildMatchCandidates({
         annotationsA: annotationsByImage[p.image1Id] ?? [],
@@ -635,11 +640,26 @@ export function IndividualIdHarness({
         categoryFilter: categoryId,
       });
       const merged = working.mergeCandidates(pairKey, built);
-      if (evaluatePairCompletion(merged).status === 'incomplete') {
-        actionable.push(p);
-      } else {
-        reviewedReunionsRef.current.add(`${p.image1Id}|${p.image2Id}`);
+      if (evaluatePairCompletion(merged).status !== 'incomplete') continue;
+      const pending = new Set(
+        merged
+          .filter((m) => !m.informational && m.status !== 'accepted')
+          .map((m) => m.pairKey)
+      );
+      const reviewKey = `${p.image1Id}|${p.image2Id}`;
+      const seen = reviewedReunionsRef.current.get(reviewKey);
+      if (seen) {
+        let hasNew = false;
+        for (const k of pending) {
+          if (!seen.has(k)) {
+            hasNew = true;
+            break;
+          }
+        }
+        if (!hasNew) continue;
       }
+      actionable.push(p);
+      pendingKeysByPair.set(reviewKey, pending);
     }
 
     if (actionable.length === 0) {
@@ -647,7 +667,7 @@ export function IndividualIdHarness({
       setShowTransectComplete(true);
       return;
     }
-    setPendingReunionDialog({ pairs: actionable });
+    setPendingReunionDialog({ pairs: actionable, pendingKeysByPair });
   }, [
     chainObjectId,
     pairViews,
@@ -665,13 +685,22 @@ export function IndividualIdHarness({
   ]);
 
   // The reunion dialog has no skip button — confirmation always enters
-  // review mode. The image pairs are stamped into `reviewedReunionsRef`
-  // here so the user only sees each one once per session, even if they
-  // walk away without changing anything.
+  // review mode. The pending candidate keys shown for each pair are
+  // stamped into `reviewedReunionsRef` here (unioned with any earlier
+  // round's), so a pair the user saw and left untouched is never re-shown,
+  // while later merges that mint unseen pendings on it re-surface it.
   const confirmReunionDialog = useCallback(() => {
     if (!pendingReunionDialog) return;
     for (const p of pendingReunionDialog.pairs) {
-      reviewedReunionsRef.current.add(`${p.image1Id}|${p.image2Id}`);
+      const reviewKey = `${p.image1Id}|${p.image2Id}`;
+      const pending = pendingReunionDialog.pendingKeysByPair.get(reviewKey);
+      if (!pending) continue;
+      const seen = reviewedReunionsRef.current.get(reviewKey);
+      if (seen) {
+        for (const k of pending) seen.add(k);
+      } else {
+        reviewedReunionsRef.current.set(reviewKey, new Set(pending));
+      }
     }
     setReunionMode({ pairs: pendingReunionDialog.pairs });
     setPendingReunionDialog(null);
